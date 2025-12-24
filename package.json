@@ -11,6 +11,7 @@
     "preview": "rsbuild preview"
   },
   "dependencies": {
+    "@tauri-apps/plugin-global-shortcut": "~2.3.1",
     "vue": "^3.5.25"
   },
   "devDependencies": {

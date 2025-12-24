@@ -72,6 +72,25 @@ pub fn run() {
         });
       }
 
+      #[cfg(desktop)]
+      {
+        use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+        let show_window_shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Space);
+        app.handle().plugin(
+          tauri_plugin_global_shortcut::Builder::new()
+            .with_handler(move |app, shortcut, _event| {
+              if shortcut == &show_window_shortcut {
+                if let Some(window) = app.get_webview_window("main") {
+                  window.show().unwrap();
+                }
+              }
+            })
+            .build(),
+        )?;
+
+        app.global_shortcut().register(show_window_shortcut)?;
+      }
+
       Ok(())
     })
     .run(tauri::generate_context!())
