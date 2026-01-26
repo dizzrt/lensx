@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
+
+pnpm lint-staged
+git update-index --again
+echo "✨ ${GREEN}Done - HUSKY_PRE_COMMIT${NC}"

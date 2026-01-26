@@ -1,8 +1,5 @@
 <template>
-  <div class="content">
-    <h1>Rsbuild with Vue</h1>
-    <p>Start building amazing things with Rsbuild.</p>
-  </div>
+  <div data-tauri-drag-region class="wh-full bg-white"></div>
 </template>
 
 <style scoped>
@@ -26,3 +23,5 @@
   opacity: 0.5;
 }
 </style>
+
+<script setup lang="ts"></script>

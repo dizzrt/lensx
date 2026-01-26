@@ -7,7 +7,10 @@
     "skipLibCheck": true,
     "jsxImportSource": "vue",
     "useDefineForClassFields": true,
-
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
     /* modules */
     "module": "ESNext",
     "moduleDetection": "force",
@@ -16,7 +19,6 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "noUncheckedSideEffectImports": true,
-
     /* type checking */
     "strict": true,
     "noUnusedLocals": true,
