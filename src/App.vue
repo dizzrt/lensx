@@ -1,5 +1,10 @@
 <template>
-  <div data-tauri-drag-region class="wh-full bg-white"></div>
+  <div data-tauri-drag-region class="wh-full bg-white">
+    <div class="flex wh-full">
+      <div data-tauri-drag-region class="bg-red w-4"></div>
+      <n-auto-complete v-model:value="value" :options="options" />
+    </div>
+  </div>
 </template>
 
 <style scoped>
@@ -24,4 +29,14 @@
 }
 </style>
 
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { NAutoComplete } from 'naive-ui';
+import { ref } from 'vue';
+
+const value = ref('');
+const options = ref([
+  {
+    label: 'a',
+  },
+]);
+</script>
