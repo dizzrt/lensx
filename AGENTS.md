@@ -128,12 +128,30 @@ capabilities as shipped features unless they are implemented in the repository.
 
 - Use Vue SFCs with `<script setup lang="ts">` for new components unless there is
   a clear reason not to.
-- Prefer Naive UI primitives before custom widgets.
+- Naive UI is the default UI implementation layer. Use Naive UI components,
+  providers, theme tokens, and locale support before creating custom widgets or
+  custom interaction primitives.
+- Custom frontend widgets are acceptable only when Naive UI cannot reasonably
+  express a launcher-specific interaction, and they must still integrate with
+  the app theme and i18n layers.
 - Prefer UnoCSS for static layout, spacing, sizing, display, flex/grid, and
   repeated page skeletons.
 - Use Less for longer semantic style blocks, pseudo classes, media queries,
   theme binding, and component-specific styling that is not cleanly expressed
   with utilities.
+- Do not introduce ordinary CSS files for component styling unless there is a
+  clear framework or tooling reason; use UnoCSS and Less as the styling surface.
+- The frontend must be wired through Naive UI theme providers. New UI must
+  support both light and dark modes, avoid hard-coded light-only colors, and use
+  Naive UI tokens or project theme variables where practical.
+- The frontend must be wired through an i18n layer. User-facing text in
+  components, dialogs, notifications, empty states, errors, menus, and settings
+  must be translatable instead of hard-coded.
+- Use Naive UI `locale` and `dateLocale` for Naive UI built-in component text
+  and date formatting, but do not treat them as a replacement for the
+  application i18n layer that owns product copy.
+- The application locale must be the single source of truth that drives both
+  product-owned i18n messages and Naive UI `locale` / `dateLocale`.
 - Keep `src/index.css` limited to global base styles and the UnoCSS entry.
 - Preserve accessibility basics: semantic elements, labels, keyboard behavior,
   visible focus states, and accessible names for icon-only controls.

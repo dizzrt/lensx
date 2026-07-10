@@ -25,6 +25,29 @@ context: |
   - Formatting and linting: Biome.
   - Python environment management: uv.
 
+  Frontend requirements:
+  - Naive UI is the default UI implementation layer for frontend work.
+  - Use Naive UI components, providers, theme tokens, and locale support before
+    creating custom widgets or custom interaction primitives.
+  - Use UnoCSS for static layout, spacing, sizing, display, flex/grid, and
+    repeated page skeletons.
+  - Use Less for longer semantic style blocks, pseudo classes, media queries,
+    theme binding, and component-specific styling that is not cleanly expressed
+    with utilities.
+  - Do not add ordinary component CSS files unless there is a clear framework or
+    tooling reason; UnoCSS and Less are the project styling surface.
+  - Frontend UI must support Naive UI-compatible light and dark modes. Avoid
+    hard-coded light-only colors; use Naive UI tokens or project theme variables
+    where practical.
+  - Frontend UI must support application i18n. User-facing text in components,
+    dialogs, notifications, empty states, errors, menus, and settings must be
+    translatable instead of hard-coded.
+  - Use Naive UI locale and dateLocale for Naive UI built-in component text and
+    date formatting, but do not treat them as a replacement for the application
+    i18n layer that owns product copy.
+  - The application locale must be the single source of truth that drives both
+    product-owned i18n messages and Naive UI locale / dateLocale.
+
   Architecture preferences:
   - Keep Tauri commands thin, typed, and stable.
   - Put system integration, window lifecycle behavior, shortcuts, persistence,
@@ -73,11 +96,13 @@ rules:
     - Write proposals in Chinese unless the user explicitly requests another language.
     - State the problem, scope, non-goals, affected modules, and expected outcome.
     - Identify whether the change touches frontend UI, Rust/Tauri desktop behavior, documentation, OpenSpec artifacts, tooling, or Python helper scripts.
+    - For frontend UI changes, state how the change follows the Naive UI-first, UnoCSS/Less styling, dark-mode, application i18n, and Naive UI locale/dateLocale synchronization requirements.
     - Do not claim planned capabilities as implemented behavior.
     - Do not reference tmp/ file names, paths, or temporary document identities.
   design:
     - Write designs in Chinese unless the user explicitly requests another language.
     - Describe Rust/Tauri/Vue boundaries, data flow, command contracts, lifecycle ownership, and key trade-offs.
+    - For frontend designs, describe the Naive UI provider/component usage, theme and dark-mode strategy, application i18n message ownership, Naive UI locale/dateLocale synchronization, and UnoCSS/Less styling boundaries.
     - Keep Tauri command contracts explicit and stable.
     - Call out security, permission, filesystem, process, shortcut, tray, and window lifecycle impacts when affected.
     - Record documentation mirror impacts when docs/ or README files are affected.
@@ -85,12 +110,14 @@ rules:
   specs:
     - Write capability specs and scenarios in Chinese unless the user explicitly requests another language.
     - Use stable, testable requirement language with SHALL or MUST.
+    - Include observable dark-mode, application i18n, and Naive UI locale/dateLocale synchronization behavior when a requirement affects user-facing frontend UI.
     - Include at least one observable scenario per requirement.
     - Keep requirements tied to implemented or proposed behavior, not transient planning notes.
     - Do not reference tmp/ file names, paths, or temporary document identities.
   tasks:
     - Write tasks in Chinese unless the user explicitly requests another language.
     - Break work into small checkbox tasks ordered by dependency.
+    - For frontend UI work, include tasks for Naive UI integration, UnoCSS/Less styling, dark-mode compatibility, application i18n compatibility, and Naive UI locale/dateLocale synchronization.
     - Include README.md and README-zh.md synchronization tasks when either README changes.
     - Include docs/en and docs/zh mirror checks when docs/ changes.
     - Do not add placeholder category index files under docs/en/** or docs/zh/**.

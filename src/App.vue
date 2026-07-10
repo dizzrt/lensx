@@ -1,42 +1,38 @@
 <template>
-  <div data-tauri-drag-region class="wh-full bg-white">
+  <div data-tauri-drag-region class="launcher-root wh-full">
     <div class="flex wh-full">
-      <div data-tauri-drag-region class="bg-red w-4"></div>
-      <n-auto-complete v-model:value="value" :options="options" />
+      <div data-tauri-drag-region class="launcher-drag-handle w-4"></div>
+      <n-auto-complete
+        v-model:value="value"
+        class="flex-1"
+        :options="options"
+        :placeholder="t('launcher.input.placeholder')"
+      />
     </div>
   </div>
 </template>
 
-<style scoped>
-.content {
-  display: flex;
-  min-height: 100vh;
-  line-height: 1.1;
-  text-align: center;
-  flex-direction: column;
-  justify-content: center;
+<style scoped lang="less">
+.launcher-root {
+  background: var(--n-color);
 }
 
-.content h1 {
-  font-size: 3.6rem;
-  font-weight: 700;
-}
-
-.content p {
-  font-size: 1.2rem;
-  font-weight: 400;
-  opacity: 0.5;
+.launcher-drag-handle {
+  background: var(--n-primary-color);
 }
 </style>
 
 <script setup lang="ts">
 import { NAutoComplete } from 'naive-ui';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 
+const { t } = useI18n();
 const value = ref('');
-const options = ref([
+const options = computed(() => [
   {
-    label: 'a',
+    label: t('launcher.option.example'),
+    value: 'example',
   },
 ]);
 </script>
