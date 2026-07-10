@@ -9,6 +9,7 @@
     "useDefineForClassFields": true,
     "baseUrl": ".",
     "paths": {
+      "@lensx/plugin-sdk": ["packages/plugin-sdk/src/index.ts"],
       "@/*": ["src/*"]
     },
     /* modules */
@@ -24,5 +25,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["src"]
+  "include": ["src", "packages/plugin-sdk/src"]
 }

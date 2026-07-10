@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@lensx/plugin-sdk':
+        specifier: workspace:*
+        version: link:packages/plugin-sdk
       '@tauri-apps/api':
         specifier: 2.11.1
         version: 2.11.1
@@ -60,6 +63,22 @@ importers:
       unocss:
         specifier: ^66.7.5
         version: 66.7.5(@unocss/postcss@66.7.5(postcss@8.5.16))(vite@7.3.1(@types/node@25.0.10)(jiti@2.7.0)(less@4.6.7)(terser@5.46.0)(yaml@2.9.0))
+
+  examples/plugins/hello-world:
+    dependencies:
+      '@lensx/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../../packages/plugin-sdk
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/plugin-sdk:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
 packages:
 

@@ -1,0 +1,50 @@
+{
+  "id": "lensx.example.hello_world",
+  "name": "Hello World",
+  "version": "0.1.0",
+  "source": "external",
+  "lifecycle": {
+    "uninstallable": true,
+    "disableable": true
+  },
+  "runtime": {
+    "ui": "iframe",
+    "entry": "dist",
+    "sandbox": ["allow-scripts", "allow-forms"]
+  },
+  "pages": [
+    {
+      "id": "lensx.example.hello_world_page_main",
+      "plugin_id": "lensx.example.hello_world",
+      "title": "Hello World",
+      "entry": "index.html",
+      "required_permissions": ["lensx.example.hello_world_permission_preferences_read"]
+    }
+  ],
+  "actions": [
+    {
+      "id": "lensx.example.hello_world_action_open",
+      "plugin_id": "lensx.example.hello_world",
+      "title": "Open Hello World",
+      "target_page_id": "lensx.example.hello_world_page_main",
+      "required_permissions": ["lensx.example.hello_world_permission_preferences_read"]
+    }
+  ],
+  "permissions": [
+    {
+      "id": "lensx.example.hello_world_permission_preferences_read",
+      "plugin_id": "lensx.example.hello_world",
+      "title": "Read demo preferences",
+      "description": "Allows the example plugin to call the safe preferences read Host API wrapper."
+    }
+  ],
+  "sdk": {
+    "min_version": "0.1.0"
+  },
+  "host_api": {
+    "min_version": "0.1.0"
+  },
+  "sidecar": {
+    "enabled": false
+  }
+}

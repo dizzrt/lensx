@@ -1,2 +1,5 @@
 onlyBuiltDependencies:
   - core-js
+packages:
+  - packages/*
+  - examples/plugins/*

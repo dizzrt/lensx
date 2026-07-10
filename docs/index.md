@@ -17,15 +17,21 @@ actual topic documents only.
 | Category | English Path | 中文路径 | Purpose / 用途 |
 | --- | --- | --- | --- |
 | Architecture / 架构 | `docs/en/architecture/` | `docs/zh/architecture/` | Long-lived architecture, layering, module boundaries, desktop runtime constraints. / 长期架构、分层、模块边界、桌面运行时约束。 |
+| Plugins / 插件 | `docs/en/plugins/` | `docs/zh/plugins/` | Plugin contract, runtime boundaries, SDK usage, package format, permissions, and Host API rules. / 插件契约、运行时边界、SDK 使用、包格式、权限和 Host API 规则。 |
 | Workflow / 流程 | `docs/en/workflow/` | `docs/zh/workflow/` | Development workflow, OpenSpec workflow, validation, documentation maintenance. / 开发流程、OpenSpec 流程、验证、文档维护。 |
 | Decisions / 决策 | `docs/en/decisions/` | `docs/zh/decisions/` | Durable decisions, trade-offs, and long-lived constraints. / 长期决策、取舍和稳定约束。 |
 
 ## Current Documents / 当前文档
 
-There are no topic documents yet. Add paired English and Simplified Chinese
-documents under the category directories when stable project knowledge emerges.
+Current mirrored topic documents:
 
-当前还没有主题文档。稳定项目知识出现后，应在对应分类目录下新增英文与简体中文成对文档。
+- Plugin architecture: `docs/en/plugins/architecture.md` / `docs/zh/plugins/architecture.md`
+- Plugin development: `docs/en/plugins/development.md` / `docs/zh/plugins/development.md`
+
+当前镜像主题文档：
+
+- 插件架构：`docs/en/plugins/architecture.md` / `docs/zh/plugins/architecture.md`
+- 插件开发：`docs/en/plugins/development.md` / `docs/zh/plugins/development.md`
 
 ## Document Roles / 文档分工
 

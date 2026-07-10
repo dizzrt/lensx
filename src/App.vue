@@ -36,6 +36,41 @@
           </button>
         </div>
       </section>
+
+      <section class="launcher-section">
+        <div class="launcher-section-heading flex items-center justify-between gap-3">
+          <h2 class="m-0">{{ t('pluginHost.section.title') }}</h2>
+          <span>{{ pluginHostHint }}</span>
+        </div>
+
+        <n-alert v-if="pluginHostError" type="error" :title="t('pluginHost.registry.errorTitle')">
+          {{ pluginHostError }}
+        </n-alert>
+
+        <div v-else-if="pluginActions.length > 0" class="launcher-grid grid grid-cols-2 gap-2">
+          <button
+            v-for="action in pluginActions"
+            :key="action.id"
+            class="launcher-item launcher-no-drag flex items-center gap-3"
+            type="button"
+            @click="openPluginAction(action.id)"
+          >
+            <span class="launcher-item-icon shrink-0" aria-hidden="true">P</span>
+            <span class="launcher-item-main min-w-0">
+              <span class="launcher-item-title">{{ action.title }}</span>
+              <span class="launcher-item-description">{{ action.id }}</span>
+            </span>
+            <span class="launcher-item-meta shrink-0">
+              <span class="launcher-item-badge">{{ t('pluginHost.action.badge') }}</span>
+              <span class="launcher-item-action">{{ t('launcher.item.action.open') }}</span>
+            </span>
+          </button>
+        </div>
+
+        <n-empty v-else class="launcher-no-drag" :description="t('pluginHost.registry.empty')" />
+      </section>
+
+      <plugin-page-outlet v-if="pluginRegistry" :page-id="pluginNavigation.currentPageId" :registry="pluginRegistry" />
     </main>
   </div>
 </template>
@@ -201,11 +236,16 @@
 </style>
 
 <script setup lang="ts">
+import type { PluginRegistrySnapshot } from '@lensx/plugin-sdk';
+import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
-import { NInput, useThemeVars } from 'naive-ui';
+import { NAlert, NEmpty, NInput, useThemeVars } from 'naive-ui';
 import type { CSSProperties } from 'vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { createPluginActionDispatcher, type PluginNavigationState } from '@/app/plugin-host/actions';
+import PluginPageOutlet from '@/app/plugin-host/PluginPageOutlet.vue';
+import { createPluginRegistryIndex, type PluginRegistryIndex } from '@/app/plugin-host/registry';
 
 const { t } = useI18n();
 const themeVars = useThemeVars();
@@ -234,6 +274,9 @@ type LauncherSection = {
 const query = ref('');
 const launcherRef = ref<HTMLElement | null>(null);
 const lastAppliedHeight = ref(0);
+const pluginRegistry = ref<PluginRegistryIndex | null>(null);
+const pluginHostError = ref('');
+const pluginNavigation = ref<PluginNavigationState>({ currentPageId: null });
 let resizeObserver: ResizeObserver | undefined;
 let resizeFrame = 0;
 
@@ -332,6 +375,12 @@ const matchItems: LauncherItem[] = [
 
 const normalizedQuery = computed(() => query.value.trim());
 const hasQuery = computed(() => normalizedQuery.value.length > 0);
+const pluginActions = computed(() => (pluginRegistry.value ? [...pluginRegistry.value.actionsById.values()] : []));
+const pluginHostHint = computed(() =>
+  pluginRegistry.value
+    ? t('pluginHost.section.hint', { count: pluginRegistry.value.snapshot.plugins.length })
+    : t('pluginHost.section.loading')
+);
 
 const visibleSections = computed<LauncherSection[]>(() => {
   if (hasQuery.value) {
@@ -414,11 +463,34 @@ const startPanelDrag = (event: MouseEvent) => {
   void getCurrentWindow().startDragging();
 };
 
+const loadPluginRegistry = async () => {
+  try {
+    const snapshot = await invoke<PluginRegistrySnapshot>('get_plugin_registry');
+    pluginRegistry.value = createPluginRegistryIndex(snapshot.plugins);
+  } catch (error) {
+    pluginHostError.value = error instanceof Error ? error.message : String(error);
+  }
+};
+
+const openPluginAction = (actionId: string) => {
+  if (!pluginRegistry.value) {
+    return;
+  }
+
+  try {
+    const dispatch = createPluginActionDispatcher(pluginRegistry.value, pluginNavigation.value);
+    dispatch(actionId);
+  } catch (error) {
+    pluginHostError.value = error instanceof Error ? error.message : String(error);
+  }
+};
+
 onMounted(() => {
   resizeObserver = new ResizeObserver(scheduleWindowResize);
   if (launcherRef.value) {
     resizeObserver.observe(launcherRef.value);
   }
+  void loadPluginRegistry();
   void nextTick(scheduleWindowResize);
 });
 
@@ -430,6 +502,10 @@ onBeforeUnmount(() => {
 });
 
 watch(visibleSections, () => {
+  void nextTick(scheduleWindowResize);
+});
+
+watch([visibleSections, pluginActions, () => pluginNavigation.value.currentPageId], () => {
   void nextTick(scheduleWindowResize);
 });
 </script>

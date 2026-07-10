@@ -1,0 +1,16 @@
+{
+  "name": "lensx-plugin-hello-world",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && cp src/index.html dist/index.html",
+    "package": "pnpm run build && zip -r hello-world.lxplugin manifest.json dist"
+  },
+  "dependencies": {
+    "@lensx/plugin-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

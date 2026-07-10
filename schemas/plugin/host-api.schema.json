@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lensx.local/schemas/plugin/host-api.schema.json",
+  "title": "lensX Host API",
+  "type": "object",
+  "required": ["version", "methods"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "string" },
+    "methods": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*\\.[a-z][a-z0-9_-]*\\.[a-z][a-z0-9_-]*$"
+          },
+          "permission": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*\\.[a-z][a-z0-9_-]*\\.[a-z][a-z0-9_-]*$"
+          },
+          "params_schema": { "type": "object" },
+          "result_schema": { "type": "object" }
+        }
+      }
+    }
+  }
+}
