@@ -10,13 +10,19 @@
     "beforeBuildCommand": "pnpm run build"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "lensX",
-        "width": 800,
-        "height": 60,
+        "width": 650,
+        "height": 430,
+        "minWidth": 650,
+        "maxWidth": 650,
+        "maxHeight": 800,
         "decorations": false,
-        "transparent": false,
+        "transparent": true,
+        "backgroundColor": "#00000000",
+        "shadow": false,
         "resizable": false,
         "fullscreen": false
       }
