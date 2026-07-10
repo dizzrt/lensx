@@ -13,7 +13,7 @@
     "prepare": "husky"
   },
   "lint-staged": {
-    "*.{js,jsx,ts,tsx,vue,html,css,less,scss,md,json}": [
+    "*.{js,jsx,ts,tsx,vue,html,css,less,scss,json}": [
       "biome check --write",
       "biome format --write"
     ]

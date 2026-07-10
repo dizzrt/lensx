@@ -1,5 +1,7 @@
+mod launcher_actions;
 mod menu;
 mod shortcut;
+use launcher_actions::{execute_window_action, LauncherAction};
 use tauri::{Manager, WindowEvent};
 
 pub fn run() {
@@ -17,7 +19,8 @@ pub fn run() {
       menu::create_tray_menu(app)?;
 
       // register global shortcut
-      shortcut::register_global_shortcut(app)?;
+      shortcut::install_global_shortcut_plugin(app)?;
+      shortcut::register_default_shortcuts(app.handle())?;
 
       // get main window and set close behavior
       if let Some(window) = app.get_webview_window("main") {
@@ -37,8 +40,14 @@ pub fn run() {
               println!("close requested");
               api.prevent_close();
 
-              // hide window
-              window_clone.hide().unwrap();
+              if let Err(e) = execute_window_action(&window_clone, LauncherAction::Hide) {
+                eprintln!("hide window on close failed: {:?}", e);
+              }
+            }
+            WindowEvent::Focused(false) => {
+              if let Err(e) = execute_window_action(&window_clone, LauncherAction::Hide) {
+                eprintln!("hide window on blur failed: {:?}", e);
+              }
             }
             _ => {}
           }

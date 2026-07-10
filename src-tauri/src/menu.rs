@@ -1,8 +1,10 @@
 use tauri::{
   menu::{Menu, PredefinedMenuItem},
   tray::TrayIconBuilder,
-  Manager, Runtime,
+  Runtime,
 };
+
+use crate::launcher_actions::{execute_launcher_action, LauncherAction};
 
 fn build_menu<R: Runtime>(app: &tauri::App<R>) -> Result<Menu<R>, tauri::Error> {
   let hide_item = PredefinedMenuItem::hide(app, Some("Hide"))?;
@@ -22,8 +24,8 @@ pub fn create_tray_menu<R: Runtime>(app: &tauri::App<R>) -> Result<(), tauri::Er
     .show_menu_on_left_click(true)
     .on_menu_event(|app, event| match event.id.as_ref() {
       "show" => {
-        if let Some(window) = app.get_webview_window("main") {
-          window.show().unwrap();
+        if let Err(e) = execute_launcher_action(app, LauncherAction::Show) {
+          eprintln!("show window from tray menu failed: {:?}", e);
         }
       }
       "quit" => {
