@@ -2,8 +2,8 @@ use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
 use super::manifest::{
-  validate_manifest, PluginAction, PluginLifecycle, PluginManifest, PluginPage, PluginPermission, PluginRuntime,
-  PluginSource,
+  validate_manifest, PluginAction, PluginDisplayNames, PluginLifecycle, PluginManifest, PluginPage, PluginPermission,
+  PluginRuntime, PluginSource,
 };
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -106,7 +106,16 @@ impl PluginRegistry {
 pub fn builtin_plugin_manifests() -> Vec<PluginManifest> {
   vec![PluginManifest {
     id: "lensx.core.settings".to_string(),
-    name: "Settings".to_string(),
+    display_names: PluginDisplayNames {
+      en: "Settings".to_string(),
+      locales: HashMap::from([("zh-CN".to_string(), "设置".to_string())]),
+    },
+    default_aliases: vec![
+      "settings".to_string(),
+      "preferences".to_string(),
+      "设置".to_string(),
+      "偏好".to_string(),
+    ],
     version: "0.1.0".to_string(),
     source: PluginSource::Builtin,
     lifecycle: PluginLifecycle {
@@ -173,7 +182,11 @@ mod tests {
   fn manifest(id: &str) -> PluginManifest {
     PluginManifest {
       id: id.to_string(),
-      name: "Test".to_string(),
+      display_names: PluginDisplayNames {
+        en: "Test".to_string(),
+        locales: HashMap::new(),
+      },
+      default_aliases: Vec::new(),
       version: "0.1.0".to_string(),
       source: PluginSource::Builtin,
       lifecycle: PluginLifecycle {
@@ -205,6 +218,21 @@ mod tests {
     let registry = load_default_registry().unwrap();
 
     assert!(registry.plugin("lensx.core.settings").is_some());
+    let settings = registry.plugin("lensx.core.settings").unwrap();
+    assert_eq!(settings.display_names.en, "Settings");
+    assert_eq!(
+      settings.display_names.locales.get("zh-CN").map(String::as_str),
+      Some("设置")
+    );
+    assert_eq!(
+      settings.default_aliases,
+      vec![
+        "settings".to_string(),
+        "preferences".to_string(),
+        "设置".to_string(),
+        "偏好".to_string(),
+      ]
+    );
     assert!(registry.page("lensx.core.settings_page_main").is_some());
     assert!(registry.page("lensx.core.settings_page_style").is_some());
     assert!(registry.page("lensx.core.settings_page_shortcuts").is_some());

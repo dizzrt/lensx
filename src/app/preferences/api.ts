@@ -4,8 +4,14 @@ import { type AppThemeMode, appThemeMode, DEFAULT_THEME_MODE } from '@/app/theme
 
 export type ThemeMode = AppThemeMode;
 
+export type PluginAliasOverride = {
+  added_aliases: string[];
+  disabled_default_aliases: string[];
+};
+
 export type AppPreferences = {
   theme_mode: ThemeMode;
+  plugin_alias_overrides: Record<string, PluginAliasOverride>;
 };
 
 export type PreferenceFileStatus = 'ok' | 'missing' | 'corrupted';
@@ -18,11 +24,13 @@ export type AppPreferencesState = {
 
 export type UpdateAppPreferencesRequest = {
   theme_mode?: ThemeMode;
+  plugin_alias_overrides?: Record<string, PluginAliasOverride>;
 };
 
 export const appPreferencesState = ref<AppPreferencesState>({
   preferences: {
     theme_mode: DEFAULT_THEME_MODE,
+    plugin_alias_overrides: {},
   },
   file_status: 'missing',
   diagnostic: null,

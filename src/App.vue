@@ -11,7 +11,7 @@
       />
 
       <div v-else class="launcher-active-plugin flex min-w-0 items-center gap-2">
-        <span class="launcher-active-plugin-name min-w-0">{{ currentPlugin?.name }}</span>
+        <span class="launcher-active-plugin-name min-w-0">{{ currentPluginName }}</span>
         <n-button
           class="launcher-active-plugin-close launcher-no-drag shrink-0"
           quaternary
@@ -340,11 +340,13 @@ import { NAlert, NButton, NEmpty, NInput, useThemeVars } from 'naive-ui';
 import type { CSSProperties } from 'vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { appLocale } from '@/app/i18n/state';
 import { normalizeLauncherSearchQuery, searchPluginActions } from '@/app/launcher/search';
 import { createPluginActionDispatcher, type PluginNavigationState } from '@/app/plugin-host/actions';
+import { resolvePluginDisplayName } from '@/app/plugin-host/display';
 import PluginPageOutlet from '@/app/plugin-host/PluginPageOutlet.vue';
 import { createPluginRegistryIndex, type PluginRegistryIndex } from '@/app/plugin-host/registry';
-import { loadAppPreferences } from '@/app/preferences/api';
+import { appPreferencesState, loadAppPreferences } from '@/app/preferences/api';
 
 const { t } = useI18n();
 const themeVars = useThemeVars();
@@ -454,10 +456,20 @@ const currentPlugin = computed<PluginManifest | undefined>(() =>
     ? pluginRegistry.value.pluginsById.get(currentPluginPage.value.plugin_id)
     : undefined
 );
+const currentPluginName = computed(() =>
+  currentPlugin.value ? resolvePluginDisplayName(currentPlugin.value, appLocale.value) : ''
+);
 const hasActivePluginPage = computed(() => Boolean(currentPluginPage.value && currentPlugin.value));
 const pluginActions = computed(() => (pluginRegistry.value ? [...pluginRegistry.value.actionsById.values()] : []));
 const searchResults = computed(() =>
-  pluginRegistry.value ? searchPluginActions(pluginRegistry.value, normalizedQuery.value) : []
+  pluginRegistry.value
+    ? searchPluginActions(
+        pluginRegistry.value,
+        normalizedQuery.value,
+        appLocale.value,
+        appPreferencesState.value.preferences.plugin_alias_overrides
+      )
+    : []
 );
 const pluginHostHint = computed(() =>
   pluginRegistry.value

@@ -12,6 +12,59 @@ const requiredString = (value: unknown, label: string): string[] =>
 const validatePluginIdReference = (value: string, expected: string, label: string): string[] =>
   value === expected ? [] : [`${label} must reference plugin_id "${expected}", got "${value}"`];
 
+const normalizeAlias = (value: string): string => value.trim().toLocaleLowerCase();
+
+const validateDefaultAliases = (aliases: readonly string[] | undefined): string[] => {
+  const errors: string[] = [];
+  const seen = new Set<string>();
+
+  if (!Array.isArray(aliases)) {
+    errors.push('default_aliases must be an array');
+    return errors;
+  }
+
+  for (const alias of aliases) {
+    if (typeof alias !== 'string') {
+      errors.push('default_aliases entries must be strings');
+      continue;
+    }
+
+    const normalized = normalizeAlias(alias);
+    if (!normalized) {
+      errors.push('default_aliases must not contain empty aliases');
+      continue;
+    }
+
+    if (seen.has(normalized)) {
+      errors.push(`duplicate default_aliases entry "${alias}"`);
+      continue;
+    }
+
+    seen.add(normalized);
+  }
+
+  return errors;
+};
+
+const validateDisplayNames = (manifest: PluginManifest): string[] => {
+  const errors: string[] = [];
+  errors.push(...requiredString(manifest.display_names?.en, 'display_names.en'));
+
+  if (manifest.display_names?.locales !== undefined) {
+    if (typeof manifest.display_names.locales !== 'object' || manifest.display_names.locales === null) {
+      errors.push('display_names.locales must be an object');
+      return errors;
+    }
+
+    for (const [locale, name] of Object.entries(manifest.display_names.locales)) {
+      errors.push(...requiredString(locale, 'display_names.locales locale'));
+      errors.push(...requiredString(name, `display_names.locales.${locale}`));
+    }
+  }
+
+  return errors;
+};
+
 const validatePermissionRefs = (
   ownerId: string,
   permissionIds: readonly string[] | undefined,
@@ -71,7 +124,8 @@ export const validatePluginManifest = (manifest: PluginManifest): PluginValidati
   const pageIds = new Set<string>();
   const permissionIds = new Set<string>();
 
-  errors.push(...requiredString(manifest.name, 'name'));
+  errors.push(...validateDisplayNames(manifest));
+  errors.push(...validateDefaultAliases(manifest.default_aliases));
   errors.push(...requiredString(manifest.version, 'version'));
   errors.push(...validateLensxId(manifest.id, 'plugin.id'));
 

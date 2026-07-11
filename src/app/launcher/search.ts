@@ -1,5 +1,8 @@
 import type { PluginAction, PluginManifest } from '@lensx/plugin-sdk';
+import { resolvePluginAliases } from '@/app/plugin-host/aliases';
+import { resolvePluginDisplayName } from '@/app/plugin-host/display';
 import type { PluginRegistryIndex } from '@/app/plugin-host/registry';
+import type { PluginAliasOverride } from '@/app/preferences/api';
 
 export type LauncherPluginActionSearchResult = {
   id: string;
@@ -20,18 +23,33 @@ export const normalizeLauncherSearchQuery = (query: string): string => query.tri
 
 const includesQuery = (value: string, query: string): boolean => value.toLocaleLowerCase().includes(query);
 
-const getMatchScore = (plugin: PluginManifest, action: PluginAction, query: string): number | null => {
+const includesAnyQuery = (values: readonly string[], query: string): boolean =>
+  values.some((value) => includesQuery(value, query));
+
+const getMatchScore = (
+  plugin: PluginManifest,
+  action: PluginAction,
+  query: string,
+  locale: string,
+  aliasOverride: PluginAliasOverride | undefined
+): number | null => {
   if (includesQuery(action.title, query)) {
     return 0;
   }
-  if (includesQuery(plugin.name, query)) {
+  if (includesQuery(action.id, query)) {
     return 1;
   }
-  if (includesQuery(action.id, query)) {
+  if (includesQuery(plugin.id, query)) {
     return 2;
   }
-  if (includesQuery(plugin.id, query)) {
+  if (includesQuery(plugin.display_names.en, query)) {
     return 3;
+  }
+  if (includesQuery(resolvePluginDisplayName(plugin, locale), query)) {
+    return 4;
+  }
+  if (includesAnyQuery(resolvePluginAliases(plugin, aliasOverride, locale), query)) {
+    return 5;
   }
 
   return null;
@@ -39,7 +57,9 @@ const getMatchScore = (plugin: PluginManifest, action: PluginAction, query: stri
 
 export const searchPluginActions = (
   registry: PluginRegistryIndex,
-  query: string
+  query: string,
+  locale: string,
+  aliasOverrides: Record<string, PluginAliasOverride>
 ): LauncherPluginActionSearchResult[] => {
   const normalizedQuery = normalizeLauncherSearchQuery(query);
   if (!normalizedQuery) {
@@ -49,8 +69,9 @@ export const searchPluginActions = (
   const matches: MatchedPluginAction[] = [];
 
   for (const plugin of registry.snapshot.plugins) {
+    const aliasOverride = aliasOverrides[plugin.id];
     for (const action of plugin.actions) {
-      const score = getMatchScore(plugin, action, normalizedQuery);
+      const score = getMatchScore(plugin, action, normalizedQuery, locale, aliasOverride);
       if (score === null) {
         continue;
       }
@@ -66,11 +87,14 @@ export const searchPluginActions = (
 
   return matches
     .sort((left, right) => left.score - right.score || left.index - right.index)
-    .map(({ action, plugin }) => ({
-      id: action.id,
-      action_id: action.id,
-      title: action.title,
-      plugin_name: plugin.name,
-      detail: `${plugin.name} - ${action.id}`,
-    }));
+    .map(({ action, plugin }) => {
+      const pluginName = resolvePluginDisplayName(plugin, locale);
+      return {
+        id: action.id,
+        action_id: action.id,
+        title: action.title,
+        plugin_name: pluginName,
+        detail: `${pluginName} - ${action.id}`,
+      };
+    });
 };

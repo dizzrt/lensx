@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{error::Error, fmt, fs, io, path::PathBuf};
+use std::{collections::HashMap, error::Error, fmt, fs, io, path::PathBuf};
 use tauri::{AppHandle, Manager, Runtime};
 
 const PREFERENCES_FILE_NAME: &str = "preferences.json";
@@ -11,15 +11,24 @@ pub enum ThemeMode {
   Dark,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PluginAliasOverride {
+  pub added_aliases: Vec<String>,
+  pub disabled_default_aliases: Vec<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AppPreferences {
   pub theme_mode: ThemeMode,
+  #[serde(default)]
+  pub plugin_alias_overrides: HashMap<String, PluginAliasOverride>,
 }
 
 impl Default for AppPreferences {
   fn default() -> Self {
     Self {
       theme_mode: ThemeMode::Light,
+      plugin_alias_overrides: HashMap::new(),
     }
   }
 }
@@ -27,6 +36,7 @@ impl Default for AppPreferences {
 #[derive(Clone, Debug, Deserialize, Default, Eq, PartialEq)]
 pub struct UpdateAppPreferencesRequest {
   pub theme_mode: Option<ThemeMode>,
+  pub plugin_alias_overrides: Option<HashMap<String, PluginAliasOverride>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -117,6 +127,9 @@ impl PreferencesStore {
     if let Some(theme_mode) = request.theme_mode {
       preferences.theme_mode = theme_mode;
     }
+    if let Some(plugin_alias_overrides) = request.plugin_alias_overrides {
+      preferences.plugin_alias_overrides = plugin_alias_overrides;
+    }
 
     self.write(&preferences)?;
 
@@ -187,6 +200,7 @@ mod tests {
   #[test]
   fn default_preferences_use_light_theme() {
     assert_eq!(AppPreferences::default().theme_mode, ThemeMode::Light);
+    assert!(AppPreferences::default().plugin_alias_overrides.is_empty());
   }
 
   #[test]
@@ -208,12 +222,56 @@ mod tests {
     let updated = store
       .update(UpdateAppPreferencesRequest {
         theme_mode: Some(ThemeMode::Dark),
+        plugin_alias_overrides: None,
       })
       .unwrap();
     let read_back = store.read();
 
     assert_eq!(updated.preferences.theme_mode, ThemeMode::Dark);
     assert_eq!(read_back.preferences.theme_mode, ThemeMode::Dark);
+    assert_eq!(read_back.file_status, PreferenceFileStatus::Ok);
+
+    let _ = fs::remove_file(path);
+  }
+
+  #[test]
+  fn reads_legacy_preferences_without_alias_overrides() {
+    let path = unique_preferences_path("legacy");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, r#"{"theme_mode":"dark"}"#).unwrap();
+    let store = PreferencesStore::new(path.clone());
+
+    let state = store.read();
+
+    assert_eq!(state.preferences.theme_mode, ThemeMode::Dark);
+    assert!(state.preferences.plugin_alias_overrides.is_empty());
+    assert_eq!(state.file_status, PreferenceFileStatus::Ok);
+
+    let _ = fs::remove_file(path);
+  }
+
+  #[test]
+  fn update_writes_plugin_alias_overrides() {
+    let path = unique_preferences_path("aliases");
+    let store = PreferencesStore::new(path.clone());
+    let overrides = HashMap::from([(
+      "lensx.core.settings".to_string(),
+      PluginAliasOverride {
+        added_aliases: vec!["prefs".to_string()],
+        disabled_default_aliases: vec!["settings".to_string()],
+      },
+    )]);
+
+    let updated = store
+      .update(UpdateAppPreferencesRequest {
+        theme_mode: None,
+        plugin_alias_overrides: Some(overrides.clone()),
+      })
+      .unwrap();
+    let read_back = store.read();
+
+    assert_eq!(updated.preferences.plugin_alias_overrides, overrides);
+    assert_eq!(read_back.preferences.plugin_alias_overrides, overrides);
     assert_eq!(read_back.file_status, PreferenceFileStatus::Ok);
 
     let _ = fs::remove_file(path);

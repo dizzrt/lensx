@@ -2,6 +2,11 @@ export type LensxId = string;
 
 export type PluginSource = 'builtin' | 'external';
 
+export type PluginDisplayNames = {
+  en: string;
+  locales?: Record<string, string>;
+};
+
 export type PluginLifecycle = {
   uninstallable: boolean;
   disableable: boolean;
@@ -50,7 +55,8 @@ export type PluginAction = {
 
 export type PluginManifest = {
   id: LensxId;
-  name: string;
+  display_names: PluginDisplayNames;
+  default_aliases: string[];
   version: string;
   source: PluginSource;
   lifecycle: PluginLifecycle;
