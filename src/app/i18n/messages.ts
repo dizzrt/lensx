@@ -3,6 +3,7 @@ import type { AppLocale } from './locales';
 export const messages: Record<AppLocale, Record<string, string>> = {
   'zh-CN': {
     'launcher.input.placeholder': '输入关键词或命令',
+    'launcher.activePlugin.close': '关闭插件',
     'launcher.item.action.open': '打开',
     'launcher.item.action.pin': '固定',
     'launcher.item.action.run': '运行',
@@ -69,6 +70,7 @@ export const messages: Record<AppLocale, Record<string, string>> = {
   },
   'en-US': {
     'launcher.input.placeholder': 'Type a keyword or command',
+    'launcher.activePlugin.close': 'Close plugin',
     'launcher.item.action.open': 'Open',
     'launcher.item.action.pin': 'Pin',
     'launcher.item.action.run': 'Run',

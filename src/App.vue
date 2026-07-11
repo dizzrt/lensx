@@ -2,12 +2,29 @@
   <div ref="launcherRef" class="launcher-root flex flex-col" :style="launcherThemeStyle" @mousedown="startPanelDrag">
     <header class="launcher-search flex items-center px-4 pt-4" @mousedown.stop="startHeaderDrag">
       <n-input
+        v-if="!hasActivePluginPage"
         v-model:value="query"
         class="launcher-search-input launcher-no-drag"
         clearable
         size="large"
         :placeholder="t('launcher.input.placeholder')"
       />
+
+      <div v-else class="launcher-active-plugin flex min-w-0 items-center gap-2">
+        <span class="launcher-active-plugin-name min-w-0">{{ currentPlugin?.name }}</span>
+        <n-button
+          class="launcher-active-plugin-close launcher-no-drag shrink-0"
+          quaternary
+          circle
+          size="small"
+          :aria-label="t('launcher.activePlugin.close')"
+          :title="t('launcher.activePlugin.close')"
+          @click="closeActivePlugin"
+          @mousedown.stop
+        >
+          ×
+        </n-button>
+      </div>
     </header>
 
     <main
@@ -148,6 +165,30 @@
 
 .launcher-search-input {
   border-radius: 14px;
+}
+
+.launcher-active-plugin {
+  max-width: 100%;
+  height: 40px;
+}
+
+.launcher-active-plugin-name {
+  overflow: hidden;
+  color: var(--launcher-text-color);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.launcher-active-plugin-close {
+  color: var(--launcher-text-color-2);
+
+  &:hover,
+  &:focus-visible {
+    color: var(--launcher-primary-color);
+  }
 }
 
 .launcher-body {
@@ -292,10 +333,10 @@
 </style>
 
 <script setup lang="ts">
-import type { PluginRegistrySnapshot } from '@lensx/plugin-sdk';
+import type { PluginManifest, PluginPage, PluginRegistrySnapshot } from '@lensx/plugin-sdk';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
-import { NAlert, NEmpty, NInput, useThemeVars } from 'naive-ui';
+import { NAlert, NButton, NEmpty, NInput, useThemeVars } from 'naive-ui';
 import type { CSSProperties } from 'vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -404,7 +445,16 @@ const pinnedItems: LauncherItem[] = [
 
 const normalizedQuery = computed(() => normalizeLauncherSearchQuery(query.value));
 const hasQuery = computed(() => normalizedQuery.value.length > 0);
-const hasActivePluginPage = computed(() => pluginNavigation.value.currentPageId !== null);
+const currentPluginPage = computed<PluginPage | undefined>(() => {
+  const currentPageId = pluginNavigation.value.currentPageId;
+  return currentPageId && pluginRegistry.value ? pluginRegistry.value.pagesById.get(currentPageId) : undefined;
+});
+const currentPlugin = computed<PluginManifest | undefined>(() =>
+  currentPluginPage.value && pluginRegistry.value
+    ? pluginRegistry.value.pluginsById.get(currentPluginPage.value.plugin_id)
+    : undefined
+);
+const hasActivePluginPage = computed(() => Boolean(currentPluginPage.value && currentPlugin.value));
 const pluginActions = computed(() => (pluginRegistry.value ? [...pluginRegistry.value.actionsById.values()] : []));
 const searchResults = computed(() =>
   pluginRegistry.value ? searchPluginActions(pluginRegistry.value, normalizedQuery.value) : []
@@ -470,15 +520,18 @@ const startHeaderDrag = (event: MouseEvent) => {
     return;
   }
 
+  if (isNonDragTarget(event.target)) {
+    return;
+  }
+
   void getCurrentWindow().startDragging();
 };
 
+const isNonDragTarget = (target: EventTarget | null) =>
+  target instanceof Element && target.closest('.launcher-no-drag, input, textarea, button, [role="button"], .n-input');
+
 const startPanelDrag = (event: MouseEvent) => {
-  const target = event.target;
-  if (
-    !(target instanceof Element) ||
-    target.closest('.launcher-no-drag, input, textarea, button, [role="button"], .n-input')
-  ) {
+  if (!(event.target instanceof Element) || isNonDragTarget(event.target)) {
     return;
   }
 
@@ -505,6 +558,11 @@ const openPluginAction = (actionId: string) => {
   } catch (error) {
     pluginHostError.value = error instanceof Error ? error.message : String(error);
   }
+};
+
+const closeActivePlugin = () => {
+  pluginNavigation.value.currentPageId = null;
+  query.value = '';
 };
 
 onMounted(() => {
