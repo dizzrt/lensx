@@ -1,7 +1,10 @@
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
-use super::manifest::{validate_manifest, PluginAction, PluginManifest, PluginPage, PluginPermission};
+use super::manifest::{
+  validate_manifest, PluginAction, PluginLifecycle, PluginManifest, PluginPage, PluginPermission, PluginRuntime,
+  PluginSource,
+};
 
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct PluginRegistrySnapshot {
@@ -101,7 +104,56 @@ impl PluginRegistry {
 }
 
 pub fn builtin_plugin_manifests() -> Vec<PluginManifest> {
-  Vec::new()
+  vec![PluginManifest {
+    id: "lensx.core.settings".to_string(),
+    name: "Settings".to_string(),
+    version: "0.1.0".to_string(),
+    source: PluginSource::Builtin,
+    lifecycle: PluginLifecycle {
+      uninstallable: false,
+      disableable: false,
+    },
+    runtime: PluginRuntime::VueModule {
+      module: "settings".to_string(),
+    },
+    pages: vec![
+      PluginPage {
+        id: "lensx.core.settings_page_main".to_string(),
+        plugin_id: "lensx.core.settings".to_string(),
+        title: "Settings".to_string(),
+        entry: "settings".to_string(),
+        parent_page_id: None,
+        required_permissions: None,
+      },
+      PluginPage {
+        id: "lensx.core.settings_page_style".to_string(),
+        plugin_id: "lensx.core.settings".to_string(),
+        title: "Style".to_string(),
+        entry: "settings/style".to_string(),
+        parent_page_id: Some("lensx.core.settings_page_main".to_string()),
+        required_permissions: None,
+      },
+      PluginPage {
+        id: "lensx.core.settings_page_shortcuts".to_string(),
+        plugin_id: "lensx.core.settings".to_string(),
+        title: "Shortcuts".to_string(),
+        entry: "settings/shortcuts".to_string(),
+        parent_page_id: Some("lensx.core.settings_page_main".to_string()),
+        required_permissions: None,
+      },
+    ],
+    actions: vec![PluginAction {
+      id: "lensx.core.settings_action_open".to_string(),
+      plugin_id: "lensx.core.settings".to_string(),
+      title: "Open Settings".to_string(),
+      target_page_id: "lensx.core.settings_page_main".to_string(),
+      required_permissions: None,
+    }],
+    permissions: Vec::new(),
+    sdk: None,
+    host_api: None,
+    sidecar: None,
+  }]
 }
 
 pub fn load_default_registry() -> Result<PluginRegistry, Vec<String>> {
@@ -117,7 +169,6 @@ pub fn load_default_registry() -> Result<PluginRegistry, Vec<String>> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::plugin::manifest::{PluginLifecycle, PluginRuntime, PluginSource};
 
   fn manifest(id: &str) -> PluginManifest {
     PluginManifest {
@@ -147,5 +198,21 @@ mod tests {
     registry.register(manifest("lensx.test.one")).unwrap();
 
     assert!(registry.register(manifest("lensx.test.one")).is_err());
+  }
+
+  #[test]
+  fn default_registry_contains_valid_builtin_settings_plugin() {
+    let registry = load_default_registry().unwrap();
+
+    assert!(registry.plugin("lensx.core.settings").is_some());
+    assert!(registry.page("lensx.core.settings_page_main").is_some());
+    assert!(registry.page("lensx.core.settings_page_style").is_some());
+    assert!(registry.page("lensx.core.settings_page_shortcuts").is_some());
+    assert_eq!(
+      registry
+        .action("lensx.core.settings_action_open")
+        .map(|action| action.target_page_id.as_str()),
+      Some("lensx.core.settings_page_main")
+    );
   }
 }

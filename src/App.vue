@@ -10,67 +10,77 @@
       />
     </header>
 
-    <main class="launcher-body flex flex-col gap-4 px-4 pt-3 pb-4">
-      <section v-for="section in visibleSections" :key="section.id" class="launcher-section">
-        <div class="launcher-section-heading flex items-center justify-between gap-3">
-          <h2 class="m-0">{{ t(section.titleKey) }}</h2>
-          <span>{{ section.hint }}</span>
-        </div>
+    <main
+      class="launcher-body flex flex-col px-4 pt-3 pb-4"
+      :class="hasActivePluginPage ? 'launcher-body--plugin' : 'gap-4'"
+    >
+      <plugin-page-outlet
+        v-if="hasActivePluginPage && pluginRegistry"
+        class="launcher-plugin-page"
+        :page-id="pluginNavigation.currentPageId"
+        :registry="pluginRegistry"
+      />
 
-        <div class="launcher-grid grid grid-cols-2 gap-2">
-          <button
-            v-for="item in section.items"
-            :key="item.id"
-            class="launcher-item launcher-no-drag flex items-center gap-3"
-            type="button"
-          >
-            <span class="launcher-item-icon shrink-0" aria-hidden="true">{{ item.icon }}</span>
-            <span class="launcher-item-main min-w-0">
-              <span class="launcher-item-title">{{ t(item.titleKey) }}</span>
-              <span class="launcher-item-description">{{ t(item.descriptionKey) }}</span>
-            </span>
-            <span class="launcher-item-meta shrink-0">
-              <span class="launcher-item-badge">{{ t(item.badgeKey) }}</span>
-              <span class="launcher-item-action">{{ t(item.actionKey) }}</span>
-            </span>
-          </button>
-        </div>
-      </section>
+      <template v-else>
+        <section v-for="section in visibleSections" :key="section.id" class="launcher-section">
+          <div class="launcher-section-heading flex items-center justify-between gap-3">
+            <h2 class="m-0">{{ t(section.titleKey) }}</h2>
+            <span>{{ section.hint }}</span>
+          </div>
 
-      <section class="launcher-section">
-        <div class="launcher-section-heading flex items-center justify-between gap-3">
-          <h2 class="m-0">{{ t('pluginHost.section.title') }}</h2>
-          <span>{{ pluginHostHint }}</span>
-        </div>
+          <div class="launcher-grid grid grid-cols-2 gap-2">
+            <button
+              v-for="item in section.items"
+              :key="item.id"
+              class="launcher-item launcher-no-drag flex items-center gap-3"
+              type="button"
+            >
+              <span class="launcher-item-icon shrink-0" aria-hidden="true">{{ item.icon }}</span>
+              <span class="launcher-item-main min-w-0">
+                <span class="launcher-item-title">{{ t(item.titleKey) }}</span>
+                <span class="launcher-item-description">{{ t(item.descriptionKey) }}</span>
+              </span>
+              <span class="launcher-item-meta shrink-0">
+                <span class="launcher-item-badge">{{ t(item.badgeKey) }}</span>
+                <span class="launcher-item-action">{{ t(item.actionKey) }}</span>
+              </span>
+            </button>
+          </div>
+        </section>
 
-        <n-alert v-if="pluginHostError" type="error" :title="t('pluginHost.registry.errorTitle')">
-          {{ pluginHostError }}
-        </n-alert>
+        <section class="launcher-section">
+          <div class="launcher-section-heading flex items-center justify-between gap-3">
+            <h2 class="m-0">{{ t('pluginHost.section.title') }}</h2>
+            <span>{{ pluginHostHint }}</span>
+          </div>
 
-        <div v-else-if="pluginActions.length > 0" class="launcher-grid grid grid-cols-2 gap-2">
-          <button
-            v-for="action in pluginActions"
-            :key="action.id"
-            class="launcher-item launcher-no-drag flex items-center gap-3"
-            type="button"
-            @click="openPluginAction(action.id)"
-          >
-            <span class="launcher-item-icon shrink-0" aria-hidden="true">P</span>
-            <span class="launcher-item-main min-w-0">
-              <span class="launcher-item-title">{{ action.title }}</span>
-              <span class="launcher-item-description">{{ action.id }}</span>
-            </span>
-            <span class="launcher-item-meta shrink-0">
-              <span class="launcher-item-badge">{{ t('pluginHost.action.badge') }}</span>
-              <span class="launcher-item-action">{{ t('launcher.item.action.open') }}</span>
-            </span>
-          </button>
-        </div>
+          <n-alert v-if="pluginHostError" type="error" :title="t('pluginHost.registry.errorTitle')">
+            {{ pluginHostError }}
+          </n-alert>
 
-        <n-empty v-else class="launcher-no-drag" :description="t('pluginHost.registry.empty')" />
-      </section>
+          <div v-else-if="pluginActions.length > 0" class="launcher-grid grid grid-cols-2 gap-2">
+            <button
+              v-for="action in pluginActions"
+              :key="action.id"
+              class="launcher-item launcher-no-drag flex items-center gap-3"
+              type="button"
+              @click="openPluginAction(action.id)"
+            >
+              <span class="launcher-item-icon shrink-0" aria-hidden="true">P</span>
+              <span class="launcher-item-main min-w-0">
+                <span class="launcher-item-title">{{ action.title }}</span>
+                <span class="launcher-item-description">{{ action.id }}</span>
+              </span>
+              <span class="launcher-item-meta shrink-0">
+                <span class="launcher-item-badge">{{ t('pluginHost.action.badge') }}</span>
+                <span class="launcher-item-action">{{ t('launcher.item.action.open') }}</span>
+              </span>
+            </button>
+          </div>
 
-      <plugin-page-outlet v-if="pluginRegistry" :page-id="pluginNavigation.currentPageId" :registry="pluginRegistry" />
+          <n-empty v-else class="launcher-no-drag" :description="t('pluginHost.registry.empty')" />
+        </section>
+      </template>
     </main>
   </div>
 </template>
@@ -126,6 +136,18 @@
   &::-webkit-scrollbar-track {
     background: transparent;
   }
+}
+
+.launcher-body--plugin {
+  --launcher-plugin-body-min-height: 600px;
+
+  align-items: stretch;
+  min-height: var(--launcher-plugin-body-min-height);
+}
+
+.launcher-plugin-page {
+  flex: 1;
+  min-height: var(--launcher-plugin-body-min-height);
 }
 
 .launcher-section-heading {
@@ -246,6 +268,7 @@ import { useI18n } from 'vue-i18n';
 import { createPluginActionDispatcher, type PluginNavigationState } from '@/app/plugin-host/actions';
 import PluginPageOutlet from '@/app/plugin-host/PluginPageOutlet.vue';
 import { createPluginRegistryIndex, type PluginRegistryIndex } from '@/app/plugin-host/registry';
+import { loadAppPreferences } from '@/app/preferences/api';
 
 const { t } = useI18n();
 const themeVars = useThemeVars();
@@ -375,6 +398,7 @@ const matchItems: LauncherItem[] = [
 
 const normalizedQuery = computed(() => query.value.trim());
 const hasQuery = computed(() => normalizedQuery.value.length > 0);
+const hasActivePluginPage = computed(() => pluginNavigation.value.currentPageId !== null);
 const pluginActions = computed(() => (pluginRegistry.value ? [...pluginRegistry.value.actionsById.values()] : []));
 const pluginHostHint = computed(() =>
   pluginRegistry.value
@@ -490,6 +514,9 @@ onMounted(() => {
   if (launcherRef.value) {
     resizeObserver.observe(launcherRef.value);
   }
+  void loadAppPreferences().catch((error) => {
+    console.warn('Failed to load app preferences', error);
+  });
   void loadPluginRegistry();
   void nextTick(scheduleWindowResize);
 });

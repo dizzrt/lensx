@@ -1,7 +1,8 @@
-mod launcher_actions;
 mod host_api;
+mod launcher_actions;
 mod menu;
 mod plugin;
+mod preferences;
 mod shortcut;
 use launcher_actions::{execute_window_action, LauncherAction};
 use tauri::{Manager, WindowEvent};
@@ -59,12 +60,15 @@ pub fn run() {
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
+      preferences::get_app_preferences,
+      preferences::update_app_preferences,
       plugin::call_host_api,
       plugin::get_host_api_methods,
       plugin::get_plugin_registry,
       plugin::get_plugin_sidecar_status,
       plugin::read_external_plugin_manifest,
-      plugin::resolve_external_plugin_entry
+      plugin::resolve_external_plugin_entry,
+      shortcut::get_default_shortcut_bindings
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

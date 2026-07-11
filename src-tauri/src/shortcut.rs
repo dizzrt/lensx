@@ -1,3 +1,4 @@
+use serde::Serialize;
 use std::{error::Error, fmt, sync::Mutex};
 
 use tauri::{AppHandle, Manager, Runtime};
@@ -10,6 +11,14 @@ pub struct ShortcutBinding {
   pub id: &'static str,
   pub shortcut: Shortcut,
   pub action: LauncherAction,
+  pub enabled: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ShortcutBindingView {
+  pub id: String,
+  pub shortcut: String,
+  pub action_id: String,
   pub enabled: bool,
 }
 
@@ -172,6 +181,19 @@ pub fn default_shortcut_bindings() -> Vec<ShortcutBinding> {
     action: LauncherAction::Toggle,
     enabled: true,
   }]
+}
+
+#[tauri::command]
+pub fn get_default_shortcut_bindings() -> Vec<ShortcutBindingView> {
+  default_shortcut_bindings()
+    .into_iter()
+    .map(|binding| ShortcutBindingView {
+      id: binding.id.to_string(),
+      shortcut: binding.shortcut_label(),
+      action_id: binding.action.id().to_string(),
+      enabled: binding.enabled,
+    })
+    .collect()
 }
 
 pub fn install_global_shortcut_plugin<R: Runtime>(app: &tauri::App<R>) -> Result<(), ShortcutError> {

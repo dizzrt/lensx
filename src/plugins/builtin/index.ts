@@ -21,3 +21,5 @@ export const loadBuiltinPluginPage = async (pageId: string): Promise<Component |
 };
 
 export const listBuiltinPluginPageIds = (): string[] => [...builtinPageModules.keys()];
+
+registerBuiltinPluginPage('lensx.core.settings_page_main', () => import('./settings/SettingsPage.vue'));

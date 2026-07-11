@@ -1,9 +1,7 @@
 ## Purpose
 
 定义 lensX 插件系统的稳定能力边界，包括统一插件 contract、全局 ID 与引用校验、内建插件与外部插件运行时、外部插件 Host API 通信、同仓 Plugin SDK、插件规范文档，以及 sidecar 第一阶段预留策略。
-
 ## Requirements
-
 ### Requirement: 插件系统必须提供统一插件 Contract
 
 系统 MUST 为内建插件和外部插件提供统一插件 contract，至少包含插件 ID、来源、生命周期策略、运行时策略、页面、行为、权限、SDK/Host API 兼容信息和 sidecar 预留信息。插件来源 MUST 只描述插件来自内建包还是外部安装包，MUST NOT 隐含插件能否卸载或禁用；卸载和禁用能力 MUST 由生命周期策略显式表达。
@@ -174,3 +172,27 @@
 - **THEN** 系统可以读取该预留字段
 - **THEN** 系统不得启动 sidecar 进程
 - **THEN** 系统返回或记录 sidecar 暂不支持的可诊断状态
+
+### Requirement: 插件系统必须注册内建设置插件
+
+系统 MUST 将 `lensx.core.settings` 作为内建插件注册到默认插件 registry。该插件 MUST 使用统一插件 contract 声明 runtime、pages、actions 和 lifecycle，并 MUST 通过现有内建 Vue module 页面加载机制渲染。
+
+#### Scenario: 默认 registry 包含内建设置插件
+
+- **WHEN** 系统加载默认插件 registry
+- **THEN** registry 包含 ID 为 `lensx.core.settings` 的内建插件
+- **THEN** 该插件来源为 `builtin`
+- **THEN** 该插件 runtime 为 `vue_module`
+
+#### Scenario: 设置插件页面和行为通过统一 contract 校验
+
+- **WHEN** 系统注册内建设置插件
+- **THEN** 系统使用现有三段式 ID 校验规则校验插件、页面和行为 ID
+- **THEN** 系统使用现有引用校验规则校验 `plugin_id`、`parent_page_id` 和 `target_page_id`
+
+#### Scenario: 设置 action 打开设置主页面
+
+- **WHEN** 用户触发 `lensx.core.settings_action_open`
+- **THEN** 插件 action dispatcher 定位到 `lensx.core.settings_page_main`
+- **THEN** 插件页面出口加载该页面对应的内建 Vue module
+

@@ -4,7 +4,7 @@
 
     <n-empty v-else-if="!page || !plugin" :description="t('pluginHost.outlet.empty')" />
 
-    <component :is="builtinComponent" v-else-if="builtinComponent" />
+    <component :is="builtinComponent" v-else-if="builtinComponent" class="plugin-outlet__page" />
 
     <external-plugin-frame
       v-else-if="plugin.runtime.ui === 'iframe'"
@@ -78,6 +78,14 @@ watchEffect(async () => {
 
 <style scoped lang="less">
 .plugin-outlet {
+  display: flex;
+  flex: 1;
+  min-height: var(--launcher-plugin-body-min-height);
   color: var(--launcher-text-color);
+}
+
+.plugin-outlet__page {
+  flex: 1;
+  min-height: var(--launcher-plugin-body-min-height);
 }
 </style>
