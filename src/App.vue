@@ -21,6 +21,40 @@
         :registry="pluginRegistry"
       />
 
+      <template v-else-if="hasQuery">
+        <section class="launcher-section">
+          <div class="launcher-section-heading flex items-center justify-between gap-3">
+            <h2 class="m-0">{{ t('launcher.section.matches.title') }}</h2>
+          </div>
+
+          <n-alert v-if="pluginHostError" type="error" :title="t('launcher.search.registryErrorTitle')">
+            {{ pluginHostError }}
+          </n-alert>
+
+          <div v-else-if="searchResults.length > 0" class="launcher-grid grid grid-cols-2 gap-2">
+            <button
+              v-for="result in searchResults"
+              :key="result.id"
+              class="launcher-item launcher-no-drag flex items-center gap-3"
+              type="button"
+              @click="openPluginAction(result.action_id)"
+            >
+              <span class="launcher-item-icon shrink-0" aria-hidden="true">P</span>
+              <span class="launcher-item-main min-w-0">
+                <span class="launcher-item-title">{{ result.title }}</span>
+                <span class="launcher-item-description">{{ result.detail }}</span>
+              </span>
+              <span class="launcher-item-meta shrink-0">
+                <span class="launcher-item-badge">{{ t('pluginHost.action.badge') }}</span>
+                <span class="launcher-item-action">{{ t('launcher.item.action.open') }}</span>
+              </span>
+            </button>
+          </div>
+
+          <n-empty v-else class="launcher-no-drag" :description="t('launcher.search.empty')" />
+        </section>
+      </template>
+
       <template v-else>
         <section v-for="section in visibleSections" :key="section.id" class="launcher-section">
           <div class="launcher-section-heading flex items-center justify-between gap-3">
@@ -265,6 +299,7 @@ import { NAlert, NEmpty, NInput, useThemeVars } from 'naive-ui';
 import type { CSSProperties } from 'vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { normalizeLauncherSearchQuery, searchPluginActions } from '@/app/launcher/search';
 import { createPluginActionDispatcher, type PluginNavigationState } from '@/app/plugin-host/actions';
 import PluginPageOutlet from '@/app/plugin-host/PluginPageOutlet.vue';
 import { createPluginRegistryIndex, type PluginRegistryIndex } from '@/app/plugin-host/registry';
@@ -367,39 +402,13 @@ const pinnedItems: LauncherItem[] = [
   },
 ];
 
-const matchItems: LauncherItem[] = [
-  ...recentItems,
-  ...pinnedItems,
-  {
-    id: 'calendar',
-    icon: 'D',
-    titleKey: 'launcher.item.calendar.title',
-    descriptionKey: 'launcher.item.calendar.description',
-    badgeKey: 'launcher.item.badge.app',
-    actionKey: 'launcher.item.action.open',
-  },
-  {
-    id: 'snippets',
-    icon: 'T',
-    titleKey: 'launcher.item.snippets.title',
-    descriptionKey: 'launcher.item.snippets.description',
-    badgeKey: 'launcher.item.badge.command',
-    actionKey: 'launcher.item.action.run',
-  },
-  {
-    id: 'preview',
-    icon: 'P',
-    titleKey: 'launcher.item.preview.title',
-    descriptionKey: 'launcher.item.preview.description',
-    badgeKey: 'launcher.item.badge.tool',
-    actionKey: 'launcher.item.action.open',
-  },
-];
-
-const normalizedQuery = computed(() => query.value.trim());
+const normalizedQuery = computed(() => normalizeLauncherSearchQuery(query.value));
 const hasQuery = computed(() => normalizedQuery.value.length > 0);
 const hasActivePluginPage = computed(() => pluginNavigation.value.currentPageId !== null);
 const pluginActions = computed(() => (pluginRegistry.value ? [...pluginRegistry.value.actionsById.values()] : []));
+const searchResults = computed(() =>
+  pluginRegistry.value ? searchPluginActions(pluginRegistry.value, normalizedQuery.value) : []
+);
 const pluginHostHint = computed(() =>
   pluginRegistry.value
     ? t('pluginHost.section.hint', { count: pluginRegistry.value.snapshot.plugins.length })
@@ -407,17 +416,6 @@ const pluginHostHint = computed(() =>
 );
 
 const visibleSections = computed<LauncherSection[]>(() => {
-  if (hasQuery.value) {
-    return [
-      {
-        id: 'matches',
-        titleKey: 'launcher.section.matches.title',
-        hint: t('launcher.section.matches.hint', { query: normalizedQuery.value }),
-        items: matchItems,
-      },
-    ];
-  }
-
   return [
     {
       id: 'recent',
@@ -528,11 +526,11 @@ onBeforeUnmount(() => {
   }
 });
 
-watch(visibleSections, () => {
+watch([visibleSections, searchResults, hasQuery], () => {
   void nextTick(scheduleWindowResize);
 });
 
-watch([visibleSections, pluginActions, () => pluginNavigation.value.currentPageId], () => {
+watch([visibleSections, pluginActions, searchResults, () => pluginNavigation.value.currentPageId], () => {
   void nextTick(scheduleWindowResize);
 });
 </script>
