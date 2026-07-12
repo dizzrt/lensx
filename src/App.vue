@@ -98,39 +98,6 @@
             </button>
           </div>
         </section>
-
-        <section class="launcher-section">
-          <div class="launcher-section-heading flex items-center justify-between gap-3">
-            <h2 class="m-0">{{ t('pluginHost.section.title') }}</h2>
-            <span>{{ pluginHostHint }}</span>
-          </div>
-
-          <n-alert v-if="pluginHostError" type="error" :title="t('pluginHost.registry.errorTitle')">
-            {{ pluginHostError }}
-          </n-alert>
-
-          <div v-else-if="pluginActions.length > 0" class="launcher-grid grid grid-cols-2 gap-2">
-            <button
-              v-for="action in pluginActions"
-              :key="action.id"
-              class="launcher-item launcher-no-drag flex items-center gap-3"
-              type="button"
-              @click="openPluginAction(action.id)"
-            >
-              <span class="launcher-item-icon shrink-0" aria-hidden="true">P</span>
-              <span class="launcher-item-main min-w-0">
-                <span class="launcher-item-title">{{ action.title }}</span>
-                <span class="launcher-item-description">{{ action.id }}</span>
-              </span>
-              <span class="launcher-item-meta shrink-0">
-                <span class="launcher-item-badge">{{ t('pluginHost.action.badge') }}</span>
-                <span class="launcher-item-action">{{ t('launcher.item.action.open') }}</span>
-              </span>
-            </button>
-          </div>
-
-          <n-empty v-else class="launcher-no-drag" :description="t('pluginHost.registry.empty')" />
-        </section>
       </template>
     </main>
   </div>
@@ -460,7 +427,6 @@ const currentPluginName = computed(() =>
   currentPlugin.value ? resolvePluginDisplayName(currentPlugin.value, appLocale.value) : ''
 );
 const hasActivePluginPage = computed(() => Boolean(currentPluginPage.value && currentPlugin.value));
-const pluginActions = computed(() => (pluginRegistry.value ? [...pluginRegistry.value.actionsById.values()] : []));
 const searchResults = computed(() =>
   pluginRegistry.value
     ? searchPluginActions(
@@ -470,11 +436,6 @@ const searchResults = computed(() =>
         appPreferencesState.value.preferences.plugin_alias_overrides
       )
     : []
-);
-const pluginHostHint = computed(() =>
-  pluginRegistry.value
-    ? t('pluginHost.section.hint', { count: pluginRegistry.value.snapshot.plugins.length })
-    : t('pluginHost.section.loading')
 );
 
 const visibleSections = computed<LauncherSection[]>(() => {
@@ -596,11 +557,7 @@ onBeforeUnmount(() => {
   }
 });
 
-watch([visibleSections, searchResults, hasQuery], () => {
-  void nextTick(scheduleWindowResize);
-});
-
-watch([visibleSections, pluginActions, searchResults, () => pluginNavigation.value.currentPageId], () => {
+watch([visibleSections, searchResults, hasQuery, () => pluginNavigation.value.currentPageId], () => {
   void nextTick(scheduleWindowResize);
 });
 </script>

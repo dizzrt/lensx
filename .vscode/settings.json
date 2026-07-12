@@ -35,5 +35,6 @@
     "editor.codeActionsOnSave": {
       "source.fixAll": "explicit"
     }
-  }
+  },
+  "i18n-ally.localesPaths": ["src/app/i18n"]
 }
