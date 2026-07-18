@@ -13,4 +13,7 @@ export default defineConfig({
   html: {
     template: './static/index.html',
   },
+  server: {
+    port: 40755,
+  },
 });
