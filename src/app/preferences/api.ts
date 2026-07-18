@@ -12,6 +12,8 @@ export type PluginAliasOverride = {
 export type AppPreferences = {
   theme_mode: ThemeMode;
   plugin_alias_overrides: Record<string, PluginAliasOverride>;
+  recent_action_ids: string[];
+  pinned_action_ids: string[];
 };
 
 export type PreferenceFileStatus = 'ok' | 'missing' | 'corrupted';
@@ -25,12 +27,16 @@ export type AppPreferencesState = {
 export type UpdateAppPreferencesRequest = {
   theme_mode?: ThemeMode;
   plugin_alias_overrides?: Record<string, PluginAliasOverride>;
+  recent_action_ids?: string[];
+  pinned_action_ids?: string[];
 };
 
 export const appPreferencesState = ref<AppPreferencesState>({
   preferences: {
     theme_mode: DEFAULT_THEME_MODE,
     plugin_alias_overrides: {},
+    recent_action_ids: [],
+    pinned_action_ids: [],
   },
   file_status: 'missing',
   diagnostic: null,
@@ -61,4 +67,38 @@ export const loadAppPreferences = async (): Promise<AppPreferencesState> => {
 
 export const updateAppPreferences = async (request: UpdateAppPreferencesRequest): Promise<AppPreferencesState> => {
   return applyPreferencesState(await invoke<AppPreferencesState>('update_app_preferences', { request }));
+};
+
+let launcherPreferencesMutation = Promise.resolve();
+
+const enqueueLauncherPreferencesMutation = (
+  mutation: () => Promise<AppPreferencesState>
+): Promise<AppPreferencesState> => {
+  const queuedMutation = launcherPreferencesMutation.then(mutation, mutation);
+  launcherPreferencesMutation = queuedMutation.then(
+    () => undefined,
+    () => undefined
+  );
+
+  return queuedMutation;
+};
+
+export const recordLauncherAction = (actionId: string): Promise<AppPreferencesState> => {
+  return enqueueLauncherPreferencesMutation(async () =>
+    applyPreferencesState(
+      await invoke<AppPreferencesState>('record_launcher_action', {
+        request: { action_id: actionId },
+      })
+    )
+  );
+};
+
+export const setLauncherActionPinned = (actionId: string, pinned: boolean): Promise<AppPreferencesState> => {
+  return enqueueLauncherPreferencesMutation(async () =>
+    applyPreferencesState(
+      await invoke<AppPreferencesState>('set_launcher_action_pinned', {
+        request: { action_id: actionId, pinned },
+      })
+    )
+  );
 };

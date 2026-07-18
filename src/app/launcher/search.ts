@@ -1,16 +1,11 @@
 import type { PluginAction, PluginManifest } from '@lensx/plugin-sdk';
+import { createLauncherActionEntry, type LauncherActionEntry } from '@/app/launcher/entries';
 import { resolvePluginAliases } from '@/app/plugin-host/aliases';
 import { resolvePluginDisplayName } from '@/app/plugin-host/display';
 import type { PluginRegistryIndex } from '@/app/plugin-host/registry';
 import type { PluginAliasOverride } from '@/app/preferences/api';
 
-export type LauncherPluginActionSearchResult = {
-  id: string;
-  action_id: string;
-  title: string;
-  plugin_name: string;
-  detail: string;
-};
+export type LauncherPluginActionSearchResult = LauncherActionEntry;
 
 type MatchedPluginAction = {
   action: PluginAction;
@@ -87,14 +82,5 @@ export const searchPluginActions = (
 
   return matches
     .sort((left, right) => left.score - right.score || left.index - right.index)
-    .map(({ action, plugin }) => {
-      const pluginName = resolvePluginDisplayName(plugin, locale);
-      return {
-        id: action.id,
-        action_id: action.id,
-        title: pluginName,
-        plugin_name: pluginName,
-        detail: `${pluginName} - ${action.id}`,
-      };
-    });
+    .map(({ action, plugin }) => createLauncherActionEntry(action, plugin, locale));
 };

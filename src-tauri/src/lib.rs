@@ -62,6 +62,8 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       preferences::get_app_preferences,
       preferences::update_app_preferences,
+      preferences::record_launcher_action,
+      preferences::set_launcher_action_pinned,
       plugin::call_host_api,
       plugin::get_host_api_methods,
       plugin::get_plugin_registry,

@@ -1,14 +1,16 @@
 <template>
   <n-config-provider :date-locale="naiveDateLocale" :locale="naiveLocale" :theme="naiveTheme">
     <n-global-style />
-    <div class="app-shell wh-full">
-      <slot />
-    </div>
+    <n-message-provider>
+      <div class="app-shell wh-full">
+        <slot />
+      </div>
+    </n-message-provider>
   </n-config-provider>
 </template>
 
 <script setup lang="ts">
-import { NConfigProvider, NGlobalStyle } from 'naive-ui';
+import { NConfigProvider, NGlobalStyle, NMessageProvider } from 'naive-ui';
 import { computed, watchEffect } from 'vue';
 import { getNaiveLocaleBundle } from '@/app/naive/locale';
 import { useNaiveTheme } from '@/app/theme/theme';

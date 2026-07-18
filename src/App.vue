@@ -49,23 +49,14 @@
           </n-alert>
 
           <div v-else-if="searchResults.length > 0" class="launcher-grid grid grid-cols-2 gap-2">
-            <button
+            <launcher-action-card
               v-for="result in searchResults"
               :key="result.id"
-              class="launcher-item launcher-no-drag flex items-center gap-3"
-              type="button"
-              @click="openPluginAction(result.action_id)"
-            >
-              <span class="launcher-item-icon shrink-0" aria-hidden="true">P</span>
-              <span class="launcher-item-main min-w-0">
-                <span class="launcher-item-title">{{ result.title }}</span>
-                <span class="launcher-item-description">{{ result.detail }}</span>
-              </span>
-              <span class="launcher-item-meta shrink-0">
-                <span class="launcher-item-badge">{{ t('pluginHost.action.badge') }}</span>
-                <span class="launcher-item-action">{{ t('launcher.item.action.open') }}</span>
-              </span>
-            </button>
+              :entry="result"
+              :pinned="isLauncherActionPinned(result.action_id)"
+              @open="openPluginAction(result.action_id)"
+              @toggle-pin="toggleLauncherActionPin(result.action_id)"
+            />
           </div>
 
           <n-empty v-else class="launcher-no-drag" :description="t('launcher.search.empty')" />
@@ -76,27 +67,26 @@
         <section v-for="section in visibleSections" :key="section.id" class="launcher-section">
           <div class="launcher-section-heading flex items-center justify-between gap-3">
             <h2 class="m-0">{{ t(section.titleKey) }}</h2>
-            <span>{{ section.hint }}</span>
           </div>
 
-          <div class="launcher-grid grid grid-cols-2 gap-2">
-            <button
+          <div v-if="section.items.length > 0" class="launcher-grid grid grid-cols-2 gap-2">
+            <launcher-action-card
               v-for="item in section.items"
               :key="item.id"
-              class="launcher-item launcher-no-drag flex items-center gap-3"
-              type="button"
-            >
-              <span class="launcher-item-icon shrink-0" aria-hidden="true">{{ item.icon }}</span>
-              <span class="launcher-item-main min-w-0">
-                <span class="launcher-item-title">{{ t(item.titleKey) }}</span>
-                <span class="launcher-item-description">{{ t(item.descriptionKey) }}</span>
-              </span>
-              <span class="launcher-item-meta shrink-0">
-                <span class="launcher-item-badge">{{ t(item.badgeKey) }}</span>
-                <span class="launcher-item-action">{{ t(item.actionKey) }}</span>
-              </span>
-            </button>
+              :entry="item"
+              :pinned="isLauncherActionPinned(item.action_id)"
+              @open="openPluginAction(item.action_id)"
+              @toggle-pin="toggleLauncherActionPin(item.action_id)"
+            />
           </div>
+
+          <n-empty
+            v-else
+            class="launcher-section-empty launcher-no-drag"
+            :description="t(section.emptyKey)"
+            :show-icon="false"
+            size="small"
+          />
         </section>
       </template>
     </main>
@@ -207,115 +197,33 @@
     font-size: 12px;
   }
 }
-
-.launcher-item {
-  min-width: 0;
-  padding: 12px;
-  border: 1px solid transparent;
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--launcher-item-color) 78%, transparent);
-  color: var(--launcher-text-color);
-  cursor: pointer;
-  text-align: left;
-  transition:
-    background-color 0.16s ease,
-    border-color 0.16s ease,
-    transform 0.16s ease;
-
-  &:hover {
-    border-color: color-mix(in srgb, var(--launcher-primary-color) 42%, var(--launcher-border-color));
-    background: color-mix(in srgb, var(--launcher-primary-color) 12%, var(--launcher-panel-color));
-    transform: translateY(-1px);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--launcher-primary-color);
-    outline-offset: 2px;
-  }
-}
-
-.launcher-item-icon {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 11px;
-  background: color-mix(in srgb, var(--launcher-primary-color) 16%, var(--launcher-panel-color));
-  color: var(--launcher-primary-color);
-  font-size: 17px;
-  font-weight: 700;
-}
-
-.launcher-item-main {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.launcher-item-title,
-.launcher-item-description {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.launcher-item-title {
-  color: var(--launcher-text-color);
-  font-size: 14px;
-  font-weight: 650;
-}
-
-.launcher-item-description {
-  color: var(--launcher-text-color-3);
-  font-size: 12px;
-}
-
-.launcher-item-meta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  color: var(--launcher-text-color-3);
-  font-size: 11px;
-}
-
-.launcher-item-badge {
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--launcher-primary-color) 14%, transparent);
-  color: var(--launcher-primary-color);
-  font-weight: 650;
-}
-
-.launcher-item-action {
-  opacity: 0;
-  transition: opacity 0.16s ease;
-}
-
-.launcher-item:hover .launcher-item-action,
-.launcher-item:focus-visible .launcher-item-action {
-  opacity: 1;
-}
 </style>
 
 <script setup lang="ts">
 import type { PluginManifest, PluginPage, PluginRegistrySnapshot } from '@lensx/plugin-sdk';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
-import { NAlert, NButton, NEmpty, NInput, useThemeVars } from 'naive-ui';
+import { NAlert, NButton, NEmpty, NInput, useMessage, useThemeVars } from 'naive-ui';
 import type { CSSProperties } from 'vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { appLocale } from '@/app/i18n/state';
+import { type LauncherActionEntry, resolveLauncherActionEntries } from '@/app/launcher/entries';
+import LauncherActionCard from '@/app/launcher/LauncherActionCard.vue';
 import { normalizeLauncherSearchQuery, searchPluginActions } from '@/app/launcher/search';
 import { createPluginActionDispatcher, type PluginNavigationState } from '@/app/plugin-host/actions';
 import { resolvePluginDisplayName } from '@/app/plugin-host/display';
 import PluginPageOutlet from '@/app/plugin-host/PluginPageOutlet.vue';
 import { createPluginRegistryIndex, type PluginRegistryIndex } from '@/app/plugin-host/registry';
-import { appPreferencesState, loadAppPreferences } from '@/app/preferences/api';
+import {
+  appPreferencesState,
+  loadAppPreferences,
+  recordLauncherAction,
+  setLauncherActionPinned,
+} from '@/app/preferences/api';
 
 const { t } = useI18n();
+const message = useMessage();
 const themeVars = useThemeVars();
 
 const WINDOW_WIDTH = 650;
@@ -323,20 +231,11 @@ const MIN_WINDOW_HEIGHT = 180;
 const MAX_WINDOW_HEIGHT = 800;
 const RESIZE_THRESHOLD = 1;
 
-type LauncherItem = {
-  id: string;
-  icon: string;
-  titleKey: string;
-  descriptionKey: string;
-  badgeKey: string;
-  actionKey: string;
-};
-
 type LauncherSection = {
-  id: string;
-  titleKey: string;
-  hint: string;
-  items: LauncherItem[];
+  id: 'recent' | 'pinned';
+  titleKey: 'launcher.section.recent.title' | 'launcher.section.pinned.title';
+  emptyKey: 'launcher.section.recent.empty' | 'launcher.section.pinned.empty';
+  items: LauncherActionEntry[];
 };
 
 const query = ref('');
@@ -357,60 +256,6 @@ const launcherThemeStyle = computed<CSSProperties>(() => ({
   '--launcher-text-color-2': themeVars.value.textColor2,
   '--launcher-text-color-3': themeVars.value.textColor3,
 }));
-
-const recentItems: LauncherItem[] = [
-  {
-    id: 'calculator',
-    icon: '=',
-    titleKey: 'launcher.item.calculator.title',
-    descriptionKey: 'launcher.item.calculator.description',
-    badgeKey: 'launcher.item.badge.tool',
-    actionKey: 'launcher.item.action.open',
-  },
-  {
-    id: 'clipboard',
-    icon: 'C',
-    titleKey: 'launcher.item.clipboard.title',
-    descriptionKey: 'launcher.item.clipboard.description',
-    badgeKey: 'launcher.item.badge.command',
-    actionKey: 'launcher.item.action.run',
-  },
-  {
-    id: 'notes',
-    icon: 'N',
-    titleKey: 'launcher.item.notes.title',
-    descriptionKey: 'launcher.item.notes.description',
-    badgeKey: 'launcher.item.badge.app',
-    actionKey: 'launcher.item.action.open',
-  },
-];
-
-const pinnedItems: LauncherItem[] = [
-  {
-    id: 'terminal',
-    icon: '>',
-    titleKey: 'launcher.item.terminal.title',
-    descriptionKey: 'launcher.item.terminal.description',
-    badgeKey: 'launcher.item.badge.command',
-    actionKey: 'launcher.item.action.run',
-  },
-  {
-    id: 'files',
-    icon: 'F',
-    titleKey: 'launcher.item.files.title',
-    descriptionKey: 'launcher.item.files.description',
-    badgeKey: 'launcher.item.badge.file',
-    actionKey: 'launcher.item.action.open',
-  },
-  {
-    id: 'settings',
-    icon: 'S',
-    titleKey: 'launcher.item.settings.title',
-    descriptionKey: 'launcher.item.settings.description',
-    badgeKey: 'launcher.item.badge.app',
-    actionKey: 'launcher.item.action.open',
-  },
-];
 
 const normalizedQuery = computed(() => normalizeLauncherSearchQuery(query.value));
 const hasQuery = computed(() => normalizedQuery.value.length > 0);
@@ -438,21 +283,41 @@ const searchResults = computed(() =>
     : []
 );
 
+const recentItems = computed(() =>
+  pluginRegistry.value
+    ? resolveLauncherActionEntries(
+        pluginRegistry.value,
+        appPreferencesState.value.preferences.recent_action_ids,
+        appLocale.value
+      )
+    : []
+);
+const pinnedItems = computed(() =>
+  pluginRegistry.value
+    ? resolveLauncherActionEntries(
+        pluginRegistry.value,
+        appPreferencesState.value.preferences.pinned_action_ids,
+        appLocale.value
+      )
+    : []
+);
 const visibleSections = computed<LauncherSection[]>(() => {
-  return [
+  const sections: LauncherSection[] = [
     {
       id: 'recent',
       titleKey: 'launcher.section.recent.title',
-      hint: t('launcher.section.recent.hint'),
-      items: recentItems,
+      emptyKey: 'launcher.section.recent.empty',
+      items: recentItems.value,
     },
     {
       id: 'pinned',
       titleKey: 'launcher.section.pinned.title',
-      hint: t('launcher.section.pinned.hint'),
-      items: pinnedItems,
+      emptyKey: 'launcher.section.pinned.empty',
+      items: pinnedItems.value,
     },
   ];
+
+  return sections;
 });
 
 const clampWindowHeight = (height: number) =>
@@ -520,6 +385,22 @@ const loadPluginRegistry = async () => {
   }
 };
 
+const isLauncherActionPinned = (actionId: string): boolean =>
+  appPreferencesState.value.preferences.pinned_action_ids.includes(actionId);
+
+const showLauncherPersistenceError = (error: unknown) => {
+  const diagnostic = error instanceof Error ? error.message : String(error);
+  message.error(`${t('launcher.history.persistenceError')}: ${diagnostic}`);
+};
+
+const toggleLauncherActionPin = async (actionId: string) => {
+  try {
+    await setLauncherActionPinned(actionId, !isLauncherActionPinned(actionId));
+  } catch (error) {
+    showLauncherPersistenceError(error);
+  }
+};
+
 const openPluginAction = (actionId: string) => {
   if (!pluginRegistry.value) {
     return;
@@ -528,6 +409,7 @@ const openPluginAction = (actionId: string) => {
   try {
     const dispatch = createPluginActionDispatcher(pluginRegistry.value, pluginNavigation.value);
     dispatch(actionId);
+    void recordLauncherAction(actionId).catch(showLauncherPersistenceError);
   } catch (error) {
     pluginHostError.value = error instanceof Error ? error.message : String(error);
   }
