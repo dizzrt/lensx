@@ -92,7 +92,7 @@ export const searchPluginActions = (
       return {
         id: action.id,
         action_id: action.id,
-        title: action.title,
+        title: pluginName,
         plugin_name: pluginName,
         detail: `${pluginName} - ${action.id}`,
       };
