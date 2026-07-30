@@ -3,6 +3,10 @@
     "name": "lensX",
     "description": "一款轻量、键盘优先的桌面效率启动器。"
   },
+  "launcher": {
+    "inputLabel": "启动器查询",
+    "inputPlaceholder": "输入查询内容"
+  },
   "error": {
     "title": "出现了问题",
     "description": "lensX 无法显示此界面。请重新加载应用后再试。",

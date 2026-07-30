@@ -27,6 +27,8 @@ The repository currently provides:
 - Semi Design, UnoCSS, and Less as the frontend UI and styling foundation;
 - a product-owned React App Shell with unified locale, theme, Semi Design, and
   render-error boundaries;
+- a compact native launcher window with unified Rust-owned show, hide, toggle,
+  global-shortcut, close, and focus-loss lifecycle behavior;
 - Rstest, Testing Library, TypeScript checks, Biome, and Cargo validation
   commands;
 - OpenSpec configuration for capability and architecture changes.
@@ -74,9 +76,56 @@ reload action without displaying exception details. Event-handler and
 asynchronous errors require explicit error states and are outside this render
 boundary.
 
-The current App Shell deliberately exposes only the lensX identity and product
-description. It is an observable foundation, not evidence that launcher,
-settings, or plugin workflows are implemented.
+The current App Shell exposes the lensX identity, product description, and a
+local controlled launcher input. The input accepts text but does not produce
+results or actions. It is an observable launcher surface, not evidence that
+search, execution, settings, or plugin workflows are implemented.
+
+## Launcher Window Lifecycle
+
+The Tauri webview window with the stable `main` label is configured as a
+compact launcher surface. It has a fixed width of 650px, an initial and minimum
+height of 180px, and a maximum height of 800px. The window is transparent,
+always on top, undecorated, non-resizable, and non-fullscreen. The application
+does not currently resize the native window in response to DOM content or the
+input value.
+
+Rust owns all native launcher window operations through one action boundary:
+
+- `show` restores the window, shows it, requests focus, and then emits a typed
+  activation event;
+- `hide` hides the window without terminating the application process;
+- `toggle` reads the current visibility and reuses the corresponding `show` or
+  `hide` path.
+
+The action boundary resolves the `main` window through a Tauri adapter and
+reports failures with both the requested action and the failing native
+operation stage. Native shortcut and window-event handlers route actions
+through this boundary rather than calling window APIs independently.
+
+The official Tauri global-shortcut plugin registers one default
+`Ctrl+Shift+Space` binding. Only its pressed event routes to `toggle`; release
+events and unknown shortcuts do nothing. Lifecycle setup first installs the
+action state, then registers the shortcut, and only then attaches the main
+window listeners. After registration succeeds, a close request is prevented
+and routed to `hide`, and focus loss is also routed to `hide`. If shortcut
+registration fails, the application reports the binding failure and leaves
+hide-on-close and hide-on-blur disabled, so the visible window keeps ordinary
+close behavior instead of becoming unrecoverable.
+
+After a successful `show`, Rust emits `launcher://activated` to the main
+webview. Its serializable payload contains a `reason` field with one of
+`startup`, `global_shortcut`, or `programmatic`, using snake-case serialized
+values. React receives this contract through a typed desktop adapter. The
+launcher input focuses itself on initial mount and focuses again after each
+activation. Its hook keeps one subscription for the active event source,
+releases the listener when the source changes or the component unmounts, and
+diagnoses malformed payloads or listener failures without breaking initial
+input focus.
+
+This lifecycle does not implement action definitions, query matching, result
+lists, execution, settings, shortcut customization, persistence, or plugin
+runtime behavior.
 
 ## Layered Model
 

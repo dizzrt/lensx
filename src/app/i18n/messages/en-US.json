@@ -3,6 +3,10 @@
     "name": "lensX",
     "description": "A lightweight, keyboard-first desktop productivity launcher."
   },
+  "launcher": {
+    "inputLabel": "Launcher query",
+    "inputPlaceholder": "Type a query"
+  },
   "error": {
     "title": "Something went wrong",
     "description": "lensX could not display this screen. Reload the application to try again.",

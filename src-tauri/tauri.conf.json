@@ -10,11 +10,22 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
+        "label": "main",
         "title": "lensx",
-        "width": 800,
-        "height": 600
+        "width": 650,
+        "height": 180,
+        "minWidth": 650,
+        "minHeight": 180,
+        "maxWidth": 650,
+        "maxHeight": 800,
+        "decorations": false,
+        "resizable": false,
+        "fullscreen": false,
+        "transparent": true,
+        "alwaysOnTop": true
       }
     ],
     "security": {

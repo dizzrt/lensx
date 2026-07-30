@@ -13,8 +13,10 @@ and removal of unused scaffold behavior.
 The frontend application MUST render a product-owned, semantic, and accessible
 minimal App Shell. It MUST NOT continue to display build-tool welcome copy,
 example interactions, or presentation-layer mock features. The App Shell MUST
-only communicate the lensX product identity and description, and MUST NOT imply
-that unimplemented launcher, settings, or plugin capabilities are available.
+display the lensX product identity and description in the current locale and
+MUST provide a locally controlled launcher input that accepts text without
+producing search results. The App Shell MUST NOT imply that unimplemented
+action search, execution, settings, or plugin capabilities are available.
 
 #### Scenario: Start the application
 
@@ -22,13 +24,21 @@ that unimplemented launcher, settings, or plugin capabilities are available.
 - **THEN** the page contains an accessible main content region
 - **THEN** the page displays the lensX product identity and product description
   in the current locale
+- **THEN** the page displays a launcher input with an accessible name and
+  localized placeholder
 - **THEN** the page does not display Rsbuild welcome copy or example
   interactions
+
+#### Scenario: Edit text in the minimal launcher input
+
+- **WHEN** a user enters or deletes text in the launcher input
+- **THEN** the input reflects the current text through local React state
+- **THEN** the page does not generate simulated search results or actions
 
 #### Scenario: Inspect unavailable features
 
 - **WHEN** a user views the minimal App Shell
-- **THEN** the page does not display a search field, settings entry point,
+- **THEN** the page does not display a search result list, settings entry point,
   simulated action, or plugin entry point
 - **THEN** the page does not describe planned capabilities as implemented
 

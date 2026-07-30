@@ -20,6 +20,21 @@
       },
       "required": ["name", "description"]
     },
+    "launcher": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inputLabel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inputPlaceholder": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["inputLabel", "inputPlaceholder"]
+    },
     "error": {
       "type": "object",
       "additionalProperties": false,
@@ -40,5 +55,5 @@
       "required": ["title", "description", "reload"]
     }
   },
-  "required": ["app", "error"]
+  "required": ["app", "launcher", "error"]
 }

@@ -24,6 +24,8 @@ lensX 是一款轻量级桌面效率启动器，其设计重点包括：
 - 使用 Rsbuild 和 Rspack 构建的 React 与 TypeScript 前端；
 - 作为前端 UI 和样式基础的 Semi Design、UnoCSS 与 Less；
 - 带有统一 locale、主题、Semi Design 和渲染错误边界的产品自有 React App Shell；
+- 由 Rust 统一拥有显示、隐藏、切换、全局快捷键、关闭与失焦行为的紧凑原生 launcher
+  窗口；
 - Rstest、Testing Library、TypeScript 检查、Biome 和 Cargo 验证命令；
 - 用于能力和架构变更的 OpenSpec 配置。
 
@@ -59,8 +61,39 @@ locale，并比较完整叶子 key 集合。locale 选择目前仅保存在内�
 主题，并提供窗口重新加载操作，但不展示异常细节。事件处理器和异步错误需要显式错误状态，不属于此
 渲染错误边界的捕获范围。
 
-当前 App Shell 只展示 lensX 产品身份和产品说明。它是可观察的前端基座，不代表 launcher、设置或
-插件工作流已经实现。
+当前 App Shell 展示 lensX 产品身份、产品说明和一个本地受控的 launcher 输入。输入可以接受文本，
+但不会产生结果或 action。它是可观察的 launcher 承载面，不代表搜索、执行、设置或插件工作流已经
+实现。
+
+## Launcher 窗口生命周期
+
+Tauri 中带有稳定 `main` 标签的 webview 窗口被配置为紧凑的 launcher 承载面。窗口固定宽度为
+650px，初始和最小高度为 180px，最大高度为 800px。窗口透明、保持置顶、无系统边框、不可调整
+大小且非全屏。应用目前不会根据 DOM 内容或输入值调整原生窗口尺寸。
+
+Rust 通过单一动作边界拥有全部 launcher 原生窗口操作：
+
+- `show` 依次恢复窗口、显示窗口、请求焦点，然后发送类型化激活事件；
+- `hide` 隐藏窗口，但不终止应用进程；
+- `toggle` 读取当前可见性，并复用对应的 `show` 或 `hide` 路径。
+
+动作边界通过 Tauri adapter 解析 `main` 窗口，并在失败时同时报告请求的动作和失败的原生操作阶段。
+原生快捷键和窗口事件 handler 通过该边界路由动作，不会各自直接调用窗口 API。
+
+官方 Tauri global-shortcut 插件注册唯一的默认 `Ctrl+Shift+Space` 绑定。只有按下事件会路由到
+`toggle`；释放事件和未知快捷键不执行动作。生命周期 setup 先安装动作状态，再注册快捷键，最后才
+为主窗口安装 listener。注册成功后，关闭请求会被阻止并路由到 `hide`，失焦也会路由到 `hide`。
+如果快捷键注册失败，应用会报告包含绑定的错误，并保持关闭转隐藏和失焦隐藏为禁用状态，使可见窗口
+保留普通关闭行为，而不会进入无法恢复的隐藏状态。
+
+每次 `show` 成功后，Rust 向主 webview 发送 `launcher://activated`。其可序列化 payload 包含
+`reason` 字段，值为 `startup`、`global_shortcut` 或 `programmatic` 之一，并使用 snake-case
+序列化值。React 通过类型化桌面 adapter 接收该契约。launcher 输入在首次挂载时主动聚焦，并在每次
+激活后重新聚焦。对应 hook 为当前事件源维护一个订阅，在事件源变化或组件卸载时释放 listener，并在
+载荷格式错误或监听失败时输出诊断，而不破坏首次输入聚焦。
+
+该生命周期不实现 action 定义、查询匹配、结果列表、执行、设置、快捷键自定义、持久化或插件运行时
+行为。
 
 ## 分层模型
 
