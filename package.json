@@ -1,0 +1,60 @@
+{
+  "name": "lensx",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.17.0",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=11 <12"
+  },
+  "scripts": {
+    "dev": "rsbuild",
+    "build": "pnpm run typecheck && rsbuild build",
+    "preview": "rsbuild preview",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
+    "test": "rstest",
+    "test:watch": "rstest --watch",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "lint-staged": "lint-staged",
+    "prepare": "husky",
+    "tauri": "tauri",
+    "src-tauri:check": "cargo check --manifest-path src-tauri/Cargo.toml --workspace",
+    "src-tauri:test": "cargo test --manifest-path src-tauri/Cargo.toml --workspace",
+    "src-tauri:format": "cargo fmt --manifest-path src-tauri/Cargo.toml --all",
+    "src-tauri:format:check": "cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,mjs,cjs,json,jsonc,css}": "biome check --write --files-ignore-unknown=true --no-errors-on-unmatched"
+  },
+  "dependencies": {
+    "@douyinfe/semi-ui": "^2.101.1",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.15",
+    "@rsbuild/core": "^2.1.8",
+    "@rsbuild/plugin-less": "^2.0.1",
+    "@rsbuild/plugin-react": "^2.1.0",
+    "@rstest/adapter-rsbuild": "^0.11.2",
+    "@rstest/core": "^0.11.2",
+    "@tauri-apps/cli": "^2",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@unocss/postcss": "^66.7.5",
+    "happy-dom": "^20.11.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.2.0",
+    "typescript": "^6.0.3",
+    "unocss": "^66.7.5"
+  }
+}

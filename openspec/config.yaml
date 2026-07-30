@@ -1,0 +1,65 @@
+schema: spec-driven
+
+context: |
+  lensX is a lightweight, keyboard-first desktop productivity launcher.
+
+  Repository foundations:
+  - Desktop runtime and privileged system integration use Rust and Tauri 2.
+  - The frontend uses React, TypeScript, Rsbuild, and Rspack.
+  - Prefer Semi Design for UI components and supported theme and locale integration.
+  - Use UnoCSS for simple utility styling and Less for complex or reusable styling.
+  - The product supports English and Simplified Chinese; English is the default locale.
+  - Frontend tests use Rstest and Testing Library. Formatting and static checks use Biome.
+  - Rust validation uses cargo fmt, cargo test, and cargo check.
+
+  Artifact and documentation roles:
+  - README files are human onboarding only and contain no concrete implementation design.
+  - AGENTS.md is the English agent onboarding and operating guide.
+  - docs/en is the canonical English implementation and architecture documentation.
+  - docs/zh mirrors docs/en in Simplified Chinese at identical relative paths.
+  - Stable specs under openspec/specs are written in English.
+  - Active change artifacts use the language of the agent conversation unless the user requests otherwise.
+  - Temporary material may inform a change but must never be cited, linked, imported, or named as a maintained project source.
+
+  Source-of-truth order:
+  1. Current source code and tests for implemented behavior.
+  2. Stable OpenSpec specs for accepted capability requirements.
+  3. Canonical English docs for maintained architecture and implementation guidance.
+  4. Active changes for proposed or in-progress behavior.
+  5. README files for onboarding only.
+
+rules:
+  proposal:
+    - Write the artifact in the language used in the agent conversation unless the user requests another language.
+    - State the problem, goals, non-goals, user-visible impact, and affected capabilities.
+    - Clearly distinguish current implemented behavior from proposed behavior.
+    - Keep the change cohesive; split unrelated capabilities into separate changes.
+    - Do not cite, link, or name temporary reference files or directories.
+    - Do not put concrete implementation details in README or agent onboarding files.
+  design:
+    - Write the artifact in the language used in the agent conversation unless the user requests another language.
+    - Record architectural boundaries, data flow, alternatives, risks, migration, and rollback considerations where relevant.
+    - Keep Rust responsible for privileged native operations, persistence, and stable Tauri boundaries.
+    - Keep React responsible for presentation, interaction state, and view composition.
+    - Require typed and validated payloads at frontend, Rust, and extension boundaries.
+    - Prefer Semi Design, use UnoCSS for simple styles, and use Less for complex or reusable styles.
+    - Require English-default internationalization with a semantically aligned Simplified Chinese locale.
+    - Require light and dark modes through the supported Semi Design theming mechanism.
+    - Justify every new runtime dependency or component library and prefer the existing stack.
+    - Do not cite, link, or name temporary reference files or directories.
+  specs:
+    - Write delta specs in the language used in the agent conversation unless the user requests another language.
+    - Use normative requirements and observable scenarios; avoid implementation-task wording.
+    - Cover success, empty, error, recovery, accessibility, localization, and theme behavior when relevant.
+    - Do not claim planned behavior is already implemented.
+    - Before syncing or archiving, translate or rewrite all content entering main specs into English.
+    - Main specs under openspec/specs must remain English.
+  tasks:
+    - Write the artifact in the language used in the agent conversation unless the user requests another language.
+    - Order tasks by dependency and keep each task independently verifiable.
+    - Include tests and English and Simplified Chinese documentation updates alongside the implementation they cover.
+    - Do not use README or agent onboarding files for concrete implementation documentation.
+    - End every task list with an explicit final validation section.
+    - The final validation section must cover frontend tests, frontend formatting and static checks, frontend type checking and build, Rust formatting, Rust tests, and Rust static checks.
+    - If a validation area is genuinely unaffected, record the reason in the task instead of silently omitting it.
+    - Fix every warning and error introduced by the change, then rerun the failed command and the complete final validation set.
