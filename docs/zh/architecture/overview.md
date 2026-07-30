@@ -20,13 +20,47 @@ lensX 是一款轻量级桌面效率启动器，其设计重点包括：
 
 仓库目前提供：
 
-- 由 Rust 支持的 Tauri 2 桌面应用脚手架；
+- 由 Rust 支持的 Tauri 2 桌面应用运行时；
 - 使用 Rsbuild 和 Rspack 构建的 React 与 TypeScript 前端；
 - 作为前端 UI 和样式基础的 Semi Design、UnoCSS 与 Less；
+- 带有统一 locale、主题、Semi Design 和渲染错误边界的产品自有 React App Shell；
 - Rstest、Testing Library、TypeScript 检查、Biome 和 Cargo 验证命令；
 - 用于能力和架构变更的 OpenSpec 配置。
 
 在相应源码和测试存在之前，不能把超出这些基础的产品能力描述为已经实现。
+
+## 前端应用基座
+
+`src/index.tsx` 是唯一的前端组合入口。它只导入一次 Semi Design 全局样式表和项目
+`global.less` 入口，然后在 `AppProviders` 内渲染产品 App Shell。
+
+`AppProviders` 是唯一的应用级 Provider 组合：
+
+```text
+AppLocaleProvider
+└── AppThemeProvider
+    └── Semi Design LocaleProvider
+        └── AppErrorBoundary
+            └── App
+```
+
+应用 locale 仅限 `en-US` 和 `zh-CN`，默认使用 `en-US`，并同时驱动应用 message、对应的
+Semi Design 官方 locale pack 和 HTML `lang` 属性。英文 message 是规范源，两种 message 资源保持
+相同的嵌套层次和叶子 key 集合。静态导入的资源位于 `src/app/i18n/messages/en-US.json` 和
+`zh-CN.json`，应用通过点分隔路径查询叶子 message。共享的 `messages.schema.json` 镜像该层次，
+固定允许和必需的 key、拒绝额外 key，并要求值为非空字符串。前端测试会依据该 schema 校验每个
+locale，并比较完整叶子 key 集合。locale 选择目前仅保存在内存中，不跟随操作系统偏好。
+
+应用主题仅限 `light` 和 `dark`，默认使用 `light`。主题 Provider 使用
+`body[theme-mode="dark"]`，使挂载在 `body` 下的 Semi Design 内容（包括浮层）获得同一套 token，
+并同步文档的 `color-scheme`。主题选择目前仅保存在内存中，不跟随操作系统偏好。
+
+`AppErrorBoundary` 隔离 Provider 根层以下的渲染失败。其本地化 Semi Design 降级界面保留当前
+主题，并提供窗口重新加载操作，但不展示异常细节。事件处理器和异步错误需要显式错误状态，不属于此
+渲染错误边界的捕获范围。
+
+当前 App Shell 只展示 lensX 产品身份和产品说明。它是可观察的前端基座，不代表 launcher、设置或
+插件工作流已经实现。
 
 ## 分层模型
 

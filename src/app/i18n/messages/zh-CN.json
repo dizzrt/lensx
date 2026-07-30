@@ -1,0 +1,11 @@
+{
+  "app": {
+    "name": "lensX",
+    "description": "一款轻量、键盘优先的桌面效率启动器。"
+  },
+  "error": {
+    "title": "出现了问题",
+    "description": "lensX 无法显示此界面。请重新加载应用后再试。",
+    "reload": "重新加载 lensX"
+  }
+}

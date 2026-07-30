@@ -18,6 +18,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(projectRoot, 'src'),
+      // Semi ships the global bundle outside its package exports.
+      '@douyinfe/semi-ui/dist/css/semi.min.css': resolve(
+        projectRoot,
+        'node_modules/@douyinfe/semi-ui/dist/css/semi.min.css',
+      ),
     },
   },
   html: {

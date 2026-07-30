@@ -24,6 +24,26 @@ Avoid wrapping every Semi Design component. Introduce a project wrapper only
 when it owns stable product semantics, repeated configuration, or a meaningful
 accessibility contract.
 
+## Application Root Composition
+
+Keep `src/index.tsx` limited to one-time global style imports, React root
+creation, and the `AppProviders` plus `App` composition. Do not add parallel
+application-level providers in pages or feature modules.
+
+`AppProviders` owns the established root order:
+
+1. `AppLocaleProvider` initializes application messages and owns locale state.
+2. `AppThemeProvider` owns theme state and document theme synchronization.
+3. Semi Design `LocaleProvider` receives the official locale pack mapped from
+   the application locale.
+4. `AppErrorBoundary` isolates render failures and keeps its fallback inside
+   locale, theme, and Semi Design contexts.
+
+Context values must use stable update callbacks and memoized value objects.
+Tests may provide an initial locale or theme through the root providers, but
+features must consume `useAppLocale` and `useAppTheme` instead of creating
+another global source of truth.
+
 ## Styling
 
 Use UnoCSS for simple, local styling:
@@ -47,11 +67,19 @@ Use Less for complex or reusable styling:
 Do not introduce a parallel styling system. Avoid hard-coded colors when a Semi
 Design token or application semantic variable exists.
 
+Import `@douyinfe/semi-ui/dist/css/semi.min.css` and
+`src/styles/global.less` only from `src/index.tsx`. Keep root resets, semantic
+token bridges, and cross-component base rules in `global.less`; keep simple App
+Shell layout and spacing in UnoCSS utilities.
+
 ## Theme
 
 - Support both light and dark modes.
 - Use the supported Semi Design theme mechanism and tokens.
 - Keep one application theme source of truth.
+- Use `body[theme-mode="dark"]` for dark mode so body-mounted overlays inherit
+  Semi Design dark tokens; light mode must remove the dark theme attribute.
+- Synchronize the document `color-scheme` with the current application theme.
 - Components must not create independent global theme state.
 - Test custom surfaces, focus indicators, disabled states, overlays, and error
   states in both modes.
@@ -64,9 +92,21 @@ Design token or application semantic variable exists.
 - English is the default locale and canonical message source.
 - All user-visible product copy must come from the application
   internationalization layer.
+- Store statically bundled application copy as locale JSON files under
+  `src/app/i18n/messages/`; keep TypeScript limited to importing resources and
+  exposing key types.
+- Organize locale JSON as nested objects and use dot-separated leaf paths in
+  application lookups. Keep the same object hierarchy and leaf paths in every
+  locale.
+- Update `messages.schema.json` whenever the canonical English key set changes.
+  Its nested property hierarchy must mirror the locale resources. Every locale
+  must pass schema validation and complete leaf-key comparison in frontend
+  tests.
 - Keep English and Simplified Chinese message keys aligned.
 - Integrate Semi Design locale behavior with the same application locale source
   of truth.
+- Map `en-US` and `zh-CN` to the official Semi Design `en_US` and `zh_CN`
+  locale packs, and synchronize the HTML `lang` attribute.
 - Do not use Semi Design built-in locale messages as a substitute for product
   copy.
 - Do not concatenate translated fragments when a complete message can express
@@ -104,5 +144,8 @@ Design token or application semantic variable exists.
 - Cover keyboard and focus behavior for keyboard-first workflows.
 - Cover English and Simplified Chinese output when locale behavior changes.
 - Cover light and dark mode integration when theme behavior changes.
+- Cover App Shell render failures through `AppErrorBoundary`; event-handler and
+  asynchronous failures must use explicit error states because React error
+  boundaries do not capture them.
 - Add focused tests for extracted domain functions.
 - Avoid snapshots that obscure meaningful behavioral assertions.

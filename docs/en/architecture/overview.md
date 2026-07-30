@@ -22,15 +22,61 @@ lensX is a lightweight desktop productivity launcher. It is designed around:
 
 The repository currently provides:
 
-- a Tauri 2 desktop application scaffold backed by Rust;
+- a Tauri 2 desktop application runtime backed by Rust;
 - a React and TypeScript frontend built with Rsbuild and Rspack;
 - Semi Design, UnoCSS, and Less as the frontend UI and styling foundation;
+- a product-owned React App Shell with unified locale, theme, Semi Design, and
+  render-error boundaries;
 - Rstest, Testing Library, TypeScript checks, Biome, and Cargo validation
   commands;
 - OpenSpec configuration for capability and architecture changes.
 
 Product capabilities beyond this foundation must not be described as
 implemented until their source code and tests exist.
+
+## Frontend Application Foundation
+
+`src/index.tsx` is the only frontend composition entry. It imports the Semi
+Design global stylesheet and the project `global.less` entry once, then renders
+the product App Shell inside `AppProviders`.
+
+`AppProviders` is the single application-level provider composition:
+
+```text
+AppLocaleProvider
+└── AppThemeProvider
+    └── Semi Design LocaleProvider
+        └── AppErrorBoundary
+            └── App
+```
+
+The application locale is limited to `en-US` and `zh-CN`, defaults to `en-US`,
+and drives application messages, the corresponding official Semi Design locale
+pack, and the HTML `lang` attribute. English messages are canonical, and both
+message resources keep the same nested hierarchy and leaf-key set. Statically
+imported resources live in `src/app/i18n/messages/en-US.json` and `zh-CN.json`;
+application lookups address their leaves with dot-separated paths. A shared
+`messages.schema.json` mirrors the hierarchy, fixes the allowed and required
+keys, rejects additional keys, and requires non-empty string values. Frontend
+tests validate every locale against that schema and compare complete leaf-key
+sets. Locale selection is currently in-memory only and does not follow an
+operating-system preference.
+
+The application theme is limited to `light` and `dark` and defaults to
+`light`. The theme provider uses `body[theme-mode="dark"]` so Semi Design
+content mounted under `body`, including overlays, receives the same token set.
+It also synchronizes the document `color-scheme`. Theme selection is currently
+in-memory only and does not follow an operating-system preference.
+
+`AppErrorBoundary` isolates render failures below the provider root. Its
+localized Semi Design fallback preserves the current theme and offers a window
+reload action without displaying exception details. Event-handler and
+asynchronous errors require explicit error states and are outside this render
+boundary.
+
+The current App Shell deliberately exposes only the lensX identity and product
+description. It is an observable foundation, not evidence that launcher,
+settings, or plugin workflows are implemented.
 
 ## Layered Model
 

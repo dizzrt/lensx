@@ -1,0 +1,26 @@
+/* biome-ignore lint/suspicious/noUnknownAtRules: UnoCSS build-time directive */
+@unocss all;
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-width: 320px;
+  min-height: 100%;
+}
+
+html {
+  background: var(--semi-color-bg-0);
+  color: var(--semi-color-text-0);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  background: var(--semi-color-bg-0);
+  color: var(--semi-color-text-0);
+}

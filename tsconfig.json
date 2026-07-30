@@ -1,12 +1,14 @@
 {
   "compilerOptions": {
-    "lib": ["DOM", "ES2020"],
+    "lib": ["DOM", "ES2022"],
     "jsx": "react-jsx",
-    "target": "ES2020",
+    "target": "ES2022",
     "noEmit": true,
     "skipLibCheck": true,
     "types": ["@rsbuild/core/types", "node"],
     "useDefineForClassFields": true,
+    "module": "ESNext",
+    "strict": true,
 
     /* modules */
     "moduleDetection": "force",
@@ -17,7 +19,12 @@
 
     /* type checking */
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+
+    /* paths */
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
-  "include": ["src"]
+  "include": ["./src/**/*"]
 }
