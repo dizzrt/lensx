@@ -5,7 +5,13 @@
   },
   "launcher": {
     "inputLabel": "Launcher query",
-    "inputPlaceholder": "Type a query"
+    "inputPlaceholder": "Type a query",
+    "actions": {
+      "hideLauncher": {
+        "title": "Hide launcher",
+        "description": "Hide the launcher window"
+      }
+    }
   },
   "error": {
     "title": "Something went wrong",

@@ -29,6 +29,9 @@ The repository currently provides:
   render-error boundaries;
 - a compact native launcher window with unified Rust-owned show, hide, toggle,
   global-shortcut, close, and focus-loss lifecycle behavior;
+- a framework-neutral TypeScript launcher action core with validated
+  descriptors, a Host-owned registry, a dispatcher, and one built-in hide
+  action routed through a typed Rust command;
 - Rstest, Testing Library, TypeScript checks, Biome, and Cargo validation
   commands;
 - OpenSpec configuration for capability and architecture changes.
@@ -123,9 +126,44 @@ releases the listener when the source changes or the component unmounts, and
 diagnoses malformed payloads or listener failures without breaking initial
 input focus.
 
-This lifecycle does not implement action definitions, query matching, result
-lists, execution, settings, shortcut customization, persistence, or plugin
-runtime behavior.
+This lifecycle does not itself implement query matching, result lists,
+settings, shortcut customization, persistence, or plugin runtime behavior.
+
+## Launcher Action Core
+
+The launcher action core lives under `src/app/launcher/actions/` in the trusted
+TypeScript application and domain layer. It does not depend on React, Semi
+Design, or Tauri APIs. Each action has a validated, serializable descriptor
+with a stable namespaced `action_id`, an `owner_id`, localized metadata,
+localized default keywords, and a static enabled state. English metadata is
+canonical, Simplified Chinese is supported, and missing localized text falls
+back to English.
+
+`LauncherActionRegistry` is the only running source of truth for registered
+launcher actions. Registration validates and normalizes unknown descriptor
+input before committing it, rejects duplicate IDs, and applies batches
+atomically. Public lookups and snapshots return deeply isolated descriptor
+data, never executors. Snapshots are ordered by `action_id` so their default
+order does not depend on provider load order.
+
+Executors remain Host-owned and are resolved only by
+`LauncherActionDispatcher`. Dispatch returns an explicit success or typed
+`action_not_found`, `action_unavailable`, or `action_execution_failed` result.
+Thrown, rejected, or invalid executor results are contained and do not expose
+native or framework objects through the public contract.
+
+The default service currently registers only
+`lensx.core.hide_launcher`. Its title and description come from the canonical
+application message resources. The executor calls a typed desktop adapter,
+which invokes the narrow `hide_launcher` Tauri command. Rust maps that command
+to the existing managed `LauncherWindowActions` boundary and
+`LauncherWindowAction::Hide`; it does not duplicate native window logic or
+accept an arbitrary action identifier.
+
+The current React App Shell does not create or consume the default action
+service, read the registry snapshot, match the launcher query, or render action
+results. Search, ranking, selection, history, settings, dynamic availability,
+provider lifecycle, and plugin action projection remain future capabilities.
 
 ## Layered Model
 

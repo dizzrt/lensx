@@ -52,6 +52,29 @@ Serialized contracts should have one versioned schema source and should be
 validated consistently in TypeScript and Rust. Validation errors exposed across
 boundaries must have stable machine-readable codes and locations.
 
+## Host Action Registry
+
+The shipped launcher action core establishes a Host-owned TypeScript registry
+for validated, serializable action descriptors. Descriptor metadata and
+executors are separate: consumers can inspect immutable descriptor snapshots,
+while only the trusted Host dispatcher can resolve and invoke executors.
+External code must never place functions, React state, Tauri objects, or Rust
+implementation values in a descriptor.
+
+Future built-in modules and external plugins must project actions through a
+validated provider adapter. That adapter is responsible for mapping provider
+identity and metadata into the stable launcher descriptor contract before an
+atomic Host registration. A provider cannot directly mutate the registry,
+choose a trusted executor, invoke privileged desktop commands, or bypass the
+Host dispatcher. Privileged behavior remains an explicit Host capability with
+its own authorization and typed application or Rust boundary.
+
+The current registry contains one Host built-in action and does not yet define
+plugin manifests, provider lifecycle, unregister or replacement semantics,
+permissions, search, or external execution. Those capabilities require
+dedicated accepted specifications rather than implicit expansion of the action
+descriptor.
+
 ## Runtime Boundaries
 
 ### Trusted Host Modules

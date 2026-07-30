@@ -2,7 +2,7 @@ use serde::Serialize;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use tauri::plugin::TauriPlugin;
-use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, Runtime, State, WebviewWindow, WindowEvent};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 pub const MAIN_WINDOW_LABEL: &str = "main";
@@ -96,6 +96,27 @@ impl Display for LauncherWindowActionError {
 }
 
 impl Error for LauncherWindowActionError {}
+
+const LAUNCHER_WINDOW_ACTION_FAILED: &str = "launcher_window_action_failed";
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct LauncherCommandError {
+    pub code: &'static str,
+    pub action: &'static str,
+    pub operation: String,
+    pub message: String,
+}
+
+impl From<LauncherWindowActionError> for LauncherCommandError {
+    fn from(error: LauncherWindowActionError) -> Self {
+        Self {
+            code: LAUNCHER_WINDOW_ACTION_FAILED,
+            action: error.action.name(),
+            operation: error.operation.to_string(),
+            message: error.to_string(),
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Serialize)]
 struct LauncherActivationPayload {
@@ -244,6 +265,21 @@ impl LauncherWindowActions {
     ) -> Result<(), LauncherWindowActionError> {
         execute_with_resolver(&TauriLauncherWindowResolver { app }, action)
     }
+}
+
+fn dispatch_hide_command<F>(dispatch: F) -> Result<(), LauncherCommandError>
+where
+    F: FnOnce(LauncherWindowAction) -> Result<(), LauncherWindowActionError>,
+{
+    dispatch(LauncherWindowAction::Hide).map_err(LauncherCommandError::from)
+}
+
+#[tauri::command]
+pub fn hide_launcher(
+    app: AppHandle,
+    actions: State<'_, LauncherWindowActions>,
+) -> Result<(), LauncherCommandError> {
+    dispatch_hide_command(|action| actions.dispatch(&app, action))
 }
 
 fn default_shortcut() -> Shortcut {
@@ -561,6 +597,45 @@ mod tests {
         execute_with_adapter(&mut window, LauncherWindowAction::Hide).expect("hide should succeed");
 
         assert_eq!(window.calls, vec![LauncherWindowOperation::Hide]);
+    }
+
+    #[test]
+    fn hide_launcher_command_routes_to_the_shared_hide_action() {
+        let requested_action = Cell::new(None);
+
+        dispatch_hide_command(|action| {
+            requested_action.set(Some(action));
+            Ok(())
+        })
+        .expect("hide command should succeed");
+
+        assert_eq!(requested_action.get(), Some(LauncherWindowAction::Hide));
+    }
+
+    #[test]
+    fn hide_launcher_command_returns_structured_failure_fields() {
+        let error = dispatch_hide_command(|action| {
+            Err(LauncherWindowActionError::new(
+                action,
+                LauncherWindowOperation::Hide,
+                "native hide failed",
+            ))
+        })
+        .expect_err("hide command should preserve a structured failure");
+
+        assert_eq!(error.code, LAUNCHER_WINDOW_ACTION_FAILED);
+        assert_eq!(error.action, "hide");
+        assert_eq!(error.operation, "hide");
+        assert!(error.message.contains("native hide failed"));
+        assert_eq!(
+            serde_json::to_value(&error).expect("command error should serialize"),
+            serde_json::json!({
+                "code": "launcher_window_action_failed",
+                "action": "hide",
+                "operation": "hide",
+                "message": "launcher action 'hide' failed during 'hide': native hide failed"
+            })
+        );
     }
 
     #[test]

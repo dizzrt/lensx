@@ -5,7 +5,13 @@
   },
   "launcher": {
     "inputLabel": "启动器查询",
-    "inputPlaceholder": "输入查询内容"
+    "inputPlaceholder": "输入查询内容",
+    "actions": {
+      "hideLauncher": {
+        "title": "隐藏启动器",
+        "description": "隐藏启动器窗口"
+      }
+    }
   },
   "error": {
     "title": "出现了问题",

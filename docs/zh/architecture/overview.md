@@ -26,6 +26,8 @@ lensX 是一款轻量级桌面效率启动器，其设计重点包括：
 - 带有统一 locale、主题、Semi Design 和渲染错误边界的产品自有 React App Shell；
 - 由 Rust 统一拥有显示、隐藏、切换、全局快捷键、关闭与失焦行为的紧凑原生 launcher
   窗口；
+- 框架无关的 TypeScript launcher action 核心，包含经过校验的 descriptor、Host 所有的
+  registry、dispatcher，以及通过类型化 Rust command 路由的内建隐藏 action；
 - Rstest、Testing Library、TypeScript 检查、Biome 和 Cargo 验证命令；
 - 用于能力和架构变更的 OpenSpec 配置。
 
@@ -92,8 +94,32 @@ Rust 通过单一动作边界拥有全部 launcher 原生窗口操作：
 激活后重新聚焦。对应 hook 为当前事件源维护一个订阅，在事件源变化或组件卸载时释放 listener，并在
 载荷格式错误或监听失败时输出诊断，而不破坏首次输入聚焦。
 
-该生命周期不实现 action 定义、查询匹配、结果列表、执行、设置、快捷键自定义、持久化或插件运行时
-行为。
+该生命周期本身不实现查询匹配、结果列表、设置、快捷键自定义、持久化或插件运行时行为。
+
+## Launcher Action 核心
+
+launcher action 核心位于 `src/app/launcher/actions/`，属于可信 TypeScript 应用与领域层。
+它不依赖 React、Semi Design 或 Tauri API。每个 action 都有经过校验、可序列化的
+descriptor，其中包含稳定的命名空间 `action_id`、`owner_id`、本地化元数据、本地化默认
+关键词和静态启用状态。英文元数据是规范源，同时支持简体中文；缺少当前语言文本时回退到英文。
+
+`LauncherActionRegistry` 是运行时已注册 launcher action 的唯一事实来源。注册过程在提交前校验并
+规范化未知 descriptor 输入，拒绝重复 ID，并以原子方式应用批量注册。公开查询和 snapshot 返回
+深度隔离的 descriptor 数据，绝不包含 executor。snapshot 按 `action_id` 排序，使默认顺序不依赖
+provider 加载顺序。
+
+executor 保持由 Host 所有，只能由 `LauncherActionDispatcher` 解析。dispatch 返回明确成功结果，
+或者类型化的 `action_not_found`、`action_unavailable`、`action_execution_failed` 结果。
+executor 抛出、reject 或返回无效结果时会被隔离，不会通过公开契约暴露原生或框架对象。
+
+默认 service 当前只注册 `lensx.core.hide_launcher`。其标题和说明来自规范应用 message 资源。
+executor 调用类型化桌面 adapter，后者调用窄化的 `hide_launcher` Tauri command。Rust 将该
+command 映射到现有 managed `LauncherWindowActions` 边界和 `LauncherWindowAction::Hide`；
+它不会复制原生窗口逻辑，也不接受任意 action ID。
+
+当前 React App Shell 不创建或消费默认 action service，不读取 registry snapshot，不匹配
+launcher 查询，也不渲染 action 结果。搜索、排序、选择、历史、设置、动态可用性、provider
+生命周期和插件 action 投影仍属于未来能力。
 
 ## 分层模型
 

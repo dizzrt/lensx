@@ -48,6 +48,23 @@ Plugin
 序列化契约应当具有唯一的版本化 schema 来源，并在 TypeScript 和 Rust 中进行一致校验。
 跨边界暴露的校验错误必须包含稳定、机器可读的代码和位置。
 
+## Host Action Registry
+
+已经交付的 launcher action 核心建立了 Host 所有的 TypeScript registry，用于保存经过校验且可
+序列化的 action descriptor。descriptor 元数据与 executor 相互分离：消费者可以读取不可变的
+descriptor snapshot，只有可信 Host dispatcher 能够解析和调用 executor。外部代码绝不能把
+函数、React 状态、Tauri 对象或 Rust 实现值放进 descriptor。
+
+未来的内建 module 和外部插件必须通过经过校验的 provider adapter 投影 action。该 adapter 负责
+先把 provider 身份和元数据映射到稳定的 launcher descriptor 契约，再进行原子 Host 注册。
+provider 不能直接修改 registry、选择可信 executor、调用特权桌面 command，或绕过 Host
+dispatcher。特权行为仍然必须是明确的 Host capability，并具有自己的授权及类型化应用或 Rust
+边界。
+
+当前 registry 只包含一个 Host 内建 action，尚未定义插件 manifest、provider lifecycle、
+unregister 或 replace 语义、权限、搜索或外部执行。这些能力需要各自已接受的规格，不能通过隐式
+扩展 action descriptor 获得。
+
 ## 运行时边界
 
 ### 可信 Host Module

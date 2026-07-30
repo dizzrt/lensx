@@ -48,6 +48,7 @@ describe('lensX app shell', () => {
     expect(screen.getByText('A lightweight, keyboard-first desktop productivity launcher.')).toBeInTheDocument();
     expect(screen.queryByText(/Rsbuild/i)).not.toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Launcher query' })).toHaveAttribute('placeholder', 'Type a query');
+    expect(screen.queryByText('Hide launcher')).not.toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
