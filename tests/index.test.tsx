@@ -47,7 +47,7 @@ describe('lensX app shell', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'lensX' })).toBeInTheDocument();
     expect(screen.getByText('A lightweight, keyboard-first desktop productivity launcher.')).toBeInTheDocument();
     expect(screen.queryByText(/Rsbuild/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Launcher query' })).toHaveAttribute('placeholder', 'Type a query');
+    expect(screen.getByRole('combobox', { name: 'Launcher query' })).toHaveAttribute('placeholder', 'Type a query');
     expect(screen.queryByText('Hide launcher')).not.toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
@@ -62,7 +62,7 @@ describe('lensX app shell', () => {
     );
 
     expect(await screen.findByText('一款轻量、键盘优先的桌面效率启动器。')).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: '启动器查询' })).toHaveAttribute('placeholder', '输入查询内容');
+    expect(screen.getByRole('combobox', { name: '启动器查询' })).toHaveAttribute('placeholder', '输入查询内容');
     expect(screen.queryByText(/Rsbuild/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
@@ -75,7 +75,7 @@ describe('lensX app shell', () => {
       </AppProviders>,
     );
 
-    const input = screen.getByRole('textbox', { name: 'Launcher query' });
+    const input = screen.getByRole('combobox', { name: 'Launcher query' });
     fireEvent.change(input, { target: { value: 'open notes' } });
 
     expect(input).toHaveValue('open notes');
@@ -91,7 +91,7 @@ describe('lensX app shell', () => {
         <App activationSource={activationSource} />
       </AppProviders>,
     );
-    const input = screen.getByRole('textbox', { name: 'Launcher query' });
+    const input = screen.getByRole('combobox', { name: 'Launcher query' });
 
     expect(input).toHaveFocus();
     await waitFor(() => expect(activationSource.listeners.size).toBe(1));
@@ -147,7 +147,7 @@ describe('lensX app shell', () => {
       </AppProviders>,
     );
 
-    expect(screen.getByRole('textbox', { name: 'Launcher query' })).toHaveFocus();
+    expect(screen.getByRole('combobox', { name: 'Launcher query' })).toHaveFocus();
     await waitFor(() => expect(consoleError).toHaveBeenCalledWith('Failed to listen for launcher activation.', error));
     consoleError.mockRestore();
   });

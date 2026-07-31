@@ -31,6 +31,7 @@ body {
 }
 
 .launcher-surface {
+  overflow: hidden;
   border: 1px solid var(--semi-color-border);
   border-radius: var(--semi-border-radius-large);
   background: var(--semi-color-bg-0);
@@ -48,4 +49,69 @@ body {
   max-width: 70%;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.launcher-results {
+  min-height: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--semi-color-border);
+  border-radius: var(--semi-border-radius-medium);
+  background: var(--semi-color-bg-0);
+}
+
+.launcher-result {
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--semi-color-text-0);
+  cursor: pointer;
+  font: inherit;
+
+  &:hover {
+    background: var(--semi-color-fill-0);
+  }
+
+  &[data-selected="true"] {
+    background: var(--semi-color-primary-light-default);
+    box-shadow: inset 3px 0 0 var(--semi-color-primary);
+  }
+
+  &[data-pending="true"] {
+    cursor: progress;
+    opacity: 0.72;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--semi-color-focus-border);
+    outline-offset: -2px;
+  }
+}
+
+.launcher-result + .launcher-result {
+  border-top: 1px solid var(--semi-color-border);
+}
+
+.launcher-result-title,
+.launcher-result-description {
+  display: block;
+}
+
+.launcher-result-description {
+  margin-top: 2px;
+}
+
+.launcher-result-pending {
+  flex: none;
+}
+
+.launcher-search-status {
+  min-height: 20px;
+
+  &[data-feedback="error"] {
+    font-weight: 600;
+  }
 }

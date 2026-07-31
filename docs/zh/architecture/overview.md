@@ -28,6 +28,8 @@ lensX 是一款轻量级桌面效率启动器，其设计重点包括：
   窗口；
 - 框架无关的 TypeScript launcher action 核心，包含经过校验的 descriptor、Host 所有的
   registry、dispatcher，以及通过类型化 Rust command 路由的内建隐藏 action；
+- 基于不可变 registry snapshot 的确定性 launcher action 搜索，包含本地化匹配和可访问、
+  键盘优先的结果界面；
 - Rstest、Testing Library、TypeScript 检查、Biome 和 Cargo 验证命令；
 - 用于能力和架构变更的 OpenSpec 配置。
 
@@ -63,9 +65,11 @@ locale，并比较完整叶子 key 集合。locale 选择目前仅保存在内�
 主题，并提供窗口重新加载操作，但不展示异常细节。事件处理器和异步错误需要显式错误状态，不属于此
 渲染错误边界的捕获范围。
 
-当前 App Shell 展示 lensX 产品身份、产品说明和一个本地受控的 launcher 输入。输入可以接受文本，
-但不会产生结果或 action。它是可观察的 launcher 承载面，不代表搜索、执行、设置或插件工作流已经
-实现。
+当前 App Shell 展示 lensX 产品身份、产品说明和一个连接到生产 launcher action service 的本地
+受控输入。非空查询会搜索最新的 registry descriptor snapshot，展示最多八个真实且已启用的
+action，并在用户使用方向键或指针选择结果时保持输入焦点。Enter 和指针激活都会通过 Host
+dispatcher 分发所选 `action_id`。空查询不会暗示推荐、历史或固定 action，App Shell 也不会公开
+设置或插件工作流。
 
 ## Launcher 窗口生命周期
 
@@ -92,7 +96,8 @@ Rust 通过单一动作边界拥有全部 launcher 原生窗口操作：
 `reason` 字段，值为 `startup`、`global_shortcut` 或 `programmatic` 之一，并使用 snake-case
 序列化值。React 通过类型化桌面 adapter 接收该契约。launcher 输入在首次挂载时主动聚焦，并在每次
 激活后重新聚焦。对应 hook 为当前事件源维护一个订阅，在事件源变化或组件卸载时释放 listener，并在
-载荷格式错误或监听失败时输出诊断，而不破坏首次输入聚焦。
+载荷格式错误或监听失败时输出诊断，而不破坏首次输入聚焦。每次激活还会使用当前查询和最新 registry
+snapshot 刷新搜索，但不会填充、清除或执行 action。
 
 该生命周期本身不实现查询匹配、结果列表、设置、快捷键自定义、持久化或插件运行时行为。
 
@@ -117,9 +122,21 @@ executor 调用类型化桌面 adapter，后者调用窄化的 `hide_launcher` T
 command 映射到现有 managed `LauncherWindowActions` 边界和 `LauncherWindowAction::Hide`；
 它不会复制原生窗口逻辑，也不接受任意 action ID。
 
-当前 React App Shell 不创建或消费默认 action service，不读取 registry snapshot，不匹配
-launcher 查询，也不渲染 action 结果。搜索、排序、选择、历史、设置、动态可用性、provider
-生命周期和插件 action 投影仍属于未来能力。
+生产 launcher action service 在 React render 之外只创建一次，并允许在 App Shell 边界替换为
+隔离的测试 service。Launcher action 搜索是 registry descriptor snapshot 的纯消费者。它使用
+Unicode NFKC、locale-aware 大小写折叠和 Unicode 空白折叠来规范化查询及可搜索 metadata。每个
+查询 token 都必须匹配已解析标题、某个已解析默认关键词或已解析描述。固定的 exact、prefix 和
+substring 权重产生按 score 降序的顺序，并以 `action_id` 作为确定性平分规则。禁用 action 会在
+排序结果截断到 v0 上限八项之前被过滤。搜索结果是冻结的可序列化数据，只包含身份、已解析展示文本和
+score，绝不包含 executor 或 registry 内部状态。
+
+App Shell 将这些结果实现为 combobox/listbox 交互。第一项默认选中，方向键移动在列表边界停止，
+Escape 清空搜索，pending dispatch 会阻止重复执行。成功会清空查询；类型化 dispatcher failure
+会保留查询和选中项，同时显示安全的本地化反馈。结果数量、空状态、pending、成功和失败状态通过
+live region 播报。有界结果列表在现有 surface 内滚动，不会调整原生窗口尺寸。
+
+历史、最近使用、固定 action、设置、动态 provider 订阅、provider lifecycle 和插件 action 投影
+仍属于未来能力。
 
 ## 分层模型
 

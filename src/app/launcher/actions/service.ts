@@ -1,10 +1,15 @@
 import { createHideLauncherRegistration, type LauncherDesktopActions } from './builtins';
 import { LauncherActionDispatcher } from './dispatcher';
 import { LauncherActionRegistry } from './registry';
+import type { LauncherActionDescriptor, LauncherActionDispatchResult } from './types';
 
 export interface LauncherActionService {
-  readonly registry: LauncherActionRegistry;
-  readonly dispatcher: LauncherActionDispatcher;
+  readonly registry: {
+    snapshot: () => readonly LauncherActionDescriptor[];
+  };
+  readonly dispatcher: {
+    dispatch: (actionId: string) => Promise<LauncherActionDispatchResult>;
+  };
 }
 
 export const createDefaultLauncherActionService = (desktopActions: LauncherDesktopActions): LauncherActionService => {

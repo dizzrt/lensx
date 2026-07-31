@@ -6,6 +6,19 @@
   "launcher": {
     "inputLabel": "Launcher query",
     "inputPlaceholder": "Type a query",
+    "search": {
+      "resultsLabel": "Launcher actions",
+      "resultCount": "Results: {{count}}.",
+      "noResults": "No matching actions.",
+      "executing": "Running {{title}}…",
+      "pendingShort": "Running…",
+      "success": "Action completed.",
+      "failure": {
+        "actionNotFound": "This action no longer exists.",
+        "actionUnavailable": "This action is currently unavailable.",
+        "actionExecutionFailed": "The action could not be completed."
+      }
+    },
     "actions": {
       "hideLauncher": {
         "title": "Hide launcher",

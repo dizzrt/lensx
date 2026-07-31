@@ -32,6 +32,8 @@ The repository currently provides:
 - a framework-neutral TypeScript launcher action core with validated
   descriptors, a Host-owned registry, a dispatcher, and one built-in hide
   action routed through a typed Rust command;
+- deterministic launcher action search over immutable registry snapshots, with
+  localized matching and an accessible keyboard-first result interface;
 - Rstest, Testing Library, TypeScript checks, Biome, and Cargo validation
   commands;
 - OpenSpec configuration for capability and architecture changes.
@@ -80,9 +82,13 @@ asynchronous errors require explicit error states and are outside this render
 boundary.
 
 The current App Shell exposes the lensX identity, product description, and a
-local controlled launcher input. The input accepts text but does not produce
-results or actions. It is an observable launcher surface, not evidence that
-search, execution, settings, or plugin workflows are implemented.
+local controlled launcher input connected to the production launcher action
+service. A non-empty query searches the latest registry descriptor snapshot,
+shows at most eight real enabled actions, and keeps the input focused while the
+user selects a result with arrow keys or a pointer. Enter and pointer activation
+both dispatch the selected `action_id` through the Host dispatcher. Empty
+queries do not imply recommendations, history, or pinned actions, and the App
+Shell does not expose settings or plugin workflows.
 
 ## Launcher Window Lifecycle
 
@@ -124,7 +130,8 @@ launcher input focuses itself on initial mount and focuses again after each
 activation. Its hook keeps one subscription for the active event source,
 releases the listener when the source changes or the component unmounts, and
 diagnoses malformed payloads or listener failures without breaking initial
-input focus.
+input focus. Each activation also refreshes search from the current query and
+latest registry snapshot without filling, clearing, or executing an action.
 
 This lifecycle does not itself implement query matching, result lists,
 settings, shortcut customization, persistence, or plugin runtime behavior.
@@ -160,9 +167,28 @@ to the existing managed `LauncherWindowActions` boundary and
 `LauncherWindowAction::Hide`; it does not duplicate native window logic or
 accept an arbitrary action identifier.
 
-The current React App Shell does not create or consume the default action
-service, read the registry snapshot, match the launcher query, or render action
-results. Search, ranking, selection, history, settings, dynamic availability,
+The production launcher action service is created once outside React rendering
+and can be replaced with an isolated service at the App Shell boundary for
+tests. Launcher action search is a pure consumer of registry descriptor
+snapshots. It normalizes queries and searchable metadata with Unicode NFKC,
+locale-aware case folding, and collapsed Unicode whitespace. Every query token
+must match the resolved title, one resolved default keyword, or the resolved
+description. Fixed exact, prefix, and substring weights produce a descending
+score order, with `action_id` as the deterministic tie-breaker. Disabled actions
+are filtered before the sorted result set is truncated to the v0 limit of eight.
+Search results are frozen serializable data containing identity, resolved
+display text, and score; they never contain executors or registry internals.
+
+The App Shell treats those results as a combobox/listbox interaction. The first
+result is selected by default, arrow-key movement stops at the list boundaries,
+Escape clears the search, and pending dispatch prevents duplicate execution.
+Success clears the query; typed dispatcher failures preserve the query and
+selection while showing localized safe feedback. Result count, empty, pending,
+success, and failure states are announced through a live region. The bounded
+result list scrolls inside the existing surface and does not resize the native
+window.
+
+History, recent use, pinned actions, settings, dynamic provider subscriptions,
 provider lifecycle, and plugin action projection remain future capabilities.
 
 ## Layered Model

@@ -11,35 +11,49 @@ and removal of unused scaffold behavior.
 ### Requirement: The application must provide a product-owned React root interface
 
 The frontend application MUST render a product-owned, semantic, and accessible
-minimal App Shell. It MUST NOT continue to display build-tool welcome copy,
+Launcher App Shell. It MUST NOT continue to display build-tool welcome copy,
 example interactions, or presentation-layer mock features. The App Shell MUST
 display the lensX product identity and description in the current locale and
-MUST provide a locally controlled launcher input that accepts text without
-producing search results. The App Shell MUST NOT imply that unimplemented
-action search, execution, settings, or plugin capabilities are available.
+MUST provide a locally controlled launcher input connected to the real
+Host-owned Action Registry through the accepted Action Search capability.
+Non-empty queries MUST be able to display and operate real registered Action
+results. Empty queries MUST NOT imply recommendations, recent use, or pinned
+content. The App Shell MUST NOT present simulated Actions, unimplemented plugin
+entry points, settings, history, or persistence as available.
 
 #### Scenario: Start the application
 
-- **WHEN** the React application completes its root render
+- **WHEN** the React application completes its root render with an empty query
 - **THEN** the page contains an accessible main content region
 - **THEN** the page displays the lensX product identity and product description
   in the current locale
 - **THEN** the page displays a launcher input with an accessible name and
   localized placeholder
-- **THEN** the page does not display Rsbuild welcome copy or example
-  interactions
+- **THEN** the page does not display Rsbuild welcome copy, example interactions,
+  a result list, or fabricated recommendations
 
-#### Scenario: Edit text in the minimal launcher input
+#### Scenario: Search from the launcher input
 
 - **WHEN** a user enters or deletes text in the launcher input
 - **THEN** the input reflects the current text through local React state
-- **THEN** the page does not generate simulated search results or actions
+- **THEN** a non-empty query is evaluated against a real immutable Action
+  Registry snapshot
+- **THEN** the page displays only accepted Action Search results or the accepted
+  localized empty state
+
+#### Scenario: Operate a real Action result
+
+- **WHEN** the current query matches a registered and enabled Action
+- **THEN** the page exposes that result through accessible keyboard and pointer
+  interaction
+- **THEN** executing the result routes its `action_id` through the Host
+  Dispatcher instead of calling an executor from React
 
 #### Scenario: Inspect unavailable features
 
-- **WHEN** a user views the minimal App Shell
-- **THEN** the page does not display a search result list, settings entry point,
-  simulated action, or plugin entry point
+- **WHEN** a user views the Launcher App Shell
+- **THEN** the page does not display simulated Actions, a settings entry point,
+  recent use, pinned content, or a plugin entry point
 - **THEN** the page does not describe planned capabilities as implemented
 
 ### Requirement: The application must provide a unified global provider foundation

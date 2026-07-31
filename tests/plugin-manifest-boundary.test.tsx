@@ -36,7 +36,7 @@ test('static Manifest validation does not discover, register, render, or execute
     </AppProviders>,
   );
 
-  expect(screen.getByRole('textbox', { name: 'Launcher query' })).toBeInTheDocument();
+  expect(screen.getByRole('combobox', { name: 'Launcher query' })).toBeInTheDocument();
   expect(document.querySelector('iframe')).not.toBeInTheDocument();
   expect(screen.queryByText('Workspace Tools')).not.toBeInTheDocument();
   expect(screen.queryByRole('listbox')).not.toBeInTheDocument();

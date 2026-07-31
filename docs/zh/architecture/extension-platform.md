@@ -3,7 +3,7 @@
 ## 文档状态
 
 本文区分已经交付的静态插件 Manifest 契约与预期的运行时扩展边界。安装、分发、插件执行、
-权限、搜索和 Host API 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
+权限、插件 action 投影与搜索和 Host API 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
 
 ## 目标
 
@@ -101,8 +101,8 @@ Tauri 值、Rust 实现对象，或 `source`、`lifecycle`、`enabled`、安装�
 ### 明确未实现的能力
 
 静态校验不会发现或安装包、注册插件、创建 iframe、授予权限、把插件 Action 投影进 launcher
-registry、搜索这些 Action、导航 Page、交换 Host API 消息或运行插件代码。当前 App Shell
-及其唯一内建 launcher Action 保持不变。
+registry、搜索这些 Action、导航 Page、交换 Host API 消息或运行插件代码。当前 App Shell 可以
+搜索唯一的内建 launcher Action，但静态 Manifest 校验与该 registry 或搜索路径没有连接。
 
 ## Host Action Registry
 
@@ -111,15 +111,21 @@ registry、搜索这些 Action、导航 Page、交换 Host API 消息或运行�
 descriptor snapshot，只有可信 Host dispatcher 能够解析和调用 executor。外部代码绝不能把
 函数、React 状态、Tauri 对象或 Rust 实现值放进 descriptor。
 
+Launcher 搜索 service 只消费该 registry 的不可变 descriptor snapshot。它对每个已注册
+descriptor 使用相同的确定性 locale 解析、token 匹配、评分、排序和 enabled 过滤。它不会读取插件
+display name、Manifest 私有数据或 provider 来源，也不会提升 Manifest 的
+`contributes.launcher.default_action_id`。
+
 未来的内建 module 和外部插件必须通过经过校验的 provider adapter 投影 action。该 adapter 负责
 先把 provider 身份和元数据映射到稳定的 launcher descriptor 契约，再进行原子 Host 注册。
-provider 不能直接修改 registry、选择可信 executor、调用特权桌面 command，或绕过 Host
+插件 Action 注册后会自动使用与内建 Action 相同的搜索路径；搜索本身不会增加 provider-specific
+分支。provider 不能直接修改 registry、选择可信 executor、调用特权桌面 command，或绕过 Host
 dispatcher。特权行为仍然必须是明确的 Host capability，并具有自己的授权及类型化应用或 Rust
 边界。
 
 当前 registry 只包含一个 Host 内建 action。静态插件 Manifest 契约不会注册已贡献 Action，
-且尚未定义 provider lifecycle、unregister 或 replace 语义、权限、搜索或外部执行。这些能力
-需要各自已接受的规格，不能通过隐式扩展 action descriptor 获得。
+且尚未定义 provider lifecycle、unregister 或 replace 语义、权限、插件投影或外部执行。这些
+能力需要各自已接受的规格，不能通过隐式扩展 action descriptor 获得。
 
 ## 运行时边界
 

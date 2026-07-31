@@ -32,6 +32,56 @@
           "type": "string",
           "minLength": 1
         },
+        "search": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "resultsLabel": {
+              "type": "string",
+              "minLength": 1
+            },
+            "resultCount": {
+              "type": "string",
+              "minLength": 1
+            },
+            "noResults": {
+              "type": "string",
+              "minLength": 1
+            },
+            "executing": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pendingShort": {
+              "type": "string",
+              "minLength": 1
+            },
+            "success": {
+              "type": "string",
+              "minLength": 1
+            },
+            "failure": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "actionNotFound": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "actionUnavailable": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "actionExecutionFailed": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["actionNotFound", "actionUnavailable", "actionExecutionFailed"]
+            }
+          },
+          "required": ["resultsLabel", "resultCount", "noResults", "executing", "pendingShort", "success", "failure"]
+        },
         "actions": {
           "type": "object",
           "additionalProperties": false,
@@ -55,7 +105,7 @@
           "required": ["hideLauncher"]
         }
       },
-      "required": ["inputLabel", "inputPlaceholder", "actions"]
+      "required": ["inputLabel", "inputPlaceholder", "search", "actions"]
     },
     "error": {
       "type": "object",

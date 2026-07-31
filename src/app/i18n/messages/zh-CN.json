@@ -6,6 +6,19 @@
   "launcher": {
     "inputLabel": "启动器查询",
     "inputPlaceholder": "输入查询内容",
+    "search": {
+      "resultsLabel": "启动器操作",
+      "resultCount": "结果：{{count}} 项。",
+      "noResults": "没有匹配的操作。",
+      "executing": "正在执行“{{title}}”…",
+      "pendingShort": "执行中…",
+      "success": "操作已完成。",
+      "failure": {
+        "actionNotFound": "该操作已不存在。",
+        "actionUnavailable": "该操作当前不可用。",
+        "actionExecutionFailed": "无法完成该操作。"
+      }
+    },
     "actions": {
       "hideLauncher": {
         "title": "隐藏启动器",

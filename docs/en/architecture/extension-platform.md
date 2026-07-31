@@ -4,8 +4,9 @@
 
 This document separates the shipped static plugin Manifest contract from the
 intended runtime extension boundary. Installation, distribution, plugin
-execution, permissions, search, and the Host API are not currently implemented.
-Stable specs and source code define the shipped subset.
+execution, permissions, plugin action projection and search, and the Host API
+are not currently implemented. Stable specs and source code define the shipped
+subset.
 
 ## Goals
 
@@ -119,8 +120,9 @@ alone to grant trust or permission.
 Static validation does not discover or install packages, register plugins,
 create iframes, grant permissions, project plugin Actions into the launcher
 registry, search those Actions, navigate Pages, exchange Host API messages, or
-run plugin code. The current App Shell and its single built-in launcher Action
-remain unchanged.
+run plugin code. The current App Shell can search the single built-in launcher
+Action, but static Manifest validation has no connection to that registry or
+search path.
 
 ## Host Action Registry
 
@@ -131,19 +133,29 @@ while only the trusted Host dispatcher can resolve and invoke executors.
 External code must never place functions, React state, Tauri objects, or Rust
 implementation values in a descriptor.
 
+The launcher search service consumes only immutable descriptor snapshots from
+that registry. It applies the same deterministic locale resolution, token
+matching, scoring, sorting, and enabled filtering to every registered
+descriptor. It does not read a plugin display name, Manifest-private data, or
+provider source, and it does not boost a Manifest
+`contributes.launcher.default_action_id`.
+
 Future built-in modules and external plugins must project actions through a
 validated provider adapter. That adapter is responsible for mapping provider
 identity and metadata into the stable launcher descriptor contract before an
-atomic Host registration. A provider cannot directly mutate the registry,
+atomic Host registration. Once registered, a plugin Action will automatically
+use the same search path as a built-in Action; search itself will not add a
+provider-specific branch. A provider cannot directly mutate the registry,
 choose a trusted executor, invoke privileged desktop commands, or bypass the
 Host dispatcher. Privileged behavior remains an explicit Host capability with
 its own authorization and typed application or Rust boundary.
 
 The current registry contains one Host built-in action. The static plugin
 Manifest contract does not register contributed Actions and does not yet define
-provider lifecycle, unregister or replacement semantics, permissions, search,
-or external execution. Those capabilities require dedicated accepted
-specifications rather than implicit expansion of the action descriptor.
+provider lifecycle, unregister or replacement semantics, permissions, plugin
+projection, or external execution. Those capabilities require dedicated
+accepted specifications rather than implicit expansion of the action
+descriptor.
 
 ## Runtime Boundaries
 
