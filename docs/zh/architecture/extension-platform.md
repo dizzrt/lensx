@@ -2,8 +2,8 @@
 
 ## 文档状态
 
-本文描述预期的扩展边界，并不表示安装、分发、插件执行或全部 Host API 当前已经实现。
-稳定 spec 和源码共同决定已经交付的子集。
+本文区分已经交付的静态插件 Manifest 契约与预期的运行时扩展边界。安装、分发、插件执行、
+权限、搜索和 Host API 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
 
 ## 目标
 
@@ -48,6 +48,62 @@ Plugin
 序列化契约应当具有唯一的版本化 schema 来源，并在 TypeScript 和 Rust 中进行一致校验。
 跨边界暴露的校验错误必须包含稳定、机器可读的代码和位置。
 
+## 已交付的静态 Manifest 契约
+
+lensX 已经把作者可控的 Manifest 协议 `manifest_version: "1.0.0-dev"` 实现为严格的
+Draft 2020-12 JSON Schema。Schema 是 wire format 的结构真源。生成的 TypeScript 作者输入
+类型、明确的 Rust 作者输入模型以及两端校验器共同消费该契约。共享的 valid、invalid、
+normalized 和 incompatible fixtures 约束分类、规范化输出以及诊断 `code`/`path` 行为一致。
+
+项目自有的完整示例位于
+[examples/plugin-manifest-v0/manifest.json](../../../examples/plugin-manifest-v0/manifest.json)。
+
+### 字段模型
+
+| 字段 | 契约 |
+| --- | --- |
+| `manifest_version` | 必填，且必须精确等于 `1.0.0-dev`。 |
+| `plugin_id` 和 `version` | 必填的稳定命名空间插件 ID 和 SemVer 发布版本。 |
+| `display` | 必填的本地化 `name`；可选本地化 `description` 和包内 asset `icon`。 |
+| `publisher` | 必填的作者声明 `author`、HTTPS `homepage` 和 HTTPS `repository`；三者都不建立信任。 |
+| `compatibility` | 必填的 `lensx` 和 `host_api` SemVer 半开区间。 |
+| `runtime` | 必填 `kind: "iframe"` 和包内 HTML `entry`；它只是元数据，不会创建 iframe。 |
+| `requested_permissions` | 可选的唯一权限请求及本地化原因；请求不等于授权。 |
+| `contributes.pages` | 一个或多个具有唯一 ID 的 Page，包含本地化标题、内部 route，以及可选 parent/icon 和已请求权限依赖。 |
+| `contributes.actions` | 可选的唯一 Action，包含本地化标题/描述、Action 自有的 `default_keywords`、可选 icon 和只指向 Page 的 target。 |
+| `contributes.launcher` | 可选的 `default_action_id`，引用一个已贡献 Action；它不实现排序或注册。 |
+
+用户可见的本地化文本在去除首尾空白后必须包含非空 `en-US`，并可提供 `zh-CN`；消费方回退到
+英文。未知 locale key 和未知字段会被拒绝。缺失的可选集合规范化为空集合，而显式 `null`
+始终无效。
+
+Page 和 Action ID 都是插件内本地 ID。未来 Host 投影可以把全局 Action ID 派生为
+`<plugin_id>.<local_action_id>`，但已经交付的校验器不会执行该投影。Page parent 引用必须存在，
+且整个图必须无环。每个 Action target 必须是
+`{ "kind": "page", "page_id": "<local-page-id>" }`。Action 关键词始终归属于对应 Action，
+不会成为插件级别的共享别名。Page 权限依赖必须是顶层请求权限的子集。
+
+### 校验、规范化与兼容性
+
+校验依次经过严格 Schema 检查、确定性规范化、语义引用/路径/图检查和兼容性分类。公开诊断是
+可序列化的 `{code, path, message}` 对象，使用 JSON Pointer path，并依次按 `path` 和
+`code` 排序。
+
+插件版本和兼容边界使用 SemVer，包括预发布版本优先级。当前版本满足
+`min_version <= current < max_version_exclusive` 时兼容。结构和语义有效、但超出任一范围的
+Manifest 是 `incompatible`，而不是 `invalid`。
+
+规范化 Manifest 只包含作者声明的数据和确定性默认值。它不能包含 executor、函数、React 或
+Tauri 值、Rust 实现对象，或 `source`、`lifecycle`、`enabled`、安装路径、已授予权限、签名
+状态、runtime 状态等 Host-owned 字段。Publisher 元数据是不受信任的作者输入，不能单独用于
+授予信任或权限。
+
+### 明确未实现的能力
+
+静态校验不会发现或安装包、注册插件、创建 iframe、授予权限、把插件 Action 投影进 launcher
+registry、搜索这些 Action、导航 Page、交换 Host API 消息或运行插件代码。当前 App Shell
+及其唯一内建 launcher Action 保持不变。
+
 ## Host Action Registry
 
 已经交付的 launcher action 核心建立了 Host 所有的 TypeScript registry，用于保存经过校验且可
@@ -61,9 +117,9 @@ provider 不能直接修改 registry、选择可信 executor、调用特权桌�
 dispatcher。特权行为仍然必须是明确的 Host capability，并具有自己的授权及类型化应用或 Rust
 边界。
 
-当前 registry 只包含一个 Host 内建 action，尚未定义插件 manifest、provider lifecycle、
-unregister 或 replace 语义、权限、搜索或外部执行。这些能力需要各自已接受的规格，不能通过隐式
-扩展 action descriptor 获得。
+当前 registry 只包含一个 Host 内建 action。静态插件 Manifest 契约不会注册已贡献 Action，
+且尚未定义 provider lifecycle、unregister 或 replace 语义、权限、搜索或外部执行。这些能力
+需要各自已接受的规格，不能通过隐式扩展 action descriptor 获得。
 
 ## 运行时边界
 
@@ -76,8 +132,8 @@ unregister 或 replace 语义、权限、搜索或外部执行。这些能力需
 
 ### 外部插件
 
-外部插件 UI 必须在隔离的 iframe 中运行，并且只能通过受控 Host Bridge 通信。外部插件不能直接
-访问：
+实现外部插件执行后，插件 UI 必须在隔离的 iframe 中运行，并且只能通过受控 Host Bridge 通信。
+外部插件不能直接访问：
 
 - 应用 React 状态或组件实例；
 - 私有前端模块；
@@ -125,5 +181,6 @@ Host API 方法应当保持小型、类型化、版本化，并且可以独立�
 
 ## 能力交付
 
-每项具体能力——manifest 格式、registry、安装、权限、Host API 方法、打包、生命周期或
-sidecar——都需要独立的已接受规格和实现证据。本文定义架构方向和边界，不是发布检查清单。
+静态 Manifest 格式和校验器已经交付。其余每项能力——provider 投影、安装、权限、Host API
+方法、打包、生命周期、runtime 执行或 sidecar——都需要独立的已接受规格和实现证据。本文定义
+架构方向和边界，不是发布检查清单。

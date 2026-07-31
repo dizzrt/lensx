@@ -1,0 +1,325 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lensx.app/schemas/plugin/manifest-1.0.0-dev.schema.json",
+  "title": "lensX Plugin Manifest 1.0.0-dev",
+  "description": "Author-controlled static manifest input for an external lensX plugin.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_version",
+    "plugin_id",
+    "version",
+    "display",
+    "publisher",
+    "compatibility",
+    "runtime",
+    "contributes"
+  ],
+  "properties": {
+    "manifest_version": {
+      "const": "1.0.0-dev"
+    },
+    "plugin_id": {
+      "$ref": "#/$defs/pluginId"
+    },
+    "version": {
+      "$ref": "#/$defs/semver"
+    },
+    "display": {
+      "$ref": "#/$defs/display"
+    },
+    "publisher": {
+      "$ref": "#/$defs/publisher"
+    },
+    "compatibility": {
+      "$ref": "#/$defs/compatibility"
+    },
+    "runtime": {
+      "$ref": "#/$defs/runtime"
+    },
+    "requested_permissions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/permissionRequest"
+      }
+    },
+    "contributes": {
+      "$ref": "#/$defs/contributes"
+    }
+  },
+  "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "pluginId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 255,
+      "pattern": "^[a-z][a-z0-9_-]{0,63}(?:\\.[a-z][a-z0-9_-]{0,63})+$"
+    },
+    "localId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "permissionId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 255,
+      "pattern": "^[a-z][a-z0-9_-]{0,63}(?:\\.[a-z][a-z0-9_-]{0,63})+$"
+    },
+    "packagePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)(?!.*[\\\\?#:])\\S+$"
+    },
+    "packageHtmlPath": {
+      "type": "string",
+      "minLength": 6,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)(?!.*[\\\\?#:])\\S+\\.[Hh][Tt][Mm][Ll]$"
+    },
+    "internalRoute": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^/(?!/)(?!.*//)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*[\\\\?#])(?:[^/]+(?:/[^/]+)*)?/?$"
+    },
+    "localizedText": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en-US"],
+      "properties": {
+        "en-US": {
+          "type": "string",
+          "minLength": 1
+        },
+        "zh-CN": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "localizedKeywords": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "en-US": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "zh-CN": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path"],
+      "properties": {
+        "kind": {
+          "const": "asset"
+        },
+        "path": {
+          "$ref": "#/$defs/packagePath"
+        }
+      }
+    },
+    "display": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/localizedText"
+        },
+        "description": {
+          "$ref": "#/$defs/localizedText"
+        },
+        "icon": {
+          "$ref": "#/$defs/asset"
+        }
+      }
+    },
+    "publisher": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["author", "homepage", "repository"],
+      "properties": {
+        "author": {
+          "type": "string",
+          "minLength": 1
+        },
+        "homepage": {
+          "type": "string",
+          "minLength": 9,
+          "pattern": "^https://"
+        },
+        "repository": {
+          "type": "string",
+          "minLength": 9,
+          "pattern": "^https://"
+        }
+      }
+    },
+    "versionRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min_version", "max_version_exclusive"],
+      "properties": {
+        "min_version": {
+          "$ref": "#/$defs/semver"
+        },
+        "max_version_exclusive": {
+          "$ref": "#/$defs/semver"
+        }
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lensx", "host_api"],
+      "properties": {
+        "lensx": {
+          "$ref": "#/$defs/versionRange"
+        },
+        "host_api": {
+          "$ref": "#/$defs/versionRange"
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "entry"],
+      "properties": {
+        "kind": {
+          "const": "iframe"
+        },
+        "entry": {
+          "$ref": "#/$defs/packageHtmlPath"
+        }
+      }
+    },
+    "permissionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["permission_id", "reason"],
+      "properties": {
+        "permission_id": {
+          "$ref": "#/$defs/permissionId"
+        },
+        "reason": {
+          "$ref": "#/$defs/localizedText"
+        }
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "route"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/localId"
+        },
+        "title": {
+          "$ref": "#/$defs/localizedText"
+        },
+        "route": {
+          "$ref": "#/$defs/internalRoute"
+        },
+        "parent_page_id": {
+          "$ref": "#/$defs/localId"
+        },
+        "icon": {
+          "$ref": "#/$defs/asset"
+        },
+        "required_permissions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/permissionId"
+          }
+        }
+      }
+    },
+    "actionTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "page_id"],
+      "properties": {
+        "kind": {
+          "const": "page"
+        },
+        "page_id": {
+          "$ref": "#/$defs/localId"
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "target"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/localId"
+        },
+        "title": {
+          "$ref": "#/$defs/localizedText"
+        },
+        "description": {
+          "$ref": "#/$defs/localizedText"
+        },
+        "default_keywords": {
+          "$ref": "#/$defs/localizedKeywords"
+        },
+        "icon": {
+          "$ref": "#/$defs/asset"
+        },
+        "target": {
+          "$ref": "#/$defs/actionTarget"
+        }
+      }
+    },
+    "launcher": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["default_action_id"],
+      "properties": {
+        "default_action_id": {
+          "$ref": "#/$defs/localId"
+        }
+      }
+    },
+    "contributes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pages"],
+      "properties": {
+        "pages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/page"
+          }
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/action"
+          }
+        },
+        "launcher": {
+          "$ref": "#/$defs/launcher"
+        }
+      }
+    }
+  }
+}

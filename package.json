@@ -15,6 +15,9 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
     "test": "rstest",
     "test:watch": "rstest --watch",
+    "generate:plugin-manifest-types": "node scripts/generate-plugin-manifest-types.mjs",
+    "check:plugin-manifest-types": "node scripts/generate-plugin-manifest-types.mjs --check",
+    "check:plugin-contract": "pnpm run check:plugin-manifest-types && rstest tests/plugin-manifest-contract.test.ts tests/plugin-manifest-boundary.test.tsx && cargo test --manifest-path src-tauri/Cargo.toml plugin_manifest",
     "check": "biome check .",
     "check:fix": "biome check --write .",
     "format": "biome format --write .",
@@ -56,6 +59,7 @@
     "ajv": "^8.20.0",
     "happy-dom": "^20.11.0",
     "husky": "^9.1.7",
+    "json-schema-to-typescript": "^15.0.4",
     "lint-staged": "^17.2.0",
     "typescript": "^6.0.3",
     "unocss": "^66.7.5"

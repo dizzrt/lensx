@@ -1,4 +1,5 @@
 pub mod launcher_window;
+pub mod plugin_manifest;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

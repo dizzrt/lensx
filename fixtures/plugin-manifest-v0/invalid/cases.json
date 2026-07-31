@@ -1,0 +1,334 @@
+[
+  {
+    "name": "unknown top-level field",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/unexpected",
+        "value": true
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "unknown_field",
+        "path": "/unexpected"
+      }
+    ]
+  },
+  {
+    "name": "explicit null remains invalid",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/requested_permissions",
+        "value": null
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "invalid_type",
+        "path": "/requested_permissions"
+      }
+    ]
+  },
+  {
+    "name": "Host-owned source is rejected",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/source",
+        "value": "external"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "unknown_field",
+        "path": "/source"
+      }
+    ]
+  },
+  {
+    "name": "Host-owned enabled state is rejected",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/enabled",
+        "value": true
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "unknown_field",
+        "path": "/enabled"
+      }
+    ]
+  },
+  {
+    "name": "invalid plugin ID",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/plugin_id",
+        "value": "Acme"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "invalid_format",
+        "path": "/plugin_id"
+      }
+    ]
+  },
+  {
+    "name": "invalid plugin SemVer",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/version",
+        "value": "1.0"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "invalid_format",
+        "path": "/version"
+      }
+    ]
+  },
+  {
+    "name": "Publisher URL credentials are rejected",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/publisher/homepage",
+        "value": "https://user:password@example.com"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "invalid_url",
+        "path": "/publisher/homepage"
+      }
+    ]
+  },
+  {
+    "name": "parent traversal in asset path",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/display/icon/path",
+        "value": "assets/../secret.svg"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "invalid_path",
+        "path": "/display/icon/path"
+      }
+    ]
+  },
+  {
+    "name": "runtime entry must be HTML",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/runtime/entry",
+        "value": "dist/plugin.js"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "invalid_path",
+        "path": "/runtime/entry"
+      }
+    ]
+  },
+  {
+    "name": "external Page route",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/pages/0/route",
+        "value": "https://example.com"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "invalid_route",
+        "path": "/contributes/pages/0/route"
+      }
+    ]
+  },
+  {
+    "name": "duplicate Page ID",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/pages/1/id",
+        "value": "home"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "unknown_reference",
+        "path": "/contributes/actions/0/target/page_id"
+      },
+      {
+        "code": "duplicate_id",
+        "path": "/contributes/pages/1/id"
+      },
+      {
+        "code": "reference_cycle",
+        "path": "/contributes/pages/1/parent_page_id"
+      }
+    ]
+  },
+  {
+    "name": "unknown parent Page",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/pages/1/parent_page_id",
+        "value": "missing"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "unknown_reference",
+        "path": "/contributes/pages/1/parent_page_id"
+      }
+    ]
+  },
+  {
+    "name": "Page parent cycle",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/pages/0/parent_page_id",
+        "value": "open_project"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "reference_cycle",
+        "path": "/contributes/pages/0/parent_page_id"
+      },
+      {
+        "code": "reference_cycle",
+        "path": "/contributes/pages/1/parent_page_id"
+      }
+    ]
+  },
+  {
+    "name": "Page permission was not requested",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/pages/0/required_permissions",
+        "value": ["lensx.filesystem.write"]
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "unknown_reference",
+        "path": "/contributes/pages/0/required_permissions/0"
+      }
+    ]
+  },
+  {
+    "name": "Action target must be a Page",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/actions/0/target/kind",
+        "value": "command"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "invalid_value",
+        "path": "/contributes/actions/0/target/kind"
+      }
+    ]
+  },
+  {
+    "name": "Action target references an unknown Page",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/actions/0/target/page_id",
+        "value": "missing"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "unknown_reference",
+        "path": "/contributes/actions/0/target/page_id"
+      }
+    ]
+  },
+  {
+    "name": "Action keyword is empty after trimming",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/actions/0/default_keywords/en-US/0",
+        "value": "   "
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "empty_value",
+        "path": "/contributes/actions/0/default_keywords/en-US/0"
+      }
+    ]
+  },
+  {
+    "name": "Action keyword is duplicated after normalization",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/actions/0/default_keywords/en-US",
+        "value": ["Open Workspace", " open workspace "]
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "duplicate_value",
+        "path": "/contributes/actions/0/default_keywords/en-US/1"
+      }
+    ]
+  },
+  {
+    "name": "Launcher default Action is unknown",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/launcher/default_action_id",
+        "value": "missing"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "unknown_reference",
+        "path": "/contributes/launcher/default_action_id"
+      }
+    ]
+  },
+  {
+    "name": "compatibility range is empty",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/compatibility/lensx/min_version",
+        "value": "0.2.0"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "invalid_range",
+        "path": "/compatibility/lensx"
+      }
+    ]
+  }
+]

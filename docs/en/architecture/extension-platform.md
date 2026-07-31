@@ -2,9 +2,10 @@
 
 ## Document Status
 
-This document describes the intended extension boundary. It does not claim that
-installation, distribution, plugin execution, or every Host API is currently
-implemented. Stable specs and source code define the shipped subset.
+This document separates the shipped static plugin Manifest contract from the
+intended runtime extension boundary. Installation, distribution, plugin
+execution, permissions, search, and the Host API are not currently implemented.
+Stable specs and source code define the shipped subset.
 
 ## Goals
 
@@ -52,6 +53,75 @@ Serialized contracts should have one versioned schema source and should be
 validated consistently in TypeScript and Rust. Validation errors exposed across
 boundaries must have stable machine-readable codes and locations.
 
+## Shipped Static Manifest Contract
+
+lensX implements the author-controlled Manifest protocol
+`manifest_version: "1.0.0-dev"` as a strict Draft 2020-12 JSON Schema. The
+Schema is the structural source of truth for the wire format. Generated
+TypeScript author-input types, explicit Rust author-input models, and both
+validators consume that contract. Shared valid, invalid, normalized, and
+incompatible fixtures keep classification, normalized output, and diagnostic
+`code`/`path` behavior aligned.
+
+The complete project-owned example is
+[examples/plugin-manifest-v0/manifest.json](../../../examples/plugin-manifest-v0/manifest.json).
+
+### Field Model
+
+| Field | Contract |
+| --- | --- |
+| `manifest_version` | Required and exactly `1.0.0-dev`. |
+| `plugin_id` and `version` | Required stable namespaced plugin ID and SemVer release version. |
+| `display` | Required localized `name`; optional localized `description` and package-local asset `icon`. |
+| `publisher` | Required author-declared `author`, HTTPS `homepage`, and HTTPS `repository`; none establish trust. |
+| `compatibility` | Required half-open SemVer ranges for both `lensx` and `host_api`. |
+| `runtime` | Required `kind: "iframe"` and package-local HTML `entry`; this is metadata and does not create an iframe. |
+| `requested_permissions` | Optional unique permission requests with localized reasons; requests are not grants. |
+| `contributes.pages` | One or more uniquely identified pages with localized titles, internal routes, optional parent/icon, and requested-permission dependencies. |
+| `contributes.actions` | Optional unique actions with localized title/description, action-owned `default_keywords`, optional icon, and a Page-only target. |
+| `contributes.launcher` | Optional `default_action_id` referencing one contributed action; it does not implement ranking or registration. |
+
+User-visible localized text requires a non-empty `en-US` value after trimming
+and may provide `zh-CN`; consumers fall back to English. Unknown locale keys and
+unknown fields are rejected. Missing optional collections normalize to empty
+collections, while explicit `null` remains invalid.
+
+Page and Action IDs are plugin-local. A future Host projection can derive the
+global Action ID as `<plugin_id>.<local_action_id>`, but the shipped validator
+does not perform that projection. Page parent references must exist and form an
+acyclic graph. Every Action target must be
+`{ "kind": "page", "page_id": "<local-page-id>" }`. Action keywords remain
+owned by that Action and never become plugin-wide aliases. Page permission
+dependencies must be a subset of top-level requests.
+
+### Validation, Normalization, And Compatibility
+
+Validation proceeds through strict Schema checks, deterministic normalization,
+semantic reference/path/graph checks, and compatibility classification. Public
+diagnostics are serializable `{code, path, message}` objects, use JSON Pointer
+paths, and are sorted by `path` and then `code`.
+
+Plugin version and compatibility bounds use SemVer, including prerelease
+precedence. Each current version is compatible when
+`min_version <= current < max_version_exclusive`. A structurally and
+semantically valid Manifest outside either range is `incompatible`, not
+`invalid`.
+
+The normalized Manifest contains only author-declared data and deterministic
+defaults. It cannot contain executors, functions, React or Tauri values, Rust
+implementation objects, or Host-owned fields such as `source`, `lifecycle`,
+`enabled`, installed paths, granted permissions, signature status, or runtime
+status. Publisher metadata is unverified author input and must never be used
+alone to grant trust or permission.
+
+### Explicitly Unimplemented Capabilities
+
+Static validation does not discover or install packages, register plugins,
+create iframes, grant permissions, project plugin Actions into the launcher
+registry, search those Actions, navigate Pages, exchange Host API messages, or
+run plugin code. The current App Shell and its single built-in launcher Action
+remain unchanged.
+
 ## Host Action Registry
 
 The shipped launcher action core establishes a Host-owned TypeScript registry
@@ -69,11 +139,11 @@ choose a trusted executor, invoke privileged desktop commands, or bypass the
 Host dispatcher. Privileged behavior remains an explicit Host capability with
 its own authorization and typed application or Rust boundary.
 
-The current registry contains one Host built-in action and does not yet define
-plugin manifests, provider lifecycle, unregister or replacement semantics,
-permissions, search, or external execution. Those capabilities require
-dedicated accepted specifications rather than implicit expansion of the action
-descriptor.
+The current registry contains one Host built-in action. The static plugin
+Manifest contract does not register contributed Actions and does not yet define
+provider lifecycle, unregister or replacement semantics, permissions, search,
+or external execution. Those capabilities require dedicated accepted
+specifications rather than implicit expansion of the action descriptor.
 
 ## Runtime Boundaries
 
@@ -89,8 +159,9 @@ external contract does not depend on React implementation details.
 
 ### External Plugins
 
-External plugin UI must run in an isolated iframe and communicate only through
-a controlled Host bridge. External plugins must not directly access:
+When external plugin execution is implemented, plugin UI must run in an
+isolated iframe and communicate only through a controlled Host bridge. External
+plugins must not directly access:
 
 - application React state or component instances;
 - private frontend modules;
@@ -141,7 +212,8 @@ method exists.
 
 ## Capability Delivery
 
-Each concrete capability—manifest format, registry, installation, permissions,
-Host API methods, packaging, lifecycle, or sidecars—requires its own accepted
+The static Manifest format and validators are delivered. Each remaining
+capability—provider projection, installation, permissions, Host API methods,
+packaging, lifecycle, runtime execution, or sidecars—requires its own accepted
 specification and implementation evidence. This architectural document defines
 direction and boundaries, not a release checklist.
