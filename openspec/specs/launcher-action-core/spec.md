@@ -4,7 +4,7 @@
 
 Define the accepted launcher action descriptor, stable identity and ownership
 rules, Host-owned registry and dispatcher, trust boundaries, typed execution
-results, and the first real built-in launcher action.
+results, and built-in launcher actions.
 
 ## Requirements
 
@@ -260,3 +260,52 @@ the native window hide operation directly.
   code, action, operation, and message
 - **THEN** the TypeScript adapter maps the failure to an executor failure
 - **THEN** the dispatcher returns `action_execution_failed`
+
+### Requirement: The default registry must contain the Host settings Action
+
+The default Action service MUST register the enabled
+`lensx.core.open_settings` Action with owner `lensx.core`. Its English and
+Simplified Chinese title, description, and search keywords MUST come from
+application message resources. The public descriptor MUST continue to contain
+only serializable metadata and MUST NOT contain a page target or executable
+function.
+
+The trusted Host executor MUST preserve the existing
+`LauncherActionExecutor = () => Promise<void> | void` contract and MUST request
+the `lensx.core/settings` Host page through a framework-independent application
+navigation service. React result components MUST continue to dispatch only the
+Action ID.
+
+#### Scenario: Create the default Action service
+
+- **WHEN** the Host creates the default launcher Action service
+- **THEN** the registry contains `lensx.core.open_settings`
+- **THEN** the descriptor is enabled and passes identity, ownership,
+  localization, keyword, and serialization validation
+- **THEN** the descriptor does not expose a page target or executor
+
+#### Scenario: Find the settings Action
+
+- **WHEN** a query in a supported locale matches the settings Action title,
+  description, or keywords
+- **THEN** Action Search returns the real `lensx.core.open_settings` descriptor
+- **THEN** the result uses localized metadata from application messages
+
+#### Scenario: Execute the settings Action
+
+- **WHEN** the Dispatcher executes `lensx.core.open_settings`
+- **THEN** the trusted Host executor requests that the application navigation
+  service open owner `lensx.core`, page `settings`
+- **THEN** the request records `lensx.core.open_settings` as the Action that
+  opened the page
+- **THEN** the React component does not directly receive or call the executor
+- **THEN** the Dispatcher returns its existing typed success result when page
+  preflight and opening succeed
+
+#### Scenario: The settings page cannot open
+
+- **WHEN** the application navigation service rejects the request because the
+  settings page is missing or unavailable or no active App Shell handler exists
+- **THEN** the executor reports an execution failure
+- **THEN** the Dispatcher returns `action_execution_failed`
+- **THEN** the public Action and Dispatcher contracts remain unchanged

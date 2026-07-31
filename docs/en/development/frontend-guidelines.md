@@ -27,8 +27,9 @@ accessibility contract.
 ## Application Root Composition
 
 Keep `src/index.tsx` limited to one-time global style imports, React root
-creation, and the `AppProviders` plus `App` composition. Do not add parallel
-application-level providers in pages or feature modules.
+creation, and `AppBootstrap`. The bootstrap must resolve persisted preferences
+before composing `AppProviders` and `App`. Do not add parallel application-level
+providers in pages or feature modules.
 
 `AppProviders` owns the established root order:
 
@@ -43,6 +44,11 @@ Context values must use stable update callbacks and memoized value objects.
 Tests may provide an initial locale or theme through the root providers, but
 features must consume `useAppLocale` and `useAppTheme` instead of creating
 another global source of truth.
+
+Preference controls must send a complete, runtime-validated snapshot through
+the typed desktop adapter. Serialize writes and update the root Providers only
+after Rust confirms persistence. A failed write must retain the last confirmed
+values and expose localized feedback.
 
 ## Styling
 
@@ -83,8 +89,8 @@ Shell layout and spacing in UnoCSS utilities.
 - Components must not create independent global theme state.
 - Test custom surfaces, focus indicators, disabled states, overlays, and error
   states in both modes.
-- Persisted theme behavior requires a stable application boundary and an
-  accepted specification.
+- Persist theme only through the accepted `AppPreferences` Rust/Tauri boundary.
+- Do not optimistically update the root theme before persistence succeeds.
 
 ## Internationalization
 
@@ -112,6 +118,8 @@ Shell layout and spacing in UnoCSS utilities.
 - Do not concatenate translated fragments when a complete message can express
   the sentence.
 - Allow layouts to accommodate different text lengths.
+- Persist locale only through the accepted complete preference snapshot, then
+  update application messages, Semi Design locale, and HTML `lang` together.
 
 ## React Structure
 
@@ -126,6 +134,14 @@ Shell layout and spacing in UnoCSS utilities.
 - Lazy-load large, optional surfaces at stable boundaries.
 - Keep native calls behind typed adapters rather than invoking Tauri throughout
   the component tree.
+- Keep `AppNavigationService` independent of React. Host executors may request
+  a validated page through it, but must not receive React setters.
+- Derive `home`, `search`, and `page` presentation from normalized query and
+  flat `ActivePage` state; do not introduce a router or parallel Shell store for
+  the current single-page depth.
+- Send those presentation states through the typed launcher-surface adapter so
+  Rust selects the fixed 240px, 480px, or 600px height. Components must not
+  measure DOM content or submit arbitrary native dimensions.
 
 ## Accessibility And Keyboard Behavior
 
@@ -134,6 +150,8 @@ Shell layout and spacing in UnoCSS utilities.
 - Make primary workflows operable without a pointer.
 - Define predictable focus movement for opening, closing, and switching
   launcher surfaces.
+- Replace the search input with a page-context header while a page is active;
+  provide an accessible close control and restore launcher-input focus on close.
 - Do not use color alone to communicate state.
 - Announce asynchronous errors and important state changes appropriately.
 
@@ -147,5 +165,7 @@ Shell layout and spacing in UnoCSS utilities.
 - Cover App Shell render failures through `AppErrorBoundary`; event-handler and
   asynchronous failures must use explicit error states because React error
   boundaries do not capture them.
+- Cover active-page render failures through the page-level boundary so the
+  context header and close control remain usable.
 - Add focused tests for extracted domain functions.
 - Avoid snapshots that obscure meaningful behavioral assertions.

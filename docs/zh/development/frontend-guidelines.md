@@ -21,8 +21,9 @@
 
 ## 应用根层组合
 
-保持 `src/index.tsx` 只负责一次性全局样式导入、React root 创建以及 `AppProviders` 与 `App`
-组合。不要在页面或功能模块中添加并行的应用级 Provider。
+保持 `src/index.tsx` 只负责一次性全局样式导入、React root 创建以及 `AppBootstrap`。bootstrap
+必须先解析持久化偏好，再组合 `AppProviders` 与 `App`。不要在页面或功能模块中添加并行的应用级
+Provider。
 
 `AppProviders` 负责已经确立的根层顺序：
 
@@ -33,6 +34,9 @@
 
 Context value 必须使用稳定的更新回调和 memo 后的 value 对象。测试可以通过根 Provider 提供初始
 locale 或主题，但功能代码必须消费 `useAppLocale` 和 `useAppTheme`，不能创建另一个全局事实来源。
+
+偏好控件必须通过类型化桌面 adapter 提交完整、经过运行时校验的 snapshot。写入必须串行，且只有
+Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确认的值并显示本地化反馈。
 
 ## 样式
 
@@ -70,7 +74,8 @@ locale 或主题，但功能代码必须消费 `useAppLocale` 和 `useAppTheme`�
 - 将文档 `color-scheme` 与当前应用主题同步。
 - 组件不能创建独立的全局主题状态。
 - 在两种模式下测试自定义界面、焦点提示、禁用状态、浮层和错误状态。
-- 持久化主题行为需要稳定的应用边界和已接受的规格。
+- 只能通过已接受的 `AppPreferences` Rust/Tauri 边界持久化主题。
+- 持久化成功前不能乐观更新根主题。
 
 ## 国际化
 
@@ -90,6 +95,8 @@ locale 或主题，但功能代码必须消费 `useAppLocale` 和 `useAppTheme`�
 - 不要使用 Semi Design 内置 locale 文案代替产品文案。
 - 可以用完整 message 表达句子时，不要拼接多个翻译片段。
 - 布局需要适应不同长度的文本。
+- locale 只能通过完整偏好 snapshot 持久化；成功后同步更新应用 message、Semi Design locale 和
+  HTML `lang`。
 
 ## React 结构
 
@@ -101,6 +108,12 @@ locale 或主题，但功能代码必须消费 `useAppLocale` 和 `useAppTheme`�
 - 避免会导致无关子树重新渲染的宽泛 Context Provider。
 - 在稳定边界懒加载大型可选界面。
 - 原生调用保留在类型化适配器之后，不要在组件树各处直接调用 Tauri。
+- `AppNavigationService` 必须独立于 React。Host executor 可以通过它请求经过校验的页面，但不能
+  接收 React setter。
+- 根据规范化查询和扁平 `ActivePage` 状态推导 `home`、`search` 和 `page`；当前单层页面深度不
+  引入 router 或并行 Shell store。
+- 通过类型化 launcher surface adapter 发送这些呈现状态，由 Rust 选择固定的 240px、480px 或
+  600px 高度。组件不能测量 DOM 内容或提交任意原生尺寸。
 
 ## 无障碍与键盘行为
 
@@ -108,6 +121,7 @@ locale 或主题，但功能代码必须消费 `useAppLocale` 和 `useAppTheme`�
 - 保留可见焦点。
 - 主要工作流必须能够在不使用指针设备的情况下操作。
 - 为启动器界面的打开、关闭和切换定义可预测的焦点移动。
+- 页面活动时以页面上下文头部替换搜索输入，提供具有无障碍名称的关闭控件，并在关闭后恢复输入焦点。
 - 不要只通过颜色表达状态。
 - 以合适方式通知异步错误和重要状态变化。
 
@@ -120,5 +134,6 @@ locale 或主题，但功能代码必须消费 `useAppLocale` 和 `useAppTheme`�
 - 主题行为变化时覆盖明亮和黑暗模式集成。
 - 通过 `AppErrorBoundary` 覆盖 App Shell 渲染失败；React 错误边界不会捕获事件处理器和异步
   失败，因此这些失败必须使用显式错误状态。
+- 通过页面级错误边界覆盖活动页面渲染失败，确保上下文头部和关闭控件继续可用。
 - 为提取出的领域函数增加聚焦测试。
 - 避免使用会掩盖有效行为断言的 snapshot。

@@ -4,7 +4,11 @@ import { expect, rs, test } from '@rstest/core';
 import { render, screen } from '@testing-library/react';
 import App from '../src/App';
 import { AppProviders } from '../src/app/AppProviders';
-import { createDefaultLauncherActionService, HIDE_LAUNCHER_ACTION_ID } from '../src/app/launcher/actions';
+import {
+  createDefaultLauncherActionService,
+  HIDE_LAUNCHER_ACTION_ID,
+  OPEN_SETTINGS_ACTION_ID,
+} from '../src/app/launcher/actions';
 import type { LauncherActivationSource } from '../src/app/launcher/activation';
 import { validatePluginManifestV0 } from '../src/app/plugins/manifest';
 
@@ -24,7 +28,10 @@ test('static Manifest validation does not discover, register, render, or execute
 
   expect(validation.status).toBe('compatible');
   expect(service.registry.snapshot()).toEqual(before);
-  expect(service.registry.snapshot().map(({ action_id: actionId }) => actionId)).toEqual([HIDE_LAUNCHER_ACTION_ID]);
+  expect(service.registry.snapshot().map(({ action_id: actionId }) => actionId)).toEqual([
+    HIDE_LAUNCHER_ACTION_ID,
+    OPEN_SETTINGS_ACTION_ID,
+  ]);
   expect(hideLauncher).not.toHaveBeenCalled();
 
   const activationSource: LauncherActivationSource = {

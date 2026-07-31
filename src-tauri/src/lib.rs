@@ -1,3 +1,5 @@
+pub mod app_preferences;
+pub mod launcher_surface;
 pub mod launcher_window;
 pub mod plugin_manifest;
 
@@ -5,7 +7,12 @@ pub mod plugin_manifest;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![launcher_window::hide_launcher])
+        .invoke_handler(tauri::generate_handler![
+            app_preferences::read_app_preferences,
+            app_preferences::write_app_preferences,
+            launcher_surface::set_launcher_surface_mode,
+            launcher_window::hide_launcher
+        ])
         .setup(|app| {
             launcher_window::setup_launcher_window(app.handle());
             Ok(())

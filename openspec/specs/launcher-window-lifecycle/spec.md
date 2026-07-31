@@ -11,27 +11,62 @@ restoration across repeated launcher activations.
 ### Requirement: The launcher main window must use a compact native window shape
 
 The system MUST configure the main window labeled `main` as a launcher window
-with a fixed width of 650px, an initial and minimum height of 180px, and a
-maximum height of 800px. The window MUST be undecorated, non-resizable,
-non-fullscreen, transparent, and always on top. This capability MUST NOT
-automatically change the native window height based on search results or other
-product content.
+with a fixed width of 650px, an initial height of 240px, a minimum height of
+180px, and a maximum height of 800px. The window MUST be undecorated,
+non-resizable, non-fullscreen, transparent, and always on top.
+
+Through a Rust-validated typed boundary, the Host MUST use fixed discrete
+heights of 240px, 480px, and 600px for the App Shell's `home`, `search`, and
+`page` presentation states, respectively. The system MUST NOT accept arbitrary
+dimensions supplied by the frontend and MUST NOT change the native window
+height based on DOM measurements or search-result counts.
 
 #### Scenario: Start the desktop application
 
-- **WHEN** lensX creates the main window
+- **WHEN** lensX creates the main window and enters the `home` presentation
+  state
 - **THEN** the main window appears at a width of 650px and an initial height of
-  180px
+  240px
+- **THEN** the home shared content region is visible in the window
 - **THEN** the main window is undecorated and remains always on top
 - **THEN** the user cannot manually resize the main window or enter fullscreen
 
-#### Scenario: Inspect window height constraints
+#### Scenario: Search Actions
 
-- **WHEN** the system reads the main window constraints
-- **THEN** the main window has a minimum height of 180px and a maximum height of
-  800px
-- **THEN** this capability does not automatically change native window height
-  when input content changes
+- **WHEN** the App Shell moves from the `home` to the `search` presentation
+  state
+- **THEN** the Host requests a fixed main-window height of 480px
+- **THEN** search results scroll inside a bounded region within the window
+- **THEN** the window height does not change with the number of results
+
+#### Scenario: Open a Host page
+
+- **WHEN** the App Shell enters the `page` presentation state
+- **THEN** the Host requests a fixed main-window height of 600px
+- **THEN** the page-context header and shared page content region are visible
+  together
+
+#### Scenario: Close a Host page
+
+- **WHEN** the App Shell closes the active page and returns to `home`
+- **THEN** the Host requests restoration of the fixed 240px main-window height
+- **THEN** the launcher input and shared home content region remain visible
+
+#### Scenario: Submit an unsupported presentation mode
+
+- **WHEN** the Tauri boundary receives a mode other than `home`, `search`, or
+  `page`
+- **THEN** Rust rejects the request
+- **THEN** the frontend cannot use this boundary to submit arbitrary window
+  dimensions
+
+#### Scenario: Native height transition fails
+
+- **WHEN** Rust cannot resolve the main window or set the fixed height for the
+  requested mode
+- **THEN** the command returns a serializable error containing a stable code,
+  mode, operation, and safe message
+- **THEN** the current App Shell state is not cleared
 
 ### Requirement: Rust must execute launcher window actions through one boundary
 

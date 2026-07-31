@@ -6,6 +6,19 @@
   "launcher": {
     "inputLabel": "启动器查询",
     "inputPlaceholder": "输入查询内容",
+    "home": {
+      "description": "搜索操作以开始使用。"
+    },
+    "page": {
+      "close": "关闭",
+      "closeLabel": "关闭设置并返回主页",
+      "openedBy": "由“{{action}}”打开",
+      "errorTitle": "无法显示此页面",
+      "errorDescription": "请关闭页面后重试。"
+    },
+    "preferences": {
+      "startupFailure": "无法恢复已保存的偏好设置，当前正在使用安全默认值。"
+    },
     "search": {
       "resultsLabel": "启动器操作",
       "resultCount": "结果：{{count}} 项。",
@@ -23,7 +36,43 @@
       "hideLauncher": {
         "title": "隐藏启动器",
         "description": "隐藏启动器窗口"
+      },
+      "openSettings": {
+        "title": "打开设置",
+        "description": "查看和更改 lensX 偏好设置",
+        "keywords": {
+          "settings": "设置",
+          "preferences": "偏好",
+          "configuration": "配置"
+        }
       }
+    }
+  },
+  "settings": {
+    "title": "设置",
+    "sections": {
+      "preferences": "偏好",
+      "plugins": "插件"
+    },
+    "theme": {
+      "label": "颜色主题",
+      "description": "选择 lensX 及其 Host 界面的显示方式。",
+      "light": "浅色",
+      "dark": "深色"
+    },
+    "locale": {
+      "label": "语言",
+      "description": "选择 lensX 与 Semi Design 使用的语言。",
+      "enUS": "英语",
+      "zhCN": "简体中文"
+    },
+    "plugins": {
+      "emptyTitle": "没有可管理的插件",
+      "emptyDescription": "当前版本尚未提供插件管理功能。"
+    },
+    "save": {
+      "inProgress": "正在保存…",
+      "failure": "无法保存该偏好设置，仍在使用之前的值。"
     }
   },
   "error": {

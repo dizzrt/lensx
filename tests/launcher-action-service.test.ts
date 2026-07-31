@@ -4,10 +4,12 @@ import {
   createDefaultLauncherActionService,
   HIDE_LAUNCHER_ACTION_ID,
   type LauncherDesktopActions,
+  OPEN_SETTINGS_ACTION_ID,
 } from '../src/app/launcher/actions';
+import { AppNavigationService, HostPageCatalog } from '../src/app/navigation';
 
 describe('default launcher action service', () => {
-  test('registers only the real message-derived hide action', () => {
+  test('registers the real message-derived Host actions without exposing executors or page targets', () => {
     const desktopActions: LauncherDesktopActions = {
       hideLauncher: rs.fn(async () => undefined),
     };
@@ -31,7 +33,26 @@ describe('default launcher action service', () => {
         },
         enabled: true,
       },
+      {
+        action_id: OPEN_SETTINGS_ACTION_ID,
+        owner_id: 'lensx.core',
+        title: {
+          'en-US': enUSMessages.launcher.actions.openSettings.title,
+          'zh-CN': zhCNMessages.launcher.actions.openSettings.title,
+        },
+        description: {
+          'en-US': enUSMessages.launcher.actions.openSettings.description,
+          'zh-CN': zhCNMessages.launcher.actions.openSettings.description,
+        },
+        default_keywords: {
+          'en-US': ['settings', 'preferences', 'configuration'],
+          'zh-CN': ['设置', '偏好', '配置'],
+        },
+        enabled: true,
+      },
     ]);
+    expect(JSON.stringify(service.registry.snapshot())).not.toContain('executor');
+    expect(JSON.stringify(service.registry.snapshot())).not.toContain('page_id');
   });
 
   test('dispatches registry action through the injected desktop adapter', async () => {
@@ -55,6 +76,45 @@ describe('default launcher action service', () => {
     await expect(service.dispatcher.dispatch(HIDE_LAUNCHER_ACTION_ID)).resolves.toEqual({
       ok: false,
       action_id: HIDE_LAUNCHER_ACTION_ID,
+      error: {
+        code: 'action_execution_failed',
+        message: 'Launcher action execution failed.',
+      },
+    });
+  });
+
+  test('dispatches Open Settings through the injected framework-neutral navigation service', async () => {
+    const navigationService = new AppNavigationService(
+      new HostPageCatalog([
+        {
+          owner_id: 'lensx.core',
+          page_id: 'settings',
+          enabled: true,
+        },
+      ]),
+    );
+    const handler = rs.fn();
+    navigationService.registerHandler(handler);
+    const service = createDefaultLauncherActionService({ hideLauncher: async () => undefined }, navigationService);
+
+    await expect(service.dispatcher.dispatch(OPEN_SETTINGS_ACTION_ID)).resolves.toEqual({
+      ok: true,
+      action_id: OPEN_SETTINGS_ACTION_ID,
+    });
+    expect(handler).toHaveBeenCalledWith({
+      owner_id: 'lensx.core',
+      page_id: 'settings',
+      opened_by_action_id: OPEN_SETTINGS_ACTION_ID,
+    });
+  });
+
+  test('contains navigation preflight failures as the existing dispatcher error', async () => {
+    const navigationService = new AppNavigationService(new HostPageCatalog([]));
+    const service = createDefaultLauncherActionService({ hideLauncher: async () => undefined }, navigationService);
+
+    await expect(service.dispatcher.dispatch(OPEN_SETTINGS_ACTION_ID)).resolves.toEqual({
+      ok: false,
+      action_id: OPEN_SETTINGS_ACTION_ID,
       error: {
         code: 'action_execution_failed',
         message: 'Launcher action execution failed.',

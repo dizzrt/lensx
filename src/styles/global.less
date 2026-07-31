@@ -115,3 +115,81 @@ body {
     font-weight: 600;
   }
 }
+
+.launcher-content {
+  overflow: hidden;
+}
+
+.launcher-home {
+  min-height: 64px;
+  border: 1px dashed var(--semi-color-border);
+  border-radius: var(--semi-border-radius-medium);
+  background: var(--semi-color-fill-0);
+}
+
+.active-page-header {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--semi-color-border);
+
+  h2 {
+    margin: 0;
+    font-size: 18px;
+    line-height: 24px;
+  }
+}
+
+.active-page-error {
+  min-height: 120px;
+  border-radius: var(--semi-border-radius-medium);
+  background: var(--semi-color-danger-light-default);
+}
+
+.settings-page {
+  overflow: hidden;
+}
+
+.settings-tabs,
+.settings-tabs > .semi-tabs-content,
+.settings-tabs .semi-tabs-pane {
+  min-height: 0;
+}
+
+.settings-tabs {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+
+  > .semi-tabs-content {
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+.settings-section {
+  min-height: 160px;
+  padding: 12px 4px 4px;
+
+  h3,
+  p {
+    margin: 0;
+  }
+}
+
+.settings-row {
+  padding: 12px;
+  border: 1px solid var(--semi-color-border);
+  border-radius: var(--semi-border-radius-medium);
+  background: var(--semi-color-bg-1);
+}
+
+.settings-save-status {
+  min-height: 20px;
+}
+
+.settings-plugin-empty {
+  min-height: 220px;
+  border: 1px dashed var(--semi-color-border);
+  border-radius: var(--semi-border-radius-medium);
+  background: var(--semi-color-fill-0);
+}

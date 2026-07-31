@@ -6,6 +6,19 @@
   "launcher": {
     "inputLabel": "Launcher query",
     "inputPlaceholder": "Type a query",
+    "home": {
+      "description": "Search for an action to get started."
+    },
+    "page": {
+      "close": "Close",
+      "closeLabel": "Close settings and return home",
+      "openedBy": "Opened by {{action}}",
+      "errorTitle": "This page could not be displayed",
+      "errorDescription": "Close the page and try opening it again."
+    },
+    "preferences": {
+      "startupFailure": "Saved preferences could not be restored. Safe defaults are in use."
+    },
     "search": {
       "resultsLabel": "Launcher actions",
       "resultCount": "Results: {{count}}.",
@@ -23,7 +36,43 @@
       "hideLauncher": {
         "title": "Hide launcher",
         "description": "Hide the launcher window"
+      },
+      "openSettings": {
+        "title": "Open settings",
+        "description": "View and change lensX preferences",
+        "keywords": {
+          "settings": "settings",
+          "preferences": "preferences",
+          "configuration": "configuration"
+        }
       }
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "sections": {
+      "preferences": "Preferences",
+      "plugins": "Plugins"
+    },
+    "theme": {
+      "label": "Color theme",
+      "description": "Choose how lensX and its Host surfaces appear.",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "locale": {
+      "label": "Language",
+      "description": "Choose the language used by lensX and Semi Design.",
+      "enUS": "English",
+      "zhCN": "Simplified Chinese"
+    },
+    "plugins": {
+      "emptyTitle": "No plugins to manage",
+      "emptyDescription": "Plugin management is not available in this version."
+    },
+    "save": {
+      "inProgress": "Saving…",
+      "failure": "The preference could not be saved. Your previous value is still active."
     }
   },
   "error": {

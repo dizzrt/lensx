@@ -30,10 +30,12 @@ The repository currently provides:
 - a compact native launcher window with unified Rust-owned show, hide, toggle,
   global-shortcut, close, and focus-loss lifecycle behavior;
 - a framework-neutral TypeScript launcher action core with validated
-  descriptors, a Host-owned registry, a dispatcher, and one built-in hide
-  action routed through a typed Rust command;
+  descriptors, a Host-owned registry, a dispatcher, and built-in hide and
+  settings actions;
 - deterministic launcher action search over immutable registry snapshots, with
   localized matching and an accessible keyboard-first result interface;
+- a single-window Host settings surface with persisted theme and locale
+  preferences plus a deliberately empty plugin section;
 - Rstest, Testing Library, TypeScript checks, Biome, and Cargo validation
   commands;
 - OpenSpec configuration for capability and architecture changes.
@@ -45,16 +47,19 @@ implemented until their source code and tests exist.
 
 `src/index.tsx` is the only frontend composition entry. It imports the Semi
 Design global stylesheet and the project `global.less` entry once, then renders
-the product App Shell inside `AppProviders`.
+`AppBootstrap`. The bootstrap reads preferences before rendering the product
+App Shell and falls back to safe defaults without blocking startup when that
+read fails.
 
 `AppProviders` is the single application-level provider composition:
 
 ```text
-AppLocaleProvider
-└── AppThemeProvider
-    └── Semi Design LocaleProvider
-        └── AppErrorBoundary
-            └── App
+AppBootstrap
+└── AppLocaleProvider
+    └── AppThemeProvider
+        └── Semi Design LocaleProvider
+            └── AppErrorBoundary
+                └── App
 ```
 
 The application locale is limited to `en-US` and `zh-CN`, defaults to `en-US`,
@@ -66,14 +71,15 @@ application lookups address their leaves with dot-separated paths. A shared
 `messages.schema.json` mirrors the hierarchy, fixes the allowed and required
 keys, rejects additional keys, and requires non-empty string values. Frontend
 tests validate every locale against that schema and compare complete leaf-key
-sets. Locale selection is currently in-memory only and does not follow an
-operating-system preference.
+sets. The confirmed locale is persisted through the Rust preferences boundary;
+it does not follow an operating-system preference.
 
 The application theme is limited to `light` and `dark` and defaults to
 `light`. The theme provider uses `body[theme-mode="dark"]` so Semi Design
 content mounted under `body`, including overlays, receives the same token set.
-It also synchronizes the document `color-scheme`. Theme selection is currently
-in-memory only and does not follow an operating-system preference.
+It also synchronizes the document `color-scheme`. The confirmed theme is
+persisted through the same Rust preferences boundary; it does not follow an
+operating-system preference.
 
 `AppErrorBoundary` isolates render failures below the provider root. Its
 localized Semi Design fallback preserves the current theme and offers a window
@@ -81,23 +87,27 @@ reload action without displaying exception details. Event-handler and
 asynchronous errors require explicit error states and are outside this render
 boundary.
 
-The current App Shell exposes the lensX identity, product description, and a
-local controlled launcher input connected to the production launcher action
-service. A non-empty query searches the latest registry descriptor snapshot,
-shows at most eight real enabled actions, and keeps the input focused while the
-user selects a result with arrow keys or a pointer. Enter and pointer activation
-both dispatch the selected `action_id` through the Host dispatcher. Empty
-queries do not imply recommendations, history, or pinned actions, and the App
-Shell does not expose settings or plugin workflows.
+The App Shell derives three presentation states from local `activePage` and
+normalized query state. `home` owns the empty-query content area without
+implying recommendations, history, or pinned actions. `search` exposes the
+controlled launcher input and at most eight real enabled Action results.
+`page` replaces the input with a localized page-context header and renders the
+validated Host page in the same window. Closing a page returns to `home` and
+restores input focus. A page-level error boundary retains that header and close
+control when page content fails.
 
 ## Launcher Window Lifecycle
 
 The Tauri webview window with the stable `main` label is configured as a
-compact launcher surface. It has a fixed width of 650px, an initial and minimum
-height of 180px, and a maximum height of 800px. The window is transparent,
-always on top, undecorated, non-resizable, and non-fullscreen. The application
-does not currently resize the native window in response to DOM content or the
-input value.
+compact launcher surface. It has a fixed width of 650px, an initial height of
+240px, a minimum height of 180px, and a maximum height of 800px. The window is
+transparent, always on top, undecorated, non-resizable, and non-fullscreen.
+
+The Host maps App Shell presentation state to fixed logical heights through a
+typed Rust command: `home` uses 240px, `search` uses 480px, and `page` uses
+600px. This keeps the shared content region visible without measuring DOM
+content or changing height based on the number of search results. The frontend
+cannot submit arbitrary dimensions.
 
 Rust owns all native launcher window operations through one action boundary:
 
@@ -134,7 +144,9 @@ input focus. Each activation also refreshes search from the current query and
 latest registry snapshot without filling, clearing, or executing an action.
 
 This lifecycle does not itself implement query matching, result lists,
-settings, shortcut customization, persistence, or plugin runtime behavior.
+settings, shortcut customization, persistence, or plugin runtime behavior. The
+separate constrained surface-mode command only controls the fixed presentation
+height of the same `main` window.
 
 ## Launcher Action Core
 
@@ -159,13 +171,13 @@ Executors remain Host-owned and are resolved only by
 Thrown, rejected, or invalid executor results are contained and do not expose
 native or framework objects through the public contract.
 
-The default service currently registers only
-`lensx.core.hide_launcher`. Its title and description come from the canonical
-application message resources. The executor calls a typed desktop adapter,
-which invokes the narrow `hide_launcher` Tauri command. Rust maps that command
-to the existing managed `LauncherWindowActions` boundary and
-`LauncherWindowAction::Hide`; it does not duplicate native window logic or
-accept an arbitrary action identifier.
+The default service registers `lensx.core.hide_launcher` and
+`lensx.core.open_settings`. Their localized metadata comes from canonical
+application message resources. The hide executor calls a typed desktop adapter,
+which invokes the narrow `hide_launcher` Tauri command. The settings executor
+calls the framework-neutral `AppNavigationService` with the fixed
+`lensx.core/settings` Host target. Neither public descriptor exposes an
+executor or page target.
 
 The production launcher action service is created once outside React rendering
 and can be replaced with an isolated service at the App Shell boundary for
@@ -188,8 +200,35 @@ success, and failure states are announced through a live region. The bounded
 result list scrolls inside the existing surface and does not resize the native
 window.
 
-History, recent use, pinned actions, settings, dynamic provider subscriptions,
-provider lifecycle, and plugin action projection remain future capabilities.
+History, recent use, pinned actions, dynamic provider subscriptions, plugin
+management, and plugin action projection remain future capabilities.
+
+## Host Pages And Preferences
+
+Host pages use a flat `owner_id`, `page_id`, and `opened_by_action_id`
+identity. A trusted Host page catalog preflights targets before
+`AppNavigationService` sends an `ActivePage` to the single App Shell handler.
+This identity shape may be reused by future validated plugin pages, but the
+current catalog contains only `lensx.core/settings`; external plugins cannot
+provide React components, executors, or direct App Shell mutations.
+
+Settings is rendered in the existing `main` Tauri window. It has first-level
+Preferences and Plugins sections. Preferences controls the supported
+`light`/`dark` theme and `en-US`/`zh-CN` locale. Plugins is an empty,
+non-operational placeholder and does not imply plugin management.
+
+Rust owns the complete `AppPreferences` payload and stores
+`preferences.json` in the application config directory. Missing files return
+`light` and `en-US`; invalid content and I/O failures return stable,
+serializable, safe errors. Writes use a temporary file followed by replacement.
+The TypeScript desktop adapter validates both successful payloads and error
+payloads.
+
+Settings writes a complete preference snapshot through a serial save chain.
+Root theme and locale Providers change only after Rust confirms the write.
+Failed writes retain the last confirmed Provider values and display localized
+feedback. A startup read failure uses safe defaults and preserves a localized
+diagnostic state.
 
 ## Layered Model
 

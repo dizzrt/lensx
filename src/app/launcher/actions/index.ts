@@ -1,7 +1,9 @@
 export {
   createHideLauncherRegistration,
+  createOpenSettingsRegistration,
   HIDE_LAUNCHER_ACTION_ID,
   type LauncherDesktopActions,
+  OPEN_SETTINGS_ACTION_ID,
 } from './builtins';
 export { LauncherActionDispatcher } from './dispatcher';
 export { productionLauncherActionService } from './productionService';

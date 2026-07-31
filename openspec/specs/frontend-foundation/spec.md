@@ -16,30 +16,53 @@ example interactions, or presentation-layer mock features. The App Shell MUST
 display the lensX product identity and description in the current locale and
 MUST provide a locally controlled launcher input connected to the real
 Host-owned Action Registry through the accepted Action Search capability.
-Non-empty queries MUST be able to display and operate real registered Action
-results. Empty queries MUST NOT imply recommendations, recent use, or pinned
-content. The App Shell MUST NOT present simulated Actions, unimplemented plugin
-entry points, settings, history, or persistence as available.
+When no page is active, an empty normalized query MUST select the `home`
+presentation state, and a non-empty normalized query MUST select the `search`
+presentation state. `home` MUST provide a shared content region but MUST NOT
+imply that recommendations, recent use, or pinned content are implemented.
+`search` MUST be able to display and operate real registered Action results.
+The App Shell MUST request the fixed window height for the current presentation
+state through a typed Host boundary so that the shared content region remains
+visible. It MUST NOT resize the window from DOM measurements or search-result
+counts.
+
+When a validated page is active, the `page` presentation state MUST take
+precedence over the query. A non-searchable page-context header MUST replace
+the editable launcher input, and the shared content region MUST display the
+active page. The header MUST identify the page capability and the Action that
+opened it in the current locale, and MUST provide an accessible close control
+that returns to `home`. The App Shell MUST NOT present simulated Actions,
+unimplemented plugin entry points, history, recent use, pinned content, or
+unimplemented persistence as available.
 
 #### Scenario: Start the application
 
-- **WHEN** the React application completes its root render with an empty query
+- **WHEN** the React application completes its root render with no active page
+  and an empty normalized query
 - **THEN** the page contains an accessible main content region
 - **THEN** the page displays the lensX product identity and product description
   in the current locale
 - **THEN** the page displays a launcher input with an accessible name and
   localized placeholder
+- **THEN** the shared content region displays the home presentation state
+- **THEN** the App Shell requests the fixed `home` presentation height and the
+  home content remains visible in the main window
 - **THEN** the page does not display Rsbuild welcome copy, example interactions,
   a result list, or fabricated recommendations
 
 #### Scenario: Search from the launcher input
 
-- **WHEN** a user enters or deletes text in the launcher input
+- **WHEN** a user enters or deletes text in the launcher input while no page is
+  active
 - **THEN** the input reflects the current text through local React state
-- **THEN** a non-empty query is evaluated against a real immutable Action
-  Registry snapshot
+- **THEN** a non-empty normalized query selects the search presentation state
+  and is evaluated against a real immutable Action Registry snapshot
 - **THEN** the page displays only accepted Action Search results or the accepted
   localized empty state
+- **THEN** the App Shell requests the fixed `search` presentation height and
+  does not change that height based on the number of results
+- **THEN** restoring an empty normalized query selects the home presentation
+  state
 
 #### Scenario: Operate a real Action result
 
@@ -49,12 +72,64 @@ entry points, settings, history, or persistence as available.
 - **THEN** executing the result routes its `action_id` through the Host
   Dispatcher instead of calling an executor from React
 
+#### Scenario: Enter a validated page
+
+- **WHEN** a trusted Host executor successfully opens a validated page
+- **THEN** the App Shell clears the query, search results, and search selection
+- **THEN** the App Shell selects the page presentation state
+- **THEN** the top region displays a non-editable page-context header instead
+  of the launcher input
+- **THEN** the shared content region displays the active page
+- **THEN** the App Shell requests the fixed `page` presentation height so the
+  page header and content region are visible together
+
+#### Scenario: Close the active page
+
+- **WHEN** the user activates the close control in the page-context header
+- **THEN** the App Shell clears the active page and returns to the home
+  presentation state
+- **THEN** the App Shell requests the fixed `home` presentation height
+- **THEN** keyboard focus returns to the launcher input
+
+#### Scenario: Page preflight fails
+
+- **WHEN** a Host Action requests a missing or unavailable page before the App
+  Shell enters the page state
+- **THEN** the current home or search presentation state remains unchanged
+- **THEN** the current query and selection remain unchanged
+- **THEN** the user receives localized, safe failure feedback
+
 #### Scenario: Inspect unavailable features
 
 - **WHEN** a user views the Launcher App Shell
-- **THEN** the page does not display simulated Actions, a settings entry point,
-  recent use, pinned content, or a plugin entry point
+- **THEN** the page does not display simulated Actions, recent use, pinned
+  content, history, or an unimplemented plugin entry point
 - **THEN** the page does not describe planned capabilities as implemented
+
+### Requirement: Active pages must isolate content failures and preserve navigation
+
+The shared content region MUST isolate failures that occur after entering an
+active page. Page loading, rendering, or runtime failures MUST preserve the
+page presentation state, page-context header, and close control. The failure
+view MUST use the current locale and theme and MUST NOT expose error stacks or
+internal implementation details.
+
+#### Scenario: Active page content fails
+
+- **WHEN** the active page fails during loading, rendering, or runtime
+- **THEN** the shared content region displays a localized and accessible page
+  failure view
+- **THEN** the page-context header and close control remain available
+- **THEN** the App Shell does not automatically return to the home state
+- **THEN** the failure view does not display an error stack
+
+#### Scenario: Leave a failed page
+
+- **WHEN** the user activates the close control while the page failure view is
+  visible
+- **THEN** the App Shell clears the failed active page and returns to the home
+  state
+- **THEN** keyboard focus returns to the launcher input
 
 ### Requirement: The application must provide a unified global provider foundation
 

@@ -32,6 +32,55 @@
           "type": "string",
           "minLength": 1
         },
+        "home": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["description"]
+        },
+        "page": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "close": {
+              "type": "string",
+              "minLength": 1
+            },
+            "closeLabel": {
+              "type": "string",
+              "minLength": 1
+            },
+            "openedBy": {
+              "type": "string",
+              "minLength": 1
+            },
+            "errorTitle": {
+              "type": "string",
+              "minLength": 1
+            },
+            "errorDescription": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["close", "closeLabel", "openedBy", "errorTitle", "errorDescription"]
+        },
+        "preferences": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "startupFailure": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["startupFailure"]
+        },
         "search": {
           "type": "object",
           "additionalProperties": false,
@@ -100,12 +149,148 @@
                 }
               },
               "required": ["title", "description"]
+            },
+            "openSettings": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "keywords": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "settings": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "preferences": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "configuration": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": ["settings", "preferences", "configuration"]
+                }
+              },
+              "required": ["title", "description", "keywords"]
             }
           },
-          "required": ["hideLauncher"]
+          "required": ["hideLauncher", "openSettings"]
         }
       },
-      "required": ["inputLabel", "inputPlaceholder", "search", "actions"]
+      "required": ["inputLabel", "inputPlaceholder", "home", "page", "preferences", "search", "actions"]
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sections": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "preferences": {
+              "type": "string",
+              "minLength": 1
+            },
+            "plugins": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["preferences", "plugins"]
+        },
+        "theme": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "light": {
+              "type": "string",
+              "minLength": 1
+            },
+            "dark": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["label", "description", "light", "dark"]
+        },
+        "locale": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "enUS": {
+              "type": "string",
+              "minLength": 1
+            },
+            "zhCN": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["label", "description", "enUS", "zhCN"]
+        },
+        "plugins": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "emptyTitle": {
+              "type": "string",
+              "minLength": 1
+            },
+            "emptyDescription": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["emptyTitle", "emptyDescription"]
+        },
+        "save": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "inProgress": {
+              "type": "string",
+              "minLength": 1
+            },
+            "failure": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["inProgress", "failure"]
+        }
+      },
+      "required": ["title", "sections", "theme", "locale", "plugins", "save"]
     },
     "error": {
       "type": "object",
@@ -127,5 +312,5 @@
       "required": ["title", "description", "reload"]
     }
   },
-  "required": ["app", "launcher", "error"]
+  "required": ["app", "launcher", "settings", "error"]
 }

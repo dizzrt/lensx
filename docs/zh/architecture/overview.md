@@ -27,9 +27,10 @@ lensX 是一款轻量级桌面效率启动器，其设计重点包括：
 - 由 Rust 统一拥有显示、隐藏、切换、全局快捷键、关闭与失焦行为的紧凑原生 launcher
   窗口；
 - 框架无关的 TypeScript launcher action 核心，包含经过校验的 descriptor、Host 所有的
-  registry、dispatcher，以及通过类型化 Rust command 路由的内建隐藏 action；
+  registry、dispatcher，以及内建的隐藏和设置 action；
 - 基于不可变 registry snapshot 的确定性 launcher action 搜索，包含本地化匹配和可访问、
   键盘优先的结果界面；
+- 单窗口 Host 设置界面，包含持久化主题与语言偏好，以及刻意保持为空的插件部分；
 - Rstest、Testing Library、TypeScript 检查、Biome 和 Cargo 验证命令；
 - 用于能力和架构变更的 OpenSpec 配置。
 
@@ -38,16 +39,18 @@ lensX 是一款轻量级桌面效率启动器，其设计重点包括：
 ## 前端应用基座
 
 `src/index.tsx` 是唯一的前端组合入口。它只导入一次 Semi Design 全局样式表和项目
-`global.less` 入口，然后在 `AppProviders` 内渲染产品 App Shell。
+`global.less` 入口，然后渲染 `AppBootstrap`。bootstrap 会在产品 App Shell 渲染前读取偏好；
+读取失败时使用安全默认值继续启动。
 
 `AppProviders` 是唯一的应用级 Provider 组合：
 
 ```text
-AppLocaleProvider
-└── AppThemeProvider
-    └── Semi Design LocaleProvider
-        └── AppErrorBoundary
-            └── App
+AppBootstrap
+└── AppLocaleProvider
+    └── AppThemeProvider
+        └── Semi Design LocaleProvider
+            └── AppErrorBoundary
+                └── App
 ```
 
 应用 locale 仅限 `en-US` 和 `zh-CN`，默认使用 `en-US`，并同时驱动应用 message、对应的
@@ -55,27 +58,30 @@ Semi Design 官方 locale pack 和 HTML `lang` 属性。英文 message 是规范
 相同的嵌套层次和叶子 key 集合。静态导入的资源位于 `src/app/i18n/messages/en-US.json` 和
 `zh-CN.json`，应用通过点分隔路径查询叶子 message。共享的 `messages.schema.json` 镜像该层次，
 固定允许和必需的 key、拒绝额外 key，并要求值为非空字符串。前端测试会依据该 schema 校验每个
-locale，并比较完整叶子 key 集合。locale 选择目前仅保存在内存中，不跟随操作系统偏好。
+locale，并比较完整叶子 key 集合。已确认的 locale 通过 Rust 偏好边界持久化，不跟随操作系统偏好。
 
 应用主题仅限 `light` 和 `dark`，默认使用 `light`。主题 Provider 使用
 `body[theme-mode="dark"]`，使挂载在 `body` 下的 Semi Design 内容（包括浮层）获得同一套 token，
-并同步文档的 `color-scheme`。主题选择目前仅保存在内存中，不跟随操作系统偏好。
+并同步文档的 `color-scheme`。已确认的主题通过同一 Rust 偏好边界持久化，不跟随操作系统偏好。
 
 `AppErrorBoundary` 隔离 Provider 根层以下的渲染失败。其本地化 Semi Design 降级界面保留当前
 主题，并提供窗口重新加载操作，但不展示异常细节。事件处理器和异步错误需要显式错误状态，不属于此
 渲染错误边界的捕获范围。
 
-当前 App Shell 展示 lensX 产品身份、产品说明和一个连接到生产 launcher action service 的本地
-受控输入。非空查询会搜索最新的 registry descriptor snapshot，展示最多八个真实且已启用的
-action，并在用户使用方向键或指针选择结果时保持输入焦点。Enter 和指针激活都会通过 Host
-dispatcher 分发所选 `action_id`。空查询不会暗示推荐、历史或固定 action，App Shell 也不会公开
-设置或插件工作流。
+App Shell 根据本地 `activePage` 和规范化查询推导三种呈现状态。`home` 提供空查询公共内容区，
+但不暗示推荐、历史或固定 action；`search` 提供受控输入和最多八个真实启用的 Action 结果；
+`page` 在同一窗口中以本地化页面上下文头部替换输入，并渲染经过校验的 Host 页面。关闭页面会返回
+`home` 并恢复输入焦点；页面级错误边界会在内容失败时保留头部和关闭控件。
 
 ## Launcher 窗口生命周期
 
 Tauri 中带有稳定 `main` 标签的 webview 窗口被配置为紧凑的 launcher 承载面。窗口固定宽度为
-650px，初始和最小高度为 180px，最大高度为 800px。窗口透明、保持置顶、无系统边框、不可调整
-大小且非全屏。应用目前不会根据 DOM 内容或输入值调整原生窗口尺寸。
+650px，初始高度为 240px、最小高度为 180px、最大高度为 800px。窗口透明、保持置顶、无系统边框、
+不可由用户调整大小且非全屏。
+
+Host 通过类型化 Rust command 把 App Shell 呈现状态映射到固定逻辑高度：`home` 使用 240px、
+`search` 使用 480px、`page` 使用 600px。这样公共内容区保持可见，同时不会测量 DOM 内容或根据
+搜索结果数量改变高度；前端也不能提交任意尺寸。
 
 Rust 通过单一动作边界拥有全部 launcher 原生窗口操作：
 
@@ -99,7 +105,8 @@ Rust 通过单一动作边界拥有全部 launcher 原生窗口操作：
 载荷格式错误或监听失败时输出诊断，而不破坏首次输入聚焦。每次激活还会使用当前查询和最新 registry
 snapshot 刷新搜索，但不会填充、清除或执行 action。
 
-该生命周期本身不实现查询匹配、结果列表、设置、快捷键自定义、持久化或插件运行时行为。
+该生命周期本身不实现查询匹配、结果列表、设置、快捷键自定义、持久化或插件运行时行为。独立的受约束
+surface mode command 只控制同一 `main` 窗口的固定呈现高度。
 
 ## Launcher Action 核心
 
@@ -117,10 +124,10 @@ executor 保持由 Host 所有，只能由 `LauncherActionDispatcher` 解析。d
 或者类型化的 `action_not_found`、`action_unavailable`、`action_execution_failed` 结果。
 executor 抛出、reject 或返回无效结果时会被隔离，不会通过公开契约暴露原生或框架对象。
 
-默认 service 当前只注册 `lensx.core.hide_launcher`。其标题和说明来自规范应用 message 资源。
-executor 调用类型化桌面 adapter，后者调用窄化的 `hide_launcher` Tauri command。Rust 将该
-command 映射到现有 managed `LauncherWindowActions` 边界和 `LauncherWindowAction::Hide`；
-它不会复制原生窗口逻辑，也不接受任意 action ID。
+默认 service 注册 `lensx.core.hide_launcher` 和 `lensx.core.open_settings`。两者的本地化
+metadata 都来自规范应用 message 资源。隐藏 executor 通过类型化桌面 adapter 调用窄化的
+`hide_launcher` Tauri command；设置 executor 通过框架无关的 `AppNavigationService` 请求固定
+的 `lensx.core/settings` Host 目标。公开 descriptor 都不暴露 executor 或页面目标。
 
 生产 launcher action service 在 React render 之外只创建一次，并允许在 App Shell 边界替换为
 隔离的测试 service。Launcher action 搜索是 registry descriptor snapshot 的纯消费者。它使用
@@ -135,8 +142,26 @@ Escape 清空搜索，pending dispatch 会阻止重复执行。成功会清空�
 会保留查询和选中项，同时显示安全的本地化反馈。结果数量、空状态、pending、成功和失败状态通过
 live region 播报。有界结果列表在现有 surface 内滚动，不会调整原生窗口尺寸。
 
-历史、最近使用、固定 action、设置、动态 provider 订阅、provider lifecycle 和插件 action 投影
-仍属于未来能力。
+历史、最近使用、固定 action、动态 provider 订阅、插件管理和插件 action 投影仍属于未来能力。
+
+## Host 页面与偏好
+
+Host 页面使用扁平的 `owner_id`、`page_id` 与 `opened_by_action_id` 身份。可信 Host 页面目录在
+`AppNavigationService` 把 `ActivePage` 交给唯一 App Shell handler 前预检目标。未来经过校验的
+插件页面可以复用这一身份形状，但当前目录只包含 `lensx.core/settings`；外部插件不能提供 React
+组件、executor 或直接修改 App Shell。
+
+设置在现有 `main` Tauri 窗口中渲染，包含“偏好”和“插件”两个一级部分。“偏好”控制受支持的
+`light`/`dark` 主题与 `en-US`/`zh-CN` locale；“插件”只是不可操作的空占位，不代表插件管理
+已经实现。
+
+Rust 持有完整 `AppPreferences` payload，并在应用配置目录中保存 `preferences.json`。文件缺失时
+返回 `light` 和 `en-US`；无效内容与 I/O 失败返回稳定、可序列化且安全的错误。写入先生成临时文件
+再替换目标文件。TypeScript 桌面 adapter 会校验成功 payload 和错误 payload。
+
+设置通过串行保存链写入完整偏好 snapshot。只有 Rust 确认写入后，根主题与语言 Provider 才会
+切换。写入失败会保留最后确认的 Provider 值并显示本地化反馈；启动读取失败会使用安全默认值并保留
+本地化诊断状态。
 
 ## 分层模型
 

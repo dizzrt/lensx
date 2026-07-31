@@ -1,4 +1,9 @@
-import { createHideLauncherRegistration, type LauncherDesktopActions } from './builtins';
+import { type AppNavigationService, productionAppNavigationService } from '../../navigation';
+import {
+  createHideLauncherRegistration,
+  createOpenSettingsRegistration,
+  type LauncherDesktopActions,
+} from './builtins';
 import { LauncherActionDispatcher } from './dispatcher';
 import { LauncherActionRegistry } from './registry';
 import type { LauncherActionDescriptor, LauncherActionDispatchResult } from './types';
@@ -12,9 +17,15 @@ export interface LauncherActionService {
   };
 }
 
-export const createDefaultLauncherActionService = (desktopActions: LauncherDesktopActions): LauncherActionService => {
+export const createDefaultLauncherActionService = (
+  desktopActions: LauncherDesktopActions,
+  navigationService: AppNavigationService = productionAppNavigationService,
+): LauncherActionService => {
   const registry = new LauncherActionRegistry();
-  const registrationResult = registry.registerBatch([createHideLauncherRegistration(desktopActions)]);
+  const registrationResult = registry.registerBatch([
+    createHideLauncherRegistration(desktopActions),
+    createOpenSettingsRegistration(navigationService),
+  ]);
   if (!registrationResult.ok) {
     throw new Error('Default launcher actions failed Host validation.');
   }
