@@ -4,5 +4,6 @@ import { defineConfig } from '@rstest/core';
 // Docs: https://rstest.rs/config/
 export default defineConfig({
   extends: withRsbuildConfig(),
+  include: ['./tests/**/*.test.{ts,tsx}'],
   setupFiles: ['./tests/rstest.setup.ts'],
 });

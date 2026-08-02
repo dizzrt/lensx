@@ -1,0 +1,93 @@
+[
+  {
+    "name": "missing collections and surrounding whitespace are normalized",
+    "current_versions": {
+      "lensx": "0.1.0",
+      "host_api": "0.1.0"
+    },
+    "input": {
+      "manifest_version": "0.1.0",
+      "plugin_id": "com.acme.minimal",
+      "version": "1.0.0",
+      "display": {
+        "name": {
+          "en-US": "  Minimal Plugin  "
+        }
+      },
+      "publisher": {
+        "author": "  Acme  ",
+        "homepage": "https://example.com/minimal",
+        "repository": "https://github.com/acme/minimal"
+      },
+      "compatibility": {
+        "lensx": {
+          "min_version": "0.1.0",
+          "max_version_exclusive": "0.2.0"
+        },
+        "host_api": {
+          "min_version": "0.1.0",
+          "max_version_exclusive": "2.0.0"
+        }
+      },
+      "runtime": {
+        "kind": "iframe",
+        "entry": "dist/plugin.html"
+      },
+      "contributes": {
+        "pages": [
+          {
+            "id": "home",
+            "title": {
+              "en-US": "  Home  "
+            },
+            "route": "/"
+          }
+        ]
+      }
+    },
+    "expected_status": "compatible",
+    "expected_normalized": {
+      "manifest_version": "0.1.0",
+      "plugin_id": "com.acme.minimal",
+      "version": "1.0.0",
+      "display": {
+        "name": {
+          "en-US": "Minimal Plugin"
+        }
+      },
+      "publisher": {
+        "author": "Acme",
+        "homepage": "https://example.com/minimal",
+        "repository": "https://github.com/acme/minimal"
+      },
+      "compatibility": {
+        "lensx": {
+          "min_version": "0.1.0",
+          "max_version_exclusive": "0.2.0"
+        },
+        "host_api": {
+          "min_version": "0.1.0",
+          "max_version_exclusive": "2.0.0"
+        }
+      },
+      "runtime": {
+        "kind": "iframe",
+        "entry": "dist/plugin.html"
+      },
+      "requested_permissions": [],
+      "contributes": {
+        "pages": [
+          {
+            "id": "home",
+            "title": {
+              "en-US": "Home"
+            },
+            "route": "/",
+            "required_permissions": []
+          }
+        ],
+        "actions": []
+      }
+    }
+  }
+]

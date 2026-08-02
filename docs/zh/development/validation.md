@@ -44,6 +44,18 @@ pnpm run check:workspace-boundaries
 
 `pnpm run test:watch` 只用于开发过程。最终证据必须使用非 watch 命令。
 
+## Plugin Contract 验证
+
+修改 `@lensx/plugin-contract`、其 Schema、Host 消费方或 Rust 模型时，必须运行：
+
+```bash
+pnpm run check:plugin-contract
+```
+
+该门禁验证生成类型 drift、package tests、Host 边界、TypeScript/Rust 共享 fixtures、打包文件
+清单与 exports，以及从真实 tarball 安装的隔离外部消费者。tarball smoke test 是必需项，因为
+workspace link 可能掩盖缺失的声明、Schema 文件、export 目标或 runtime 依赖。
+
 ## Rust 验证
 
 检查 Rust 格式：

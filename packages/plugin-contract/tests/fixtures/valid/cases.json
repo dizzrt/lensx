@@ -1,0 +1,48 @@
+[
+  {
+    "name": "complete manifest is compatible",
+    "mutations": [],
+    "expected_status": "compatible"
+  },
+  {
+    "name": "actions and launcher may be omitted",
+    "mutations": [
+      {
+        "op": "remove",
+        "path": "/contributes/actions"
+      },
+      {
+        "op": "remove",
+        "path": "/contributes/launcher"
+      }
+    ],
+    "expected_status": "compatible"
+  },
+  {
+    "name": "plugin prerelease version is valid",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/version",
+        "value": "1.2.0-beta.1"
+      }
+    ],
+    "expected_status": "compatible"
+  },
+  {
+    "name": "current versions are included at lower bounds",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/compatibility/lensx/min_version",
+        "value": "0.1.0"
+      },
+      {
+        "op": "set",
+        "path": "/compatibility/host_api/min_version",
+        "value": "0.1.0"
+      }
+    ],
+    "expected_status": "compatible"
+  }
+]

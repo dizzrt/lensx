@@ -8,15 +8,15 @@ structure.
 
 - [Architecture Overview](architecture/overview.md) — project goals, current
   foundation, system boundaries, and dependency direction.
-- [Extension Platform](architecture/extension-platform.md) — architectural
-  direction for launcher actions, plugins, isolation, and Host contracts.
+- [Extension Platform](architecture/extension-platform.md) — shipped public
+  Contract package plus the architectural direction for plugins and isolation.
 
 ## Development
 
 - [Getting Started](development/getting-started.md) — environment setup,
   development commands, and repository map.
-- [Plugin Workspace](development/plugin-workspace.md) — workspace member
-  locations, lifecycle scripts, dependency boundaries, and repository checks.
+- [Plugin Workspace](development/plugin-workspace.md) — Contract package,
+  member locations, lifecycle scripts, dependency boundaries, and pack checks.
 - [Frontend Guidelines](development/frontend-guidelines.md) — React, Semi
   Design, styling, theme, localization, and accessibility rules.
 - [Project Workflow](development/project-workflow.md) — sources of truth,

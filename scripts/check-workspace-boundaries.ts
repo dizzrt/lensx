@@ -25,6 +25,7 @@ export const WORKSPACE_BOUNDARY_RULES = {
   privateRoot: 'workspace/private-root',
   requiredLifecycleScript: 'workspace/required-lifecycle-script',
   undeclaredWorkspaceDependency: 'workspace/undeclared-workspace-dependency',
+  undeclaredPackageExport: 'workspace/undeclared-package-export',
   workspacePatterns: 'workspace/supported-patterns',
 } as const;
 
@@ -184,6 +185,11 @@ const memberDependencyAllowed = (consumer: WorkspaceMember, target: WorkspaceMem
   target.kind === 'public-package' &&
   (consumer.kind === 'public-package' || consumer.kind === 'official-plugin' || consumer.kind === 'example-plugin');
 
+const packageSubpathIsExported = (manifest: PackageManifest, packageName: string, specifier: string): boolean => {
+  const subpath = specifier === packageName ? '.' : `.${specifier.slice(packageName.length)}`;
+  return typeof manifest.exports === 'string' ? subpath === '.' : Object.hasOwn(manifest.exports ?? {}, subpath);
+};
+
 const memberContainingPath = (members: readonly WorkspaceMember[], targetPath: string): WorkspaceMember | undefined =>
   members.find((member) => isWithin(member.rootDir, targetPath));
 
@@ -341,6 +347,17 @@ const validateSourceSpecifier = (
           sourceFile,
           specifier,
           'Workspace members may import only public workspace package exports.',
+        ),
+      );
+    }
+    if (!packageSubpathIsExported(targetByPackageName.manifest, targetByPackageName.name, specifier)) {
+      diagnostics.push(
+        diagnostic(
+          rootDir,
+          WORKSPACE_BOUNDARY_RULES.undeclaredPackageExport,
+          sourceFile,
+          specifier,
+          'Workspace packages may import only declared package exports.',
         ),
       );
     }

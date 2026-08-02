@@ -63,9 +63,11 @@ pnpm exec tauri build
 - `src/` — React 和 TypeScript 前端源码。
 - `tests/` — 前端和 DOM 相关测试。
 - `src-tauri/` — Rust 与 Tauri 桌面源码和配置。
-- `packages/*` — 包含 package manifest 时纳入 workspace 的公共 package。
+- `packages/plugin-contract` — 公共 Manifest Contract package。
+- `packages/*` — 其他包含 package manifest 时纳入 workspace 的公共 package。
 - `plugins/official/*` — 存在时纳入 workspace 的官方插件 package。
 - `examples/plugins/*` — 存在时纳入 workspace 的示例插件 package。
+- `examples/plugin-contract-consumer` — 非 workspace 的外部 tarball 消费示例。
 - `public/` 与 `static/` — 前端资源和 HTML 输入。
 - `docs/en/` — 规范英文实现与架构文档。
 - `docs/zh/` — 与之对应的简体中文文档。

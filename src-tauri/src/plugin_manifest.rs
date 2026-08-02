@@ -6,11 +6,12 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::OnceLock;
 use url::Url;
 
-const MANIFEST_SCHEMA: &str = include_str!("../../schemas/plugin/manifest.schema.json");
+const MANIFEST_SCHEMA: &str =
+    include_str!("../../packages/plugin-contract/schema/manifest.schema.json");
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct PluginManifestV0Input {
+pub struct PluginManifestInput {
     pub manifest_version: String,
     pub plugin_id: String,
     pub version: String,
@@ -153,7 +154,7 @@ pub struct LauncherInput {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
-pub struct NormalizedPluginManifestV0 {
+pub struct NormalizedPluginManifest {
     pub manifest_version: String,
     pub plugin_id: String,
     pub version: String,
@@ -295,7 +296,7 @@ pub struct PluginManifestCompatibility {
 pub struct PluginManifestValidationResult {
     pub status: PluginManifestValidationStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub manifest: Option<NormalizedPluginManifestV0>,
+    pub manifest: Option<NormalizedPluginManifest>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compatibility: Option<PluginManifestCompatibility>,
     pub diagnostics: Vec<PluginManifestDiagnostic>,
@@ -408,8 +409,8 @@ fn normalize_asset(input: AssetInput) -> NormalizedAsset {
     }
 }
 
-fn normalize_manifest(input: PluginManifestV0Input) -> NormalizedPluginManifestV0 {
-    NormalizedPluginManifestV0 {
+fn normalize_manifest(input: PluginManifestInput) -> NormalizedPluginManifest {
+    NormalizedPluginManifest {
         manifest_version: input.manifest_version.trim().to_owned(),
         plugin_id: input.plugin_id.trim().to_owned(),
         version: input.version.trim().to_owned(),
@@ -599,7 +600,7 @@ fn validate_route(value: &str, path: &str, diagnostics: &mut Vec<PluginManifestD
 }
 
 fn validate_compatibility(
-    manifest: &NormalizedPluginManifestV0,
+    manifest: &NormalizedPluginManifest,
     current_versions: &PluginHostVersions,
     diagnostics: &mut Vec<PluginManifestDiagnostic>,
 ) -> PluginManifestCompatibility {
@@ -656,7 +657,7 @@ fn validate_compatibility(
 }
 
 fn validate_semantics(
-    manifest: &NormalizedPluginManifestV0,
+    manifest: &NormalizedPluginManifest,
     current_versions: &PluginHostVersions,
 ) -> (Vec<PluginManifestDiagnostic>, PluginManifestCompatibility) {
     let mut diagnostics = Vec::new();
@@ -885,7 +886,7 @@ fn validate_semantics(
     (diagnostics, compatibility)
 }
 
-pub fn validate_plugin_manifest_v0(
+pub fn validate_plugin_manifest(
     value: &Value,
     current_versions: &PluginHostVersions,
 ) -> PluginManifestValidationResult {
@@ -899,7 +900,7 @@ pub fn validate_plugin_manifest_v0(
         };
     }
 
-    let input: PluginManifestV0Input = serde_json::from_value(value.clone())
+    let input: PluginManifestInput = serde_json::from_value(value.clone())
         .expect("Schema-valid plugin Manifest should deserialize into the author input model");
     let manifest = normalize_manifest(input);
     let (diagnostics, compatibility) = validate_semantics(&manifest, current_versions);
@@ -964,7 +965,7 @@ mod tests {
     }
 
     fn fixture_root() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fixtures/plugin-manifest-v0")
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../packages/plugin-contract/tests/fixtures")
     }
 
     fn read_json(path: impl AsRef<Path>) -> Value {
@@ -1037,7 +1038,7 @@ mod tests {
         case.current_versions.as_ref().map_or_else(
             || PluginHostVersions {
                 lensx: "0.1.0".to_owned(),
-                host_api: "1.0.0-dev".to_owned(),
+                host_api: "0.1.0".to_owned(),
             },
             |versions| PluginHostVersions {
                 lensx: versions.lensx.clone(),
@@ -1061,7 +1062,7 @@ mod tests {
             for case in read_cases(category) {
                 let input = fixture_input(&case, &base);
                 let original = input.clone();
-                let result = validate_plugin_manifest_v0(&input, &current_versions(&case));
+                let result = validate_plugin_manifest(&input, &current_versions(&case));
 
                 if let Some(expected_status) = &case.expected_status {
                     assert_eq!(
@@ -1115,11 +1116,11 @@ mod tests {
 
     #[test]
     fn normalized_manifest_contains_author_data_only() {
-        let result = validate_plugin_manifest_v0(
+        let result = validate_plugin_manifest(
             &read_json(fixture_root().join("base.json")),
             &PluginHostVersions {
                 lensx: "0.1.0".to_owned(),
-                host_api: "1.0.0-dev".to_owned(),
+                host_api: "0.1.0".to_owned(),
             },
         );
         let serialized = serde_json::to_value(result.manifest)

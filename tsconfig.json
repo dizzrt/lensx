@@ -23,6 +23,9 @@
 
     /* paths */
     "paths": {
+      "@lensx/plugin-contract": ["./packages/plugin-contract/src/index.ts"],
+      "@lensx/plugin-contract/schema": ["./packages/plugin-contract/src/schema.ts"],
+      "@lensx/plugin-contract/manifest.schema.json": ["./packages/plugin-contract/schema/manifest.schema.json"],
       "@/*": ["./src/*"]
     }
   },

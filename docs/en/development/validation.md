@@ -49,6 +49,21 @@ pnpm run check:workspace-boundaries
 Use `pnpm run test:watch` only during development. Final evidence must use the
 non-watch command.
 
+## Plugin Contract Validation
+
+Changes to `@lensx/plugin-contract`, its Schema, Host consumer, or Rust model
+must run:
+
+```bash
+pnpm run check:plugin-contract
+```
+
+This gate verifies generated-type drift, package tests, Host boundaries,
+TypeScript/Rust shared fixtures, the packed file list and exports, and an
+isolated external consumer installed from the real tarball. The tarball smoke
+test is required because workspace links can hide missing declarations,
+Schema files, export targets, or runtime dependencies.
+
 ## Rust Validation
 
 Check Rust formatting:

@@ -6,14 +6,14 @@
 ## 架构
 
 - [架构概览](architecture/overview.md) — 项目目标、当前基础、系统边界和依赖方向。
-- [扩展平台](architecture/extension-platform.md) — 启动器 action、插件、隔离和 Host
-  契约的架构方向。
+- [扩展平台](architecture/extension-platform.md) — 已交付的公共 Contract package，以及
+  插件和隔离的架构方向。
 
 ## 开发
 
 - [开发入门](development/getting-started.md) — 环境配置、开发命令和仓库目录说明。
-- [插件 Workspace](development/plugin-workspace.md) — workspace 成员位置、lifecycle
-  scripts、依赖边界和仓库检查。
+- [插件 Workspace](development/plugin-workspace.md) — Contract package、workspace 成员位置、
+  lifecycle scripts、依赖边界和 pack 检查。
 - [前端指南](development/frontend-guidelines.md) — React、Semi Design、样式、主题、
   国际化和无障碍规则。
 - [项目工作流](development/project-workflow.md) — 事实来源、文档治理、OpenSpec 和

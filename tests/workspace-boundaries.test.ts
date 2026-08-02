@@ -44,6 +44,7 @@ describe('workspace boundary checker', () => {
     expect(diagnostics.some((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.hostTauriAdapter)).toBe(true);
     expect(diagnostics.some((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.hostInternalStyle)).toBe(true);
     expect(diagnostics.some((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.crossMemberRelativeImport)).toBe(true);
+    expect(diagnostics.some((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.undeclaredPackageExport)).toBe(true);
   });
 
   test('rejects private package dependencies and missing lifecycle scripts', () => {

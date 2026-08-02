@@ -3,9 +3,9 @@
 ## 范围
 
 本仓库是一个 pnpm workspace，并将 `lensx` React/Tauri Host 保留为 private 根
-package。workspace 为未来公共 package 和插件建立开发拓扑、lifecycle 聚合及依赖检查。
-它不会发布 Plugin Contract、SDK、UI library、Testkit 或 CLI，也不会发现、安装、注册或
-执行插件。
+package。workspace 为公共 package 和插件建立开发拓扑、lifecycle 聚合及依赖检查，并包含
+可发布的 `@lensx/plugin-contract` package，但仓库验证不会执行 registry 发布操作。workspace
+尚未提供 SDK、UI library、Testkit 或 CLI，也不会发现、安装、注册或执行插件。
 
 已经交付的静态 Manifest 契约仍然只负责验证。package 位于本 workspace 内，并不代表它
 获得 Host 信任、Tauri 访问权、权限或 Runtime 能力。
@@ -22,7 +22,8 @@ examples/plugins/*
 
 `packages/*` 保留给公共 workspace package。官方插件和示例插件使用不同的成员区域，但遵守
 相同的外部插件源码边界。位于这些模式之外或嵌套层级更深的 package 不是 workspace 成员。
-`examples/plugin-manifest-v0` 中的静态示例仍是普通项目数据，不是 package。
+`examples/plugin-contract-consumer` 中的外部 Contract 消费示例仍是普通项目数据，不是
+workspace package。
 
 每个实际成员都必须声明全部四个 lifecycle scripts：
 
@@ -39,6 +40,30 @@ examples/plugins/*
 
 这些 scripts 必须执行有效的 package 局部验证。不要使用占位命令，也不要省略 script，
 因为根运行器会拒绝不完整的成员。
+
+## Plugin Contract Package
+
+`packages/plugin-contract` 持有公共 Manifest Schema、生成的 `PluginManifestInput`、规范化
+类型、协议常量、诊断和纯两阶段校验 API。受支持的 import 仅限：
+
+```text
+@lensx/plugin-contract
+@lensx/plugin-contract/schema
+@lensx/plugin-contract/manifest.schema.json
+```
+
+package 将 `ajv` 声明为直接 runtime 依赖，并复用现有 TypeScript 与 Rstest 工具链；其 runtime
+表面不依赖 React、Semi Design、Tauri、DOM、Node filesystem 或 package bundler。使用以下
+命令生成并验证契约：
+
+```bash
+pnpm run generate:plugin-manifest-types
+pnpm run check:plugin-contract
+```
+
+完整检查会重建生成类型，运行 package 与 Host 边界测试，检查 TypeScript/Rust 共享 fixtures，
+打出真实 tarball 并验证文件清单和 exports，最后将其安装到隔离消费者中执行 typecheck 和 runtime
+smoke test。
 
 ## 根命令
 

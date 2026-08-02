@@ -1,6 +1,7 @@
 {
   "name": "@fixture/public",
   "private": true,
+  "exports": "./src/index.ts",
   "scripts": {
     "build": "fixture",
     "typecheck": "fixture",

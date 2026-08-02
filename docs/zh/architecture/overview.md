@@ -33,6 +33,8 @@ lensX 是一款轻量级桌面效率启动器，其设计重点包括：
 - 通过窄化 Rust/Tauri 边界持久化、并按当前 registry snapshot 解析的版本化最近使用与已固定
   Action 集合；
 - 单窗口 Host 设置界面，包含持久化主题与语言偏好，以及刻意保持为空的插件部分；
+- 公开的 `@lensx/plugin-contract@0.1.0` workspace package，提供受限的 Schema、类型、
+  校验和规范化 exports，并通过真实 package tarball 验证；
 - Rstest、Testing Library、TypeScript 检查、Biome 和 Cargo 验证命令；
 - 用于能力和架构变更的 OpenSpec 配置。
 

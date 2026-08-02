@@ -17,16 +17,17 @@
 
 截至本文档创建时，仓库已经实现：
 
-- `manifest_version: "1.0.0-dev"` 的严格外部插件 Manifest Schema；
-- Schema 驱动的 TypeScript author-input 类型，以及 TypeScript/Rust 双端校验；
-- valid、invalid、normalized、incompatible 共享 fixtures 和契约 drift gate；
+- `@lensx/plugin-contract@0.1.0` 公共 workspace package，以及三个受限公共入口；
+- `manifest_version: "0.1.0"` 的严格外部插件 Manifest Schema；
+- Schema 驱动的 `PluginManifestInput`、两阶段 TypeScript API 与独立 Rust 校验；
+- valid、invalid、normalized、incompatible 共享 fixtures、真实 tarball 消费验证和契约 drift gate；
 - Host-owned Launcher Action descriptor、Registry、Dispatcher、搜索与集合能力；
 - Host 内建的隐藏 Launcher 和打开设置 Action；
 - Host 设置页面中的插件空占位。
 
 当前尚未实现：
 
-- pnpm workspace 和可对外发布的 Plugin Contract、SDK、UI、Testkit、CLI package；
+- Plugin SDK、UI、Testkit 和 CLI package；
 - 持久化 Plugin Manager、插件注册状态、安装与升级事务；
 - 插件 Action/Page 到现有 Host Registry 和页面导航的投影；
 - 插件包格式、安全资源服务、iframe Runtime 和 Runtime session；
@@ -34,7 +35,8 @@
 - 插件管理 UI、开发模式、签名、更新、Catalog 和 Marketplace。
 
 已归档的 `define-plugin-contract-v0` 只交付静态 Manifest 契约与校验，不代表插件已经可被
-发现、安装、注册、运行或授权。当前根 `package.json` 仍是单一 private 应用 package。
+发现、安装、注册、运行或授权。当前根 `lensx` package 保持 private，并通过 public export 消费
+Contract package；仓库验证不会执行 npm registry 发布操作。
 
 ## 平台边界
 
@@ -134,7 +136,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：根应用行为保持不变；workspace 安装和全量验证通过；依赖边界可由 CI 检查。
 
-- [ ] **Task 1.2：发布 Plugin Contract Package**
+- [x] **Task 1.2：发布 Plugin Contract Package**
 
 **OpenSpec change**：`publish-plugin-contract-package`
 
@@ -143,14 +145,17 @@ Milestone 8  Trusted Distribution Ecosystem
 **范围**：
 
 - 建立 `@lensx/plugin-contract`，承载 Schema、生成 TypeScript 类型、版本和诊断结构。
+- 公开不可绕过的 `validatePluginManifest` 与 `normalizePluginManifest` 两阶段纯 TypeScript API。
 - 保持 JSON Schema 为 author-input wire format 的结构事实源。
-- 让 Host、CLI、Testkit、示例和 Rust fixture 继续使用同一契约输入。
-- 定义 package export、SemVer、兼容性和 breaking-change 策略。
-- 保持现有 TypeScript/Rust 共享 fixture gate。
+- 让 Host、外部示例和 Rust fixture 使用同一 package-owned 契约输入。
+- 从 `0.1.0` 建立 package、Manifest、Host API 与应用四个独立版本维度。
+- 定义受限 exports、SemVer 和 breaking-change 策略，并以真实 tarball 验证仓库外消费。
+- 保持 TypeScript/Rust 共享 fixture gate，并拒绝发布内容与运行时依赖 drift。
 
 **依赖**：Task 1.1。
 
-**完成标准**：外部示例只依赖发布后的 package 即可类型检查；契约 drift 会使 CI 失败。
+**完成标准**：隔离外部示例只依赖真实 tarball 即可完成 typecheck 和运行时契约调用；任何
+Schema、类型、Host、Rust、exports、内容或依赖 drift 都会使门禁失败。
 
 - [ ] **Task 1.3：建立框架无关 Plugin SDK**
 

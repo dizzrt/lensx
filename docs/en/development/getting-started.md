@@ -64,9 +64,11 @@ pnpm exec tauri build
 - `src/` — React and TypeScript frontend source.
 - `tests/` — frontend and DOM-oriented tests.
 - `src-tauri/` — Rust and Tauri desktop source and configuration.
-- `packages/*` — public workspace packages when a package manifest is present.
+- `packages/plugin-contract` — public Manifest Contract package.
+- `packages/*` — other public workspace packages when a package manifest is present.
 - `plugins/official/*` — official plugin workspace packages when present.
 - `examples/plugins/*` — example plugin workspace packages when present.
+- `examples/plugin-contract-consumer` — non-workspace external tarball consumer example.
 - `public/` and `static/` — frontend assets and HTML input.
 - `docs/en/` — canonical English implementation and architecture documents.
 - `docs/zh/` — matching Simplified Chinese documents.

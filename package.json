@@ -1,6 +1,6 @@
 {
   "name": "lensx",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.17.0",
@@ -20,9 +20,10 @@
     "test:watch": "rstest --watch",
     "test:workspace-lifecycle": "rstest run tests/workspace-lifecycle.test.ts",
     "test:workspace-boundaries": "rstest run tests/workspace-boundaries.test.ts",
-    "generate:plugin-manifest-types": "node scripts/generate-plugin-manifest-types.mjs",
-    "check:plugin-manifest-types": "node scripts/generate-plugin-manifest-types.mjs --check",
-    "check:plugin-contract": "pnpm run check:plugin-manifest-types && rstest tests/plugin-manifest-contract.test.ts tests/plugin-manifest-boundary.test.tsx && cargo test --manifest-path src-tauri/Cargo.toml plugin_manifest",
+    "generate:plugin-manifest-types": "pnpm --dir packages/plugin-contract run generate",
+    "check:plugin-manifest-types": "pnpm --dir packages/plugin-contract run check:generated",
+    "check:plugin-contract": "pnpm --dir packages/plugin-contract run check:generated && pnpm --dir packages/plugin-contract run test && rstest tests/plugin-manifest-boundary.test.tsx && pnpm --dir packages/plugin-contract run test:pack && cargo test --manifest-path src-tauri/Cargo.toml plugin_manifest",
+    "check:plugin-contract-docs": "node scripts/check-plugin-contract-docs.ts",
     "check:workspace-boundaries": "node scripts/check-workspace-boundaries.ts",
     "check": "node scripts/workspace-lifecycle.ts check",
     "app:check": "biome check . && pnpm run check:workspace-boundaries",
@@ -40,6 +41,7 @@
     "*.{js,jsx,ts,tsx,mjs,cjs,json,jsonc,css}": "biome check --write --files-ignore-unknown=true --no-errors-on-unmatched"
   },
   "dependencies": {
+    "@lensx/plugin-contract": "workspace:*",
     "@douyinfe/semi-ui": "^2.101.1",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
@@ -66,7 +68,6 @@
     "ajv": "^8.20.0",
     "happy-dom": "^20.11.0",
     "husky": "^9.1.7",
-    "json-schema-to-typescript": "^15.0.4",
     "lint-staged": "^17.2.0",
     "typescript": "^6.0.3",
     "unocss": "^66.7.5"

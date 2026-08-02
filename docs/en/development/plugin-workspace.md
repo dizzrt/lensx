@@ -4,9 +4,11 @@
 
 The repository is a pnpm workspace that keeps the `lensx` React/Tauri Host as
 the private root package. The workspace establishes development topology,
-lifecycle aggregation, and dependency checks for future public packages and
-plugins. It does not publish a Plugin Contract, SDK, UI library, Testkit, or
-CLI, and it does not discover, install, register, or execute plugins.
+lifecycle aggregation, and dependency checks for public packages and plugins.
+It contains the publishable `@lensx/plugin-contract` package, but repository
+validation does not perform a registry publish. The workspace does not yet
+provide an SDK, UI library, Testkit, or CLI, and it does not discover, install,
+register, or execute plugins.
 
 The shipped static Manifest contract remains validation-only. A package being
 inside this workspace does not grant it Host trust, Tauri access, permissions,
@@ -25,8 +27,9 @@ examples/plugins/*
 `packages/*` is reserved for public workspace packages. Official and example
 plugins use separate member areas but follow the same external-plugin source
 boundaries. A package outside these patterns, or nested more deeply, is not a
-workspace member. The static example at `examples/plugin-manifest-v0` remains
-ordinary project data and is not a package.
+workspace member. The external Contract consumer at
+`examples/plugin-contract-consumer` remains ordinary project data and is not a
+workspace package.
 
 Every actual member must declare all four lifecycle scripts:
 
@@ -44,6 +47,33 @@ Every actual member must declare all four lifecycle scripts:
 The scripts must perform meaningful package-local validation. Do not use a
 placeholder or omit a script because the root runner rejects incomplete
 members.
+
+## Plugin Contract Package
+
+`packages/plugin-contract` owns the public Manifest Schema, generated
+`PluginManifestInput`, normalized types, protocol constants, diagnostics, and
+the pure two-stage validation API. Supported imports are limited to:
+
+```text
+@lensx/plugin-contract
+@lensx/plugin-contract/schema
+@lensx/plugin-contract/manifest.schema.json
+```
+
+The package owns `ajv` as a direct runtime dependency and uses the existing
+TypeScript and Rstest toolchain without React, Semi Design, Tauri, a DOM, Node
+filesystem access, or a package bundler in its runtime surface. Generate and
+validate the Contract with:
+
+```bash
+pnpm run generate:plugin-manifest-types
+pnpm run check:plugin-contract
+```
+
+The complete check rebuilds generated types, runs package and Host boundary
+tests, checks TypeScript/Rust shared fixtures, packs a real tarball, verifies
+its file list and exports, and installs it into an isolated consumer for
+typecheck and runtime smoke testing.
 
 ## Root Commands
 

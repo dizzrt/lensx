@@ -13,13 +13,15 @@ between author data and Host-owned state.
 ### Requirement: Plugin author Manifests must be strict and versioned inputs
 
 The system MUST accept an external plugin author Manifest as a JSON object and
-MUST require `manifest_version` to exactly match the Host-supported
-`1.0.0-dev` protocol version. The Manifest MUST contain `plugin_id`, `version`,
+MUST require `manifest_version` to exactly match the Host-supported `0.1.0`
+protocol version. The Manifest MUST contain `plugin_id`, `version`,
 `display`, `publisher`, `compatibility`, `runtime`, and `contributes` at the
 top level. Fields outside the Schema-declared scope and every explicit `null`
 MUST be rejected. An author Manifest MUST NOT contain Host-owned source,
 lifecycle, enabled state, installation state, compatibility results, runtime
 state, permission grants, signature facts, or update facts.
+The system MUST NOT accept another Manifest protocol through a compatibility
+alias, fallback Schema, or migration path.
 
 #### Scenario: Accept a complete first-version Manifest
 
@@ -29,6 +31,14 @@ state, permission grants, signature facts, or update facts.
   valid Manifest
 - **THEN** the system does not treat the author input as an installed or
   enabled plugin
+
+#### Scenario: Reject an unsupported Manifest protocol version
+
+- **WHEN** author input contains any `manifest_version` other than `0.1.0`
+- **THEN** the system rejects the Manifest with a diagnostic at
+  `/manifest_version`
+- **THEN** the system does not translate or retry the input through another
+  protocol contract
 
 #### Scenario: Reject an unknown field
 
@@ -399,19 +409,30 @@ NOT treat a requested permission as a granted permission.
 
 ### Requirement: Compatibility status must be separate from Manifest validity
 
-The LensX and Host API compatibility ranges MUST each contain valid SemVer
+The current LensX and Host API protocol versions MUST both begin at `0.1.0`.
+Their compatibility ranges MUST each contain valid SemVer
 `min_version` and `max_version_exclusive` values, and the minimum version MUST
 be strictly less than the exclusive maximum version. A dimension is compatible
 when its current version satisfies
 `min_version <= current_version < max_version_exclusive`. A structurally and
 semantically valid Manifest for which either current version is outside its
-range MUST return `incompatible` status rather than `invalid`.
+range MUST return `incompatible` status rather than `invalid`. Compatibility
+MUST depend only on the declared ranges and current `0.1.0` baselines; the
+system MUST NOT recognize or convert an earlier experimental Host API version.
 
-#### Scenario: Current versions are within both ranges
+#### Scenario: Initial current versions are within both ranges
 
-- **WHEN** the current LensX and Host API versions are each within their
-  declared half-open ranges
+- **WHEN** the current LensX and Host API versions are both `0.1.0` and each is
+  within its declared half-open range
 - **THEN** the system classifies the valid Manifest as `compatible`
+
+#### Scenario: A current version is outside its range
+
+- **WHEN** the current LensX or Host API `0.1.0` is outside its declared
+  half-open range
+- **THEN** the system classifies the valid Manifest as `incompatible`
+- **THEN** the system does not use an alias or migration rule to satisfy the
+  range
 
 #### Scenario: A current version equals its exclusive upper bound
 

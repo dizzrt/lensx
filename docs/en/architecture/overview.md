@@ -38,6 +38,9 @@ The repository currently provides:
   Rust/Tauri boundary and resolved against the current registry snapshot;
 - a single-window Host settings surface with persisted theme and locale
   preferences plus a deliberately empty plugin section;
+- the public `@lensx/plugin-contract@0.1.0` workspace package with bounded
+  Schema, type, validation, and normalization exports verified from a real
+  package tarball;
 - Rstest, Testing Library, TypeScript checks, Biome, and Cargo validation
   commands;
 - OpenSpec configuration for capability and architecture changes.

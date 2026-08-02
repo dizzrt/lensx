@@ -48,21 +48,28 @@ Plugin
 序列化契约应当具有唯一的版本化 schema 来源，并在 TypeScript 和 Rust 中进行一致校验。
 跨边界暴露的校验错误必须包含稳定、机器可读的代码和位置。
 
-## 已交付的静态 Manifest 契约
+## 已交付的公共契约与静态 Manifest
 
-lensX 已经把作者可控的 Manifest 协议 `manifest_version: "1.0.0-dev"` 实现为严格的
-Draft 2020-12 JSON Schema。Schema 是 wire format 的结构真源。生成的 TypeScript 作者输入
-类型、明确的 Rust 作者输入模型以及两端校验器共同消费该契约。共享的 valid、invalid、
-normalized 和 incompatible fixtures 约束分类、规范化输出以及诊断 `code`/`path` 行为一致。
+lensX 已交付可发布的 `@lensx/plugin-contract@0.1.0` workspace package。根 export
+提供 `PLUGIN_MANIFEST_VERSION`、`PLUGIN_HOST_API_VERSION`、生成的作者输入类型、
+规范化类型、稳定诊断、`validatePluginManifest`、`normalizePluginManifest` 和本地化文本
+解析 helper。额外公共入口仅有 `@lensx/plugin-contract/schema` 与
+`@lensx/plugin-contract/manifest.schema.json`；未声明的 deep import 不受支持。
+
+package 拥有作者可控的 `manifest_version: "0.1.0"` 协议，并将其实现为严格的 Draft
+2020-12 JSON Schema。Schema 是 wire format 的结构真源，已提交的 `PluginManifestInput`
+由它确定性生成。package TypeScript 实现与明确的 Rust 模型读取相同的 package-owned valid、
+invalid、normalized 和 incompatible fixtures，从而保持 validity、compatibility、规范化输出
+及诊断 `code`/`path` 一致。
 
 项目自有的完整示例位于
-[examples/plugin-manifest-v0/manifest.json](../../../examples/plugin-manifest-v0/manifest.json)。
+[examples/plugin-contract-consumer/manifest.json](../../../examples/plugin-contract-consumer/manifest.json)。
 
 ### 字段模型
 
 | 字段 | 契约 |
 | --- | --- |
-| `manifest_version` | 必填，且必须精确等于 `1.0.0-dev`。 |
+| `manifest_version` | 必填，且必须精确等于 `0.1.0`。 |
 | `plugin_id` 和 `version` | 必填的稳定命名空间插件 ID 和 SemVer 发布版本。 |
 | `display` | 必填的本地化 `name`；可选本地化 `description` 和包内 asset `icon`。 |
 | `publisher` | 必填的作者声明 `author`、HTTPS `homepage` 和 HTTPS `repository`；三者都不建立信任。 |
@@ -85,9 +92,11 @@ Page 和 Action ID 都是插件内本地 ID。未来 Host 投影可以把全局 
 
 ### 校验、规范化与兼容性
 
-校验依次经过严格 Schema 检查、确定性规范化、语义引用/路径/图检查和兼容性分类。公开诊断是
-可序列化的 `{code, path, message}` 对象，使用 JSON Pointer path，并依次按 `path` 和
-`code` 排序。
+`validatePluginManifest(unknown)` 执行严格 Schema 与语义检查，返回确定性的 invalid 诊断
+或不透明的成功校验结果。只有该成功结果才能传给
+`normalizePluginManifest(result, currentVersions)`；后者应用确定性的 trimming/defaults，
+并返回 `compatible` 或 `incompatible`。两个函数都不会修改作者输入。公开诊断是可序列化的
+`{code, path, message}` 对象，使用 JSON Pointer path，并依次按 `path` 和 `code` 排序。
 
 插件版本和兼容边界使用 SemVer，包括预发布版本优先级。当前版本满足
 `min_version <= current < max_version_exclusive` 时兼容。结构和语义有效、但超出任一范围的
@@ -97,6 +106,17 @@ Manifest 是 `incompatible`，而不是 `invalid`。
 Tauri 值、Rust 实现对象，或 `source`、`lifecycle`、`enabled`、安装路径、已授予权限、签名
 状态、runtime 状态等 Host-owned 字段。Publisher 元数据是不受信任的作者输入，不能单独用于
 授予信任或权限。
+
+Contract package 版本、Manifest 协议、Host API 协议与 lensX 应用版本都从 `0.1.0` 起步，
+但此后独立演进。package 实现修复不会改变 wire protocol；Manifest 或 Host API 的 breaking
+change 更新各自版本维度。当前契约不提供更早 Schema、deprecated symbol alias、兼容 adapter
+或迁移分支。
+
+运行 `pnpm run generate:plugin-manifest-types` 可重新生成已提交的输入类型，运行
+`pnpm run check:plugin-contract` 可执行完整 drift gate。门禁覆盖生成类型、package tests、Host
+边界、Rust 共享 fixtures，以及把真实 tarball 安装到隔离外部消费者中的验证。tarball 只包含
+运行时 JavaScript、声明、两个 Schema 入口和 package metadata，不包含 tests、fixtures、生成
+scripts 或 Host 私有源码。
 
 ### 明确未实现的能力
 

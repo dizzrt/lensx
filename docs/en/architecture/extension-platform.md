@@ -54,24 +54,33 @@ Serialized contracts should have one versioned schema source and should be
 validated consistently in TypeScript and Rust. Validation errors exposed across
 boundaries must have stable machine-readable codes and locations.
 
-## Shipped Static Manifest Contract
+## Shipped Public Contract And Static Manifest
 
-lensX implements the author-controlled Manifest protocol
-`manifest_version: "1.0.0-dev"` as a strict Draft 2020-12 JSON Schema. The
-Schema is the structural source of truth for the wire format. Generated
-TypeScript author-input types, explicit Rust author-input models, and both
-validators consume that contract. Shared valid, invalid, normalized, and
-incompatible fixtures keep classification, normalized output, and diagnostic
-`code`/`path` behavior aligned.
+lensX ships the publishable `@lensx/plugin-contract@0.1.0` workspace package.
+Its root export provides `PLUGIN_MANIFEST_VERSION`,
+`PLUGIN_HOST_API_VERSION`, generated author-input types, normalized types,
+stable diagnostics, `validatePluginManifest`, `normalizePluginManifest`, and
+the localized-text resolver. The only additional public entries are
+`@lensx/plugin-contract/schema` and
+`@lensx/plugin-contract/manifest.schema.json`; undeclared deep imports are not
+supported.
+
+The package owns the author-controlled `manifest_version: "0.1.0"` protocol as
+a strict Draft 2020-12 JSON Schema. The Schema is the structural source of
+truth for the wire format. The committed `PluginManifestInput` type is
+generated deterministically from it. The package TypeScript implementation and
+the explicit Rust model read the same package-owned valid, invalid, normalized,
+and incompatible fixtures so validity, compatibility, normalized output, and
+diagnostic `code`/`path` behavior stay aligned.
 
 The complete project-owned example is
-[examples/plugin-manifest-v0/manifest.json](../../../examples/plugin-manifest-v0/manifest.json).
+[examples/plugin-contract-consumer/manifest.json](../../../examples/plugin-contract-consumer/manifest.json).
 
 ### Field Model
 
 | Field | Contract |
 | --- | --- |
-| `manifest_version` | Required and exactly `1.0.0-dev`. |
+| `manifest_version` | Required and exactly `0.1.0`. |
 | `plugin_id` and `version` | Required stable namespaced plugin ID and SemVer release version. |
 | `display` | Required localized `name`; optional localized `description` and package-local asset `icon`. |
 | `publisher` | Required author-declared `author`, HTTPS `homepage`, and HTTPS `repository`; none establish trust. |
@@ -97,10 +106,14 @@ dependencies must be a subset of top-level requests.
 
 ### Validation, Normalization, And Compatibility
 
-Validation proceeds through strict Schema checks, deterministic normalization,
-semantic reference/path/graph checks, and compatibility classification. Public
-diagnostics are serializable `{code, path, message}` objects, use JSON Pointer
-paths, and are sorted by `path` and then `code`.
+`validatePluginManifest(unknown)` performs strict Schema and semantic checks
+and returns either deterministic invalid diagnostics or an opaque successful
+validation result. Only that successful result can be passed to
+`normalizePluginManifest(result, currentVersions)`, which applies deterministic
+trimming/defaults and returns `compatible` or `incompatible`. Neither function
+mutates author input. Public diagnostics are serializable
+`{code, path, message}` objects, use JSON Pointer paths, and are sorted by
+`path` and then `code`.
 
 Plugin version and compatibility bounds use SemVer, including prerelease
 precedence. Each current version is compatible when
@@ -114,6 +127,21 @@ implementation objects, or Host-owned fields such as `source`, `lifecycle`,
 `enabled`, installed paths, granted permissions, signature status, or runtime
 status. Publisher metadata is unverified author input and must never be used
 alone to grant trust or permission.
+
+The Contract package version, Manifest protocol, Host API protocol, and lensX
+application version all begin at `0.1.0` but evolve independently. Package
+implementation fixes do not change a wire protocol; breaking Manifest or Host
+API changes update their own version dimension. The current contract provides
+no earlier Schema, deprecated symbol alias, compatibility adapter, or
+migration branch.
+
+Run `pnpm run generate:plugin-manifest-types` to regenerate the committed input
+type and `pnpm run check:plugin-contract` for the complete drift gate. The gate
+checks generated types, package tests, Host boundaries, shared Rust fixtures,
+and a real tarball installed into an isolated external consumer. The tarball
+contains runtime JavaScript, declarations, the two Schema entries, and package
+metadata; it excludes tests, fixtures, generation scripts, and Host private
+source.
 
 ### Explicitly Unimplemented Capabilities
 
