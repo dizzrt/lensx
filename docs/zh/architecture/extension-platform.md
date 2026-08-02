@@ -2,9 +2,9 @@
 
 ## 文档状态
 
-本文区分已经交付的静态插件 Manifest 契约、Plugin SDK foundation、可选 Plugin UI package
-与预期的运行时扩展边界。安装、分发、插件执行、权限、插件 action 投影与搜索、iframe
-transport 和 Host API 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
+本文区分已经交付的静态插件 Manifest 契约、Plugin SDK foundation、Plugin Testkit、可选
+Plugin UI package 与预期的运行时扩展边界。安装、分发、插件执行、权限、插件 action 投影与
+搜索、iframe transport 和 Host API 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
 
 ## 目标
 
@@ -163,8 +163,50 @@ Host 对象或 wire 数据。权限、未知 method 和 Host 参数错误仍属�
 
 `PluginSdkTransport` 是连接、抽象请求、抽象事件、断开通知与销毁的语义 adapter 注入边界。
 它不定义 request ID、nonce、identity、origin、`Window`、`MessagePort`、`postMessage` 或
-JSON-RPC envelope。公共 `PluginSdkClient` 特意不提供任意字符串 Host method 调用。package
-测试 fake 是私有 fixture；公共 Plugin Testkit 尚未交付。
+JSON-RPC envelope。公共 `PluginSdkClient` 特意不提供任意字符串 Host method 调用。SDK package
+的白盒测试 fake 仍是私有 fixture；公共黑盒控制位于独立 Testkit package。
+
+## 已交付的公共 Plugin Testkit
+
+lensX 已交付只有一个公共根入口的 `@lensx/plugin-testkit@0.1.0`。它的 Runtime dependency 是
+`@lensx/plugin-contract` 与 `@lensx/plugin-sdk` 的公共根入口；Contract 与 SDK 不反向依赖
+Testkit。其 Runtime 和声明不需要 DOM、React、Semi Design、Tauri、Node filesystem、Host 私有
+module 或测试运行器。
+
+根入口提供：
+
+- `createPluginManifestFixture()`：创建满足当前 Contract 的全新最小输入；
+- `mutatePluginManifestFixture()`：按顺序执行基于 JSON Pointer 的 `set`/`remove`，并返回深拷贝；
+- `createPluginRuntimeContextFixture()`：创建复制并冻结的 locale、theme、Host API version 与
+  capability snapshot；
+- `PluginTestCancellationController` 与 `createDeferred()`：提供 runner-neutral 的取消和 pending
+  operation 控制；
+- `FakePluginSdkTransport`：提供语义 connect/request handler、抽象 event、disconnect、dispose 和
+  不可变 observation snapshot。
+
+典型 lifecycle 测试把 fake 注入真实 SDK：
+
+```ts
+import { createPluginSdk } from '@lensx/plugin-sdk';
+import { FakePluginSdkTransport } from '@lensx/plugin-testkit';
+
+const transport = new FakePluginSdkTransport();
+const client = createPluginSdk({ transport });
+const context = await client.initialize();
+const observation = transport.observation;
+await client.dispose();
+```
+
+Manifest fixture 由真实 Contract validator/normalizer 校验；Runtime context 失败、取消、超时、
+transport failure、断开、重试与迟到结果抑制仍由真实 SDK 决定。fake transport 不定义 RPC
+envelope、request identity、nonce、origin、browser messaging object 或可信 Host identity。它的抽象
+request hook 不是已交付的 Host API method client。capability ID 仍是不透明 context 数据，不是权限
+请求、grant 或 decision。
+
+`pnpm run check:plugin-testkit` 校验 package 测试与声明、Contract -> SDK -> Testkit 依赖方向、真实
+tarball 内容，以及安装到 workspace 外的无 DOM ES2022 consumer。该 consumer 是发布 smoke fixture，
+不是正式插件项目模板。Testkit 不提供 permission harness、iframe Runtime、插件执行或真实 Host API
+method/error；后续 Host API、权限和 Runtime change 只能在对应契约接受后扩展此 package。
 
 ## 已交付的可选 Plugin UI Package
 
@@ -221,8 +263,7 @@ UI，继续只消费 Contract 与 SDK。
 
 package tests、真实 tarball Rsbuild consumer、module graph/bundle 检查和 `650×600` browser
 visual matrix 共同覆盖公共边界、locale/theme、可访问性、键盘恢复、focus 与双语长内容。本次
-交付不会创建 iframe、Runtime session、Host API、installer、registry、template、Testkit 或
-插件执行路径。
+交付不会创建 iframe、Runtime session、Host API、installer、registry、template 或插件执行路径。
 
 ## Host Action Registry
 

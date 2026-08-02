@@ -5,12 +5,12 @@
 The repository is a pnpm workspace that keeps the `lensx` React/Tauri Host as
 the private root package. The workspace establishes development topology,
 lifecycle aggregation, and dependency checks for public packages and plugins.
-It contains the publishable `@lensx/plugin-contract`, `@lensx/plugin-sdk`, and
-optional `@lensx/plugin-ui` packages, but repository validation does not
-perform a registry publish. The workspace does not yet provide a public
-Testkit or CLI, and it does not discover, install, register, or execute
-plugins. The SDK and UI packages are development foundations, not a working
-iframe Runtime or Host API.
+It contains the publishable `@lensx/plugin-contract`, `@lensx/plugin-sdk`,
+`@lensx/plugin-testkit`, and optional `@lensx/plugin-ui` packages, but repository
+validation does not perform a registry publish. The workspace does not yet
+provide a plugin CLI, and it does not discover, install, register, or execute
+plugins. The SDK, Testkit, and UI packages are development foundations, not a
+working iframe Runtime or Host API.
 
 The shipped static Manifest contract remains validation-only. A package being
 inside this workspace does not grant it Host trust, Tauri access, permissions,
@@ -30,9 +30,9 @@ examples/plugins/*
 plugins use separate member areas but follow the same external-plugin source
 boundaries. A package outside these patterns, or nested more deeply, is not a
 workspace member. The external Contract and SDK consumers at
-`examples/plugin-contract-consumer`, `examples/plugin-sdk-consumer`, and
-`examples/plugin-ui-consumer` remain ordinary project data and are not
-workspace packages.
+`examples/plugin-contract-consumer`, `examples/plugin-sdk-consumer`,
+`examples/plugin-testkit-consumer`, and `examples/plugin-ui-consumer` remain
+ordinary project data and are not workspace packages.
 
 Every actual member must declare all four lifecycle scripts:
 
@@ -108,8 +108,8 @@ await client.dispose();
 
 The client has no arbitrary raw Host method call. The transport interface is
 for future trusted adapters and tests; it is not an iframe implementation or a
-public wire protocol. Package-internal tests use a private fake, while the
-public Testkit remains future work.
+public wire protocol. Package-internal white-box tests keep their private fake;
+public black-box controls are provided by Plugin Testkit.
 
 Validate the SDK with:
 
@@ -128,6 +128,59 @@ both tarballs into an isolated external consumer. That consumer typechecks with
 `lib: ["ES2022"]` and no DOM types, runs an ESM lifecycle smoke test, and proves
 that an undeclared SDK deep import is rejected. Tests, fixtures, scripts, and
 Host-private source are excluded from the tarball.
+
+## Plugin Testkit Package
+
+`packages/plugin-testkit` owns framework-neutral fixtures and controls for the
+public Contract and SDK lifecycle. Its only supported import is:
+
+```text
+@lensx/plugin-testkit
+```
+
+The package depends at Runtime only on the public Contract and SDK roots. It
+provides fresh Manifest fixtures, explicit JSON Pointer mutations, frozen
+Runtime context fixtures, a cancellation controller, deferred promises, and a
+semantic fake transport with immutable observations. The fake can configure
+connect/request handlers, emit abstract events, disconnect, and dispose, but it
+does not model a wire envelope, iframe, Host identity, permission decision, or
+real Host API method.
+
+Use it with the real SDK rather than replacing SDK validation or lifecycle:
+
+```ts
+import { createPluginSdk } from '@lensx/plugin-sdk';
+import {
+  createPluginManifestFixture,
+  FakePluginSdkTransport,
+} from '@lensx/plugin-testkit';
+
+const manifest = createPluginManifestFixture();
+const transport = new FakePluginSdkTransport();
+const client = createPluginSdk({ transport });
+await client.initialize();
+await client.dispose();
+```
+
+Capability IDs in a context fixture are opaque IDs, not grants. Invalid or
+incompatible context, cancellation, timeout, transport failure, retry,
+disconnect, state publication, and late completion are evaluated by the real
+SDK. Validate Testkit with:
+
+```bash
+pnpm --dir packages/plugin-testkit run build
+pnpm --dir packages/plugin-testkit run typecheck
+pnpm --dir packages/plugin-testkit run test
+pnpm --dir packages/plugin-testkit run check
+pnpm --dir packages/plugin-testkit run test:pack
+pnpm run check:plugin-testkit
+```
+
+The dedicated gate validates Contract, SDK, and Testkit tarballs plus workspace
+dependency and lifecycle rules. Its no-DOM ES2022 external consumer covers
+Manifest/context fixtures, SDK initialization, observations, and disposal. It
+is a release fixture, not the formal plugin project template from roadmap Task
+1.6, and it does not execute a plugin or desktop Host.
 
 ## Plugin UI Package
 
@@ -231,6 +284,7 @@ pnpm run check:workspace-boundaries
 pnpm run test:workspace-boundaries
 pnpm run test:workspace-lifecycle
 pnpm run check:plugin-sdk
+pnpm run check:plugin-testkit
 pnpm run check:plugin-ui
 ```
 
@@ -256,9 +310,11 @@ Host Tauri adapters, or internal Host styles. Plugin source and manifests must
 not depend on or import `@tauri-apps/*`. Official plugins receive no exception
 to these rules.
 
-The package-level direction is Contract -> SDK -> optional UI. The UI package
-may consume the SDK public context type, while the framework-neutral SDK must
-never depend on or import UI, React, or Semi Design.
+The package-level directions are Contract -> SDK -> Testkit and Contract -> SDK
+-> optional UI. Testkit consumes only Contract and SDK public roots; Contract
+and SDK must not depend on or import Testkit. The UI package may consume the SDK
+public context type, while the framework-neutral SDK must never depend on or
+import UI, React, or Semi Design.
 
 The deterministic boundary checker parses package manifests and TypeScript
 module references, including static imports, exports, dynamic imports,

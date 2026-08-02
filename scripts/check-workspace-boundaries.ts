@@ -25,6 +25,7 @@ export const WORKSPACE_BOUNDARY_RULES = {
   privateRoot: 'workspace/private-root',
   requiredLifecycleScript: 'workspace/required-lifecycle-script',
   sdkUiReverseDependency: 'workspace/sdk-ui-reverse-dependency',
+  testkitReverseDependency: 'workspace/testkit-reverse-dependency',
   undeclaredWorkspaceDependency: 'workspace/undeclared-workspace-dependency',
   undeclaredPackageExport: 'workspace/undeclared-package-export',
   workspacePatterns: 'workspace/supported-patterns',
@@ -267,6 +268,20 @@ const validatePackageDependencies = (
           ),
         );
       }
+      if (
+        (member.name === '@lensx/plugin-contract' || member.name === '@lensx/plugin-sdk') &&
+        dependencyName === '@lensx/plugin-testkit'
+      ) {
+        diagnostics.push(
+          diagnostic(
+            rootDir,
+            WORKSPACE_BOUNDARY_RULES.testkitReverseDependency,
+            member.manifestPath,
+            dependencyName,
+            'Plugin Contract and Plugin SDK must not depend on the higher-level Plugin Testkit.',
+          ),
+        );
+      }
       if (targetMember !== undefined && !memberDependencyAllowed(member, targetMember)) {
         diagnostics.push(
           diagnostic(
@@ -348,6 +363,20 @@ const validateSourceSpecifier = (
           sourceFile,
           specifier,
           'The framework-neutral Plugin SDK must not import the optional Plugin UI package.',
+        ),
+      );
+    }
+    if (
+      (member.name === '@lensx/plugin-contract' || member.name === '@lensx/plugin-sdk') &&
+      targetByPackageName.name === '@lensx/plugin-testkit'
+    ) {
+      diagnostics.push(
+        diagnostic(
+          rootDir,
+          WORKSPACE_BOUNDARY_RULES.testkitReverseDependency,
+          sourceFile,
+          specifier,
+          'Plugin Contract and Plugin SDK must not import the higher-level Plugin Testkit.',
         ),
       );
     }

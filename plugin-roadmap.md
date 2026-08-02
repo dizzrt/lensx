@@ -29,7 +29,7 @@
 
 当前尚未实现：
 
-- Plugin Testkit 和 CLI package；
+- Plugin CLI package；
 - 持久化 Plugin Manager、插件注册状态、安装与升级事务；
 - 插件 Action/Page 到现有 Host Registry 和页面导航的投影；
 - 插件包格式、安全资源服务、iframe Runtime 和 Runtime session；
@@ -68,7 +68,8 @@ Contract package；仓库验证不会执行 npm registry 发布操作。
 - `plugin-contract`：Manifest Schema、生成类型、协议版本和公共诊断结构。
 - `plugin-sdk`：框架无关的 TypeScript API、Runtime context、RPC 和稳定错误类型。
 - `plugin-ui`：可选的 React/Semi Design 组件、主题 token 和 locale 适配层。
-- `plugin-testkit`：Manifest、SDK、RPC、权限和页面 Runtime 测试工具。
+- `plugin-testkit`：当前提供 Manifest、Runtime context 与 SDK lifecycle 测试核心；Host API、权限和
+  页面 Runtime 工具只随对应后续 Milestone 扩展。
 - `plugin-cli`：create、dev、validate、inspect、build、pack 和 sign 命令。
 
 ### 私有 Host 能力
@@ -196,22 +197,28 @@ Schema、类型、Host、Rust、exports、内容或依赖 drift 都会使门禁�
 
 **完成标准**：使用和不使用 React 的插件都可运行；UI package 不成为 SDK 的传递依赖。
 
-- [ ] **Task 1.5：建立 Plugin Testkit**
+- [x] **Task 1.5：建立 Plugin Testkit**
 
-**OpenSpec change**：`create-plugin-testkit`
+**OpenSpec change**：[create-plugin-testkit](openspec/changes/archive/2026-08-03-create-plugin-testkit/)
+（已完成并归档）
 
-**目标**：让插件作者在不启动完整桌面应用的情况下验证 Manifest、SDK 和 Host API 行为。
+**目标**：让插件作者在不启动完整桌面应用的情况下验证当前 Manifest Contract 与 SDK lifecycle。
 
 **范围**：
 
-- 提供 Manifest fixture helper、fake Runtime context、fake transport 和 permission harness。
-- 支持成功、拒绝、超时、取消、Host 断开和不兼容版本测试。
-- 复用 `plugin-contract` 和 SDK 公共类型，不复制协议定义。
-- 输出适合 Rstest/Vitest 等测试运行器消费的框架无关核心。
+- 提供 Manifest fixture/mutation、Runtime context fixture、语义 fake transport、取消 controller 与
+  deferred 控制。
+- 使用真实 SDK 覆盖初始化成功、无效或不兼容 context、transport failure、超时、取消、Host 断开、
+  显式重试和幂等销毁。
+- 复用 `plugin-contract` 和 SDK 公共入口，不复制协议、校验、规范化或兼容算法。
+- 输出适合 Rstest/Vitest 等测试运行器消费的框架无关核心；初版不提供 permission harness、真实
+  Host API 调用、iframe wire、页面 Runtime 或插件执行。
 
 **依赖**：Task 1.2、Task 1.3。
 
-**完成标准**：示例插件可用 Testkit 覆盖初始化、调用、错误和销毁，不依赖 Host 私有模块。
+**完成标准**：真实 Contract、SDK 与 Testkit tarball 的隔离 consumer 可以覆盖 Manifest/context
+fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；Task 1.6 只依赖这一 Testkit core，并继续
+负责正式插件项目模板。
 
 - [ ] **Task 1.6：提供 Plugin Project Template**
 
@@ -906,8 +913,8 @@ Schema、类型、Host、Rust、exports、内容或依赖 drift 都会使门禁�
 
 包含 Milestone 1。
 
-当前进度：Contract、SDK 与可选 UI 已完成；Testkit 与项目模板仍待完成，
-因此尚未达到本 checkpoint。
+当前进度：Contract、SDK、可选 UI 与 Testkit core 已完成；项目模板仍待完成，因此尚未达到本
+checkpoint。
 
 - 内外部开发者可以消费 Contract、SDK、可选 UI、Testkit 和模板。
 - 公共 package 可独立构建和版本化。

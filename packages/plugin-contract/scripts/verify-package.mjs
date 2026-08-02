@@ -68,6 +68,20 @@ try {
     'utf8',
   );
   await writeFile(
+    resolve(consumerRoot, 'pnpm-workspace.yaml'),
+    [
+      'overrides:',
+      `  '@lensx/plugin-contract': file:${tarballPath}`,
+      "  'ajv': 8.20.0",
+      "  'fast-deep-equal': 3.1.3",
+      "  'fast-uri': 3.1.4",
+      "  'json-schema-traverse': 1.0.0",
+      "  'require-from-string': 2.0.2",
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+  await writeFile(
     resolve(consumerRoot, 'tsconfig.json'),
     `${JSON.stringify(
       {

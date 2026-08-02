@@ -129,6 +129,25 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/plugin-testkit:
+    dependencies:
+      '@lensx/plugin-contract':
+        specifier: workspace:*
+        version: link:../plugin-contract
+      '@lensx/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+    devDependencies:
+      '@rstest/core':
+        specifier: ^0.11.2
+        version: 0.11.4(happy-dom@20.11.1)
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/plugin-ui:
     dependencies:
       '@douyinfe/semi-ui':

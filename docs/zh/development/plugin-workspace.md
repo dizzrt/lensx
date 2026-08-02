@@ -4,9 +4,10 @@
 
 本仓库是一个 pnpm workspace，并将 `lensx` React/Tauri Host 保留为 private 根
 package。workspace 为公共 package 和插件建立开发拓扑、lifecycle 聚合及依赖检查，并包含
-可发布的 `@lensx/plugin-contract`、`@lensx/plugin-sdk` 与可选 `@lensx/plugin-ui` package，
-但仓库验证不会执行 registry 发布操作。workspace 尚未提供公共 Testkit 或 CLI，也不会发现、
-安装、注册或执行插件。SDK 与 UI package 是开发基础，不是可工作的 iframe Runtime 或 Host API。
+可发布的 `@lensx/plugin-contract`、`@lensx/plugin-sdk`、`@lensx/plugin-testkit` 与可选
+`@lensx/plugin-ui` package，但仓库验证不会执行 registry 发布操作。workspace 尚未提供插件 CLI，
+也不会发现、安装、注册或执行插件。SDK、Testkit 与 UI package 是开发基础，不是可工作的 iframe
+Runtime 或 Host API。
 
 已经交付的静态 Manifest 契约仍然只负责验证。package 位于本 workspace 内，并不代表它
 获得 Host 信任、Tauri 访问权、权限或 Runtime 能力。
@@ -23,8 +24,9 @@ examples/plugins/*
 
 `packages/*` 保留给公共 workspace package。官方插件和示例插件使用不同的成员区域，但遵守
 相同的外部插件源码边界。位于这些模式之外或嵌套层级更深的 package 不是 workspace 成员。
-`examples/plugin-contract-consumer`、`examples/plugin-sdk-consumer` 与
-`examples/plugin-ui-consumer` 中的外部消费示例仍是普通项目数据，不是 workspace package。
+`examples/plugin-contract-consumer`、`examples/plugin-sdk-consumer`、
+`examples/plugin-testkit-consumer` 与 `examples/plugin-ui-consumer` 中的外部消费示例仍是普通项目
+数据，不是 workspace package。
 
 每个实际成员都必须声明全部四个 lifecycle scripts：
 
@@ -91,7 +93,8 @@ await client.dispose();
 ```
 
 client 不提供任意 raw Host method 调用。transport interface 用于未来可信 adapter 和测试，不是
-iframe 实现或公共 wire protocol。package 内部测试使用私有 fake；公共 Testkit 仍是后续工作。
+iframe 实现或公共 wire protocol。package 内部白盒测试保留私有 fake；公共黑盒控制由 Plugin
+Testkit 提供。
 
 使用以下命令验证 SDK：
 
@@ -108,6 +111,53 @@ pack gate 会构建真实 Contract 与 SDK tarball，校验 SDK 文件清单、�
 依赖 metadata，并把两个 tarball 安装进隔离 external consumer。consumer 使用
 `lib: ["ES2022"]` 且不包含 DOM 类型完成 typecheck，运行 ESM lifecycle smoke，并证明未声明的
 SDK deep import 会被拒绝。tarball 排除 tests、fixtures、scripts 和 Host 私有源码。
+
+## Plugin Testkit Package
+
+`packages/plugin-testkit` 持有面向公共 Contract 与 SDK lifecycle 的框架无关 fixture 和控制工具。
+唯一受支持的 import 是：
+
+```text
+@lensx/plugin-testkit
+```
+
+package 的 Runtime dependency 只有 Contract 与 SDK 的公共根入口。它提供全新的 Manifest fixture、
+显式 JSON Pointer mutation、冻结的 Runtime context fixture、取消 controller、deferred promise，
+以及带不可变 observation 的语义 fake transport。fake 可以配置 connect/request handler、发送抽象
+event、断开和销毁，但不会模拟 wire envelope、iframe、Host identity、permission decision 或真实
+Host API method。
+
+它应当与真实 SDK 一起使用，而不是替代 SDK 校验或 lifecycle：
+
+```ts
+import { createPluginSdk } from '@lensx/plugin-sdk';
+import {
+  createPluginManifestFixture,
+  FakePluginSdkTransport,
+} from '@lensx/plugin-testkit';
+
+const manifest = createPluginManifestFixture();
+const transport = new FakePluginSdkTransport();
+const client = createPluginSdk({ transport });
+await client.initialize();
+await client.dispose();
+```
+
+context fixture 中的 capability ID 是不透明 ID，不是 grant。无效或不兼容 context、取消、超时、
+transport failure、重试、断开、状态发布与迟到完成由真实 SDK 判断。使用以下命令验证 Testkit：
+
+```bash
+pnpm --dir packages/plugin-testkit run build
+pnpm --dir packages/plugin-testkit run typecheck
+pnpm --dir packages/plugin-testkit run test
+pnpm --dir packages/plugin-testkit run check
+pnpm --dir packages/plugin-testkit run test:pack
+pnpm run check:plugin-testkit
+```
+
+专用 gate 校验 Contract、SDK 与 Testkit tarball，以及 workspace dependency/lifecycle 规则。其无 DOM
+ES2022 external consumer 覆盖 Manifest/context fixture、SDK 初始化、observation 与 dispose。它是发布
+fixture，不是 roadmap Task 1.6 的正式插件项目模板，也不会执行插件或桌面 Host。
 
 ## Plugin UI Package
 
@@ -200,6 +250,7 @@ pnpm run check:workspace-boundaries
 pnpm run test:workspace-boundaries
 pnpm run test:workspace-lifecycle
 pnpm run check:plugin-sdk
+pnpm run check:plugin-testkit
 pnpm run check:plugin-ui
 ```
 
@@ -221,8 +272,9 @@ examples/plugins/*     -> packages/* 公共 exports
 `src/app/**` 等 Host 私有路径、Host Tauri adapter 或 Host 内部样式。插件源码和 manifest
 不得依赖或导入 `@tauri-apps/*`。官方插件不享有规则例外。
 
-package 层级的依赖方向是 Contract -> SDK -> 可选 UI。UI package 可以消费 SDK 公共 context
-类型；框架无关 SDK 不得依赖或导入 UI、React 或 Semi Design。
+package 层级的依赖方向是 Contract -> SDK -> Testkit，以及 Contract -> SDK -> 可选 UI。Testkit
+只能消费 Contract 与 SDK 公共根入口；Contract 和 SDK 不得依赖或导入 Testkit。UI package 可以
+消费 SDK 公共 context 类型；框架无关 SDK 不得依赖或导入 UI、React 或 Semi Design。
 
 确定性的边界检查会解析 package manifest 和 TypeScript 模块引用，包括静态 import、export、
 动态 import、相对路径和仓库 alias。发生违规时，检查返回非零状态，并报告规则标识、文件和

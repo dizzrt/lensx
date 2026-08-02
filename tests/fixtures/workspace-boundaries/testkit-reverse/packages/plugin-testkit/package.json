@@ -1,0 +1,16 @@
+{
+  "name": "@lensx/plugin-testkit",
+  "scripts": {
+    "build": "fixture",
+    "typecheck": "fixture",
+    "test": "fixture",
+    "check": "fixture"
+  },
+  "dependencies": {
+    "@lensx/plugin-contract": "workspace:*",
+    "@lensx/plugin-sdk": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

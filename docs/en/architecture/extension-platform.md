@@ -3,10 +3,11 @@
 ## Document Status
 
 This document separates the shipped static plugin Manifest contract, Plugin SDK
-foundation, and optional Plugin UI package from the intended runtime extension
-boundary. Installation, distribution, plugin execution, permissions, plugin
-action projection and search, iframe transport, and the Host API are not
-currently implemented. Stable specs and source code define the shipped subset.
+foundation, Plugin Testkit, and optional Plugin UI package from the intended
+runtime extension boundary. Installation, distribution, plugin execution,
+permissions, plugin action projection and search, iframe transport, and the
+Host API are not currently implemented. Stable specs and source code define the
+shipped subset.
 
 ## Goals
 
@@ -203,8 +204,58 @@ and Host parameter errors remain future Host API contract work.
 abstract requests, abstract events, disconnect notification, and disposal. It
 does not define request IDs, nonce, identity, origin, `Window`, `MessagePort`,
 `postMessage`, or a JSON-RPC envelope. The public `PluginSdkClient` deliberately
-does not expose an arbitrary string-based Host method call. The package test
-fake is private; a public Plugin Testkit has not been delivered.
+does not expose an arbitrary string-based Host method call. The SDK package's
+white-box test fake remains private; public black-box controls live in the
+separate Testkit package.
+
+## Shipped Public Plugin Testkit
+
+lensX ships `@lensx/plugin-testkit@0.1.0` with one public root entry. Its Runtime
+dependencies are the public roots of `@lensx/plugin-contract` and
+`@lensx/plugin-sdk`; Contract and SDK do not depend on Testkit. Its Runtime and
+declarations do not require a DOM, React, Semi Design, Tauri, Node filesystem,
+Host-private modules, or a test runner.
+
+The root entry provides:
+
+- `createPluginManifestFixture()` for a fresh minimal current Contract input;
+- `mutatePluginManifestFixture()` for ordered JSON Pointer `set` and `remove`
+  operations that return a deep copy;
+- `createPluginRuntimeContextFixture()` for copied and frozen locale, theme,
+  Host API version, and capability snapshots;
+- `PluginTestCancellationController` and `createDeferred()` for runner-neutral
+  cancellation and pending-operation control;
+- `FakePluginSdkTransport` for semantic connect/request handlers, abstract
+  events, disconnect, disposal, and immutable observation snapshots.
+
+Typical lifecycle tests inject the fake into the real SDK:
+
+```ts
+import { createPluginSdk } from '@lensx/plugin-sdk';
+import { FakePluginSdkTransport } from '@lensx/plugin-testkit';
+
+const transport = new FakePluginSdkTransport();
+const client = createPluginSdk({ transport });
+const context = await client.initialize();
+const observation = transport.observation;
+await client.dispose();
+```
+
+Manifest fixtures are checked by the real Contract validator and normalizer;
+Runtime context failures, cancellation, timeout, transport failure,
+disconnect, retry, and late-result suppression remain real SDK behavior. The
+fake transport does not define an RPC envelope, request identity, nonce,
+origin, browser messaging object, or trusted Host identity. Its abstract
+request hook is not a delivered Host API method client. Capability IDs remain
+opaque context data and are not permission requests, grants, or decisions.
+
+`pnpm run check:plugin-testkit` verifies package tests and declarations,
+Contract -> SDK -> Testkit dependency direction, real tarball contents, and a
+no-DOM ES2022 consumer installed outside the workspace. That consumer is a
+release smoke fixture, not the formal plugin project template. Testkit does not
+provide permission harnesses, iframe Runtime, plugin execution, or real Host API
+methods or errors; later Host API, permission, and Runtime changes may extend
+the package only after their contracts are accepted.
 
 ## Shipped Optional Plugin UI Package
 
@@ -273,7 +324,7 @@ Package tests, a real-tarball Rsbuild consumer, module-graph and bundle checks,
 and a `650×600` browser visual matrix cover public boundaries, locale/theme,
 accessibility, keyboard recovery, focus, and long bilingual content. This
 delivery does not create an iframe, Runtime session, Host API, installer,
-registry, template, Testkit, or plugin execution path.
+registry, template, or plugin execution path.
 
 ## Host Action Registry
 
