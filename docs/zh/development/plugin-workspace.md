@@ -4,9 +4,9 @@
 
 本仓库是一个 pnpm workspace，并将 `lensx` React/Tauri Host 保留为 private 根
 package。workspace 为公共 package 和插件建立开发拓扑、lifecycle 聚合及依赖检查，并包含
-可发布的 `@lensx/plugin-contract` 与 `@lensx/plugin-sdk` package，但仓库验证不会执行 registry
-发布操作。workspace 尚未提供 UI library、公共 Testkit 或 CLI，也不会发现、安装、注册或执行
-插件。SDK package 是 client/transport foundation，不是可工作的 iframe Runtime 或 Host API。
+可发布的 `@lensx/plugin-contract`、`@lensx/plugin-sdk` 与可选 `@lensx/plugin-ui` package，
+但仓库验证不会执行 registry 发布操作。workspace 尚未提供公共 Testkit 或 CLI，也不会发现、
+安装、注册或执行插件。SDK 与 UI package 是开发基础，不是可工作的 iframe Runtime 或 Host API。
 
 已经交付的静态 Manifest 契约仍然只负责验证。package 位于本 workspace 内，并不代表它
 获得 Host 信任、Tauri 访问权、权限或 Runtime 能力。
@@ -23,8 +23,8 @@ examples/plugins/*
 
 `packages/*` 保留给公共 workspace package。官方插件和示例插件使用不同的成员区域，但遵守
 相同的外部插件源码边界。位于这些模式之外或嵌套层级更深的 package 不是 workspace 成员。
-`examples/plugin-contract-consumer` 与 `examples/plugin-sdk-consumer` 中的外部 Contract/SDK
-消费示例仍是普通项目数据，不是 workspace package。
+`examples/plugin-contract-consumer`、`examples/plugin-sdk-consumer` 与
+`examples/plugin-ui-consumer` 中的外部消费示例仍是普通项目数据，不是 workspace package。
 
 每个实际成员都必须声明全部四个 lifecycle scripts：
 
@@ -109,6 +109,75 @@ pack gate 会构建真实 Contract 与 SDK tarball，校验 SDK 文件清单、�
 `lib: ["ES2022"]` 且不包含 DOM 类型完成 typecheck，运行 ESM lifecycle smoke，并证明未声明的
 SDK deep import 会被拒绝。tarball 排除 tests、fixtures、scripts 和 Host 私有源码。
 
+## Plugin UI Package
+
+`packages/plugin-ui` 持有可选的 React/Semi Design UI foundation。受支持的 import 仅限：
+
+```text
+@lensx/plugin-ui
+@lensx/plugin-ui/styles.css
+```
+
+根入口公开 `PluginUiProvider`、`PluginPage`、`PluginFeedback` 及其公共类型。它不会重新导出
+通用 Semi 控件；插件需要 `Button`、`Input`、`Table`、`Form` 或 `Modal` 时，直接从 Semi
+Design 导入。未声明的 package source、component、test、visual fixture 和 style deep import
+都不是公共 API。
+
+`PluginUiProvider` 接受 SDK 的只读 `PluginRuntimeContext` snapshot，将 `en-US` 与 `zh-CN`
+映射到 Semi locale pack，提供 package 自有反馈文案，并同步插件 document 的 `lang`、CSS
+`color-scheme` 与 `body[theme-mode="dark"]`。调用方传入新的 context snapshot 时，呈现会同步
+更新。Provider 不订阅 transport、不轮询 Host、不定义 context event protocol，并在 unmount
+时恢复此前的 document 状态。
+
+React 插件 document 只需导入一次样式入口：
+
+```tsx
+import { PluginPage, PluginUiProvider } from '@lensx/plugin-ui';
+import '@lensx/plugin-ui/styles.css';
+
+<PluginUiProvider context={context}>
+  <PluginPage title="插件页面">内容</PluginPage>
+</PluginUiProvider>;
+```
+
+样式入口包含必要的 Semi 基础样式，并公开以下版本化 lensX 语义 token：
+
+```text
+--lensx-plugin-color-background
+--lensx-plugin-color-surface
+--lensx-plugin-color-text
+--lensx-plugin-color-text-secondary
+--lensx-plugin-color-border
+--lensx-plugin-color-accent
+--lensx-plugin-color-danger
+--lensx-plugin-color-focus
+--lensx-plugin-radius-page
+--lensx-plugin-space-page
+```
+
+React、React DOM 与 `@lensx/plugin-sdk` 是由插件项目持有并打包的 peer dependency；Semi
+Design 是 UI package 的直接 Runtime dependency。最终 React 插件 browser bundle 包含插件
+自有的单份 React Runtime、React DOM、Semi、Plugin UI JavaScript 与样式；Host 不提供
+external、import map、global、私有 React Context 或私有 CSS。框架无关插件仍然只安装
+Contract 与 SDK，不需要 UI、React 或 Semi。
+
+使用以下命令验证 UI package：
+
+```bash
+pnpm --dir packages/plugin-ui run build
+pnpm --dir packages/plugin-ui run typecheck
+pnpm --dir packages/plugin-ui run test
+pnpm --dir packages/plugin-ui run check
+pnpm --dir packages/plugin-ui run test:pack
+pnpm --dir packages/plugin-ui run test:visual
+pnpm run check:plugin-ui
+```
+
+pack gate 会把真实 Contract、SDK 与 UI tarball 安装到隔离的 Rsbuild browser consumer，
+检查 package metadata 与 bundle module graph，并运行 browser Runtime smoke test。visual gate
+在 `650×600` 下覆盖 `en-US`/`zh-CN` 与 light/dark，包括语义结构、live region、键盘恢复、
+focus、computed token、长文本和截图。这些门禁不会实现或模拟 Host 安装与 iframe 执行。
+
 ## 根命令
 
 标准根命令是仓库级入口：
@@ -131,6 +200,7 @@ pnpm run check:workspace-boundaries
 pnpm run test:workspace-boundaries
 pnpm run test:workspace-lifecycle
 pnpm run check:plugin-sdk
+pnpm run check:plugin-ui
 ```
 
 ## 依赖方向
@@ -150,6 +220,9 @@ examples/plugins/*     -> packages/* 公共 exports
 公共 package、官方插件和示例插件不得依赖 private 根 `lensx` package，也不得导入
 `src/app/**` 等 Host 私有路径、Host Tauri adapter 或 Host 内部样式。插件源码和 manifest
 不得依赖或导入 `@tauri-apps/*`。官方插件不享有规则例外。
+
+package 层级的依赖方向是 Contract -> SDK -> 可选 UI。UI package 可以消费 SDK 公共 context
+类型；框架无关 SDK 不得依赖或导入 UI、React 或 Semi Design。
 
 确定性的边界检查会解析 package manifest 和 TypeScript 模块引用，包括静态 import、export、
 动态 import、相对路径和仓库 alias。发生违规时，检查返回非零状态，并报告规则标识、文件和

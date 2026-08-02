@@ -18,6 +18,8 @@
 截至本文档创建时，仓库已经实现：
 
 - `@lensx/plugin-contract@0.1.0` 公共 workspace package，以及三个受限公共入口；
+- `@lensx/plugin-sdk@0.1.0` 框架无关公共 package 与受限根入口；
+- 可选的 `@lensx/plugin-ui@0.1.0` React/Semi Design 公共 package、样式入口与十个语义 token；
 - `manifest_version: "0.1.0"` 的严格外部插件 Manifest Schema；
 - Schema 驱动的 `PluginManifestInput`、两阶段 TypeScript API 与独立 Rust 校验；
 - valid、invalid、normalized、incompatible 共享 fixtures、真实 tarball 消费验证和契约 drift gate；
@@ -27,7 +29,7 @@
 
 当前尚未实现：
 
-- Plugin SDK、UI、Testkit 和 CLI package；
+- Plugin Testkit 和 CLI package；
 - 持久化 Plugin Manager、插件注册状态、安装与升级事务；
 - 插件 Action/Page 到现有 Host Registry 和页面导航的投影；
 - 插件包格式、安全资源服务、iframe Runtime 和 Runtime session；
@@ -175,9 +177,10 @@ Schema、类型、Host、Rust、exports、内容或依赖 drift 都会使门禁�
 
 **完成标准**：SDK 可以独立构建、发布和测试；公共入口不包含 React、Semi 或 Tauri 依赖。
 
-- [ ] **Task 1.4：建立可选 Plugin UI Package**
+- [x] **Task 1.4：建立可选 Plugin UI Package**
 
-**OpenSpec change**：`create-plugin-ui-package`
+**OpenSpec change**：[create-plugin-ui-package](openspec/changes/archive/2026-08-03-create-plugin-ui-package/)
+（已完成并归档）
 
 **目标**：允许 React 插件复用 lensX 的稳定视觉语言，同时不限制其他前端技术栈。
 
@@ -902,6 +905,9 @@ Schema、类型、Host、Rust、exports、内容或依赖 drift 都会使门禁�
 ### Plugin Developer Preview
 
 包含 Milestone 1。
+
+当前进度：Contract、SDK 与可选 UI 已完成；Testkit 与项目模板仍待完成，
+因此尚未达到本 checkpoint。
 
 - 内外部开发者可以消费 Contract、SDK、可选 UI、Testkit 和模板。
 - 公共 package 可独立构建和版本化。

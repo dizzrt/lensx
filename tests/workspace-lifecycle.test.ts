@@ -24,6 +24,7 @@ describe('workspace lifecycle aggregation', () => {
         `root application:app:${lifecycle}`,
         `@lensx/plugin-contract (packages/plugin-contract):${lifecycle}`,
         `@lensx/plugin-sdk (packages/plugin-sdk):${lifecycle}`,
+        `@lensx/plugin-ui (packages/plugin-ui):${lifecycle}`,
       ]);
     }
   });

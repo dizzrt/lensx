@@ -2,11 +2,11 @@
 
 ## Document Status
 
-This document separates the shipped static plugin Manifest contract and Plugin
-SDK foundation from the intended runtime extension boundary. Installation,
-distribution, plugin execution, permissions, plugin action projection and
-search, iframe transport, and the Host API are not currently implemented.
-Stable specs and source code define the shipped subset.
+This document separates the shipped static plugin Manifest contract, Plugin SDK
+foundation, and optional Plugin UI package from the intended runtime extension
+boundary. Installation, distribution, plugin execution, permissions, plugin
+action projection and search, iframe transport, and the Host API are not
+currently implemented. Stable specs and source code define the shipped subset.
 
 ## Goals
 
@@ -205,6 +205,75 @@ does not define request IDs, nonce, identity, origin, `Window`, `MessagePort`,
 `postMessage`, or a JSON-RPC envelope. The public `PluginSdkClient` deliberately
 does not expose an arbitrary string-based Host method call. The package test
 fake is private; a public Plugin Testkit has not been delivered.
+
+## Shipped Optional Plugin UI Package
+
+lensX ships the optional `@lensx/plugin-ui@0.1.0` package for React plugins.
+Its root export is constrained to `PluginUiProvider`, `PluginPage`,
+`PluginFeedback`, and their public types. Its only other public entry is
+`@lensx/plugin-ui/styles.css`. Undeclared deep imports, Host React context,
+private application components, Tauri adapters, Host styles, and the complete
+Semi Design API are not exported.
+
+`PluginUiProvider` receives a read-only `PluginRuntimeContext` snapshot from the
+SDK and adapts only its `locale` and `theme` fields inside the plugin document:
+
+```text
+validated PluginRuntimeContext snapshot
+  -> PluginUiProvider
+     -> Semi LocaleProvider (en-US or zh-CN)
+     -> package-owned feedback messages
+     -> document lang and color-scheme
+     -> body[theme-mode="dark"]
+```
+
+Passing a new snapshot updates every mapped presentation value. The provider
+does not read Host providers or preferences, subscribe to SDK transport, poll,
+or define a context-update event. It records document state at mount and
+restores it at unmount; the intended future execution environment is the
+plugin's own isolated document.
+
+`PluginPage` provides only the stable page semantics: one `main`, an accessible
+heading, optional description and actions, and a content region.
+`PluginFeedback` provides localized `loading`, `empty`, and `error` states with
+busy/status/alert/live-region semantics and an optional plugin-owned recovery
+handler. General controls remain direct Semi Design imports rather than lensX
+wrappers.
+
+The styles entry includes required Semi base styles and stabilizes exactly ten
+lensX semantic custom properties:
+
+```text
+--lensx-plugin-color-background
+--lensx-plugin-color-surface
+--lensx-plugin-color-text
+--lensx-plugin-color-text-secondary
+--lensx-plugin-color-border
+--lensx-plugin-color-accent
+--lensx-plugin-color-danger
+--lensx-plugin-color-focus
+--lensx-plugin-radius-page
+--lensx-plugin-space-page
+```
+
+Those properties map to supported Semi theme tokens and the package's page
+spacing/radius. Other Semi tokens may be used by plugin code but are not lensX
+compatibility promises. The published CSS has no Host global-style or UnoCSS
+scan dependency.
+
+React, React DOM, and Plugin SDK are UI peer dependencies. Semi Design is the
+UI package's direct Runtime dependency. A React plugin installs the peers and
+builds one self-contained browser bundle containing its own single React
+Runtime, React DOM, Semi, Plugin UI JavaScript, and styles. It does not receive
+Host externals, import maps, window globals, React instances, or private CSS.
+A non-React plugin can ignore UI entirely and continue to consume only Contract
+and SDK.
+
+Package tests, a real-tarball Rsbuild consumer, module-graph and bundle checks,
+and a `650×600` browser visual matrix cover public boundaries, locale/theme,
+accessibility, keyboard recovery, focus, and long bilingual content. This
+delivery does not create an iframe, Runtime session, Host API, installer,
+registry, template, Testkit, or plugin execution path.
 
 ## Host Action Registry
 

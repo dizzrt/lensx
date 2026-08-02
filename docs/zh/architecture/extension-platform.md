@@ -2,9 +2,9 @@
 
 ## 文档状态
 
-本文区分已经交付的静态插件 Manifest 契约、Plugin SDK foundation 与预期的运行时扩展边界。
-安装、分发、插件执行、权限、插件 action 投影与搜索、iframe transport 和 Host API 当前尚未实现。
-稳定 spec 和源码共同决定已经交付的子集。
+本文区分已经交付的静态插件 Manifest 契约、Plugin SDK foundation、可选 Plugin UI package
+与预期的运行时扩展边界。安装、分发、插件执行、权限、插件 action 投影与搜索、iframe
+transport 和 Host API 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
 
 ## 目标
 
@@ -165,6 +165,64 @@ Host 对象或 wire 数据。权限、未知 method 和 Host 参数错误仍属�
 它不定义 request ID、nonce、identity、origin、`Window`、`MessagePort`、`postMessage` 或
 JSON-RPC envelope。公共 `PluginSdkClient` 特意不提供任意字符串 Host method 调用。package
 测试 fake 是私有 fixture；公共 Plugin Testkit 尚未交付。
+
+## 已交付的可选 Plugin UI Package
+
+lensX 已交付面向 React 插件的可选 `@lensx/plugin-ui@0.1.0` package。根 export 严格限制为
+`PluginUiProvider`、`PluginPage`、`PluginFeedback` 及其公共类型；唯一额外公共入口是
+`@lensx/plugin-ui/styles.css`。未声明的 deep import、Host React Context、应用私有组件、
+Tauri adapter、Host 样式和完整 Semi Design API 都不会被导出。
+
+`PluginUiProvider` 接收 SDK 的只读 `PluginRuntimeContext` snapshot，并且只在插件 document
+内适配其 `locale` 与 `theme` 字段：
+
+```text
+经过校验的 PluginRuntimeContext snapshot
+  -> PluginUiProvider
+     -> Semi LocaleProvider（en-US 或 zh-CN）
+     -> package 自有反馈文案
+     -> document lang 与 color-scheme
+     -> body[theme-mode="dark"]
+```
+
+传入新的 snapshot 会更新所有映射后的呈现值。Provider 不读取 Host provider 或 preference、
+不订阅 SDK transport、不轮询，也不定义 context 更新 event。它在 mount 时记录 document 状态，
+并在 unmount 时恢复；预期的后续执行环境是插件自有的隔离 document。
+
+`PluginPage` 只提供稳定页面语义：单一 `main`、可访问 heading、可选 description/actions 和
+内容区域。`PluginFeedback` 提供本地化 `loading`、`empty`、`error` 状态，包含 busy/status/
+alert/live-region 语义与可选的插件自有 recovery handler。通用控件仍由插件直接从 Semi
+Design 导入，不由 lensX 进行薄包装。
+
+样式入口包含必要的 Semi 基础样式，并且只稳定以下十个 lensX 语义 custom properties：
+
+```text
+--lensx-plugin-color-background
+--lensx-plugin-color-surface
+--lensx-plugin-color-text
+--lensx-plugin-color-text-secondary
+--lensx-plugin-color-border
+--lensx-plugin-color-accent
+--lensx-plugin-color-danger
+--lensx-plugin-color-focus
+--lensx-plugin-radius-page
+--lensx-plugin-space-page
+```
+
+这些 properties 映射到受支持的 Semi theme token 以及 package 自有页面间距/圆角。插件可以
+使用其他 Semi token，但它们不是 lensX 兼容承诺。发布 CSS 不依赖 Host global style 或
+UnoCSS scan。
+
+React、React DOM 与 Plugin SDK 是 UI 的 peer dependency，Semi Design 是 UI package 的直接
+Runtime dependency。React 插件安装这些 peers，并构建一个自包含 browser bundle，其中包含
+插件自有的单份 React Runtime、React DOM、Semi、Plugin UI JavaScript 与样式。它不会从 Host
+获得 external、import map、window global、React 实例或私有 CSS。非 React 插件可以完全忽略
+UI，继续只消费 Contract 与 SDK。
+
+package tests、真实 tarball Rsbuild consumer、module graph/bundle 检查和 `650×600` browser
+visual matrix 共同覆盖公共边界、locale/theme、可访问性、键盘恢复、focus 与双语长内容。本次
+交付不会创建 iframe、Runtime session、Host API、installer、registry、template、Testkit 或
+插件执行路径。
 
 ## Host Action Registry
 

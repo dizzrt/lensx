@@ -1,0 +1,141 @@
+@import (inline) '@douyinfe/semi-ui/dist/css/semi.min.css';
+
+body,
+:host {
+  --lensx-plugin-color-background: var(--semi-color-bg-0);
+  --lensx-plugin-color-surface: var(--semi-color-bg-1);
+  --lensx-plugin-color-text: var(--semi-color-text-0);
+  --lensx-plugin-color-text-secondary: var(--semi-color-text-2);
+  --lensx-plugin-color-border: var(--semi-color-border);
+  --lensx-plugin-color-accent: var(--semi-color-primary);
+  --lensx-plugin-color-danger: var(--semi-color-danger);
+  --lensx-plugin-color-focus: var(--semi-color-focus-border);
+  --lensx-plugin-radius-page: 12px;
+  --lensx-plugin-space-page: 24px;
+
+  margin: 0;
+  color: var(--lensx-plugin-color-text);
+  background: var(--lensx-plugin-color-background);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+.lensx-plugin-page {
+  width: 100%;
+  min-height: 100vh;
+  padding: var(--lensx-plugin-space-page);
+  color: var(--lensx-plugin-color-text);
+  background: var(--lensx-plugin-color-background);
+}
+
+.lensx-plugin-page__header {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.lensx-plugin-page__heading-group {
+  min-width: 0;
+}
+
+.lensx-plugin-page__title {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.lensx-plugin-page__description {
+  max-width: 68ch;
+  margin-top: 8px;
+  color: var(--lensx-plugin-color-text-secondary);
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.lensx-plugin-page__actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-inline-size: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.lensx-plugin-page__content {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lensx-plugin-page__actions :is(button, a, input, select, textarea):focus-visible,
+.lensx-plugin-feedback__recovery:focus-visible {
+  outline: 3px solid var(--lensx-plugin-color-focus);
+  outline-offset: 2px;
+}
+
+.lensx-plugin-feedback {
+  display: flex;
+  min-height: 132px;
+  padding: 20px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  border: 1px solid var(--lensx-plugin-color-border);
+  border-radius: var(--lensx-plugin-radius-page);
+  background: var(--lensx-plugin-color-surface);
+}
+
+.lensx-plugin-feedback__mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 12px;
+  place-items: center;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  color: var(--lensx-plugin-color-accent);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.lensx-plugin-feedback--error .lensx-plugin-feedback__mark {
+  color: var(--lensx-plugin-color-danger);
+}
+
+.lensx-plugin-feedback__title {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.lensx-plugin-feedback__description {
+  margin-top: 4px;
+  color: var(--lensx-plugin-color-text-secondary);
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.lensx-plugin-feedback__recovery {
+  margin-top: 16px;
+}
+
+@media (max-width: 520px) {
+  .lensx-plugin-page__header {
+    flex-direction: column;
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@lensx/plugin-ui",
+  "scripts": {
+    "build": "fixture",
+    "typecheck": "fixture",
+    "test": "fixture",
+    "check": "fixture"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

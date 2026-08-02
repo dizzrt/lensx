@@ -5,11 +5,12 @@
 The repository is a pnpm workspace that keeps the `lensx` React/Tauri Host as
 the private root package. The workspace establishes development topology,
 lifecycle aggregation, and dependency checks for public packages and plugins.
-It contains the publishable `@lensx/plugin-contract` and `@lensx/plugin-sdk`
-packages, but repository validation does not perform a registry publish. The
-workspace does not yet provide a UI library, public Testkit, or CLI, and it does
-not discover, install, register, or execute plugins. The SDK package is a
-client/transport foundation, not a working iframe Runtime or Host API.
+It contains the publishable `@lensx/plugin-contract`, `@lensx/plugin-sdk`, and
+optional `@lensx/plugin-ui` packages, but repository validation does not
+perform a registry publish. The workspace does not yet provide a public
+Testkit or CLI, and it does not discover, install, register, or execute
+plugins. The SDK and UI packages are development foundations, not a working
+iframe Runtime or Host API.
 
 The shipped static Manifest contract remains validation-only. A package being
 inside this workspace does not grant it Host trust, Tauri access, permissions,
@@ -29,8 +30,9 @@ examples/plugins/*
 plugins use separate member areas but follow the same external-plugin source
 boundaries. A package outside these patterns, or nested more deeply, is not a
 workspace member. The external Contract and SDK consumers at
-`examples/plugin-contract-consumer` and `examples/plugin-sdk-consumer` remain
-ordinary project data and are not workspace packages.
+`examples/plugin-contract-consumer`, `examples/plugin-sdk-consumer`, and
+`examples/plugin-ui-consumer` remain ordinary project data and are not
+workspace packages.
 
 Every actual member must declare all four lifecycle scripts:
 
@@ -127,6 +129,84 @@ both tarballs into an isolated external consumer. That consumer typechecks with
 that an undeclared SDK deep import is rejected. Tests, fixtures, scripts, and
 Host-private source are excluded from the tarball.
 
+## Plugin UI Package
+
+`packages/plugin-ui` owns the optional React/Semi Design UI foundation. Its
+supported imports are limited to:
+
+```text
+@lensx/plugin-ui
+@lensx/plugin-ui/styles.css
+```
+
+The root entry exports `PluginUiProvider`, `PluginPage`, `PluginFeedback`, and
+their public types. It does not re-export general Semi controls; plugin code
+imports controls such as `Button`, `Input`, `Table`, `Form`, and `Modal`
+directly from Semi Design when needed. Undeclared package source, component,
+test, visual-fixture, and style deep imports are not public APIs.
+
+`PluginUiProvider` accepts a read-only `PluginRuntimeContext` snapshot from the
+SDK. It maps `en-US` and `zh-CN` to Semi locale packs, supplies package-owned
+feedback copy, and synchronizes the plugin document's `lang`, CSS
+`color-scheme`, and `body[theme-mode="dark"]`. Passing a new context snapshot
+updates presentation. The provider does not subscribe to transport, poll the
+Host, or define a context event protocol, and it restores prior document state
+on unmount.
+
+Import the styles entry once in a React plugin document:
+
+```tsx
+import { PluginPage, PluginUiProvider } from '@lensx/plugin-ui';
+import '@lensx/plugin-ui/styles.css';
+
+<PluginUiProvider context={context}>
+  <PluginPage title="Plugin page">Content</PluginPage>
+</PluginUiProvider>;
+```
+
+The styles entry includes the required Semi base styles and these versioned
+lensX semantic tokens:
+
+```text
+--lensx-plugin-color-background
+--lensx-plugin-color-surface
+--lensx-plugin-color-text
+--lensx-plugin-color-text-secondary
+--lensx-plugin-color-border
+--lensx-plugin-color-accent
+--lensx-plugin-color-danger
+--lensx-plugin-color-focus
+--lensx-plugin-radius-page
+--lensx-plugin-space-page
+```
+
+React, React DOM, and `@lensx/plugin-sdk` are peer dependencies owned and
+bundled by the plugin project. Semi Design is a direct UI package Runtime
+dependency. A final React plugin browser bundle contains its own single React
+Runtime, React DOM, Semi, Plugin UI JavaScript, and styles; the Host does not
+provide externals, import maps, globals, private React context, or private CSS.
+A framework-neutral plugin continues to install only Contract and SDK and does
+not need UI, React, or Semi.
+
+Validate the UI package with:
+
+```bash
+pnpm --dir packages/plugin-ui run build
+pnpm --dir packages/plugin-ui run typecheck
+pnpm --dir packages/plugin-ui run test
+pnpm --dir packages/plugin-ui run check
+pnpm --dir packages/plugin-ui run test:pack
+pnpm --dir packages/plugin-ui run test:visual
+pnpm run check:plugin-ui
+```
+
+The pack gate installs real Contract, SDK, and UI tarballs into an isolated
+Rsbuild browser consumer, checks package metadata and the bundle module graph,
+and runs a browser Runtime smoke test. The visual gate covers `en-US`/`zh-CN`
+and light/dark at `650×600`, including semantic structure, live regions,
+keyboard recovery, focus, computed tokens, long text, and screenshots. These
+gates do not implement or simulate Host installation or iframe execution.
+
 ## Root Commands
 
 The standard root commands are repository-wide entry points:
@@ -151,6 +231,7 @@ pnpm run check:workspace-boundaries
 pnpm run test:workspace-boundaries
 pnpm run test:workspace-lifecycle
 pnpm run check:plugin-sdk
+pnpm run check:plugin-ui
 ```
 
 ## Dependency Direction
@@ -174,6 +255,10 @@ private root `lensx` package or import Host-private paths such as `src/app/**`,
 Host Tauri adapters, or internal Host styles. Plugin source and manifests must
 not depend on or import `@tauri-apps/*`. Official plugins receive no exception
 to these rules.
+
+The package-level direction is Contract -> SDK -> optional UI. The UI package
+may consume the SDK public context type, while the framework-neutral SDK must
+never depend on or import UI, React, or Semi Design.
 
 The deterministic boundary checker parses package manifests and TypeScript
 module references, including static imports, exports, dynamic imports,

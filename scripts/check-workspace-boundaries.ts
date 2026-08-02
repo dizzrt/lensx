@@ -24,6 +24,7 @@ export const WORKSPACE_BOUNDARY_RULES = {
   pluginTauriImport: 'workspace/plugin-tauri-import',
   privateRoot: 'workspace/private-root',
   requiredLifecycleScript: 'workspace/required-lifecycle-script',
+  sdkUiReverseDependency: 'workspace/sdk-ui-reverse-dependency',
   undeclaredWorkspaceDependency: 'workspace/undeclared-workspace-dependency',
   undeclaredPackageExport: 'workspace/undeclared-package-export',
   workspacePatterns: 'workspace/supported-patterns',
@@ -255,6 +256,17 @@ const validatePackageDependencies = (
       }
 
       const targetMember = membersByName.get(dependencyName);
+      if (member.name === '@lensx/plugin-sdk' && dependencyName === '@lensx/plugin-ui') {
+        diagnostics.push(
+          diagnostic(
+            rootDir,
+            WORKSPACE_BOUNDARY_RULES.sdkUiReverseDependency,
+            member.manifestPath,
+            dependencyName,
+            'The framework-neutral Plugin SDK must not depend on the optional Plugin UI package.',
+          ),
+        );
+      }
       if (targetMember !== undefined && !memberDependencyAllowed(member, targetMember)) {
         diagnostics.push(
           diagnostic(
@@ -328,6 +340,17 @@ const validateSourceSpecifier = (
   const targetByPackageName =
     packageName === undefined ? undefined : members.find((candidate) => candidate.name === packageName);
   if (targetByPackageName !== undefined && targetByPackageName !== member) {
+    if (member.name === '@lensx/plugin-sdk' && targetByPackageName.name === '@lensx/plugin-ui') {
+      diagnostics.push(
+        diagnostic(
+          rootDir,
+          WORKSPACE_BOUNDARY_RULES.sdkUiReverseDependency,
+          sourceFile,
+          specifier,
+          'The framework-neutral Plugin SDK must not import the optional Plugin UI package.',
+        ),
+      );
+    }
     if (!declaredDependencies(member.manifest).has(targetByPackageName.name)) {
       diagnostics.push(
         diagnostic(

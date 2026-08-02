@@ -13,8 +13,21 @@ const fixtureRoot = (name: string): string =>
   fileURLToPath(new URL(`fixtures/workspace-boundaries/${name}`, import.meta.url));
 
 describe('workspace boundary checker', () => {
-  test('accepts the real Contract to SDK public dependency and package exports', () => {
+  test('accepts the real Contract to SDK to optional UI public dependency direction and package exports', () => {
     expect(checkWorkspaceBoundaries(repositoryRoot)).toEqual([]);
+  });
+
+  test('rejects a Plugin SDK reverse dependency on Plugin UI', () => {
+    const diagnostics = checkWorkspaceBoundaries(fixtureRoot('sdk-ui-reverse'));
+    const reverseDependencies = diagnostics.filter(
+      (item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.sdkUiReverseDependency,
+    );
+
+    expect(reverseDependencies.map((item) => item.file)).toEqual([
+      'packages/plugin-sdk/package.json',
+      'packages/plugin-sdk/src/index.ts',
+    ]);
+    expect(reverseDependencies.every((item) => item.specifier === '@lensx/plugin-ui')).toBe(true);
   });
 
   test('accepts public package exports for official and example plugins', () => {
