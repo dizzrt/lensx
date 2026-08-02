@@ -27,6 +27,7 @@ export const createHideLauncherRegistration = (
       'en-US': ['hide', 'launcher', 'window'],
       'zh-CN': ['隐藏', '启动器', '窗口'],
     },
+    icon: { kind: 'host', token: 'hide-launcher' },
     enabled: true,
   },
   executor: () => desktopActions.hideLauncher(),
@@ -58,6 +59,7 @@ export const createOpenSettingsRegistration = (
         zhCNMessages.launcher.actions.openSettings.keywords.configuration,
       ],
     },
+    icon: { kind: 'host', token: 'settings' },
     enabled: true,
   },
   executor: () => {

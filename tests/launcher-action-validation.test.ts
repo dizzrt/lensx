@@ -21,6 +21,7 @@ const createDescriptor = () => ({
     'en-US': [' hide ', 'window'],
     'zh-CN': [' 隐藏 ', '窗口'],
   },
+  icon: { kind: 'host', token: 'hide-launcher' },
   enabled: true,
 });
 
@@ -41,6 +42,7 @@ describe('launcher action descriptor validation', () => {
           'en-US': ['hide', 'window'],
           'zh-CN': ['隐藏', '窗口'],
         },
+        icon: { kind: 'host', token: 'hide-launcher' },
         enabled: true,
       },
     });
@@ -54,6 +56,31 @@ describe('launcher action descriptor validation', () => {
         enabled: false,
       }),
     ).toMatchObject({ ok: true, diagnostics: [] });
+  });
+
+  test('validates optional Host icon metadata and rejects unsafe shapes', () => {
+    expect(
+      validateLauncherActionDescriptor({
+        ...createDescriptor(),
+        icon: undefined,
+      }),
+    ).toMatchObject({ ok: true, diagnostics: [] });
+
+    const cases = [
+      { icon: { kind: 'asset', token: 'settings' }, diagnostic: { code: 'invalid_type', path: '/icon/kind' } },
+      { icon: { kind: 'host', token: '../settings' }, diagnostic: { code: 'invalid_type', path: '/icon/token' } },
+      {
+        icon: { kind: 'host', token: 'settings', url: 'https://example.com/icon.svg' },
+        diagnostic: { code: 'unknown_field', path: '/icon/url' },
+      },
+      { icon: () => undefined, diagnostic: { code: 'invalid_type', path: '/icon' } },
+    ];
+    for (const { icon, diagnostic } of cases) {
+      expect(validateLauncherActionDescriptor({ ...createDescriptor(), icon })).toMatchObject({
+        ok: false,
+        diagnostics: expect.arrayContaining([expect.objectContaining(diagnostic)]),
+      });
+    }
   });
 
   test('validates owner and action namespace shape and relationship', () => {

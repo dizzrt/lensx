@@ -18,6 +18,7 @@ const createDescriptor = (
     keywords = [],
     enabled = true,
     locale = 'en-US',
+    icon,
   }: {
     ownerId?: string;
     title?: string;
@@ -25,6 +26,7 @@ const createDescriptor = (
     keywords?: readonly string[];
     enabled?: boolean;
     locale?: LauncherActionLocale;
+    icon?: LauncherActionDescriptor['icon'];
   } = {},
 ): LauncherActionDescriptor => ({
   action_id: actionId,
@@ -44,6 +46,7 @@ const createDescriptor = (
   default_keywords: {
     [locale]: [...keywords],
   },
+  ...(icon ? { icon } : {}),
   enabled,
 });
 
@@ -132,6 +135,23 @@ describe('launcher action matching and ranking', () => {
       'tools.alpha.open',
       'tools.zulu.open',
     ]);
+  });
+
+  test('carries icon metadata without changing matching, scores, or order', () => {
+    const alpha = createDescriptor('tools.alpha.open', {
+      title: 'Open',
+      icon: { kind: 'host', token: 'settings' },
+    });
+    const zulu = createDescriptor('tools.zulu.open', { title: 'Open' });
+    const results = search('open', [zulu, alpha]);
+
+    expect(results.map(({ action_id, score }) => ({ action_id, score }))).toEqual([
+      { action_id: 'tools.alpha.open', score: results[0]?.score },
+      { action_id: 'tools.zulu.open', score: results[1]?.score },
+    ]);
+    expect(results[0]?.icon).toEqual({ kind: 'host', token: 'settings' });
+    expect(results[1]?.icon).toBeUndefined();
+    expect(Object.isFrozen(results[0]?.icon)).toBe(true);
   });
 
   test('filters disabled actions and truncates only after deterministic sorting', () => {

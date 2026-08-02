@@ -112,8 +112,25 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
   接收 React setter。
 - 根据规范化查询和扁平 `ActivePage` 状态推导 `home`、`search` 和 `page`；当前单层页面深度不
   引入 router 或并行 Shell store。
-- 通过类型化 launcher surface adapter 发送这些呈现状态，由 Rust 选择固定的 240px、480px 或
-  600px 高度。组件不能测量 DOM 内容或提交任意原生尺寸。
+- 保持统一顶部行几何：`home` 和 `search` 渲染 launcher 输入，`page` 渲染由 ID 派生的页面上下文
+  条，所有状态都渲染非交互 avatar 占位。不要恢复独立产品标题或介绍。
+- Launcher 必须保持一个连续统一的 surface 背景。静止状态的输入、页面上下文、集合空状态和 Action
+  tile 不得形成常驻卡片；填充色只用于短暂的 hover、focus、selected 或 pending 状态。
+- 通过类型化 launcher surface adapter 发送这些呈现状态，由 Rust 选择固定的 320px、480px 或
+  600px 高度。组件不能根据 DOM 内容、集合长度或结果数量提交任意原生尺寸。
+
+## Launcher Action 与集合
+
+- 保持 Action descriptor 可序列化且不包含 executor。可选展示图标使用经过校验的 Host token 和共享
+  Host resolver；组件不得按 `action_id` 分支选择图标。
+- 通过同一个当前不可变 registry snapshot 解析最近使用和已固定 ID，保持持久化顺序，过滤缺失或
+  禁用 Action，且不用 registry 顺序或模拟数据补齐。
+- 仅在 Dispatcher 成功后记录最近使用；Action 结果与集合持久化反馈保持分离。
+- Optimistic 固定/取消固定界面必须在失败时恢复最后经 Rust 确认的 snapshot；不得为了第九项固定而
+  移除现有项。
+- 在专门能力被接受前，本地化“全部”文字和 avatar 视觉始终只是非交互占位。
+- 搜索使用单一四列、最多八项的 listbox 网格。左右键移动一项，上下键仅在目标存在时移动四项；
+  pointer 与键盘激活必须复用同一 Dispatcher 路径。
 
 ## 无障碍与键盘行为
 
@@ -121,7 +138,9 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
 - 保留可见焦点。
 - 主要工作流必须能够在不使用指针设备的情况下操作。
 - 为启动器界面的打开、关闭和切换定义可预测的焦点移动。
-- 页面活动时以页面上下文头部替换搜索输入，提供具有无障碍名称的关闭控件，并在关闭后恢复输入焦点。
+- 页面活动时以不可编辑的“所属方 / Action”页面上下文条替换搜索输入，提供具有无障碍名称的关闭图标，
+  并在关闭后恢复输入焦点。
+- Avatar 与“全部”占位不能具有 button、link、menu、hover、pointer 或键盘焦点语义。
 - 不要只通过颜色表达状态。
 - 以合适方式通知异步错误和重要状态变化。
 

@@ -1,5 +1,5 @@
 import { describe, expect, rs, test } from '@rstest/core';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from '../src/App';
 import { AppProviders } from '../src/app/AppProviders';
 import {
@@ -7,6 +7,10 @@ import {
   LauncherActionRegistry,
   type LauncherActionService,
 } from '../src/app/launcher/actions';
+import {
+  EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+  type LauncherActionCollectionsClient,
+} from '../src/app/launcher/collections';
 import type { LauncherSurfaceController } from '../src/app/launcher/surface';
 import { AppNavigationService, HostPageCatalog } from '../src/app/navigation';
 
@@ -64,6 +68,11 @@ const renderShell = ({
   initialLocale = 'en-US',
   initialThemeMode = 'light',
   surfaceController,
+  collectionsClient = {
+    read: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+    recordUse: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+    setPinned: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+  },
 }: {
   navigationService: AppNavigationService;
   actionService?: LauncherActionService;
@@ -71,12 +80,14 @@ const renderShell = ({
   initialLocale?: 'en-US' | 'zh-CN';
   initialThemeMode?: 'light' | 'dark';
   surfaceController?: LauncherSurfaceController;
+  collectionsClient?: LauncherActionCollectionsClient;
 }) =>
   render(
     <AppProviders initialLocale={initialLocale} initialThemeMode={initialThemeMode}>
       <App
         actionService={actionService}
         activationSource={inertActivationSource}
+        collectionsClient={collectionsClient}
         navigationService={navigationService}
         renderPage={renderPage}
         surfaceController={surfaceController}
@@ -89,9 +100,13 @@ describe('App Shell page navigation', () => {
     const navigationService = createNavigationService();
     renderShell({ navigationService });
 
-    expect(
-      screen.getByText('Search for an action to get started.').closest('[data-presentation-state]'),
-    ).toHaveAttribute('data-presentation-state', 'home');
+    expect(screen.getByRole('region', { name: 'Recent' }).closest('[data-presentation-state]')).toHaveAttribute(
+      'data-presentation-state',
+      'home',
+    );
+    expect(screen.getByRole('region', { name: 'Pinned' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument();
+    expect(document.querySelector('.launcher-avatar')).not.toHaveAttribute('tabindex');
     const input = screen.getByRole('combobox', { name: 'Launcher query' });
 
     fireEvent.change(input, { target: { value: 'settings' } });
@@ -103,8 +118,7 @@ describe('App Shell page navigation', () => {
 
     expect(await screen.findByText('Trusted settings content')).toBeInTheDocument();
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 2, name: 'Settings' })).toBeInTheDocument();
-    expect(screen.getByText('Opened by Open settings')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'lensX / Open settings' })).toBeInTheDocument();
     expect(screen.getByText('Trusted settings content').closest('[data-presentation-state]')).toHaveAttribute(
       'data-presentation-state',
       'page',
@@ -114,7 +128,7 @@ describe('App Shell page navigation', () => {
     const restoredInput = await screen.findByRole('combobox', { name: 'Launcher query' });
     expect(restoredInput).toHaveValue('');
     expect(restoredInput).toHaveFocus();
-    expect(screen.getByText('Search for an action to get started.')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Recent' })).toBeInTheDocument();
   });
 
   test('requests fixed presentation heights by state without resizing for result-count changes', async () => {
@@ -181,12 +195,22 @@ describe('App Shell page navigation', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('无法显示此页面');
     expect(screen.getByRole('button', { name: '关闭设置并返回主页' })).toBeInTheDocument();
-    expect(screen.getByText('由“打开设置”打开')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'lensX / Open settings' })).toBeInTheDocument();
     expect(screen.queryByText(/sensitive page implementation detail/)).not.toBeInTheDocument();
     expect(document.body).toHaveAttribute('theme-mode', 'dark');
 
     fireEvent.click(screen.getByRole('button', { name: '关闭设置并返回主页' }));
     await waitFor(() => expect(screen.getByRole('combobox', { name: '启动器查询' })).toHaveFocus());
     consoleError.mockRestore();
+  });
+
+  test('uses the localized page fallback when the opening Action is no longer in the Registry', async () => {
+    const navigationService = createNavigationService();
+    renderShell({ navigationService });
+
+    act(() => navigationService.openPage(settingsTarget, 'lensx.core.missing_action'));
+
+    expect(await screen.findByRole('region', { name: 'lensX / Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close settings and return home' })).toBeInTheDocument();
   });
 });

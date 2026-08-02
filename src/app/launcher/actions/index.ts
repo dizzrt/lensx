@@ -24,6 +24,7 @@ export type {
   LauncherActionDispatchErrorCode,
   LauncherActionDispatchResult,
   LauncherActionExecutor,
+  LauncherActionHostIcon,
   LauncherActionKeywordMap,
   LauncherActionLocale,
   LauncherActionRegistrationInput,

@@ -102,7 +102,8 @@ Tauri 值、Rust 实现对象，或 `source`、`lifecycle`、`enabled`、安装�
 
 静态校验不会发现或安装包、注册插件、创建 iframe、授予权限、把插件 Action 投影进 launcher
 registry、搜索这些 Action、导航 Page、交换 Host API 消息或运行插件代码。当前 App Shell 可以
-搜索唯一的内建 launcher Action，但静态 Manifest 校验与该 registry 或搜索路径没有连接。
+搜索 Host 内建 launcher Action，但静态 Manifest 校验与该 registry、搜索路径、Action 集合或
+Host icon 投影没有连接。
 
 ## Host Action Registry
 
@@ -111,10 +112,15 @@ registry、搜索这些 Action、导航 Page、交换 Host API 消息或运行�
 descriptor snapshot，只有可信 Host dispatcher 能够解析和调用 executor。外部代码绝不能把
 函数、React 状态、Tauri 对象或 Rust 实现值放进 descriptor。
 
+Launcher descriptor 可以携带经过校验的 plain-data Host icon token。Host resolver 把受支持 token
+映射到应用 icon 组件，并为缺失或无法解析的 token 使用通用 Action 降级图标。Manifest 的包内 asset
+icon 属于不同契约，当前运行时不会把它投影进该 Host token 字段。
+
 Launcher 搜索 service 只消费该 registry 的不可变 descriptor snapshot。它对每个已注册
 descriptor 使用相同的确定性 locale 解析、token 匹配、评分、排序和 enabled 过滤。它不会读取插件
 display name、Manifest 私有数据或 provider 来源，也不会提升 Manifest 的
-`contributes.launcher.default_action_id`。
+`contributes.launcher.default_action_id`。可选 icon metadata 与最近使用/已固定集合都不影响匹配、
+评分或排序。
 
 未来的内建 module 和外部插件必须通过经过校验的 provider adapter 投影 action。该 adapter 负责
 先把 provider 身份和元数据映射到稳定的 launcher descriptor 契约，再进行原子 Host 注册。
@@ -123,9 +129,10 @@ display name、Manifest 私有数据或 provider 来源，也不会提升 Manife
 dispatcher。特权行为仍然必须是明确的 Host capability，并具有自己的授权及类型化应用或 Rust
 边界。
 
-当前 registry 只包含一个 Host 内建 action。静态插件 Manifest 契约不会注册已贡献 Action，
-且尚未定义 provider lifecycle、unregister 或 replace 语义、权限、插件投影或外部执行。这些
-能力需要各自已接受的规格，不能通过隐式扩展 action descriptor 获得。
+当前 registry 包含 Host 内建的隐藏 launcher 和打开设置 Action。静态插件 Manifest 契约不会注册
+已贡献 Action，且尚未定义 provider lifecycle、unregister 或 replace 语义、权限、插件 Action/icon
+投影或外部执行。因此，持久化的最近使用与已固定集合目前只会解析已注册的 Host Action。这些剩余能力
+需要各自已接受的规格，不能通过隐式扩展 action descriptor 获得。
 
 ## 运行时边界
 

@@ -7,12 +7,18 @@
     "inputLabel": "启动器查询",
     "inputPlaceholder": "输入查询内容",
     "home": {
-      "description": "搜索操作以开始使用。"
+      "recentTitle": "最近使用",
+      "pinnedTitle": "已固定",
+      "allPlaceholder": "全部",
+      "recentEmpty": "使用过的操作会显示在这里。",
+      "pinnedEmpty": "固定操作以便快速访问。",
+      "pinAction": "固定“{{title}}”",
+      "unpinAction": "取消固定“{{title}}”",
+      "pinnedAction": "“{{title}}”已固定"
     },
     "page": {
-      "close": "关闭",
       "closeLabel": "关闭设置并返回主页",
-      "openedBy": "由“{{action}}”打开",
+      "hostOwner": "lensX",
       "errorTitle": "无法显示此页面",
       "errorDescription": "请关闭页面后重试。"
     },
@@ -20,7 +26,7 @@
       "startupFailure": "无法恢复已保存的偏好设置，当前正在使用安全默认值。"
     },
     "search": {
-      "resultsLabel": "启动器操作",
+      "resultsLabel": "搜索结果",
       "resultCount": "结果：{{count}} 项。",
       "noResults": "没有匹配的操作。",
       "executing": "正在执行“{{title}}”…",
@@ -31,6 +37,12 @@
         "actionUnavailable": "该操作当前不可用。",
         "actionExecutionFailed": "无法完成该操作。"
       }
+    },
+    "collections": {
+      "loadFailure": "无法恢复最近使用和已固定操作。",
+      "syncFailure": "操作已完成，但无法更新操作集合。",
+      "pinFailure": "无法更新已固定操作，仍保留之前的固定状态。",
+      "capacity": "最多可以固定八个操作。"
     },
     "actions": {
       "hideLauncher": {

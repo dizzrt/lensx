@@ -7,6 +7,7 @@ import {
   OPEN_SETTINGS_ACTION_ID,
   searchLauncherActions,
 } from '../src/app/launcher/actions';
+import { EMPTY_LAUNCHER_ACTION_COLLECTIONS } from '../src/app/launcher/collections';
 import { AppNavigationService, HostPageCatalog } from '../src/app/navigation';
 import { type AppPreferences, type AppPreferencesClient, AppPreferencesError } from '../src/app/preferences';
 
@@ -41,6 +42,11 @@ const renderSettingsApp = ({
       <App
         actionService={actionService}
         activationSource={inertActivationSource}
+        collectionsClient={{
+          read: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+          recordUse: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+          setPinned: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+        }}
         navigationService={navigationService}
         preferencesClient={preferencesClient}
       />
@@ -57,7 +63,7 @@ const openSettingsWithKeyboard = async () => {
   const input = screen.getByRole('combobox', { name: 'Launcher query' });
   fireEvent.change(input, { target: { value: 'settings' } });
   fireEvent.keyDown(input, { key: 'Enter' });
-  await screen.findByRole('heading', { level: 2, name: 'Settings' });
+  await screen.findByRole('region', { name: 'lensX / Open settings' });
 };
 
 describe('Host settings surface', () => {
@@ -125,7 +131,7 @@ describe('Host settings surface', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Simplified Chinese' }));
     await waitFor(() => expect(write).toHaveBeenLastCalledWith({ theme_mode: 'dark', locale: 'zh-CN' }));
     await waitFor(() => expect(document.documentElement).toHaveAttribute('lang', 'zh-CN'));
-    expect(screen.getByRole('heading', { level: 2, name: '设置' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'lensX / 打开设置' })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: '简体中文' })).toBeChecked();
   });
 

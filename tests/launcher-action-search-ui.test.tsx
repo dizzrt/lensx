@@ -15,6 +15,10 @@ import type {
   LauncherActivationPayload,
   LauncherActivationSource,
 } from '../src/app/launcher/activation';
+import {
+  EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+  type LauncherActionCollectionsClient,
+} from '../src/app/launcher/collections';
 
 class FakeActivationSource implements LauncherActivationSource {
   readonly listeners = new Set<LauncherActivationListener>();
@@ -44,6 +48,7 @@ const createRegistration = (
     keywords = ['run'],
     enabled = true,
     executor = () => undefined,
+    icon,
   }: {
     ownerId?: string;
     title?: string;
@@ -51,6 +56,7 @@ const createRegistration = (
     keywords?: readonly string[];
     enabled?: boolean;
     executor?: () => Promise<void> | void;
+    icon?: { readonly kind: 'host'; readonly token: string };
   } = {},
 ) => ({
   descriptor: {
@@ -59,6 +65,7 @@ const createRegistration = (
     title: { 'en-US': title },
     description: { 'en-US': description },
     default_keywords: { 'en-US': [...keywords] },
+    ...(icon ? { icon } : {}),
     enabled,
   },
   executor,
@@ -87,15 +94,21 @@ const renderLauncher = (
     activationSource = inertActivationSource,
     initialLocale = 'en-US',
     initialThemeMode = 'light',
+    collectionsClient = {
+      read: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+      recordUse: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+      setPinned: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+    },
   }: {
     activationSource?: LauncherActivationSource;
     initialLocale?: 'en-US' | 'zh-CN';
     initialThemeMode?: 'light' | 'dark';
+    collectionsClient?: LauncherActionCollectionsClient;
   } = {},
 ) =>
   render(
     <AppProviders initialLocale={initialLocale} initialThemeMode={initialThemeMode}>
-      <App actionService={service} activationSource={activationSource} />
+      <App actionService={service} activationSource={activationSource} collectionsClient={collectionsClient} />
     </AppProviders>,
   );
 
@@ -108,7 +121,7 @@ describe('launcher action search interface', () => {
 
     fireEvent.change(input, { target: { value: 'hide' } });
 
-    const listbox = screen.getByRole('listbox', { name: 'Launcher actions' });
+    const listbox = screen.getByRole('listbox', { name: 'Search results' });
     const option = screen.getByRole('option', { name: /Hide launcher/ });
     expect(option).toHaveAttribute('aria-selected', 'true');
     expect(input).toHaveAttribute('aria-controls', listbox.id);
@@ -126,7 +139,7 @@ describe('launcher action search interface', () => {
     expect(input).toHaveFocus();
   });
 
-  test('hides empty-query state, reports no results, and caps real results at eight', () => {
+  test('uses one four-column result section, reports no results, and caps real results at eight', () => {
     const { service } = createService(
       Array.from({ length: 10 }, (_, index) =>
         createRegistration(`action_${String(index).padStart(2, '0')}`, {
@@ -142,6 +155,8 @@ describe('launcher action search interface', () => {
 
     fireEvent.change(input, { target: { value: 'run' } });
     expect(screen.getAllByRole('option')).toHaveLength(8);
+    expect(screen.getByRole('listbox', { name: 'Search results' })).toHaveClass('grid-cols-4');
+    expect(screen.getAllByRole('heading', { level: 2, name: 'Search results' })).toHaveLength(1);
     expect(screen.getByRole('status')).toHaveTextContent('Results: 8.');
 
     fireEvent.change(input, { target: { value: '' } });
@@ -154,29 +169,32 @@ describe('launcher action search interface', () => {
 
     fireEvent.change(input, { target: { value: 'missing' } });
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Search results' })).toBeInTheDocument();
+    expect(screen.getAllByText('No matching actions.')).toHaveLength(2);
     expect(screen.getByRole('status')).toHaveTextContent('No matching actions.');
   });
 
-  test('keeps input focus while moving selection within boundaries and clears on Escape', () => {
-    const { service } = createService([
-      createRegistration('alpha', { title: 'Alpha' }),
-      createRegistration('beta', { title: 'Beta' }),
-      createRegistration('gamma', { title: 'Gamma' }),
-    ]);
+  test('keeps input focus while navigating fixed-grid boundaries and clears on Escape', () => {
+    const { service } = createService(
+      Array.from({ length: 6 }, (_, index) => createRegistration(`action_${index}`, { title: `Action ${index}` })),
+    );
     renderLauncher(service);
     const input = screen.getByRole('combobox', { name: 'Launcher query' });
     fireEvent.change(input, { target: { value: 'run' } });
     const options = screen.getAllByRole('option');
 
     expect(options[0]).toHaveAttribute('aria-selected', 'true');
-    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    fireEvent.keyDown(input, { key: 'ArrowLeft' });
     expect(options[0]).toHaveAttribute('aria-selected', 'true');
 
-    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'ArrowRight' });
     expect(options[1]).toHaveAttribute('aria-selected', 'true');
     fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(options[5]).toHaveAttribute('aria-selected', 'true');
     fireEvent.keyDown(input, { key: 'ArrowDown' });
-    expect(options[2]).toHaveAttribute('aria-selected', 'true');
+    expect(options[5]).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    expect(options[1]).toHaveAttribute('aria-selected', 'true');
     expect(input).toHaveFocus();
 
     fireEvent.keyDown(input, { key: 'Escape' });
@@ -316,11 +334,29 @@ describe('launcher action search interface', () => {
     fireEvent.change(input, { target: { value: 'run' } });
 
     const option = await screen.findByRole('option', { name: /Open notes/ });
-    expect(option).toHaveAttribute('data-selected', 'true');
+    expect(option).toHaveAttribute('aria-selected', 'true');
     expect(document.body).toHaveAttribute('theme-mode', 'dark');
     expect(screen.getByRole('status')).toHaveTextContent('结果：1 项。');
 
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(await screen.findByText('无法完成该操作。')).toBeInTheDocument();
+  });
+
+  test('renders supported Host icons and the stable fallback without changing option names', () => {
+    const { service } = createService([
+      createRegistration('with_icon', { title: 'With icon', icon: { kind: 'host', token: 'settings' } }),
+      createRegistration('without_icon', { title: 'Without icon' }),
+    ]);
+    renderLauncher(service);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Launcher query' }), { target: { value: 'run' } });
+
+    expect(screen.getByRole('option', { name: /With icon/ }).querySelector('[data-icon-token]')).toHaveAttribute(
+      'data-icon-token',
+      'settings',
+    );
+    expect(screen.getByRole('option', { name: /Without icon/ }).querySelector('[data-icon-token]')).toHaveAttribute(
+      'data-icon-token',
+      'action-fallback',
+    );
   });
 });

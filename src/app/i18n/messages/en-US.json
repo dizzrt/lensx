@@ -7,12 +7,18 @@
     "inputLabel": "Launcher query",
     "inputPlaceholder": "Type a query",
     "home": {
-      "description": "Search for an action to get started."
+      "recentTitle": "Recent",
+      "pinnedTitle": "Pinned",
+      "allPlaceholder": "All",
+      "recentEmpty": "Actions you use will appear here.",
+      "pinnedEmpty": "Pin an action for quick access.",
+      "pinAction": "Pin {{title}}",
+      "unpinAction": "Unpin {{title}}",
+      "pinnedAction": "{{title}} is pinned"
     },
     "page": {
-      "close": "Close",
       "closeLabel": "Close settings and return home",
-      "openedBy": "Opened by {{action}}",
+      "hostOwner": "lensX",
       "errorTitle": "This page could not be displayed",
       "errorDescription": "Close the page and try opening it again."
     },
@@ -20,7 +26,7 @@
       "startupFailure": "Saved preferences could not be restored. Safe defaults are in use."
     },
     "search": {
-      "resultsLabel": "Launcher actions",
+      "resultsLabel": "Search results",
       "resultCount": "Results: {{count}}.",
       "noResults": "No matching actions.",
       "executing": "Running {{title}}…",
@@ -31,6 +37,12 @@
         "actionUnavailable": "This action is currently unavailable.",
         "actionExecutionFailed": "The action could not be completed."
       }
+    },
+    "collections": {
+      "loadFailure": "Recent and pinned actions could not be restored.",
+      "syncFailure": "The action completed, but its collection could not be updated.",
+      "pinFailure": "Pinned actions could not be updated. Your previous pins are still active.",
+      "capacity": "You can pin up to eight actions."
     },
     "actions": {
       "hideLauncher": {

@@ -1,4 +1,5 @@
 pub mod app_preferences;
+pub mod launcher_action_collections;
 pub mod launcher_surface;
 pub mod launcher_window;
 pub mod plugin_manifest;
@@ -10,6 +11,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             app_preferences::read_app_preferences,
             app_preferences::write_app_preferences,
+            launcher_action_collections::read_launcher_action_collections,
+            launcher_action_collections::record_launcher_action_use,
+            launcher_action_collections::set_launcher_action_pinned,
             launcher_surface::set_launcher_surface_mode,
             launcher_window::hide_launcher
         ])

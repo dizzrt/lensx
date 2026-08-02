@@ -29,7 +29,9 @@ lensX 是一款轻量级桌面效率启动器，其设计重点包括：
 - 框架无关的 TypeScript launcher action 核心，包含经过校验的 descriptor、Host 所有的
   registry、dispatcher，以及内建的隐藏和设置 action；
 - 基于不可变 registry snapshot 的确定性 launcher action 搜索，包含本地化匹配和可访问、
-  键盘优先的结果界面；
+  键盘优先的四列结果网格；
+- 通过窄化 Rust/Tauri 边界持久化、并按当前 registry snapshot 解析的版本化最近使用与已固定
+  Action 集合；
 - 单窗口 Host 设置界面，包含持久化主题与语言偏好，以及刻意保持为空的插件部分；
 - Rstest、Testing Library、TypeScript 检查、Biome 和 Cargo 验证命令；
 - 用于能力和架构变更的 OpenSpec 配置。
@@ -68,20 +70,22 @@ locale，并比较完整叶子 key 集合。已确认的 locale 通过 Rust 偏�
 主题，并提供窗口重新加载操作，但不展示异常细节。事件处理器和异步错误需要显式错误状态，不属于此
 渲染错误边界的捕获范围。
 
-App Shell 根据本地 `activePage` 和规范化查询推导三种呈现状态。`home` 提供空查询公共内容区，
-但不暗示推荐、历史或固定 action；`search` 提供受控输入和最多八个真实启用的 Action 结果；
-`page` 在同一窗口中以本地化页面上下文头部替换输入，并渲染经过校验的 Host 页面。关闭页面会返回
-`home` 并恢复输入焦点；页面级错误边界会在内容失败时保留头部和关闭控件。
+App Shell 根据本地 `activePage` 和规范化查询推导三种呈现状态。三种状态共享同一顶部行和非交互
+avatar 占位。`home` 保留 launcher 输入，并依次从已接受的 Action 集合渲染“最近使用”和“已固定”；
+它不会用 registry 顺序或模拟数据补齐。“已固定”旁的本地化“全部”只是非交互占位。`search` 保留
+同一输入，并在单一四列网格中显示最多八个真实启用的 Action 结果。`page` 用本地化的“所属方 / Action”
+上下文条和可访问关闭图标替换输入，同时保留 avatar 占位。关闭页面会返回 `home` 并恢复输入焦点；
+页面级错误边界会在内容失败时保留上下文条和关闭控件。
 
 ## Launcher 窗口生命周期
 
 Tauri 中带有稳定 `main` 标签的 webview 窗口被配置为紧凑的 launcher 承载面。窗口固定宽度为
-650px，初始高度为 240px、最小高度为 180px、最大高度为 800px。窗口透明、保持置顶、无系统边框、
+650px，初始高度为 320px、最小高度为 180px、最大高度为 800px。窗口透明、保持置顶、无系统边框、
 不可由用户调整大小且非全屏。
 
-Host 通过类型化 Rust command 把 App Shell 呈现状态映射到固定逻辑高度：`home` 使用 240px、
+Host 通过类型化 Rust command 把 App Shell 呈现状态映射到固定逻辑高度：`home` 使用 320px、
 `search` 使用 480px、`page` 使用 600px。这样公共内容区保持可见，同时不会测量 DOM 内容或根据
-搜索结果数量改变高度；前端也不能提交任意尺寸。
+集合或搜索结果数量改变高度；前端也不能提交任意尺寸。
 
 Rust 通过单一动作边界拥有全部 launcher 原生窗口操作：
 
@@ -113,7 +117,9 @@ surface mode command 只控制同一 `main` 窗口的固定呈现高度。
 launcher action 核心位于 `src/app/launcher/actions/`，属于可信 TypeScript 应用与领域层。
 它不依赖 React、Semi Design 或 Tauri API。每个 action 都有经过校验、可序列化的
 descriptor，其中包含稳定的命名空间 `action_id`、`owner_id`、本地化元数据、本地化默认
-关键词和静态启用状态。英文元数据是规范源，同时支持简体中文；缺少当前语言文本时回退到英文。
+关键词、静态启用状态，以及可选且经过校验的 `{ kind: "host", token }` 展示图标。Host icon token
+始终是可序列化 plain data，只能通过 Host icon resolver 解析；缺失或无法解析时使用稳定的通用
+Action 图标。英文元数据是规范源，同时支持简体中文；缺少当前语言文本时回退到英文。
 
 `LauncherActionRegistry` 是运行时已注册 launcher action 的唯一事实来源。注册过程在提交前校验并
 规范化未知 descriptor 输入，拒绝重复 ID，并以原子方式应用批量注册。公开查询和 snapshot 返回
@@ -134,15 +140,31 @@ metadata 都来自规范应用 message 资源。隐藏 executor 通过类型化�
 Unicode NFKC、locale-aware 大小写折叠和 Unicode 空白折叠来规范化查询及可搜索 metadata。每个
 查询 token 都必须匹配已解析标题、某个已解析默认关键词或已解析描述。固定的 exact、prefix 和
 substring 权重产生按 score 降序的顺序，并以 `action_id` 作为确定性平分规则。禁用 action 会在
-排序结果截断到 v0 上限八项之前被过滤。搜索结果是冻结的可序列化数据，只包含身份、已解析展示文本和
-score，绝不包含 executor 或 registry 内部状态。
+排序结果截断到 v0 上限八项之前被过滤。搜索结果是冻结的可序列化数据，只包含身份、已解析展示文本、
+可选安全 icon metadata 和 score；icon 与 Action 集合都不影响匹配、评分或排序，结果绝不包含
+executor 或 registry 内部状态。
 
-App Shell 将这些结果实现为 combobox/listbox 交互。第一项默认选中，方向键移动在列表边界停止，
-Escape 清空搜索，pending dispatch 会阻止重复执行。成功会清空查询；类型化 dispatcher failure
+App Shell 将这些结果实现为 combobox/listbox 交互，并使用固定四个视觉列和最多两行。第一项默认
+选中；左右键移动到相邻结果，上下键在目标存在时按四项移动，且移动不循环。Escape 清空搜索，
+pending dispatch 会阻止重复执行。成功会清空查询；类型化 dispatcher failure
 会保留查询和选中项，同时显示安全的本地化反馈。结果数量、空状态、pending、成功和失败状态通过
-live region 播报。有界结果列表在现有 surface 内滚动，不会调整原生窗口尺寸。
+live region 播报，而不会形成第二个可见结果分区。结果网格在现有 surface 内保持有界，不会调整原生
+窗口尺寸。
 
-历史、最近使用、固定 action、动态 provider 订阅、插件管理和插件 action 投影仍属于未来能力。
+## Launcher Action 集合
+
+Rust 在独立的应用配置文件中持有版本化 `LauncherActionCollections` snapshot。
+`recent_action_ids` 是从新到旧的 MRU 列表，`pinned_action_ids` 保持固定顺序。两个集合都只包含唯一、
+经过校验的 Action ID，且最多八项。文件缺失时返回空集合；严格读取会拒绝格式错误的版本、字段、ID、
+重复和超限数据。写入使用已同步的临时文件再原子替换，并返回不包含路径或文件内容的稳定安全错误。
+
+TypeScript client 只公开读取、记录成功使用和设置固定状态操作。React 通过当前不可变 registry
+snapshot 解析已存 ID，保持顺序，隐藏缺失或禁用 Action，但不删除或替换这些 ID。只有成功 dispatch
+才记录最近使用；dispatch 失败不记录。最近使用持久化失败不会把已成功 Action 改写为失败。固定与
+取消固定使用 optimistic 视图，但失败后恢复最后确认 snapshot；第九个固定请求会被拒绝，且不会删除
+现有项。
+
+动态 provider 订阅、插件管理、插件 Action 投影和插件 icon 投影仍属于未来能力。
 
 ## Host 页面与偏好
 
@@ -150,6 +172,10 @@ Host 页面使用扁平的 `owner_id`、`page_id` 与 `opened_by_action_id` 身�
 `AppNavigationService` 把 `ActivePage` 交给唯一 App Shell handler 前预检目标。未来经过校验的
 插件页面可以复用这一身份形状，但当前目录只包含 `lensx.core/settings`；外部插件不能提供 React
 组件、executor 或直接修改 App Shell。
+
+页面上下文 resolver 根据 ID、当前 registry snapshot 和 locale 派生本地化 Host 所属方与打开
+Action 名称，并用本地化页面标题降级。显示字符串不会复制进 `ActivePage`，因此运行时 locale 切换会
+更新上下文条。
 
 设置在现有 `main` Tauri 窗口中渲染，包含“偏好”和“插件”两个一级部分。“偏好”控制受支持的
 `light`/`dark` 主题与 `en-US`/`zh-CN` locale；“插件”只是不可操作的空占位，不代表插件管理

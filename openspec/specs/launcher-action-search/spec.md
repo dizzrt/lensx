@@ -17,15 +17,19 @@ sorted serializable Action results. Search MUST depend only on a valid Action
 Descriptor's `action_id`, `owner_id`, localized `title`, optional
 `description`, `default_keywords`, and Host-owned `enabled` state. It MUST NOT
 use different search paths for built-in, plugin, or other provider sources.
+Optional icon metadata and recent or pinned state MAY be carried with safe
+display results, but MUST NOT affect matching, scoring, or ordering.
 Each result MUST retain the `action_id`, `owner_id`, resolved localized display
-text, and deterministic relevance score. A result MUST NOT contain an executor,
-function, Registry internal state, React state, Tauri object, or Rust object.
+text, deterministic relevance score, and optional safe icon metadata. A result
+MUST NOT contain an executor, function, Registry internal state, React state,
+Tauri object, or Rust object.
 
 #### Scenario: Search a built-in Action
 
 - **WHEN** a Registry snapshot contains a valid and enabled Host built-in Action
   whose searchable metadata matches the query
 - **THEN** search returns a serializable result for that Action
+- **THEN** the result may contain the descriptor's safe icon metadata
 - **THEN** the result does not contain the Action executor
 
 #### Scenario: Search an Action registered by another future source
@@ -36,6 +40,13 @@ function, Registry internal state, React state, Tauri object, or Rust object.
   used for a built-in Action
 - **THEN** search does not read provider-private data or branch on the source
   type
+
+#### Scenario: Recent or pinned state changes
+
+- **WHEN** recent or pinned state changes for a matching Action while the query
+  and Registry snapshot remain the same
+- **THEN** search returns the same matching set, scores, and order
+- **THEN** collection state neither raises nor lowers search relevance
 
 #### Scenario: A caller modifies search input or results
 
@@ -52,8 +63,10 @@ Search MUST apply Unicode NFKC normalization to the query, perform case folding
 with the current application locale, trim leading and trailing whitespace, and
 collapse consecutive Unicode whitespace to one ASCII space. The normalized
 query MUST be split on Unicode whitespace into non-empty tokens. An empty or
-whitespace-only query MUST return no results and MUST NOT implicitly display any
-Action, recent use, or pinned content.
+whitespace-only query MUST return no results and MUST NOT treat Registry default
+order as recommendation order. The independent `home` presentation state MAY
+display accepted Launcher Action collections for an empty query. Search itself
+MUST NOT generate, order, or populate recent or pinned content.
 
 #### Scenario: Normalize case and whitespace
 
@@ -69,6 +82,8 @@ Action, recent use, or pinned content.
 - **THEN** search returns no results
 - **THEN** search does not treat the Registry's default order as a
   recommendation order
+- **THEN** the App Shell may independently display home content from Launcher
+  Action collections
 
 ### Requirement: Matching and ranking must be explainable and deterministic
 
@@ -145,11 +160,16 @@ Actions.
 
 The React App Shell MUST connect its controlled launcher input to the default
 Host Action Service and run unified search against the current Registry
-snapshot. For an empty query, it MUST display neither a result list nor an empty
-state. For a non-empty query with matches, it MUST display a bounded, scrollable
-list of real Action results. For a non-empty query without matches, it MUST
-display a localized empty state. Results MUST show the resolved Action title and
-MAY show the description, but MUST NOT expose the owner, internal score, or
+snapshot. For an empty query, it MUST display neither a search-result collection
+nor a search empty state and MUST return to the independent home presentation
+state. For a non-empty query with matches, it MUST display a bounded, fixed
+four-column grid of at most eight real Action tiles in one localized Search
+Results section. It MUST NOT display an additional Matches, Recommendations,
+Marketplace, or source section. For a non-empty query without matches, it MUST
+display a localized empty state.
+
+Results MUST show the resolved Action title and an icon or stable fallback icon
+and MAY show the description, but MUST NOT expose the owner, internal score, or
 executor as ordinary product copy. The interface MUST NOT automatically change
 the native launcher window height based on result count.
 
@@ -157,47 +177,72 @@ the native launcher window height based on result count.
 
 - **WHEN** a user enters a non-empty query matching the title or keyword of
   `lensx.core.hide_launcher`
-- **THEN** the App Shell displays that real localized Action result
-- **THEN** the page does not display a simulated Action or plugin entry point
+- **THEN** the App Shell displays that real localized Action result in the
+  Search Results grid
+- **THEN** the tile displays a valid Action icon or the stable generic fallback
+  icon
+- **THEN** the page does not display a simulated Action, plugin entry point, or
+  second result section
 
 #### Scenario: Clear the query
 
 - **WHEN** a user removes all content from the query
-- **THEN** the App Shell removes the result list, selection, and empty state
+- **THEN** the App Shell removes the result grid, selection, and search empty
+  state
 - **THEN** the launcher input remains editable and focusable
+- **THEN** the App Shell displays the independent home Action collections
 
 #### Scenario: A non-empty query has no results
 
 - **WHEN** a user enters a non-empty query that matches no enabled Action
-- **THEN** the App Shell displays the localized no-results state
+- **THEN** the App Shell displays the localized no-results state in the Search
+  Results section
 - **THEN** the page does not display an unavailable or fabricated Action
 
-#### Scenario: Results exceed the visible area
+#### Scenario: Results reach the visible limit
 
-- **WHEN** search returns more results than fit in the current launcher content
-  area
-- **THEN** the result area scrolls inside the existing native window
+- **WHEN** search returns eight Action results
+- **THEN** the App Shell displays all eight items in a fixed four-column grid of
+  at most two rows
 - **THEN** the system does not change the native window height because of the
   result count
+
+#### Scenario: Ordinary result status changes
+
+- **WHEN** result count, selection, or execution-pending state changes
+- **THEN** the App Shell provides necessary status through an appropriate live
+  region
+- **THEN** ordinary count or success messages do not form another visible
+  section outside Search Results
 
 ### Requirement: Users must be able to select and execute results with keyboard or pointer
 
 When the result set is non-empty, the App Shell MUST select the first result by
 default. When the query or result set changes, selection MUST reset to the new
-first result. When no result exists, selection MUST be cleared. `ArrowDown` and
-`ArrowUp` MUST move selection within result boundaries without moving focus out
-of the launcher input. `Enter` MUST execute the selected `action_id` through the
+first result. When no result exists, selection MUST be cleared. The input MUST
+retain focus during navigation. `ArrowLeft` and `ArrowRight` MUST move between
+adjacent results without wrapping. `ArrowUp` and `ArrowDown` MUST move by the
+fixed four-column offset and MUST preserve the current selection when the target
+does not exist. `Enter` MUST execute the selected `action_id` through the
 existing Host Dispatcher. Pointer activation MUST use the same dispatch path.
-`Escape` MUST clear the query and results and restore input focus. While one
-dispatch is pending, the same interaction MUST NOT start a duplicate execution.
+`Escape` MUST clear the query, results, and selection and restore input focus.
+While one dispatch is pending, the same interaction MUST NOT start a duplicate
+execution.
 
-#### Scenario: Select results with arrow keys
+#### Scenario: Select results horizontally
 
-- **WHEN** the input retains focus and the result set contains multiple Actions
-- **THEN** `ArrowDown` moves selection to the next result and stops at the last
-  result
-- **THEN** `ArrowUp` moves selection to the previous result and stops at the
-  first result
+- **WHEN** the input retains focus and a result row contains multiple Actions
+- **THEN** `ArrowRight` selects the next result and stops at the last result
+- **THEN** `ArrowLeft` selects the previous result and stops at the first result
+
+#### Scenario: Select results vertically
+
+- **WHEN** the input retains focus and the four-column grid has multiple rows
+- **THEN** `ArrowDown` selects the result at the current index plus four when it
+  exists
+- **THEN** `ArrowUp` selects the result at the current index minus four when it
+  exists
+- **THEN** selection remains unchanged when the target result does not exist
 
 #### Scenario: Execute the selected Action with Enter
 
@@ -262,14 +307,18 @@ dispatch failure MUST NOT prevent later launcher input use.
 The launcher input and result collection MUST follow accessible combobox and
 listbox interaction semantics. The input MUST expose expanded state, the result
 container relationship, and the current active descendant. Every result MUST
-have a stable option identity, selected state, and visible focus or highlight
-state. Result count, no-results, executing, success, and failure states MUST be
-provided through an appropriate live region and MUST NOT rely on color alone.
+have a stable option identity, selected state, and visible highlight. The CSS
+four-column layout MUST NOT change listbox and option semantics. Result count,
+no-results, executing, success, and failure states MUST be provided through an
+appropriate live region and MUST NOT rely on color alone.
+
 All user-visible copy MUST use application i18n, default to `en-US`, and provide
-a semantically aligned `zh-CN` resource. Results and states MUST use Semi
-Design-supported light and dark theme tokens. Simple layout MUST use UnoCSS,
-while complex selection, scrolling, theme, and interaction states MUST use
-Less.
+a semantically aligned `zh-CN` resource. Search Results MUST be the only visible
+result-section title. Results, icon fallback, selection, hover, pending, focus,
+and feedback MUST use Semi Design-supported light and dark theme tokens. Simple
+grid and spacing MUST use UnoCSS, while complex selection, scrolling, theme,
+and interaction states MUST use Less. The result container and individual
+results MUST NOT depend on prominent borders or per-item dividers for hierarchy.
 
 #### Scenario: A screen reader navigates results
 
@@ -277,26 +326,29 @@ Less.
 - **THEN** the input exposes the listbox relationship and currently selected
   option
 - **THEN** a screen reader can determine the result count and selection
+- **THEN** the four-column visual layout introduces no incorrect additional
+  interaction roles
 
 #### Scenario: Use Simplified Chinese
 
 - **WHEN** the application locale is `zh-CN`
-- **THEN** input assistance, no-results, and execution feedback use Simplified
-  Chinese
+- **THEN** Search Results, input assistance, no-results, and execution feedback
+  use Simplified Chinese
 - **THEN** Action display text follows the existing `zh-CN` to `en-US` fallback
 
 #### Scenario: Switch the theme
 
 - **WHEN** the application switches between light and dark themes while results
   are visible
-- **THEN** results, selection, the scroll area, and feedback use the
+- **THEN** result tiles, icon fallback, selection, focus, and feedback use the
   corresponding Semi Design theme tokens
-- **THEN** text and selection remain distinguishable
+- **THEN** text, selection, and focus remain distinguishable
 
 #### Scenario: Complete search with the keyboard only
 
-- **WHEN** a user enters a query, selects a result, and executes the Action
-  without using a pointer
+- **WHEN** a user enters a query, navigates in two dimensions, and executes the
+  Action without using a pointer
 - **THEN** every operation can be completed through launcher-input keyboard
   interaction
-- **THEN** focus is not captured by non-interactive display elements
+- **THEN** focus is not captured by the non-interactive avatar or All
+  placeholder

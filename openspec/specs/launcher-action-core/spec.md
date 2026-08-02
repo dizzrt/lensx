@@ -10,22 +10,47 @@ results, and built-in launcher actions.
 
 ### Requirement: Launcher actions must use validatable, serializable descriptors
 
-The system MUST provide a plain-data descriptor for every launcher action. The
+The system MUST provide a plain-data descriptor for every Launcher Action. The
 descriptor MUST contain at least `action_id`, `owner_id`, localized `title`,
 optional localized `description`, locale-keyed `default_keywords`, and
-`enabled`. A descriptor MUST be serializable and MUST NOT contain an executor,
-function, React state, Tauri window, Rust internal type, or any other
-non-serializable value. Before registration, the system MUST validate unknown
-input and return structured diagnostics sorted by JSON Pointer path and stable
-code.
+`enabled`, and MAY contain an optional Host-owned display `icon`. When present,
+the icon MUST be serializable plain data made of a fixed `kind` and a validated,
+stable token. It MUST NOT be a ReactNode, function, arbitrary URL, unvalidated
+file path, or Provider-private object.
+
+A descriptor MUST be serializable and MUST NOT contain an executor, function,
+React state, Tauri window, Rust internal type, or any other non-serializable
+value. Before registration, the system MUST validate unknown input and return
+structured diagnostics sorted by JSON Pointer path and stable code. Registry
+lookup, cloning, and snapshots MUST preserve valid icon metadata while
+continuing to isolate the executor.
 
 #### Scenario: Accept a valid descriptor
 
 - **WHEN** the Host registers a descriptor with valid field types, identity,
-  ownership, localized text, keywords, and enabled state
+  ownership, localized text, keywords, enabled state, and an optional valid
+  Host icon token
 - **THEN** the validation boundary returns a normalized plain-data descriptor
 - **THEN** the descriptor can be serialized independently of its executor
+- **THEN** the Registry snapshot preserves optional icon metadata but contains
+  no executor
 - **THEN** the validation boundary returns no diagnostics
+
+#### Scenario: Accept a descriptor without an icon
+
+- **WHEN** a valid descriptor omits the optional icon
+- **THEN** the system accepts the descriptor
+- **THEN** the presentation layer uses the stable generic Action fallback icon
+- **THEN** the Action title remains its accessible name
+
+#### Scenario: Reject invalid icon metadata
+
+- **WHEN** descriptor icon metadata contains an unknown kind, invalid token,
+  ReactNode, function, arbitrary URL, unvalidated path, or unknown field
+- **THEN** the system rejects the descriptor
+- **THEN** the system returns a diagnostic with a stable code and corresponding
+  JSON Pointer path
+- **THEN** the Registry does not store the input
 
 #### Scenario: Reject unknown or non-serializable fields
 

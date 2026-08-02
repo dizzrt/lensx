@@ -1,4 +1,9 @@
-import type { LauncherActionDescriptor, LauncherActionLocale, ResolvedLauncherActionMetadata } from './types';
+import type {
+  LauncherActionDescriptor,
+  LauncherActionHostIcon,
+  LauncherActionLocale,
+  ResolvedLauncherActionMetadata,
+} from './types';
 import { resolveLauncherActionMetadata } from './validation';
 
 export const LAUNCHER_ACTION_SEARCH_RESULT_LIMIT_V0 = 8;
@@ -27,6 +32,7 @@ export interface LauncherActionSearchResult {
   readonly owner_id: string;
   readonly title: string;
   readonly description?: string;
+  readonly icon?: LauncherActionHostIcon;
   readonly score: number;
 }
 
@@ -107,6 +113,7 @@ const createSearchResult = (
     owner_id: descriptor.owner_id,
     title: metadata.title,
     ...(metadata.description ? { description: metadata.description } : {}),
+    ...(descriptor.icon ? { icon: Object.freeze({ kind: descriptor.icon.kind, token: descriptor.icon.token }) } : {}),
     score,
   });
 

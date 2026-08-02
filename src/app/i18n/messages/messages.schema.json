@@ -36,26 +36,59 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "description": {
+            "recentTitle": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pinnedTitle": {
+              "type": "string",
+              "minLength": 1
+            },
+            "allPlaceholder": {
+              "type": "string",
+              "minLength": 1
+            },
+            "recentEmpty": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pinnedEmpty": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pinAction": {
+              "type": "string",
+              "minLength": 1
+            },
+            "unpinAction": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pinnedAction": {
               "type": "string",
               "minLength": 1
             }
           },
-          "required": ["description"]
+          "required": [
+            "recentTitle",
+            "pinnedTitle",
+            "allPlaceholder",
+            "recentEmpty",
+            "pinnedEmpty",
+            "pinAction",
+            "unpinAction",
+            "pinnedAction"
+          ]
         },
         "page": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "close": {
-              "type": "string",
-              "minLength": 1
-            },
             "closeLabel": {
               "type": "string",
               "minLength": 1
             },
-            "openedBy": {
+            "hostOwner": {
               "type": "string",
               "minLength": 1
             },
@@ -68,7 +101,7 @@
               "minLength": 1
             }
           },
-          "required": ["close", "closeLabel", "openedBy", "errorTitle", "errorDescription"]
+          "required": ["closeLabel", "hostOwner", "errorTitle", "errorDescription"]
         },
         "preferences": {
           "type": "object",
@@ -131,6 +164,29 @@
           },
           "required": ["resultsLabel", "resultCount", "noResults", "executing", "pendingShort", "success", "failure"]
         },
+        "collections": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "loadFailure": {
+              "type": "string",
+              "minLength": 1
+            },
+            "syncFailure": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pinFailure": {
+              "type": "string",
+              "minLength": 1
+            },
+            "capacity": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["loadFailure", "syncFailure", "pinFailure", "capacity"]
+        },
         "actions": {
           "type": "object",
           "additionalProperties": false,
@@ -188,7 +244,7 @@
           "required": ["hideLauncher", "openSettings"]
         }
       },
-      "required": ["inputLabel", "inputPlaceholder", "home", "page", "preferences", "search", "actions"]
+      "required": ["inputLabel", "inputPlaceholder", "home", "page", "preferences", "search", "collections", "actions"]
     },
     "settings": {
       "type": "object",

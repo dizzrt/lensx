@@ -12,43 +12,52 @@ and removal of unused scaffold behavior.
 
 The frontend application MUST render a product-owned, semantic, and accessible
 Launcher App Shell. It MUST NOT continue to display build-tool welcome copy,
-example interactions, or presentation-layer mock features. The App Shell MUST
-display the lensX product identity and description in the current locale and
-MUST provide a locally controlled launcher input connected to the real
-Host-owned Action Registry through the accepted Action Search capability.
+example interactions, presentation-layer mock features, a standalone product
+title, or product-description copy. In a unified top region, the App Shell
+MUST display either the search input or page context and MUST display a circular
+avatar placeholder at the far right. The avatar MUST be a non-interactive
+decorative element and MUST NOT provide account, menu, notification, click,
+hover, focus, or accessible-action semantics.
+
 When no page is active, an empty normalized query MUST select the `home`
 presentation state, and a non-empty normalized query MUST select the `search`
-presentation state. `home` MUST provide a shared content region but MUST NOT
-imply that recommendations, recent use, or pinned content are implemented.
-`search` MUST be able to display and operate real registered Action results.
-The App Shell MUST request the fixed window height for the current presentation
-state through a typed Host boundary so that the shared content region remains
-visible. It MUST NOT resize the window from DOM measurements or search-result
-counts.
+presentation state. In its shared content region, `home` MUST display the real
+Recent and Pinned Action collections in that order and MUST display a
+non-interactive All placeholder beside the Pinned heading. It MUST NOT populate
+collections with simulated Actions, Registry default order, recommendations, or
+marketplace content. `search` MUST display and operate a single Search Results
+grid of real registered Actions. The App Shell MUST request the fixed height for
+the current presentation state through a typed Host boundary so the shared
+content region remains visible. It MUST NOT resize the window from DOM
+measurements or Action and search-result counts.
 
 When a validated page is active, the `page` presentation state MUST take
-precedence over the query. A non-searchable page-context header MUST replace
-the editable launcher input, and the shared content region MUST display the
-active page. The header MUST identify the page capability and the Action that
-opened it in the current locale, and MUST provide an accessible close control
-that returns to `home`. The App Shell MUST NOT present simulated Actions,
-unimplemented plugin entry points, history, recent use, pinned content, or
-unimplemented persistence as available.
+precedence over the query. A non-searchable page-context bar in the same top
+slot as the search input MUST replace the editable launcher input, and the
+shared content region MUST display the active page. In the current locale, the
+context bar MUST identify the owner and the name of the Action that opened the
+page and MUST provide an accessible close icon button that returns to `home`.
+The App Shell MUST NOT present the avatar, All placeholder, plugin entry points,
+or other unimplemented capabilities as actionable features.
 
 #### Scenario: Start the application
 
 - **WHEN** the React application completes its root render with no active page
   and an empty normalized query
 - **THEN** the page contains an accessible main content region
-- **THEN** the page displays the lensX product identity and product description
-  in the current locale
-- **THEN** the page displays a launcher input with an accessible name and
+- **THEN** the top region displays a launcher input with an accessible name and
   localized placeholder
-- **THEN** the shared content region displays the home presentation state
+- **THEN** the far right of the top region displays a non-interactive circular
+  avatar placeholder
+- **THEN** the shared content region displays the Recent and Pinned sections of
+  the home presentation state
+- **THEN** All appears beside the Pinned heading but is not a button, link, or
+  focusable element
 - **THEN** the App Shell requests the fixed `home` presentation height and the
   home content remains visible in the main window
-- **THEN** the page does not display Rsbuild welcome copy, example interactions,
-  a result list, or fabricated recommendations
+- **THEN** the page does not display a lensX title or description, Rsbuild
+  welcome copy, example interactions, search results, or fabricated
+  recommendations
 
 #### Scenario: Search from the launcher input
 
@@ -57,12 +66,12 @@ unimplemented persistence as available.
 - **THEN** the input reflects the current text through local React state
 - **THEN** a non-empty normalized query selects the search presentation state
   and is evaluated against a real immutable Action Registry snapshot
-- **THEN** the page displays only accepted Action Search results or the accepted
-  localized empty state
+- **THEN** the page displays only the accepted Action Search result grid or
+  accepted localized empty state
 - **THEN** the App Shell requests the fixed `search` presentation height and
   does not change that height based on the number of results
 - **THEN** restoring an empty normalized query selects the home presentation
-  state
+  state and displays real Action collections
 
 #### Scenario: Operate a real Action result
 
@@ -77,15 +86,18 @@ unimplemented persistence as available.
 - **WHEN** a trusted Host executor successfully opens a validated page
 - **THEN** the App Shell clears the query, search results, and search selection
 - **THEN** the App Shell selects the page presentation state
-- **THEN** the top region displays a non-editable page-context header instead
-  of the launcher input
+- **THEN** the top slot displays a non-editable page-context bar instead of the
+  launcher input
+- **THEN** the context bar displays the owner name, opening Action name, and a
+  close icon button
+- **THEN** the circular avatar remains visible and non-interactive
 - **THEN** the shared content region displays the active page
 - **THEN** the App Shell requests the fixed `page` presentation height so the
-  page header and content region are visible together
+  context bar and content region are visible together
 
 #### Scenario: Close the active page
 
-- **WHEN** the user activates the close control in the page-context header
+- **WHEN** the user activates the close icon button in the page-context bar
 - **THEN** the App Shell clears the active page and returns to the home
   presentation state
 - **THEN** the App Shell requests the fixed `home` presentation height
@@ -99,11 +111,21 @@ unimplemented persistence as available.
 - **THEN** the current query and selection remain unchanged
 - **THEN** the user receives localized, safe failure feedback
 
+#### Scenario: Inspect non-interactive placeholders
+
+- **WHEN** a user or assistive technology inspects the Launcher App Shell
+- **THEN** the avatar and All placeholder have no button, link, menu-trigger, or
+  keyboard-focus semantics
+- **THEN** the page does not describe either placeholder as providing account,
+  navigation, or management capabilities
+
 #### Scenario: Inspect unavailable features
 
 - **WHEN** a user views the Launcher App Shell
-- **THEN** the page does not display simulated Actions, recent use, pinned
-  content, history, or an unimplemented plugin entry point
+- **THEN** the page does not display simulated Actions, recommendations,
+  marketplace content, or unimplemented plugin entry points
+- **THEN** Recent and Pinned display only real Actions resolved from the
+  accepted Launcher Action collections
 - **THEN** the page does not describe planned capabilities as implemented
 
 ### Requirement: Active pages must isolate content failures and preserve navigation

@@ -120,9 +120,9 @@ alone to grant trust or permission.
 Static validation does not discover or install packages, register plugins,
 create iframes, grant permissions, project plugin Actions into the launcher
 registry, search those Actions, navigate Pages, exchange Host API messages, or
-run plugin code. The current App Shell can search the single built-in launcher
-Action, but static Manifest validation has no connection to that registry or
-search path.
+run plugin code. The current App Shell can search Host built-in launcher
+Actions, but static Manifest validation has no connection to that registry,
+search path, Action collections, or Host icon projection.
 
 ## Host Action Registry
 
@@ -133,12 +133,19 @@ while only the trusted Host dispatcher can resolve and invoke executors.
 External code must never place functions, React state, Tauri objects, or Rust
 implementation values in a descriptor.
 
+A launcher descriptor may carry a validated plain-data Host icon token. The
+Host resolver maps supported tokens to application icon components and uses a
+generic Action fallback for missing or unresolved tokens. A Manifest
+package-local asset icon is a different contract and is not projected into this
+Host token field by the shipped runtime.
+
 The launcher search service consumes only immutable descriptor snapshots from
 that registry. It applies the same deterministic locale resolution, token
 matching, scoring, sorting, and enabled filtering to every registered
 descriptor. It does not read a plugin display name, Manifest-private data, or
 provider source, and it does not boost a Manifest
-`contributes.launcher.default_action_id`.
+`contributes.launcher.default_action_id`. Optional icon metadata and the
+recent/pinned collections do not affect matching, scoring, or sorting.
 
 Future built-in modules and external plugins must project actions through a
 validated provider adapter. That adapter is responsible for mapping provider
@@ -150,12 +157,14 @@ choose a trusted executor, invoke privileged desktop commands, or bypass the
 Host dispatcher. Privileged behavior remains an explicit Host capability with
 its own authorization and typed application or Rust boundary.
 
-The current registry contains one Host built-in action. The static plugin
+The current registry contains the Host hide-launcher and open-settings built-in
+Actions. The static plugin
 Manifest contract does not register contributed Actions and does not yet define
 provider lifecycle, unregister or replacement semantics, permissions, plugin
-projection, or external execution. Those capabilities require dedicated
-accepted specifications rather than implicit expansion of the action
-descriptor.
+Action/icon projection, or external execution. The persisted recent and pinned
+collections therefore resolve only currently registered Host Actions. Those
+remaining capabilities require dedicated accepted specifications rather than
+implicit expansion of the action descriptor.
 
 ## Runtime Boundaries
 

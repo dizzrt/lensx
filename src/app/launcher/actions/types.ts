@@ -8,12 +8,18 @@ export type LocalizedActionText = Readonly<
 
 export type LauncherActionKeywordMap = Readonly<Partial<Record<LauncherActionLocale, readonly string[]>>>;
 
+export interface LauncherActionHostIcon {
+  readonly kind: 'host';
+  readonly token: string;
+}
+
 export interface LauncherActionDescriptor {
   readonly action_id: string;
   readonly owner_id: string;
   readonly title: LocalizedActionText;
   readonly description?: LocalizedActionText;
   readonly default_keywords: LauncherActionKeywordMap;
+  readonly icon?: LauncherActionHostIcon;
   readonly enabled: boolean;
 }
 
@@ -82,4 +88,5 @@ export interface ResolvedLauncherActionMetadata {
   readonly title: string;
   readonly description?: string;
   readonly default_keywords: readonly string[];
+  readonly icon?: LauncherActionHostIcon;
 }

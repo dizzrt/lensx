@@ -15,6 +15,15 @@ The application MUST implement settings as a Host page with owner
 region of the existing Tauri main window. It MUST NOT create a separate Tauri
 settings window and MUST NOT register, label, or execute settings as a plugin.
 
+While settings is active, the App Shell MUST replace the launcher input in the
+unified top slot with a non-searchable page-context bar. In the current locale,
+the context bar MUST display the Host owner name and the name of the Action that
+opened the page, and MUST provide an accessible close icon button. It MUST NOT
+display the former standalone settings title, opening-source description, or
+text Close button. The avatar placeholder on the right MUST remain visible and
+non-interactive. The existing preferences and plugins content and the
+PageErrorBoundary MUST remain in the shared content region.
+
 #### Scenario: Open the settings page
 
 - **WHEN** the `lensx.core.open_settings` Action successfully opens settings
@@ -22,9 +31,30 @@ settings window and MUST NOT register, label, or execute settings as a plugin.
   Host settings page
 - **THEN** the active page identity has `owner_id` equal to `lensx.core`
 - **THEN** the active page identity has `page_id` equal to `settings`
+- **THEN** the top context bar displays the localized Host owner name and the
+  Action name that opened settings
+- **THEN** the context bar displays an accessible close icon button and the
+  avatar remains a non-interactive placeholder
 - **THEN** the main window uses the fixed `page` presentation height so the
-  page-context header and settings content region are both visible
+  page-context bar and settings content region are both visible
 - **THEN** the application has not created a second Tauri window
+
+#### Scenario: Switch locale while settings is open
+
+- **WHEN** the settings page is active and the user successfully switches the
+  application locale
+- **THEN** the owner name and Action name in the context bar update to the new
+  locale
+- **THEN** the context does not depend on stale display strings copied when the
+  page opened
+
+#### Scenario: Close settings
+
+- **WHEN** the user activates the context bar's close icon button
+- **THEN** the App Shell closes settings and returns to the home presentation
+  state
+- **THEN** keyboard focus returns to the launcher input
+- **THEN** the avatar placeholder receives no focus and triggers no action
 
 #### Scenario: Inspect settings runtime ownership
 

@@ -13,12 +13,29 @@ import {
 } from './app/launcher/actions';
 import { desktopLauncherActivationSource, type LauncherActivationSource } from './app/launcher/activation';
 import {
+  desktopLauncherActionCollectionsClient,
+  EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+  LAUNCHER_ACTION_COLLECTION_LIMIT,
+  LAUNCHER_ACTION_COLLECTIONS_VERSION,
+  type LauncherActionCollections,
+  type LauncherActionCollectionsClient,
+  LauncherActionCollectionsError,
+  resolveLauncherActionCollection,
+} from './app/launcher/collections';
+import { LauncherHome } from './app/launcher/LauncherHome';
+import { CloseIcon } from './app/launcher/LauncherIcons';
+import {
   inertLauncherSurfaceController,
   type LauncherPresentationState,
   type LauncherSurfaceController,
 } from './app/launcher/surface';
 import { useLauncherActivation } from './app/launcher/useLauncherActivation';
-import { type ActivePage, type AppNavigationService, productionAppNavigationService } from './app/navigation';
+import {
+  type ActivePage,
+  type AppNavigationService,
+  productionAppNavigationService,
+  resolvePageContext,
+} from './app/navigation';
 import { PageErrorBoundary } from './app/pages/PageErrorBoundary';
 import { SettingsPage } from './app/pages/SettingsPage';
 import { type AppPreferencesClient, desktopAppPreferencesClient } from './app/preferences';
@@ -26,6 +43,7 @@ import { type AppPreferencesClient, desktopAppPreferencesClient } from './app/pr
 export interface AppProps {
   activationSource?: LauncherActivationSource;
   actionService?: LauncherActionService;
+  collectionsClient?: LauncherActionCollectionsClient;
   navigationService?: AppNavigationService;
   preferencesClient?: AppPreferencesClient;
   renderPage?: (activePage: ActivePage) => ReactNode;
@@ -34,7 +52,8 @@ export interface AppProps {
 }
 
 const ACTION_RESULTS_LISTBOX_ID = 'launcher-action-results';
-const LAUNCHER_STATUS_ID = 'launcher-search-status';
+const LAUNCHER_STATUS_ID = 'launcher-status';
+const SEARCH_GRID_COLUMN_COUNT = 4;
 
 const dispatchFailureMessageKeys: Record<LauncherActionDispatchErrorCode, AppMessageKey> = {
   action_not_found: 'launcher.search.failure.actionNotFound',
@@ -50,6 +69,7 @@ interface DispatchFeedback {
 const App = ({
   activationSource = desktopLauncherActivationSource,
   actionService = productionLauncherActionService,
+  collectionsClient = desktopLauncherActionCollectionsClient,
   navigationService = productionAppNavigationService,
   preferencesClient = desktopAppPreferencesClient,
   renderPage,
@@ -62,30 +82,97 @@ const App = ({
   const [query, setQuery] = useState('');
   const [selectedActionId, setSelectedActionId] = useState<string>();
   const [pendingActionId, setPendingActionId] = useState<string>();
+  const [pendingPinActionId, setPendingPinActionId] = useState<string>();
   const [dispatchFeedback, setDispatchFeedback] = useState<DispatchFeedback>();
+  const [collectionsFeedbackKey, setCollectionsFeedbackKey] = useState<AppMessageKey>();
+  const [collections, setCollections] = useState<LauncherActionCollections>(EMPTY_LAUNCHER_ACTION_COLLECTIONS);
   const [snapshotRevision, setSnapshotRevision] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingActionIdRef = useRef<string | undefined>(undefined);
+  const pendingPinActionIdRef = useRef<string | undefined>(undefined);
   const shouldRestoreInputFocusRef = useRef(false);
   const lastPresentationStateRef = useRef<LauncherPresentationState | undefined>(undefined);
+  const confirmedCollectionsRef = useRef<LauncherActionCollections>(EMPTY_LAUNCHER_ACTION_COLLECTIONS);
+  const collectionsMutationRevisionRef = useRef(0);
+  const collectionsMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
+
   const focusLauncherInput = useCallback(() => {
     inputRef.current?.focus({ preventScroll: true });
   }, []);
-  const results = useMemo(() => {
+
+  const registrySnapshot = useMemo(() => {
     void snapshotRevision;
-    return searchLauncherActions({
-      query,
-      locale,
-      snapshot: actionService.registry.snapshot(),
-      limit: LAUNCHER_ACTION_SEARCH_RESULT_LIMIT_V0,
-    });
-  }, [actionService, locale, query, snapshotRevision]);
+    return actionService.registry.snapshot();
+  }, [actionService, snapshotRevision]);
+  const results = useMemo(
+    () =>
+      searchLauncherActions({
+        query,
+        locale,
+        snapshot: registrySnapshot,
+        limit: LAUNCHER_ACTION_SEARCH_RESULT_LIMIT_V0,
+      }),
+    [locale, query, registrySnapshot],
+  );
+  const recentActions = useMemo(
+    () => resolveLauncherActionCollection(collections.recent_action_ids, registrySnapshot),
+    [collections.recent_action_ids, registrySnapshot],
+  );
+  const pinnedActions = useMemo(
+    () => resolveLauncherActionCollection(collections.pinned_action_ids, registrySnapshot),
+    [collections.pinned_action_ids, registrySnapshot],
+  );
   const effectiveSelectedActionId = results.some(({ action_id: actionId }) => actionId === selectedActionId)
     ? selectedActionId
     : results[0]?.action_id;
   const selectedIndex = results.findIndex(({ action_id: actionId }) => actionId === effectiveSelectedActionId);
   const hasSearchQuery = normalizeLauncherActionSearchQuery(query, locale).tokens.length > 0;
   const presentationState: LauncherPresentationState = activePage ? 'page' : hasSearchQuery ? 'search' : 'home';
+  const pageContext = useMemo(
+    () =>
+      activePage
+        ? resolvePageContext({
+            activePage,
+            hostOwnerName: t('launcher.page.hostOwner'),
+            locale,
+            pageTitleFallback: t('settings.title'),
+            snapshot: registrySnapshot,
+          })
+        : undefined,
+    [activePage, locale, registrySnapshot, t],
+  );
+
+  const enqueueCollectionMutation = useCallback((operation: () => Promise<LauncherActionCollections>) => {
+    const result = collectionsMutationQueueRef.current.then(operation, operation);
+    collectionsMutationQueueRef.current = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const revision = collectionsMutationRevisionRef.current;
+    void collectionsClient
+      .read()
+      .then((confirmed) => {
+        if (mounted && revision === collectionsMutationRevisionRef.current) {
+          confirmedCollectionsRef.current = confirmed;
+          setCollections(confirmed);
+        }
+      })
+      .catch(() => {
+        if (mounted && revision === collectionsMutationRevisionRef.current) {
+          confirmedCollectionsRef.current = EMPTY_LAUNCHER_ACTION_COLLECTIONS;
+          setCollections(EMPTY_LAUNCHER_ACTION_COLLECTIONS);
+          setCollectionsFeedbackKey('launcher.collections.loadFailure');
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [collectionsClient]);
 
   useEffect(() => {
     focusLauncherInput();
@@ -132,6 +219,21 @@ const App = ({
 
   useLauncherActivation(activationSource, handleLauncherActivation);
 
+  const recordSuccessfulUse = useCallback(
+    (actionId: string) => {
+      collectionsMutationRevisionRef.current += 1;
+      void enqueueCollectionMutation(() => collectionsClient.recordUse(actionId))
+        .then((confirmed) => {
+          confirmedCollectionsRef.current = confirmed;
+          setCollections(confirmed);
+        })
+        .catch(() => {
+          setCollectionsFeedbackKey('launcher.collections.syncFailure');
+        });
+    },
+    [collectionsClient, enqueueCollectionMutation],
+  );
+
   const executeAction = useCallback(
     async (actionId: string) => {
       if (pendingActionIdRef.current) {
@@ -141,6 +243,7 @@ const App = ({
       pendingActionIdRef.current = actionId;
       setPendingActionId(actionId);
       setDispatchFeedback(undefined);
+      setCollectionsFeedbackKey(undefined);
 
       try {
         const result = await actionService.dispatcher.dispatch(actionId);
@@ -151,6 +254,7 @@ const App = ({
             kind: 'success',
             messageKey: 'launcher.search.success',
           });
+          recordSuccessfulUse(actionId);
         } else {
           setDispatchFeedback({
             kind: 'error',
@@ -168,7 +272,57 @@ const App = ({
         focusLauncherInput();
       }
     },
-    [actionService, focusLauncherInput],
+    [actionService, focusLauncherInput, recordSuccessfulUse],
+  );
+
+  const setActionPinned = useCallback(
+    (actionId: string, pinned: boolean) => {
+      if (pendingPinActionIdRef.current) {
+        return;
+      }
+      const current = collections;
+      const alreadyPinned = current.pinned_action_ids.includes(actionId);
+      if (pinned && !alreadyPinned && current.pinned_action_ids.length >= LAUNCHER_ACTION_COLLECTION_LIMIT) {
+        setCollectionsFeedbackKey('launcher.collections.capacity');
+        return;
+      }
+
+      const optimisticPinnedIds = pinned
+        ? alreadyPinned
+          ? current.pinned_action_ids
+          : [...current.pinned_action_ids, actionId]
+        : current.pinned_action_ids.filter((existing) => existing !== actionId);
+      const optimistic: LauncherActionCollections = Object.freeze({
+        version: LAUNCHER_ACTION_COLLECTIONS_VERSION,
+        recent_action_ids: Object.freeze([...current.recent_action_ids]),
+        pinned_action_ids: Object.freeze([...optimisticPinnedIds]),
+      });
+      pendingPinActionIdRef.current = actionId;
+      collectionsMutationRevisionRef.current += 1;
+      setPendingPinActionId(actionId);
+      setCollectionsFeedbackKey(undefined);
+      setCollections(optimistic);
+
+      void enqueueCollectionMutation(() => collectionsClient.setPinned(actionId, pinned))
+        .then((confirmed) => {
+          confirmedCollectionsRef.current = confirmed;
+          setCollections(confirmed);
+        })
+        .catch((error: unknown) => {
+          setCollections(confirmedCollectionsRef.current);
+          setCollectionsFeedbackKey(
+            error instanceof LauncherActionCollectionsError &&
+              error.code === 'launcher_action_collections_capacity_reached'
+              ? 'launcher.collections.capacity'
+              : 'launcher.collections.pinFailure',
+          );
+        })
+        .finally(() => {
+          pendingPinActionIdRef.current = undefined;
+          setPendingPinActionId(undefined);
+        });
+    },
+    [collections, collectionsClient, enqueueCollectionMutation],
   );
 
   const clearSearch = useCallback(() => {
@@ -203,17 +357,19 @@ const App = ({
         return;
       }
 
-      if (event.key === 'ArrowDown') {
+      const currentIndex = Math.max(0, selectedIndex);
+      const targetByKey: Partial<Record<string, number>> = {
+        ArrowLeft: currentIndex - 1,
+        ArrowRight: currentIndex + 1,
+        ArrowUp: currentIndex - SEARCH_GRID_COLUMN_COUNT,
+        ArrowDown: currentIndex + SEARCH_GRID_COLUMN_COUNT,
+      };
+      const targetIndex = targetByKey[event.key];
+      if (targetIndex !== undefined) {
         event.preventDefault();
-        const nextIndex = Math.min(selectedIndex + 1, results.length - 1);
-        setSelectedActionId(results[Math.max(0, nextIndex)]?.action_id);
-        return;
-      }
-
-      if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        const nextIndex = Math.max(selectedIndex, 0) - 1;
-        setSelectedActionId(results[Math.max(0, nextIndex)]?.action_id);
+        if (targetIndex >= 0 && targetIndex < results.length) {
+          setSelectedActionId(results[targetIndex]?.action_id);
+        }
         return;
       }
 
@@ -225,118 +381,101 @@ const App = ({
     [clearSearch, effectiveSelectedActionId, executeAction, results, selectedIndex],
   );
 
-  const statusMessage = pendingActionId
+  const searchStatusMessage = pendingActionId
     ? t('launcher.search.executing', {
-        title: results.find(({ action_id: actionId }) => actionId === pendingActionId)?.title ?? '',
+        title:
+          results.find(({ action_id: actionId }) => actionId === pendingActionId)?.title ??
+          registrySnapshot.find(({ action_id: actionId }) => actionId === pendingActionId)?.title['en-US'] ??
+          '',
       })
-    : dispatchFeedback
+    : dispatchFeedback?.kind === 'success'
       ? t(dispatchFeedback.messageKey)
       : hasSearchQuery
         ? results.length > 0
           ? t('launcher.search.resultCount', { count: results.length })
           : t('launcher.search.noResults')
-        : startupPreferencesErrorCode
-          ? t('launcher.preferences.startupFailure')
-          : '';
+        : '';
+  const visibleSearchError = dispatchFeedback?.kind === 'error' ? t(dispatchFeedback.messageKey) : undefined;
+  const homeFeedbackMessage = collectionsFeedbackKey
+    ? t(collectionsFeedbackKey)
+    : startupPreferencesErrorCode
+      ? t('launcher.preferences.startupFailure')
+      : '';
 
   return (
-    <main aria-labelledby="app-title" className="h-screen flex items-center justify-center p-3">
-      <section
-        aria-describedby="app-description"
-        className="launcher-surface max-h-full w-full flex flex-col gap-2 p-4"
-      >
-        <div className="flex items-baseline justify-between gap-4">
-          <Typography.Title className="launcher-title" heading={1} id="app-title">
-            {t('app.name')}
-          </Typography.Title>
-          <Typography.Text className="launcher-description" id="app-description" type="tertiary">
-            {t('app.description')}
-          </Typography.Text>
-        </div>
-        {presentationState === 'page' && activePage ? (
-          <header className="active-page-header flex items-center justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <Typography.Title ellipsis heading={2}>
-                {t('settings.title')}
-              </Typography.Title>
-              <Typography.Text type="tertiary">
-                {t('launcher.page.openedBy', {
-                  action: t('launcher.actions.openSettings.title'),
-                })}
-              </Typography.Text>
-            </div>
-            <Button
-              aria-label={t('launcher.page.closeLabel')}
-              onClick={closeActivePage}
-              theme="borderless"
-              type="tertiary"
+    <main className="h-screen flex items-center justify-center">
+      <section className="launcher-surface h-full max-h-full w-full flex flex-col gap-3 p-4">
+        <div className="launcher-top-row flex items-center gap-3">
+          {presentationState === 'page' && activePage && pageContext ? (
+            <section
+              aria-label={`${pageContext.owner_name} / ${pageContext.action_name}`}
+              className="page-context-bar min-w-0 flex flex-1 items-center gap-2 px-3"
             >
-              {t('launcher.page.close')}
-            </Button>
-          </header>
-        ) : (
-          <Input
-            aria-activedescendant={
-              effectiveSelectedActionId ? getLauncherActionOptionId(effectiveSelectedActionId) : undefined
-            }
-            aria-autocomplete="list"
-            aria-busy={Boolean(pendingActionId)}
-            aria-controls={results.length > 0 ? ACTION_RESULTS_LISTBOX_ID : undefined}
-            aria-describedby={LAUNCHER_STATUS_ID}
-            aria-expanded={results.length > 0}
-            aria-label={t('launcher.inputLabel')}
-            autoComplete="off"
-            onChange={handleQueryChange}
-            onKeyDown={handleInputKeyDown}
-            placeholder={t('launcher.inputPlaceholder')}
-            ref={inputRef}
-            role="combobox"
-            size="large"
-            value={query}
-          />
-        )}
+              <Typography.Text className="page-context-owner" ellipsis strong>
+                {pageContext.owner_name}
+              </Typography.Text>
+              <Typography.Text aria-hidden="true" type="tertiary">
+                /
+              </Typography.Text>
+              <Typography.Text className="min-w-0 flex-1" ellipsis>
+                {pageContext.action_name}
+              </Typography.Text>
+              <Button
+                aria-label={t('launcher.page.closeLabel')}
+                className="page-context-close"
+                icon={<CloseIcon />}
+                onClick={closeActivePage}
+                theme="borderless"
+                type="tertiary"
+              />
+            </section>
+          ) : (
+            <Input
+              aria-activedescendant={
+                effectiveSelectedActionId ? getLauncherActionOptionId(effectiveSelectedActionId) : undefined
+              }
+              aria-autocomplete="list"
+              aria-busy={Boolean(pendingActionId)}
+              aria-controls={results.length > 0 ? ACTION_RESULTS_LISTBOX_ID : undefined}
+              aria-describedby={LAUNCHER_STATUS_ID}
+              aria-expanded={results.length > 0}
+              aria-label={t('launcher.inputLabel')}
+              autoComplete="off"
+              className="launcher-input min-w-0 flex-1"
+              onChange={handleQueryChange}
+              onKeyDown={handleInputKeyDown}
+              placeholder={t('launcher.inputPlaceholder')}
+              ref={inputRef}
+              role="combobox"
+              size="large"
+              value={query}
+            />
+          )}
+          <div aria-hidden="true" className="launcher-avatar flex flex-none items-center justify-center">
+            LX
+          </div>
+        </div>
         <div className="launcher-content min-h-0 flex flex-1 flex-col" data-presentation-state={presentationState}>
           {presentationState === 'home' ? (
-            <div className="launcher-home flex flex-1 items-center justify-center p-4 text-center">
-              <Typography.Text type="tertiary">{t('launcher.home.description')}</Typography.Text>
-            </div>
+            <LauncherHome
+              locale={locale}
+              onActivate={(actionId) => void executeAction(actionId)}
+              onSetPinned={setActionPinned}
+              pendingActionId={pendingActionId}
+              pendingPinActionId={pendingPinActionId}
+              pinnedActions={pinnedActions}
+              recentActions={recentActions}
+            />
           ) : null}
           {presentationState === 'search' ? (
-            <>
-              {results.length > 0 ? (
-                <ActionSearchResults
-                  listboxId={ACTION_RESULTS_LISTBOX_ID}
-                  onActivate={(actionId) => void executeAction(actionId)}
-                  pendingActionId={pendingActionId}
-                  results={results}
-                  selectedActionId={effectiveSelectedActionId}
-                />
-              ) : null}
-              <Typography.Text
-                aria-atomic="true"
-                aria-live="polite"
-                className="launcher-search-status"
-                data-feedback={dispatchFeedback?.kind}
-                id={LAUNCHER_STATUS_ID}
-                role="status"
-                type={dispatchFeedback?.kind === 'error' ? 'danger' : 'tertiary'}
-              >
-                {statusMessage}
-              </Typography.Text>
-            </>
-          ) : null}
-          {presentationState === 'home' ? (
-            <Typography.Text
-              aria-atomic="true"
-              aria-live="polite"
-              className="launcher-search-status"
-              data-feedback={startupPreferencesErrorCode ? 'error' : undefined}
-              id={LAUNCHER_STATUS_ID}
-              role="status"
-              type={startupPreferencesErrorCode ? 'danger' : 'tertiary'}
-            >
-              {statusMessage}
-            </Typography.Text>
+            <ActionSearchResults
+              listboxId={ACTION_RESULTS_LISTBOX_ID}
+              onActivate={(actionId) => void executeAction(actionId)}
+              pendingActionId={pendingActionId}
+              results={results}
+              selectedActionId={effectiveSelectedActionId}
+              visibleError={visibleSearchError}
+            />
           ) : null}
           {presentationState === 'page' && activePage ? (
             <PageErrorBoundary key={`${activePage.owner_id}/${activePage.page_id}`}>
@@ -344,6 +483,19 @@ const App = ({
             </PageErrorBoundary>
           ) : null}
         </div>
+        <Typography.Text
+          aria-atomic="true"
+          aria-live="polite"
+          className={presentationState === 'home' && homeFeedbackMessage ? 'launcher-feedback' : 'sr-only'}
+          data-feedback={presentationState === 'home' && homeFeedbackMessage ? 'error' : undefined}
+          id={LAUNCHER_STATUS_ID}
+          role="status"
+          type={presentationState === 'home' && homeFeedbackMessage ? 'danger' : 'tertiary'}
+        >
+          {presentationState === 'home'
+            ? homeFeedbackMessage || searchStatusMessage
+            : searchStatusMessage || homeFeedbackMessage}
+        </Typography.Text>
       </section>
     </main>
   );

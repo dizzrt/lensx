@@ -3,6 +3,7 @@ import {
   type LauncherActionDescriptor,
   type LauncherActionDiagnostic,
   type LauncherActionDiagnosticCode,
+  type LauncherActionHostIcon,
   type LauncherActionKeywordMap,
   type LauncherActionLocale,
   type LauncherActionValidationResult,
@@ -10,9 +11,19 @@ import {
   type ResolvedLauncherActionMetadata,
 } from './types';
 
-const DESCRIPTOR_FIELDS = new Set(['action_id', 'owner_id', 'title', 'description', 'default_keywords', 'enabled']);
+const DESCRIPTOR_FIELDS = new Set([
+  'action_id',
+  'owner_id',
+  'title',
+  'description',
+  'default_keywords',
+  'icon',
+  'enabled',
+]);
+const ICON_FIELDS = new Set(['kind', 'token']);
 const LOCALIZED_TEXT_FIELDS = new Set<string>(LAUNCHER_ACTION_LOCALES);
 const ID_SEGMENT_PATTERN = /^[a-z][a-z0-9_-]*$/;
+const HOST_ICON_TOKEN_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 const MAX_ID_SEGMENT_LENGTH = 64;
 const MAX_NAMESPACED_ID_LENGTH = 255;
 
@@ -193,6 +204,36 @@ const parseKeywords = (
   return Object.freeze(normalized);
 };
 
+const parseHostIcon = (value: unknown, diagnostics: LauncherActionDiagnostic[]): LauncherActionHostIcon | undefined => {
+  const path = '/icon';
+  if (!isPlainObject(value)) {
+    diagnostics.push(createDiagnostic('invalid_type', path, 'Action icon must be a plain object.'));
+    return undefined;
+  }
+
+  for (const key of Object.keys(value)) {
+    if (!ICON_FIELDS.has(key)) {
+      diagnostics.push(
+        createDiagnostic('unknown_field', `${path}/${escapeJsonPointerSegment(key)}`, `Unknown icon field '${key}'.`),
+      );
+    }
+  }
+
+  if (value.kind !== 'host') {
+    diagnostics.push(createDiagnostic('invalid_type', `${path}/kind`, "Action icon kind must be 'host'."));
+  }
+
+  if (typeof value.token !== 'string' || !HOST_ICON_TOKEN_PATTERN.test(value.token)) {
+    diagnostics.push(
+      createDiagnostic('invalid_type', `${path}/token`, 'Host icon token must use stable lowercase kebab-case.'),
+    );
+  }
+
+  return value.kind === 'host' && typeof value.token === 'string' && HOST_ICON_TOKEN_PATTERN.test(value.token)
+    ? Object.freeze({ kind: 'host', token: value.token })
+    : undefined;
+};
+
 export const cloneLauncherActionDescriptor = (descriptor: LauncherActionDescriptor): LauncherActionDescriptor => {
   const cloneLocalizedText = (text: LocalizedActionText): LocalizedActionText =>
     Object.freeze({
@@ -214,6 +255,7 @@ export const cloneLauncherActionDescriptor = (descriptor: LauncherActionDescript
     title: cloneLocalizedText(descriptor.title),
     ...(descriptor.description ? { description: cloneLocalizedText(descriptor.description) } : {}),
     default_keywords: Object.freeze(keywords),
+    ...(descriptor.icon ? { icon: Object.freeze({ kind: descriptor.icon.kind, token: descriptor.icon.token }) } : {}),
     enabled: descriptor.enabled,
   });
 };
@@ -261,6 +303,7 @@ export const validateLauncherActionDescriptor = (input: unknown): LauncherAction
   const description =
     input.description === undefined ? undefined : parseLocalizedText(input.description, '/description', diagnostics);
   const defaultKeywords = parseKeywords(input.default_keywords, diagnostics);
+  const icon = input.icon === undefined ? undefined : parseHostIcon(input.icon, diagnostics);
 
   if (typeof input.enabled !== 'boolean') {
     diagnostics.push(createDiagnostic('invalid_type', '/enabled', 'Enabled must be a boolean.'));
@@ -289,6 +332,7 @@ export const validateLauncherActionDescriptor = (input: unknown): LauncherAction
       title,
       ...(description ? { description } : {}),
       default_keywords: defaultKeywords,
+      ...(icon ? { icon } : {}),
       enabled: input.enabled,
     }),
     diagnostics: [],
@@ -310,5 +354,6 @@ export const resolveLauncherActionMetadata = (
     default_keywords: Object.freeze([
       ...(descriptor.default_keywords[locale] ?? descriptor.default_keywords['en-US'] ?? []),
     ]),
+    ...(descriptor.icon ? { icon: Object.freeze({ kind: descriptor.icon.kind, token: descriptor.icon.token }) } : {}),
   });
 };

@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import App from '../src/App';
 import { AppBootstrap, type AppStartupState } from '../src/app/AppBootstrap';
 import { useAppLocale } from '../src/app/i18n';
+import { EMPTY_LAUNCHER_ACTION_COLLECTIONS } from '../src/app/launcher/collections';
 import type { AppPreferencesClient } from '../src/app/preferences';
 import { AppPreferencesError, DEFAULT_APP_PREFERENCES } from '../src/app/preferences';
 import { useAppTheme } from '../src/app/theme';
@@ -77,6 +78,11 @@ describe('application preferences bootstrap', () => {
           <>
             <App
               activationSource={inertActivationSource}
+              collectionsClient={{
+                read: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+                recordUse: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+                setPinned: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+              }}
               startupPreferencesErrorCode={startupState.preferencesErrorCode}
             />
             <ProviderReadout startupState={startupState} />

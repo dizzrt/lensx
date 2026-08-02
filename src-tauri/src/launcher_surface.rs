@@ -4,7 +4,7 @@ use tauri::{AppHandle, LogicalSize, Manager, Runtime, WebviewWindow};
 
 const LAUNCHER_SURFACE_RESIZE_FAILED: &str = "launcher_surface_resize_failed";
 pub const LAUNCHER_WIDTH: f64 = 650.0;
-pub const HOME_HEIGHT: f64 = 240.0;
+pub const HOME_HEIGHT: f64 = 320.0;
 pub const SEARCH_HEIGHT: f64 = 480.0;
 pub const PAGE_HEIGHT: f64 = 600.0;
 
@@ -116,12 +116,24 @@ mod tests {
 
         assert_eq!(
             window.requested_sizes.into_inner(),
-            vec![
-                (LAUNCHER_WIDTH, HOME_HEIGHT),
-                (LAUNCHER_WIDTH, SEARCH_HEIGHT),
-                (LAUNCHER_WIDTH, PAGE_HEIGHT),
-            ]
+            vec![(650.0, 320.0), (650.0, 480.0), (650.0, 600.0),]
         );
+    }
+
+    #[test]
+    fn tauri_main_window_starts_at_the_home_size_and_preserves_shape_bounds() {
+        let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("Tauri config should be valid JSON");
+        let main_window = &config["app"]["windows"][0];
+
+        assert_eq!(main_window["label"], "main");
+        assert_eq!(main_window["width"], 650);
+        assert_eq!(main_window["height"], 320);
+        assert_eq!(main_window["minWidth"], 650);
+        assert_eq!(main_window["minHeight"], 180);
+        assert_eq!(main_window["maxWidth"], 650);
+        assert_eq!(main_window["maxHeight"], 800);
+        assert_eq!(main_window["resizable"], false);
     }
 
     #[test]

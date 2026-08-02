@@ -33,7 +33,9 @@ The repository currently provides:
   descriptors, a Host-owned registry, a dispatcher, and built-in hide and
   settings actions;
 - deterministic launcher action search over immutable registry snapshots, with
-  localized matching and an accessible keyboard-first result interface;
+  localized matching and an accessible four-column keyboard-first result grid;
+- versioned recent-use and pinned Action collections persisted through a narrow
+  Rust/Tauri boundary and resolved against the current registry snapshot;
 - a single-window Host settings surface with persisted theme and locale
   preferences plus a deliberately empty plugin section;
 - Rstest, Testing Library, TypeScript checks, Biome, and Cargo validation
@@ -88,26 +90,29 @@ asynchronous errors require explicit error states and are outside this render
 boundary.
 
 The App Shell derives three presentation states from local `activePage` and
-normalized query state. `home` owns the empty-query content area without
-implying recommendations, history, or pinned actions. `search` exposes the
-controlled launcher input and at most eight real enabled Action results.
-`page` replaces the input with a localized page-context header and renders the
-validated Host page in the same window. Closing a page returns to `home` and
-restores input focus. A page-level error boundary retains that header and close
+normalized query state. All three share one top row and a non-interactive avatar
+placeholder. `home` keeps the launcher input and renders Recent followed by
+Pinned from accepted Action collections; it never fills either row from
+registry order or simulated data. The localized `All` text beside Pinned is a
+non-interactive placeholder. `search` keeps the same input and exposes at most
+eight real enabled Action results in one four-column grid. `page` replaces the
+input with a localized owner/action context bar and accessible close icon while
+retaining the avatar placeholder. Closing a page returns to `home` and restores
+input focus. A page-level error boundary retains that context bar and close
 control when page content fails.
 
 ## Launcher Window Lifecycle
 
 The Tauri webview window with the stable `main` label is configured as a
 compact launcher surface. It has a fixed width of 650px, an initial height of
-240px, a minimum height of 180px, and a maximum height of 800px. The window is
+320px, a minimum height of 180px, and a maximum height of 800px. The window is
 transparent, always on top, undecorated, non-resizable, and non-fullscreen.
 
 The Host maps App Shell presentation state to fixed logical heights through a
-typed Rust command: `home` uses 240px, `search` uses 480px, and `page` uses
+typed Rust command: `home` uses 320px, `search` uses 480px, and `page` uses
 600px. This keeps the shared content region visible without measuring DOM
-content or changing height based on the number of search results. The frontend
-cannot submit arbitrary dimensions.
+content or changing height based on collection or search-result counts. The
+frontend cannot submit arbitrary dimensions.
 
 Rust owns all native launcher window operations through one action boundary:
 
@@ -154,7 +159,10 @@ The launcher action core lives under `src/app/launcher/actions/` in the trusted
 TypeScript application and domain layer. It does not depend on React, Semi
 Design, or Tauri APIs. Each action has a validated, serializable descriptor
 with a stable namespaced `action_id`, an `owner_id`, localized metadata,
-localized default keywords, and a static enabled state. English metadata is
+localized default keywords, a static enabled state, and an optional validated
+`{ kind: "host", token }` display icon. Host icon tokens remain plain
+serializable data and resolve only through the Host icon resolver; an absent or
+unresolved token uses the stable generic Action icon. English metadata is
 canonical, Simplified Chinese is supported, and missing localized text falls
 back to English.
 
@@ -189,19 +197,42 @@ description. Fixed exact, prefix, and substring weights produce a descending
 score order, with `action_id` as the deterministic tie-breaker. Disabled actions
 are filtered before the sorted result set is truncated to the v0 limit of eight.
 Search results are frozen serializable data containing identity, resolved
-display text, and score; they never contain executors or registry internals.
+display text, optional safe icon metadata, and score. Icons and Action
+collections never affect matching, scoring, or sorting, and results never
+contain executors or registry internals.
 
-The App Shell treats those results as a combobox/listbox interaction. The first
-result is selected by default, arrow-key movement stops at the list boundaries,
-Escape clears the search, and pending dispatch prevents duplicate execution.
+The App Shell treats those results as a combobox/listbox interaction with four
+fixed visual columns and at most two rows. The first result is selected by
+default. Left and right move to adjacent results; up and down move by four when
+the target exists. Movement never wraps, Escape clears the search, and pending
+dispatch prevents duplicate execution.
 Success clears the query; typed dispatcher failures preserve the query and
 selection while showing localized safe feedback. Result count, empty, pending,
-success, and failure states are announced through a live region. The bounded
-result list scrolls inside the existing surface and does not resize the native
-window.
+success, and failure states are announced through a live region without
+creating a second visible result section. The result grid remains bounded
+inside the existing surface and does not resize the native window.
 
-History, recent use, pinned actions, dynamic provider subscriptions, plugin
-management, and plugin action projection remain future capabilities.
+## Launcher Action Collections
+
+Rust owns a versioned `LauncherActionCollections` snapshot in a dedicated
+application-config file. `recent_action_ids` is a newest-first MRU list and
+`pinned_action_ids` preserves pin order. Both contain unique validated Action
+IDs and are capped at eight. Missing files return empty collections; strict
+reads reject malformed versions, fields, IDs, duplicates, and over-limit data.
+Writes use a synchronized temporary file followed by atomic replacement and
+return stable safe errors without paths or file contents.
+
+The TypeScript client exposes only read, record-successful-use, and set-pinned
+operations. React resolves stored IDs against the current immutable registry
+snapshot, preserves stored order, and hides missing or disabled Actions without
+deleting or replacing those IDs. A successful dispatch records recent use;
+failed dispatches do not. Recent-use persistence failure does not rewrite a
+successful Action result. Pin and unpin use an optimistic view but restore the
+last confirmed snapshot after failure, and a ninth pin is rejected without
+dropping an existing one.
+
+Dynamic provider subscriptions, plugin management, plugin Action projection,
+and plugin icon projection remain future capabilities.
 
 ## Host Pages And Preferences
 
@@ -211,6 +242,11 @@ identity. A trusted Host page catalog preflights targets before
 This identity shape may be reused by future validated plugin pages, but the
 current catalog contains only `lensx.core/settings`; external plugins cannot
 provide React components, executors, or direct App Shell mutations.
+
+The page context resolver derives the localized Host owner and opening Action
+name from IDs and the current registry snapshot, with the localized page title
+as fallback. Display strings are not copied into `ActivePage`, so a runtime
+locale change updates the context bar.
 
 Settings is rendered in the existing `main` Tauri window. It has first-level
 Preferences and Plugins sections. Preferences controls the supported

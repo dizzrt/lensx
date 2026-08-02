@@ -8,6 +8,13 @@ import type {
   LauncherActivationPayload,
   LauncherActivationSource,
 } from '../src/app/launcher/activation';
+import { EMPTY_LAUNCHER_ACTION_COLLECTIONS } from '../src/app/launcher/collections';
+
+const inertCollectionsClient = {
+  read: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+  recordUse: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+  setPinned: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
+};
 
 class FakeActivationSource implements LauncherActivationSource {
   listeners = new Set<LauncherActivationListener>();
@@ -39,16 +46,20 @@ describe('lensX app shell', () => {
     const activationSource = new FakeActivationSource();
     render(
       <AppProviders>
-        <App activationSource={activationSource} />
+        <App activationSource={activationSource} collectionsClient={inertCollectionsClient} />
       </AppProviders>,
     );
 
     expect(screen.getByRole('main')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 1, name: 'lensX' })).toBeInTheDocument();
-    expect(screen.getByText('A lightweight, keyboard-first desktop productivity launcher.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: 'lensX' })).not.toBeInTheDocument();
+    expect(screen.queryByText('A lightweight, keyboard-first desktop productivity launcher.')).not.toBeInTheDocument();
     expect(screen.queryByText(/Rsbuild/i)).not.toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Launcher query' })).toHaveAttribute('placeholder', 'Type a query');
     expect(screen.queryByText('Hide launcher')).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Recent' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Pinned' })).toBeInTheDocument();
+    expect(screen.getByText('All')).toHaveAttribute('aria-hidden', 'true');
+    expect(document.querySelector('.launcher-avatar')).toHaveAttribute('aria-hidden', 'true');
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
@@ -57,11 +68,13 @@ describe('lensX app shell', () => {
     const activationSource = new FakeActivationSource();
     render(
       <AppProviders initialLocale="zh-CN">
-        <App activationSource={activationSource} />
+        <App activationSource={activationSource} collectionsClient={inertCollectionsClient} />
       </AppProviders>,
     );
 
-    expect(await screen.findByText('一款轻量、键盘优先的桌面效率启动器。')).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: '最近使用' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '已固定' })).toBeInTheDocument();
+    expect(screen.queryByText('一款轻量、键盘优先的桌面效率启动器。')).not.toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: '启动器查询' })).toHaveAttribute('placeholder', '输入查询内容');
     expect(screen.queryByText(/Rsbuild/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
@@ -71,7 +84,7 @@ describe('lensX app shell', () => {
     const activationSource = new FakeActivationSource();
     render(
       <AppProviders>
-        <App activationSource={activationSource} />
+        <App activationSource={activationSource} collectionsClient={inertCollectionsClient} />
       </AppProviders>,
     );
 
@@ -88,7 +101,7 @@ describe('lensX app shell', () => {
     const activationSource = new FakeActivationSource();
     const { unmount } = render(
       <AppProviders>
-        <App activationSource={activationSource} />
+        <App activationSource={activationSource} collectionsClient={inertCollectionsClient} />
       </AppProviders>,
     );
     const input = screen.getByRole('combobox', { name: 'Launcher query' });
@@ -116,14 +129,14 @@ describe('lensX app shell', () => {
     const secondSource = new FakeActivationSource();
     const { rerender } = render(
       <AppProviders>
-        <App activationSource={firstSource} />
+        <App activationSource={firstSource} collectionsClient={inertCollectionsClient} />
       </AppProviders>,
     );
     await waitFor(() => expect(firstSource.listeners.size).toBe(1));
 
     rerender(
       <AppProviders>
-        <App activationSource={secondSource} />
+        <App activationSource={secondSource} collectionsClient={inertCollectionsClient} />
       </AppProviders>,
     );
 
@@ -143,7 +156,7 @@ describe('lensX app shell', () => {
 
     render(
       <AppProviders>
-        <App activationSource={activationSource} />
+        <App activationSource={activationSource} collectionsClient={inertCollectionsClient} />
       </AppProviders>,
     );
 

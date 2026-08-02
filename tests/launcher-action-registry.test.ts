@@ -8,6 +8,7 @@ const createDescriptor = (localName: string, enabled = true) => ({
   owner_id: 'lensx.core',
   title: { 'en-US': localName },
   default_keywords: { 'en-US': [localName] },
+  icon: { kind: 'host', token: 'settings' },
   enabled,
 });
 
@@ -69,11 +70,14 @@ describe('launcher action registry', () => {
 
     mutableDescriptor.title['en-US'] = 'changed by caller';
     mutableDescriptor.default_keywords['en-US'].push('changed');
+    mutableDescriptor.icon.token = 'changed';
     const snapshot = registry.snapshot();
 
     expect(snapshot.map(({ action_id }) => action_id)).toEqual(['lensx.core.alpha', 'lensx.core.zulu']);
     expect(snapshot[1]?.title['en-US']).toBe('zulu');
     expect(snapshot[1]?.default_keywords['en-US']).toEqual(['zulu']);
+    expect(snapshot[1]?.icon).toEqual({ kind: 'host', token: 'settings' });
+    expect(Object.isFrozen(snapshot[1]?.icon)).toBe(true);
     expect(Object.isFrozen(snapshot)).toBe(true);
     expect(Object.isFrozen(snapshot[1]?.default_keywords['en-US'])).toBe(true);
     expect('executor' in (snapshot[0] ?? {})).toBe(false);

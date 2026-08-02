@@ -31,6 +31,7 @@ describe('default launcher action service', () => {
           'en-US': ['hide', 'launcher', 'window'],
           'zh-CN': ['隐藏', '启动器', '窗口'],
         },
+        icon: { kind: 'host', token: 'hide-launcher' },
         enabled: true,
       },
       {
@@ -48,6 +49,7 @@ describe('default launcher action service', () => {
           'en-US': ['settings', 'preferences', 'configuration'],
           'zh-CN': ['设置', '偏好', '配置'],
         },
+        icon: { kind: 'host', token: 'settings' },
         enabled: true,
       },
     ]);

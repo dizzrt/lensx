@@ -139,9 +139,36 @@ Shell layout and spacing in UnoCSS utilities.
 - Derive `home`, `search`, and `page` presentation from normalized query and
   flat `ActivePage` state; do not introduce a router or parallel Shell store for
   the current single-page depth.
+- Keep one shared top-row geometry: render the launcher input for `home` and
+  `search`, the ID-derived page context bar for `page`, and the non-interactive
+  avatar placeholder in every state. Do not restore a separate product title or
+  description.
+- Keep the launcher as one continuous surface background. Idle inputs, page
+  context, collection empty states, and Action tiles must not become persistent
+  cards; reserve fill colors for transient hover, focus, selected, or pending
+  states.
 - Send those presentation states through the typed launcher-surface adapter so
-  Rust selects the fixed 240px, 480px, or 600px height. Components must not
-  measure DOM content or submit arbitrary native dimensions.
+  Rust selects the fixed 320px, 480px, or 600px height. Components must not
+  measure DOM content, collection length, or result count to submit arbitrary
+  native dimensions.
+
+## Launcher Actions And Collections
+
+- Keep Action descriptors serializable and executor-free. Optional display
+  icons use validated Host tokens and the shared Host resolver; never branch on
+  `action_id` in a component to choose an icon.
+- Resolve recent and pinned IDs against one current immutable registry snapshot,
+  preserve persisted order, and filter missing or disabled Actions without
+  filling gaps from registry order or mock data.
+- Record recent use only after Dispatcher success. Keep Action outcomes separate
+  from collection persistence feedback.
+- Optimistic pin/unpin UI must restore the last Rust-confirmed snapshot on
+  failure. Never evict an existing pin to make room for a ninth item.
+- Keep the localized `All` text and avatar visual as non-interactive
+  placeholders until dedicated capabilities are accepted.
+- Present search as one four-column, at-most-eight-item listbox grid. Left/right
+  move by one, up/down move by four only when the target exists, and all pointer
+  and keyboard activation must share the Dispatcher path.
 
 ## Accessibility And Keyboard Behavior
 
@@ -150,8 +177,11 @@ Shell layout and spacing in UnoCSS utilities.
 - Make primary workflows operable without a pointer.
 - Define predictable focus movement for opening, closing, and switching
   launcher surfaces.
-- Replace the search input with a page-context header while a page is active;
-  provide an accessible close control and restore launcher-input focus on close.
+- Replace the search input with the non-editable owner/action page-context bar
+  while a page is active; provide an accessible close icon and restore
+  launcher-input focus on close.
+- Keep the avatar and `All` placeholders out of button, link, menu, hover,
+  pointer, and keyboard-focus semantics.
 - Do not use color alone to communicate state.
 - Announce asynchronous errors and important state changes appropriately.
 
