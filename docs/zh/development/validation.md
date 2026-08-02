@@ -33,6 +33,15 @@ pnpm run check
 pnpm run build
 ```
 
+这四个标准命令会验证根应用和每个实际 workspace 成员。成员缺少对应 lifecycle script
+或返回非零状态时，根命令会失败。修改聚合或依赖规则时，直接运行 workspace 专项回归：
+
+```bash
+pnpm run test:workspace-lifecycle
+pnpm run test:workspace-boundaries
+pnpm run check:workspace-boundaries
+```
+
 `pnpm run test:watch` 只用于开发过程。最终证据必须使用非 watch 命令。
 
 ## Rust 验证

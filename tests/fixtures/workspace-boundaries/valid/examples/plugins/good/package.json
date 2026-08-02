@@ -1,0 +1,13 @@
+{
+  "name": "@fixture/example",
+  "private": true,
+  "scripts": {
+    "build": "fixture",
+    "typecheck": "fixture",
+    "test": "fixture",
+    "check": "fixture"
+  },
+  "dependencies": {
+    "@fixture/public": "workspace:*"
+  }
+}

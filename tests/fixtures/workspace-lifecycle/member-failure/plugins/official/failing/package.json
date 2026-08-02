@@ -1,0 +1,13 @@
+{
+  "name": "@fixture/failing-plugin",
+  "private": true,
+  "scripts": {
+    "build": "fixture",
+    "typecheck": "fixture",
+    "test": "fixture",
+    "check": "fixture"
+  },
+  "dependencies": {
+    "@fixture/base": "workspace:*"
+  }
+}

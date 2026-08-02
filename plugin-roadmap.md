@@ -116,7 +116,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 ## Milestone 1：建立通用插件开发基础
 
-### Task 1.1：建立 Plugin Platform Workspace
+- [x] **Task 1.1：建立 Plugin Platform Workspace**
 
 **OpenSpec change**：`establish-plugin-platform-workspace`
 
@@ -134,7 +134,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：根应用行为保持不变；workspace 安装和全量验证通过；依赖边界可由 CI 检查。
 
-### Task 1.2：发布 Plugin Contract Package
+- [ ] **Task 1.2：发布 Plugin Contract Package**
 
 **OpenSpec change**：`publish-plugin-contract-package`
 
@@ -152,7 +152,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：外部示例只依赖发布后的 package 即可类型检查；契约 drift 会使 CI 失败。
 
-### Task 1.3：建立框架无关 Plugin SDK
+- [ ] **Task 1.3：建立框架无关 Plugin SDK**
 
 **OpenSpec change**：`create-plugin-sdk-foundation`
 
@@ -170,7 +170,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：SDK 可以独立构建、发布和测试；公共入口不包含 React、Semi 或 Tauri 依赖。
 
-### Task 1.4：建立可选 Plugin UI Package
+- [ ] **Task 1.4：建立可选 Plugin UI Package**
 
 **OpenSpec change**：`create-plugin-ui-package`
 
@@ -188,7 +188,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：使用和不使用 React 的插件都可运行；UI package 不成为 SDK 的传递依赖。
 
-### Task 1.5：建立 Plugin Testkit
+- [ ] **Task 1.5：建立 Plugin Testkit**
 
 **OpenSpec change**：`create-plugin-testkit`
 
@@ -205,7 +205,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：示例插件可用 Testkit 覆盖初始化、调用、错误和销毁，不依赖 Host 私有模块。
 
-### Task 1.6：提供 Plugin Project Template
+- [ ] **Task 1.6：提供 Plugin Project Template**
 
 **OpenSpec change**：`create-plugin-project-template`
 
@@ -231,7 +231,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 ## Milestone 2：建立 Host 插件注册模型
 
-### Task 2.1：建立持久化 Plugin Manager
+- [ ] **Task 2.1：建立持久化 Plugin Manager**
 
 **OpenSpec change**：`add-persistent-plugin-manager`
 
@@ -249,7 +249,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：注册状态可持久化和恢复；损坏记录进入 quarantine；Rust 测试覆盖状态转换。
 
-### Task 2.2：定义 Plugin Registration Contract
+- [ ] **Task 2.2：定义 Plugin Registration Contract**
 
 **OpenSpec change**：`define-plugin-registration-contract`
 
@@ -267,7 +267,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：前端只能读取 Host 组合后的注册状态；author input 无法覆盖 Host-owned 字段。
 
-### Task 2.3：投影 Plugin Actions 到 Launcher
+- [ ] **Task 2.3：投影 Plugin Actions 到 Launcher**
 
 **OpenSpec change**：`project-plugin-actions-to-launcher`
 
@@ -285,7 +285,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：插件 Action 使用现有 Registry、搜索和 Dispatcher；搜索层没有插件专用分支。
 
-### Task 2.4：建立 Plugin Page Registry 与导航
+- [ ] **Task 2.4：建立 Plugin Page Registry 与导航**
 
 **OpenSpec change**：`add-plugin-page-navigation`
 
@@ -310,7 +310,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 ## Milestone 3：实现插件包与本地生命周期
 
-### Task 3.1：定义 Plugin Package Format
+- [ ] **Task 3.1：定义 Plugin Package Format**
 
 **OpenSpec change**：`define-plugin-package-format`
 
@@ -328,7 +328,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：相同输入可产生内容等价的包；Host 和 CLI 对包结构给出一致结论。
 
-### Task 3.2：实现本地插件安装
+- [ ] **Task 3.2：实现本地插件安装**
 
 **OpenSpec change**：`add-local-plugin-installation`
 
@@ -346,7 +346,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：有效本地包无需重启即可注册；无效包失败可诊断且无残留。
 
-### Task 3.3：实现启用、禁用与卸载
+- [ ] **Task 3.3：实现启用、禁用与卸载**
 
 **OpenSpec change**：`add-plugin-lifecycle-controls`
 
@@ -364,7 +364,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：状态变化无需重启生效；重启后保持；生命周期失败可恢复到一致状态。
 
-### Task 3.4：实现插件升级与回滚
+- [ ] **Task 3.4：实现插件升级与回滚**
 
 **OpenSpec change**：`add-plugin-upgrade-and-rollback`
 
@@ -389,7 +389,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 ## Milestone 4：建立隔离插件 Runtime
 
-### Task 4.1：安全提供插件资源
+- [ ] **Task 4.1：安全提供插件资源**
 
 **OpenSpec change**：`serve-plugin-resources-securely`
 
@@ -407,7 +407,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：插件只能读取自己的已安装资源；路径攻击具有 Rust 集成测试。
 
-### Task 4.2：实现隔离 iframe Runtime
+- [ ] **Task 4.2：实现隔离 iframe Runtime**
 
 **OpenSpec change**：`add-isolated-plugin-iframe-runtime`
 
@@ -425,7 +425,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：有效插件页面可被打开；未注册 URL、跨 origin 导航和 Tauri 访问被拒绝。
 
-### Task 4.3：绑定 Runtime Session 与消息来源
+- [ ] **Task 4.3：绑定 Runtime Session 与消息来源**
 
 **OpenSpec change**：`bind-plugin-runtime-sessions`
 
@@ -443,7 +443,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：只有当前活跃 iframe 能以其真实身份建立 Host 通信；伪造消息稳定失败。
 
-### Task 4.4：完善 Runtime CSP 与生命周期
+- [ ] **Task 4.4：完善 Runtime CSP 与生命周期**
 
 **OpenSpec change**：`complete-plugin-runtime-security-lifecycle`
 
@@ -468,7 +468,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 ## Milestone 5：实现 Host API 与权限系统
 
-### Task 5.1：定义 Host API v1 Contract
+- [ ] **Task 5.1：定义 Host API v1 Contract**
 
 **OpenSpec change**：`define-plugin-host-api-v1`
 
@@ -486,7 +486,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：每个方法都有规范、Schema、权限需求和成功/失败场景；无占位方法进入公共 API。
 
-### Task 5.2：实现 SDK iframe Transport
+- [ ] **Task 5.2：实现 SDK iframe Transport**
 
 **OpenSpec change**：`implement-plugin-sdk-transport`
 
@@ -504,7 +504,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：示例插件只通过 SDK 完成握手和调用；transport 异常可预测、可测试。
 
-### Task 5.3：实现 Host API Dispatcher
+- [ ] **Task 5.3：实现 Host API Dispatcher**
 
 **OpenSpec change**：`implement-plugin-host-api-v1`
 
@@ -522,7 +522,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：首版方法产生真实效果；插件无法得到 executor、Tauri 对象或 Rust 内部值。
 
-### Task 5.4：提供插件私有存储
+- [ ] **Task 5.4：提供插件私有存储**
 
 **OpenSpec change**：`add-plugin-scoped-storage`
 
@@ -540,7 +540,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：两个插件无法读写彼此数据；数据可跨重启恢复；超限和损坏有稳定诊断。
 
-### Task 5.5：实现 Plugin Permission Management
+- [ ] **Task 5.5：实现 Plugin Permission Management**
 
 **OpenSpec change**：`add-plugin-permission-management`
 
@@ -558,7 +558,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：未声明、未支持、未授权和已撤销权限均被稳定拒绝；无法伪造 grant state。
 
-### Task 5.6：校验 RPC 输入、输出与资源限制
+- [ ] **Task 5.6：校验 RPC 输入、输出与资源限制**
 
 **OpenSpec change**：`validate-plugin-rpc-contracts`
 
@@ -583,7 +583,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 ## Milestone 6：完善用户与开发者体验
 
-### Task 6.1：新增插件管理设置页面
+- [ ] **Task 6.1：新增插件管理设置页面**
 
 **OpenSpec change**：`add-plugin-management-settings`
 
@@ -601,7 +601,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：用户无需开发命令即可完成生命周期操作；失败状态具有可操作诊断。
 
-### Task 6.2：新增权限授权与撤销交互
+- [ ] **Task 6.2：新增权限授权与撤销交互**
 
 **OpenSpec change**：`add-plugin-permission-prompts`
 
@@ -619,7 +619,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：用户选择与 Host grant state 一致；拒绝不会被静默转为授权；撤销立即生效。
 
-### Task 6.3：提供 Plugin Developer CLI
+- [ ] **Task 6.3：提供 Plugin Developer CLI**
 
 **OpenSpec change**：`add-plugin-developer-cli`
 
@@ -637,7 +637,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：新项目可以一条命令验证并打包；CI 可以只依赖公开 CLI 验证插件。
 
-### Task 6.4：支持 Plugin Development Mode
+- [ ] **Task 6.4：支持 Plugin Development Mode**
 
 **OpenSpec change**：`add-plugin-development-mode`
 
@@ -655,7 +655,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：开发插件可快速 reload；正式与开发状态清晰区分；安全边界保持一致。
 
-### Task 6.5：发布插件开发文档
+- [ ] **Task 6.5：发布插件开发文档**
 
 **OpenSpec change**：`publish-plugin-development-documentation`
 
@@ -680,7 +680,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 ## Milestone 7：落地官方插件并完成平台加固
 
-### Task 7.1：建立官方插件发布流水线
+- [ ] **Task 7.1：建立官方插件发布流水线**
 
 **OpenSpec change**：`add-official-plugin-release-pipeline`
 
@@ -698,7 +698,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：一个官方插件可单独发版且不触发桌面应用发布；产物可由普通安装器验证。
 
-### Task 7.2：交付首个无权限官方插件
+- [ ] **Task 7.2：交付首个无权限官方插件**
 
 **OpenSpec change**：`add-official-json-tools-plugin`
 
@@ -716,7 +716,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：官方 JSON 工具从独立产物安装、搜索、打开、关闭、禁用、升级和卸载均通过。
 
-### Task 7.3：交付首个权限型官方插件
+- [ ] **Task 7.3：交付首个权限型官方插件**
 
 **OpenSpec change**：`add-official-clipboard-tools-plugin`
 
@@ -734,7 +734,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：权限选择始终由 Host 强制；官方来源不能绕过拒绝或撤销。
 
-### Task 7.4：加固插件包摄入
+- [ ] **Task 7.4：加固插件包摄入**
 
 **OpenSpec change**：`harden-plugin-package-ingestion`
 
@@ -752,7 +752,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：恶意包测试集全部被拒绝；任何失败都不污染正式安装目录。
 
-### Task 7.5：限制插件 Runtime 资源
+- [ ] **Task 7.5：限制插件 Runtime 资源**
 
 **OpenSpec change**：`add-plugin-runtime-resource-limits`
 
@@ -770,7 +770,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：滥用测试不会导致 Launcher 无响应；超限插件可暂停、诊断和恢复。
 
-### Task 7.6：建立插件系统端到端验证
+- [ ] **Task 7.6：建立插件系统端到端验证**
 
 **OpenSpec change**：`add-plugin-system-e2e-tests`
 
@@ -797,7 +797,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 ## Milestone 8：建立可信插件分发生态
 
-### Task 8.1：支持插件包签名与 Provenance
+- [ ] **Task 8.1：支持插件包签名与 Provenance**
 
 **OpenSpec change**：`add-plugin-package-signing-and-provenance`
 
@@ -815,7 +815,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：官方和第三方使用相同签名格式；篡改包无法安装；来源不改变权限结果。
 
-### Task 8.2：建立信任、密钥轮换与撤回
+- [ ] **Task 8.2：建立信任、密钥轮换与撤回**
 
 **OpenSpec change**：`add-plugin-trust-and-revocation`
 
@@ -833,7 +833,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：撤回版本不能新安装或升级；已安装实例得到一致、可解释的受限处理。
 
-### Task 8.3：实现插件更新管理
+- [ ] **Task 8.3：实现插件更新管理**
 
 **OpenSpec change**：`add-plugin-update-management`
 
@@ -851,7 +851,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：更新失败恢复旧版本；来源、权限或兼容性异常版本不能静默生效。
 
-### Task 8.4：建立远程 Plugin Catalog
+- [ ] **Task 8.4：建立远程 Plugin Catalog**
 
 **OpenSpec change**：`add-plugin-catalog`
 
@@ -869,7 +869,7 @@ Milestone 8  Trusted Distribution Ecosystem
 
 **完成标准**：用户可查询可信目录；伪造 Catalog 元数据不能绕过本地校验。
 
-### Task 8.5：新增 Plugin Marketplace
+- [ ] **Task 8.5：新增 Plugin Marketplace**
 
 **OpenSpec change**：`add-plugin-marketplace`
 

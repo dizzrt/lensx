@@ -1,0 +1,10 @@
+{
+  "name": "fixture-root",
+  "private": true,
+  "scripts": {
+    "app:build": "fixture",
+    "app:typecheck": "fixture",
+    "app:test": "fixture",
+    "app:check": "fixture"
+  }
+}

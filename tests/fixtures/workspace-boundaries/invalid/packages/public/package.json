@@ -1,0 +1,10 @@
+{
+  "name": "@fixture/public",
+  "private": true,
+  "scripts": {
+    "build": "fixture",
+    "typecheck": "fixture",
+    "test": "fixture",
+    "check": "fixture"
+  }
+}

@@ -35,6 +35,17 @@ Build the production frontend:
 pnpm run build
 ```
 
+These four standard commands validate the root application and every actual
+workspace member. A member that omits the corresponding lifecycle script or
+returns a non-zero status fails the root command. Run workspace-specific
+regressions directly when changing the aggregation or dependency rules:
+
+```bash
+pnpm run test:workspace-lifecycle
+pnpm run test:workspace-boundaries
+pnpm run check:workspace-boundaries
+```
+
 Use `pnpm run test:watch` only during development. Final evidence must use the
 non-watch command.
 

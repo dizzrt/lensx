@@ -15,6 +15,8 @@ structure.
 
 - [Getting Started](development/getting-started.md) — environment setup,
   development commands, and repository map.
+- [Plugin Workspace](development/plugin-workspace.md) — workspace member
+  locations, lifecycle scripts, dependency boundaries, and repository checks.
 - [Frontend Guidelines](development/frontend-guidelines.md) — React, Semi
   Design, styling, theme, localization, and accessibility rules.
 - [Project Workflow](development/project-workflow.md) — sources of truth,

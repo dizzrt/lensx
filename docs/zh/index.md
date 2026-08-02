@@ -12,6 +12,8 @@
 ## 开发
 
 - [开发入门](development/getting-started.md) — 环境配置、开发命令和仓库目录说明。
+- [插件 Workspace](development/plugin-workspace.md) — workspace 成员位置、lifecycle
+  scripts、依赖边界和仓库检查。
 - [前端指南](development/frontend-guidelines.md) — React、Semi Design、样式、主题、
   国际化和无障碍规则。
 - [项目工作流](development/project-workflow.md) — 事实来源、文档治理、OpenSpec 和

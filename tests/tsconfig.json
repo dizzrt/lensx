@@ -3,5 +3,6 @@
   "compilerOptions": {
     "types": ["@rsbuild/core/types", "node", "@testing-library/jest-dom"]
   },
-  "include": ["./"]
+  "include": ["./"],
+  "exclude": ["./fixtures"]
 }
