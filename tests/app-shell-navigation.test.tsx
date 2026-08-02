@@ -118,7 +118,13 @@ describe('App Shell page navigation', () => {
 
     expect(await screen.findByText('Trusted settings content')).toBeInTheDocument();
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'lensX / Open settings' })).toBeInTheDocument();
+    const pageContext = screen.getByRole('region', { name: 'lensX: Open settings' });
+    expect(pageContext).toBeInTheDocument();
+    expect(pageContext.querySelector('[data-owner-icon-token]')).toHaveAttribute(
+      'data-owner-icon-token',
+      'lensx-owner',
+    );
+    expect(document.body).not.toHaveAttribute('theme-mode');
     expect(screen.getByText('Trusted settings content').closest('[data-presentation-state]')).toHaveAttribute(
       'data-presentation-state',
       'page',
@@ -195,7 +201,7 @@ describe('App Shell page navigation', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('无法显示此页面');
     expect(screen.getByRole('button', { name: '关闭设置并返回主页' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'lensX / Open settings' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'lensX: Open settings' })).toBeInTheDocument();
     expect(screen.queryByText(/sensitive page implementation detail/)).not.toBeInTheDocument();
     expect(document.body).toHaveAttribute('theme-mode', 'dark');
 
@@ -210,7 +216,7 @@ describe('App Shell page navigation', () => {
 
     act(() => navigationService.openPage(settingsTarget, 'lensx.core.missing_action'));
 
-    expect(await screen.findByRole('region', { name: 'lensX / Settings' })).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'lensX: Settings' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close settings and return home' })).toBeInTheDocument();
   });
 });

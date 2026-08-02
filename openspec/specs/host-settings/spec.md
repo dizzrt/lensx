@@ -169,3 +169,50 @@ values, and writes MUST avoid leaving a partial file.
   saved
 - **THEN** the page displays localized failure feedback and does not claim that
   saving succeeded
+
+### Requirement: The Host settings context must use lensX Owner presentation
+
+When the Host settings page is active, the page-context Owner segment MUST
+display the lensX Host name for the current locale and the Host-controlled
+lensX Owner icon. The Action segment MUST display the name of the Action that
+opened settings, and the close icon button MUST be adjacent to the Action. The
+system MUST present lensX as the Host Owner of the settings page and MUST NOT
+represent settings as a plugin or depend on plugin Manifest presentation data.
+
+The settings page context MUST reuse the shared segmented page context's Owner
+icon fallback, theme, localization, text-constraint, accessibility, and window-
+dragging rules. The settings-gear Action icon MUST NOT replace the lensX Owner
+icon.
+
+#### Scenario: Open Host settings from its Action
+
+- **WHEN** the `lensx.core.open_settings` Action successfully opens
+  `lensx.core/settings`
+- **THEN** the Owner segment displays the lensX Host name and lensX Owner icon
+- **THEN** the Action segment displays the opening settings Action name in the
+  current locale
+- **THEN** the close icon button is adjacent to the Action and has a localized
+  accessible name for returning to Home
+- **THEN** the settings page remains in the shared content region of the
+  existing main window
+
+#### Scenario: Switch locale while viewing segmented settings context
+
+- **WHEN** the user successfully switches between English and Simplified
+  Chinese while settings is open
+- **THEN** the lensX Owner name, opening settings Action name, and close-button
+  accessible name switch to the current locale
+- **THEN** the lensX Owner icon and segmented structure remain stable
+- **THEN** the page context does not depend on stale display strings copied
+  when the page opened
+
+#### Scenario: Inspect Host ownership of settings context
+
+- **WHEN** a user or assistive technology inspects the Owner segment of the
+  settings page
+- **THEN** settings is presented as a page owned by the lensX Host rather than
+  a plugin page
+- **THEN** the Owner segment exposes no plugin navigation, management, or menu
+  interaction
+- **THEN** the settings-gear Action icon is not presented as the lensX Owner
+  icon

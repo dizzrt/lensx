@@ -143,6 +143,19 @@ Shell layout and spacing in UnoCSS utilities.
   `search`, the ID-derived page context bar for `page`, and the non-interactive
   avatar placeholder in every state. Do not restore a separate product title or
   description.
+- Resolve page Owner and opening Action presentation before rendering the shared
+  page-context view. Keep the view free of Owner-ID and Registry branches, and
+  pass it only serializable Owner name/icon and Action name display data.
+- Present page context as one content-sized segmented capsule in Owner, opening
+  Action, and close-button order. Owner and Action segments remain
+  non-interactive; only the adjacent Semi Design borderless close button may
+  receive focus or exclude window dragging. Resolve Owner icons through their
+  dedicated Host token namespace with a generic provider fallback, never through
+  an opening Action icon such as the settings gear.
+- Keep the full page-context slot transparent and draggable. Use UnoCSS only for
+  its simple flex/min-width composition, and keep the capsule hierarchy,
+  decorative diagonal divider, token-based fills, text truncation, and close
+  button hover/active/focus states in semantic Less.
 - Treat the complete horizontal band from the native window's top edge through
   the spacing below that shared top row as one delegated launcher drag region.
   Route only primary-mouse starts through the typed
@@ -224,5 +237,11 @@ Shell layout and spacing in UnoCSS utilities.
   320/480/600px heights. Save screenshots and inspect computed styles for the
   continuous surface, rounded corners, transparent background, avatar, and top
   spacing.
+- For segmented page-context changes, capture `650×600px` page screenshots in
+  English light, Simplified Chinese light, and at least one dark combination.
+  Inspect computed styles and geometry for content-sized capsule width,
+  token-derived segment hierarchy, the diagonal divider, close-button adjacency
+  and keyboard focus, retained avatar geometry, and long-text ellipsis without
+  overlap.
 - Add focused tests for extracted domain functions.
 - Avoid snapshots that obscure meaningful behavioral assertions.

@@ -1,4 +1,4 @@
-import { Button, Input, Typography } from '@douyinfe/semi-ui';
+import { Input, Typography } from '@douyinfe/semi-ui';
 import {
   type KeyboardEvent,
   type MouseEvent,
@@ -32,7 +32,6 @@ import {
   resolveLauncherActionCollection,
 } from './app/launcher/collections';
 import { LauncherHome } from './app/launcher/LauncherHome';
-import { CloseIcon } from './app/launcher/LauncherIcons';
 import {
   inertLauncherSurfaceController,
   type LauncherPresentationState,
@@ -47,6 +46,7 @@ import {
 import {
   type ActivePage,
   type AppNavigationService,
+  PageContextBar,
   productionAppNavigationService,
   resolvePageContext,
 } from './app/navigation';
@@ -444,29 +444,11 @@ const App = ({
         >
           <div className="launcher-top-row flex items-center gap-3">
             {presentationState === 'page' && activePage && pageContext ? (
-              <section
-                aria-label={`${pageContext.owner_name} / ${pageContext.action_name}`}
-                className="page-context-bar min-w-0 flex flex-1 items-center gap-2 px-3"
-              >
-                <Typography.Text className="page-context-owner" ellipsis strong>
-                  {pageContext.owner_name}
-                </Typography.Text>
-                <Typography.Text aria-hidden="true" type="tertiary">
-                  /
-                </Typography.Text>
-                <Typography.Text className="min-w-0 flex-1" ellipsis>
-                  {pageContext.action_name}
-                </Typography.Text>
-                <Button
-                  aria-label={t('launcher.page.closeLabel')}
-                  className="page-context-close"
-                  data-launcher-drag-exclude="true"
-                  icon={<CloseIcon />}
-                  onClick={closeActivePage}
-                  theme="borderless"
-                  type="tertiary"
-                />
-              </section>
+              <PageContextBar
+                closeLabel={t('launcher.page.closeLabel')}
+                context={pageContext}
+                onClose={closeActivePage}
+              />
             ) : (
               <Input
                 aria-activedescendant={

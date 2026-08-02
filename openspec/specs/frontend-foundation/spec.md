@@ -399,3 +399,82 @@ It MUST preserve the functioning React, Tauri, testing, and styling toolchain.
 - **THEN** no example `greet` command or handler registration exists
 - **THEN** the Tauri application can still build and start through the existing
   run entry point
+
+### Requirement: The shared page context must use a compact segmented control
+
+When the App Shell displays an active page, it MUST present the page context as
+a continuous, content-sized segmented capsule constrained by the available
+width. In visual order, the capsule MUST contain an Owner segment, the opening
+Action segment, and a close icon button adjacent to the Action. The Owner and
+Action segments MUST use decorative diagonal separation and theme-aware
+hierarchical fills; they MUST NOT use visible `/` text as a substitute for the
+segmented structure.
+
+The Owner segment MUST display the Owner name resolved for the current locale
+and an Owner icon. If the Owner icon is missing or cannot be resolved, the
+system MUST display a stable generic-provider fallback, and the view component
+MUST NOT hard-code icon branches based on Owner IDs. The Action segment MUST
+display the name of the Action that opened the current page. The system MUST
+NOT use an Action icon as the Owner icon.
+
+The Owner and Action segments MUST remain non-interactive and non-focusable and
+MUST NOT expose button, link, menu, or breadcrumb-navigation semantics. The
+close icon button MUST remain visible, support pointer and keyboard operation,
+have an accessible name in the current locale, and remain excluded from native
+window dragging. The complete page-context slot outside the segmented capsule
+MUST continue to support window dragging.
+
+The segmented capsule MUST use application theme tokens and preserve clear
+text, icons, hierarchical fills, hover states, and keyboard-focus states in
+English, Simplified Chinese, light theme, and dark theme. When an Owner or
+Action name exceeds the available width, the system MUST constrain and elide
+the text while preserving the complete close button and the non-interactive
+avatar placeholder at the right.
+
+#### Scenario: Display a page context
+
+- **WHEN** the App Shell enters the `page` presentation state with a resolved
+  Owner and opening Action
+- **THEN** the top slot displays a content-sized continuous segmented capsule
+  containing the Owner, Action, and close button
+- **THEN** the close button is adjacent to the Action instead of being pushed
+  to the far end of the page-context slot
+- **THEN** a decorative diagonal separator appears between the Owner and Action
+  without visible `/` text
+
+#### Scenario: Resolve a missing Owner icon
+
+- **WHEN** the page context has no Owner icon or has an unrecognized Owner icon
+  token
+- **THEN** the Owner segment displays the stable generic-provider fallback
+- **THEN** the system does not use an Action icon as the Owner icon
+- **THEN** the page can still return to Home through the close button
+
+#### Scenario: Constrain long localized context
+
+- **WHEN** the Owner name or Action name exceeds the page-context width in the
+  current locale
+- **THEN** the corresponding text contracts and is elided within its segment
+- **THEN** the close button remains fully visible and operable
+- **THEN** the non-interactive avatar placeholder remains visible at the right
+
+#### Scenario: Inspect page-context interaction semantics
+
+- **WHEN** a user or assistive technology inspects the segmented page context
+- **THEN** the Owner and Action segments expose no button, link, menu, or
+  keyboard-focus semantics
+- **THEN** the close button is the only focusable operation in the page context
+- **THEN** a primary-mouse drag beginning on a non-interactive segment or the
+  surrounding slot still requests native window movement
+- **THEN** pointer or keyboard operation beginning on the close button does not
+  request window movement
+
+#### Scenario: Render supported themes and locales
+
+- **WHEN** the App Shell displays the segmented page context in English or
+  Simplified Chinese and in light or dark theme
+- **THEN** the Owner and Action segments use semantic fills and text tokens
+  from the current theme
+- **THEN** the close button remains distinguishable in its default, hover, and
+  keyboard-focus states
+- **THEN** the top drag surface outside the capsule gains no persistent fill

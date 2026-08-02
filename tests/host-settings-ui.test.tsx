@@ -63,7 +63,7 @@ const openSettingsWithKeyboard = async () => {
   const input = screen.getByRole('combobox', { name: 'Launcher query' });
   fireEvent.change(input, { target: { value: 'settings' } });
   fireEvent.keyDown(input, { key: 'Enter' });
-  await screen.findByRole('region', { name: 'lensX / Open settings' });
+  await screen.findByRole('region', { name: 'lensX: Open settings' });
 };
 
 describe('Host settings surface', () => {
@@ -99,6 +99,7 @@ describe('Host settings surface', () => {
     expect(screen.getByRole('radio', { name: 'Light' })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'English' })).toBeChecked();
     expect(screen.getByRole('button', { name: 'Close settings and return home' })).toBeInTheDocument();
+    expect(document.querySelector('[data-owner-icon-token]')).toHaveAttribute('data-owner-icon-token', 'lensx-owner');
   });
 
   test('persists complete snapshots serially and updates root theme and locale only after confirmation', async () => {
@@ -131,7 +132,7 @@ describe('Host settings surface', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Simplified Chinese' }));
     await waitFor(() => expect(write).toHaveBeenLastCalledWith({ theme_mode: 'dark', locale: 'zh-CN' }));
     await waitFor(() => expect(document.documentElement).toHaveAttribute('lang', 'zh-CN'));
-    expect(screen.getByRole('region', { name: 'lensX / 打开设置' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'lensX: 打开设置' })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: '简体中文' })).toBeChecked();
   });
 

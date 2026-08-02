@@ -42,10 +42,13 @@ body {
 }
 
 .launcher-input,
-.page-context-bar {
+.page-context-slot {
   min-height: 40px;
-  border-radius: 12px;
   background: transparent;
+}
+
+.launcher-input {
+  border-radius: 12px;
 }
 
 .launcher-input.semi-input-wrapper {
@@ -191,9 +194,112 @@ body {
   overflow: hidden;
 }
 
-.page-context-close.semi-button {
+.page-context-control {
+  max-width: 100%;
+  min-height: 36px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--semi-color-bg-0);
+  color: var(--semi-color-text-0);
+}
+
+.page-context-owner-segment,
+.page-context-action-segment {
+  min-height: 36px;
+}
+
+.page-context-owner-segment {
+  flex: 0 1 auto;
+  max-width: 220px;
+  padding: 0 26px 0 12px;
+  background: var(--semi-color-fill-1);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 16px) 100%, 0 100%);
+}
+
+.page-context-owner-icon {
   flex: none;
-  border-radius: 9px;
+  color: var(--semi-color-primary);
+}
+
+.page-context-owner-text.semi-typography,
+.page-context-action-text.semi-typography {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-context-action-segment {
+  flex: 0 1 auto;
+  max-width: 280px;
+  margin-left: -14px;
+  padding-left: 24px;
+  background: var(--semi-color-fill-0);
+  clip-path: polygon(16px 0, 100% 0, 100% 100%, 0 100%);
+}
+
+.page-context-action-text.semi-typography {
+  flex: 0 1 auto;
+  width: max-content;
+  max-width: 232px;
+}
+
+.page-context-close.semi-button {
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin: 2px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--semi-color-text-1);
+
+  &::before {
+    position: absolute;
+    inset: 4px;
+    z-index: 0;
+    border-radius: 50%;
+    background: transparent;
+    content: '';
+    pointer-events: none;
+  }
+
+  &:hover {
+    background: transparent;
+    color: var(--semi-color-text-0);
+  }
+
+  &:hover::before {
+    background: var(--semi-color-fill-1);
+  }
+
+  &:active {
+    background: transparent;
+  }
+
+  &:active::before {
+    background: var(--semi-color-fill-2);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--semi-color-focus-border);
+    outline-offset: -2px;
+  }
+
+  .semi-button-content,
+  .semi-icon,
+  svg {
+    position: relative;
+    z-index: 1;
+  }
+
+  .semi-icon,
+  svg {
+    width: 16px;
+    height: 16px;
+  }
 }
 
 .sr-only {

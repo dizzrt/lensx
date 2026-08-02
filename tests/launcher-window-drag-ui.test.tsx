@@ -122,8 +122,8 @@ describe('launcher unified top drag region', () => {
     fireEvent.mouseDown(searchInput, { button: 0 });
 
     act(() => navigationService.openPage(settingsTarget, 'lensx.core.open_settings'));
-    const context = await screen.findByRole('region', { name: 'lensX / Open settings' });
-    fireEvent.mouseDown(context.querySelector('.page-context-owner') as Element, { button: 0 });
+    const context = await screen.findByRole('region', { name: 'lensX: Open settings' });
+    fireEvent.mouseDown(context.querySelector('.page-context-owner-segment') as Element, { button: 0 });
     fireEvent.mouseDown(document.querySelector('.launcher-avatar') as Element, { button: 0 });
 
     expect(startDragging).toHaveBeenCalledTimes(6);
@@ -172,7 +172,7 @@ describe('launcher unified top drag region', () => {
     expect(selectedOption).toHaveAttribute('aria-selected', 'true');
 
     act(() => navigationService.openPage(settingsTarget, 'lensx.core.open_settings'));
-    const context = await screen.findByRole('region', { name: 'lensX / Open settings' });
+    const context = await screen.findByRole('region', { name: 'lensX: Open settings' });
     fireEvent.mouseDown(context, { button: 0 });
     await act(async () => Promise.resolve());
     expect(screen.getByText('Trusted settings content')).toBeInTheDocument();
