@@ -362,6 +362,9 @@ const validateSourceSpecifier = (
       );
     }
   }
+  if (targetByPackageName !== undefined) {
+    return diagnostics;
+  }
 
   const aliasTarget = resolveAlias(specifier, aliases);
   const resolvedTarget =

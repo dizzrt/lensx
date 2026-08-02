@@ -157,7 +157,7 @@ Milestone 8  Trusted Distribution Ecosystem
 **完成标准**：隔离外部示例只依赖真实 tarball 即可完成 typecheck 和运行时契约调用；任何
 Schema、类型、Host、Rust、exports、内容或依赖 drift 都会使门禁失败。
 
-- [ ] **Task 1.3：建立框架无关 Plugin SDK**
+- [x] **Task 1.3：建立框架无关 Plugin SDK**
 
 **OpenSpec change**：`create-plugin-sdk-foundation`
 

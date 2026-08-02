@@ -2,11 +2,11 @@
 
 ## Document Status
 
-This document separates the shipped static plugin Manifest contract from the
-intended runtime extension boundary. Installation, distribution, plugin
-execution, permissions, plugin action projection and search, and the Host API
-are not currently implemented. Stable specs and source code define the shipped
-subset.
+This document separates the shipped static plugin Manifest contract and Plugin
+SDK foundation from the intended runtime extension boundary. Installation,
+distribution, plugin execution, permissions, plugin action projection and
+search, iframe transport, and the Host API are not currently implemented.
+Stable specs and source code define the shipped subset.
 
 ## Goals
 
@@ -151,6 +151,60 @@ registry, search those Actions, navigate Pages, exchange Host API messages, or
 run plugin code. The current App Shell can search Host built-in launcher
 Actions, but static Manifest validation has no connection to that registry,
 search path, Action collections, or Host icon projection.
+
+## Shipped Public Plugin SDK Foundation
+
+lensX ships the framework-neutral `@lensx/plugin-sdk@0.1.0` workspace package.
+The package has one public root entry and depends only on
+`@lensx/plugin-contract` at Runtime. Undeclared deep imports are unsupported,
+and its public declarations do not require React, Semi Design, Tauri, DOM
+globals, Node filesystem types, or Host-private modules.
+
+The root entry exposes `createPluginSdk`, `PluginSdkError`, SDK lifecycle,
+Runtime context, cancellation, and transport types, plus these independent
+version facts:
+
+| Export | Meaning |
+| --- | --- |
+| `PLUGIN_SDK_VERSION` | The SDK package and public API version, currently `0.1.0`. |
+| `PLUGIN_SDK_SUPPORTED_HOST_API_RANGE` | The half-open supported Host API range, currently `>=0.1.0 <0.2.0`. |
+| `PLUGIN_HOST_API_VERSION` | Not re-exported by the SDK; the current Host API version remains owned by `@lensx/plugin-contract`. |
+
+`createPluginSdk({ transport })` returns an isolated client rather than a
+global singleton. A client moves through `idle`, `initializing`, `ready`,
+`disconnected`, and `disposed`. Concurrent initialization calls share one
+connection attempt. A cancelled, timed-out, or failed attempt returns to
+`idle` for explicit retry; disconnect is terminal for that client and does not
+automatically reconnect. Disposal is idempotent, cancels pending SDK-managed
+operations, removes listeners, and disposes the transport at most once.
+
+Before entering `ready`, the SDK validates, copies, and freezes a
+`PluginRuntimeContext` containing a compatible `hostApiVersion`,
+`en-US | zh-CN` locale, `light | dark` theme, and a unique readonly capability
+ID snapshot. An empty capability list is valid and does not imply any Host API
+method. Plugin identity, Page identity, granted permissions, installation
+source, and Host lifecycle facts are not supported context inputs.
+
+SDK-managed operations use a 10,000 millisecond default timeout with positive
+finite integer overrides. Cancellation accepts a minimal structural signal
+compatible with native `AbortSignal` without referring to the DOM type in
+public declarations. Timeout, cancellation, disconnect, and disposal propagate
+cancellation to the transport, clean up timers and listeners, and suppress late
+results.
+
+`PluginSdkError.code` provides stable SDK-level branches for `cancelled`,
+`timeout`, `disconnected`, `disposed`, `incompatible_host_api`,
+`invalid_runtime_context`, `invalid_argument`, and `transport_failure`.
+Transport exceptions are mapped to safe SDK errors without exposing the raw
+exception, private stack, Host object, or wire data. Permission, unknown-method,
+and Host parameter errors remain future Host API contract work.
+
+`PluginSdkTransport` is a semantic adapter injection boundary for connection,
+abstract requests, abstract events, disconnect notification, and disposal. It
+does not define request IDs, nonce, identity, origin, `Window`, `MessagePort`,
+`postMessage`, or a JSON-RPC envelope. The public `PluginSdkClient` deliberately
+does not expose an arbitrary string-based Host method call. The package test
+fake is private; a public Plugin Testkit has not been delivered.
 
 ## Host Action Registry
 

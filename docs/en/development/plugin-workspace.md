@@ -5,10 +5,11 @@
 The repository is a pnpm workspace that keeps the `lensx` React/Tauri Host as
 the private root package. The workspace establishes development topology,
 lifecycle aggregation, and dependency checks for public packages and plugins.
-It contains the publishable `@lensx/plugin-contract` package, but repository
-validation does not perform a registry publish. The workspace does not yet
-provide an SDK, UI library, Testkit, or CLI, and it does not discover, install,
-register, or execute plugins.
+It contains the publishable `@lensx/plugin-contract` and `@lensx/plugin-sdk`
+packages, but repository validation does not perform a registry publish. The
+workspace does not yet provide a UI library, public Testkit, or CLI, and it does
+not discover, install, register, or execute plugins. The SDK package is a
+client/transport foundation, not a working iframe Runtime or Host API.
 
 The shipped static Manifest contract remains validation-only. A package being
 inside this workspace does not grant it Host trust, Tauri access, permissions,
@@ -27,9 +28,9 @@ examples/plugins/*
 `packages/*` is reserved for public workspace packages. Official and example
 plugins use separate member areas but follow the same external-plugin source
 boundaries. A package outside these patterns, or nested more deeply, is not a
-workspace member. The external Contract consumer at
-`examples/plugin-contract-consumer` remains ordinary project data and is not a
-workspace package.
+workspace member. The external Contract and SDK consumers at
+`examples/plugin-contract-consumer` and `examples/plugin-sdk-consumer` remain
+ordinary project data and are not workspace packages.
 
 Every actual member must declare all four lifecycle scripts:
 
@@ -75,6 +76,57 @@ tests, checks TypeScript/Rust shared fixtures, packs a real tarball, verifies
 its file list and exports, and installs it into an isolated consumer for
 typecheck and runtime smoke testing.
 
+## Plugin SDK Package
+
+`packages/plugin-sdk` owns the framework-neutral SDK client lifecycle, validated
+Runtime context, version compatibility, stable SDK errors, cancellation and
+timeout behavior, and the semantic transport interface. Its only supported
+import is:
+
+```text
+@lensx/plugin-sdk
+```
+
+The package has one direct Runtime dependency,
+`@lensx/plugin-contract`, and imports `PLUGIN_HOST_API_VERSION` from that
+package as the current Host API fact. It exposes its independent
+`PLUGIN_SDK_VERSION` and `PLUGIN_SDK_SUPPORTED_HOST_API_RANGE`; it does not
+re-export or duplicate the current Host API version.
+
+Use an explicit instance and injected transport:
+
+```ts
+import { createPluginSdk, type PluginSdkTransport } from '@lensx/plugin-sdk';
+
+declare const transport: PluginSdkTransport;
+const client = createPluginSdk({ transport });
+const context = await client.initialize();
+await client.dispose();
+```
+
+The client has no arbitrary raw Host method call. The transport interface is
+for future trusted adapters and tests; it is not an iframe implementation or a
+public wire protocol. Package-internal tests use a private fake, while the
+public Testkit remains future work.
+
+Validate the SDK with:
+
+```bash
+pnpm --dir packages/plugin-sdk run build
+pnpm --dir packages/plugin-sdk run typecheck
+pnpm --dir packages/plugin-sdk run test
+pnpm --dir packages/plugin-sdk run check
+pnpm --dir packages/plugin-sdk run test:pack
+pnpm run check:plugin-sdk
+```
+
+The pack gate builds real Contract and SDK tarballs, verifies the SDK file list,
+root-only exports, declarations, and Runtime dependency metadata, and installs
+both tarballs into an isolated external consumer. That consumer typechecks with
+`lib: ["ES2022"]` and no DOM types, runs an ESM lifecycle smoke test, and proves
+that an undeclared SDK deep import is rejected. Tests, fixtures, scripts, and
+Host-private source are excluded from the tarball.
+
 ## Root Commands
 
 The standard root commands are repository-wide entry points:
@@ -98,6 +150,7 @@ Use these focused commands when changing workspace tooling:
 pnpm run check:workspace-boundaries
 pnpm run test:workspace-boundaries
 pnpm run test:workspace-lifecycle
+pnpm run check:plugin-sdk
 ```
 
 ## Dependency Direction

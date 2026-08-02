@@ -8,10 +8,15 @@ import {
   WORKSPACE_BOUNDARY_RULES,
 } from '../scripts/check-workspace-boundaries.ts';
 
+const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 const fixtureRoot = (name: string): string =>
   fileURLToPath(new URL(`fixtures/workspace-boundaries/${name}`, import.meta.url));
 
 describe('workspace boundary checker', () => {
+  test('accepts the real Contract to SDK public dependency and package exports', () => {
+    expect(checkWorkspaceBoundaries(repositoryRoot)).toEqual([]);
+  });
+
   test('accepts public package exports for official and example plugins', () => {
     expect(checkWorkspaceBoundaries(fixtureRoot('valid'))).toEqual([]);
   });

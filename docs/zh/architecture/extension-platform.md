@@ -2,8 +2,9 @@
 
 ## 文档状态
 
-本文区分已经交付的静态插件 Manifest 契约与预期的运行时扩展边界。安装、分发、插件执行、
-权限、插件 action 投影与搜索和 Host API 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
+本文区分已经交付的静态插件 Manifest 契约、Plugin SDK foundation 与预期的运行时扩展边界。
+安装、分发、插件执行、权限、插件 action 投影与搜索、iframe transport 和 Host API 当前尚未实现。
+稳定 spec 和源码共同决定已经交付的子集。
 
 ## 目标
 
@@ -124,6 +125,46 @@ scripts 或 Host 私有源码。
 registry、搜索这些 Action、导航 Page、交换 Host API 消息或运行插件代码。当前 App Shell 可以
 搜索 Host 内建 launcher Action，但静态 Manifest 校验与该 registry、搜索路径、Action 集合或
 Host icon 投影没有连接。
+
+## 已交付的公共 Plugin SDK Foundation
+
+lensX 已交付框架无关的 `@lensx/plugin-sdk@0.1.0` workspace package。package 只有一个公共
+根入口，Runtime 只依赖 `@lensx/plugin-contract`。未声明的 deep import 不受支持；其公共声明
+不要求 React、Semi Design、Tauri、DOM 全局、Node filesystem 类型或 Host 私有模块。
+
+根入口公开 `createPluginSdk`、`PluginSdkError`、SDK lifecycle、Runtime context、取消和
+transport 类型，以及下列独立版本事实：
+
+| Export | 含义 |
+| --- | --- |
+| `PLUGIN_SDK_VERSION` | SDK package 与公共 API 版本，当前为 `0.1.0`。 |
+| `PLUGIN_SDK_SUPPORTED_HOST_API_RANGE` | 支持的 Host API 半开区间，当前为 `>=0.1.0 <0.2.0`。 |
+| `PLUGIN_HOST_API_VERSION` | SDK 不会重新导出；当前 Host API 版本仍由 `@lensx/plugin-contract` 持有。 |
+
+`createPluginSdk({ transport })` 返回相互隔离的 client，而不是全局 singleton。client 依次使用
+`idle`、`initializing`、`ready`、`disconnected` 和 `disposed` 状态。并发初始化共享同一次连接
+尝试；被取消、超时或失败的尝试回到 `idle`，允许显式重试。断开对当前 client 是终止状态，不会
+自动重连。销毁是幂等的，会取消 SDK 管理的 pending operation、移除 listener，并且最多销毁一次
+transport。
+
+进入 `ready` 前，SDK 校验、复制并冻结 `PluginRuntimeContext`。该 context 包含兼容的
+`hostApiVersion`、`en-US | zh-CN` locale、`light | dark` theme，以及唯一且只读的 capability
+ID snapshot。空 capability 列表有效，并不代表存在任何 Host API method。plugin identity、Page
+identity、已授予权限、安装来源和 Host lifecycle 事实都不是受支持的 context 输入。
+
+SDK 管理的 operation 默认超时为 10000 毫秒，并允许正有限整数覆盖。取消输入使用与原生
+`AbortSignal` 结构兼容的最小 signal，但公共声明不引用 DOM 类型。超时、取消、断开或销毁会把
+取消传给 transport、清理 timer 和 listener，并抑制迟到结果。
+
+`PluginSdkError.code` 提供稳定的 SDK 级分支：`cancelled`、`timeout`、`disconnected`、
+`disposed`、`incompatible_host_api`、`invalid_runtime_context`、`invalid_argument` 和
+`transport_failure`。transport exception 会映射为安全 SDK error，不暴露原始异常、私有 stack、
+Host 对象或 wire 数据。权限、未知 method 和 Host 参数错误仍属于后续 Host API contract。
+
+`PluginSdkTransport` 是连接、抽象请求、抽象事件、断开通知与销毁的语义 adapter 注入边界。
+它不定义 request ID、nonce、identity、origin、`Window`、`MessagePort`、`postMessage` 或
+JSON-RPC envelope。公共 `PluginSdkClient` 特意不提供任意字符串 Host method 调用。package
+测试 fake 是私有 fixture；公共 Plugin Testkit 尚未交付。
 
 ## Host Action Registry
 

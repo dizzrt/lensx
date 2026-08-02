@@ -9,7 +9,7 @@ const fixtureRoot = (name: string): string =>
   fileURLToPath(new URL(`fixtures/workspace-lifecycle/${name}`, import.meta.url));
 
 describe('workspace lifecycle aggregation', () => {
-  test('covers every Contract package lifecycle from the real workspace', () => {
+  test('covers every public package lifecycle from the real workspace in dependency order', () => {
     for (const lifecycle of ['build', 'typecheck', 'test', 'check'] as const) {
       const invocations: string[] = [];
       runWorkspaceLifecycle({
@@ -20,7 +20,11 @@ describe('workspace lifecycle aggregation', () => {
           return 0;
         },
       });
-      expect(invocations).toContain(`@lensx/plugin-contract (packages/plugin-contract):${lifecycle}`);
+      expect(invocations).toEqual([
+        `root application:app:${lifecycle}`,
+        `@lensx/plugin-contract (packages/plugin-contract):${lifecycle}`,
+        `@lensx/plugin-sdk (packages/plugin-sdk):${lifecycle}`,
+      ]);
     }
   });
 
