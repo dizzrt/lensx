@@ -1,6 +1,10 @@
 use serde::Serialize;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
+#[cfg(target_os = "macos")]
+use tauri::menu::{
+    AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu, HELP_SUBMENU_ID, WINDOW_SUBMENU_ID,
+};
 use tauri::plugin::TauriPlugin;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State, WebviewWindow, WindowEvent};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
@@ -8,7 +12,22 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 pub const MAIN_WINDOW_LABEL: &str = "main";
 pub const LAUNCHER_ACTIVATED_EVENT: &str = "launcher://activated";
 pub const DEFAULT_SHORTCUT_LABEL: &str = "Ctrl+Shift+Space";
+pub const MACOS_CLOSE_WINDOW_MENU_ID: &str = "lensx.macos.close_window";
+const MACOS_CLOSE_WINDOW_ACCELERATOR: &str = "Cmd+W";
 const DEFAULT_SHORTCUT_BINDINGS: [&str; 1] = [DEFAULT_SHORTCUT_LABEL];
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct MacosMenuShortcutBinding {
+    id: &'static str,
+    accelerator: &'static str,
+    action: LauncherWindowAction,
+}
+
+const MACOS_MENU_SHORTCUT_BINDINGS: [MacosMenuShortcutBinding; 1] = [MacosMenuShortcutBinding {
+    id: MACOS_CLOSE_WINDOW_MENU_ID,
+    accelerator: MACOS_CLOSE_WINDOW_ACCELERATOR,
+    action: LauncherWindowAction::Hide,
+}];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -44,6 +63,7 @@ pub enum LauncherWindowOperation {
     Hide,
     Focus,
     EmitActivation,
+    InstallMenu,
 }
 
 impl Display for LauncherWindowOperation {
@@ -56,6 +76,7 @@ impl Display for LauncherWindowOperation {
             Self::Hide => "hide",
             Self::Focus => "focus",
             Self::EmitActivation => "emit_activation",
+            Self::InstallMenu => "install_menu",
         };
 
         formatter.write_str(operation)
@@ -298,6 +319,28 @@ fn route_shortcut_event(
     }
 }
 
+fn route_macos_menu_event(menu_id: &str) -> Option<LauncherWindowAction> {
+    MACOS_MENU_SHORTCUT_BINDINGS
+        .iter()
+        .find(|binding| binding.id == menu_id)
+        .map(|binding| binding.action)
+}
+
+fn dispatch_macos_menu_event<F>(
+    menu_id: &str,
+    dispatch: F,
+) -> Result<bool, LauncherWindowActionError>
+where
+    F: FnOnce(LauncherWindowAction) -> Result<(), LauncherWindowActionError>,
+{
+    let Some(action) = route_macos_menu_event(menu_id) else {
+        return Ok(false);
+    };
+
+    dispatch(action)?;
+    Ok(true)
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ShortcutEventState {
     Pressed,
@@ -381,6 +424,11 @@ enum LauncherLifecycleSetupError {
     WindowListener(LauncherWindowActionError),
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct LauncherLifecycleSetupOutcome {
+    menu_installation_error: Option<LauncherWindowActionError>,
+}
+
 impl Display for LauncherLifecycleSetupError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -401,15 +449,17 @@ impl Display for LauncherLifecycleSetupError {
     }
 }
 
-fn initialize_launcher_lifecycle<I, R, F>(
+fn initialize_launcher_lifecycle<I, R, F, M>(
     plugin_installer: &I,
     registrar: &R,
     install_window_listener: F,
-) -> Result<(), LauncherLifecycleSetupError>
+    install_macos_menu: M,
+) -> Result<LauncherLifecycleSetupOutcome, LauncherLifecycleSetupError>
 where
     I: ShortcutPluginInstaller,
     R: ShortcutRegistrar,
     F: FnOnce() -> Result<(), LauncherWindowActionError>,
+    M: FnOnce() -> Result<(), LauncherWindowActionError>,
 {
     debug_assert_eq!(DEFAULT_SHORTCUT_BINDINGS.len(), 1);
     plugin_installer
@@ -422,7 +472,11 @@ where
         })
     })?;
 
-    install_window_listener().map_err(LauncherLifecycleSetupError::WindowListener)
+    install_window_listener().map_err(LauncherLifecycleSetupError::WindowListener)?;
+
+    Ok(LauncherLifecycleSetupOutcome {
+        menu_installation_error: install_macos_menu().err(),
+    })
 }
 
 fn resolve_main_window<R: Runtime>(
@@ -445,6 +499,23 @@ fn dispatch_hide<R: Runtime>(app: &AppHandle<R>, trigger: &str) {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LauncherWindowEventRoute {
+    PreventCloseAndHide,
+    Hide,
+    Ignore,
+}
+
+fn route_window_event(is_close_requested: bool, focus: Option<bool>) -> LauncherWindowEventRoute {
+    if is_close_requested {
+        LauncherWindowEventRoute::PreventCloseAndHide
+    } else if focus == Some(false) {
+        LauncherWindowEventRoute::Hide
+    } else {
+        LauncherWindowEventRoute::Ignore
+    }
+}
+
 fn install_window_lifecycle_listener<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<(), LauncherWindowActionError> {
@@ -453,11 +524,15 @@ fn install_window_lifecycle_listener<R: Runtime>(
     let app = app.clone();
 
     window.on_window_event(move |event| match event {
-        WindowEvent::CloseRequested { api, .. } => {
+        WindowEvent::CloseRequested { api, .. }
+            if route_window_event(true, None) == LauncherWindowEventRoute::PreventCloseAndHide =>
+        {
             api.prevent_close();
             dispatch_hide(&app, "close request");
         }
-        WindowEvent::Focused(false) => {
+        WindowEvent::Focused(focused)
+            if route_window_event(false, Some(*focused)) == LauncherWindowEventRoute::Hide =>
+        {
             dispatch_hide(&app, "focus loss");
         }
         _ => {}
@@ -466,15 +541,153 @@ fn install_window_lifecycle_listener<R: Runtime>(
     Ok(())
 }
 
+#[cfg(target_os = "macos")]
+fn build_macos_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
+    debug_assert_eq!(MACOS_MENU_SHORTCUT_BINDINGS.len(), 1);
+    let close_binding = MACOS_MENU_SHORTCUT_BINDINGS[0];
+    let package_info = app.package_info();
+    let config = app.config();
+    let about_metadata = AboutMetadata {
+        name: Some(package_info.name.clone()),
+        version: Some(package_info.version.to_string()),
+        copyright: config.bundle.copyright.clone(),
+        authors: config
+            .bundle
+            .publisher
+            .clone()
+            .map(|publisher| vec![publisher]),
+        ..Default::default()
+    };
+    let close_window = MenuItem::with_id(
+        app,
+        close_binding.id,
+        "Close Window",
+        true,
+        Some(close_binding.accelerator),
+    )?;
+    let window_menu = Submenu::with_id_and_items(
+        app,
+        WINDOW_SUBMENU_ID,
+        "Window",
+        true,
+        &[
+            &PredefinedMenuItem::minimize(app, None)?,
+            &PredefinedMenuItem::maximize(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+        ],
+    )?;
+    let help_menu = Submenu::with_id_and_items(app, HELP_SUBMENU_ID, "Help", true, &[])?;
+
+    Menu::with_items(
+        app,
+        &[
+            &Submenu::with_items(
+                app,
+                package_info.name.clone(),
+                true,
+                &[
+                    &PredefinedMenuItem::about(app, None, Some(about_metadata))?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::services(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::hide(app, None)?,
+                    &PredefinedMenuItem::hide_others(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::quit(app, None)?,
+                ],
+            )?,
+            &Submenu::with_items(app, "File", true, &[&close_window])?,
+            &Submenu::with_items(
+                app,
+                "Edit",
+                true,
+                &[
+                    &PredefinedMenuItem::undo(app, None)?,
+                    &PredefinedMenuItem::redo(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::cut(app, None)?,
+                    &PredefinedMenuItem::copy(app, None)?,
+                    &PredefinedMenuItem::paste(app, None)?,
+                    &PredefinedMenuItem::select_all(app, None)?,
+                ],
+            )?,
+            &Submenu::with_items(
+                app,
+                "View",
+                true,
+                &[&PredefinedMenuItem::fullscreen(app, None)?],
+            )?,
+            &window_menu,
+            &help_menu,
+        ],
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn install_macos_close_window_menu<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<(), LauncherWindowActionError> {
+    let action = LauncherWindowAction::Hide;
+    let menu = build_macos_app_menu(app).map_err(|error| {
+        LauncherWindowActionError::new(
+            action,
+            LauncherWindowOperation::InstallMenu,
+            error.to_string(),
+        )
+    })?;
+
+    app.set_menu(menu).map_err(|error| {
+        LauncherWindowActionError::new(
+            action,
+            LauncherWindowOperation::InstallMenu,
+            error.to_string(),
+        )
+    })?;
+    app.on_menu_event(|app, event| {
+        let actions = app.state::<LauncherWindowActions>();
+        match dispatch_macos_menu_event(event.id().as_ref(), |action| actions.dispatch(app, action))
+        {
+            Ok(true) => {
+                eprintln!("macOS Close Window menu routed to launcher action 'hide'");
+            }
+            Ok(false) => {}
+            Err(error) => {
+                eprintln!("macOS Close Window menu action failed: {error}");
+            }
+        }
+    });
+
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn install_macos_close_window_menu<R: Runtime>(
+    _app: &AppHandle<R>,
+) -> Result<(), LauncherWindowActionError> {
+    Ok(())
+}
+
 pub fn setup_launcher_window<R: Runtime>(app: &AppHandle<R>) {
     app.manage(LauncherWindowActions);
 
     let plugin_installer = TauriShortcutPluginInstaller { app };
     let registrar = TauriShortcutRegistrar { app };
-    match initialize_launcher_lifecycle(&plugin_installer, &registrar, || {
-        install_window_lifecycle_listener(app)
-    }) {
-        Ok(()) => {}
+    match initialize_launcher_lifecycle(
+        &plugin_installer,
+        &registrar,
+        || install_window_lifecycle_listener(app),
+        || install_macos_close_window_menu(app),
+    ) {
+        Ok(LauncherLifecycleSetupOutcome {
+            menu_installation_error: Some(error),
+        }) => {
+            eprintln!(
+                "{error}; macOS Cmd+W hide remains disabled while the registered recovery shortcut and window lifecycle listeners remain available"
+            );
+        }
+        Ok(LauncherLifecycleSetupOutcome {
+            menu_installation_error: None,
+        }) => {}
         Err(LauncherLifecycleSetupError::PluginInstallation(details)) => {
             eprintln!(
                 "failed to install global shortcut plugin: {details}; launcher hide-on-close and hide-on-blur remain disabled so the visible window can close normally"
@@ -744,6 +957,81 @@ mod tests {
         );
     }
 
+    #[test]
+    fn macos_close_menu_routes_only_the_stable_id_to_hide() {
+        assert_eq!(
+            route_macos_menu_event(MACOS_CLOSE_WINDOW_MENU_ID),
+            Some(LauncherWindowAction::Hide)
+        );
+        assert_eq!(route_macos_menu_event("lensx.macos.unknown"), None);
+    }
+
+    #[test]
+    fn macos_menu_declares_exactly_one_cmd_w_binding() {
+        assert_eq!(MACOS_MENU_SHORTCUT_BINDINGS.len(), 1);
+        assert_eq!(
+            MACOS_MENU_SHORTCUT_BINDINGS[0],
+            MacosMenuShortcutBinding {
+                id: MACOS_CLOSE_WINDOW_MENU_ID,
+                accelerator: MACOS_CLOSE_WINDOW_ACCELERATOR,
+                action: LauncherWindowAction::Hide,
+            }
+        );
+    }
+
+    #[test]
+    fn macos_menu_dispatch_reuses_hide_and_preserves_failure_diagnostics() {
+        let requested_action = Cell::new(None);
+        assert!(
+            dispatch_macos_menu_event(MACOS_CLOSE_WINDOW_MENU_ID, |action| {
+                requested_action.set(Some(action));
+                Ok(())
+            })
+            .expect("known menu event should dispatch")
+        );
+        assert_eq!(requested_action.get(), Some(LauncherWindowAction::Hide));
+
+        let error = dispatch_macos_menu_event(MACOS_CLOSE_WINDOW_MENU_ID, |action| {
+            Err(LauncherWindowActionError::new(
+                action,
+                LauncherWindowOperation::Hide,
+                "native hide failed",
+            ))
+        })
+        .expect_err("hide failure should remain diagnosable");
+        assert_eq!(error.action, LauncherWindowAction::Hide);
+        assert_eq!(error.operation, LauncherWindowOperation::Hide);
+        assert!(error.to_string().contains("native hide failed"));
+
+        let unknown_dispatched = Cell::new(false);
+        assert!(!dispatch_macos_menu_event("lensx.macos.unknown", |_| {
+            unknown_dispatched.set(true);
+            Ok(())
+        })
+        .expect("unknown menu event should be ignored"));
+        assert!(!unknown_dispatched.get());
+    }
+
+    #[test]
+    fn close_and_focus_loss_keep_the_existing_hide_routes() {
+        assert_eq!(
+            route_window_event(true, None),
+            LauncherWindowEventRoute::PreventCloseAndHide
+        );
+        assert_eq!(
+            route_window_event(false, Some(false)),
+            LauncherWindowEventRoute::Hide
+        );
+        assert_eq!(
+            route_window_event(false, Some(true)),
+            LauncherWindowEventRoute::Ignore
+        );
+        assert_eq!(
+            route_window_event(false, None),
+            LauncherWindowEventRoute::Ignore
+        );
+    }
+
     struct FakeRegistrar {
         attempts: Cell<usize>,
         fail: bool,
@@ -799,15 +1087,26 @@ mod tests {
             order: Some(Rc::clone(&order)),
         };
 
-        initialize_launcher_lifecycle(&plugin_installer, &registrar, || {
-            order.borrow_mut().push("listener");
-            Ok(())
-        })
+        initialize_launcher_lifecycle(
+            &plugin_installer,
+            &registrar,
+            || {
+                order.borrow_mut().push("listener");
+                Ok(())
+            },
+            || {
+                order.borrow_mut().push("menu");
+                Ok(())
+            },
+        )
         .expect("initialization should succeed");
 
         assert_eq!(plugin_installer.attempts.get(), 1);
         assert_eq!(registrar.attempts.get(), 1);
-        assert_eq!(*order.borrow(), vec!["plugin", "register", "listener"]);
+        assert_eq!(
+            *order.borrow(),
+            vec!["plugin", "register", "listener", "menu"]
+        );
     }
 
     #[test]
@@ -823,16 +1122,26 @@ mod tests {
             order: None,
         };
         let listener_installed = Cell::new(false);
+        let menu_installed = Cell::new(false);
 
-        let error = initialize_launcher_lifecycle(&plugin_installer, &registrar, || {
-            listener_installed.set(true);
-            Ok(())
-        })
+        let error = initialize_launcher_lifecycle(
+            &plugin_installer,
+            &registrar,
+            || {
+                listener_installed.set(true);
+                Ok(())
+            },
+            || {
+                menu_installed.set(true);
+                Ok(())
+            },
+        )
         .expect_err("plugin installation should fail");
 
         assert_eq!(plugin_installer.attempts.get(), 1);
         assert_eq!(registrar.attempts.get(), 0);
         assert!(!listener_installed.get());
+        assert!(!menu_installed.get());
         assert!(matches!(
             error,
             LauncherLifecycleSetupError::PluginInstallation(_)
@@ -855,21 +1164,75 @@ mod tests {
             order: None,
         };
         let listener_installed = Cell::new(false);
+        let menu_installed = Cell::new(false);
 
-        let error = initialize_launcher_lifecycle(&plugin_installer, &registrar, || {
-            listener_installed.set(true);
-            Ok(())
-        })
+        let error = initialize_launcher_lifecycle(
+            &plugin_installer,
+            &registrar,
+            || {
+                listener_installed.set(true);
+                Ok(())
+            },
+            || {
+                menu_installed.set(true);
+                Ok(())
+            },
+        )
         .expect_err("registration should fail");
 
         assert_eq!(plugin_installer.attempts.get(), 1);
         assert_eq!(registrar.attempts.get(), 1);
         assert!(!listener_installed.get());
+        assert!(!menu_installed.get());
         assert!(matches!(
             error,
             LauncherLifecycleSetupError::ShortcutRegistration(_)
         ));
         assert!(error.to_string().contains(DEFAULT_SHORTCUT_LABEL));
         assert!(error.to_string().contains("shortcut already in use"));
+    }
+
+    #[test]
+    fn menu_installation_failure_is_diagnosed_without_disabling_ready_lifecycle() {
+        let plugin_installer = FakePluginInstaller {
+            attempts: Cell::new(0),
+            fail: false,
+            order: None,
+        };
+        let registrar = FakeRegistrar {
+            attempts: Cell::new(0),
+            fail: false,
+            order: None,
+        };
+        let listener_installed = Cell::new(false);
+
+        let outcome = initialize_launcher_lifecycle(
+            &plugin_installer,
+            &registrar,
+            || {
+                listener_installed.set(true);
+                Ok(())
+            },
+            || {
+                Err(LauncherWindowActionError::new(
+                    LauncherWindowAction::Hide,
+                    LauncherWindowOperation::InstallMenu,
+                    "native menu installation failed",
+                ))
+            },
+        )
+        .expect("menu installation failure should be a local degradation");
+
+        assert_eq!(plugin_installer.attempts.get(), 1);
+        assert_eq!(registrar.attempts.get(), 1);
+        assert!(listener_installed.get());
+        let error = outcome
+            .menu_installation_error
+            .expect("menu installation diagnostic should be retained");
+        assert_eq!(error.action, LauncherWindowAction::Hide);
+        assert_eq!(error.operation, LauncherWindowOperation::InstallMenu);
+        assert!(error
+            .to_string()
+            .contains("native menu installation failed"));
     }
 }

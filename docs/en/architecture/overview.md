@@ -137,6 +137,22 @@ registration fails, the application reports the binding failure and leaves
 hide-on-close and hide-on-blur disabled, so the visible window keeps ordinary
 close behavior instead of becoming unrecoverable.
 
+On macOS, the undecorated launcher cannot rely on the default Close Window
+menu command: its native `performClose:` selector expects a closable window
+style and therefore does not produce `CloseRequested` for this borderless
+surface. Once the recovery shortcut and native window listeners are ready, the
+Host replaces the default application menu with an application-owned menu that
+preserves the standard application, edit, view, window, help, and `Cmd+Q` quit
+semantics while removing every predefined Close Window accelerator. Exactly
+one custom Close Window item owns the application-local `Cmd+W` accelerator
+and routes its stable menu ID through the same Rust `Hide` action boundary used
+by native close requests and focus loss. It is not a global shortcut and does
+not affect `Cmd+W` in other applications. If the recovery shortcut or window
+listener is unavailable, the custom menu is not installed. If menu installation
+itself fails, the Host records the `hide` action and `install_menu` operation
+stage without terminating the process; the already registered recovery
+shortcut and native lifecycle listeners remain available.
+
 After a successful `show`, Rust emits `launcher://activated` to the main
 webview. Its serializable payload contains a `reason` field with one of
 `startup`, `global_shortcut`, or `programmatic`, using snake-case serialized

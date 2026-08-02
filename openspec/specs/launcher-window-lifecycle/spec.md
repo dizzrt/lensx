@@ -233,9 +233,21 @@ is running.
 
 After the default global shortcut is registered successfully, the system MUST
 prevent a main-window close request from terminating the application and MUST
-route the request to `hide`. The system MUST route main-window focus loss to
-`hide`. Window events emitted after a system-initiated hide MUST NOT cause an
-action loop or terminate the application.
+route the request to `hide`. On macOS, the system MUST provide exactly one
+application-local `Cmd+W` window-close shortcut entry point. When the
+undecorated main window cannot produce a close event through the native close
+command, that entry point MUST still route to `hide` through the unified action
+boundary. The system MUST NOT register `Cmd+W` as a system-wide global
+shortcut. The system MUST route main-window focus loss to `hide`. Window events
+emitted after a system-initiated hide MUST NOT cause an action loop or terminate
+the application.
+
+The application-local macOS `Cmd+W` entry point MUST be enabled only after the
+default global shortcut is registered successfully. If menu-event installation
+or routing fails, or if the hide operation fails, the system MUST make failure
+information available for developer diagnosis, MUST NOT expose native error
+details to the user, and MUST NOT terminate the application process because of
+the failure.
 
 #### Scenario: Close a ready launcher window
 
@@ -244,6 +256,49 @@ action loop or terminate the application.
 - **THEN** the system prevents the default close behavior
 - **THEN** the system hides the main window through the unified action boundary
 - **THEN** the application process continues running
+
+#### Scenario: Press Cmd+W in a ready macOS launcher
+
+- **WHEN** the default global shortcut has been registered successfully
+- **AND** the macOS main window is visible and lensX is the foreground
+  application
+- **AND** the user presses `Cmd+W`
+- **THEN** exactly one application-local menu shortcut entry point handles the
+  key press
+- **THEN** the system hides the main window through the unified action boundary
+- **THEN** the main window is not destroyed and the application process
+  continues running
+
+#### Scenario: Restore the launcher after Cmd+W
+
+- **WHEN** the macOS main window has been hidden by `Cmd+W`
+- **AND** the user presses the default global shortcut
+- **THEN** the system shows and focuses the main window through the unified
+  action boundary
+- **THEN** the existing typed activation event restores focus to the launcher
+  input
+
+#### Scenario: Default recovery shortcut is unavailable on macOS
+
+- **WHEN** the global-shortcut plugin is unavailable or registration of the
+  default global shortcut fails
+- **AND** the user presses `Cmd+W`
+- **THEN** the new application-local `Cmd+W` entry point does not hide the main
+  window
+- **THEN** the system does not produce a hidden window that cannot be restored
+  through a configured path
+
+#### Scenario: Cmd+W hide fails
+
+- **WHEN** the application-local macOS `Cmd+W` entry point has handled the key
+  press
+- **AND** the unified `hide` action cannot resolve or hide the main window
+- **THEN** the system preserves the window's last successfully established
+  visibility state
+- **THEN** the failure information identifies the requested action and failed
+  native operation stage for developer diagnosis
+- **THEN** the system does not expose native error details to the user or
+  terminate the application process
 
 #### Scenario: The launcher main window loses focus
 

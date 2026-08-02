@@ -102,6 +102,16 @@ Rust 通过单一动作边界拥有全部 launcher 原生窗口操作：
 如果快捷键注册失败，应用会报告包含绑定的错误，并保持关闭转隐藏和失焦隐藏为禁用状态，使可见窗口
 保留普通关闭行为，而不会进入无法恢复的隐藏状态。
 
+在 macOS 上，无装饰 launcher 不能依赖默认的“关闭窗口”菜单命令：其原生 `performClose:` selector
+要求窗口具备 closable style，因此不会为这个无边框承载面产生 `CloseRequested`。只有在恢复快捷键
+和原生窗口 listener 都就绪后，Host 才会用应用所有的菜单替换默认应用菜单；该菜单保留标准的应用、
+编辑、显示、窗口、帮助以及 `Cmd+Q` 退出语义，同时移除所有 predefined Close Window accelerator。
+恰好一个自定义“关闭窗口”项目持有应用内 `Cmd+W` accelerator，其稳定菜单 ID 会进入与原生关闭请求
+和失焦相同的 Rust `Hide` action 边界。它不是全局快捷键，也不会影响其他应用中的 `Cmd+W`。如果恢复
+快捷键或窗口 listener 不可用，Host 不会安装该自定义菜单；如果菜单安装本身失败，Host 会记录
+`hide` action 与 `install_menu` 操作阶段且不会终止进程，已经注册的恢复快捷键和原生生命周期 listener
+仍然可用。
+
 每次 `show` 成功后，Rust 向主 webview 发送 `launcher://activated`。其可序列化 payload 包含
 `reason` 字段，值为 `startup`、`global_shortcut` 或 `programmatic` 之一，并使用 snake-case
 序列化值。React 通过类型化桌面 adapter 接收该契约。launcher 输入在首次挂载时主动聚焦，并在每次
