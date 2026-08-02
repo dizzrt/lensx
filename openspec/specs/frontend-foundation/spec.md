@@ -128,6 +128,83 @@ or other unimplemented capabilities as actionable features.
   accepted Launcher Action collections
 - **THEN** the page does not describe planned capabilities as implemented
 
+### Requirement: The unified top drag region must preserve App Shell interaction semantics
+
+The App Shell MUST treat the complete top surface shared by the `home`,
+`search`, and `page` presentation states as one consistent window drag region
+while preserving the existing product semantics, accessibility, and keyboard
+behavior of elements within that region. A stationary primary-mouse click on
+the search input MUST continue to focus the input and permit caret placement.
+A primary-mouse drag MUST initiate window movement and MUST NOT modify the
+query. Keyboard input, IME composition, and keyboard text selection MUST NOT
+initiate window dragging.
+
+The page close control MUST remain an accessible button and MUST be excluded
+from drag gestures. The avatar MUST remain a non-clickable, non-focusable
+decorative element hidden from assistive technology; allowing a drag to start
+from the avatar MUST NOT give it button, link, menu, or account semantics. This
+behavior MUST remain consistent in English and Simplified Chinese and in light
+and dark themes, and MUST NOT introduce new user-visible copy or persistent
+visual fills.
+
+#### Scenario: Click the search input without moving the pointer
+
+- **WHEN** the user clicks the search input with the primary mouse button and
+  does not move the pointer
+- **THEN** the search input gains or retains focus
+- **THEN** the caret can be placed at the clicked position
+- **THEN** the system does not modify the query or execute an Action
+
+#### Scenario: Drag the window from the search input
+
+- **WHEN** the user holds the primary mouse button inside the search input and
+  moves the pointer
+- **THEN** the App Shell requests native window dragging
+- **THEN** the search input remains editable and the current query is unchanged
+- **THEN** the gesture is not required to perform mouse text-range selection
+
+#### Scenario: Edit and select the query with the keyboard
+
+- **WHEN** the search input has focus and the user enters text, performs IME
+  composition, or selects text with the keyboard
+- **THEN** the input continues to follow the existing controlled-search
+  behavior
+- **THEN** the App Shell does not request window dragging
+
+#### Scenario: Close the active page from the page state
+
+- **WHEN** the user activates the page-context close control with a pointer or
+  keyboard
+- **THEN** the close control does not request window dragging
+- **THEN** the App Shell returns to the `home` state and restores focus to the
+  search input
+
+#### Scenario: Inspect avatar semantics
+
+- **WHEN** a user or assistive technology inspects the decorative avatar that
+  supports starting a window drag
+- **THEN** the avatar has no button, link, menu-trigger, or keyboard-focus
+  semantics
+- **THEN** dragging from the avatar does not invoke account, navigation, or
+  management behavior
+
+#### Scenario: Switch localization and theme
+
+- **WHEN** the App Shell renders the unified top region in English or Simplified
+  Chinese and in light or dark theme
+- **THEN** the same drag and exclusion rules continue to apply
+- **THEN** the top region retains its continuous-surface appearance without a
+  persistent drag-indicator fill or new copy
+
+#### Scenario: The window drag boundary rejects a request
+
+- **WHEN** the App Shell requests window dragging and the Host boundary rejects
+  the request
+- **THEN** the search input, query, Action selection, active page, and focus
+  state are not cleared
+- **THEN** the App Shell remains usable through its existing keyboard and
+  pointer interactions
+
 ### Requirement: Active pages must isolate content failures and preserve navigation
 
 The shared content region MUST isolate failures that occur after entering an

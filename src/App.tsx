@@ -1,5 +1,14 @@
 import { Button, Input, Typography } from '@douyinfe/semi-ui';
-import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AppMessageKey, useAppLocale } from './app/i18n';
 import { ActionSearchResults, getLauncherActionOptionId } from './app/launcher/ActionSearchResults';
@@ -31,6 +40,11 @@ import {
 } from './app/launcher/surface';
 import { useLauncherActivation } from './app/launcher/useLauncherActivation';
 import {
+  inertLauncherWindowDragController,
+  isLauncherWindowDragExcluded,
+  type LauncherWindowDragController,
+} from './app/launcher/windowDrag';
+import {
   type ActivePage,
   type AppNavigationService,
   productionAppNavigationService,
@@ -49,6 +63,7 @@ export interface AppProps {
   renderPage?: (activePage: ActivePage) => ReactNode;
   startupPreferencesErrorCode?: string;
   surfaceController?: LauncherSurfaceController;
+  windowDragController?: LauncherWindowDragController;
 }
 
 const ACTION_RESULTS_LISTBOX_ID = 'launcher-action-results';
@@ -75,6 +90,7 @@ const App = ({
   renderPage,
   startupPreferencesErrorCode,
   surfaceController = inertLauncherSurfaceController,
+  windowDragController = inertLauncherWindowDragController,
 }: AppProps) => {
   const { t } = useTranslation();
   const { locale } = useAppLocale();
@@ -381,6 +397,21 @@ const App = ({
     [clearSearch, effectiveSelectedActionId, executeAction, results, selectedIndex],
   );
 
+  const handleLauncherDragMouseDown = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (event.button !== 0 || isLauncherWindowDragExcluded(event.target)) {
+        return;
+      }
+
+      void windowDragController.startDragging().catch((error: unknown) => {
+        if (import.meta.env.DEV) {
+          console.error('Failed to start dragging the launcher window.', error);
+        }
+      });
+    },
+    [windowDragController],
+  );
+
   const searchStatusMessage = pendingActionId
     ? t('launcher.search.executing', {
         title:
@@ -404,98 +435,108 @@ const App = ({
 
   return (
     <main className="h-screen flex items-center justify-center">
-      <section className="launcher-surface h-full max-h-full w-full flex flex-col gap-3 p-4">
-        <div className="launcher-top-row flex items-center gap-3">
-          {presentationState === 'page' && activePage && pageContext ? (
-            <section
-              aria-label={`${pageContext.owner_name} / ${pageContext.action_name}`}
-              className="page-context-bar min-w-0 flex flex-1 items-center gap-2 px-3"
-            >
-              <Typography.Text className="page-context-owner" ellipsis strong>
-                {pageContext.owner_name}
-              </Typography.Text>
-              <Typography.Text aria-hidden="true" type="tertiary">
-                /
-              </Typography.Text>
-              <Typography.Text className="min-w-0 flex-1" ellipsis>
-                {pageContext.action_name}
-              </Typography.Text>
-              <Button
-                aria-label={t('launcher.page.closeLabel')}
-                className="page-context-close"
-                icon={<CloseIcon />}
-                onClick={closeActivePage}
-                theme="borderless"
-                type="tertiary"
+      <section className="launcher-surface h-full max-h-full w-full flex flex-col">
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: native window dragging is pointer-only surface behavior, not a product control */}
+        <div
+          className="launcher-drag-region w-full flex-none px-4 pt-4 pb-3"
+          data-launcher-drag-region="true"
+          onMouseDown={handleLauncherDragMouseDown}
+        >
+          <div className="launcher-top-row flex items-center gap-3">
+            {presentationState === 'page' && activePage && pageContext ? (
+              <section
+                aria-label={`${pageContext.owner_name} / ${pageContext.action_name}`}
+                className="page-context-bar min-w-0 flex flex-1 items-center gap-2 px-3"
+              >
+                <Typography.Text className="page-context-owner" ellipsis strong>
+                  {pageContext.owner_name}
+                </Typography.Text>
+                <Typography.Text aria-hidden="true" type="tertiary">
+                  /
+                </Typography.Text>
+                <Typography.Text className="min-w-0 flex-1" ellipsis>
+                  {pageContext.action_name}
+                </Typography.Text>
+                <Button
+                  aria-label={t('launcher.page.closeLabel')}
+                  className="page-context-close"
+                  data-launcher-drag-exclude="true"
+                  icon={<CloseIcon />}
+                  onClick={closeActivePage}
+                  theme="borderless"
+                  type="tertiary"
+                />
+              </section>
+            ) : (
+              <Input
+                aria-activedescendant={
+                  effectiveSelectedActionId ? getLauncherActionOptionId(effectiveSelectedActionId) : undefined
+                }
+                aria-autocomplete="list"
+                aria-busy={Boolean(pendingActionId)}
+                aria-controls={results.length > 0 ? ACTION_RESULTS_LISTBOX_ID : undefined}
+                aria-describedby={LAUNCHER_STATUS_ID}
+                aria-expanded={results.length > 0}
+                aria-label={t('launcher.inputLabel')}
+                autoComplete="off"
+                className="launcher-input min-w-0 flex-1"
+                onChange={handleQueryChange}
+                onKeyDown={handleInputKeyDown}
+                placeholder={t('launcher.inputPlaceholder')}
+                ref={inputRef}
+                role="combobox"
+                size="large"
+                value={query}
               />
-            </section>
-          ) : (
-            <Input
-              aria-activedescendant={
-                effectiveSelectedActionId ? getLauncherActionOptionId(effectiveSelectedActionId) : undefined
-              }
-              aria-autocomplete="list"
-              aria-busy={Boolean(pendingActionId)}
-              aria-controls={results.length > 0 ? ACTION_RESULTS_LISTBOX_ID : undefined}
-              aria-describedby={LAUNCHER_STATUS_ID}
-              aria-expanded={results.length > 0}
-              aria-label={t('launcher.inputLabel')}
-              autoComplete="off"
-              className="launcher-input min-w-0 flex-1"
-              onChange={handleQueryChange}
-              onKeyDown={handleInputKeyDown}
-              placeholder={t('launcher.inputPlaceholder')}
-              ref={inputRef}
-              role="combobox"
-              size="large"
-              value={query}
-            />
-          )}
-          <div aria-hidden="true" className="launcher-avatar flex flex-none items-center justify-center">
-            LX
+            )}
+            <div aria-hidden="true" className="launcher-avatar flex flex-none items-center justify-center">
+              LX
+            </div>
           </div>
         </div>
-        <div className="launcher-content min-h-0 flex flex-1 flex-col" data-presentation-state={presentationState}>
-          {presentationState === 'home' ? (
-            <LauncherHome
-              locale={locale}
-              onActivate={(actionId) => void executeAction(actionId)}
-              onSetPinned={setActionPinned}
-              pendingActionId={pendingActionId}
-              pendingPinActionId={pendingPinActionId}
-              pinnedActions={pinnedActions}
-              recentActions={recentActions}
-            />
-          ) : null}
-          {presentationState === 'search' ? (
-            <ActionSearchResults
-              listboxId={ACTION_RESULTS_LISTBOX_ID}
-              onActivate={(actionId) => void executeAction(actionId)}
-              pendingActionId={pendingActionId}
-              results={results}
-              selectedActionId={effectiveSelectedActionId}
-              visibleError={visibleSearchError}
-            />
-          ) : null}
-          {presentationState === 'page' && activePage ? (
-            <PageErrorBoundary key={`${activePage.owner_id}/${activePage.page_id}`}>
-              {renderPage ? renderPage(activePage) : <SettingsPage preferencesClient={preferencesClient} />}
-            </PageErrorBoundary>
-          ) : null}
+        <div className="launcher-body min-h-0 flex flex-1 flex-col gap-3 px-4 pb-4">
+          <div className="launcher-content min-h-0 flex flex-1 flex-col" data-presentation-state={presentationState}>
+            {presentationState === 'home' ? (
+              <LauncherHome
+                locale={locale}
+                onActivate={(actionId) => void executeAction(actionId)}
+                onSetPinned={setActionPinned}
+                pendingActionId={pendingActionId}
+                pendingPinActionId={pendingPinActionId}
+                pinnedActions={pinnedActions}
+                recentActions={recentActions}
+              />
+            ) : null}
+            {presentationState === 'search' ? (
+              <ActionSearchResults
+                listboxId={ACTION_RESULTS_LISTBOX_ID}
+                onActivate={(actionId) => void executeAction(actionId)}
+                pendingActionId={pendingActionId}
+                results={results}
+                selectedActionId={effectiveSelectedActionId}
+                visibleError={visibleSearchError}
+              />
+            ) : null}
+            {presentationState === 'page' && activePage ? (
+              <PageErrorBoundary key={`${activePage.owner_id}/${activePage.page_id}`}>
+                {renderPage ? renderPage(activePage) : <SettingsPage preferencesClient={preferencesClient} />}
+              </PageErrorBoundary>
+            ) : null}
+          </div>
+          <Typography.Text
+            aria-atomic="true"
+            aria-live="polite"
+            className={presentationState === 'home' && homeFeedbackMessage ? 'launcher-feedback' : 'sr-only'}
+            data-feedback={presentationState === 'home' && homeFeedbackMessage ? 'error' : undefined}
+            id={LAUNCHER_STATUS_ID}
+            role="status"
+            type={presentationState === 'home' && homeFeedbackMessage ? 'danger' : 'tertiary'}
+          >
+            {presentationState === 'home'
+              ? homeFeedbackMessage || searchStatusMessage
+              : searchStatusMessage || homeFeedbackMessage}
+          </Typography.Text>
         </div>
-        <Typography.Text
-          aria-atomic="true"
-          aria-live="polite"
-          className={presentationState === 'home' && homeFeedbackMessage ? 'launcher-feedback' : 'sr-only'}
-          data-feedback={presentationState === 'home' && homeFeedbackMessage ? 'error' : undefined}
-          id={LAUNCHER_STATUS_ID}
-          role="status"
-          type={presentationState === 'home' && homeFeedbackMessage ? 'danger' : 'tertiary'}
-        >
-          {presentationState === 'home'
-            ? homeFeedbackMessage || searchStatusMessage
-            : searchStatusMessage || homeFeedbackMessage}
-        </Typography.Text>
       </section>
     </main>
   );

@@ -143,6 +143,22 @@ Shell layout and spacing in UnoCSS utilities.
   `search`, the ID-derived page context bar for `page`, and the non-interactive
   avatar placeholder in every state. Do not restore a separate product title or
   description.
+- Treat the complete horizontal band from the native window's top edge through
+  the spacing below that shared top row as one delegated launcher drag region.
+  Route only primary-mouse starts through the typed
+  `LauncherWindowDragController`; its desktop adapter may expose only the
+  current Tauri window's `startDragging()` operation, while browser and test
+  compositions use inert or fake implementations.
+- Do not cancel the search input's default mouse behavior when requesting a
+  native drag. A stationary click must still focus the input and place the
+  caret, while pointer movement prioritizes native window dragging over mouse
+  text-range selection. Keyboard editing, keyboard selection, and IME
+  composition must remain independent of the drag path.
+- Mark every interactive control inside the delegated top region with the
+  reusable `data-launcher-drag-exclude` attribute. The page close button and
+  its icon descendants must be excluded before the native request; decorative
+  avatar and page-context text remain non-actionable even though their surface
+  can initiate a window drag.
 - Keep the launcher as one continuous surface background. Idle inputs, page
   context, collection empty states, and Action tiles must not become persistent
   cards; reserve fill colors for transient hover, focus, selected, or pending
@@ -151,6 +167,9 @@ Shell layout and spacing in UnoCSS utilities.
   Rust selects the fixed 320px, 480px, or 600px height. Components must not
   measure DOM content, collection length, or result count to submit arbitrary
   native dimensions.
+- Grant `core:window:allow-start-dragging` only in the capability scoped to the
+  `main` window. Do not grant position, resize, maximize, or other unrelated
+  native window permissions for this interaction.
 
 ## Launcher Actions And Collections
 
@@ -197,5 +216,13 @@ Shell layout and spacing in UnoCSS utilities.
   boundaries do not capture them.
 - Cover active-page render failures through the page-level boundary so the
   context header and close control remain usable.
+- Complete native macOS acceptance at the fixed 650px viewport for launcher
+  top-region changes. Drag the real window from top blank space, the search
+  input, non-interactive page context, and the avatar in `home`, `search`, and
+  `page`; then regress caret placement, English and Chinese IME input, keyboard
+  selection, page close, hide-on-blur, shortcut restore, and fixed
+  320/480/600px heights. Save screenshots and inspect computed styles for the
+  continuous surface, rounded corners, transparent background, avatar, and top
+  spacing.
 - Add focused tests for extracted domain functions.
 - Avoid snapshots that obscure meaningful behavioral assertions.

@@ -137,6 +137,23 @@ mod tests {
     }
 
     #[test]
+    fn main_window_capability_grants_only_the_required_drag_permission() {
+        let capability: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json"))
+                .expect("main-window capability should be valid JSON");
+
+        assert_eq!(capability["windows"], serde_json::json!(["main"]));
+        assert_eq!(
+            capability["permissions"],
+            serde_json::json!([
+                "core:default",
+                "opener:default",
+                "core:window:allow-start-dragging"
+            ])
+        );
+    }
+
+    #[test]
     fn native_resize_failures_serialize_safe_stable_fields() {
         let window = FakeWindow {
             fail: true,

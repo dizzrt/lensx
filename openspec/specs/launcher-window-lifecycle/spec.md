@@ -79,6 +79,79 @@ counts.
   mode, operation, and safe message
 - **THEN** the current App Shell state is not cleared
 
+### Requirement: The unified launcher top region must support native window dragging
+
+The system MUST allow the user to initiate native main-window dragging with
+the primary mouse button from the complete unified launcher top region in the
+`home`, `search`, and `page` presentation states. The region MUST span the
+window width and extend from the top edge through the lower edge of the shared
+top slot, including top blank space, the search input, non-interactive page
+context, and the decorative avatar. Dragging MUST execute through a constrained
+Host window boundary and MUST NOT allow the frontend to submit window
+coordinates, arbitrary dimensions, resize requests, or maximize requests.
+
+The page-context close control and every explicitly excluded interactive
+control MUST NOT initiate window dragging. Auxiliary mouse buttons and keyboard
+events MUST NOT initiate window dragging. Whether dragging succeeds or fails,
+it MUST NOT change the current presentation state, query, Action selection,
+active page, or fixed window shape.
+
+#### Scenario: Move the window from blank top space in home
+
+- **WHEN** the launcher is in the `home` state and the user drags blank space in
+  the unified top region with the primary mouse button
+- **THEN** the Host initiates native main-window dragging
+- **THEN** the main window retains its logical `650×320px` dimensions
+
+#### Scenario: Move the window from the search input region
+
+- **WHEN** the launcher is in the `search` state and the user starts a drag from
+  the search input with the primary mouse button
+- **THEN** the Host initiates native main-window dragging
+- **THEN** the current query, search results, and Action selection remain
+  unchanged
+- **THEN** the main window retains its logical `650×480px` dimensions
+
+#### Scenario: Move the window from the decorative avatar
+
+- **WHEN** the user drags the decorative avatar at the far right of the unified
+  top region with the primary mouse button
+- **THEN** the Host initiates native main-window dragging
+- **THEN** the avatar does not invoke account, menu, navigation, or other
+  product behavior
+
+#### Scenario: Move the window from non-interactive page context
+
+- **WHEN** the launcher is in the `page` state and the user drags the page
+  context text or its surrounding blank space
+- **THEN** the Host initiates native main-window dragging
+- **THEN** the active page remains open and the main window retains its logical
+  `650×600px` dimensions
+
+#### Scenario: Operate the page close control
+
+- **WHEN** the launcher is in the `page` state and the user activates the
+  page-context close control with the primary mouse button
+- **THEN** the system does not initiate window dragging
+- **THEN** the system closes the active page and returns to the `home` state
+
+#### Scenario: Use a non-primary mouse button or keyboard
+
+- **WHEN** the user sends an auxiliary-mouse-button, right-click, or keyboard
+  event within the unified top region
+- **THEN** the system does not initiate window dragging
+- **THEN** the current launcher state remains unchanged
+
+#### Scenario: Native dragging cannot start
+
+- **WHEN** the Host cannot initiate native window dragging
+- **THEN** the current window position and fixed shape remain at their last
+  successful state
+- **THEN** the current query, Action selection, presentation state, and active
+  page remain unchanged
+- **THEN** the failure is available for developer diagnosis without exposing
+  native error details to the user
+
 ### Requirement: Rust must execute launcher window actions through one boundary
 
 The system MUST provide a unified launcher main-window action boundary in Rust

@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import App from '../App';
 import { AppProviders } from './AppProviders';
 import { desktopLauncherSurfaceController, type LauncherSurfaceController } from './launcher/surface';
+import { desktopLauncherWindowDragController, type LauncherWindowDragController } from './launcher/windowDrag';
 import {
   type AppPreferences,
   type AppPreferencesClient,
@@ -35,12 +36,14 @@ interface AppBootstrapProps {
   preferencesClient?: AppPreferencesClient;
   renderApp?: (startupState: AppStartupState) => ReactNode;
   surfaceController?: LauncherSurfaceController;
+  windowDragController?: LauncherWindowDragController;
 }
 
 export const AppBootstrap = ({
   preferencesClient = desktopAppPreferencesClient,
   renderApp,
   surfaceController = desktopLauncherSurfaceController,
+  windowDragController = desktopLauncherWindowDragController,
 }: AppBootstrapProps) => {
   const startupRequestRef = useRef<Promise<AppStartupState> | null>(null);
   const [startupState, setStartupState] = useState<AppStartupState>();
@@ -75,6 +78,7 @@ export const AppBootstrap = ({
           preferencesClient={preferencesClient}
           startupPreferencesErrorCode={startupState.preferencesErrorCode}
           surfaceController={surfaceController}
+          windowDragController={windowDragController}
         />
       )}
     </AppProviders>

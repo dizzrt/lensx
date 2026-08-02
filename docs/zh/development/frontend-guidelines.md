@@ -114,10 +114,20 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
   引入 router 或并行 Shell store。
 - 保持统一顶部行几何：`home` 和 `search` 渲染 launcher 输入，`page` 渲染由 ID 派生的页面上下文
   条，所有状态都渲染非交互 avatar 占位。不要恢复独立产品标题或介绍。
+- 将从原生窗口上边缘到统一顶部行下方间距结束的完整横向区域作为一个使用事件委托的 launcher
+  拖动区域。只有主鼠标按下可以路由到类型化 `LauncherWindowDragController`；desktop adapter 只能
+  暴露当前 Tauri 窗口的 `startDragging()` 操作，浏览器和测试组合使用 inert 或 fake 实现。
+- 请求原生拖动时不得取消搜索输入的默认鼠标行为。无移动单击必须继续聚焦输入并定位光标；指针移动
+  时原生窗口拖动优先于鼠标文本范围选择。键盘编辑、键盘选择和输入法组合必须独立于拖动路径。
+- 统一顶部区域内的每个交互控件都必须使用可复用的 `data-launcher-drag-exclude` 属性。页面关闭按钮及
+  其图标后代必须在原生请求前被排除；装饰 avatar 和页面上下文文字即使能从其表面发起拖动，也仍然
+  保持不可操作。
 - Launcher 必须保持一个连续统一的 surface 背景。静止状态的输入、页面上下文、集合空状态和 Action
   tile 不得形成常驻卡片；填充色只用于短暂的 hover、focus、selected 或 pending 状态。
 - 通过类型化 launcher surface adapter 发送这些呈现状态，由 Rust 选择固定的 320px、480px 或
   600px 高度。组件不能根据 DOM 内容、集合长度或结果数量提交任意原生尺寸。
+- 仅在限定到 `main` 窗口的 capability 中授予 `core:window:allow-start-dragging`。不得为此交互授予
+  位置设置、缩放、最大化或其他无关原生窗口权限。
 
 ## Launcher Action 与集合
 
@@ -154,5 +164,9 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
 - 通过 `AppErrorBoundary` 覆盖 App Shell 渲染失败；React 错误边界不会捕获事件处理器和异步
   失败，因此这些失败必须使用显式错误状态。
 - 通过页面级错误边界覆盖活动页面渲染失败，确保上下文头部和关闭控件继续可用。
+- Launcher 顶部区域变化必须在固定 650px viewport 下完成 macOS 原生验收。在 `home`、`search`
+  和 `page` 中分别从顶部空白、搜索输入、页面上下文非操作区域和 avatar 拖动真实窗口；随后回归光标
+  定位、英文和中文输入法、键盘选择、页面关闭、失焦隐藏、快捷键恢复以及固定 320/480/600px 高度。
+  保存验收截图，并检查连续表面、圆角、透明背景、avatar 和顶部间距的计算样式。
 - 为提取出的领域函数增加聚焦测试。
 - 避免使用会掩盖有效行为断言的 snapshot。
