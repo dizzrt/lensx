@@ -62,6 +62,17 @@ describe('workspace boundary checker', () => {
     expect(privateImports.every((item) => item.specifier === '@/app/private')).toBe(true);
   });
 
+  test('rejects imports of the workspace-private package-format tool', () => {
+    const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
+    const packageFormatImports = diagnostics.filter((item) => item.specifier.includes('tools/plugin-package-format'));
+
+    expect(packageFormatImports.map((item) => item.file)).toEqual([
+      'examples/plugins/bad/src/index.ts',
+      'plugins/official/bad/src/index.ts',
+    ]);
+    expect(packageFormatImports.every((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport)).toBe(true);
+  });
+
   test('rejects Host-private Registration types, adapters, and event entry points', () => {
     const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
     const registrationImports = diagnostics.filter((item) => item.specifier.includes('/plugins/registration'));

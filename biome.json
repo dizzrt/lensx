@@ -19,6 +19,9 @@
     "clientKind": "git",
     "useIgnoreFile": true
   },
+  "files": {
+    "includes": ["**", "!!fixtures/plugin-package-format/expectations.json"]
+  },
   "javascript": {
     "formatter": {
       "quoteStyle": "single",

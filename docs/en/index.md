@@ -10,6 +10,8 @@ structure.
   foundation, system boundaries, and dependency direction.
 - [Extension Platform](architecture/extension-platform.md) — shipped public
   Contract package plus the architectural direction for plugins and isolation.
+- [Plugin Package Format](architecture/plugin-package-format.md) — shipped `.lxp`
+  canonical `tar.zst` profile, inspection boundaries, limits, and validation.
 
 ## Development
 

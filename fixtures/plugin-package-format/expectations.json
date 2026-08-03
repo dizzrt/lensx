@@ -1,0 +1,635 @@
+[
+  {
+    "name": "complete-compatible",
+    "category": "valid",
+    "file": "valid/complete-compatible.lxp",
+    "expected": {
+      "status": "compatible",
+      "manifest": {
+        "manifest_version": "0.1.0",
+        "plugin_id": "com.acme.workspace",
+        "version": "1.2.0",
+        "display": {
+          "name": {
+            "en-US": "Workspace Tools",
+            "zh-CN": "工作区工具"
+          },
+          "description": {
+            "en-US": "Open and manage local workspaces.",
+            "zh-CN": "打开和管理本地工作区。"
+          },
+          "icon": {
+            "kind": "asset",
+            "path": "assets/plugin-icon.svg"
+          }
+        },
+        "publisher": {
+          "author": "Acme",
+          "homepage": "https://example.com/workspace-tools",
+          "repository": "https://github.com/acme/workspace-tools"
+        },
+        "compatibility": {
+          "lensx": {
+            "min_version": "0.1.0",
+            "max_version_exclusive": "0.2.0"
+          },
+          "host_api": {
+            "min_version": "0.1.0",
+            "max_version_exclusive": "2.0.0"
+          }
+        },
+        "runtime": {
+          "kind": "iframe",
+          "entry": "dist/plugin.html"
+        },
+        "requested_permissions": [
+          {
+            "permission_id": "lensx.filesystem.read_selected",
+            "reason": {
+              "en-US": "Read folders selected by the user.",
+              "zh-CN": "读取用户主动选择的目录。"
+            }
+          }
+        ],
+        "contributes": {
+          "pages": [
+            {
+              "id": "home",
+              "title": {
+                "en-US": "Workspace Tools",
+                "zh-CN": "工作区工具"
+              },
+              "route": "/",
+              "icon": {
+                "kind": "asset",
+                "path": "assets/home.svg"
+              },
+              "required_permissions": []
+            },
+            {
+              "id": "open_project",
+              "title": {
+                "en-US": "Open Project",
+                "zh-CN": "打开项目"
+              },
+              "route": "/open-project",
+              "parent_page_id": "home",
+              "required_permissions": [
+                "lensx.filesystem.read_selected"
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "id": "open_project",
+              "title": {
+                "en-US": "Open Project",
+                "zh-CN": "打开项目"
+              },
+              "description": {
+                "en-US": "Open the project selection page.",
+                "zh-CN": "打开项目选择页面。"
+              },
+              "default_keywords": {
+                "en-US": [
+                  "open workspace",
+                  "open folder"
+                ],
+                "zh-CN": [
+                  "打开工作区",
+                  "打开文件夹"
+                ]
+              },
+              "target": {
+                "kind": "page",
+                "page_id": "open_project"
+              }
+            }
+          ],
+          "launcher": {
+            "default_action_id": "open_project"
+          }
+        }
+      },
+      "compatibility": {
+        "lensx": true,
+        "host_api": true
+      },
+      "facts": {
+        "packageFormatVersion": "0.1.0",
+        "compressedSize": 1207,
+        "decompressedSize": 8192,
+        "fileCount": 5,
+        "files": [
+          {
+            "path": "manifest.json",
+            "size": 1597,
+            "sha256": "b767937c56bb63974e149f3eac9e4cb74b80528550f6ff541ab17de2392231f1",
+            "checksumCovered": true
+          },
+          {
+            "path": "checksums.json",
+            "size": 525,
+            "sha256": "f7f9fddb7e4b1f82da14f278a13f3ec79e806e1419a1a198f22a9ecedb94eb70",
+            "checksumCovered": false
+          },
+          {
+            "path": "assets/home.svg",
+            "size": 18,
+            "sha256": "8289355179e04b91e22fb941db5a2ea37c8e468fed25e45d2654022d58a43353",
+            "checksumCovered": true
+          },
+          {
+            "path": "assets/plugin-icon.svg",
+            "size": 6,
+            "sha256": "d4dc56669143034f31aa309635d4113d9ad76a02b1739da22c965ed2049be9e6",
+            "checksumCovered": true
+          },
+          {
+            "path": "dist/plugin.html",
+            "size": 36,
+            "sha256": "049ac6ed12934a00f4c12f2e97d71bceefa78e95378169ddc574c75f9bf01321",
+            "checksumCovered": true
+          }
+        ],
+        "packageDigest": {
+          "algorithm": "sha256",
+          "value": "07a992e8da7d2b02ecd6e5e90c42d420d6382c19e333f1cd4f8cf51a68bd5caf"
+        }
+      },
+      "diagnostics": []
+    }
+  },
+  {
+    "name": "reference-repeatable",
+    "category": "reproducible",
+    "file": "reproducible/reference-repeatable.lxp",
+    "expected": {
+      "status": "compatible",
+      "manifest": {
+        "manifest_version": "0.1.0",
+        "plugin_id": "com.acme.workspace",
+        "version": "1.2.0",
+        "display": {
+          "name": {
+            "en-US": "Workspace Tools",
+            "zh-CN": "工作区工具"
+          },
+          "description": {
+            "en-US": "Open and manage local workspaces.",
+            "zh-CN": "打开和管理本地工作区。"
+          },
+          "icon": {
+            "kind": "asset",
+            "path": "assets/plugin-icon.svg"
+          }
+        },
+        "publisher": {
+          "author": "Acme",
+          "homepage": "https://example.com/workspace-tools",
+          "repository": "https://github.com/acme/workspace-tools"
+        },
+        "compatibility": {
+          "lensx": {
+            "min_version": "0.1.0",
+            "max_version_exclusive": "0.2.0"
+          },
+          "host_api": {
+            "min_version": "0.1.0",
+            "max_version_exclusive": "2.0.0"
+          }
+        },
+        "runtime": {
+          "kind": "iframe",
+          "entry": "dist/plugin.html"
+        },
+        "requested_permissions": [
+          {
+            "permission_id": "lensx.filesystem.read_selected",
+            "reason": {
+              "en-US": "Read folders selected by the user.",
+              "zh-CN": "读取用户主动选择的目录。"
+            }
+          }
+        ],
+        "contributes": {
+          "pages": [
+            {
+              "id": "home",
+              "title": {
+                "en-US": "Workspace Tools",
+                "zh-CN": "工作区工具"
+              },
+              "route": "/",
+              "icon": {
+                "kind": "asset",
+                "path": "assets/home.svg"
+              },
+              "required_permissions": []
+            },
+            {
+              "id": "open_project",
+              "title": {
+                "en-US": "Open Project",
+                "zh-CN": "打开项目"
+              },
+              "route": "/open-project",
+              "parent_page_id": "home",
+              "required_permissions": [
+                "lensx.filesystem.read_selected"
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "id": "open_project",
+              "title": {
+                "en-US": "Open Project",
+                "zh-CN": "打开项目"
+              },
+              "description": {
+                "en-US": "Open the project selection page.",
+                "zh-CN": "打开项目选择页面。"
+              },
+              "default_keywords": {
+                "en-US": [
+                  "open workspace",
+                  "open folder"
+                ],
+                "zh-CN": [
+                  "打开工作区",
+                  "打开文件夹"
+                ]
+              },
+              "target": {
+                "kind": "page",
+                "page_id": "open_project"
+              }
+            }
+          ],
+          "launcher": {
+            "default_action_id": "open_project"
+          }
+        }
+      },
+      "compatibility": {
+        "lensx": true,
+        "host_api": true
+      },
+      "facts": {
+        "packageFormatVersion": "0.1.0",
+        "compressedSize": 1207,
+        "decompressedSize": 8192,
+        "fileCount": 5,
+        "files": [
+          {
+            "path": "manifest.json",
+            "size": 1597,
+            "sha256": "b767937c56bb63974e149f3eac9e4cb74b80528550f6ff541ab17de2392231f1",
+            "checksumCovered": true
+          },
+          {
+            "path": "checksums.json",
+            "size": 525,
+            "sha256": "f7f9fddb7e4b1f82da14f278a13f3ec79e806e1419a1a198f22a9ecedb94eb70",
+            "checksumCovered": false
+          },
+          {
+            "path": "assets/home.svg",
+            "size": 18,
+            "sha256": "8289355179e04b91e22fb941db5a2ea37c8e468fed25e45d2654022d58a43353",
+            "checksumCovered": true
+          },
+          {
+            "path": "assets/plugin-icon.svg",
+            "size": 6,
+            "sha256": "d4dc56669143034f31aa309635d4113d9ad76a02b1739da22c965ed2049be9e6",
+            "checksumCovered": true
+          },
+          {
+            "path": "dist/plugin.html",
+            "size": 36,
+            "sha256": "049ac6ed12934a00f4c12f2e97d71bceefa78e95378169ddc574c75f9bf01321",
+            "checksumCovered": true
+          }
+        ],
+        "packageDigest": {
+          "algorithm": "sha256",
+          "value": "07a992e8da7d2b02ecd6e5e90c42d420d6382c19e333f1cd4f8cf51a68bd5caf"
+        }
+      },
+      "diagnostics": []
+    }
+  },
+  {
+    "name": "manifest-incompatible",
+    "category": "incompatible",
+    "file": "incompatible/manifest-incompatible.lxp",
+    "expected": {
+      "status": "incompatible",
+      "manifest": {
+        "manifest_version": "0.1.0",
+        "plugin_id": "com.acme.workspace",
+        "version": "1.2.0",
+        "display": {
+          "name": {
+            "en-US": "Workspace Tools",
+            "zh-CN": "工作区工具"
+          },
+          "description": {
+            "en-US": "Open and manage local workspaces.",
+            "zh-CN": "打开和管理本地工作区。"
+          },
+          "icon": {
+            "kind": "asset",
+            "path": "assets/plugin-icon.svg"
+          }
+        },
+        "publisher": {
+          "author": "Acme",
+          "homepage": "https://example.com/workspace-tools",
+          "repository": "https://github.com/acme/workspace-tools"
+        },
+        "compatibility": {
+          "lensx": {
+            "min_version": "0.2.0",
+            "max_version_exclusive": "0.3.0"
+          },
+          "host_api": {
+            "min_version": "0.1.0",
+            "max_version_exclusive": "2.0.0"
+          }
+        },
+        "runtime": {
+          "kind": "iframe",
+          "entry": "dist/plugin.html"
+        },
+        "requested_permissions": [
+          {
+            "permission_id": "lensx.filesystem.read_selected",
+            "reason": {
+              "en-US": "Read folders selected by the user.",
+              "zh-CN": "读取用户主动选择的目录。"
+            }
+          }
+        ],
+        "contributes": {
+          "pages": [
+            {
+              "id": "home",
+              "title": {
+                "en-US": "Workspace Tools",
+                "zh-CN": "工作区工具"
+              },
+              "route": "/",
+              "icon": {
+                "kind": "asset",
+                "path": "assets/home.svg"
+              },
+              "required_permissions": []
+            },
+            {
+              "id": "open_project",
+              "title": {
+                "en-US": "Open Project",
+                "zh-CN": "打开项目"
+              },
+              "route": "/open-project",
+              "parent_page_id": "home",
+              "required_permissions": [
+                "lensx.filesystem.read_selected"
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "id": "open_project",
+              "title": {
+                "en-US": "Open Project",
+                "zh-CN": "打开项目"
+              },
+              "description": {
+                "en-US": "Open the project selection page.",
+                "zh-CN": "打开项目选择页面。"
+              },
+              "default_keywords": {
+                "en-US": [
+                  "open workspace",
+                  "open folder"
+                ],
+                "zh-CN": [
+                  "打开工作区",
+                  "打开文件夹"
+                ]
+              },
+              "target": {
+                "kind": "page",
+                "page_id": "open_project"
+              }
+            }
+          ],
+          "launcher": {
+            "default_action_id": "open_project"
+          }
+        }
+      },
+      "compatibility": {
+        "lensx": false,
+        "host_api": true
+      },
+      "facts": {
+        "packageFormatVersion": "0.1.0",
+        "compressedSize": 1210,
+        "decompressedSize": 8192,
+        "fileCount": 5,
+        "files": [
+          {
+            "path": "manifest.json",
+            "size": 1597,
+            "sha256": "1ba3ff57a31f7124a60cf8256deadf2e19193dec2fe1fdfbfc6f857b6ed199cc",
+            "checksumCovered": true
+          },
+          {
+            "path": "checksums.json",
+            "size": 525,
+            "sha256": "68ea8e3b71136ccfd443af547b54637cd0d875712f3d65c9b6a1a491d714e4e8",
+            "checksumCovered": false
+          },
+          {
+            "path": "assets/home.svg",
+            "size": 18,
+            "sha256": "8289355179e04b91e22fb941db5a2ea37c8e468fed25e45d2654022d58a43353",
+            "checksumCovered": true
+          },
+          {
+            "path": "assets/plugin-icon.svg",
+            "size": 6,
+            "sha256": "d4dc56669143034f31aa309635d4113d9ad76a02b1739da22c965ed2049be9e6",
+            "checksumCovered": true
+          },
+          {
+            "path": "dist/plugin.html",
+            "size": 36,
+            "sha256": "049ac6ed12934a00f4c12f2e97d71bceefa78e95378169ddc574c75f9bf01321",
+            "checksumCovered": true
+          }
+        ],
+        "packageDigest": {
+          "algorithm": "sha256",
+          "value": "98625f1b71f56279185f3474ca1a9b9ccb53595fb09d604635b8f757e81abc46"
+        }
+      },
+      "diagnostics": []
+    }
+  },
+  {
+    "name": "not-zstandard",
+    "category": "invalid",
+    "file": "invalid/not-zstandard.lxp",
+    "expected": {
+      "status": "invalid",
+      "diagnostics": [
+        {
+          "code": "frame_invalid",
+          "path": "/frame",
+          "message": "The package is not a supported Zstandard frame."
+        }
+      ]
+    }
+  },
+  {
+    "name": "trailing-bytes",
+    "category": "invalid",
+    "file": "invalid/trailing-bytes.lxp",
+    "expected": {
+      "status": "invalid",
+      "diagnostics": [
+        {
+          "code": "frame_trailing_bytes",
+          "path": "/frame",
+          "message": "Trailing bytes after the Zstandard frame are not allowed."
+        }
+      ]
+    }
+  },
+  {
+    "name": "missing-runtime-resource",
+    "category": "invalid",
+    "file": "invalid/missing-runtime-resource.lxp",
+    "expected": {
+      "status": "invalid",
+      "diagnostics": [
+        {
+          "code": "resource_missing",
+          "path": "/runtime/entry",
+          "message": "A Manifest resource does not resolve to a package file."
+        }
+      ]
+    }
+  },
+  {
+    "name": "host-private-fields",
+    "category": "invalid",
+    "file": "invalid/host-private-fields.lxp",
+    "expected": {
+      "status": "invalid",
+      "diagnostics": [
+        {
+          "code": "manifest_invalid",
+          "path": "/grants",
+          "message": "The plugin Manifest is invalid."
+        },
+        {
+          "code": "manifest_invalid",
+          "path": "/installed_path",
+          "message": "The plugin Manifest is invalid."
+        },
+        {
+          "code": "manifest_invalid",
+          "path": "/lifecycle",
+          "message": "The plugin Manifest is invalid."
+        },
+        {
+          "code": "manifest_invalid",
+          "path": "/package_digest",
+          "message": "The plugin Manifest is invalid."
+        },
+        {
+          "code": "manifest_invalid",
+          "path": "/signature",
+          "message": "The plugin Manifest is invalid."
+        },
+        {
+          "code": "manifest_invalid",
+          "path": "/source",
+          "message": "The plugin Manifest is invalid."
+        }
+      ]
+    }
+  },
+  {
+    "name": "unsupported-package-version",
+    "category": "invalid",
+    "file": "invalid/unsupported-package-version.lxp",
+    "expected": {
+      "status": "invalid",
+      "diagnostics": [
+        {
+          "code": "package_version_invalid",
+          "path": "checksums.json",
+          "message": "The plugin package format version is unsupported."
+        }
+      ]
+    }
+  },
+  {
+    "name": "checksum-tampered",
+    "category": "invalid",
+    "file": "invalid/checksum-tampered.lxp",
+    "expected": {
+      "status": "invalid",
+      "diagnostics": [
+        {
+          "code": "checksum_digest_invalid",
+          "path": "assets/home.svg",
+          "message": "A package file checksum does not match its content."
+        }
+      ]
+    }
+  },
+  {
+    "name": "noncanonical-tar-metadata",
+    "category": "invalid",
+    "file": "invalid/noncanonical-tar-metadata.lxp",
+    "expected": {
+      "status": "invalid",
+      "diagnostics": [
+        {
+          "code": "archive_metadata_invalid",
+          "path": "manifest.json",
+          "message": "The package TAR metadata is not canonical."
+        }
+      ]
+    }
+  },
+  {
+    "name": "empty-package",
+    "category": "invalid",
+    "file": "invalid/empty-package.lxp",
+    "expected": {
+      "status": "invalid",
+      "diagnostics": [
+        {
+          "code": "archive_order_invalid",
+          "path": "checksums.json",
+          "message": "The package TAR entries are not in canonical order."
+        },
+        {
+          "code": "archive_order_invalid",
+          "path": "manifest.json",
+          "message": "The package TAR entries are not in canonical order."
+        }
+      ]
+    }
+  }
+]

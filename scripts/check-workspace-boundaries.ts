@@ -439,7 +439,10 @@ const validateSourceSpecifier = (
     return diagnostics;
   }
 
-  if (isWithin(join(rootDir, 'src'), resolvedTarget) && !isWithin(member.rootDir, resolvedTarget)) {
+  if (
+    (isWithin(join(rootDir, 'src'), resolvedTarget) || isWithin(join(rootDir, 'tools'), resolvedTarget)) &&
+    !isWithin(member.rootDir, resolvedTarget)
+  ) {
     if (isHostStylePath(rootDir, resolvedTarget)) {
       diagnostics.push(
         diagnostic(

@@ -5,6 +5,7 @@ import type { PluginRegistrationSnapshot } from '@/app/plugins/registration/type
 import '@/styles/internal.less';
 import '@tauri-apps/api/core';
 import '../../../../src/app/desktop.ts';
+import '../../../../tools/plugin-package-format/index.ts';
 import '../../../../packages/public/src/index.ts';
 import '@fixture/public/src/index.ts';
 

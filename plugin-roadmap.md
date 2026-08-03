@@ -60,7 +60,7 @@ Contract package；仓库验证不会执行 npm registry 发布操作。
         workspace development           released package dependencies
                  └──────────────┬──────────────┘
                                 ▼
-                         .lensx-plugin package
+                              .lxp package
                                 ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ Host: ingest → validate → install → register → isolate → authorize      │
@@ -317,34 +317,35 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；本 Ta
 
 ## Milestone 3：实现插件包与本地生命周期
 
-- [ ] **Task 3.1：定义 Plugin Package Format**
+- [x] **Task 3.1：定义 Plugin Package Format**
 
 **OpenSpec change**：`define-plugin-package-format`
 
-**目标**：定义可验证、可重复构建的 `.lensx-plugin` 交付格式。
+**目标**：定义可验证、可重复构建的 `.lxp` canonical `tar.zst` 交付格式。
 
 **范围**：
 
-- 第一版使用 ZIP 容器，包含 Manifest、构建输出、assets 和 checksums。
-- 定义路径、文件类型、大小、数量、压缩和可重复构建规则。
-- Manifest 位于固定位置，Runtime entry 必须解析到包内文件。
-- 定义开发包、未签名包和正式签名包的结构兼容关系。
-- 远程 Catalog 元数据不进入插件包事实源。
+- 第一版使用一个带 content size/checksum 的受限 Zstandard frame，内部是 canonical ustar-compatible TAR。
+- 固定 `manifest.json`、`checksums.json`、entry 顺序、metadata、portable path profile 和资源硬上限。
+- 逐文件 SHA-256、Zstandard frame checksum 和整个 `.lxp` 的 algorithm-labelled SHA-256 各自保持独立职责。
+- 复用 Manifest Contract，并要求 Runtime entry 与全部 display/Page/Action assets 精确解析到 checksummed 普通文件。
+- TypeScript reference packer/inspector 与 Rust Host-private inspector 消费同一 valid、invalid、incompatible、reproducible corpus。
+- 开发来源、未签名来源与未来签名来源共享相同 canonical payload；source、signature、grant 和 lifecycle 均为包外 Host facts。
 
 **依赖**：Task 1.2。
 
-**完成标准**：相同输入可产生内容等价的包；Host 和 CLI 对包结构给出一致结论。
+**完成标准**：固定 tool revision 对相同 canonical file map 产生 byte-for-byte 相同 `.lxp`；TypeScript 与 Rust 对 status、facts、diagnostics 和 digest 给出一致结论；本 Task 不实现 installer、CLI、Runtime 或 signing。
 
 - [ ] **Task 3.2：实现本地插件安装**
 
 **OpenSpec change**：`add-local-plugin-installation`
 
-**目标**：让用户通过本地 `.lensx-plugin` 完成安全、原子的首次安装。
+**目标**：让用户通过本地 `.lxp` 完成安全、原子的首次安装。
 
 **范围**：
 
 - 解包到临时 staging 目录后执行结构、Manifest、兼容性和路径验证。
-- 防御路径穿越、符号链接逃逸、ZIP bomb、重复路径和大小写冲突。
+- 消费 Task 3.1 的受限 Zstandard/TAR inspection，防御路径穿越、特殊 entry、compression bomb、重复路径和大小写冲突。
 - 验证成功后原子移动到正式版本目录并注册。
 - 安装失败不得留下半安装状态或污染 Registry。
 - 第一阶段不提供远程下载。
@@ -657,7 +658,7 @@ React 模板额外依赖 Task 1.4。
 
 - 建立 `@lensx/plugin-cli`，复用 Contract、Testkit 和包格式实现。
 - 提供人类可读和机器可读诊断。
-- `pack` 生成 checksums、构建摘要和 `.lensx-plugin`。
+- `pack` 复用 Task 3.1 canonical payload，生成 checksums、构建摘要和 `.lxp`。
 - CLI 与 Host installer 对同一输入给出一致结论。
 - 第一阶段支持 workspace 内执行，稳定后发布 npm package。
 
@@ -720,7 +721,7 @@ React 模板额外依赖 Task 1.4。
 - 每个官方插件拥有独立 package、Manifest、SemVer、CHANGELOG、测试和 CODEOWNERS。
 - 使用 path filter 和 changeset 触发单插件 release。
 - 发布前运行 Contract、SDK、包格式、权限、Runtime 和 E2E gate。
-- 产出与外部插件相同的 `.lensx-plugin`，不得由 Host 直接 import 源码。
+- 产出与外部插件相同的 `.lxp`，不得由 Host 直接 import 源码。
 - 记录官方发布来源，但不自动授予权限。
 
 **依赖**：Task 3.1、Task 6.4、Task 6.6。
@@ -771,7 +772,7 @@ React 模板额外依赖 Task 1.4。
 
 **范围**：
 
-- 扩展路径穿越、符号链接、ZIP bomb、重复路径、保留名称和大小写冲突测试。
+- 扩展受限 Zstandard/TAR、路径穿越、特殊 entry、compression bomb、重复路径、保留名称和大小写冲突测试。
 - 限制压缩前后大小、文件数、路径长度和嵌套深度。
 - 验证 macOS、Windows 和 Linux 路径行为。
 - 安装失败不得泄露主机绝对路径或留下 staging 数据。
@@ -834,7 +835,7 @@ React 模板额外依赖 Task 1.4。
 
 **范围**：
 
-- 定义签名格式、签名范围、package hash 和发布者公钥身份。
+- 定义覆盖完整 canonical `.lxp` digest 的签名格式、签名范围和发布者公钥身份，或使用独立外层/sidecar。
 - CLI 支持签名与离线验证，Host 安装和升级时复验。
 - 区分 official、verified publisher、unsigned local 和 development 来源。
 - Provenance 由 Host 注入，不写入 author Manifest。
@@ -927,7 +928,7 @@ React 模板额外依赖 Task 1.4。
 
 包含 Milestone 1–4。
 
-- 本地 `.lensx-plugin` 可以安装、注册、搜索、打开、关闭、禁用和卸载。
+- 本地 `.lxp` 可以安装、注册、搜索、打开、关闭、禁用和卸载。
 - 重启后插件状态可恢复。
 - 插件资源、iframe 和 session 具备基本隔离。
 - Host API 仍可能只具备 Runtime 基础握手，不承诺系统能力。

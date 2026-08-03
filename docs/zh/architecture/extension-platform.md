@@ -2,10 +2,10 @@
 
 ## 文档状态
 
-本文区分已经交付的静态插件 Manifest 契约、Plugin SDK foundation、Plugin Testkit、可选
-Plugin UI package、Host 私有 Plugin surface 投影与 Page 导航和预期的运行时扩展边界。安装、
-分发、插件执行、完整权限决策、iframe transport 和 Host API 当前尚未实现。稳定 spec 和源码共同
-决定已经交付的子集。
+本文区分已经交付的静态插件 Manifest 契约、`.lxp` package inspection、Plugin SDK foundation、
+Plugin Testkit、可选 Plugin UI package、Host 私有 Plugin surface 投影与 Page 导航和预期的运行时
+扩展边界。安装、公共 packaging CLI、分发、插件执行、完整权限决策、iframe transport、签名和
+Host API 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
 
 ## 目标
 
@@ -125,6 +125,24 @@ scripts 或 Host 私有源码。
 静态校验本身不会发现或安装包、创建生产 registration、创建 iframe、授予权限、交换 Host API
 消息或运行插件代码。Host 私有生产协调器现在可以把当前 Registration facts 投影进 Page 与 Action
 Registry，并导航到 Host-owned placeholder，但该 placeholder 不是插件 Runtime。
+
+## 已交付的 Host 私有 Plugin Package Inspection
+
+lensX 现已实现 package protocol `0.1.0`：`.lxp` 是一个受限 Zstandard frame，其中包含 canonical、
+ustar-compatible TAR 流。workspace-private TypeScript reference packer/inspector 与 Host-private Rust
+inspector 共享已提交的 valid、invalid、incompatible 和 reproducible fixtures。两侧对 status、normalized
+Manifest、compatibility、受限 file facts、安全 diagnostics 以及完整 `.lxp` 的 SHA-256 digest 达成一致。
+
+Inspector 验证单 frame Zstandard profile、canonical TAR 顺序和 metadata、可移植 paths、硬资源 limits、
+canonical `checksums.json`、每文件 SHA-256、现有 Manifest Contract，以及精确的 Runtime/asset resource
+resolution。Invalid 结果 fail closed，不返回 partial Manifest、file map、可信 digest fact、raw error、绝对
+path 或 Host state。Publisher 文本和 author 声明的 Host 字段永远不会生成 source、signature、grant、
+lifecycle 或 trust 结论。
+
+这是 inspection core，不是 installer 或 plugin-facing API。它没有 Tauri command、Plugin Manager mutation、
+安装目录写入、公共 CLI、development-directory input、resource service、iframe、Runtime session、权限决策或
+签名行为。精确 layout、limits、dependency review、diagnostics 与 drift gate 见
+[插件包格式](plugin-package-format.md)。
 
 ## 已交付的 Host 私有 Plugin Manager
 

@@ -64,6 +64,27 @@ isolated external consumer installed from the real tarball. The tarball smoke
 test is required because workspace links can hide missing declarations,
 Schema files, export targets, or runtime dependencies.
 
+## Plugin Package Format Validation
+
+Changes to `.lxp` constants, codec/archive/hash dependencies, the TypeScript
+reference packer/inspector, the Rust inspector, fixtures, or package-format
+documentation must run:
+
+```bash
+pnpm run check:plugin-package-format
+```
+
+The gate checks dependency and constant drift, compares all committed fixture
+bytes and expectations without rewriting them, proves reference pack
+repeatability, runs focused TypeScript tests, and makes Rust consume the same
+valid, invalid, incompatible, and reproducible cases. An intentional fixture
+or digest update uses `pnpm run generate:plugin-package-format-fixtures` only
+after reviewing the dependency, parameter, format, and diagnostic change.
+
+This dedicated gate supplements rather than replaces `check:plugin-contract`,
+workspace boundary/lifecycle checks, and the complete frontend/shared and Rust
+validation sets.
+
 ## Rust Validation
 
 Check Rust formatting:

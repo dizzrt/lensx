@@ -4,6 +4,8 @@ pub mod launcher_surface;
 pub mod launcher_window;
 pub mod plugin_manager;
 pub mod plugin_manifest;
+#[doc(hidden)]
+pub mod plugin_package_format;
 pub mod plugin_registration;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

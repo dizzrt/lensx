@@ -68,6 +68,31 @@ pnpm run check:plugin-contract
 打出真实 tarball 并验证文件清单和 exports，最后将其安装到隔离消费者中执行 typecheck 和 runtime
 smoke test。
 
+## Host-Private Package-Format Tool
+
+`tools/plugin-package-format` 属于 private 根 Host workspace，不是 `packages/*` 成员，也不是插件依赖。
+它持有 protocol constants、canonical TAR/checksum implementation、固定 Zstandard reference packer、
+TypeScript inspector，以及 fixture generation/check 逻辑。Rust counterpart 位于 `src-tauri`，并保持在
+Tauri commands 之外。
+
+使用专项 drift gate：
+
+```bash
+pnpm run check:plugin-package-format
+```
+
+该命令检查精确 codec/crate inputs 与 constants，验证 committed fixtures 且不重写，运行 focused
+TypeScript/reproducibility tests，并让 Rust 消费同一 expectations。Baseline regeneration 是显式 review
+操作：
+
+```bash
+pnpm run generate:plugin-package-format-fixtures
+```
+
+Workspace boundary 会拒绝公共 package、官方插件和示例插件从 `tools/**` import。公共 plugin tarball 不包含
+Host-private tool、Rust source、fixture generator 或 codec dependency。未来 `@lensx/plugin-cli` 工作可以在
+自己的 approved change 中包装或迁移 core；当前没有公共 CLI 或 package-format import。
+
 ## Plugin SDK Package
 
 `packages/plugin-sdk` 持有框架无关的 SDK client lifecycle、经过校验的 Runtime context、版本
@@ -269,8 +294,8 @@ examples/plugins/*     -> packages/* 公共 exports
 名称和公共 export 导入。消费方不得通过相对源码路径读取另一个成员。
 
 公共 package、官方插件和示例插件不得依赖 private 根 `lensx` package，也不得导入
-`src/app/**` 等 Host 私有路径、Host Tauri adapter 或 Host 内部样式。插件源码和 manifest
-不得依赖或导入 `@tauri-apps/*`。官方插件不享有规则例外。
+`src/app/**` 或 `tools/**` 等 Host 私有路径、Host Tauri adapter 或 Host 内部样式。插件源码和
+manifest 不得依赖或导入 `@tauri-apps/*`。官方插件不享有规则例外。
 
 package 层级的依赖方向是 Contract -> SDK -> Testkit，以及 Contract -> SDK -> 可选 UI。Testkit
 只能消费 Contract 与 SDK 公共根入口；Contract 和 SDK 不得依赖或导入 Testkit。UI package 可以

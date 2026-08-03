@@ -23,6 +23,9 @@
     "generate:plugin-manifest-types": "pnpm --dir packages/plugin-contract run generate",
     "check:plugin-manifest-types": "pnpm --dir packages/plugin-contract run check:generated",
     "check:plugin-contract": "pnpm --dir packages/plugin-contract run check:generated && pnpm --dir packages/plugin-contract run test && rstest tests/plugin-manifest-boundary.test.tsx && pnpm --dir packages/plugin-contract run test:pack && cargo test --manifest-path src-tauri/Cargo.toml plugin_manifest",
+    "generate:plugin-package-format-fixtures": "node --experimental-strip-types scripts/plugin-package-format-fixtures.ts --write",
+    "check:plugin-package-format-fixtures": "node --experimental-strip-types scripts/plugin-package-format-fixtures.ts",
+    "check:plugin-package-format": "node --experimental-strip-types scripts/check-plugin-package-format.ts && node --experimental-strip-types scripts/plugin-package-format-fixtures.ts && rstest run tests/plugin-package-format.test.ts && cargo test --manifest-path src-tauri/Cargo.toml plugin_package_format",
     "check:plugin-registration-contract": "rstest run tests/plugin-registration-contract.test.ts tests/plugin-registration-desktop-adapter.test.ts tests/workspace-boundaries.test.ts && cargo test --manifest-path src-tauri/Cargo.toml plugin_registration && cargo test --manifest-path src-tauri/Cargo.toml plugin_manager",
     "check:plugin-action-projection": "rstest run tests/launcher-action-registry.test.ts tests/plugin-action-mapper.test.tsx tests/plugin-action-projection.test.ts tests/plugin-registration-desktop-adapter.test.ts tests/launcher-action-service.test.ts tests/launcher-action-search.test.ts tests/launcher-action-search-boundary.test.ts tests/launcher-action-collections.test.ts tests/workspace-boundaries.test.ts",
     "check:plugin-sdk": "pnpm --dir packages/plugin-sdk run check && pnpm --dir packages/plugin-sdk run build && pnpm --dir packages/plugin-sdk run test:pack && pnpm run test:workspace-boundaries && pnpm run test:workspace-lifecycle",
@@ -56,6 +59,7 @@
     "react-i18next": "^17.0.11"
   },
   "devDependencies": {
+    "@structured-world/structured-zstd": "0.0.49",
     "@biomejs/biome": "2.4.15",
     "@rsbuild/core": "^2.1.8",
     "@rsbuild/plugin-less": "^2.0.1",

@@ -56,6 +56,23 @@ pnpm run check:plugin-contract
 清单与 exports，以及从真实 tarball 安装的隔离外部消费者。tarball smoke test 是必需项，因为
 workspace link 可能掩盖缺失的声明、Schema 文件、export 目标或 runtime 依赖。
 
+## Plugin Package Format 验证
+
+修改 `.lxp` constants、codec/archive/hash dependencies、TypeScript reference packer/inspector、Rust
+inspector、fixtures 或 package-format 文档时，必须运行：
+
+```bash
+pnpm run check:plugin-package-format
+```
+
+该门禁检查 dependency 和 constant drift，对比全部 committed fixture bytes 与 expectations 且不重写，证明
+reference pack repeatability，运行 focused TypeScript tests，并让 Rust 消费同一组 valid、invalid、
+incompatible 和 reproducible cases。只有在审查 dependency、parameter、format 与 diagnostic 变化后，才使用
+`pnpm run generate:plugin-package-format-fixtures` 有意更新 fixture 或 digest。
+
+该专项门禁是对 `check:plugin-contract`、workspace boundary/lifecycle checks，以及完整 frontend/shared 与
+Rust 验证集合的补充，不会替代它们。
+
 ## Rust 验证
 
 检查 Rust 格式：

@@ -8,6 +8,8 @@
 - [架构概览](architecture/overview.md) — 项目目标、当前基础、系统边界和依赖方向。
 - [扩展平台](architecture/extension-platform.md) — 已交付的公共 Contract package，以及
   插件和隔离的架构方向。
+- [插件包格式](architecture/plugin-package-format.md) — 已交付的 `.lxp` canonical
+  `tar.zst` profile、inspection 边界、limits 和验证方式。
 
 ## 开发
 

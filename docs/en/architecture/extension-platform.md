@@ -2,11 +2,12 @@
 
 ## Document Status
 
-This document separates the shipped static plugin Manifest contract, Plugin SDK
-foundation, Plugin Testkit, optional Plugin UI package, and Host-private Plugin
-surface projection and Page navigation from the intended runtime extension
-boundary. Installation, distribution, plugin execution, complete permission
-decisions, iframe transport, and the Host API are not currently implemented.
+This document separates the shipped static plugin Manifest contract, `.lxp`
+package inspection, Plugin SDK foundation, Plugin Testkit, optional Plugin UI
+package, and Host-private Plugin surface projection and Page navigation from the
+intended runtime extension boundary. Installation, public packaging CLI,
+distribution, plugin execution, complete permission decisions, iframe
+transport, signing, and the Host API are not currently implemented.
 Stable specs and source code define the shipped subset.
 
 ## Goals
@@ -151,6 +152,30 @@ production registration, create iframes, grant permissions, exchange Host API
 messages, or run plugin code. The Host-private production coordinator can now
 project current Registration facts into Page and Action Registries and navigate
 to a Host-owned placeholder, but that placeholder is not plugin Runtime.
+
+## Shipped Host-Private Plugin Package Inspection
+
+lensX now implements package protocol `0.1.0`: a `.lxp` is one restricted
+Zstandard frame containing a canonical ustar-compatible TAR stream. The
+workspace-private TypeScript reference packer/inspector and Host-private Rust
+inspector share committed valid, invalid, incompatible, and reproducible
+fixtures. They agree on status, normalized Manifest, compatibility, bounded
+file facts, safe diagnostics, and the SHA-256 digest of the complete `.lxp`.
+
+The inspector verifies the single-frame Zstandard profile, canonical TAR
+ordering and metadata, portable paths, hard resource limits, canonical
+`checksums.json`, every file SHA-256, the existing Manifest Contract, and exact
+Runtime/asset resource resolution. Invalid results fail closed without partial
+Manifest, file map, trusted digest fact, raw error, absolute path, or Host
+state. Publisher text and author-declared Host fields never create source,
+signature, grant, lifecycle, or trust conclusions.
+
+This is an inspection core, not an installer or plugin-facing API. It has no
+Tauri command, Plugin Manager mutation, installation directory write, public
+CLI, development-directory input, resource service, iframe, Runtime session,
+permission decision, or signing behavior. See
+[Plugin Package Format](plugin-package-format.md) for the exact layout, limits,
+dependency review, diagnostics, and drift gate.
 
 ## Shipped Host-Private Plugin Manager
 

@@ -51,6 +51,9 @@ importers:
       '@rstest/core':
         specifier: ^0.11.2
         version: 0.11.4(happy-dom@20.11.1)
+      '@structured-world/structured-zstd':
+        specifier: 0.0.49
+        version: 0.0.49
       '@tauri-apps/cli':
         specifier: ^2
         version: 2.11.4
@@ -777,6 +780,10 @@ packages:
         optional: true
       jsdom:
         optional: true
+
+  '@structured-world/structured-zstd@0.0.49':
+    resolution: {integrity: sha512-AUITSGSbxAu9C2nsj8HPTBsyjvzp+0Tn+kWvXcsvhg7UwmFdXvLJ7C39qDXW1Jy7z3Ei0u6mtem1fwgLDmqnsQ==}
+    engines: {node: '>=18'}
 
   '@swc/helpers@0.5.23':
     resolution: {integrity: sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw==}
@@ -2331,6 +2338,9 @@ packages:
   w3c-keyname@2.2.8:
     resolution: {integrity: sha512-dpojBhNsCNN7T82Tm7k26A6G9ML3NkhDsnw9n/eoxSRlVBB4CEtIQ/KTCLI2Fwf3ataSXRhYFkQi3SlnFwPvPQ==}
 
+  wasm-feature-detect@1.8.0:
+    resolution: {integrity: sha512-zksaLKM2fVlnB5jQQDqKXXwYHLQUVH9es+5TOOHwGOVJOCeRBCiPjwSg+3tN2AdTCzjgli4jijCH290kXb/zWQ==}
+
   webpack-virtual-modules@0.6.2:
     resolution: {integrity: sha512-66/V2i5hQanC51vBQKPH4aI8NMAcBW59FVBs+rC7eGHupMyfn34q7rZIE+ETlJ+XTevqfUhVVBgSUNSW2flEUQ==}
 
@@ -2905,6 +2915,10 @@ snapshots:
     transitivePeerDependencies:
       - '@module-federation/runtime-tools'
       - core-js
+
+  '@structured-world/structured-zstd@0.0.49':
+    dependencies:
+      wasm-feature-detect: 1.8.0
 
   '@swc/helpers@0.5.23':
     dependencies:
@@ -4853,6 +4867,8 @@ snapshots:
       yaml: 2.9.0
 
   w3c-keyname@2.2.8: {}
+
+  wasm-feature-detect@1.8.0: {}
 
   webpack-virtual-modules@0.6.2: {}
 

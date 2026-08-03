@@ -78,6 +78,35 @@ tests, checks TypeScript/Rust shared fixtures, packs a real tarball, verifies
 its file list and exports, and installs it into an isolated consumer for
 typecheck and runtime smoke testing.
 
+## Host-Private Package-Format Tool
+
+`tools/plugin-package-format` is part of the private root Host workspace, not a
+`packages/*` member and not a plugin dependency. It owns protocol constants,
+the canonical TAR/checksum implementation, the fixed Zstandard reference
+packer, the TypeScript inspector, and fixture generation/check logic. The Rust
+counterpart lives in `src-tauri` and remains outside Tauri commands.
+
+Use the dedicated drift gate:
+
+```bash
+pnpm run check:plugin-package-format
+```
+
+The command checks exact codec/crate inputs and constants, verifies committed
+fixtures without rewriting them, runs focused TypeScript/reproducibility tests,
+and runs Rust against the same expectations. Baseline regeneration is an
+explicit review action:
+
+```bash
+pnpm run generate:plugin-package-format-fixtures
+```
+
+Workspace boundaries reject imports from `tools/**` by public packages,
+official plugins, and example plugins. Public plugin tarballs contain none of
+the Host-private tool, Rust source, fixture generator, or codec dependency.
+Future `@lensx/plugin-cli` work may wrap or relocate the core through its own
+approved change; no public CLI or package-format import exists today.
+
 ## Plugin SDK Package
 
 `packages/plugin-sdk` owns the framework-neutral SDK client lifecycle, validated
@@ -305,10 +334,10 @@ public export. They must not reach another member through a relative source
 path.
 
 Public packages, official plugins, and example plugins must not depend on the
-private root `lensx` package or import Host-private paths such as `src/app/**`,
-Host Tauri adapters, or internal Host styles. Plugin source and manifests must
-not depend on or import `@tauri-apps/*`. Official plugins receive no exception
-to these rules.
+private root `lensx` package or import Host-private paths such as `src/app/**`
+or `tools/**`, Host Tauri adapters, or internal Host styles. Plugin source and
+manifests must not depend on or import `@tauri-apps/*`. Official plugins receive
+no exception to these rules.
 
 The package-level directions are Contract -> SDK -> Testkit and Contract -> SDK
 -> optional UI. Testkit consumes only Contract and SDK public roots; Contract
