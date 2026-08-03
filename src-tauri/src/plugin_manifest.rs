@@ -8,6 +8,7 @@ use url::Url;
 
 const MANIFEST_SCHEMA: &str =
     include_str!("../../packages/plugin-contract/schema/manifest.schema.json");
+pub const PLUGIN_HOST_API_VERSION: &str = "0.1.0";
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -153,7 +154,8 @@ pub struct LauncherInput {
     pub default_action_id: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NormalizedPluginManifest {
     pub manifest_version: String,
     pub plugin_id: String,
@@ -166,7 +168,8 @@ pub struct NormalizedPluginManifest {
     pub contributes: NormalizedContributes,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NormalizedPluginDisplay {
     pub name: NormalizedLocalizedText,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -175,7 +178,8 @@ pub struct NormalizedPluginDisplay {
     pub icon: Option<NormalizedAsset>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NormalizedLocalizedText {
     #[serde(rename = "en-US")]
     pub en_us: String,
@@ -183,44 +187,51 @@ pub struct NormalizedLocalizedText {
     pub zh_cn: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NormalizedAsset {
     pub kind: AssetKind,
     pub path: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NormalizedPublisher {
     pub author: String,
     pub homepage: String,
     pub repository: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NormalizedCompatibility {
     pub lensx: NormalizedVersionRange,
     pub host_api: NormalizedVersionRange,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NormalizedVersionRange {
     pub min_version: String,
     pub max_version_exclusive: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NormalizedRuntime {
     pub kind: RuntimeKind,
     pub entry: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NormalizedPermissionRequest {
     pub permission_id: String,
     pub reason: NormalizedLocalizedText,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NormalizedContributes {
     pub pages: Vec<NormalizedPluginPage>,
     pub actions: Vec<NormalizedPluginAction>,
@@ -228,7 +239,8 @@ pub struct NormalizedContributes {
     pub launcher: Option<NormalizedLauncher>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NormalizedPluginPage {
     pub id: String,
     pub title: NormalizedLocalizedText,
@@ -240,7 +252,8 @@ pub struct NormalizedPluginPage {
     pub required_permissions: Vec<String>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NormalizedLocalizedKeywords {
     #[serde(rename = "en-US", skip_serializing_if = "Option::is_none")]
     pub en_us: Option<Vec<String>>,
@@ -248,7 +261,8 @@ pub struct NormalizedLocalizedKeywords {
     pub zh_cn: Option<Vec<String>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NormalizedPluginAction {
     pub id: String,
     pub title: NormalizedLocalizedText,
@@ -260,13 +274,15 @@ pub struct NormalizedPluginAction {
     pub target: NormalizedActionTarget,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NormalizedActionTarget {
     pub kind: ActionTargetKind,
     pub page_id: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NormalizedLauncher {
     pub default_action_id: String,
 }

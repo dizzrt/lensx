@@ -146,12 +146,62 @@ source.
 
 ### Explicitly Unimplemented Capabilities
 
-Static validation does not discover or install packages, register plugins,
-create iframes, grant permissions, project plugin Actions into the launcher
-registry, search those Actions, navigate Pages, exchange Host API messages, or
-run plugin code. The current App Shell can search Host built-in launcher
-Actions, but static Manifest validation has no connection to that registry,
-search path, Action collections, or Host icon projection.
+Static validation does not discover or install packages, create a production
+registration, create iframes, grant permissions, project plugin Actions into
+the launcher registry, search those Actions, navigate Pages, exchange Host API
+messages, or run plugin code. The current App Shell can search Host built-in
+launcher Actions, but static Manifest validation has no connection to that
+registry, search path, Action collections, or Host icon projection.
+
+## Shipped Host-Private Plugin Manager
+
+The Rust Host now ships one Plugin Manager instance initialized during Tauri
+setup from `app_config_dir` and shared through Tauri managed state. It remains a
+Host-private core: no Plugin Manager Tauri command, TypeScript registration
+payload, frontend management surface, Action/Page projection, installer, or
+plugin execution path is exposed.
+
+Each healthy entry keeps four lifetimes separate:
+
+- the validated normalized Manifest contains only author-controlled data and
+  deterministic defaults;
+- persisted Host registration facts contain the installation path, an
+  algorithm-labelled package digest supplied by the Host, Host-controlled
+  source, enabled intent, a sorted unique grant snapshot, and at most the 32
+  most recent canonical safe diagnostics;
+- compatibility is recomputed from the Manifest ranges and current lensX and
+  Host API versions whenever a record is constructed or recovered;
+- Runtime state is process-local and always recovers as `inactive` in this
+  foundation.
+
+The grant snapshot defaults to empty. Requested permissions never become
+grants automatically. Host-controlled source, author-declared publisher data,
+requested permissions, and an official provenance claim are storage or display
+facts only; none establishes trust, grants a permission, or creates a lifecycle
+exemption.
+
+The dedicated Plugin Manager Store uses one version-1 JSON record per plugin.
+A deterministic hex-encoded record key forms the safe filename. A transition
+validates its complete next record, writes a unique same-directory temporary
+file, flushes it, and atomically replaces only that plugin's target record.
+The Manager publishes the new in-memory snapshot only after persistence
+succeeds. Create, write, flush, or replace failure leaves the previous memory
+and disk state intact, and incomplete temporary files are ignored on recovery.
+
+Startup reads records independently. A syntactically damaged record, unknown
+format version, record-key/Manifest identity mismatch, or inconsistent
+registration becomes an in-memory quarantine stub with a stable safe recovery
+diagnostic. The original file remains untouched and other healthy records keep
+loading. If the Store directory as a whole cannot be read, the Manager starts
+with an empty healthy set plus a manager-level degraded recovery report; Tauri
+startup still completes and the unreadable data is not overwritten. Clearing a
+quarantine requires a trusted Host caller to atomically replace it with a
+complete valid record whose enabled intent is supplied explicitly.
+
+This internal state records that the Host knows an installed registration; it
+does not prove that package discovery, digest computation, installation,
+uninstallation, updates, permission decisions, Runtime sessions, or a public
+Registration Contract have shipped. Those remain separate capabilities.
 
 ## Shipped Public Plugin SDK Foundation
 

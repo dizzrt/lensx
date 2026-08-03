@@ -2,6 +2,7 @@ pub mod app_preferences;
 pub mod launcher_action_collections;
 pub mod launcher_surface;
 pub mod launcher_window;
+pub mod plugin_manager;
 pub mod plugin_manifest;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -18,6 +19,7 @@ pub fn run() {
             launcher_window::hide_launcher
         ])
         .setup(|app| {
+            plugin_manager::setup_plugin_manager(app.handle());
             launcher_window::setup_launcher_window(app.handle());
             Ok(())
         })

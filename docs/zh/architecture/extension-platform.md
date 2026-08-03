@@ -121,10 +121,43 @@ scripts 或 Host 私有源码。
 
 ### 明确未实现的能力
 
-静态校验不会发现或安装包、注册插件、创建 iframe、授予权限、把插件 Action 投影进 launcher
-registry、搜索这些 Action、导航 Page、交换 Host API 消息或运行插件代码。当前 App Shell 可以
-搜索 Host 内建 launcher Action，但静态 Manifest 校验与该 registry、搜索路径、Action 集合或
-Host icon 投影没有连接。
+静态校验不会发现或安装包、创建生产 registration、创建 iframe、授予权限、把插件 Action
+投影进 launcher registry、搜索这些 Action、导航 Page、交换 Host API 消息或运行插件代码。
+当前 App Shell 可以搜索 Host 内建 launcher Action，但静态 Manifest 校验与该 registry、搜索路径、
+Action 集合或 Host icon 投影没有连接。
+
+## 已交付的 Host 私有 Plugin Manager
+
+Rust Host 现已交付一个 Plugin Manager 实例。Tauri setup 从 `app_config_dir` 初始化该实例，并通过
+Tauri managed state 在 Host 内部共享。它仍然是 Host 私有核心：没有暴露 Plugin Manager Tauri
+command、TypeScript registration payload、前端管理界面、Action/Page 投影、安装器或插件执行路径。
+
+每个健康条目明确区分四种生命周期：
+
+- 经过校验的 normalized Manifest 只包含作者可控数据和确定性默认值；
+- 持久化的 Host registration facts 包含安装路径、由 Host 提供且带算法标签的包摘要、Host 控制的
+  source、enabled intent、排序去重的 grant snapshot，以及最多最近 32 条规范且安全的诊断；
+- 每次构造或恢复记录时，都根据 Manifest 范围以及当前 lensX 和 Host API 版本重新计算
+  compatibility；
+- Runtime 状态只属于当前进程，并且在本基础中始终以 `inactive` 恢复。
+
+grant snapshot 默认为空。requested permissions 永远不会自动变成 grant。Host 控制的 source、
+作者声明的 publisher 数据、requested permissions 和官方 provenance 声明都只是存储或展示事实；
+它们都不能建立信任、授予权限或创建生命周期豁免。
+
+Plugin Manager 专用 Store 为每个插件使用一个 version 1 JSON 记录。确定性的十六进制编码 record
+key 构成安全文件名。每次转换先校验完整 next record，在同目录写入唯一临时文件并刷新，然后只对
+该插件的目标记录执行原子替换。只有持久化成功后，Manager 才发布新的内存 snapshot。临时文件创建、
+写入、刷新或替换失败都会保留原有内存和磁盘状态；恢复时忽略未完成的临时文件。
+
+启动时会独立读取每条记录。语法损坏、未知格式版本、record key 与 Manifest identity 不一致，或
+registration facts 不一致的记录会变成内存中的 quarantine stub，并携带稳定、安全的恢复诊断。
+原文件保持不变，其他健康记录继续加载。如果整个 Store 目录不可读，Manager 会以空健康集合和
+manager-level degraded 恢复报告启动；Tauri 启动仍然完成，也不会覆盖不可读数据。清除 quarantine
+要求可信 Host 调用方使用完整有效记录进行原子替换，其中 enabled intent 必须显式提供。
+
+这一内部状态只表示 Host 已知一条 installed registration；它不证明包发现、摘要计算、安装、卸载、
+更新、权限决策、Runtime session 或公共 Registration Contract 已经交付。这些仍是独立能力。
 
 ## 已交付的公共 Plugin SDK Foundation
 

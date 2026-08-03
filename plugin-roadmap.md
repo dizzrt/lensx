@@ -23,6 +23,7 @@
 - `manifest_version: "0.1.0"` 的严格外部插件 Manifest Schema；
 - Schema 驱动的 `PluginManifestInput`、两阶段 TypeScript API 与独立 Rust 校验；
 - valid、invalid、normalized、incompatible 共享 fixtures、真实 tarball 消费验证和契约 drift gate；
+- Host 私有的持久化 Plugin Manager、逐插件原子记录、兼容性重算与 quarantine 恢复；
 - Host-owned Launcher Action descriptor、Registry、Dispatcher、搜索与集合能力；
 - Host 内建的隐藏 Launcher 和打开设置 Action；
 - Host 设置页面中的插件空占位。
@@ -30,7 +31,7 @@
 当前尚未实现：
 
 - Plugin CLI package；
-- 持久化 Plugin Manager、插件注册状态、安装与升级事务；
+- 公共 Plugin Registration Contract，以及真实插件安装与升级事务；
 - 插件 Action/Page 到现有 Host Registry 和页面导航的投影；
 - 插件包格式、安全资源服务、iframe Runtime 和 Runtime session；
 - 真实 Host API、SDK transport、权限授权和插件私有存储；
@@ -228,9 +229,10 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；本 Ta
 
 ## Milestone 2：建立 Host 插件注册模型
 
-- [ ] **Task 2.1：建立持久化 Plugin Manager**
+- [x] **Task 2.1：建立持久化 Plugin Manager**
 
-**OpenSpec change**：`add-persistent-plugin-manager`
+**OpenSpec change**：[add-persistent-plugin-manager](openspec/changes/archive/2026-08-03-add-persistent-plugin-manager/)
+（已完成并归档）
 
 **目标**：在 Rust 中建立统一、持久化且可诊断的插件管理核心。
 
