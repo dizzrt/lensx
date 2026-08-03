@@ -51,13 +51,36 @@ describe('workspace boundary checker', () => {
 
   test('rejects private Host imports for official and example plugins', () => {
     const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
-    const privateImports = diagnostics.filter((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport);
+    const privateImports = diagnostics.filter(
+      (item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport && item.specifier === '@/app/private',
+    );
 
     expect(privateImports.map((item) => item.file)).toEqual([
       'examples/plugins/bad/src/index.ts',
       'plugins/official/bad/src/index.ts',
     ]);
     expect(privateImports.every((item) => item.specifier === '@/app/private')).toBe(true);
+  });
+
+  test('rejects Host-private Registration types, adapters, and event entry points', () => {
+    const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
+    const registrationImports = diagnostics.filter((item) => item.specifier.includes('/plugins/registration'));
+
+    expect(registrationImports.map((item) => item.file)).toEqual([
+      'examples/plugins/bad/src/index.ts',
+      'examples/plugins/bad/src/index.ts',
+      'examples/plugins/bad/src/index.ts',
+      'plugins/official/bad/src/index.ts',
+      'plugins/official/bad/src/index.ts',
+      'plugins/official/bad/src/index.ts',
+    ]);
+    expect(
+      registrationImports.every(
+        (item) =>
+          item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport ||
+          item.ruleId === WORKSPACE_BOUNDARY_RULES.hostTauriAdapter,
+      ),
+    ).toBe(true);
   });
 
   test('rejects Tauri imports for official and example plugins', () => {

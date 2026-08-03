@@ -15,7 +15,7 @@
 
 ## 当前基线
 
-截至本文档创建时，仓库已经实现：
+当前仓库已经实现：
 
 - `@lensx/plugin-contract@0.1.0` 公共 workspace package，以及三个受限公共入口；
 - `@lensx/plugin-sdk@0.1.0` 框架无关公共 package 与受限根入口；
@@ -24,6 +24,8 @@
 - Schema 驱动的 `PluginManifestInput`、两阶段 TypeScript API 与独立 Rust 校验；
 - valid、invalid、normalized、incompatible 共享 fixtures、真实 tarball 消费验证和契约 drift gate；
 - Host 私有的持久化 Plugin Manager、逐插件原子记录、兼容性重算与 quarantine 恢复；
+- Host 私有的 Plugin Registration Contract、只读 snapshot/detail 查询、revision 失效通知与
+  TypeScript 恢复 adapter；
 - Host-owned Launcher Action descriptor、Registry、Dispatcher、搜索与集合能力；
 - Host 内建的隐藏 Launcher 和打开设置 Action；
 - Host 设置页面中的插件空占位。
@@ -31,7 +33,7 @@
 当前尚未实现：
 
 - Plugin CLI package；
-- 公共 Plugin Registration Contract，以及真实插件安装与升级事务；
+- 真实插件安装与升级事务；
 - 插件 Action/Page 到现有 Host Registry 和页面导航的投影；
 - 插件包格式、安全资源服务、iframe Runtime 和 Runtime session；
 - 真实 Host API、SDK transport、权限授权和插件私有存储；
@@ -248,23 +250,26 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；本 Ta
 
 **完成标准**：注册状态可持久化和恢复；损坏记录进入 quarantine；Rust 测试覆盖状态转换。
 
-- [ ] **Task 2.2：定义 Plugin Registration Contract**
+- [x] **Task 2.2：定义 Plugin Registration Contract**
 
-**OpenSpec change**：`define-plugin-registration-contract`
+**OpenSpec change**：[define-plugin-registration-contract](openspec/changes/archive/2026-08-03-define-plugin-registration-contract/)
+（已完成并归档）
 
 **目标**：建立 Rust、Tauri 和 TypeScript 共享的 Host 注册与查询边界。
 
 **范围**：
 
-- 定义 author Manifest、normalized Manifest、registered plugin 和 runtime session 的独立类型。
-- Host 注入 source、lifecycle、enabled、compatibility、signature 和 permission facts。
-- 定义列表、详情和状态变更的稳定可序列化 payload。
+- 定义 author Manifest、normalized Manifest、registered plugin read model 和瞬时 runtime status 的独立层次。
+- Host 组合 source、enabled、compatibility、quarantine、permission grant 和安全诊断事实；
+  lifecycle、signature 与 permission decision 继续由后续 Task 定义。
+- 定义 snapshot、详情、稳定查询错误和状态变更通知的可序列化 payload。
 - Publisher 声明不得转换为可信 provenance。
 - 定义注册状态变化事件和完整 snapshot 恢复语义。
 
 **依赖**：Task 2.1。
 
-**完成标准**：前端只能读取 Host 组合后的注册状态；author input 无法覆盖 Host-owned 字段。
+**完成标准**：前端只能读取 Host 组合后的注册状态；author input 无法覆盖 Host-owned 字段；
+完整 snapshot 可以从事件竞态或丢失中恢复，Rust 与 TypeScript 共享 drift gate。
 
 - [ ] **Task 2.3：投影 Plugin Actions 到 Launcher**
 

@@ -2,6 +2,11 @@ use crate::plugin_manifest::{
     validate_plugin_manifest, NormalizedPluginManifest, PluginHostVersions,
     PluginManifestCompatibility, PluginManifestValidationStatus, PLUGIN_HOST_API_VERSION,
 };
+use crate::plugin_registration::{
+    project_plugin_registration_detail, project_plugin_registration_snapshot,
+    PluginRegistrationChangedEvent, PluginRegistrationDetailResponse, PluginRegistrationQueryError,
+    PluginRegistrationSnapshot,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -275,6 +280,7 @@ impl PluginRecordV1 {
 
 #[derive(Clone, Debug, Default)]
 struct PluginManagerSnapshot {
+    revision: u64,
     healthy: BTreeMap<String, PluginRegistration>,
     quarantined: BTreeMap<String, QuarantineStub>,
 }
@@ -367,11 +373,38 @@ impl PluginManager {
         self.lock_snapshot().quarantined.get(key).cloned()
     }
 
+    pub fn registration_revision(&self) -> String {
+        self.lock_snapshot().revision.to_string()
+    }
+
+    pub fn read_registration_snapshot(&self) -> PluginRegistrationSnapshot {
+        let snapshot = self.lock_snapshot();
+        project_plugin_registration_snapshot(
+            snapshot.revision,
+            &self.recovery_report,
+            snapshot.healthy.values(),
+            snapshot.quarantined.values(),
+        )
+    }
+
+    pub fn read_registration_detail(
+        &self,
+        entry_id: &str,
+    ) -> Result<PluginRegistrationDetailResponse, PluginRegistrationQueryError> {
+        let snapshot = self.lock_snapshot();
+        project_plugin_registration_detail(
+            snapshot.revision,
+            entry_id,
+            snapshot.healthy.values(),
+            snapshot.quarantined.values(),
+        )
+    }
+
     pub fn register(
         &self,
         manifest: NormalizedPluginManifest,
         facts: PluginRegistrationFacts,
-    ) -> Result<(), PluginManagerDiagnostic> {
+    ) -> Result<Option<PluginRegistrationChangedEvent>, PluginManagerDiagnostic> {
         facts.validate()?;
         let compatibility = validate_normalized_manifest(&manifest, &self.versions)?;
         let plugin_id = manifest.plugin_id.clone();
@@ -393,33 +426,36 @@ impl PluginManager {
             .write_record(&PluginRecordV1::from_registration(&registration))?;
         snapshot.quarantined.remove(&key);
         snapshot.healthy.insert(plugin_id, registration);
-        Ok(())
+        Ok(Some(snapshot.commit_change()))
     }
 
     pub fn set_enabled(
         &self,
         plugin_id: &str,
         enabled: bool,
-    ) -> Result<(), PluginManagerDiagnostic> {
+    ) -> Result<Option<PluginRegistrationChangedEvent>, PluginManagerDiagnostic> {
         let mut snapshot = self.lock_snapshot();
         let mut next = snapshot
             .healthy
             .get(plugin_id)
             .cloned()
             .ok_or_else(PluginManagerDiagnostic::invalid_registration)?;
+        if next.facts.enabled == enabled {
+            return Ok(None);
+        }
         next.facts.enabled = enabled;
         next.facts.validate()?;
         self.store
             .write_record(&PluginRecordV1::from_registration(&next))?;
         snapshot.healthy.insert(plugin_id.to_owned(), next);
-        Ok(())
+        Ok(Some(snapshot.commit_change()))
     }
 
     pub fn append_diagnostic(
         &self,
         plugin_id: &str,
         diagnostic: PluginManagerDiagnostic,
-    ) -> Result<(), PluginManagerDiagnostic> {
+    ) -> Result<Option<PluginRegistrationChangedEvent>, PluginManagerDiagnostic> {
         let mut snapshot = self.lock_snapshot();
         let mut next = snapshot
             .healthy
@@ -430,7 +466,7 @@ impl PluginManager {
         self.store
             .write_record(&PluginRecordV1::from_registration(&next))?;
         snapshot.healthy.insert(plugin_id.to_owned(), next);
-        Ok(())
+        Ok(Some(snapshot.commit_change()))
     }
 
     fn lock_snapshot(&self) -> MutexGuard<'_, PluginManagerSnapshot> {
@@ -446,6 +482,16 @@ impl PluginManager {
             .write_fault
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = fault;
+    }
+}
+
+impl PluginManagerSnapshot {
+    fn commit_change(&mut self) -> PluginRegistrationChangedEvent {
+        self.revision = self
+            .revision
+            .checked_add(1)
+            .expect("Plugin Manager revision should not overflow during one process");
+        PluginRegistrationChangedEvent::new(self.revision)
     }
 }
 
@@ -881,6 +927,7 @@ mod tests {
             .register(manifest("com.acme.duplicate", "0.3.0"), facts(false))
             .expect_err("duplicate should fail");
         assert_eq!(error.code, PluginManagerDiagnosticCode::DuplicateIdentity);
+        assert_eq!(manager.registration_revision(), "1");
         assert!(
             manager
                 .registration("com.acme.duplicate")
@@ -999,11 +1046,13 @@ mod tests {
             manager
                 .register(manifest("com.acme.atomic", "0.2.0"), facts(false))
                 .expect("initial registration should succeed");
+            assert_eq!(manager.registration_revision(), "1");
             manager.set_write_fault(Some(fault));
             let error = manager
                 .set_enabled("com.acme.atomic", true)
                 .expect_err("fault should reject transition");
             assert_eq!(error.code, PluginManagerDiagnosticCode::PersistFailed);
+            assert_eq!(manager.registration_revision(), "1");
             assert!(
                 !manager
                     .registration("com.acme.atomic")
@@ -1121,10 +1170,12 @@ mod tests {
         fs::write(store_dir.join(format!("{key}.json")), b"{")
             .expect("damaged record should be written");
         let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
+        assert_eq!(manager.registration_revision(), "0");
         assert!(manager.quarantine(&key).is_some());
         let mut invalid = manifest(plugin_id, "0.2.0");
         invalid.publisher.homepage = "not-https".to_owned();
         assert!(manager.register(invalid, facts(false)).is_err());
+        assert_eq!(manager.registration_revision(), "0");
         assert!(manager.quarantine(&key).is_some());
         assert_eq!(
             fs::read(store_dir.join(format!("{key}.json"))).expect("damaged record should remain"),
@@ -1133,6 +1184,7 @@ mod tests {
         assert!(manager
             .register(manifest(plugin_id, "0.2.0"), facts(true))
             .is_ok());
+        assert_eq!(manager.registration_revision(), "1");
         assert!(manager.quarantine(&key).is_none());
         assert!(
             manager
@@ -1141,6 +1193,42 @@ mod tests {
                 .facts
                 .enabled
         );
+    }
+
+    #[test]
+    fn real_changes_increment_revision_and_return_post_commit_events() {
+        let directory = TestDirectory::new("revision");
+        let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
+        assert_eq!(manager.registration_revision(), "0");
+
+        let registered = manager
+            .register(manifest("com.acme.revision", "0.2.0"), facts(false))
+            .expect("registration should succeed")
+            .expect("registration should change state");
+        assert_eq!(registered.revision, "1");
+
+        assert!(manager
+            .set_enabled("com.acme.revision", false)
+            .expect("no-op should succeed")
+            .is_none());
+        assert_eq!(manager.registration_revision(), "1");
+
+        let enabled = manager
+            .set_enabled("com.acme.revision", true)
+            .expect("enable should persist")
+            .expect("enable should change state");
+        assert_eq!(enabled.revision, "2");
+
+        let diagnosed = manager
+            .append_diagnostic("com.acme.revision", persist_diagnostic(0))
+            .expect("diagnostic should persist")
+            .expect("diagnostic should change state");
+        assert_eq!(diagnosed.revision, "3");
+        assert_eq!(manager.registration_revision(), "3");
+
+        let recovered = PluginManager::recover(&directory.path, versions("0.1.0"));
+        assert_eq!(recovered.registration_revision(), "0");
+        assert!(recovered.registration("com.acme.revision").is_some());
     }
 
     #[test]

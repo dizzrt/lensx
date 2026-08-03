@@ -1,0 +1,204 @@
+[
+  {
+    "name": "empty_snapshot",
+    "type": "snapshot",
+    "value": {
+      "contract_version": "0.1.0",
+      "revision": "0",
+      "availability": { "kind": "available" },
+      "entries": []
+    }
+  },
+  {
+    "name": "healthy_disabled_incompatible_snapshot",
+    "type": "snapshot",
+    "value": {
+      "contract_version": "0.1.0",
+      "revision": "3",
+      "availability": { "kind": "available" },
+      "entries": [
+        {
+          "kind": "registered",
+          "entry_id": "entry_0000000000000001",
+          "plugin_id": "com.acme.workspace",
+          "version": "1.2.0",
+          "display": {
+            "name": { "en-US": "Workspace Tools", "zh-CN": "工作区工具" },
+            "description": { "en-US": "Open and manage local workspaces.", "zh-CN": "打开和管理本地工作区。" },
+            "icon": { "kind": "asset", "path": "assets/plugin-icon.svg" }
+          },
+          "source": "external",
+          "enabled": false,
+          "compatibility": { "lensx": false, "host_api": true },
+          "runtime": { "kind": "inactive" }
+        },
+        {
+          "kind": "quarantined",
+          "entry_id": "entry_0000000000000002",
+          "plugin_id": "com.acme.damaged",
+          "diagnostic": {
+            "code": "record_invalid",
+            "phase": "recover",
+            "message": "Plugin record is invalid."
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "degraded_snapshot",
+    "type": "snapshot",
+    "value": {
+      "contract_version": "0.1.0",
+      "revision": "0",
+      "availability": {
+        "kind": "degraded",
+        "diagnostic": {
+          "code": "store_unavailable",
+          "phase": "initialize",
+          "message": "Plugin Manager storage is unavailable."
+        }
+      },
+      "entries": []
+    }
+  },
+  {
+    "name": "healthy_detail",
+    "type": "detail",
+    "value": {
+      "contract_version": "0.1.0",
+      "revision": "3",
+      "detail": {
+        "kind": "registered",
+        "entry_id": "entry_0000000000000001",
+        "manifest": {
+          "manifest_version": "0.1.0",
+          "plugin_id": "com.acme.workspace",
+          "version": "1.2.0",
+          "display": {
+            "name": { "en-US": "Workspace Tools", "zh-CN": "工作区工具" },
+            "description": { "en-US": "Open and manage local workspaces.", "zh-CN": "打开和管理本地工作区。" },
+            "icon": { "kind": "asset", "path": "assets/plugin-icon.svg" }
+          },
+          "publisher": {
+            "author": "lensX Official",
+            "homepage": "https://example.com/workspace-tools",
+            "repository": "https://github.com/acme/workspace-tools"
+          },
+          "compatibility": {
+            "lensx": { "min_version": "0.1.0", "max_version_exclusive": "0.2.0" },
+            "host_api": { "min_version": "0.1.0", "max_version_exclusive": "2.0.0" }
+          },
+          "runtime": { "kind": "iframe", "entry": "dist/plugin.html" },
+          "requested_permissions": [
+            {
+              "permission_id": "lensx.filesystem.read_selected",
+              "reason": { "en-US": "Read folders selected by the user.", "zh-CN": "读取用户主动选择的目录。" }
+            }
+          ],
+          "contributes": {
+            "pages": [
+              {
+                "id": "home",
+                "title": { "en-US": "Workspace Tools", "zh-CN": "工作区工具" },
+                "route": "/",
+                "icon": { "kind": "asset", "path": "assets/home.svg" },
+                "required_permissions": []
+              },
+              {
+                "id": "open_project",
+                "title": { "en-US": "Open Project", "zh-CN": "打开项目" },
+                "route": "/open-project",
+                "parent_page_id": "home",
+                "required_permissions": ["lensx.filesystem.read_selected"]
+              }
+            ],
+            "actions": [
+              {
+                "id": "open_project",
+                "title": { "en-US": "Open Project", "zh-CN": "打开项目" },
+                "description": { "en-US": "Open the project selection page.", "zh-CN": "打开项目选择页面。" },
+                "default_keywords": {
+                  "en-US": ["open workspace", "open folder"],
+                  "zh-CN": ["打开工作区", "打开文件夹"]
+                },
+                "target": { "kind": "page", "page_id": "open_project" }
+              }
+            ],
+            "launcher": { "default_action_id": "open_project" }
+          }
+        },
+        "source": "external",
+        "enabled": true,
+        "compatibility": { "lensx": true, "host_api": true },
+        "granted_permission_ids": ["clipboard.read", "files.read"],
+        "runtime": { "kind": "inactive" },
+        "diagnostics": [
+          {
+            "code": "persist_failed",
+            "phase": "persist",
+            "message": "Plugin registration could not be saved."
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "quarantine_detail",
+    "type": "detail",
+    "value": {
+      "contract_version": "0.1.0",
+      "revision": "3",
+      "detail": {
+        "kind": "quarantined",
+        "entry_id": "entry_0000000000000002",
+        "diagnostic": {
+          "code": "record_invalid",
+          "phase": "recover",
+          "message": "Plugin record is invalid."
+        }
+      }
+    }
+  },
+  {
+    "name": "not_found_error",
+    "type": "error",
+    "value": {
+      "code": "not_found",
+      "operation": "read_detail",
+      "message": "Plugin registration entry was not found."
+    }
+  },
+  {
+    "name": "invalid_request_error",
+    "type": "error",
+    "value": {
+      "code": "invalid_request",
+      "operation": "read_detail",
+      "message": "Plugin registration request is invalid."
+    }
+  },
+  {
+    "name": "unavailable_error",
+    "type": "error",
+    "value": {
+      "code": "unavailable",
+      "operation": "read_snapshot",
+      "message": "Plugin registration data is unavailable."
+    }
+  },
+  {
+    "name": "internal_error",
+    "type": "error",
+    "value": {
+      "code": "internal",
+      "operation": "read_detail",
+      "message": "Plugin registration query failed."
+    }
+  },
+  {
+    "name": "changed_event",
+    "type": "event",
+    "value": { "contract_version": "0.1.0", "revision": "4" }
+  }
+]

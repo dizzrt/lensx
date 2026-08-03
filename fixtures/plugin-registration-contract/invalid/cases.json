@@ -1,0 +1,67 @@
+[
+  { "name": "unknown_snapshot_field", "type": "snapshot", "base": "empty_snapshot", "set": { "/secret": true } },
+  {
+    "name": "wrong_snapshot_version",
+    "type": "snapshot",
+    "base": "empty_snapshot",
+    "set": { "/contract_version": "9.0.0" }
+  },
+  { "name": "invalid_revision_number", "type": "snapshot", "base": "empty_snapshot", "set": { "/revision": 1 } },
+  {
+    "name": "invalid_revision_leading_zero",
+    "type": "snapshot",
+    "base": "empty_snapshot",
+    "set": { "/revision": "01" }
+  },
+  {
+    "name": "wrong_summary_variant",
+    "type": "snapshot",
+    "base": "healthy_disabled_incompatible_snapshot",
+    "set": { "/entries/0/kind": "healthy" }
+  },
+  {
+    "name": "unsorted_entries",
+    "type": "snapshot",
+    "base": "healthy_disabled_incompatible_snapshot",
+    "set": { "/entries/0/entry_id": "entry_0000000000000003" }
+  },
+  {
+    "name": "unsorted_grants",
+    "type": "detail",
+    "base": "healthy_detail",
+    "set": { "/detail/granted_permission_ids": ["files.read", "clipboard.read"] }
+  },
+  {
+    "name": "duplicate_grants",
+    "type": "detail",
+    "base": "healthy_detail",
+    "set": { "/detail/granted_permission_ids": ["files.read", "files.read"] }
+  },
+  {
+    "name": "sensitive_installation_path",
+    "type": "detail",
+    "base": "healthy_detail",
+    "set": { "/detail/installation_path": "/private/secret" }
+  },
+  {
+    "name": "sensitive_package_digest",
+    "type": "detail",
+    "base": "quarantine_detail",
+    "set": { "/detail/package_digest": { "algorithm": "sha256", "value": "secret" } }
+  },
+  {
+    "name": "unsafe_diagnostic_message",
+    "type": "detail",
+    "base": "quarantine_detail",
+    "set": { "/detail/diagnostic/message": "/private/path native error" }
+  },
+  { "name": "wrong_event_version", "type": "event", "base": "changed_event", "set": { "/contract_version": "0.2.0" } },
+  {
+    "name": "event_unknown_field",
+    "type": "event",
+    "base": "changed_event",
+    "set": { "/entry_id": "entry_0000000000000001" }
+  },
+  { "name": "error_raw_stack", "type": "error", "base": "not_found_error", "set": { "/stack": "private stack" } },
+  { "name": "error_wrong_message", "type": "error", "base": "not_found_error", "set": { "/message": "/private/path" } }
+]

@@ -121,13 +121,15 @@ try {
   if (runtimeOutput !== 'com.acme.workspace:compatible') {
     throw new Error(`Unexpected external consumer output: ${runtimeOutput}`);
   }
-  const deepImport = spawnSync(
-    'node',
-    ['--input-type=module', '--eval', "await import('@lensx/plugin-contract/dist/src/validate.js')"],
-    { cwd: consumerRoot, encoding: 'utf8' },
-  );
-  if (deepImport.status === 0 || !deepImport.stderr.includes('ERR_PACKAGE_PATH_NOT_EXPORTED')) {
-    throw new Error('Undeclared deep import was not rejected by the packed package exports.');
+  for (const specifier of ['@lensx/plugin-contract/dist/src/validate.js', '@lensx/plugin-contract/registration']) {
+    const deepImport = spawnSync(
+      'node',
+      ['--input-type=module', '--eval', `await import(${JSON.stringify(specifier)})`],
+      { cwd: consumerRoot, encoding: 'utf8' },
+    );
+    if (deepImport.status === 0 || !deepImport.stderr.includes('ERR_PACKAGE_PATH_NOT_EXPORTED')) {
+      throw new Error(`Undeclared Contract import was not rejected: ${specifier}.`);
+    }
   }
 
   console.log(`Packed ${files.length} public files and verified an isolated external consumer.`);

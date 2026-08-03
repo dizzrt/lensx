@@ -129,8 +129,9 @@ Action 集合或 Host icon 投影没有连接。
 ## 已交付的 Host 私有 Plugin Manager
 
 Rust Host 现已交付一个 Plugin Manager 实例。Tauri setup 从 `app_config_dir` 初始化该实例，并通过
-Tauri managed state 在 Host 内部共享。它仍然是 Host 私有核心：没有暴露 Plugin Manager Tauri
-command、TypeScript registration payload、前端管理界面、Action/Page 投影、安装器或插件执行路径。
+Tauri managed state 在 Host 内部共享。它仍然是 Host 私有核心。Manager 对应用侧唯一的投影是
+下文所述的私有只读 Registration Contract；没有暴露生命周期写 command、前端管理界面、
+Action/Page 投影、安装器或插件执行路径。
 
 每个健康条目明确区分四种生命周期：
 
@@ -157,7 +158,39 @@ manager-level degraded 恢复报告启动；Tauri 启动仍然完成，也不会
 要求可信 Host 调用方使用完整有效记录进行原子替换，其中 enabled intent 必须显式提供。
 
 这一内部状态只表示 Host 已知一条 installed registration；它不证明包发现、摘要计算、安装、卸载、
-更新、权限决策、Runtime session 或公共 Registration Contract 已经交付。这些仍是独立能力。
+更新、权限决策、Runtime session 或面向插件的公共 registration API 已经交付。这些仍是独立能力。
+
+## 已交付的 Host 私有 Registration Contract
+
+Host 现已通过 Registration Contract version `0.1.0` 投影 managed Plugin Manager。该 contract
+只在 Rust、Tauri 与根应用 TypeScript 之间私有共享。`@lensx/plugin-contract`、
+`@lensx/plugin-sdk` 和其他插件 package 都不会导出它；workspace boundary 会拒绝官方插件与
+示例插件导入其类型、desktop adapter 或 event 入口。
+
+该边界明确区分四层：author input、normalized Manifest、Host-owned registration summary/detail，
+以及当前进程的 Runtime status。`read_plugin_registration_snapshot` 返回按 opaque entry identity
+确定性排序的严格 `registered | quarantined` summary，以及 `available | degraded` Manager
+availability。`read_plugin_registration_detail` 只接受合法 opaque entry identity，并返回绑定 revision
+的 registered 或 quarantine detail。健康详情包含 normalized Manifest、`builtin | external` source、
+enabled intent、逐维 compatibility、排序去重 grant、有界安全诊断，以及当前唯一的 `inactive`
+Runtime variant。quarantine 详情只包含 opaque identity、可选的已验证 plugin ID 和一条安全诊断。
+
+每个 snapshot、detail response 和 `plugin-registration://snapshot-changed` event 都携带独立的
+Registration Contract version。revision 是只在当前进程内单调递增的十进制字符串；重启恢复会从
+新的 revision 序列开始，不改变持久化 Store format。真实状态转换只有在完整记录成功持久化并发布
+next in-memory state 后才递增 revision。拒绝、失败和 no-op 转换都不会产生 revision 或 event。
+changed event 只包含 contract version 与 revision；它是失效提示，不是 patch 或历史记录。
+
+私有 TypeScript adapter 会先订阅再执行首次完整读取，把所有 command/event 值作为 `unknown`
+校验，深度冻结接受的 payload，把并发通知合并为串行刷新，并在 revision 变化时使 snapshot 与 detail
+cache 失效。监听恢复和 Launcher activation 后会执行完整刷新；detail 与 snapshot revision 不一致时
+会重新读取。稳定 query error 只暴露 `code`、`operation` 与安全英文 message。
+
+该 contract 永远不暴露安装路径、package digest、Store key 或文件名、损坏记录内容、原始异常、
+stack、函数或 Tauri 对象。publisher、source、enabled intent、requested permissions，以及空或非空
+grant snapshot 都是相互独立的事实；任何一项都不能建立信任或自动授权。本次交付不会安装、更新、
+卸载、enable、disable、执行或渲染插件。Action/Page 投影、管理 UI、真实 Runtime session、权限决策、
+签名和 Host API method 仍未实现。
 
 ## 已交付的公共 Plugin SDK Foundation
 

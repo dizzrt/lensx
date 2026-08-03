@@ -157,9 +157,10 @@ registry, search path, Action collections, or Host icon projection.
 
 The Rust Host now ships one Plugin Manager instance initialized during Tauri
 setup from `app_config_dir` and shared through Tauri managed state. It remains a
-Host-private core: no Plugin Manager Tauri command, TypeScript registration
-payload, frontend management surface, Action/Page projection, installer, or
-plugin execution path is exposed.
+Host-private core. Its only application-facing projection is the private,
+read-only Registration Contract described below; no lifecycle write command,
+frontend management surface, Action/Page projection, installer, or plugin
+execution path is exposed.
 
 Each healthy entry keeps four lifetimes separate:
 
@@ -201,7 +202,55 @@ complete valid record whose enabled intent is supplied explicitly.
 This internal state records that the Host knows an installed registration; it
 does not prove that package discovery, digest computation, installation,
 uninstallation, updates, permission decisions, Runtime sessions, or a public
-Registration Contract have shipped. Those remain separate capabilities.
+plugin-facing registration API have shipped. Those remain separate capabilities.
+
+## Shipped Host-Private Registration Contract
+
+The Host now projects the managed Plugin Manager through Registration Contract
+version `0.1.0`. This contract is private to Rust, Tauri, and the root
+application TypeScript. It is not exported by `@lensx/plugin-contract`,
+`@lensx/plugin-sdk`, or another plugin package, and workspace boundaries reject
+official and example plugins that import its types, desktop adapter, or event
+entry point.
+
+The boundary keeps four layers distinct: author input, normalized Manifest,
+Host-owned registration summary/detail, and process-local Runtime status.
+`read_plugin_registration_snapshot` returns a deterministic list of strict
+`registered | quarantined` summaries plus `available | degraded` Manager
+availability. `read_plugin_registration_detail` accepts only an opaque entry
+identity and returns a revision-bound registered or quarantine detail. Healthy
+details contain the normalized Manifest, `builtin | external` source, enabled
+intent, per-dimension compatibility, sorted unique grants, bounded safe
+diagnostics, and only the current `inactive` Runtime variant. Quarantine details
+contain only the opaque identity, an optional verified plugin ID, and one safe
+diagnostic.
+
+Every snapshot, detail response, and `plugin-registration://snapshot-changed`
+event carries the independent Registration Contract version. Revisions are
+monotonic decimal strings within the current process only; restart recovery
+begins from a new revision sequence without changing the persisted Store
+format. A real state transition increments revision only after its complete
+record is persisted and the next in-memory state is published. Rejected,
+failed, and no-op transitions do not create a revision or event. Changed events
+carry only contract version and revision and act as invalidation hints, not
+patches or history.
+
+The private TypeScript adapter subscribes before its first full read, validates
+all command and event values from `unknown`, deep-freezes accepted payloads,
+coalesces concurrent notifications into serial refreshes, and invalidates its
+snapshot and detail caches on revision changes. It performs a complete refresh
+after listener recovery and Launcher activation, and re-reads when a detail and
+snapshot revision differ. Stable query errors expose only `code`, `operation`,
+and a safe English message.
+
+The contract never exposes installation paths, package digests, Store keys or
+filenames, damaged record contents, raw exceptions, stacks, functions, or Tauri
+objects. Publisher, source, enabled intent, requested permissions, and an empty
+or non-empty grant snapshot remain independent facts; none establishes trust
+or automatic authorization. This delivery does not install, update, uninstall,
+enable, disable, execute, or render plugins. Action/Page projection, management
+UI, real Runtime sessions, permission decisions, signatures, and Host API
+methods remain unimplemented.
 
 ## Shipped Public Plugin SDK Foundation
 

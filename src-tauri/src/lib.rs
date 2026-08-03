@@ -4,6 +4,7 @@ pub mod launcher_surface;
 pub mod launcher_window;
 pub mod plugin_manager;
 pub mod plugin_manifest;
+pub mod plugin_registration;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -16,7 +17,9 @@ pub fn run() {
             launcher_action_collections::record_launcher_action_use,
             launcher_action_collections::set_launcher_action_pinned,
             launcher_surface::set_launcher_surface_mode,
-            launcher_window::hide_launcher
+            launcher_window::hide_launcher,
+            plugin_registration::read_plugin_registration_detail,
+            plugin_registration::read_plugin_registration_snapshot
         ])
         .setup(|app| {
             plugin_manager::setup_plugin_manager(app.handle());
