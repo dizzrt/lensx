@@ -6,6 +6,7 @@ import type {
 } from './types';
 import {
   cloneLauncherActionDescriptor,
+  isValidLauncherActionOwnerId,
   sortLauncherActionDiagnostics,
   validateLauncherActionDescriptor,
 } from './validation';
@@ -13,6 +14,7 @@ import {
 interface RegisteredLauncherAction {
   readonly descriptor: LauncherActionDescriptor;
   readonly executor: LauncherActionRegistrationInput['executor'];
+  readonly providerOwner: string;
 }
 
 const registryState = new WeakMap<LauncherActionRegistry, Map<string, RegisteredLauncherAction>>();
@@ -27,6 +29,23 @@ const prefixDiagnostic = (diagnostic: LauncherActionDiagnostic, index: number): 
   ...diagnostic,
   path: `/${index}/descriptor${diagnostic.path}`,
 });
+
+const createProviderOwnerDiagnostic = (path: string): LauncherActionDiagnostic => ({
+  code: 'invalid_owner',
+  path,
+  message: 'Action does not belong to the declared provider owner.',
+});
+
+const createRegisteredAction = (
+  providerOwner: string,
+  descriptor: LauncherActionDescriptor,
+  executor: LauncherActionRegistrationInput['executor'],
+): RegisteredLauncherAction =>
+  Object.freeze({
+    descriptor: cloneLauncherActionDescriptor(descriptor),
+    executor,
+    providerOwner,
+  });
 
 export class LauncherActionRegistry {
   constructor() {
@@ -60,10 +79,11 @@ export class LauncherActionRegistry {
       };
     }
 
-    const registeredAction = Object.freeze({
-      descriptor: cloneLauncherActionDescriptor(validation.descriptor),
-      executor: registration.executor,
-    });
+    const registeredAction = createRegisteredAction(
+      validation.descriptor.owner_id,
+      validation.descriptor,
+      registration.executor,
+    );
     state.set(registeredAction.descriptor.action_id, registeredAction);
 
     return {
@@ -107,10 +127,7 @@ export class LauncherActionRegistry {
 
       batchIds.add(actionId);
       validRegistrations.push(
-        Object.freeze({
-          descriptor: cloneLauncherActionDescriptor(validation.descriptor),
-          executor: registration.executor,
-        }),
+        createRegisteredAction(validation.descriptor.owner_id, validation.descriptor, registration.executor),
       );
     });
 
@@ -125,6 +142,80 @@ export class LauncherActionRegistry {
     for (const registration of validRegistrations) {
       state.set(registration.descriptor.action_id, registration);
     }
+
+    return {
+      ok: true,
+      descriptors: Object.freeze(validRegistrations.map(({ descriptor }) => cloneLauncherActionDescriptor(descriptor))),
+      diagnostics: [],
+    };
+  }
+
+  replaceProviderBatch(
+    providerOwner: string,
+    registrations: readonly LauncherActionRegistrationInput[],
+  ): LauncherActionRegistrationResult {
+    const state = registryState.get(this);
+    if (!state) {
+      throw new Error('Launcher action registry is not initialized.');
+    }
+
+    const diagnostics: LauncherActionDiagnostic[] = [];
+    const validRegistrations: RegisteredLauncherAction[] = [];
+    const batchIds = new Set<string>();
+
+    if (!isValidLauncherActionOwnerId(providerOwner)) {
+      diagnostics.push({
+        code: 'invalid_owner',
+        path: '/provider_owner',
+        message: 'Provider owner is not a valid namespace.',
+      });
+    }
+
+    registrations.forEach((registration, index) => {
+      const validation = validateLauncherActionDescriptor(registration.descriptor);
+      diagnostics.push(...validation.diagnostics.map((diagnostic) => prefixDiagnostic(diagnostic, index)));
+
+      if (typeof registration.executor !== 'function') {
+        diagnostics.push({
+          code: 'invalid_type',
+          path: `/${index}/executor`,
+          message: 'Action executor must be a function.',
+        });
+      }
+
+      if (!validation.ok || typeof registration.executor !== 'function') {
+        return;
+      }
+
+      const { action_id: actionId, owner_id: ownerId } = validation.descriptor;
+      if (ownerId !== providerOwner) {
+        diagnostics.push(createProviderOwnerDiagnostic(`/${index}/descriptor/owner_id`));
+      }
+
+      const existing = state.get(actionId);
+      if ((existing !== undefined && existing.providerOwner !== providerOwner) || batchIds.has(actionId)) {
+        diagnostics.push(createDuplicateDiagnostic(`/${index}/descriptor/action_id`));
+      }
+
+      if (ownerId === providerOwner && !batchIds.has(actionId)) {
+        batchIds.add(actionId);
+        validRegistrations.push(createRegisteredAction(providerOwner, validation.descriptor, registration.executor));
+      }
+    });
+
+    const sortedDiagnostics = sortLauncherActionDiagnostics(diagnostics);
+    if (sortedDiagnostics.length > 0) {
+      return {
+        ok: false,
+        diagnostics: Object.freeze(sortedDiagnostics),
+      };
+    }
+
+    const nextState = new Map([...state].filter(([, registration]) => registration.providerOwner !== providerOwner));
+    for (const registration of validRegistrations) {
+      nextState.set(registration.descriptor.action_id, registration);
+    }
+    registryState.set(this, nextState);
 
     return {
       ok: true,

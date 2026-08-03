@@ -3,11 +3,12 @@
 ## Document Status
 
 This document separates the shipped static plugin Manifest contract, Plugin SDK
-foundation, Plugin Testkit, and optional Plugin UI package from the intended
-runtime extension boundary. Installation, distribution, plugin execution,
-permissions, plugin action projection and search, iframe transport, and the
-Host API are not currently implemented. Stable specs and source code define the
-shipped subset.
+foundation, Plugin Testkit, optional Plugin UI package, and Host-private Plugin
+Action projection core from the intended runtime extension boundary.
+Installation, distribution, production Plugin Action publication, Plugin Page
+navigation, plugin execution, permissions, iframe transport, and the Host API
+are not currently implemented. Stable specs and source code define the shipped
+subset.
 
 ## Goals
 
@@ -97,9 +98,9 @@ and may provide `zh-CN`; consumers fall back to English. Unknown locale keys and
 unknown fields are rejected. Missing optional collections normalize to empty
 collections, while explicit `null` remains invalid.
 
-Page and Action IDs are plugin-local. A future Host projection can derive the
-global Action ID as `<plugin_id>.<local_action_id>`, but the shipped validator
-does not perform that projection. Page parent references must exist and form an
+Page and Action IDs are plugin-local. The Host-private Plugin Action projection
+derives the global Action ID as `<plugin_id>.<local_action_id>`; the public
+validator itself does not perform that projection. Page parent references must exist and form an
 acyclic graph. Every Action target must be
 `{ "kind": "page", "page_id": "<local-page-id>" }`. Action keywords remain
 owned by that Action and never become plugin-wide aliases. Page permission
@@ -146,12 +147,12 @@ source.
 
 ### Explicitly Unimplemented Capabilities
 
-Static validation does not discover or install packages, create a production
-registration, create iframes, grant permissions, project plugin Actions into
-the launcher registry, search those Actions, navigate Pages, exchange Host API
-messages, or run plugin code. The current App Shell can search Host built-in
-launcher Actions, but static Manifest validation has no connection to that
-registry, search path, Action collections, or Host icon projection.
+Static validation alone does not discover or install packages, create a
+production registration, create iframes, grant permissions, publish plugin
+Actions in the production launcher, navigate Pages, exchange Host API messages,
+or run plugin code. The Host-private projection core can map current
+Registration facts into the shared Registry in injected compositions, but the
+production App Shell does not activate it before Plugin Page navigation exists.
 
 ## Shipped Host-Private Plugin Manager
 
@@ -159,7 +160,7 @@ The Rust Host now ships one Plugin Manager instance initialized during Tauri
 setup from `app_config_dir` and shared through Tauri managed state. It remains a
 Host-private core. Its only application-facing projection is the private,
 read-only Registration Contract described below; no lifecycle write command,
-frontend management surface, Action/Page projection, installer, or plugin
+frontend management surface, direct Action/Page projection, installer, or plugin
 execution path is exposed.
 
 Each healthy entry keeps four lifetimes separate:
@@ -247,10 +248,52 @@ The contract never exposes installation paths, package digests, Store keys or
 filenames, damaged record contents, raw exceptions, stacks, functions, or Tauri
 objects. Publisher, source, enabled intent, requested permissions, and an empty
 or non-empty grant snapshot remain independent facts; none establishes trust
-or automatic authorization. This delivery does not install, update, uninstall,
-enable, disable, execute, or render plugins. Action/Page projection, management
-UI, real Runtime sessions, permission decisions, signatures, and Host API
-methods remain unimplemented.
+or automatic authorization. This contract does not install, update, uninstall,
+enable, disable, execute, or render plugins. The downstream Host-private Action
+projection core described below consumes it without changing the wire contract.
+Plugin Page projection, production Action activation, management UI, real
+Runtime sessions, permission decisions, signatures, and Host API methods remain
+unimplemented.
+
+## Shipped Host-Private Plugin Action Projection Core
+
+The trusted TypeScript application now ships an injectable projection service
+between the Plugin Registration Desktop Adapter and the only Launcher Action
+Registry. It consumes complete snapshots and same-revision details rather than
+event patches. Only registered, enabled plugins compatible with both lensX and
+the Host API are eligible; quarantine, degraded availability, disappearance,
+or unverifiable facts unregister the affected provider fail closed. Builtin and
+external source values follow the same mapping and execution rules.
+
+The Registry supports trusted provider-scoped complete-batch replacement and
+empty-batch unregistration. Replacement validates the declared owner and every
+existing descriptor rule before committing. Invalid, duplicate, cross-owner,
+or partially invalid input preserves the complete pre-call state and cannot
+remove another provider's descriptor or executor.
+
+The pure mapper sets `owner_id = plugin_id`, derives
+`action_id = <plugin_id>.<local_action_id>`, preserves normalized localized
+Action metadata and keywords, and sets `enabled = true`. A Host-owned executor
+captures only the frozen plugin Page target and opening Action ID for an
+injected narrow Page opener. Manifest route, permission, publisher, source, and
+`default_action_id` facts do not enter the descriptor or affect search ranking.
+Package-local asset icons are deliberately omitted and use the existing generic
+Action fallback until a scoped resource service exists.
+
+Projection convergence is serialized by Registration revision. Detail identity
+and revision must match the current summary, stale asynchronous results are
+discarded, repeated refreshes are idempotent, and destroy prevents later
+Registry commits. A detail, mapping, or replacement failure unregisters only
+that plugin and emits a bounded diagnostic without paths, stacks, raw errors,
+or Host objects. Successfully projected Actions automatically reuse the shared
+search, Dispatcher, and ID-only recent/pinned resolution.
+
+The default Launcher service exposes a narrow composition entry for Task 2.4,
+but production composition does not create this service yet. Publishing a
+Plugin Action before a Plugin Page Registry can preflight and open its target
+would create a known failure, so production activation remains explicitly
+deferred. This delivery adds no plugin UI, locale key, theme style, Runtime
+dependency, or visual surface.
 
 ## Shipped Public Plugin SDK Foundation
 
@@ -448,24 +491,24 @@ provider source, and it does not boost a Manifest
 `contributes.launcher.default_action_id`. Optional icon metadata and the
 recent/pinned collections do not affect matching, scoring, or sorting.
 
-Future built-in modules and external plugins must project actions through a
-validated provider adapter. That adapter is responsible for mapping provider
-identity and metadata into the stable launcher descriptor contract before an
-atomic Host registration. Once registered, a plugin Action will automatically
+Built-in modules and external plugins project actions through the validated
+Host-private provider adapter described above. It maps provider identity and
+metadata into the stable launcher descriptor contract before atomic Host
+registration. Once registered, a plugin Action automatically
 use the same search path as a built-in Action; search itself will not add a
 provider-specific branch. A provider cannot directly mutate the registry,
 choose a trusted executor, invoke privileged desktop commands, or bypass the
 Host dispatcher. Privileged behavior remains an explicit Host capability with
 its own authorization and typed application or Rust boundary.
 
-The current registry contains the Host hide-launcher and open-settings built-in
-Actions. The static plugin
-Manifest contract does not register contributed Actions and does not yet define
-provider lifecycle, unregister or replacement semantics, permissions, plugin
-Action/icon projection, or external execution. The persisted recent and pinned
-collections therefore resolve only currently registered Host Actions. Those
-remaining capabilities require dedicated accepted specifications rather than
-implicit expansion of the action descriptor.
+Production currently registers only the Host hide-launcher and open-settings
+built-in Actions. The static Manifest contract does not register Actions by
+itself; the shipped injectable provider lifecycle now supplies replacement,
+unregistration, and Action projection, while production activation waits for
+Plugin Page navigation. Permissions, safe plugin icon resolution, and external
+Runtime execution remain separate capabilities. Recent and pinned collections
+continue to store only Action IDs, so a projected Action hides while its
+provider is absent and resolves again if the same stable ID returns.
 
 ## Runtime Boundaries
 
@@ -534,8 +577,9 @@ method exists.
 
 ## Capability Delivery
 
-The static Manifest format and validators are delivered. Each remaining
-capability—provider projection, installation, permissions, Host API methods,
+The static Manifest format, validators, and Host-private Plugin Action
+projection core are delivered. Each remaining capability—production projection
+activation, Plugin Page navigation, installation, permissions, Host API methods,
 packaging, lifecycle, runtime execution, or sidecars—requires its own accepted
 specification and implementation evidence. This architectural document defines
 direction and boundaries, not a release checklist.

@@ -16,7 +16,11 @@ export {
   normalizeLauncherActionSearchQuery,
   searchLauncherActions,
 } from './search';
-export { createDefaultLauncherActionService, type LauncherActionService } from './service';
+export {
+  createDefaultLauncherActionService,
+  type DefaultLauncherActionService,
+  type LauncherActionService,
+} from './service';
 export type {
   LauncherActionDescriptor,
   LauncherActionDiagnostic,

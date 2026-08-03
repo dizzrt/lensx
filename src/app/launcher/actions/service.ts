@@ -17,10 +17,15 @@ export interface LauncherActionService {
   };
 }
 
+export interface DefaultLauncherActionService extends LauncherActionService {
+  readonly registry: LauncherActionRegistry;
+  readonly dispatcher: LauncherActionDispatcher;
+}
+
 export const createDefaultLauncherActionService = (
   desktopActions: LauncherDesktopActions,
   navigationService: AppNavigationService = productionAppNavigationService,
-): LauncherActionService => {
+): DefaultLauncherActionService => {
   const registry = new LauncherActionRegistry();
   const registrationResult = registry.registerBatch([
     createHideLauncherRegistration(desktopActions),

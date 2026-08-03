@@ -30,6 +30,8 @@ lensX 是一款轻量级桌面效率启动器，其设计重点包括：
   registry、dispatcher，以及内建的隐藏和设置 action；
 - 基于不可变 registry snapshot 的确定性 launcher action 搜索，包含本地化匹配和可访问、
   键盘优先的四列结果网格；
+- Host 私有 Plugin Action 投影核心，提供 provider-scoped 原子替换、revision-aware 资格判断和
+  fail-closed 生命周期处理；
 - 通过窄化 Rust/Tauri 边界持久化、并按当前 registry snapshot 解析的版本化最近使用与已固定
   Action 集合；
 - 单窗口 Host 设置界面，包含持久化主题与语言偏好，以及刻意保持为空的插件部分；
@@ -134,9 +136,10 @@ descriptor，其中包含稳定的命名空间 `action_id`、`owner_id`、本地
 Action 图标。英文元数据是规范源，同时支持简体中文；缺少当前语言文本时回退到英文。
 
 `LauncherActionRegistry` 是运行时已注册 launcher action 的唯一事实来源。注册过程在提交前校验并
-规范化未知 descriptor 输入，拒绝重复 ID，并以原子方式应用批量注册。公开查询和 snapshot 返回
-深度隔离的 descriptor 数据，绝不包含 executor。snapshot 按 `action_id` 排序，使默认顺序不依赖
-provider 加载顺序。
+规范化未知 descriptor 输入，拒绝重复 ID，并以原子方式应用批量注册。可信 provider 还可以在一次
+转换中替换或注销其完整的 owner-scoped 批次；非法、重复或跨 owner 输入会保留完整调用前状态，且
+不能触碰其他 provider 的 executor。公开查询和 snapshot 返回深度隔离的 descriptor 数据，绝不包含
+executor 或 provider bookkeeping。snapshot 按 `action_id` 排序，使默认顺序不依赖 provider 加载顺序。
 
 executor 保持由 Host 所有，只能由 `LauncherActionDispatcher` 解析。dispatch 返回明确成功结果，
 或者类型化的 `action_not_found`、`action_unavailable`、`action_execution_failed` 结果。
@@ -146,6 +149,20 @@ executor 抛出、reject 或返回无效结果时会被隔离，不会通过公�
 metadata 都来自规范应用 message 资源。隐藏 executor 通过类型化桌面 adapter 调用窄化的
 `hide_launcher` Tauri command；设置 executor 通过框架无关的 `AppNavigationService` 请求固定
 的 `lensx.core/settings` Host 目标。公开 descriptor 都不暴露 executor 或页面目标。
+
+Host 私有 Plugin Action 投影 service 消费 Plugin Registration Desktop Adapter 的完整 snapshot 和同
+revision detail。只有 enabled、registered、未 quarantine，并同时兼容 lensX 与 Host API 的插件才
+具备资格。它把每个 Manifest Action 映射为 owner `plugin_id` 和全局 ID
+`<plugin_id>.<local_action_id>`，保留规范化的 Action 自有 metadata，并生成 Host-owned Page opener
+executor。Manifest asset icon、route、target、permission、publisher/source 声明和
+`default_action_id` 排名都不会进入 descriptor。package-local icon 会被省略，从而使用现有通用
+Action 图标。
+
+投影按 Registration revision 串行收敛。过期 detail 结果会被丢弃；disabled、incompatible、
+quarantined、degraded、已消失或无法验证的 provider 会 fail closed 注销。单个 provider 的失败只
+影响该 owner，并且只产生有界安全诊断。可注入组合入口已经通过统一 Registry、搜索、Dispatcher 和
+集合测试。生产组合仍有意不启动 Plugin Action 发布，直到 Task 2.4 提供 Plugin Page Registry 和能
+预检真实插件目标的 Page opener。
 
 生产 launcher action service 在 React render 之外只创建一次，并允许在 App Shell 边界替换为
 隔离的测试 service。Launcher action 搜索是 registry descriptor snapshot 的纯消费者。它使用
@@ -176,7 +193,8 @@ snapshot 解析已存 ID，保持顺序，隐藏缺失或禁用 Action，但不�
 取消固定使用 optimistic 视图，但失败后恢复最后确认 snapshot；第九个固定请求会被拒绝，且不会删除
 现有项。
 
-动态 provider 订阅、插件管理、插件 Action 投影和插件 icon 投影仍属于未来能力。
+插件管理、生产 Plugin Action 激活、安全插件 icon 投影和 Plugin Page 导航仍属于未来能力。可注入
+投影核心注销或以相同稳定 ID 重新发布时，持久化 Plugin Action ID 已能自然隐藏和恢复。
 
 ## Host 页面与偏好
 

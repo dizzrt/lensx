@@ -34,6 +34,8 @@ The repository currently provides:
   settings actions;
 - deterministic launcher action search over immutable registry snapshots, with
   localized matching and an accessible four-column keyboard-first result grid;
+- a Host-private Plugin Action projection core with provider-scoped atomic
+  replacement, revision-aware eligibility, and fail-closed lifecycle handling;
 - versioned recent-use and pinned Action collections persisted through a narrow
   Rust/Tauri boundary and resolved against the current registry snapshot;
 - a single-window Host settings surface with persisted theme and locale
@@ -188,9 +190,12 @@ back to English.
 `LauncherActionRegistry` is the only running source of truth for registered
 launcher actions. Registration validates and normalizes unknown descriptor
 input before committing it, rejects duplicate IDs, and applies batches
-atomically. Public lookups and snapshots return deeply isolated descriptor
-data, never executors. Snapshots are ordered by `action_id` so their default
-order does not depend on provider load order.
+atomically. A trusted provider may also replace or unregister its complete
+owner-scoped batch in one transition; invalid, duplicate, or cross-owner input
+preserves the complete prior state and cannot touch another provider's
+executor. Public lookups and snapshots return deeply isolated descriptor data,
+never executors or provider bookkeeping. Snapshots are ordered by `action_id`
+so their default order does not depend on provider load order.
 
 Executors remain Host-owned and are resolved only by
 `LauncherActionDispatcher`. Dispatch returns an explicit success or typed
@@ -205,6 +210,25 @@ which invokes the narrow `hide_launcher` Tauri command. The settings executor
 calls the framework-neutral `AppNavigationService` with the fixed
 `lensx.core/settings` Host target. Neither public descriptor exposes an
 executor or page target.
+
+The Host-private Plugin Action projection service consumes complete snapshots
+and same-revision details from the Plugin Registration Desktop Adapter. Only
+enabled, registered, non-quarantined plugins compatible with both lensX and the
+Host API are eligible. It maps each Manifest Action to owner `plugin_id` and
+global ID `<plugin_id>.<local_action_id>`, preserves normalized Action-local
+metadata, and creates a Host-owned Page opener executor. Manifest asset icons,
+routes, targets, permissions, publisher/source claims, and
+`default_action_id` ranking do not enter descriptors. Package-local icons are
+omitted so the existing generic Action icon is used.
+
+Projection converges serially by Registration revision. Stale detail results
+are discarded; disabled, incompatible, quarantined, degraded, disappeared, or
+unverifiable providers are unregistered fail closed. One provider's failure is
+contained to that owner and produces only bounded diagnostics. The injectable
+composition entry is covered with unified Registry, search, Dispatcher, and
+collection tests. Production composition deliberately does not start Plugin
+Action publication until Task 2.4 supplies a Plugin Page Registry and a Page
+opener that can preflight real plugin targets.
 
 The production launcher action service is created once outside React rendering
 and can be replaced with an isolated service at the App Shell boundary for
@@ -250,8 +274,10 @@ successful Action result. Pin and unpin use an optimistic view but restore the
 last confirmed snapshot after failure, and a ninth pin is rejected without
 dropping an existing one.
 
-Dynamic provider subscriptions, plugin management, plugin Action projection,
-and plugin icon projection remain future capabilities.
+Plugin management, production Plugin Action activation, safe plugin icon
+projection, and Plugin Page navigation remain future capabilities. Persisted
+plugin Action IDs can already disappear and reappear naturally when the
+injectable projection core unregisters or republishes the same stable ID.
 
 ## Host Pages And Preferences
 

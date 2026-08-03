@@ -271,9 +271,10 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；本 Ta
 **完成标准**：前端只能读取 Host 组合后的注册状态；author input 无法覆盖 Host-owned 字段；
 完整 snapshot 可以从事件竞态或丢失中恢复，Rust 与 TypeScript 共享 drift gate。
 
-- [ ] **Task 2.3：投影 Plugin Actions 到 Launcher**
+- [x] **Task 2.3：投影 Plugin Actions 到 Launcher**
 
-**OpenSpec change**：`project-plugin-actions-to-launcher`
+**OpenSpec change**：[project-plugin-actions-to-launcher](openspec/changes/archive/2026-08-03-project-plugin-actions-to-launcher/)
+（已完成并归档）
 
 **目标**：将已注册插件的 Manifest Action 安全映射到现有 Host Action Registry。
 

@@ -3,8 +3,9 @@
 ## 文档状态
 
 本文区分已经交付的静态插件 Manifest 契约、Plugin SDK foundation、Plugin Testkit、可选
-Plugin UI package 与预期的运行时扩展边界。安装、分发、插件执行、权限、插件 action 投影与
-搜索、iframe transport 和 Host API 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
+Plugin UI package、Host 私有 Plugin Action 投影核心与预期的运行时扩展边界。安装、分发、生产
+Plugin Action 发布、Plugin Page 导航、插件执行、权限、iframe transport 和 Host API 当前尚未
+实现。稳定 spec 和源码共同决定已经交付的子集。
 
 ## 目标
 
@@ -85,8 +86,8 @@ invalid、normalized 和 incompatible fixtures，从而保持 validity、compati
 英文。未知 locale key 和未知字段会被拒绝。缺失的可选集合规范化为空集合，而显式 `null`
 始终无效。
 
-Page 和 Action ID 都是插件内本地 ID。未来 Host 投影可以把全局 Action ID 派生为
-`<plugin_id>.<local_action_id>`，但已经交付的校验器不会执行该投影。Page parent 引用必须存在，
+Page 和 Action ID 都是插件内本地 ID。Host 私有 Plugin Action 投影会把全局 Action ID 派生为
+`<plugin_id>.<local_action_id>`；公共校验器本身不会执行该投影。Page parent 引用必须存在，
 且整个图必须无环。每个 Action target 必须是
 `{ "kind": "page", "page_id": "<local-page-id>" }`。Action 关键词始终归属于对应 Action，
 不会成为插件级别的共享别名。Page 权限依赖必须是顶层请求权限的子集。
@@ -121,17 +122,17 @@ scripts 或 Host 私有源码。
 
 ### 明确未实现的能力
 
-静态校验不会发现或安装包、创建生产 registration、创建 iframe、授予权限、把插件 Action
-投影进 launcher registry、搜索这些 Action、导航 Page、交换 Host API 消息或运行插件代码。
-当前 App Shell 可以搜索 Host 内建 launcher Action，但静态 Manifest 校验与该 registry、搜索路径、
-Action 集合或 Host icon 投影没有连接。
+静态校验本身不会发现或安装包、创建生产 registration、创建 iframe、授予权限、在生产 launcher
+中发布插件 Action、导航 Page、交换 Host API 消息或运行插件代码。Host 私有投影核心可以在注入式
+组合中把当前 Registration facts 映射进共享 Registry，但生产 App Shell 在 Plugin Page 导航存在前
+不会激活它。
 
 ## 已交付的 Host 私有 Plugin Manager
 
 Rust Host 现已交付一个 Plugin Manager 实例。Tauri setup 从 `app_config_dir` 初始化该实例，并通过
 Tauri managed state 在 Host 内部共享。它仍然是 Host 私有核心。Manager 对应用侧唯一的投影是
 下文所述的私有只读 Registration Contract；没有暴露生命周期写 command、前端管理界面、
-Action/Page 投影、安装器或插件执行路径。
+直接 Action/Page 投影、安装器或插件执行路径。
 
 每个健康条目明确区分四种生命周期：
 
@@ -188,9 +189,38 @@ cache 失效。监听恢复和 Launcher activation 后会执行完整刷新；de
 
 该 contract 永远不暴露安装路径、package digest、Store key 或文件名、损坏记录内容、原始异常、
 stack、函数或 Tauri 对象。publisher、source、enabled intent、requested permissions，以及空或非空
-grant snapshot 都是相互独立的事实；任何一项都不能建立信任或自动授权。本次交付不会安装、更新、
-卸载、enable、disable、执行或渲染插件。Action/Page 投影、管理 UI、真实 Runtime session、权限决策、
-签名和 Host API method 仍未实现。
+grant snapshot 都是相互独立的事实；任何一项都不能建立信任或自动授权。该 contract 不会安装、
+更新、卸载、enable、disable、执行或渲染插件。下文的 Host 私有 Action 投影核心消费它，但不改变
+wire contract。Plugin Page 投影、生产 Action 激活、管理 UI、真实 Runtime session、权限决策、签名
+和 Host API method 仍未实现。
+
+## 已交付的 Host 私有 Plugin Action 投影核心
+
+可信 TypeScript 应用现已在 Plugin Registration Desktop Adapter 与唯一 Launcher Action Registry
+之间交付可注入的投影 service。它消费完整 snapshot 与同 revision detail，而不是 event patch。只有
+registered、enabled，并同时兼容 lensX 与 Host API 的插件才具备资格；quarantine、degraded
+availability、消失或事实无法验证都会使对应 provider fail closed 注销。builtin 与 external source
+使用完全相同的映射和执行规则。
+
+Registry 支持可信 provider-scoped 完整批次替换，以及用空批次注销。替换会在提交前校验声明 owner 和
+每条现有 descriptor 规则。非法、重复、跨 owner 或部分无效输入会保留完整调用前状态，且不能删除
+其他 provider 的 descriptor 或 executor。
+
+纯 mapper 设置 `owner_id = plugin_id`，派生
+`action_id = <plugin_id>.<local_action_id>`，保留规范化的本地化 Action metadata 与关键词，并设置
+`enabled = true`。Host-owned executor 只为注入的窄 Page opener 捕获冻结的插件 Page target 和 opening
+Action ID。Manifest route、permission、publisher、source 与 `default_action_id` facts 不会进入
+descriptor，也不影响搜索排序。package-local asset icon 会被有意省略，在 scoped resource service
+存在前使用现有通用 Action fallback。
+
+投影按 Registration revision 串行收敛。detail identity 与 revision 必须匹配当前 summary；过期异步
+结果会被丢弃，重复刷新保持幂等，destroy 后不会再提交 Registry。detail、映射或替换失败只注销该
+插件，并产生不包含路径、stack、原始错误或 Host 对象的有界诊断。成功投影的 Action 自动复用共享
+搜索、Dispatcher 和只持有 ID 的 recent/pinned 解析。
+
+默认 Launcher service 为 Task 2.4 暴露窄组合入口，但生产组合尚不创建该 service。在 Plugin Page
+Registry 能预检并打开目标前发布 Plugin Action 会制造已知失败，因此生产激活明确延后。本次交付不
+增加插件 UI、locale key、主题样式、Runtime dependency 或视觉 surface。
 
 ## 已交付的公共 Plugin SDK Foundation
 
@@ -348,17 +378,18 @@ display name、Manifest 私有数据或 provider 来源，也不会提升 Manife
 `contributes.launcher.default_action_id`。可选 icon metadata 与最近使用/已固定集合都不影响匹配、
 评分或排序。
 
-未来的内建 module 和外部插件必须通过经过校验的 provider adapter 投影 action。该 adapter 负责
+内建 module 和外部插件通过上文经过校验的 Host 私有 provider adapter 投影 action。该 adapter 负责
 先把 provider 身份和元数据映射到稳定的 launcher descriptor 契约，再进行原子 Host 注册。
 插件 Action 注册后会自动使用与内建 Action 相同的搜索路径；搜索本身不会增加 provider-specific
 分支。provider 不能直接修改 registry、选择可信 executor、调用特权桌面 command，或绕过 Host
 dispatcher。特权行为仍然必须是明确的 Host capability，并具有自己的授权及类型化应用或 Rust
 边界。
 
-当前 registry 包含 Host 内建的隐藏 launcher 和打开设置 Action。静态插件 Manifest 契约不会注册
-已贡献 Action，且尚未定义 provider lifecycle、unregister 或 replace 语义、权限、插件 Action/icon
-投影或外部执行。因此，持久化的最近使用与已固定集合目前只会解析已注册的 Host Action。这些剩余能力
-需要各自已接受的规格，不能通过隐式扩展 action descriptor 获得。
+生产环境当前只注册 Host 内建的隐藏 launcher 和打开设置 Action。静态 Manifest 契约本身不会注册
+Action；已交付的可注入 provider lifecycle 现在提供 replacement、unregister 与 Action 投影，而生产
+激活仍等待 Plugin Page 导航。权限、安全插件 icon 解析和外部 Runtime 执行仍是独立能力。最近使用与
+已固定集合继续只保存 Action ID，因此投影 Action 会在 provider 缺失时隐藏，并在相同稳定 ID 返回时
+恢复解析。
 
 ## 运行时边界
 
@@ -420,6 +451,7 @@ Host API 方法应当保持小型、类型化、版本化，并且可以独立�
 
 ## 能力交付
 
-静态 Manifest 格式和校验器已经交付。其余每项能力——provider 投影、安装、权限、Host API
-方法、打包、生命周期、runtime 执行或 sidecar——都需要独立的已接受规格和实现证据。本文定义
+静态 Manifest 格式、校验器和 Host 私有 Plugin Action 投影核心已经交付。其余每项能力——生产投影
+激活、Plugin Page 导航、安装、权限、Host API 方法、打包、生命周期、runtime 执行或 sidecar——
+都需要独立的已接受规格和实现证据。本文定义
 架构方向和边界，不是发布检查清单。

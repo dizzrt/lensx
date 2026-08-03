@@ -12,6 +12,14 @@ const createDescriptor = (localName: string, enabled = true) => ({
   enabled,
 });
 
+const createProviderDescriptor = (ownerId: string, localName: string, enabled = true) => ({
+  action_id: `${ownerId}.${localName}`,
+  owner_id: ownerId,
+  title: { 'en-US': localName },
+  default_keywords: { 'en-US': [localName] },
+  enabled,
+});
+
 const noOpExecutor: LauncherActionExecutor = () => undefined;
 
 describe('launcher action registry', () => {
@@ -83,6 +91,114 @@ describe('launcher action registry', () => {
     expect('executor' in (snapshot[0] ?? {})).toBe(false);
     expect(registry.get('lensx.core.unknown')).toBeUndefined();
     expect(registry.get('lensx.core.alpha')).not.toBe(snapshot[0]);
+  });
+
+  test('atomically replaces and unregisters one provider complete batch', async () => {
+    const registry = new LauncherActionRegistry();
+    const oldExecutor = rs.fn(() => undefined);
+    const retainedExecutor = rs.fn(() => undefined);
+    registry.registerBatch([
+      { descriptor: createProviderDescriptor('com.acme.notes', 'old_action'), executor: oldExecutor },
+      { descriptor: createDescriptor('retained'), executor: retainedExecutor },
+    ]);
+
+    const replacementExecutor = rs.fn(() => undefined);
+    const replacement = registry.replaceProviderBatch('com.acme.notes', [
+      { descriptor: createProviderDescriptor('com.acme.notes', 'new_action'), executor: replacementExecutor },
+    ]);
+
+    expect(replacement).toMatchObject({
+      ok: true,
+      descriptors: [{ action_id: 'com.acme.notes.new_action' }],
+      diagnostics: [],
+    });
+    expect(registry.snapshot().map(({ action_id }) => action_id)).toEqual([
+      'com.acme.notes.new_action',
+      'lensx.core.retained',
+    ]);
+    await new LauncherActionDispatcher(registry).dispatch('lensx.core.retained');
+    expect(retainedExecutor).toHaveBeenCalledTimes(1);
+    expect(oldExecutor).not.toHaveBeenCalled();
+
+    expect(registry.replaceProviderBatch('com.acme.notes', [])).toEqual({
+      ok: true,
+      descriptors: [],
+      diagnostics: [],
+    });
+    expect(registry.snapshot().map(({ action_id }) => action_id)).toEqual(['lensx.core.retained']);
+    await new LauncherActionDispatcher(registry).dispatch('lensx.core.retained');
+    expect(retainedExecutor).toHaveBeenCalledTimes(2);
+  });
+
+  test('rejects invalid, duplicate, and cross-owner replacements without changing state', () => {
+    const registry = new LauncherActionRegistry();
+    registry.registerBatch([
+      {
+        descriptor: createProviderDescriptor('com.acme.notes', 'existing'),
+        executor: noOpExecutor,
+      },
+      { descriptor: createDescriptor('retained'), executor: noOpExecutor },
+    ]);
+    const before = registry.snapshot();
+
+    const crossOwner = registry.replaceProviderBatch('com.acme.notes', [
+      { descriptor: createProviderDescriptor('com.other.plugin', 'foreign'), executor: noOpExecutor },
+    ]);
+    expect(crossOwner).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: 'invalid_owner', path: '/0/descriptor/owner_id' }],
+    });
+    expect(registry.snapshot()).toEqual(before);
+
+    const duplicate = registry.replaceProviderBatch('com.acme.notes', [
+      { descriptor: createProviderDescriptor('com.acme.notes', 'duplicate'), executor: noOpExecutor },
+      { descriptor: createProviderDescriptor('com.acme.notes', 'duplicate'), executor: noOpExecutor },
+    ]);
+    expect(duplicate).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: 'duplicate_action_id', path: '/1/descriptor/action_id' }],
+    });
+    expect(registry.snapshot()).toEqual(before);
+
+    const invalid = registry.replaceProviderBatch('com.acme.notes', [
+      {
+        descriptor: { ...createProviderDescriptor('com.acme.notes', 'invalid'), title: { 'en-US': ' ' } },
+        executor: noOpExecutor,
+      },
+    ]);
+    expect(invalid).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: 'missing_localized_text', path: '/0/descriptor/title/en-US' }],
+    });
+    expect(registry.snapshot()).toEqual(before);
+    expect(registry.replaceProviderBatch('invalid owner', [])).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: 'invalid_owner', path: '/provider_owner' }],
+    });
+    expect(registry.snapshot()).toEqual(before);
+  });
+
+  test('isolates provider replacement inputs and keeps snapshots frozen and executor-free', () => {
+    const registry = new LauncherActionRegistry();
+    const descriptor = createProviderDescriptor('com.acme.notes', 'mutable');
+    registry.replaceProviderBatch('com.acme.notes', [{ descriptor, executor: noOpExecutor }]);
+
+    descriptor.title['en-US'] = 'changed';
+    descriptor.default_keywords['en-US'].push('changed');
+    const snapshot = registry.snapshot();
+    expect(snapshot).toEqual([
+      {
+        action_id: 'com.acme.notes.mutable',
+        owner_id: 'com.acme.notes',
+        title: { 'en-US': 'mutable' },
+        default_keywords: { 'en-US': ['mutable'] },
+        enabled: true,
+      },
+    ]);
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(Object.isFrozen(snapshot[0])).toBe(true);
+    expect('executor' in (snapshot[0] ?? {})).toBe(false);
+    expect('providerOwner' in (snapshot[0] ?? {})).toBe(false);
   });
 });
 
