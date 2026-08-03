@@ -217,32 +217,14 @@ Schema、类型、Host、Rust、exports、内容或依赖 drift 都会使门禁�
 **依赖**：Task 1.2、Task 1.3。
 
 **完成标准**：真实 Contract、SDK 与 Testkit tarball 的隔离 consumer 可以覆盖 Manifest/context
-fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；Task 1.6 只依赖这一 Testkit core，并继续
-负责正式插件项目模板。
-
-- [ ] **Task 1.6：提供 Plugin Project Template**
-
-**OpenSpec change**：`create-plugin-project-template`
-
-**目标**：提供官方插件和第三方插件共同使用的最小项目模板。
-
-**范围**：
-
-- 提供 framework-neutral 和 React/Semi 两种模板入口。
-- 包含 Manifest、Page、Action、构建、测试和本地验证示例。
-- 默认只依赖公共 Contract、SDK、可选 UI 和 Testkit package。
-- 示例使用纯前端无权限能力，避免在基础阶段依赖未实现 Host API。
-- 自动验证模板可安装依赖、构建和打包。
-
-**依赖**：Task 1.2、Task 1.3、Task 1.5；React 模板额外依赖 Task 1.4。
-
-**完成标准**：从模板生成的新项目无需访问 lensX 源码即可完成构建和契约验证。
+fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；本 Task 只交付 Testkit core，正式插件
+项目模板在 Runtime 与 Host API 基础完成后由 Task 6.3 交付。
 
 ### Milestone 1 完成标准
 
 - 仓库具备清晰的公共 package、Host 私有代码和官方插件目录边界。
-- 内外部插件可以使用相同 Contract、SDK、可选 UI、Testkit 和模板开始开发。
-- 完成后达到 **Plugin Developer Preview**。
+- Contract、SDK、可选 UI 和 Testkit 可以被仓库外 consumer 独立构建、测试和验证。
+- 完成后建立 **Plugin Development Foundation**；此阶段不交付正式项目模板、插件安装或执行能力。
 
 ## Milestone 2：建立 Host 插件注册模型
 
@@ -595,6 +577,8 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；Task 1
 
 - 插件只能通过真实、类型化、版本化、来源校验和权限控制后的 Host API 使用能力。
 - Contract、SDK、Host 和测试对方法与错误保持一致。
+- Runtime、SDK transport、Host API、权限与 RPC 校验为正式项目模板提供稳定基础；本 Milestone
+  仍不交付模板、CLI 或开发模式。
 
 ## Milestone 6：完善用户与开发者体验
 
@@ -634,7 +618,26 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；Task 1
 
 **完成标准**：用户选择与 Host grant state 一致；拒绝不会被静默转为授权；撤销立即生效。
 
-- [ ] **Task 6.3：提供 Plugin Developer CLI**
+- [ ] **Task 6.3：提供 Plugin Project Template**
+
+**OpenSpec change**：`create-plugin-project-template`
+
+**目标**：提供官方插件和第三方插件共同使用的最小项目模板。
+
+**范围**：
+
+- 提供 framework-neutral 和 React/Semi 两种模板入口。
+- 包含 Manifest、Page、Action、构建、测试和本地验证示例。
+- 默认只依赖公共 Contract、SDK、可选 UI 和 Testkit package。
+- 示例使用纯前端无权限能力，避免在基础阶段依赖未实现 Host API。
+- 自动验证模板可安装依赖、构建和打包。
+
+**依赖**：Task 1.2、Task 1.3、Task 1.5、Task 3.1、Task 4.4、Task 5.2、Task 5.3、Task 5.6；
+React 模板额外依赖 Task 1.4。
+
+**完成标准**：从模板生成的新项目无需访问 lensX 源码即可完成构建和契约验证。
+
+- [ ] **Task 6.4：提供 Plugin Developer CLI**
 
 **OpenSpec change**：`add-plugin-developer-cli`
 
@@ -648,11 +651,11 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；Task 1
 - CLI 与 Host installer 对同一输入给出一致结论。
 - 第一阶段支持 workspace 内执行，稳定后发布 npm package。
 
-**依赖**：Task 1.5、Task 1.6、Task 3.1。
+**依赖**：Task 1.5、Task 3.1、Task 6.3。
 
 **完成标准**：新项目可以一条命令验证并打包；CI 可以只依赖公开 CLI 验证插件。
 
-- [ ] **Task 6.4：支持 Plugin Development Mode**
+- [ ] **Task 6.5：支持 Plugin Development Mode**
 
 **OpenSpec change**：`add-plugin-development-mode`
 
@@ -666,11 +669,11 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；Task 1
 - 开发模式不得扩大 Host API 权限或跳过来源校验。
 - 正式构建可以完全关闭开发入口。
 
-**依赖**：Task 4.4、Task 6.3。
+**依赖**：Task 4.4、Task 6.4。
 
 **完成标准**：开发插件可快速 reload；正式与开发状态清晰区分；安全边界保持一致。
 
-- [ ] **Task 6.5：发布插件开发文档**
+- [ ] **Task 6.6：发布插件开发文档**
 
 **OpenSpec change**：`publish-plugin-development-documentation`
 
@@ -684,14 +687,15 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；Task 1
 - 所有示例代码进入自动构建或类型检查。
 - English 文档为 canonical，并维护对应简体中文镜像。
 
-**依赖**：Task 6.3、Task 6.4。
+**依赖**：Task 6.4、Task 6.5。
 
 **完成标准**：全新外部仓库不读取 lensX 私有源码即可按文档产出可安装插件。
 
 ### Milestone 6 完成标准
 
 - 用户具备图形化生命周期和权限管理入口。
-- 开发者具备公共 CLI、开发模式和双语文档闭环。
+- 开发者具备基于真实 Runtime 与 Host API 的正式项目模板、公共 CLI、开发模式和双语文档闭环。
+- 完成 Milestone 1–6 后达到 **Plugin Developer Preview**。
 
 ## Milestone 7：落地官方插件并完成平台加固
 
@@ -709,7 +713,7 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；Task 1
 - 产出与外部插件相同的 `.lensx-plugin`，不得由 Host 直接 import 源码。
 - 记录官方发布来源，但不自动授予权限。
 
-**依赖**：Task 3.1、Task 6.3、Task 6.5。
+**依赖**：Task 3.1、Task 6.4、Task 6.6。
 
 **完成标准**：一个官方插件可单独发版且不触发桌面应用发布；产物可由普通安装器验证。
 
@@ -727,7 +731,7 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；Task 1
 - 不申请系统权限，不 import 根应用 `src/app/**`。
 - 使用正式 CLI、包格式、安装器和 Runtime 完成 dogfood。
 
-**依赖**：Task 4.4、Task 6.3、Task 7.1。
+**依赖**：Task 4.4、Task 6.4、Task 7.1。
 
 **完成标准**：官方 JSON 工具从独立产物安装、搜索、打开、关闭、禁用、升级和卸载均通过。
 
@@ -826,7 +830,7 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；Task 1
 - Provenance 由 Host 注入，不写入 author Manifest。
 - 私钥不由桌面 Host 托管，包内容变化必须使签名失效。
 
-**依赖**：Task 6.3、Task 7.1、Task 7.4。
+**依赖**：Task 6.4、Task 7.1、Task 7.4。
 
 **完成标准**：官方和第三方使用相同签名格式；篡改包无法安装；来源不改变权限结果。
 
@@ -909,17 +913,6 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；Task 1
 
 ## Release Checkpoints
 
-### Plugin Developer Preview
-
-包含 Milestone 1。
-
-当前进度：Contract、SDK、可选 UI 与 Testkit core 已完成；项目模板仍待完成，因此尚未达到本
-checkpoint。
-
-- 内外部开发者可以消费 Contract、SDK、可选 UI、Testkit 和模板。
-- 公共 package 可独立构建和版本化。
-- 此阶段不承诺插件能被桌面 Host 安装或运行。
-
 ### Local Plugin Preview
 
 包含 Milestone 1–4。
@@ -928,6 +921,17 @@ checkpoint。
 - 重启后插件状态可恢复。
 - 插件资源、iframe 和 session 具备基本隔离。
 - Host API 仍可能只具备 Runtime 基础握手，不承诺系统能力。
+
+### Plugin Developer Preview
+
+包含 Milestone 1–6。
+
+当前进度：Contract、SDK、可选 UI 与 Testkit core 已完成；注册、包生命周期、隔离 Runtime、
+Host API、正式项目模板和开发者工具仍待完成，因此尚未达到本 checkpoint。
+
+- 内外部开发者可以消费 Contract、SDK、可选 UI、Testkit 和正式项目模板。
+- 本地插件可以通过公共 SDK、真实 iframe transport 和 Host API 完成受控执行。
+- 开发者可以使用公共 CLI、开发模式和双语文档完成创建、验证、打包与本地安装。
 
 ### Plugin Platform Beta
 
