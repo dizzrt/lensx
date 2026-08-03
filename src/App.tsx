@@ -47,11 +47,14 @@ import {
   type ActivePage,
   type AppNavigationService,
   PageContextBar,
+  type PageResolution,
   productionAppNavigationService,
   resolvePageContext,
 } from './app/navigation';
 import { PageErrorBoundary } from './app/pages/PageErrorBoundary';
+import { PluginPagePlaceholder } from './app/pages/PluginPagePlaceholder';
 import { SettingsPage } from './app/pages/SettingsPage';
+import type { PluginSurfaceProjectionService } from './app/plugins/surfaces';
 import { type AppPreferencesClient, desktopAppPreferencesClient } from './app/preferences';
 
 export interface AppProps {
@@ -61,6 +64,7 @@ export interface AppProps {
   navigationService?: AppNavigationService;
   preferencesClient?: AppPreferencesClient;
   renderPage?: (activePage: ActivePage) => ReactNode;
+  surfaceProjectionService?: PluginSurfaceProjectionService;
   startupPreferencesErrorCode?: string;
   surfaceController?: LauncherSurfaceController;
   windowDragController?: LauncherWindowDragController;
@@ -90,6 +94,7 @@ const App = ({
   renderPage,
   startupPreferencesErrorCode,
   surfaceController = inertLauncherSurfaceController,
+  surfaceProjectionService,
   windowDragController = inertLauncherWindowDragController,
 }: AppProps) => {
   const { t } = useTranslation();
@@ -103,6 +108,7 @@ const App = ({
   const [collectionsFeedbackKey, setCollectionsFeedbackKey] = useState<AppMessageKey>();
   const [collections, setCollections] = useState<LauncherActionCollections>(EMPTY_LAUNCHER_ACTION_COLLECTIONS);
   const [snapshotRevision, setSnapshotRevision] = useState(0);
+  const [pageRevision, setPageRevision] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingActionIdRef = useRef<string | undefined>(undefined);
   const pendingPinActionIdRef = useRef<string | undefined>(undefined);
@@ -144,18 +150,22 @@ const App = ({
   const selectedIndex = results.findIndex(({ action_id: actionId }) => actionId === effectiveSelectedActionId);
   const hasSearchQuery = normalizeLauncherActionSearchQuery(query, locale).tokens.length > 0;
   const presentationState: LauncherPresentationState = activePage ? 'page' : hasSearchQuery ? 'search' : 'home';
+  const pageResolution: PageResolution | undefined = useMemo(() => {
+    void pageRevision;
+    return activePage ? navigationService.resolvePage(activePage) : undefined;
+  }, [activePage, navigationService, pageRevision]);
   const pageContext = useMemo(
     () =>
-      activePage
+      activePage && pageResolution
         ? resolvePageContext({
             activePage,
             hostOwnerName: t('launcher.page.hostOwner'),
             locale,
-            pageTitleFallback: t('settings.title'),
+            resolution: pageResolution,
             snapshot: registrySnapshot,
           })
         : undefined,
-    [activePage, locale, registrySnapshot, t],
+    [activePage, locale, pageResolution, registrySnapshot, t],
   );
 
   const enqueueCollectionMutation = useCallback((operation: () => Promise<LauncherActionCollections>) => {
@@ -209,6 +219,9 @@ const App = ({
   useEffect(
     () =>
       navigationService.registerHandler((page) => {
+        if (!page) {
+          shouldRestoreInputFocusRef.current = true;
+        }
         setActivePage(page);
         setQuery('');
         setSelectedActionId(undefined);
@@ -216,6 +229,28 @@ const App = ({
       }),
     [navigationService],
   );
+
+  useEffect(() => {
+    const unsubscribe = navigationService.subscribeToPages(() => setPageRevision((revision) => revision + 1));
+    return () => {
+      unsubscribe();
+    };
+  }, [navigationService]);
+
+  useEffect(
+    () => actionService.registry.subscribe?.(() => setSnapshotRevision((revision) => revision + 1)),
+    [actionService],
+  );
+
+  useEffect(() => {
+    if (!surfaceProjectionService) {
+      return;
+    }
+    void surfaceProjectionService.initialize().catch(() => undefined);
+    return () => {
+      void surfaceProjectionService.destroy();
+    };
+  }, [surfaceProjectionService]);
 
   useEffect(() => {
     if (!activePage && shouldRestoreInputFocusRef.current) {
@@ -230,8 +265,15 @@ const App = ({
 
   const handleLauncherActivation = useCallback(() => {
     focusLauncherInput();
-    setSnapshotRevision((revision) => revision + 1);
-  }, [focusLauncherInput]);
+    if (surfaceProjectionService) {
+      void surfaceProjectionService.handleLauncherActivation().finally(() => {
+        setSnapshotRevision((revision) => revision + 1);
+        setPageRevision((revision) => revision + 1);
+      });
+    } else {
+      setSnapshotRevision((revision) => revision + 1);
+    }
+  }, [focusLauncherInput, surfaceProjectionService]);
 
   useLauncherActivation(activationSource, handleLauncherActivation);
 
@@ -350,11 +392,8 @@ const App = ({
 
   const closeActivePage = useCallback(() => {
     shouldRestoreInputFocusRef.current = true;
-    setActivePage(undefined);
-    setQuery('');
-    setSelectedActionId(undefined);
-    setDispatchFeedback(undefined);
-  }, []);
+    navigationService.closePage();
+  }, [navigationService]);
 
   const handleQueryChange = useCallback((value: string) => {
     setQuery(value);
@@ -445,7 +484,11 @@ const App = ({
           <div className="launcher-top-row flex items-center gap-3">
             {presentationState === 'page' && activePage && pageContext ? (
               <PageContextBar
-                closeLabel={t('launcher.page.closeLabel')}
+                closeLabel={t(
+                  pageResolution?.provider.kind === 'plugin'
+                    ? 'launcher.page.closePluginLabel'
+                    : 'launcher.page.closeLabel',
+                )}
                 context={pageContext}
                 onClose={closeActivePage}
               />
@@ -501,7 +544,15 @@ const App = ({
             ) : null}
             {presentationState === 'page' && activePage ? (
               <PageErrorBoundary key={`${activePage.owner_id}/${activePage.page_id}`}>
-                {renderPage ? renderPage(activePage) : <SettingsPage preferencesClient={preferencesClient} />}
+                {renderPage ? (
+                  renderPage(activePage)
+                ) : pageResolution?.provider.kind === 'host' &&
+                  activePage.owner_id === 'lensx.core' &&
+                  activePage.page_id === 'settings' ? (
+                  <SettingsPage preferencesClient={preferencesClient} />
+                ) : pageResolution?.provider.kind === 'plugin' && pageContext ? (
+                  <PluginPagePlaceholder pageTitle={pageContext.page_title} />
+                ) : null}
               </PageErrorBoundary>
             ) : null}
           </div>

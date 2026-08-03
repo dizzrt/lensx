@@ -4,11 +4,10 @@
 
 This document separates the shipped static plugin Manifest contract, Plugin SDK
 foundation, Plugin Testkit, optional Plugin UI package, and Host-private Plugin
-Action projection core from the intended runtime extension boundary.
-Installation, distribution, production Plugin Action publication, Plugin Page
-navigation, plugin execution, permissions, iframe transport, and the Host API
-are not currently implemented. Stable specs and source code define the shipped
-subset.
+surface projection and Page navigation from the intended runtime extension
+boundary. Installation, distribution, plugin execution, complete permission
+decisions, iframe transport, and the Host API are not currently implemented.
+Stable specs and source code define the shipped subset.
 
 ## Goals
 
@@ -148,11 +147,10 @@ source.
 ### Explicitly Unimplemented Capabilities
 
 Static validation alone does not discover or install packages, create a
-production registration, create iframes, grant permissions, publish plugin
-Actions in the production launcher, navigate Pages, exchange Host API messages,
-or run plugin code. The Host-private projection core can map current
-Registration facts into the shared Registry in injected compositions, but the
-production App Shell does not activate it before Plugin Page navigation exists.
+production registration, create iframes, grant permissions, exchange Host API
+messages, or run plugin code. The Host-private production coordinator can now
+project current Registration facts into Page and Action Registries and navigate
+to a Host-owned placeholder, but that placeholder is not plugin Runtime.
 
 ## Shipped Host-Private Plugin Manager
 
@@ -251,49 +249,73 @@ or non-empty grant snapshot remain independent facts; none establishes trust
 or automatic authorization. This contract does not install, update, uninstall,
 enable, disable, execute, or render plugins. The downstream Host-private Action
 projection core described below consumes it without changing the wire contract.
-Plugin Page projection, production Action activation, management UI, real
-Runtime sessions, permission decisions, signatures, and Host API methods remain
-unimplemented.
+Management UI, real Runtime sessions, complete permission decisions,
+signatures, lifecycle writes, scoped resource resolution, and Host API methods
+remain unimplemented.
 
-## Shipped Host-Private Plugin Action Projection Core
+## Shipped Host-Private Plugin Surface Projection And Page Navigation
 
-The trusted TypeScript application now ships an injectable projection service
-between the Plugin Registration Desktop Adapter and the only Launcher Action
-Registry. It consumes complete snapshots and same-revision details rather than
-event patches. Only registered, enabled plugins compatible with both lensX and
-the Host API are eligible; quarantine, degraded availability, disappearance,
-or unverifiable facts unregister the affected provider fail closed. Builtin and
-external source values follow the same mapping and execution rules.
+The trusted TypeScript application ships one production surface projection
+coordinator between the Plugin Registration Desktop Adapter, unified Page
+Registry, and only Launcher Action Registry. It consumes complete snapshots and
+same-revision details rather than event patches. Only registered, enabled
+plugins compatible with both lensX and the Host API are eligible; quarantine,
+degraded availability, disappearance, or unverifiable facts unregister the
+affected provider fail closed. Builtin and external source values follow the
+same mapping and execution rules.
 
-The Registry supports trusted provider-scoped complete-batch replacement and
-empty-batch unregistration. Replacement validates the declared owner and every
-existing descriptor rule before committing. Invalid, duplicate, cross-owner,
-or partially invalid input preserves the complete pre-call state and cannot
-remove another provider's descriptor or executor.
+Both Registries support trusted provider-scoped complete-batch replacement and
+empty-batch unregistration. The Page Registry protects `lensx.core`, validates
+Page identity, parent ownership, localized fields, private routes, sorted
+permission IDs, and availability before committing, and returns isolated
+deterministic lookups and snapshots. Invalid, duplicate, cross-owner, or
+partially invalid input preserves the complete pre-call state and cannot remove
+another provider's Page, descriptor, or executor.
 
-The pure mapper sets `owner_id = plugin_id`, derives
+The pure Page mapper keeps `(owner_id = plugin_id, page_id = local Page ID)` as
+the only Page identity, preserves same-owner parent targets and private routes,
+and derives localized provider/Page presentation. It marks a Page available
+only when every required permission ID is present in the current Host-owned
+grant snapshot. Empty requirements are available. This subset check neither
+creates a grant nor claims a permission catalog, user decision, or session
+enforcement.
+
+The pure Action mapper sets `owner_id = plugin_id`, derives
 `action_id = <plugin_id>.<local_action_id>`, preserves normalized localized
 Action metadata and keywords, and sets `enabled = true`. A Host-owned executor
 captures only the frozen plugin Page target and opening Action ID for an
-injected narrow Page opener. Manifest route, permission, publisher, source, and
+injected narrow Page opener. Only Actions targeting a currently available Page
+are published. Manifest route, permission, publisher, source, and
 `default_action_id` facts do not enter the descriptor or affect search ranking.
 Package-local asset icons are deliberately omitted and use the existing generic
 Action fallback until a scoped resource service exists.
 
-Projection convergence is serialized by Registration revision. Detail identity
+Projection convergence is serialized by Registration revision and reads each
+provider detail once per reconciled revision. New or replaced providers commit
+the complete Page batch before the available-target Action batch. Invalidation,
+removal, rollback, and destroy unregister Actions before Pages. Detail identity
 and revision must match the current summary, stale asynchronous results are
 discarded, repeated refreshes are idempotent, and destroy prevents later
 Registry commits. A detail, mapping, or replacement failure unregisters only
-that plugin and emits a bounded diagnostic without paths, stacks, raw errors,
-or Host objects. Successfully projected Actions automatically reuse the shared
-search, Dispatcher, and ID-only recent/pinned resolution.
+that plugin and emits a bounded diagnostic without routes, installation paths,
+stacks, raw errors, or Host objects. Successfully projected Actions reuse the
+shared search, Dispatcher, and ID-only recent/pinned resolution.
 
-The default Launcher service exposes a narrow composition entry for Task 2.4,
-but production composition does not create this service yet. Publishing a
-Plugin Action before a Plugin Page Registry can preflight and open its target
-would create a known failure, so production activation remains explicitly
-deferred. This delivery adds no plugin UI, locale key, theme style, Runtime
-dependency, or visual surface.
+`AppNavigationService` resolves the current available descriptor before sending
+one flat `ActivePage` to the single App Shell handler. Registry replacement
+invalidates an active Plugin Page only when the identity disappears or becomes
+unavailable. Current locale presentation resolves provider name, Page title,
+and opening Action from Registry facts, with `zh-CN` to `en-US` and missing
+Action to Page-title fallback. The Plugin owner icon remains the generic
+provider fallback.
+
+Production composition initializes this coordinator, refreshes it on Launcher
+activation and listener recovery, and destroys the same subscription on
+cleanup. An available Plugin Page renders a localized Host-owned placeholder in
+the existing single-window page surface. The placeholder never reads routes,
+loads entries/assets, creates an iframe, calls Tauri, or executes plugin code.
+Task 4.1 scoped resources, Task 4.2 iframe Runtime, and Task 5.5 complete
+permission management remain unimplemented.
 
 ## Shipped Public Plugin SDK Foundation
 
@@ -501,14 +523,14 @@ choose a trusted executor, invoke privileged desktop commands, or bypass the
 Host dispatcher. Privileged behavior remains an explicit Host capability with
 its own authorization and typed application or Rust boundary.
 
-Production currently registers only the Host hide-launcher and open-settings
-built-in Actions. The static Manifest contract does not register Actions by
-itself; the shipped injectable provider lifecycle now supplies replacement,
-unregistration, and Action projection, while production activation waits for
-Plugin Page navigation. Permissions, safe plugin icon resolution, and external
-Runtime execution remain separate capabilities. Recent and pinned collections
-continue to store only Action IDs, so a projected Action hides while its
-provider is absent and resolves again if the same stable ID returns.
+Production registers Host hide-launcher and open-settings Actions and publishes
+eligible Plugin Actions through the shipped surface coordinator after their
+available Page targets commit. The static Manifest contract still does not
+register Actions by itself. Safe plugin icon/resource resolution, complete
+permission decisions, lifecycle writes, and external Runtime execution remain
+separate capabilities. Recent and pinned collections continue to store only
+Action IDs, so a projected Action hides while its provider is absent and
+resolves again if the same stable ID returns.
 
 ## Runtime Boundaries
 
@@ -577,9 +599,10 @@ method exists.
 
 ## Capability Delivery
 
-The static Manifest format, validators, and Host-private Plugin Action
-projection core are delivered. Each remaining capability—production projection
-activation, Plugin Page navigation, installation, permissions, Host API methods,
-packaging, lifecycle, runtime execution, or sidecars—requires its own accepted
-specification and implementation evidence. This architectural document defines
-direction and boundaries, not a release checklist.
+The static Manifest format, validators, Host-private Plugin surface projection,
+production Action activation, Page Registry/navigation, and Runtime-free Host
+placeholder are delivered. Each remaining capability—installation, complete
+permissions, scoped resources, Host API methods, packaging, lifecycle writes,
+iframe Runtime execution, or sidecars—requires its own accepted specification
+and implementation evidence. This architectural document defines direction and
+boundaries, not a release checklist.

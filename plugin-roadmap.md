@@ -27,6 +27,8 @@
 - Host 私有的 Plugin Registration Contract、只读 snapshot/detail 查询、revision 失效通知与
   TypeScript 恢复 adapter；
 - Host-owned Launcher Action descriptor、Registry、Dispatcher、搜索与集合能力；
+- Host 私有的 Plugin Page Registry、Registration revision 驱动的 Action/Page surface projection、
+  grant snapshot 预检、统一页面导航与不执行插件代码的 Host-owned placeholder；
 - Host 内建的隐藏 Launcher 和打开设置 Action；
 - Host 设置页面中的插件空占位。
 
@@ -34,7 +36,6 @@
 
 - Plugin CLI package；
 - 真实插件安装与升级事务；
-- 插件 Action/Page 到现有 Host Registry 和页面导航的投影；
 - 插件包格式、安全资源服务、iframe Runtime 和 Runtime session；
 - 真实 Host API、SDK transport、权限授权和插件私有存储；
 - 插件管理 UI、开发模式、签名、更新、Catalog 和 Marketplace。
@@ -290,9 +291,10 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；本 Ta
 
 **完成标准**：插件 Action 使用现有 Registry、搜索和 Dispatcher；搜索层没有插件专用分支。
 
-- [ ] **Task 2.4：建立 Plugin Page Registry 与导航**
+- [x] **Task 2.4：建立 Plugin Page Registry 与导航**
 
-**OpenSpec change**：`add-plugin-page-navigation`
+**OpenSpec change**：[add-plugin-page-navigation](openspec/changes/archive/2026-08-03-add-plugin-page-navigation/)
+（已完成并归档）
 
 **目标**：让 Page-only Action 通过 Host 控制的导航边界打开插件页面。
 

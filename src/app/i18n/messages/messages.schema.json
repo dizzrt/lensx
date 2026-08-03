@@ -88,7 +88,15 @@
               "type": "string",
               "minLength": 1
             },
+            "closePluginLabel": {
+              "type": "string",
+              "minLength": 1
+            },
             "hostOwner": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pluginRuntimeUnavailable": {
               "type": "string",
               "minLength": 1
             },
@@ -101,7 +109,14 @@
               "minLength": 1
             }
           },
-          "required": ["closeLabel", "hostOwner", "errorTitle", "errorDescription"]
+          "required": [
+            "closeLabel",
+            "closePluginLabel",
+            "hostOwner",
+            "pluginRuntimeUnavailable",
+            "errorTitle",
+            "errorDescription"
+          ]
         },
         "preferences": {
           "type": "object",

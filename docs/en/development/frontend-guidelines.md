@@ -136,6 +136,15 @@ Shell layout and spacing in UnoCSS utilities.
   the component tree.
 - Keep `AppNavigationService` independent of React. Host executors may request
   a validated page through it, but must not receive React setters.
+- Resolve Host and Plugin targets through the unified Host-owned Page Registry.
+  Plugin provider replacement must remain complete-batch and atomic, and an
+  active Plugin Page that disappears or becomes unavailable must close through
+  the Host navigation invalidation transition rather than a plugin callback.
+- Keep private Page routes, required permission IDs, registration details, and
+  provider bookkeeping out of `ActivePage` and presentation props. Before the
+  isolated Runtime ships, render available Plugin Pages only through the
+  localized Host-owned placeholder; do not load routes, entries, assets,
+  iframes, plugin code, or Tauri bridges from that surface.
 - Derive `home`, `search`, and `page` presentation from normalized query and
   flat `ActivePage` state; do not introduce a router or parallel Shell store for
   the current single-page depth.

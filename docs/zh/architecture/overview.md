@@ -30,8 +30,10 @@ lensX 是一款轻量级桌面效率启动器，其设计重点包括：
   registry、dispatcher，以及内建的隐藏和设置 action；
 - 基于不可变 registry snapshot 的确定性 launcher action 搜索，包含本地化匹配和可访问、
   键盘优先的四列结果网格；
-- Host 私有 Plugin Action 投影核心，提供 provider-scoped 原子替换、revision-aware 资格判断和
-  fail-closed 生命周期处理；
+- Host 私有 Plugin surface 投影协调器，提供 provider-scoped Page/Action 原子替换、
+  revision-aware 资格判断和 fail-closed 生命周期处理；
+- 统一的 Host-owned Page Registry 与框架无关导航 service，用于受保护 Host Page 和声明式
+  Plugin Page descriptor；
 - 通过窄化 Rust/Tauri 边界持久化、并按当前 registry snapshot 解析的版本化最近使用与已固定
   Action 集合；
 - 单窗口 Host 设置界面，包含持久化主题与语言偏好，以及刻意保持为空的插件部分；
@@ -150,19 +152,22 @@ metadata 都来自规范应用 message 资源。隐藏 executor 通过类型化�
 `hide_launcher` Tauri command；设置 executor 通过框架无关的 `AppNavigationService` 请求固定
 的 `lensx.core/settings` Host 目标。公开 descriptor 都不暴露 executor 或页面目标。
 
-Host 私有 Plugin Action 投影 service 消费 Plugin Registration Desktop Adapter 的完整 snapshot 和同
+Host 私有 Plugin surface 投影协调器消费 Plugin Registration Desktop Adapter 的完整 snapshot 和同
 revision detail。只有 enabled、registered、未 quarantine，并同时兼容 lensX 与 Host API 的插件才
-具备资格。它把每个 Manifest Action 映射为 owner `plugin_id` 和全局 ID
+具备资格。它把每个 Manifest Page 映射为稳定的
+`(owner_id = plugin_id, page_id = 插件本地 Page ID)` 身份，并把每个 Manifest Action 映射为
+owner `plugin_id` 和全局 ID
 `<plugin_id>.<local_action_id>`，保留规范化的 Action 自有 metadata，并生成 Host-owned Page opener
-executor。Manifest asset icon、route、target、permission、publisher/source 声明和
+executor。Manifest asset icon、Action target、publisher/source 声明和
 `default_action_id` 排名都不会进入 descriptor。package-local icon 会被省略，从而使用现有通用
 Action 图标。
 
 投影按 Registration revision 串行收敛。过期 detail 结果会被丢弃；disabled、incompatible、
 quarantined、degraded、已消失或无法验证的 provider 会 fail closed 注销。单个 provider 的失败只
-影响该 owner，并且只产生有界安全诊断。可注入组合入口已经通过统一 Registry、搜索、Dispatcher 和
-集合测试。生产组合仍有意不启动 Plugin Action 发布，直到 Task 2.4 提供 Plugin Page Registry 和能
-预检真实插件目标的 Page opener。
+影响该 owner，并且只产生有界安全诊断。对当前合格 revision，生产环境先提交完整 Page 批次，再发布
+目标当前 available 的 Action；移除时先注销 Action，再注销 Page。Page 仅在其全部 required
+permission ID 都存在于当前 Host-owned grant snapshot 时 available。这只是机械的子集检查，不是
+permission catalog、grant decision、提示或 Runtime session 授权。
 
 生产 launcher action service 在 React render 之外只创建一次，并允许在 App Shell 边界替换为
 隔离的测试 service。Launcher action 搜索是 registry descriptor snapshot 的纯消费者。它使用
@@ -193,19 +198,33 @@ snapshot 解析已存 ID，保持顺序，隐藏缺失或禁用 Action，但不�
 取消固定使用 optimistic 视图，但失败后恢复最后确认 snapshot；第九个固定请求会被拒绝，且不会删除
 现有项。
 
-插件管理、生产 Plugin Action 激活、安全插件 icon 投影和 Plugin Page 导航仍属于未来能力。可注入
-投影核心注销或以相同稳定 ID 重新发布时，持久化 Plugin Action ID 已能自然隐藏和恢复。
+插件管理、安全插件资源/icon 解析、iframe Runtime、生命周期写操作和完整权限决策仍属于未来能力。
+生产 Plugin Action 现在只会在其投影目标 Page available 时出现。持久化 Plugin Action ID 可以自然
+隐藏和恢复，而不会从最近使用或已固定存储中删除。
 
 ## Host 页面与偏好
 
-Host 页面使用扁平的 `owner_id`、`page_id` 与 `opened_by_action_id` 身份。可信 Host 页面目录在
-`AppNavigationService` 把 `ActivePage` 交给唯一 App Shell handler 前预检目标。未来经过校验的
-插件页面可以复用这一身份形状，但当前目录只包含 `lensx.core/settings`；外部插件不能提供 React
-组件、executor 或直接修改 App Shell。
+Host 与 Plugin Page 共用统一的 Host-owned Page Registry，以及扁平的 `owner_id`、`page_id` 与
+`opened_by_action_id` `ActivePage` 身份。Registry 保护 `lensx.core`，按插件 provider 原子替换完整
+Page 批次，并返回隔离且确定性的 snapshot。私有 route、required permission ID、provider
+bookkeeping、安装事实和 Runtime entry 不会进入 `ActivePage` 或展示 props。
 
-页面上下文 resolver 根据 ID、当前 registry snapshot 和 locale 派生本地化 Host 所属方与打开
-Action 名称，并用本地化页面标题降级。显示字符串不会复制进 `ActivePage`，因此运行时 locale 切换会
-更新上下文条。
+`AppNavigationService` 在把 `ActivePage` 交给唯一 App Shell handler 前预检当前 descriptor 与
+availability。Registry 更新移除 active Plugin Page 或令其 unavailable 时，会触发 Host-owned close
+transition 返回 `home`；相同 available 身份的 metadata 更新不会关闭 Page。插件不会获得 React
+setter、navigation handler、Registry mutation API、renderer 或 Tauri 对象。
+
+页面上下文 resolver 从 Page resolution 与 Launcher Registry snapshot 派生当前本地化 Owner、Page
+标题与 opening Action 名称。缺失 `zh-CN` Owner 文本时回退 `en-US`；opening Action 缺失时回退当前
+Page 标题。Host Page 使用受保护 Host icon token；在 scoped resource resolver 交付前，Plugin Page
+使用通用 provider icon。显示字符串不会复制进 `ActivePage`，因此 locale 与 metadata 更新会从当前
+事实重新解析。
+
+App Shell 继续在现有 main window 中使用唯一 `home` / `search` / `page` presentation state。
+`lensx.core/settings` 渲染可信 Settings surface。available Plugin Page 只会在现有 Page error boundary
+内渲染本地化 Host-owned placeholder；它不会读取私有 route、加载 entry 或 asset、创建 iframe、调用
+Tauri 或执行插件代码。Task 4.1 scoped resources、Task 4.2 iframe Runtime 和 Task 5.5 完整权限管理
+仍未实现。
 
 设置在现有 `main` Tauri 窗口中渲染，包含“偏好”和“插件”两个一级部分。“偏好”控制受支持的
 `light`/`dark` 主题与 `en-US`/`zh-CN` locale；“插件”只是不可操作的空占位，不代表插件管理

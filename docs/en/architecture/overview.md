@@ -34,8 +34,11 @@ The repository currently provides:
   settings actions;
 - deterministic launcher action search over immutable registry snapshots, with
   localized matching and an accessible four-column keyboard-first result grid;
-- a Host-private Plugin Action projection core with provider-scoped atomic
-  replacement, revision-aware eligibility, and fail-closed lifecycle handling;
+- a Host-private Plugin surface projection coordinator with provider-scoped
+  atomic Page and Action replacement, revision-aware eligibility, and
+  fail-closed lifecycle handling;
+- a unified Host-owned Page Registry and framework-neutral navigation service
+  for protected Host Pages and declarative Plugin Page descriptors;
 - versioned recent-use and pinned Action collections persisted through a narrow
   Rust/Tauri boundary and resolved against the current registry snapshot;
 - a single-window Host settings surface with persisted theme and locale
@@ -211,24 +214,28 @@ calls the framework-neutral `AppNavigationService` with the fixed
 `lensx.core/settings` Host target. Neither public descriptor exposes an
 executor or page target.
 
-The Host-private Plugin Action projection service consumes complete snapshots
+The Host-private Plugin surface projection coordinator consumes complete snapshots
 and same-revision details from the Plugin Registration Desktop Adapter. Only
 enabled, registered, non-quarantined plugins compatible with both lensX and the
-Host API are eligible. It maps each Manifest Action to owner `plugin_id` and
+Host API are eligible. It maps each Manifest Page to the stable
+`(owner_id = plugin_id, page_id = local Page ID)` identity and each Manifest
+Action to owner `plugin_id` and
 global ID `<plugin_id>.<local_action_id>`, preserves normalized Action-local
 metadata, and creates a Host-owned Page opener executor. Manifest asset icons,
-routes, targets, permissions, publisher/source claims, and
+Action targets, publisher/source claims, and
 `default_action_id` ranking do not enter descriptors. Package-local icons are
 omitted so the existing generic Action icon is used.
 
 Projection converges serially by Registration revision. Stale detail results
 are discarded; disabled, incompatible, quarantined, degraded, disappeared, or
 unverifiable providers are unregistered fail closed. One provider's failure is
-contained to that owner and produces only bounded diagnostics. The injectable
-composition entry is covered with unified Registry, search, Dispatcher, and
-collection tests. Production composition deliberately does not start Plugin
-Action publication until Task 2.4 supplies a Plugin Page Registry and a Page
-opener that can preflight real plugin targets.
+contained to that owner and produces only bounded diagnostics. For a current
+eligible revision, production commits the complete Page batch before publishing
+Actions whose targets are currently available; removal performs Action
+unregistration before Page unregistration. A Page is available only when all
+of its required permission IDs are present in the current Host-owned grant
+snapshot. This is a mechanical subset check, not a permission catalog, grant
+decision, prompt, or Runtime session authorization.
 
 The production launcher action service is created once outside React rendering
 and can be replaced with an isolated service at the App Shell boundary for
@@ -274,24 +281,43 @@ successful Action result. Pin and unpin use an optimistic view but restore the
 last confirmed snapshot after failure, and a ninth pin is rejected without
 dropping an existing one.
 
-Plugin management, production Plugin Action activation, safe plugin icon
-projection, and Plugin Page navigation remain future capabilities. Persisted
-plugin Action IDs can already disappear and reappear naturally when the
-injectable projection core unregisters or republishes the same stable ID.
+Plugin management, safe plugin resource/icon resolution, iframe Runtime,
+lifecycle writes, and complete permission decisions remain future capabilities.
+Production Plugin Actions now appear only while their projected target Page is
+available. Persisted plugin Action IDs can disappear and reappear naturally
+without being removed from recent or pinned storage.
 
 ## Host Pages And Preferences
 
-Host pages use a flat `owner_id`, `page_id`, and `opened_by_action_id`
-identity. A trusted Host page catalog preflights targets before
-`AppNavigationService` sends an `ActivePage` to the single App Shell handler.
-This identity shape may be reused by future validated plugin pages, but the
-current catalog contains only `lensx.core/settings`; external plugins cannot
-provide React components, executors, or direct App Shell mutations.
+Host and Plugin Pages share a unified Host-owned Page Registry and the flat
+`owner_id`, `page_id`, and `opened_by_action_id` `ActivePage` identity. The
+Registry protects `lensx.core`, replaces one plugin provider's complete Page
+batch atomically, and returns isolated deterministic snapshots. Private routes,
+required permission IDs, provider bookkeeping, installation facts, and Runtime
+entries never enter `ActivePage` or presentation props.
 
-The page context resolver derives the localized Host owner and opening Action
-name from IDs and the current registry snapshot, with the localized page title
-as fallback. Display strings are not copied into `ActivePage`, so a runtime
-locale change updates the context bar.
+`AppNavigationService` preflights the current descriptor and availability
+before sending `ActivePage` to the single App Shell handler. Registry changes
+that remove or make the active Plugin Page unavailable cause a Host-owned close
+transition back to `home`; metadata changes that retain the same available
+identity do not close the Page. Plugins receive no React setter, navigation
+handler, Registry mutation API, renderer, or Tauri object.
+
+The page context resolver derives the current localized owner, Page title, and
+opening Action name from the Page resolution and Launcher Registry snapshot.
+Missing `zh-CN` owner text falls back to `en-US`, and a missing opening Action
+falls back to the current Page title. Host Pages use the protected Host icon
+token; Plugin Pages use the generic provider icon until scoped resource
+resolution ships. Display strings are not copied into `ActivePage`, so locale
+and metadata changes resolve from current facts.
+
+The App Shell still uses one `home` / `search` / `page` presentation state in
+the existing main window. `lensx.core/settings` renders the trusted Settings
+surface. An available Plugin Page renders only a localized Host-owned
+placeholder inside the existing page error boundary; it does not read the
+private route, load an entry or asset, create an iframe, invoke Tauri, or execute
+plugin code. Task 4.1 scoped resources, Task 4.2 iframe Runtime, and Task 5.5
+complete permission management remain unimplemented.
 
 Settings is rendered in the existing `main` Tauri window. It has first-level
 Preferences and Plugins sections. Preferences controls the supported

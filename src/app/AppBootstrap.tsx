@@ -1,8 +1,11 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import App from '../App';
 import { AppProviders } from './AppProviders';
+import { productionLauncherActionService } from './launcher/actions';
 import { desktopLauncherSurfaceController, type LauncherSurfaceController } from './launcher/surface';
 import { desktopLauncherWindowDragController, type LauncherWindowDragController } from './launcher/windowDrag';
+import { productionAppNavigationService, productionPageRegistry } from './navigation';
+import { createProductionPluginSurfaceProjection } from './plugins/surfaces';
 import {
   type AppPreferences,
   type AppPreferencesClient,
@@ -46,6 +49,13 @@ export const AppBootstrap = ({
   windowDragController = desktopLauncherWindowDragController,
 }: AppBootstrapProps) => {
   const startupRequestRef = useRef<Promise<AppStartupState> | null>(null);
+  const [surfaceProjectionService] = useState(() =>
+    createProductionPluginSurfaceProjection(
+      productionLauncherActionService,
+      productionPageRegistry,
+      productionAppNavigationService,
+    ),
+  );
   const [startupState, setStartupState] = useState<AppStartupState>();
 
   useEffect(() => {
@@ -78,6 +88,7 @@ export const AppBootstrap = ({
           preferencesClient={preferencesClient}
           startupPreferencesErrorCode={startupState.preferencesErrorCode}
           surfaceController={surfaceController}
+          surfaceProjectionService={surfaceProjectionService}
           windowDragController={windowDragController}
         />
       )}

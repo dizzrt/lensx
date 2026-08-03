@@ -18,7 +18,9 @@
     },
     "page": {
       "closeLabel": "Close settings and return home",
+      "closePluginLabel": "Close page and return home",
       "hostOwner": "lensX",
+      "pluginRuntimeUnavailable": "This plugin page is registered, but its isolated runtime is not available yet.",
       "errorTitle": "This page could not be displayed",
       "errorDescription": "Close the page and try opening it again."
     },

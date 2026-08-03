@@ -75,6 +75,26 @@ describe('Plugin Action mapper', () => {
     expect(Object.isFrozen(registrations)).toBe(true);
   });
 
+  test('publishes only Actions whose target Page is currently available', () => {
+    const registrations = mapPluginActionsToLauncherRegistrations(
+      withActions([
+        ...baseManifest.contributes.actions,
+        {
+          id: 'show_home',
+          title: { 'en-US': 'Show Home' },
+          default_keywords: {},
+          target: { kind: 'page', page_id: 'home' },
+        },
+      ]),
+      { openPage: rs.fn() },
+      ({ page_id: pageId }) => pageId === 'home',
+    );
+
+    expect(registrations.map(({ descriptor }) => (descriptor as { action_id: string }).action_id)).toEqual([
+      'com.acme.workspace.show_home',
+    ]);
+  });
+
   test('uses Registry validation and the existing generic icon fallback', () => {
     const registry = new LauncherActionRegistry();
     const registrations = mapPluginActionsToLauncherRegistrations(baseManifest, { openPage: rs.fn() });

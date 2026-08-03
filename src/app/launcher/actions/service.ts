@@ -11,6 +11,7 @@ import type { LauncherActionDescriptor, LauncherActionDispatchResult } from './t
 export interface LauncherActionService {
   readonly registry: {
     snapshot: () => readonly LauncherActionDescriptor[];
+    subscribe?: (listener: () => void) => () => void;
   };
   readonly dispatcher: {
     dispatch: (actionId: string) => Promise<LauncherActionDispatchResult>;

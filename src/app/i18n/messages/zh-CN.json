@@ -18,7 +18,9 @@
     },
     "page": {
       "closeLabel": "关闭设置并返回主页",
+      "closePluginLabel": "关闭页面并返回主页",
       "hostOwner": "lensX",
+      "pluginRuntimeUnavailable": "此插件页面已注册，但隔离运行时尚不可用。",
       "errorTitle": "无法显示此页面",
       "errorDescription": "请关闭页面后重试。"
     },

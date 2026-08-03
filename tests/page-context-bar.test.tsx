@@ -6,6 +6,7 @@ const lensXContext = Object.freeze({
   action_name: 'Open settings with a deliberately long localized Action name',
   owner_icon: Object.freeze({ kind: 'host' as const, token: 'lensx-owner' }),
   owner_name: 'lensX desktop Host with a deliberately long provider name',
+  page_title: 'Settings',
 });
 
 describe('PageContextBar', () => {
@@ -49,7 +50,7 @@ describe('PageContextBar', () => {
     const { container } = render(
       <PageContextBar
         closeLabel="Close"
-        context={{ action_name: 'Open page', owner_name: 'Unknown provider' }}
+        context={{ action_name: 'Open page', owner_name: 'Unknown provider', page_title: 'Page' }}
         onClose={() => undefined}
       />,
     );

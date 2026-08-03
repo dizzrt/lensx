@@ -157,13 +157,17 @@ MUST NOT unregister or block other plugins or Host built-in Actions.
 ### Requirement: Plugin Action execution must remain Host-owned and use the unified Dispatcher
 
 The system MUST synthesize a Host-owned executor for every Page-only Manifest
-target. The executor MUST pass only a frozen
+target that is eligible for publication. The executor MUST pass only a frozen
 `{ owner_id: plugin_id, page_id: local_page_id }` target and the global opening
 `action_id` to a narrow Host Page opener. A projected Action MUST execute through
 the existing Registry lookup and Dispatcher, and successful, not-found,
 unavailable, and execution-failure outcomes MUST preserve the existing typed
 dispatch semantics. A plugin MUST NOT submit, read, or directly invoke an
-executor.
+executor. Production publication MUST use the current Registration revision,
+MUST occur only after the target Plugin Page batch has been committed, and MUST
+exclude Actions whose target Page is currently unavailable. Provider removal or
+invalidation MUST unregister the provider's Action batch before unregistering
+its Page batch.
 
 #### Scenario: The Dispatcher executes a projected Action
 
@@ -181,14 +185,31 @@ executor.
 - **THEN** the result exposes no Page route, exception stack, Tauri object, or
   Rust internal value
 
-#### Scenario: Task 2.4 production Page navigation is not yet shipped
+#### Scenario: Production publishes an Action after its Page
 
-- **WHEN** production has no Plugin Page Registry and navigation implementation
-  capable of preflighting real plugin targets
-- **THEN** the default production composition does not start Plugin Action
-  publication
-- **THEN** users do not see a Plugin Action that is known to fail because the
-  Plugin Page Registry is absent
+- **WHEN** production reconciles a current, eligible Plugin Registration detail
+  whose Action targets an available Plugin Page
+- **THEN** the Plugin Page batch is committed before the Plugin Action enters
+  the Launcher Registry
+- **THEN** the default production composition starts Plugin Action publication
+  without adding a plugin-specific search or Dispatcher branch
+
+#### Scenario: An Action targets an unavailable Page
+
+- **WHEN** a Page is unknown, missing a required Host grant, or otherwise
+  unavailable in the current Page batch
+- **THEN** an Action targeting that Page is excluded from the provider's
+  published Action batch
+- **THEN** users do not see an Action that is already known to fail Page
+  preflight
+
+#### Scenario: Production removes a provider surface
+
+- **WHEN** a current Registration snapshot removes or invalidates a previously
+  published plugin provider
+- **THEN** production unregisters the provider's complete Action batch before
+  unregistering its Page batch
+- **THEN** other plugins and `lensx.core` Actions remain available
 
 ### Requirement: Projected Actions must reuse search and collections without provider-specific behavior
 

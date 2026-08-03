@@ -24,6 +24,7 @@ export type {
   PluginRegistrationQueryOperation,
   PluginRegistrationSnapshot,
   PluginRegistrationSummary,
+  RegisteredPluginRegistrationDetail,
 } from './types';
 export {
   PLUGIN_REGISTRATION_CHANGED_EVENT,

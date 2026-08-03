@@ -10,6 +10,8 @@ export interface PluginActionPageOpener {
   openPage: (target: PluginActionPageTarget, openedByActionId: string) => Promise<void> | void;
 }
 
+export type PluginActionPageAvailability = (target: PluginActionPageTarget) => boolean;
+
 const cloneLocalizedText = (text: { readonly 'en-US': string; readonly 'zh-CN'?: string }) =>
   Object.freeze({
     'en-US': text['en-US'],
@@ -25,25 +27,32 @@ const cloneKeywords = (keywords: NormalizedPluginManifest['contributes']['action
 export const mapPluginActionsToLauncherRegistrations = (
   manifest: NormalizedPluginManifest,
   pageOpener: PluginActionPageOpener,
+  isPageAvailable: PluginActionPageAvailability = () => true,
 ): readonly LauncherActionRegistrationInput[] =>
   Object.freeze(
-    manifest.contributes.actions.map((action) => {
+    manifest.contributes.actions.flatMap((action) => {
       const actionId = `${manifest.plugin_id}.${action.id}`;
       const target = Object.freeze({
         owner_id: manifest.plugin_id,
         page_id: action.target.page_id,
       });
 
-      return Object.freeze({
-        descriptor: Object.freeze({
-          action_id: actionId,
-          owner_id: manifest.plugin_id,
-          title: cloneLocalizedText(action.title),
-          ...(action.description ? { description: cloneLocalizedText(action.description) } : {}),
-          default_keywords: cloneKeywords(action.default_keywords),
-          enabled: true,
+      if (!isPageAvailable(target)) {
+        return [];
+      }
+
+      return [
+        Object.freeze({
+          descriptor: Object.freeze({
+            action_id: actionId,
+            owner_id: manifest.plugin_id,
+            title: cloneLocalizedText(action.title),
+            ...(action.description ? { description: cloneLocalizedText(action.description) } : {}),
+            default_keywords: cloneKeywords(action.default_keywords),
+            enabled: true,
+          }),
+          executor: () => pageOpener.openPage(target, actionId),
         }),
-        executor: () => pageOpener.openPage(target, actionId),
-      });
+      ];
     }),
   );

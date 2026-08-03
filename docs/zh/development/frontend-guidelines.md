@@ -110,6 +110,12 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
 - 原生调用保留在类型化适配器之后，不要在组件树各处直接调用 Tauri。
 - `AppNavigationService` 必须独立于 React。Host executor 可以通过它请求经过校验的页面，但不能
   接收 React setter。
+- Host 与 Plugin target 必须通过统一的 Host-owned Page Registry 解析。Plugin provider replacement
+  必须保持完整批次和原子性；active Plugin Page 消失或变为 unavailable 时，必须通过 Host navigation
+  invalidation transition 关闭，而不是通过插件 callback。
+- 私有 Page route、required permission ID、registration detail 与 provider bookkeeping 不得进入
+  `ActivePage` 或展示 props。在隔离 Runtime 交付前，available Plugin Page 只能渲染本地化 Host-owned
+  placeholder；该 surface 不得加载 route、entry、asset、iframe、插件代码或 Tauri bridge。
 - 根据规范化查询和扁平 `ActivePage` 状态推导 `home`、`search` 和 `page`；当前单层页面深度不
   引入 router 或并行 Shell store。
 - 保持统一顶部行几何：`home` 和 `search` 渲染 launcher 输入，`page` 渲染由 ID 派生的页面上下文

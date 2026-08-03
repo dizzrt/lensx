@@ -1,0 +1,1 @@
+export { mapPluginRegistrationToPageProviderBatch } from './mapper';

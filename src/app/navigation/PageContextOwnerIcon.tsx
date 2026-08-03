@@ -28,7 +28,7 @@ const ownerFallbackSvg = (
 );
 
 export const PageContextOwnerIcon = ({ icon }: PageContextOwnerIconProps) => {
-  const resolvedSvg = icon ? ownerSvgByToken[icon.token] : undefined;
+  const resolvedSvg = icon?.kind === 'host' ? ownerSvgByToken[icon.token] : undefined;
 
   return (
     <Icon

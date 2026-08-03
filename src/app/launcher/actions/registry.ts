@@ -18,6 +18,7 @@ interface RegisteredLauncherAction {
 }
 
 const registryState = new WeakMap<LauncherActionRegistry, Map<string, RegisteredLauncherAction>>();
+const registryListeners = new WeakMap<LauncherActionRegistry, Set<() => void>>();
 
 const createDuplicateDiagnostic = (path: string): LauncherActionDiagnostic => ({
   code: 'duplicate_action_id',
@@ -50,6 +51,13 @@ const createRegisteredAction = (
 export class LauncherActionRegistry {
   constructor() {
     registryState.set(this, new Map());
+    registryListeners.set(this, new Set());
+  }
+
+  #notify() {
+    for (const listener of registryListeners.get(this) ?? []) {
+      listener();
+    }
   }
 
   register(registration: LauncherActionRegistrationInput): LauncherActionRegistrationResult {
@@ -85,6 +93,7 @@ export class LauncherActionRegistry {
       registration.executor,
     );
     state.set(registeredAction.descriptor.action_id, registeredAction);
+    this.#notify();
 
     return {
       ok: true,
@@ -141,6 +150,9 @@ export class LauncherActionRegistry {
 
     for (const registration of validRegistrations) {
       state.set(registration.descriptor.action_id, registration);
+    }
+    if (validRegistrations.length > 0) {
+      this.#notify();
     }
 
     return {
@@ -216,6 +228,7 @@ export class LauncherActionRegistry {
       nextState.set(registration.descriptor.action_id, registration);
     }
     registryState.set(this, nextState);
+    this.#notify();
 
     return {
       ok: true,
@@ -240,6 +253,17 @@ export class LauncherActionRegistry {
         .map(({ descriptor }) => cloneLauncherActionDescriptor(descriptor))
         .sort((left, right) => left.action_id.localeCompare(right.action_id)),
     );
+  }
+
+  subscribe(listener: () => void) {
+    const listeners = registryListeners.get(this);
+    if (!listeners) {
+      throw new Error('Launcher action registry is not initialized.');
+    }
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
   }
 }
 
