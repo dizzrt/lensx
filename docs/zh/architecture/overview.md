@@ -32,8 +32,12 @@ lensX 是一款轻量级桌面效率启动器，其设计重点包括：
   键盘优先的四列结果网格；
 - Host 私有 Plugin surface 投影协调器，提供 provider-scoped Page/Action 原子替换、
   revision-aware 资格判断和 fail-closed 生命周期处理；
-- Rust 所有的 scoped Plugin Resource Service，只通过严格 package-relative path、固定 MIME、
-  no-store response 与 generation-bound 撤销提供当前 managed payload；
+- Rust 所有的 scoped Plugin Resource Service，通过 per-generation 隔离 browser authority、严格
+  host/path binding、package-relative path、固定 MIME、no-store response 与 generation-bound
+  撤销提供当前 managed payload；
+- macOS-only frame-aware WKWebView navigation policy，提供完全分离的 Host/descendant document
+  allowlist、idle 的进程内 target lease、main-only Tauri initialization，以及独立的
+  new-window/download deny；
 - 统一的 Host-owned Page Registry 与框架无关导航 service，用于受保护 Host Page 和声明式
   Plugin Page descriptor；
 - 通过窄化 Rust/Tauri 边界持久化、并按当前 registry snapshot 解析的版本化最近使用与已固定
@@ -223,10 +227,12 @@ Page 标题。Host Page 使用受保护 Host icon token；在 scoped resource re
 事实重新解析。
 
 App Shell 继续在现有 main window 中使用唯一 `home` / `search` / `page` presentation state。
-`lensx.core/settings` 渲染可信 Settings surface。available Plugin Page 只会在现有 Page error boundary
-内渲染本地化 Host-owned placeholder；它不会读取私有 route、加载 entry 或 asset、创建 iframe、调用
-Tauri 或执行插件代码。Task 4.1 scoped resources、Task 4.2 iframe Runtime 和 Task 5.5 完整权限管理
-仍未实现。
+`lensx.core/settings` 渲染可信 Settings surface。available Plugin Page 会在现有 Page error boundary 内
+渲染唯一 Host-owned 隔离 iframe。Host 私有 resolver 会交叉检查 current Page、Registration revision、
+Resource identity、isolated `entry_url` 与 Registry route，然后在挂载前激活精确 native navigation lease。
+iframe 固定 `allow-scripts allow-same-origin`、`no-referrer` 与 deny-by-default Permissions Policy；close、
+retry、invalidation、replacement 与 App teardown 都会移除它。load event 只表示 `loaded`，不等于 SDK/
+Session `ready`。Runtime Session、Host API transport、完整 CSP 与 Task 5.5 权限管理仍未实现。
 
 设置在现有 `main` Tauri 窗口中渲染，包含“偏好”和“插件”两个一级部分。“偏好”控制受支持的
 `light`/`dark` 主题与 `en-US`/`zh-CN` locale；“插件”只是不可操作的空占位，不代表插件管理
@@ -283,6 +289,8 @@ Rust 负责：
 - 特权操作和安全敏感的校验；
 - 持久化和文件系统边界；
 - scoped plugin resource 授权、安全文件打开与 protocol response；
+- macOS WKWebView frame classification，以及 commit 前的 document navigation、new-window 与
+  download enforcement；
 - 对性能敏感的后台工作；
 - 稳定的 Tauri command 和 event。
 
@@ -302,9 +310,10 @@ Rust 不能通过 Tauri 边界泄漏内部实现类型。
 
 Host 私有 Resource Contract 遵循该边界：可信 TypeScript 只提交 entry ID 与调用方观察到的
 Registration revision；Rust 派生当前 plugin identity/version/entry 与 opaque URL；每个 custom-protocol
-request 都依据当前 Manager generation 与 Installer-owned payload 重新验证进程内 scope。React 与公共
-plugin package 都不会获得 installation path、digest、record key 或通用文件读取器。这只是资源读取
-基础；iframe isolation、Runtime Session identity、Host API transport 与完整 CSP 仍是独立工作。
+request 都依据当前 Manager generation 与 Installer-owned payload 重新验证进程内 scope。React
+presentation prop 与公共 plugin package 都不会获得 installation path、digest、record key 或通用文件
+读取器。macOS iframe Runtime 通过 Host 私有 adapter 消费该资源读取基础；Runtime Session identity、
+Host API transport 与完整 CSP 仍是独立工作。
 
 ## 依赖方向
 

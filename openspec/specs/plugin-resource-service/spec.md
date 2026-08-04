@@ -18,26 +18,28 @@ Contract and allow only the trusted lensX root application to query a plugin
 entry URL through `resolve_plugin_resource_entry`. A request MUST contain
 exactly `contract_version`, `entry_id`, and `expected_revision`; the caller MUST
 NOT submit or receive an installation path, package digest, record key, file
-handle, package bytes, or Manager object. A successful result MUST contain
-exactly the contract version, entry ID, current revision, Host-resolved plugin
-ID and version, and an opaque `entry_url`. Rust and TypeScript MUST strictly
-validate requests, successful results, and errors from untrusted boundary
-values, and the contract MUST NOT become a capability that the Manifest, public
-plugin packages, iframe Runtime, or other plugins can import or invoke.
+handle, package bytes, origin, scope, generation, or Manager object. A
+successful result MUST contain exactly the contract version, entry ID, current
+revision, Host-resolved plugin ID and version, and one opaque isolated-origin
+`entry_url`. Rust and TypeScript MUST strictly validate requests, successful
+results, and errors from untrusted boundary values and MUST reject a shared
+host, unknown URL shape, or an origin and path scope mismatch. The contract
+MUST NOT become a capability that the Manifest, public plugin packages, iframe
+Runtime, or other plugins can import or invoke.
 
 #### Scenario: The trusted application resolves the current entry
 
 - **WHEN** the trusted root application queries an eligible plugin using a
   valid contract version, current entry ID, and current Registration revision
-- **THEN** the Host returns a scoped entry URL derived from the current
-  registration's normalized `runtime.entry`
-- **THEN** the result contains no installation path, digest, record key, file
-  content, or mutable Host object
+- **THEN** the Host returns a scope-bound isolated-origin entry URL derived from
+  the current registration's normalized `runtime.entry`
+- **THEN** the result contains no standalone origin, scope, or generation,
+  installation path, digest, record key, file content, or mutable Host object
 
 #### Scenario: A request attempts to submit Host-private facts
 
 - **WHEN** a request contains a path, plugin ID, version, digest, origin, scope,
-  unknown field, or an incorrect contract version or type
+  generation, unknown field, or an incorrect contract version or type
 - **THEN** the complete request fails with the stable `invalid_request` code
 - **THEN** the system issues no scope, reads no file, and changes neither the
   Manager, Registry, nor revision
@@ -48,7 +50,8 @@ plugin packages, iframe Runtime, or other plugins can import or invoke.
   external plugins, or `@lensx/plugin-contract`, `@lensx/plugin-sdk`,
   `@lensx/plugin-ui`, or `@lensx/plugin-testkit`
 - **THEN** those consumers cannot import the Resource Contract, desktop
-  adapter, Tauri command wrapper, or Host-private implementation
+  adapter, Tauri command wrapper, origin validator, or Host-private
+  implementation
 - **THEN** entry URL queries remain available only at the trusted lensX
   application boundary
 
@@ -108,19 +111,21 @@ The system MUST use an operating-system CSPRNG to generate at least 128 bits of
 entropy for each scope and MUST NOT use time, process ID, an incrementing
 sequence, a path, or an unkeyed plain hash as a bearer token. Each current
 `(entry_id, resource_generation)` MUST map to at most one scope, and repeated
-queries MUST reuse it. A scope MUST reside only in process memory and MUST NOT
-be persisted, sent in a changed event, written to logs, or returned as a
-standalone field. For every protocol request, the system MUST re-confirm the
-scope, entry, generation, plugin identity, version, digest, and payload root
-against the current Manager projection, and readable fields in the URL MUST NOT
-replace authorization by the opaque scope.
+queries MUST reuse it. The scope MUST serve as both the isolated browser-origin
+key and the path-authorization key, and the authority scope and path scope MUST
+match exactly. A scope MUST reside only in process memory and MUST NOT be
+persisted, sent in a changed event, written to logs, or returned as a standalone
+field. For every protocol request, the system MUST re-confirm the scope, entry,
+generation, plugin identity, version, digest, and payload root against the
+current Manager projection. Readable fields in the URL and a browser
+same-origin result MUST NOT replace authorization by the opaque scope.
 
 #### Scenario: The same generation is resolved repeatedly
 
 - **WHEN** the caller repeats a valid query while the registration and resource
   generation remain unchanged
-- **THEN** the Host returns the same entry URL and does not create scopes without
-  bound
+- **THEN** the Host returns the same entry URL and isolated browser origin and
+  does not create scopes without bound
 - **THEN** a revision change for an unrelated plugin does not invalidate this
   scope
 
@@ -128,47 +133,53 @@ replace authorization by the opaque scope.
 
 - **WHEN** the same plugin ID and semantic version are successfully replaced by
   a package with a different digest
-- **THEN** the old resource generation and scope are permanently invalidated,
-  and the new registration receives a different scope
-- **THEN** the old URL cannot return the new payload or stale cached content
+- **THEN** the old resource generation, scope, and origin are permanently
+  invalidated, and the new registration receives a different scope and origin
+- **THEN** the old URL cannot return the new payload, stale cached content, or
+  authority from the new generation
 
 #### Scenario: A plugin is disabled and then re-enabled
 
 - **WHEN** the same payload is enabled again after a successful disable
-- **THEN** the pre-disable scope is not restored, and the next successful
-  resolution creates a new scope
+- **THEN** the pre-disable scope and origin are not restored, and the next
+  successful resolution creates a new scope and origin
 - **THEN** matching plugin ID, version, and digest cannot make the old bearer URL
   valid again
 
 #### Scenario: The application process restarts
 
 - **WHEN** the Manager recovers the same registration from the existing Store
-- **THEN** all scopes from the prior process are unavailable, and the recovered
-  registration uses a new process-local generation
+- **THEN** all scopes and origins from the prior process are unavailable, and
+  the recovered registration uses a new process-local generation
 - **THEN** the Store record, Registration Contract, and package layout gain no
-  persisted scope or generation field
+  persisted scope, origin, or generation field
 
 ### Requirement: Protocol requests MUST be restricted to a package-relative regular file bound to the scope
 
 The Resource handler MUST accept only a fixed-version `lensx-plugin` URL
-envelope. In Rust, it MUST apply strict lexical validation of the
-package-relative path, reject symlinks or reparse points at every component,
-enforce canonical root containment, require a regular file, revalidate identity
-after opening, and perform a bounded read. Paths MUST follow the package
-protocol's portable ASCII segment constraints. Absolute paths, empty segments,
-`.` and `..`, `%`, backslashes, NUL, queries, non-UTF-8 input, paths that are too
-long or deep, directories, metadata records, and targets in another payload
-MUST fail closed. Successful reads MUST stay within the existing 64 MiB
-single-file limit, and the handler MUST NOT enumerate directories, rewrite HTML,
-or implicitly map a root-relative URL back into the scope.
+envelope whose authority contains the canonical isolated-origin scope and whose
+path repeats the same scope byte-for-byte. The old shared host and any
+translated form that does not preserve the origin key MUST fail closed. In
+Rust, the handler MUST apply strict lexical validation of the package-relative
+path, reject symlinks or reparse points at every component, enforce canonical
+root containment, require a regular file, revalidate identity after opening,
+and perform a bounded read. Paths MUST follow the package protocol's portable
+ASCII segment constraints. Absolute paths, empty segments, `.` and `..`, `%`,
+backslashes, NUL, queries, fragments, userinfo, ports, non-UTF-8 input, paths
+that are too long or deep, directories, metadata records, targets in another
+payload, and origin and path scope mismatches MUST fail closed. Successful reads
+MUST stay within the existing 64 MiB single-file limit, and the handler MUST NOT
+enumerate directories, rewrite HTML, add wildcard or null CORS, or implicitly
+map a root-relative URL back into the scope.
 
 #### Scenario: Read a valid relative resource from the current plugin
 
-- **WHEN** a valid scope requests a regular file within its canonical payload
-  that satisfies the path, type, size, and MIME rules
+- **WHEN** a valid isolated authority with a matching path scope requests a
+  regular file within its canonical payload that satisfies the path, type,
+  size, and MIME rules
 - **THEN** the handler returns the file's complete, internally consistent bytes
 - **THEN** the request cannot observe the canonical root, adjacent plugin
-  directories, or the Host filesystem structure
+  directories, the Host filesystem structure, or another browser origin
 
 #### Scenario: A request attempts path traversal or encoding confusion
 
@@ -204,6 +215,15 @@ or implicitly map a root-relative URL back into the scope.
 - **THEN** the handler returns the same failure presentation as for an ordinary
   unavailable resource
 - **THEN** metadata, directory listings, and existence details are not exposed
+
+#### Scenario: Origin authority and path scope do not match
+
+- **WHEN** a request uses the current origin authority with another scope in
+  the path, or uses an old or shared authority for the current path
+- **THEN** the handler fails closed before consulting the scope map or reading
+  the filesystem
+- **THEN** the fixed external response does not reveal which scope, origin,
+  plugin, or path exists
 
 ### Requirement: Methods, MIME types, and response headers MUST be fixed and content sniffing MUST be prohibited
 

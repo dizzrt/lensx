@@ -52,9 +52,16 @@ import {
   resolvePageContext,
 } from './app/navigation';
 import { PageErrorBoundary } from './app/pages/PageErrorBoundary';
-import { PluginPagePlaceholder } from './app/pages/PluginPagePlaceholder';
 import { SettingsPage } from './app/pages/SettingsPage';
 import { desktopLocalPluginInstallationClient, type LocalPluginInstallationClient } from './app/plugins/installation';
+import { desktopPluginResourceAdapter } from './app/plugins/resource';
+import {
+  createPluginPageRuntimeResolver,
+  desktopPluginRuntimeNavigationAdapter,
+  type PluginPageRuntimeResolver,
+  PluginRuntimeFrame,
+  type PluginRuntimeNavigationAdapter,
+} from './app/plugins/runtime';
 import type { PluginSurfaceProjectionService } from './app/plugins/surfaces';
 import { type AppPreferencesClient, desktopAppPreferencesClient } from './app/preferences';
 
@@ -65,6 +72,8 @@ export interface AppProps {
   installationClient?: LocalPluginInstallationClient;
   navigationService?: AppNavigationService;
   preferencesClient?: AppPreferencesClient;
+  pluginRuntimeNavigationAdapter?: PluginRuntimeNavigationAdapter;
+  pluginRuntimeResolver?: PluginPageRuntimeResolver;
   renderPage?: (activePage: ActivePage) => ReactNode;
   surfaceProjectionService?: PluginSurfaceProjectionService;
   startupPreferencesErrorCode?: string;
@@ -94,6 +103,8 @@ const App = ({
   installationClient = desktopLocalPluginInstallationClient,
   navigationService = productionAppNavigationService,
   preferencesClient = desktopAppPreferencesClient,
+  pluginRuntimeNavigationAdapter = desktopPluginRuntimeNavigationAdapter,
+  pluginRuntimeResolver,
   renderPage,
   startupPreferencesErrorCode,
   surfaceController = inertLauncherSurfaceController,
@@ -129,6 +140,17 @@ const App = ({
     void snapshotRevision;
     return actionService.registry.snapshot();
   }, [actionService, snapshotRevision]);
+  const effectivePluginRuntimeResolver = useMemo(
+    () =>
+      pluginRuntimeResolver ??
+      (surfaceProjectionService
+        ? createPluginPageRuntimeResolver({
+            resourceAdapter: desktopPluginResourceAdapter,
+            surfaceProjectionService,
+          })
+        : undefined),
+    [pluginRuntimeResolver, surfaceProjectionService],
+  );
   const results = useMemo(
     () =>
       searchLauncherActions({
@@ -553,8 +575,14 @@ const App = ({
                   activePage.owner_id === 'lensx.core' &&
                   activePage.page_id === 'settings' ? (
                   <SettingsPage installationClient={installationClient} preferencesClient={preferencesClient} />
-                ) : pageResolution?.provider.kind === 'plugin' && pageContext ? (
-                  <PluginPagePlaceholder pageTitle={pageContext.page_title} />
+                ) : pageResolution?.provider.kind === 'plugin' && pageContext && effectivePluginRuntimeResolver ? (
+                  <PluginRuntimeFrame
+                    activePage={activePage}
+                    navigationAdapter={pluginRuntimeNavigationAdapter}
+                    pageResolution={pageResolution}
+                    pageTitle={pageContext.page_title}
+                    resolver={effectivePluginRuntimeResolver}
+                  />
                 ) : null}
               </PageErrorBoundary>
             ) : null}

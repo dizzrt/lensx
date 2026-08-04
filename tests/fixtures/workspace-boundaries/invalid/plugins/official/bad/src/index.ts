@@ -7,11 +7,20 @@ import '@/app/plugins/resource';
 import '@/app/plugins/resource/desktop';
 import type { PluginRegistrationSnapshot } from '@/app/plugins/registration/types';
 import type { PluginResourceEntry } from '@/app/plugins/resource/types';
+import '@/app/plugins/runtime';
+import '@/app/plugins/runtime/navigation';
+import type { PluginPageRuntimeDescriptor } from '@/app/plugins/runtime/types';
 import '@/styles/internal.less';
 import '@tauri-apps/api/core';
 import '../../../../src/app/desktop.ts';
 import '../../../../tools/plugin-package-format/index.ts';
 import '../../../../src-tauri/src/plugin_resource_service.rs';
+import '../../../../src-tauri/src/plugin_resource_url.rs';
+import '../../../../src-tauri/examples/plugin_iframe_runtime_harness.rs';
+import '../../../../src-tauri/src/frame_aware_navigation_policy.rs';
+import '../../../../src-tauri/src/plugin_runtime_navigation.rs';
+import '../../../../vendor/frame-aware-navigation/tauri/src/webview/mod.rs';
+import '../../../../fixtures/frame-aware-webview-navigation/cases.json';
 import '../../../../packages/public/src/index.ts';
 import '@fixture/public/src/index.ts';
 
@@ -19,3 +28,4 @@ export { publicValue } from '@fixture/public';
 
 export type LeakedRegistrationSnapshot = PluginRegistrationSnapshot;
 export type LeakedPluginResourceEntry = PluginResourceEntry;
+export type LeakedPluginRuntimeDescriptor = PluginPageRuntimeDescriptor;

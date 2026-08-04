@@ -35,3 +35,9 @@ getrandom = "=0.3.4"
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
+
+[patch.crates-io]
+tauri = { path = "../vendor/frame-aware-navigation/tauri" }
+tauri-runtime = { path = "../vendor/frame-aware-navigation/tauri-runtime" }
+tauri-runtime-wry = { path = "../vendor/frame-aware-navigation/tauri-runtime-wry" }
+wry = { path = "../vendor/frame-aware-navigation/wry" }

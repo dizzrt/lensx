@@ -1,3 +1,5 @@
+#[cfg(test)]
+use crate::plugin_resource_url::{translated_resource_url, MAX_PATH_BYTES, MAX_PATH_SEGMENTS};
 use crate::{
     plugin_installer::{prove_managed_payload_root, PluginInstaller},
     plugin_manager::{
@@ -7,6 +9,10 @@ use crate::{
         deserialize_resolve_request, PluginResourceEntry, PluginResourceError,
         PluginResourceErrorCode, ResolvePluginResourceEntryRequest,
         PLUGIN_RESOURCE_CONTRACT_VERSION,
+    },
+    plugin_resource_url::{
+        build_native_resource_url, is_portable_resource_path, parse_plugin_resource_url,
+        PluginResourceUrl,
     },
 };
 use std::{
@@ -18,12 +24,7 @@ use std::{
 };
 use tauri::{http, AppHandle, Manager, Runtime, State};
 
-const RESOURCE_SCHEME: &str = "lensx-plugin";
-const RESOURCE_HOST: &str = "localhost";
-const RESOURCE_VERSION: &str = "v1";
 const MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
-const MAX_PATH_BYTES: usize = 100;
-const MAX_PATH_SEGMENTS: usize = 16;
 const MAX_SCOPE_ATTEMPTS: usize = 8;
 const NOT_FOUND_BODY: &[u8] = b"Plugin resource unavailable.";
 const METHOD_NOT_ALLOWED_BODY: &[u8] = b"Plugin resource method unavailable.";
@@ -81,7 +82,7 @@ impl PluginResourceService {
             if existing.resource_generation == projection.resource_generation {
                 return Ok(resource_entry(
                     &projection,
-                    build_resource_url(
+                    build_native_resource_url(
                         &existing.scope,
                         &projection.record_key,
                         &projection.registration.manifest.version,
@@ -105,7 +106,7 @@ impl PluginResourceService {
         scopes.by_scope.insert(scope.clone(), binding);
         Ok(resource_entry(
             &projection,
-            build_resource_url(
+            build_native_resource_url(
                 &scope,
                 &projection.record_key,
                 &projection.registration.manifest.version,
@@ -148,7 +149,7 @@ impl PluginResourceService {
         let binding = self
             .lock_scopes()
             .by_scope
-            .get(parsed.scope)
+            .get(&parsed.origin_scope)
             .cloned()
             .ok_or(ProtocolFailure::Unavailable)?;
         let projection = self
@@ -169,8 +170,8 @@ impl PluginResourceService {
         let payload_root = self
             .prove_eligible_payload(&projection)
             .map_err(|_| ProtocolFailure::Unavailable)?;
-        let mime = mime_for_path(parsed.resource_path).ok_or(ProtocolFailure::Unavailable)?;
-        let bytes = read_resource_file(&payload_root, parsed.resource_path, self.test_hook())?;
+        let mime = mime_for_path(&parsed.resource_path).ok_or(ProtocolFailure::Unavailable)?;
+        let bytes = read_resource_file(&payload_root, &parsed.resource_path, self.test_hook())?;
         Ok((mime, bytes))
     }
 
@@ -279,88 +280,8 @@ fn generate_scope(scopes: &ScopeState) -> Result<String, PluginResourceError> {
     Err(PluginResourceError::new(PluginResourceErrorCode::Internal))
 }
 
-fn build_resource_url(scope: &str, plugin_key: &str, version: &str, resource_path: &str) -> String {
-    format!(
-        "{RESOURCE_SCHEME}://{RESOURCE_HOST}/{RESOURCE_VERSION}/{scope}/{plugin_key}/{version}/{resource_path}"
-    )
-}
-
-struct ParsedResourceUri<'a> {
-    scope: &'a str,
-    plugin_key: &'a str,
-    version: &'a str,
-    resource_path: &'a str,
-}
-
-fn parse_resource_uri(uri: &http::Uri) -> Option<ParsedResourceUri<'_>> {
-    if uri.query().is_some() || uri.path().contains('%') {
-        return None;
-    }
-    let scheme = uri.scheme_str()?;
-    let authority = uri.authority()?.as_str();
-    let valid_origin = (scheme == RESOURCE_SCHEME && authority == RESOURCE_HOST)
-        || (matches!(scheme, "http" | "https") && authority == "lensx-plugin.localhost");
-    if !valid_origin {
-        return None;
-    }
-    let path = uri.path().strip_prefix('/')?;
-    let mut parts = path.splitn(5, '/');
-    if parts.next()? != RESOURCE_VERSION {
-        return None;
-    }
-    let scope = parts.next()?;
-    let plugin_key = parts.next()?;
-    let version = parts.next()?;
-    let resource_path = parts.next()?;
-    if scope.len() != 32
-        || !scope
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-        || !is_plugin_key(plugin_key)
-        || semver::Version::parse(version).is_err()
-        || !is_portable_resource_path(resource_path)
-    {
-        return None;
-    }
-    Some(ParsedResourceUri {
-        scope,
-        plugin_key,
-        version,
-        resource_path,
-    })
-}
-
-fn is_plugin_key(value: &str) -> bool {
-    value.strip_prefix("v1-").is_some_and(|hex| {
-        !hex.is_empty()
-            && hex
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
-    })
-}
-
-fn is_portable_resource_path(path: &str) -> bool {
-    let segments = path.split('/').collect::<Vec<_>>();
-    !path.is_empty()
-        && path.is_ascii()
-        && !path.starts_with('/')
-        && !path.ends_with('/')
-        && !path.contains(['\\', '\0', '%'])
-        && path.len() <= MAX_PATH_BYTES
-        && segments.len() <= MAX_PATH_SEGMENTS
-        && segments.iter().all(|segment| {
-            let bytes = segment.as_bytes();
-            !matches!(*segment, "" | "." | "..")
-                && bytes.first().is_some_and(u8::is_ascii_alphanumeric)
-                && bytes.last().is_some_and(u8::is_ascii_alphanumeric)
-                && bytes
-                    .iter()
-                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(*byte, b'.' | b'_' | b'-'))
-        })
-        && !matches!(
-            path.to_ascii_lowercase().as_str(),
-            "manifest.json" | "checksums.json"
-        )
+fn parse_resource_uri(uri: &http::Uri) -> Option<PluginResourceUrl> {
+    parse_plugin_resource_url(&uri.to_string(), false)
 }
 
 fn mime_for_path(path: &str) -> Option<&'static str> {
@@ -1024,6 +945,25 @@ mod tests {
                 ),
             )
             .expect("unrelated diagnostic should persist");
+        let other_registration = fixture
+            .manager
+            .registration(other_id)
+            .expect("other registration should exist");
+        let other = fixture
+            .service
+            .resolve_entry(&ResolvePluginResourceEntryRequest {
+                contract_version: PLUGIN_RESOURCE_CONTRACT_VERSION.to_owned(),
+                entry_id: healthy_entry_id(&other_registration),
+                expected_revision: fixture.manager.registration_revision(),
+            })
+            .expect("other entry should resolve");
+        let first_origin = parse_plugin_resource_url(&first.entry_url, false)
+            .expect("first URL should parse")
+            .origin_scope;
+        let other_origin = parse_plugin_resource_url(&other.entry_url, false)
+            .expect("other URL should parse")
+            .origin_scope;
+        assert_ne!(first_origin, other_origin);
         assert_eq!(
             fixture
                 .service
@@ -1255,21 +1195,44 @@ mod tests {
             assert_eq!(response.status(), http::StatusCode::NOT_FOUND);
             assert_security_headers(&response);
         }
+        for (header, value) in [
+            (http::header::ORIGIN, "null"),
+            (http::header::ACCEPT, "application/octet-stream"),
+        ] {
+            let mut read = request(http::Method::GET, &entry.entry_url);
+            read.headers_mut()
+                .insert(header, http::HeaderValue::from_static(value));
+            let response = fixture.service.handle_request(read);
+            assert_eq!(response.status(), http::StatusCode::OK);
+            assert_security_headers(&response);
+            assert!(!response.headers().contains_key(http::header::VARY));
+        }
         let missing = fixture.service.handle_request(request(
             http::Method::GET,
             &resource_url(&entry.entry_url, "missing.js"),
         ));
-        let expired = fixture.service.handle_request(request(
+        let scope = parse_plugin_resource_url(&entry.entry_url, false)
+            .expect("entry URL should parse")
+            .origin_scope;
+        let expired_url = entry
+            .entry_url
+            .replace(&scope, "ffffffffffffffffffffffffffffffff");
+        let expired = fixture
+            .service
+            .handle_request(request(http::Method::GET, &expired_url));
+        let host_path_mismatch = fixture.service.handle_request(request(
             http::Method::GET,
             &entry.entry_url.replacen(
-                entry
-                    .entry_url
-                    .split('/')
-                    .nth(4)
-                    .expect("scope should exist"),
-                "ffffffffffffffffffffffffffffffff",
+                &format!("{scope}.runtime.localhost"),
+                "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee.runtime.localhost",
                 1,
             ),
+        ));
+        let shared_host = fixture.service.handle_request(request(
+            http::Method::GET,
+            &entry
+                .entry_url
+                .replacen(&format!("{scope}.runtime.localhost"), "localhost", 1),
         ));
         let wrong_plugin = fixture.service.handle_request(request(
             http::Method::GET,
@@ -1284,7 +1247,13 @@ mod tests {
             &entry.entry_url.replacen("/1.2.0/", "/9.9.9/", 1),
         ));
         assert_eq!(missing.status(), http::StatusCode::NOT_FOUND);
-        for rejected in [&expired, &wrong_plugin, &wrong_version] {
+        for rejected in [
+            &expired,
+            &host_path_mismatch,
+            &shared_host,
+            &wrong_plugin,
+            &wrong_version,
+        ] {
             assert_eq!(rejected.status(), missing.status());
             assert_eq!(rejected.headers(), missing.headers());
             assert_eq!(rejected.body(), missing.body());
@@ -1305,21 +1274,19 @@ mod tests {
         let fixture = fixture("platform-urls");
         let entry = resolve(&fixture);
         let native: http::Uri = entry.entry_url.parse().expect("native URL should parse");
-        let translated = entry.entry_url.replacen(
-            "lensx-plugin://localhost",
-            "http://lensx-plugin.localhost",
-            1,
-        );
+        let translated = translated_resource_url(&entry.entry_url, "http")
+            .expect("translated URL should preserve the origin key");
         let windows: http::Uri = translated.parse().expect("translated URL should parse");
         let native = parse_resource_uri(&native).expect("native fixture should parse");
         let windows = parse_resource_uri(&windows).expect("Windows fixture should parse");
-        assert_eq!(native.scope, windows.scope);
+        assert_eq!(native.origin_scope, windows.origin_scope);
+        assert_eq!(native.path_scope, windows.path_scope);
         assert_eq!(native.plugin_key, windows.plugin_key);
         assert_eq!(native.version, windows.version);
         assert_eq!(native.resource_path, windows.resource_path);
         for invalid in [
             translated.replace("http://", "ftp://"),
-            translated.replace("lensx-plugin.localhost", "attacker.localhost"),
+            translated.replace("lensx-plugin.", "attacker."),
             format!("{translated}?path=dist/plugin.js"),
         ] {
             let uri: http::Uri = invalid.parse().expect("fixture URI should parse");

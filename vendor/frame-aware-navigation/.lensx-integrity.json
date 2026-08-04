@@ -1,0 +1,1041 @@
+{
+  "integrity_version": "0.1.0",
+  "packages": {
+    "tauri": "2.11.5",
+    "tauri-runtime": "2.11.3",
+    "tauri-runtime-wry": "2.11.4",
+    "wry": "0.55.1"
+  },
+  "patched_files": [
+    "tauri/src/webview/mod.rs",
+    "tauri/src/webview/webview_window.rs",
+    "tauri-runtime/src/webview.rs",
+    "tauri-runtime-wry/src/lib.rs",
+    "wry/src/lib.rs",
+    "wry/src/wkwebview/class/wry_navigation_delegate.rs",
+    "wry/src/wkwebview/mod.rs",
+    "wry/src/wkwebview/navigation.rs"
+  ],
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "c8be9be5d7d0aedc9f6bdfda381f6efd7d3f7931e3a24a6f564ed047ebd7b5a3"
+    },
+    {
+      "path": "tauri-runtime-wry/Cargo.lock",
+      "sha256": "9b148cdeedd533806a66afd7df3782220a4db9cf4e2febbbd53b2610da51dd93"
+    },
+    {
+      "path": "tauri-runtime-wry/Cargo.toml",
+      "sha256": "d177948d650b25133b8dae499dcc3ecd61fe46355fd5a53d93172c99f4c0179e"
+    },
+    {
+      "path": "tauri-runtime-wry/Cargo.toml.orig",
+      "sha256": "90e7ab4b965cdd1beacc82f37d899bd06a2ee28ab1cdf43e86f565612c868f10"
+    },
+    {
+      "path": "tauri-runtime-wry/LICENSE_APACHE-2.0",
+      "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+    },
+    {
+      "path": "tauri-runtime-wry/LICENSE_MIT",
+      "sha256": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d"
+    },
+    {
+      "path": "tauri-runtime-wry/README.md",
+      "sha256": "cf468efdcd6eb86ef6a2c0b1fbe6aca80f0df6a9d3016f77c0bfdb64dc4091c0"
+    },
+    {
+      "path": "tauri-runtime-wry/build.rs",
+      "sha256": "68b2727346e58a9963803a75ac29695b500aaa7d0673e18551465502b60cbf11"
+    },
+    {
+      "path": "tauri-runtime-wry/src/dialog/mod.rs",
+      "sha256": "ed391f94760a3f257ea7244fa62ad9b536e41f52f83b3994dedde23e5bbd287d"
+    },
+    {
+      "path": "tauri-runtime-wry/src/dialog/windows.rs",
+      "sha256": "07acf2fb60489d06ad08194d4eda621eb683fe828aa199bf7e6f286aa7eaa57c"
+    },
+    {
+      "path": "tauri-runtime-wry/src/lib.rs",
+      "sha256": "abd846b8d49c21df9149eebbd7bd0148abc977700d583a8e3d03ea713bba1781"
+    },
+    {
+      "path": "tauri-runtime-wry/src/monitor/linux.rs",
+      "sha256": "ebf2b48ebe0fa8facd0457fc5d16dc3156842e65a6c6334b1e0e4daa439160b2"
+    },
+    {
+      "path": "tauri-runtime-wry/src/monitor/macos.rs",
+      "sha256": "31bfae5bf45dff98c68a1f2f19d8787cba5e3f0575d7d13ec564e524d79abae8"
+    },
+    {
+      "path": "tauri-runtime-wry/src/monitor/mod.rs",
+      "sha256": "f3a4161b3306afa32edb416d6c81773749d32f3068018eb83e32f055ae4c31c2"
+    },
+    {
+      "path": "tauri-runtime-wry/src/monitor/windows.rs",
+      "sha256": "c177f8f1d7d7f40350076a89d495511c1fd24d79d2f44fb6a1efd0d7e1726657"
+    },
+    {
+      "path": "tauri-runtime-wry/src/undecorated_resizing.rs",
+      "sha256": "a9e766d826809b938bad4a49bfa0fefc25e46cccf5b181c3eff7823ea148ccb0"
+    },
+    {
+      "path": "tauri-runtime-wry/src/util.rs",
+      "sha256": "a14a4987445fd6e9b0ee32234081e7a152ac9598916bad6f7e939b798cb62119"
+    },
+    {
+      "path": "tauri-runtime-wry/src/webview.rs",
+      "sha256": "d17f1c69aa6e3b9c34d963d0fc2a4ac86b53881ce80b0de50df3d8d8eddca743"
+    },
+    {
+      "path": "tauri-runtime-wry/src/window/linux.rs",
+      "sha256": "8cae057b27bd9576aefada130cb68eb0e39ce0e73af3dad793bab7d03b269ce2"
+    },
+    {
+      "path": "tauri-runtime-wry/src/window/macos.rs",
+      "sha256": "53dd67b344dfb58f8192d609d3da63aafb3350e15ead653ec6e545dc6b2c3fe5"
+    },
+    {
+      "path": "tauri-runtime-wry/src/window/mod.rs",
+      "sha256": "e1efb04e03b1163c35a61c383ffd3d3adfff2ed8bf6bb6e3305147d4e91bcb6e"
+    },
+    {
+      "path": "tauri-runtime-wry/src/window/windows.rs",
+      "sha256": "734622475b78dbf0c7ac6bd780c893e6cad6cfe034d84fa5f6397b92ede139ab"
+    },
+    {
+      "path": "tauri-runtime/Cargo.lock",
+      "sha256": "16a73330ee3cf7c745f4f0719d538278b121a8bd9f82f48faf04db4d6b46a0e7"
+    },
+    {
+      "path": "tauri-runtime/Cargo.toml",
+      "sha256": "3fcbe7bc142fdc86011cbac3d7454b753d0d3cac2407d764ec2ee88010c2ab7a"
+    },
+    {
+      "path": "tauri-runtime/Cargo.toml.orig",
+      "sha256": "162c60efd66b7745940aef985c3575f79e54c7ea5c0b68ff00b2f3c09cd19cf7"
+    },
+    {
+      "path": "tauri-runtime/LICENSE_APACHE-2.0",
+      "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+    },
+    {
+      "path": "tauri-runtime/LICENSE_MIT",
+      "sha256": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d"
+    },
+    {
+      "path": "tauri-runtime/README.md",
+      "sha256": "28a88dafa1492da0f0819f2f88f019e9580d7c61331165904ce4cd6bf1818778"
+    },
+    {
+      "path": "tauri-runtime/build.rs",
+      "sha256": "68b2727346e58a9963803a75ac29695b500aaa7d0673e18551465502b60cbf11"
+    },
+    {
+      "path": "tauri-runtime/src/dpi.rs",
+      "sha256": "06cbfeb4698b1508ddcb631efc55bc1fa6e0ecd9253f0c5314577e16f5aecfb5"
+    },
+    {
+      "path": "tauri-runtime/src/lib.rs",
+      "sha256": "44e8f02c7647e1ba9eea3b69761eebc9611256eba8d901a7dbe2d58b5200ac9c"
+    },
+    {
+      "path": "tauri-runtime/src/monitor.rs",
+      "sha256": "6dfa5598df36ab45c6f3730b530aa627ec1cd2c1ef744c756f8ffa16d0e91fdc"
+    },
+    {
+      "path": "tauri-runtime/src/webview.rs",
+      "sha256": "9639ec21724dc79500226f802ea26993cab9fe758fc1f75124eab68af6d8c75a"
+    },
+    {
+      "path": "tauri-runtime/src/window.rs",
+      "sha256": "a1387e26517210349c11563ac076b4202a513518c62acaabf4e2d4d92d82259a"
+    },
+    {
+      "path": "tauri/Cargo.lock",
+      "sha256": "13e06e79f4be17fee9cccde18f41a22f5f4e044657aff7516098bc528a8f4b95"
+    },
+    {
+      "path": "tauri/Cargo.toml",
+      "sha256": "899b9a26104a4088eb7439c4c9c1ac80b279006a69b07bbbd3a0c607f897f11e"
+    },
+    {
+      "path": "tauri/Cargo.toml.orig",
+      "sha256": "4462ab255c9c9f8f1c8edaf737cba916e89227f321df3623e2c53a487a22e0d0"
+    },
+    {
+      "path": "tauri/LICENSE_APACHE-2.0",
+      "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+    },
+    {
+      "path": "tauri/LICENSE_MIT",
+      "sha256": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d"
+    },
+    {
+      "path": "tauri/README.md",
+      "sha256": "d53737b76e569ea9d7af01d69be6fb729959b97bc08d0564a421c3917b584070"
+    },
+    {
+      "path": "tauri/build.rs",
+      "sha256": "62d1a1e16affe3c9b59d6766159a568255e385cab969ce4149ad6081276715bd"
+    },
+    {
+      "path": "tauri/mobile/android-codegen/TauriActivity.kt",
+      "sha256": "7c14c42554e4bb4e9bab576307c85c2998e6b3f82397979c547294b26a9e7423"
+    },
+    {
+      "path": "tauri/mobile/android/.gitignore",
+      "sha256": "5c3174b74edc6f2b9e0743594b8bd3c7f31e4f4405758cc9872b3fe1de1d28b4"
+    },
+    {
+      "path": "tauri/mobile/android/build.gradle.kts",
+      "sha256": "aab1b0ecb929ea70b33ad42d7df55c185a3485f9609ec998047232b45df76a4d"
+    },
+    {
+      "path": "tauri/mobile/android/proguard-rules.pro",
+      "sha256": "07ae2ffe37f0f484c46401f510ef003e1bbe9f708d1d2597546c729eb9956cca"
+    },
+    {
+      "path": "tauri/mobile/android/src/androidTest/java/app/tauri/ExampleInstrumentedTest.kt",
+      "sha256": "1e7c0c6f613431962750a2f80dcf8a0c231c4b5fb2f569bfd55b5fa0e80f2e7d"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/AndroidManifest.xml",
+      "sha256": "8ef94a6aec2218c5fd02408d018f6d52602c0ef4473dd1c115c5c6964f1e63e1"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/AppPlugin.kt",
+      "sha256": "931d4a7636b75c81e7daed48e1822fa8bf02d2993d620592ed7febca94702555"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/FsUtils.kt",
+      "sha256": "217851c9539c6171c46354fb24c8af9501babd045a122e239f01009794d122c9"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/JniMethod.kt",
+      "sha256": "ece2f2b7179edeb9cf0a62acb116390f53c23a32e51520b6e4c2d7601a581a88"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/Logger.kt",
+      "sha256": "771fa4822dec7cc95aab726ee1c176c17970c4ffee737ad53959fea1fa26ef7d"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/PathPlugin.kt",
+      "sha256": "2c256a75511aa4509629e55400b7969cbcb3b42079dd8955afe7e78ed7f3f256"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/PermissionHelper.kt",
+      "sha256": "5c53545d51386be33505084f56145dd364d57fb6623815d50cca83139f8687c1"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/PermissionState.kt",
+      "sha256": "c38e1f200db71faf05f8d7acf643b2f1d6dd8970b8ae51a6a7c842743a596be2"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/annotation/ActivityCallback.kt",
+      "sha256": "aec0ebccfe66d7b857606a9244e717d5aa3b02324f50fbdfe4b4ee1a67ad8637"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/annotation/InvokeArg.kt",
+      "sha256": "6b747509a75a7c8f1c31c03a23a80b4f83cd226f87033a318db1782505b2aeab"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/annotation/Permission.kt",
+      "sha256": "bca04adb46a3de1c36da755fb62a5efb40481a7a529dd0f727eadd95466ecbd7"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/annotation/PermissionCallback.kt",
+      "sha256": "d0a63179ca048629d37e9efe696d2c6554095b7de64bbbc1450a8f07d3888d8e"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/annotation/PluginMethod.kt",
+      "sha256": "aee7aef7a3f59ad67ca3a2cfbcb2a2c2cacfa28bddf4b2f565ed6e930f92c8c1"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/annotation/TauriPlugin.kt",
+      "sha256": "361783a7baf30a33192c22f922f50fb2c97d8a7d9ae9dc774d8b637f9eeea04a"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/plugin/Channel.kt",
+      "sha256": "f6f5c2dcc442b9e81165f55f80d363129bc91b130586abb8489cd3006af00011"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/plugin/InvalidPluginMethodException.kt",
+      "sha256": "90d2dddfb918447ed8fd35c44be7f00e41b89fcd586eeca995e0ead56c38b6c4"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/plugin/Invoke.kt",
+      "sha256": "05cadb94907dbd3979d8c7eaad7bd8f540c38cc9d988a5513777eadd18330028"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/plugin/JSArray.kt",
+      "sha256": "fca8b72a6bf357b6cc57aa21ac787dbe3d69fca27f927b0c3f598567dc17f52f"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/plugin/JSObject.kt",
+      "sha256": "234a9afa4da858b3dbd8d5a688209a640984166482e040ab908b34ed577726b5"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/plugin/Plugin.kt",
+      "sha256": "f7a9a1d170177d8c32e729f867ba2adcfb9923cb4e2a38efa312dccfcd506127"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/plugin/PluginHandle.kt",
+      "sha256": "284b3209e2c415b8af9db372f92081b7b4c874a8d921136363cd6d7426b7579f"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/plugin/PluginManager.kt",
+      "sha256": "2b0ef3b8cc92182858456f4b504330d61d23a3fe62a2e4e08c8f5c09cbdb4312"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/plugin/PluginMethodData.kt",
+      "sha256": "c3024eb23b038fdd1566e69db725c8c5d39fb66909baf45d258ccfe8449daedf"
+    },
+    {
+      "path": "tauri/mobile/android/src/main/java/app/tauri/plugin/PluginResult.kt",
+      "sha256": "437f44a6ccf5354a5ec1a3a3c894609f6df90999f397e52dfaafb6e74d30c006"
+    },
+    {
+      "path": "tauri/mobile/android/src/test/java/app/tauri/ExampleUnitTest.kt",
+      "sha256": "c0b0b313769a0e3f519c203bf0862f35bd6128a6eeef67ca4965c12b4ef0ac4b"
+    },
+    {
+      "path": "tauri/mobile/ios-api/.gitignore",
+      "sha256": "bc9466a4cd82cf38d2a4471c15c5c6b8153182f361a72c9926a9f422d966e3b0"
+    },
+    {
+      "path": "tauri/mobile/ios-api/Package.swift",
+      "sha256": "bd322622d84f3538b512646267fcf063734ad3dcede35480950cfd95c2ed392a"
+    },
+    {
+      "path": "tauri/mobile/ios-api/README.md",
+      "sha256": "a06a181db430708640f970ac98611e3feea64430d5b4ab82c15d778604937591"
+    },
+    {
+      "path": "tauri/mobile/ios-api/Sources/Tauri/Channel.swift",
+      "sha256": "850e8239ccb561ea7177f0f66b33d5b63e97faeefcb79b60640007934c3894a4"
+    },
+    {
+      "path": "tauri/mobile/ios-api/Sources/Tauri/Invoke.swift",
+      "sha256": "afc9ee63daafe1754969b6dfd104d49d2ca09fd41e7c6343063c13d9e56f7d3e"
+    },
+    {
+      "path": "tauri/mobile/ios-api/Sources/Tauri/JSTypes.swift",
+      "sha256": "bce9da78d74d495a2d05176cb0b68bd9a40ebfcac8c8e9cb1678d4ca142bd653"
+    },
+    {
+      "path": "tauri/mobile/ios-api/Sources/Tauri/JsonValue.swift",
+      "sha256": "a22a4bad5788132955a63160bda00eeb62a6e138993d46504f6f96e2fb94246d"
+    },
+    {
+      "path": "tauri/mobile/ios-api/Sources/Tauri/Logger.swift",
+      "sha256": "9624719792f6ce0baf6df0aaf2928efc8c0aef77972a3fb638ce67e3a6dfb918"
+    },
+    {
+      "path": "tauri/mobile/ios-api/Sources/Tauri/Plugin/Plugin.swift",
+      "sha256": "e5d2e0e6f6c178b0ea2745dcd88f68b6a142154c3b245845bb6b9026b3a76d69"
+    },
+    {
+      "path": "tauri/mobile/ios-api/Sources/Tauri/Tauri.swift",
+      "sha256": "4c7aa0b830e17851784fd14ca6941d2d53bd3b902e0477e7416f90da4488333c"
+    },
+    {
+      "path": "tauri/mobile/ios-api/Sources/Tauri/UiUtils.swift",
+      "sha256": "c12b2a5a3bde289c45dd6c348cc41d7072c81a1559eac76339ea061c4fa5d89c"
+    },
+    {
+      "path": "tauri/mobile/ios-api/Tests/TauriTests/TauriTests.swift",
+      "sha256": "ef1e10dafc147b1d6b145f19ab0a81cb44eb80d7b989abfae4e2447209a88a34"
+    },
+    {
+      "path": "tauri/mobile/proguard-tauri.pro",
+      "sha256": "9f6f2555912c6b984ab9be8e4766da646b175dd33c3a193a4d72c4a56a1b6a2c"
+    },
+    {
+      "path": "tauri/permissions/app/autogenerated/reference.md",
+      "sha256": "904d5a966cb1b4000f401a29ab734e4dcb2842e9659b8adcf7831167e16ea634"
+    },
+    {
+      "path": "tauri/permissions/event/autogenerated/reference.md",
+      "sha256": "018766e1817884ed384b525480e58e63d1860994441c114d1a2517967a267d49"
+    },
+    {
+      "path": "tauri/permissions/image/autogenerated/reference.md",
+      "sha256": "e3fe93fbb7e62c0139592f4b030d50254c1fbbcc518785bb98ab1f037e251e5c"
+    },
+    {
+      "path": "tauri/permissions/menu/autogenerated/reference.md",
+      "sha256": "4bed65930223d505c3fc3295d299f07165d5b355b7a5ba910501fc089b2f0044"
+    },
+    {
+      "path": "tauri/permissions/path/autogenerated/reference.md",
+      "sha256": "8be6a806aaaf1a081fe25aadabf253b74337c5f31b5f356c078ce43ddd47a098"
+    },
+    {
+      "path": "tauri/permissions/resources/autogenerated/reference.md",
+      "sha256": "593941263d28df065d95a9db260220fad053d4c5aca3b74a9d58977199127210"
+    },
+    {
+      "path": "tauri/permissions/tray/autogenerated/reference.md",
+      "sha256": "f17969a556be8c3788821cc5eaffa3a2604ab78f647aaae294305a93b67c0178"
+    },
+    {
+      "path": "tauri/permissions/webview/autogenerated/reference.md",
+      "sha256": "5ee143504a878ca35dcd1277310c152fc93668da50573c1acfab051fa9cfe8ec"
+    },
+    {
+      "path": "tauri/permissions/window/autogenerated/reference.md",
+      "sha256": "11e9af4caef9cec04c891022d3fd9996d7a6f5ece1d55455fe2cf7ff89ee172c"
+    },
+    {
+      "path": "tauri/scripts/bundle.global.js",
+      "sha256": "fe12a35f0590762311f4ddc1af023efb6ddc9116095e49828ccc929da69b5518"
+    },
+    {
+      "path": "tauri/scripts/core.js",
+      "sha256": "71056442a732cca1f03572ccae96d68e16104c3a591c64de9618cd304e063070"
+    },
+    {
+      "path": "tauri/scripts/freeze_prototype.js",
+      "sha256": "599745f0da51f0ba6c7dcbb7c770d6f538f337f6df7f1bf420e4043b9e4b6bf9"
+    },
+    {
+      "path": "tauri/scripts/init.js",
+      "sha256": "2a062abc65bc99ac458dd9a78701a8a9e3f473aa1f25afa64dc810036932f973"
+    },
+    {
+      "path": "tauri/scripts/ipc-protocol.js",
+      "sha256": "68ae690606006f733bde75dd8bb6748464954a22c7e83914a93b1abc221d7072"
+    },
+    {
+      "path": "tauri/scripts/ipc.js",
+      "sha256": "3e3766fc90efa68003096cbf0a07c6a00cb31c5756d55b5a68ebbfd2930c4865"
+    },
+    {
+      "path": "tauri/scripts/isolation.js",
+      "sha256": "58e79828ba6d68c79eceb276d62f766710f77df70c5fec1f79176bd6aa6d0ae1"
+    },
+    {
+      "path": "tauri/scripts/pattern.js",
+      "sha256": "149570459687f1636c02e41ede8b40efe52378965eeddb6dbfebc0c525a3551b"
+    },
+    {
+      "path": "tauri/scripts/process-ipc-message-fn.js",
+      "sha256": "d51917f89e4d3d318d63f1f4f5a7ac7ea1399a5b85c81a840c4d606597f29132"
+    },
+    {
+      "path": "tauri/src/app.rs",
+      "sha256": "50606eba378383efe0bec17c6cc192d8b68769e77fa55258129c0a783b508d08"
+    },
+    {
+      "path": "tauri/src/app/plugin.rs",
+      "sha256": "cc0d3d578800388a64f1ec1dec8602923214d19c7e6115a54b2fbac06009480c"
+    },
+    {
+      "path": "tauri/src/async_runtime.rs",
+      "sha256": "ccee9dc653f37366a4060d64c6b447ccb98c08300316298be3afc7a98b1301af"
+    },
+    {
+      "path": "tauri/src/error.rs",
+      "sha256": "c46648d6df9a3e5f1bd9b27edfcf5a68a689d33d4d0cd2c794a5c6ea24e03332"
+    },
+    {
+      "path": "tauri/src/event/event-system-spec.md",
+      "sha256": "ca15ed691a62d531b790f1fab1d3b07f6e5dad3711c14e6c821d64b802038e02"
+    },
+    {
+      "path": "tauri/src/event/event_name.rs",
+      "sha256": "982908c70b4d51378d2298f8446fbbf1dbb253856b46c591c680303affd4765e"
+    },
+    {
+      "path": "tauri/src/event/init.js",
+      "sha256": "8946488895cc9879f2bf8fee98be454d0f21949b946c264b47d2a2fc84eb1df0"
+    },
+    {
+      "path": "tauri/src/event/listener.rs",
+      "sha256": "85ed903eb331f2021ee75453a21f46f3a59e22acd5ef73a4173162446bbfdeae"
+    },
+    {
+      "path": "tauri/src/event/mod.rs",
+      "sha256": "dfcb7cf11d7674903f71196e64ae0fa95286757ac816bfbc3139ebdedcb25dea"
+    },
+    {
+      "path": "tauri/src/event/plugin.rs",
+      "sha256": "90f6bb584d14d572ded405942165e38ef4b9be9de68e75ecf19ee83fe2a9091f"
+    },
+    {
+      "path": "tauri/src/image/mod.rs",
+      "sha256": "85f4f11c242f5ee0def9ef143b728dfdb6469dab84b8fe75f80717aa72c02bc6"
+    },
+    {
+      "path": "tauri/src/image/plugin.rs",
+      "sha256": "391e9b92ab344a18a0e61fbf63979fa500ad12484b81fb25e9d4fa72f581c968"
+    },
+    {
+      "path": "tauri/src/ios.rs",
+      "sha256": "a9c1512a4ff26f6a443c04ab2740cac7583b13e2c4288f04a6b631fceece4344"
+    },
+    {
+      "path": "tauri/src/ipc/authority.rs",
+      "sha256": "6da0f6200de5d8a417d0a13b5f6b08f69dafe6f78517691cc072a1dbc7e3859b"
+    },
+    {
+      "path": "tauri/src/ipc/capability_builder.rs",
+      "sha256": "9b4ccd15b7aa406950347cce5d5dd234ce44a96c3697316d98e6ae017598cd61"
+    },
+    {
+      "path": "tauri/src/ipc/channel.rs",
+      "sha256": "8533436b36afb959401052ab0bd7990c63817e9d984fe0daa49a80bc6ed35e5f"
+    },
+    {
+      "path": "tauri/src/ipc/command.rs",
+      "sha256": "d611effb696608cf698d25c203fae99b05f862ef2321fef1d71ee75aa54e470b"
+    },
+    {
+      "path": "tauri/src/ipc/format_callback.rs",
+      "sha256": "e9de68956b9437f440291d37292bb9544b6c0b180029e6d2772685aa768a494d"
+    },
+    {
+      "path": "tauri/src/ipc/mod.rs",
+      "sha256": "8c18c612897de97dc4e1b3c1aa62869b66d610e85093e2015b1b6abc3418364d"
+    },
+    {
+      "path": "tauri/src/ipc/protocol.rs",
+      "sha256": "f9748a000d2946863ed4bad304de9145fb3dc1e87abbe8c0143011e7b9a1e8de"
+    },
+    {
+      "path": "tauri/src/lib.rs",
+      "sha256": "dd9d3eeec873339b8fcdd0aa1719e3a875c440462f449a0dc8833685d95996d2"
+    },
+    {
+      "path": "tauri/src/manager/menu.rs",
+      "sha256": "c943562c06dfd799e85a8287615d988bb532b47751e1fac0b896ef6274ac0b30"
+    },
+    {
+      "path": "tauri/src/manager/mod.rs",
+      "sha256": "3b35d04bded3a068d3d9e1737d52a66a69ccfbc4b2300ec00ed6a5deaa85c79a"
+    },
+    {
+      "path": "tauri/src/manager/tray.rs",
+      "sha256": "615b3f28ee23859eb712600c1fae7f3ca22d40def21eb4e859a5f227d5b9e169"
+    },
+    {
+      "path": "tauri/src/manager/webview.rs",
+      "sha256": "24d3d51920ccd56db5c44db73c0deca09cba4a0811921a2f66b78e6213789f51"
+    },
+    {
+      "path": "tauri/src/manager/window.rs",
+      "sha256": "882caf1fdd15f3cd93c6b419ae19748d91387ba5e8283ee2b7b89bc7187a1535"
+    },
+    {
+      "path": "tauri/src/menu/builders/check.rs",
+      "sha256": "42161bbfaf3ddeebff6559cb8857aa9a1b03abb1351bcb6fec3e4cff060f5ee0"
+    },
+    {
+      "path": "tauri/src/menu/builders/icon.rs",
+      "sha256": "ef2d073d0effc15e3868ff3bc853785cfe55dcca59ae915197cf83873c8f1e0b"
+    },
+    {
+      "path": "tauri/src/menu/builders/menu.rs",
+      "sha256": "76c9e24f9447b5b3476feb2c5959441a4fdd647f1dc973e86aee79145c83e266"
+    },
+    {
+      "path": "tauri/src/menu/builders/mod.rs",
+      "sha256": "8e47f079550864a58a0a9b3e0dcce452ccc210ac303861bb91b92b7553b497ea"
+    },
+    {
+      "path": "tauri/src/menu/builders/normal.rs",
+      "sha256": "56e0293e84241b8464eb7c9f1090bff8c0ede32255f30ccddabb36c76cb2dccc"
+    },
+    {
+      "path": "tauri/src/menu/check.rs",
+      "sha256": "8759713b5e3d15dc48bc9f2e8641b646a9ace5f2b06a76102d865b5c70546323"
+    },
+    {
+      "path": "tauri/src/menu/icon.rs",
+      "sha256": "660a87ecc8efe7552aa34c0bffa5100b58cdd1abda05ba2a4959310f176bcb10"
+    },
+    {
+      "path": "tauri/src/menu/menu.rs",
+      "sha256": "72fc8bf0c415cb579631da773ede64f9b92077e0afe09dc41253f42178ca139b"
+    },
+    {
+      "path": "tauri/src/menu/mod.rs",
+      "sha256": "6ac6300fd9709c14e0ee61997f9234cc294383ab107eadbff149e8929659070c"
+    },
+    {
+      "path": "tauri/src/menu/normal.rs",
+      "sha256": "087aec7dbb524767ff5d61ece9f555fe0745b6ee65454c316133354b38e726f6"
+    },
+    {
+      "path": "tauri/src/menu/plugin.rs",
+      "sha256": "98f9b904858c579f01cf8d706521ceac64fded612fa38d7576e7f30146a9d116"
+    },
+    {
+      "path": "tauri/src/menu/predefined.rs",
+      "sha256": "b0d12497d743a9f484c2ff848b5d86eb3251b89e7520b701354c86ef4aebd383"
+    },
+    {
+      "path": "tauri/src/menu/submenu.rs",
+      "sha256": "d3c1b060911c9f4294e127a5db7a1161baa25231b8665006c14b0ed115fae41b"
+    },
+    {
+      "path": "tauri/src/path/android.rs",
+      "sha256": "4f9293d2066246707c47a58512d5f2a0bc742b7057ef09f1b91ce0ec77f594a4"
+    },
+    {
+      "path": "tauri/src/path/desktop.rs",
+      "sha256": "11bb4f74c6053cc0eca33a54da00a4a31aff85c5164e7260cd573b5efec18ebc"
+    },
+    {
+      "path": "tauri/src/path/init.js",
+      "sha256": "6ecfef8c9078a591f04c5eb7ed355721efcba1eb820a0b5067be1dcca7748ef3"
+    },
+    {
+      "path": "tauri/src/path/mod.rs",
+      "sha256": "1876463ce16aa8a0284d437f5efdba579fbb097be195642e222514550174c42b"
+    },
+    {
+      "path": "tauri/src/path/plugin.rs",
+      "sha256": "d298631d5494cdf95644d840f9713b52da38fe839a73c7df5d343662864c90bc"
+    },
+    {
+      "path": "tauri/src/pattern.rs",
+      "sha256": "2d5bd790939732f66b88966564da8925e4d92c4829122f8f6d246dfad6a8e701"
+    },
+    {
+      "path": "tauri/src/plugin.rs",
+      "sha256": "0a91231b87ba13ed239fa0dbc81155a2bef35f84d0513de85af69354a3890ca0"
+    },
+    {
+      "path": "tauri/src/plugin/mobile.rs",
+      "sha256": "b49a4dc644e8e8a2ea2c90305be54b2ec168f7e4daffcf4fa404d03993f69a7c"
+    },
+    {
+      "path": "tauri/src/process.rs",
+      "sha256": "9c413b0b6b74df553028f826ee0bc60164db533dceb96d79bf6c47b6358aa8ba"
+    },
+    {
+      "path": "tauri/src/protocol/asset.rs",
+      "sha256": "a9dd1849f372444086ccf1e9ac3157106ac88fbb9ed5b654ddcf9a86b8529c10"
+    },
+    {
+      "path": "tauri/src/protocol/isolation.rs",
+      "sha256": "22a2bf36732a2659bd927d29ed8094e7a8fbeeab65848764474913d4ce5628de"
+    },
+    {
+      "path": "tauri/src/protocol/mod.rs",
+      "sha256": "269be0cb57035748bde9903c64eac2dd8659923497f4e2bdf7a115e93aeaad6f"
+    },
+    {
+      "path": "tauri/src/protocol/tauri.rs",
+      "sha256": "54f375940676fe774a1bc0f2303781472f24de9bc69dcafc32f80025201bc1ea"
+    },
+    {
+      "path": "tauri/src/resources/mod.rs",
+      "sha256": "5291a552d5392ba88d821e1f206c2e1e444f848e3766c3b89963de2b6ca96bb7"
+    },
+    {
+      "path": "tauri/src/resources/plugin.rs",
+      "sha256": "712c19110baa20e9ee59af79322bfc14818b7d622b5140307368e555381ffc49"
+    },
+    {
+      "path": "tauri/src/scope/fs.rs",
+      "sha256": "52246bc0ac38cd14225838316f8f7a6116647abb67c41aef8e0bc79af18b1039"
+    },
+    {
+      "path": "tauri/src/scope/mod.rs",
+      "sha256": "63118615042cc4f3e053ac8406e8216cf6522396f3a9acda860b074a7dc7e9bb"
+    },
+    {
+      "path": "tauri/src/state.rs",
+      "sha256": "f4539fb268deffc3a6f2f8d26bb56be1cd5e5650308251e84ad1b56c5c2d19f1"
+    },
+    {
+      "path": "tauri/src/test/mock_runtime.rs",
+      "sha256": "ebbb0113cb21cad98780481f671bfe26625c62ab1a9eecba27f6bd6910d782dc"
+    },
+    {
+      "path": "tauri/src/test/mod.rs",
+      "sha256": "96ccda85b638ebbdb6a7ea30d5cfdf435cc69e62d0bbf7f9bdc03454c7e177fb"
+    },
+    {
+      "path": "tauri/src/tray/mod.rs",
+      "sha256": "b17a2039dcc49226cf96d9ace88bef7bc4e019e188c085187568589e6b89e273"
+    },
+    {
+      "path": "tauri/src/tray/plugin.rs",
+      "sha256": "ffa5b69f61376cf366b5c696c3fc620bade8f3b86b1322804c2d375ae41f7e84"
+    },
+    {
+      "path": "tauri/src/vibrancy/macos.rs",
+      "sha256": "787fc8ba6950944434590fc66e3e0ee366da1d78af953ab332501a87c95bc352"
+    },
+    {
+      "path": "tauri/src/vibrancy/mod.rs",
+      "sha256": "60ae894de47a232a33e2e095f1f851716d63e00c4d8bc0ca9114cff26141a745"
+    },
+    {
+      "path": "tauri/src/vibrancy/windows.rs",
+      "sha256": "7cc46026788b31a9d08f7820d73fe69957ed5289b7ef6e3692cea885a1245522"
+    },
+    {
+      "path": "tauri/src/webview/mod.rs",
+      "sha256": "9c7d8dea0c2f3b08735d992bf102d1c0b47df2688a78ec5718ef492431411516"
+    },
+    {
+      "path": "tauri/src/webview/plugin.rs",
+      "sha256": "defea87e3f7e8488a77048432e287f9ed7a45151fe307d5495a3671d83a93bd7"
+    },
+    {
+      "path": "tauri/src/webview/scripts/print.js",
+      "sha256": "2a7c344c3c7285cc30ae14b741484db1acf24f03a22bda6ffe6c6d16d8acbf0b"
+    },
+    {
+      "path": "tauri/src/webview/scripts/toggle-devtools.js",
+      "sha256": "433c08901992823a37396ce72a695636bd034c1b960364b7d9c75f261f771770"
+    },
+    {
+      "path": "tauri/src/webview/scripts/zoom-hotkey.js",
+      "sha256": "3a29990c1551bbb7bbca34e318dd6a044963c6d8b7cc14c1600db6e6f45fdc97"
+    },
+    {
+      "path": "tauri/src/webview/webview_window.rs",
+      "sha256": "b072f079f2c2f3df35f65e3ea56128c325d5c5f79c8acb326605d7e78a451891"
+    },
+    {
+      "path": "tauri/src/window/mod.rs",
+      "sha256": "2617d73490fbad9c2f9c52b280569b87f1096b7ae6465e89b2fd53ab83ca1cbe"
+    },
+    {
+      "path": "tauri/src/window/plugin.rs",
+      "sha256": "4eaed8f66c0d33cccde4b883e277352cca4d9cacb1b0ce7cf940645cfe1c2491"
+    },
+    {
+      "path": "tauri/src/window/scripts/drag.js",
+      "sha256": "2d47d2e302512024af4ded95b89f8b1f5c8d83530d287c252052112901a59888"
+    },
+    {
+      "path": "wry/.cargo/config.toml",
+      "sha256": "0c9559057a73238c99857c7bc3b58243306ebcfe3dcc4c90027da2502186eb11"
+    },
+    {
+      "path": "wry/.gitignore",
+      "sha256": "dadf1c3dd73d49c9bce82d54a2a141e2712ab11df1d97b0d6ae99bb591ff440c"
+    },
+    {
+      "path": "wry/.license_template",
+      "sha256": "9aca48869404894538e54a881bcc2ece2142a709b665ced1fd2d284ae7c44595"
+    },
+    {
+      "path": "wry/CHANGELOG.md",
+      "sha256": "e0ed6ecfaf5ef9b76acc2f63ee397dd3933c87c9b269f2d5b22b9589c9b05208"
+    },
+    {
+      "path": "wry/Cargo.lock",
+      "sha256": "af619c25400de25d1a86a70186d1a850cd62012f06530eab1dd5fecf06a33e1a"
+    },
+    {
+      "path": "wry/Cargo.toml",
+      "sha256": "bd17f58e514f6099a7f1e0cfa6aedf414102d1fe8fa130beca81e7030b705588"
+    },
+    {
+      "path": "wry/Cargo.toml.orig",
+      "sha256": "606420fd1c8cd695cc820d309f97ff4c9f5f71c8591c478587c23ab6db5da310"
+    },
+    {
+      "path": "wry/LICENSE-APACHE",
+      "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+    },
+    {
+      "path": "wry/LICENSE-MIT",
+      "sha256": "ef88893533af22ffbb68ceef0724ba1389518df26165a34f3c99ad30b884df4f"
+    },
+    {
+      "path": "wry/LICENSE.spdx",
+      "sha256": "26235c41e314fb0da35b33b2bb5bcbc4dd523839f8eeca52efcd43586f441fb5"
+    },
+    {
+      "path": "wry/MOBILE.md",
+      "sha256": "7e4311eb2128c6605b51b3f4c3578f8e49c2595ada41986a8bc09bf20950fd08"
+    },
+    {
+      "path": "wry/README.md",
+      "sha256": "cc68c09fb277bacf4d61ae79d9bd0e7763e5f39719f9239ec8444602f3d59485"
+    },
+    {
+      "path": "wry/SECURITY.md",
+      "sha256": "84ed305e72c0348770feb82dacd98478ad7fc024eedd29e9e9794025f8e04bfe"
+    },
+    {
+      "path": "wry/build.rs",
+      "sha256": "3c3153deae92302ed707b06ecfafffbf256f0ef4157b813c3120887c8010d7db"
+    },
+    {
+      "path": "wry/examples/async_custom_protocol.rs",
+      "sha256": "679e6c09f54c8d284665f52c4a13b726db58583eb27b96975f5fe543cee1052d"
+    },
+    {
+      "path": "wry/examples/cookies.rs",
+      "sha256": "ef2f4464f9fa5c536e17f3f9ff46f557e99ad6e3aa5e46e37d53ae96f50a412f"
+    },
+    {
+      "path": "wry/examples/custom_protocol.rs",
+      "sha256": "a369505817b3de906d210ff08e3a30bf393a625ac83ac32fd7b2cbbe87bb09c1"
+    },
+    {
+      "path": "wry/examples/custom_protocol/index.html",
+      "sha256": "86a935667a25d8cc7d4ccbff68b6067c702efc6bc435dc62ce46a498a87678e7"
+    },
+    {
+      "path": "wry/examples/custom_protocol/script.js",
+      "sha256": "6e08b96e8e1e0a3acb924a4ea63d45f45544ed82b253b8b9e33aace1e323656e"
+    },
+    {
+      "path": "wry/examples/custom_protocol/subpage.html",
+      "sha256": "39a21e00664d114f7d6a0c841be473deb0c5e142712decb711377e86c48afd51"
+    },
+    {
+      "path": "wry/examples/custom_protocol/wasm.wasm",
+      "sha256": "2cb1a33779de77d7cc016d934f91262b0984ec695e1f8dda9ba3c33725f5ef1b"
+    },
+    {
+      "path": "wry/examples/custom_titlebar.rs",
+      "sha256": "40b62be794d0e2fd2d5ae548a1dfdc94f48290260c8f6d4fdab8920420614107"
+    },
+    {
+      "path": "wry/examples/gtk_multiwebview.rs",
+      "sha256": "38f818480c5710420d3a0f83ba575d2c3ac9b71255aa8475337c04696ab4a813"
+    },
+    {
+      "path": "wry/examples/gtk_opengl.rs",
+      "sha256": "50772b28bf657afddfbf56fb0b0f7a3b8a1a4a2a03b32531f6ae957bc4c3a372"
+    },
+    {
+      "path": "wry/examples/multiwebview.rs",
+      "sha256": "435326c3fc182084f774bd0924d7eadffe2ead8fad9c9c2656450ea7978710ca"
+    },
+    {
+      "path": "wry/examples/multiwindow.rs",
+      "sha256": "86a8dbe10e1913c5b67b0667998ca005886323cce13edc3ac65261b5c5d87723"
+    },
+    {
+      "path": "wry/examples/reparent.rs",
+      "sha256": "9ad2e4b46eeab665bee9cfb19f8407f5f5fd7cce34cb010d56e043ff36c6a534"
+    },
+    {
+      "path": "wry/examples/simple.rs",
+      "sha256": "dd060533de836fae76add7185a6c41a7577271aed7cb38e6e55d612512a75c09"
+    },
+    {
+      "path": "wry/examples/streaming.rs",
+      "sha256": "14e006096b01e283e237b9362a8e81842b520710f280eb909d1b8e69d53c4ac5"
+    },
+    {
+      "path": "wry/examples/streaming/index.html",
+      "sha256": "7eb6977535c62e269b91f85ea6fd5e2ac0da4e8afd33d925e6ffeebe2f1b31d3"
+    },
+    {
+      "path": "wry/examples/transparent.rs",
+      "sha256": "6e0b349c5b56f2a0312f32e738b1dc282c5cd11fe0fbcabe9b855d2c5cc47e4f"
+    },
+    {
+      "path": "wry/examples/wgpu.rs",
+      "sha256": "90f6b825602370c90ff5781a1e82f6b7a9e2d09e62be0249418f9a98935dbf88"
+    },
+    {
+      "path": "wry/examples/window_border.rs",
+      "sha256": "fa859ac7bdf738ec5f620c15aa3e3cec07409fcbc9d5ef72fa757635e83c1f53"
+    },
+    {
+      "path": "wry/examples/winit.rs",
+      "sha256": "fd1263474c2dd3057beeab2d3e582f6d35df8b049c37655d86a4ddba5c4b94cd"
+    },
+    {
+      "path": "wry/renovate.json",
+      "sha256": "32cf3c60bb8d28e5bb05d6564f413edcf8440261de9c6d9e2882f948a61a26a2"
+    },
+    {
+      "path": "wry/rustfmt.toml",
+      "sha256": "355f303583e15d1518e0c89eeaf2a4034bcc7c2a292087dfc17d00dc8173a5fd"
+    },
+    {
+      "path": "wry/src/android/binding.rs",
+      "sha256": "a51dc070bd7e00e1e7ed5e643d08bfb497223b2e50dbb8847a0e92f90c099a06"
+    },
+    {
+      "path": "wry/src/android/kotlin/Ipc.kt",
+      "sha256": "80232ae2df8264b7855ef21aafff772d8563aae6b2374c49394421cb085c0b10"
+    },
+    {
+      "path": "wry/src/android/kotlin/Logger.kt",
+      "sha256": "6ef1209ea4a45ef236fd4e2b0d1c2b086bc99ddb31a4e1d9da171f45c06a51fe"
+    },
+    {
+      "path": "wry/src/android/kotlin/PermissionHelper.kt",
+      "sha256": "15fbd8ac2606c9f930cfd047a1074cedec286b7257e2a644e5caa45fdcab74e4"
+    },
+    {
+      "path": "wry/src/android/kotlin/Rust.kt",
+      "sha256": "6baf5e3945696ce07ebc740c4c28d927389ba292f0fcc6fa2e1c28d8399aa7cf"
+    },
+    {
+      "path": "wry/src/android/kotlin/RustWebChromeClient.kt",
+      "sha256": "651701cbaeee1d88032cd2b1a9cf47d36bf6c02509ff11541cef80b21a536093"
+    },
+    {
+      "path": "wry/src/android/kotlin/RustWebView.kt",
+      "sha256": "0c4e6e8bde658f0e2ac7563a0cc2c164d0d39af369998ddd7f5c8fd9745b4236"
+    },
+    {
+      "path": "wry/src/android/kotlin/RustWebViewClient.kt",
+      "sha256": "deeb93a0960d7c9f2268bef4f43d220aa7bb0e981826372f0120ec9c514b2c2b"
+    },
+    {
+      "path": "wry/src/android/kotlin/WryActivity.kt",
+      "sha256": "07067830f2356858527ad8cf93d467246875c3bd15ee578af9ccacd534b83845"
+    },
+    {
+      "path": "wry/src/android/kotlin/proguard-wry.pro",
+      "sha256": "6b10700539fe7f2d20616387a79fc6c1ebfa729691031feb2952f368ade73f51"
+    },
+    {
+      "path": "wry/src/android/main_pipe.rs",
+      "sha256": "65d757482028ba36fdcc8c8fe288e771988c7142549abd29e004b0bdebabd8ea"
+    },
+    {
+      "path": "wry/src/android/mod.rs",
+      "sha256": "ee15a76371a0a809b3b44282f6038ba9bbe7cf341c69b607c6d76f127233ecda"
+    },
+    {
+      "path": "wry/src/custom_protocol_workaround.rs",
+      "sha256": "6910a753ea354938168b91b6d7985e9cc4a1de76ce57b90f76d42fa695e96e25"
+    },
+    {
+      "path": "wry/src/error.rs",
+      "sha256": "d25cb6ee2aeb38fce037e02b1ab410aacfe4cd087ba58849cd109ae4fb838bba"
+    },
+    {
+      "path": "wry/src/inject_initialization_scripts.rs",
+      "sha256": "eff563eee5ff7b1f57fbf84268f8bc4a5853391ab64ed200a9ad60ca537b2f4b"
+    },
+    {
+      "path": "wry/src/lib.rs",
+      "sha256": "c8309ffd1aa4593dc58bc65b42b75c3ea0e51f792720ec8c6b0749f77bdf3eaf"
+    },
+    {
+      "path": "wry/src/proxy.rs",
+      "sha256": "c72606d68787704fa91088d81f6b495fc05ce92ba77845339819b4d0c004a8f0"
+    },
+    {
+      "path": "wry/src/util.rs",
+      "sha256": "5f1b64eab6c81dea1c6ce7f955d2a7888b368ef9fcbe574bb1187e4046135e98"
+    },
+    {
+      "path": "wry/src/web_context.rs",
+      "sha256": "dd9912d669f3a5de10aeda7b8e1361751a1137a602385d31964439f101773aac"
+    },
+    {
+      "path": "wry/src/webkitgtk/drag_drop.rs",
+      "sha256": "e3e52b6c32543c7e415244766a4a9da1decb028b50ccaaf3d981f8566acc8ed8"
+    },
+    {
+      "path": "wry/src/webkitgtk/mod.rs",
+      "sha256": "276f4449a1c5e7c7ee8ca67cbde44f8a5605c75fd5529cc597f6ac2d3b41afa5"
+    },
+    {
+      "path": "wry/src/webkitgtk/synthetic_mouse_events.rs",
+      "sha256": "e534ed5d79d3b0e79a6341cefa57bb20438ec34db32983522bf6816bdbdab2b0"
+    },
+    {
+      "path": "wry/src/webkitgtk/web_context.rs",
+      "sha256": "ef43edb59e19e60743c7858be846cac23ce8e7a188f77b12ac7e0a82a907628f"
+    },
+    {
+      "path": "wry/src/webview2/drag_drop.rs",
+      "sha256": "ec03770d82dbbf47cbc3932a1b709bd8aed5a0914e20b6afdcc6629fed99c7ee"
+    },
+    {
+      "path": "wry/src/webview2/mod.rs",
+      "sha256": "f8abc032e2f0acdb04d865e5e88d0ec11e2841944e24dc7089cd4b55f140af20"
+    },
+    {
+      "path": "wry/src/webview2/util.rs",
+      "sha256": "068edfbcda4060a789f9e1f6dea83ba748e560a33c17179aa7839425f52ade39"
+    },
+    {
+      "path": "wry/src/wkwebview/class/document_title_changed_observer.rs",
+      "sha256": "7e09f34f232f7838ecfa11c0d75d0361d32df91aa9ce9e041915e316f0784af8"
+    },
+    {
+      "path": "wry/src/wkwebview/class/mod.rs",
+      "sha256": "f20048d06e0098d25eee0c549eb7fe26b20d041ada2fe1daf7771125fd44a7b8"
+    },
+    {
+      "path": "wry/src/wkwebview/class/url_scheme_handler.rs",
+      "sha256": "1cc38a32613b6f281f94aa54e45ac1be0bab78b083990ef09112256e3d263e94"
+    },
+    {
+      "path": "wry/src/wkwebview/class/wry_download_delegate.rs",
+      "sha256": "d52460df67678eccb4c5d409c9d24a81d5c63ff04eee6a76e5558c9ccd341756"
+    },
+    {
+      "path": "wry/src/wkwebview/class/wry_navigation_delegate.rs",
+      "sha256": "480bfbaffb275f3f19b5b4824d84310594f14f94cb1ca5db6a636a4e529449d8"
+    },
+    {
+      "path": "wry/src/wkwebview/class/wry_web_view.rs",
+      "sha256": "692b4420ace30fafece0707533d68b40b82c20ee7f5843eb17e04a7c6fcb4656"
+    },
+    {
+      "path": "wry/src/wkwebview/class/wry_web_view_delegate.rs",
+      "sha256": "97559a443b53682d98858effed722774b309b7d72aac1aacc573f1d989fae093"
+    },
+    {
+      "path": "wry/src/wkwebview/class/wry_web_view_parent.rs",
+      "sha256": "c405e3ea1d2e062a43847c6d7c91be6da36026f3230bf47f2661bddc6852012a"
+    },
+    {
+      "path": "wry/src/wkwebview/class/wry_web_view_ui_delegate.rs",
+      "sha256": "f9bab65e7ff279786b28935725321a1ee6fe8804c5ca3072d042198f6562c497"
+    },
+    {
+      "path": "wry/src/wkwebview/download.rs",
+      "sha256": "3b67113c3d13a2082992d284a1e995e07c06a9b892b3ed2dae9b7370daa0f6c0"
+    },
+    {
+      "path": "wry/src/wkwebview/drag_drop.rs",
+      "sha256": "10bf1524a41d586810cae18d318629da3768e69a1b0ab59ad04dfd69840d83c7"
+    },
+    {
+      "path": "wry/src/wkwebview/ios/WKWebView.rs",
+      "sha256": "4ff8588c4d8773c244c228e5aa1cce3af8d62e4de1fb08cb80dfb31ae9a2dbb0"
+    },
+    {
+      "path": "wry/src/wkwebview/ios/mod.rs",
+      "sha256": "03823ce7c572f1ed345ae4ef6ec63e8ce4df1f0a7d3ad0efebb36dd6a7c18dd1"
+    },
+    {
+      "path": "wry/src/wkwebview/mod.rs",
+      "sha256": "f2061b195b35f3838a843e467061383a220cef68045ec879a85a166671be98fa"
+    },
+    {
+      "path": "wry/src/wkwebview/navigation.rs",
+      "sha256": "cd82e548cb1bd7787a7383b47b2744d14e859a625c3d2b834ffc21c5548c406d"
+    },
+    {
+      "path": "wry/src/wkwebview/proxy.rs",
+      "sha256": "f7ee208069b3d4d045540c46b842c71f0fa2bba905b20463e67679471f58ad20"
+    },
+    {
+      "path": "wry/src/wkwebview/synthetic_mouse_events.rs",
+      "sha256": "729487a4009431c29633c0ada6d78c513a18af148c118aefa9b0279c322c7cb2"
+    },
+    {
+      "path": "wry/src/wkwebview/util.rs",
+      "sha256": "c7be7b4421d3d4ba06a61d39f4efc3ada0eb3e2d691078aa842c3ae76f95e755"
+    }
+  ]
+}

@@ -117,6 +117,82 @@ Rust validation sets. The change has no visible UI, locale, theme, keyboard,
 accessibility, or Semi Design surface, so those areas require regression
 validation but no new product copy or component-specific acceptance.
 
+## Isolated Plugin Runtime Origin Validation
+
+Changes to the isolated Resource authority, host/path parser, translated URL
+shape, origin evidence, or downstream origin prerequisite must run:
+
+```bash
+pnpm run check:isolated-plugin-runtime-origin
+```
+
+The gate combines canonical `.lxp` fixture validation, bounded committed real
+macOS WKWebView evidence, Resource Contract and Service tests, frame-aware
+navigation tests and evidence, workspace-private boundary checks, and the
+Plugin Page composition regression. The real evidence must cover a non-opaque
+serialized origin, the complete ES Module/resource graph, same-generation
+storage roundtrip, Host/other-generation isolation, parent/frame/Tauri absence,
+zero privileged hits, and normal/malicious/replacement packages through the
+real Resource Service. It must not contain raw URLs, scopes, paths, storage
+values, or invoke secrets.
+
+This gate proves only the macOS prerequisite. It does not authorize a
+production iframe by itself or establish Windows/Linux Runtime support. Any shared-host,
+lost translated key, authority/path mismatch, wildcard/null CORS, or
+opaque/classic-only fallback is a validation failure.
+
+## macOS Frame-Aware WebView Navigation Validation
+
+When changing the Host navigation policy, Tauri/Wry patch, main-only
+initialization, WebView harness, evidence schema, or Plugin Page/Resource
+regressions, run:
+
+```bash
+pnpm run check:frame-aware-webview-navigation-policy
+```
+
+The gate checks all 15 maintained documents, the bounded evidence schema, the
+committed real WKWebView matrix, exact vendored dependency integrity and patch
+surface, Rust policy/epoch/normalization/adapter tests, Resource Service
+regressions, workspace-private boundaries, and the Plugin Page composition.
+Evidence is macOS-only and must confirm the activate/replace/dispose/reactivate
+lease preflight plus native `main`/`descendant` facts,
+pre-commit outcomes, Host bootstrap availability, descendant bootstrap/invoke
+absence, and popup/download hook counts. It must never contain a raw URL,
+scope, identity, invoke key or payload, bootstrap source, or local path.
+
+Use `pnpm run generate:frame-aware-webview-navigation-fixtures` only after
+reviewing fixture changes. Real evidence must first be rerun on the target
+macOS WKWebView, then intentionally promoted with
+`pnpm run generate:frame-aware-webview-evidence-matrix`. Vendored dependency
+changes require exact diff and license review before
+`pnpm run generate:frame-aware-navigation-dependency-drift` updates the
+integrity record. These generators do not replace the focused gate or the full
+frontend and Rust validation sets.
+
+## Isolated Plugin iframe Runtime Validation
+
+Changes to the Runtime resolver, iframe policy/container, Host navigation
+adapter, Plugin Page composition, or lifecycle cleanup must run:
+
+```bash
+pnpm run check:plugin-iframe-runtime
+```
+
+The gate combines resolver and React state/cancellation tests, exact
+sandbox/Permissions Policy/referrer assertions, native lease activation and
+compare-current disposal, Page/lifecycle/replacement/resource regressions,
+workspace-private imports, canonical real `.lxp` fixtures, bounded macOS
+WKWebView evidence, and both origin/navigation prerequisite gates. Evidence must
+continue to prove the ES Module graph, route fragment, storage partition,
+parent/frame/Tauri absence, zero privileged hits, and malicious navigation and
+capability rejection.
+
+This gate proves iframe `loaded`, never Runtime Session or SDK `ready`. It does
+not validate a message bridge, Host API, permission dispatcher, complete CSP,
+general timeout/crash recovery, or Windows/Linux Runtime. Run it before the
+complete frontend and Rust validation sets; it does not replace them.
+
 ## Rust Validation
 
 Check Rust formatting:

@@ -20,7 +20,12 @@
       "closeLabel": "Close settings and return home",
       "closePluginLabel": "Close page and return home",
       "hostOwner": "lensX",
-      "pluginRuntimeUnavailable": "This plugin page is registered, but its isolated runtime is not available yet.",
+      "pluginRuntimeResolving": "Preparing the isolated plugin runtime…",
+      "pluginRuntimeLoading": "Loading the plugin page…",
+      "pluginRuntimeFrameTitle": "{{title}} plugin runtime",
+      "pluginRuntimeFailureTitle": "This plugin page could not be loaded",
+      "pluginRuntimeFailureDescription": "The isolated runtime is unavailable. Retry to resolve the current plugin version.",
+      "pluginRuntimeRetry": "Retry",
       "errorTitle": "This page could not be displayed",
       "errorDescription": "Close the page and try opening it again."
     },

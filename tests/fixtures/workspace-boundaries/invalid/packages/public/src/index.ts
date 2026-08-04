@@ -1,7 +1,17 @@
 import '@/app/plugins/resource';
 import '@/app/plugins/resource/desktop';
 import type { PluginResourceEntry } from '@/app/plugins/resource/types';
+import '@/app/plugins/runtime';
+import '@/app/plugins/runtime/navigation';
+import type { PluginPageRuntimeDescriptor } from '@/app/plugins/runtime/types';
 import '../../../src-tauri/src/plugin_resource_contract.rs';
+import '../../../src-tauri/src/plugin_resource_url.rs';
+import '../../../src-tauri/examples/plugin_iframe_runtime_harness.rs';
+import '../../../src-tauri/src/frame_aware_navigation_policy.rs';
+import '../../../src-tauri/src/plugin_runtime_navigation.rs';
+import '../../../vendor/frame-aware-navigation/wry/src/lib.rs';
+import '../../../tools/frame-aware-webview-harness/evidence.schema.json';
 
 export const publicValue = 'public';
 export type LeakedPluginResourceEntry = PluginResourceEntry;
+export type LeakedPluginRuntimeDescriptor = PluginPageRuntimeDescriptor;

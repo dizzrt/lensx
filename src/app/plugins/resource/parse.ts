@@ -11,6 +11,9 @@ const PLUGIN_ID_PATTERN = /^(?:[a-z][a-z0-9_-]{0,63}\.)+[a-z][a-z0-9_-]{0,63}$/u
 const REVISION_PATTERN = /^(?:0|[1-9][0-9]*)$/u;
 const SEMVER_PATTERN =
   /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
+const SCOPE_PATTERN = /^[0-9a-f]{32}$/u;
+const PLUGIN_KEY_PATTERN = /^v1-[0-9a-f]+$/u;
+const RESOURCE_SEGMENT_PATTERN = /^[0-9A-Za-z](?:[0-9A-Za-z._-]*[0-9A-Za-z])?$/u;
 
 const ERROR_MESSAGES: Readonly<Record<PluginResourceErrorCode, string>> = Object.freeze({
   invalid_request: 'Plugin resource request is invalid.',
@@ -56,17 +59,37 @@ const revision = (value: unknown) => {
   return value;
 };
 
-const entryUrl = (value: unknown) => {
-  if (typeof value !== 'string') throw new TypeError('Invalid plugin resource entry URL.');
+const pluginRecordKey = (pluginId: string) =>
+  `v1-${[...new TextEncoder().encode(pluginId)].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+
+const entryUrl = (value: unknown, pluginId: string, expectedVersion: string) => {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > 2048 ||
+    !/^[\x20-\x7e]+$/u.test(value) ||
+    /[%\\\0]/u.test(value)
+  ) {
+    throw new TypeError('Invalid plugin resource entry URL.');
+  }
+  const authorityMatch = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]+)/u.exec(value);
+  if (!authorityMatch || /[@:A-Z]/u.test(authorityMatch[2])) {
+    throw new TypeError('Invalid plugin resource entry URL.');
+  }
   let parsed: URL;
   try {
     parsed = new URL(value);
   } catch {
     throw new TypeError('Invalid plugin resource entry URL.');
   }
-  const nativeOrigin = parsed.protocol === 'lensx-plugin:' && parsed.hostname === 'localhost';
-  const translatedOrigin =
-    (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.hostname === 'lensx-plugin.localhost';
+  const nativeMatch = /^([0-9a-f]{32})\.runtime\.localhost$/u.exec(parsed.hostname);
+  const translatedMatch = /^lensx-plugin\.([0-9a-f]{32})\.runtime\.localhost$/u.exec(parsed.hostname);
+  const nativeOrigin = parsed.protocol === 'lensx-plugin:' && nativeMatch !== null;
+  const translatedOrigin = (parsed.protocol === 'http:' || parsed.protocol === 'https:') && translatedMatch !== null;
+  const originScope = nativeMatch?.[1] ?? translatedMatch?.[1];
+  const pathParts = parsed.pathname.startsWith('/') ? parsed.pathname.slice(1).split('/') : [];
+  const [resourceVersion, pathScope, pluginKey, version, ...resourceSegments] = pathParts;
+  const resourcePath = resourceSegments.join('/');
   if (
     (!nativeOrigin && !translatedOrigin) ||
     parsed.username !== '' ||
@@ -74,7 +97,21 @@ const entryUrl = (value: unknown) => {
     parsed.port !== '' ||
     parsed.search !== '' ||
     parsed.hash !== '' ||
-    !parsed.pathname.startsWith('/v1/')
+    resourceVersion !== 'v1' ||
+    originScope === undefined ||
+    pathScope !== originScope ||
+    !SCOPE_PATTERN.test(pathScope) ||
+    !PLUGIN_KEY_PATTERN.test(pluginKey ?? '') ||
+    pluginKey !== pluginRecordKey(pluginId) ||
+    !SEMVER_PATTERN.test(version ?? '') ||
+    version !== expectedVersion ||
+    resourcePath.length === 0 ||
+    resourcePath.length > 100 ||
+    resourceSegments.length > 16 ||
+    resourceSegments.some(
+      (segment) => !RESOURCE_SEGMENT_PATTERN.test(segment) || segment === '.' || segment === '..',
+    ) ||
+    /^(?:manifest|checksums)\.json$/iu.test(resourcePath)
   ) {
     throw new TypeError('Invalid plugin resource entry URL.');
   }
@@ -107,7 +144,7 @@ export const parsePluginResourceEntry = (value: unknown): PluginResourceEntry =>
     revision: revision(item.revision),
     plugin_id: item.plugin_id,
     version: item.version,
-    entry_url: entryUrl(item.entry_url),
+    entry_url: entryUrl(item.entry_url, item.plugin_id, item.version),
   });
 };
 

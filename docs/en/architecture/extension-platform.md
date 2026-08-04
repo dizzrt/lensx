@@ -148,15 +148,15 @@ contains runtime JavaScript, declarations, the two Schema entries, and package
 metadata; it excludes tests, fixtures, generation scripts, and Host private
 source.
 
-### Explicitly Unimplemented Capabilities
+### Capabilities Outside Static Validation
 
 Static validation alone does not discover or install packages, create a
-production registration, create iframes, grant permissions, exchange Host API
-messages, or run plugin code. The Host-private local installer described below
-adds one selected compatible `.lxp` as an external registration. The separate
-surface coordinator can project current Registration facts into Page and Action
-Registries and navigate to a Host-owned placeholder, but that placeholder is
-not plugin Runtime.
+production registration or iframe, grant permissions, exchange Host API
+messages, or run plugin code. The Host-private capabilities described below add
+one selected compatible `.lxp` as an external registration, project current
+Registration facts into Page and Action Registries, and create the isolated
+iframe only while an eligible Plugin Page is active. Runtime Sessions, Host API
+messages, and permission decisions remain separate work.
 
 ## Shipped Host-Private Plugin Package Inspection
 
@@ -484,8 +484,14 @@ logical uninstall, incompatible or quarantine state, and restart permanently
 invalidate prior scopes; unrelated global revision changes do not.
 
 Every request rechecks the scope and current Manager facts. URL plugin key and
-version fields are derived cross-checks, not authority. Package-relative paths
-use the portable package grammar and reject absolute or root-relative forms,
+version fields are derived cross-checks, not authority. The native URL is
+`lensx-plugin://<scope>.runtime.localhost/v1/<scope>/<plugin-key>/<version>/<path>`;
+the supported translated shape is
+`http(s)://lensx-plugin.<scope>.runtime.localhost/...`. Both preserve the same
+32-character lowercase hexadecimal scope in the authority and path. Shared
+hosts, lost translation keys, or authority/path mismatches fail before scope
+lookup. Package-relative paths use the portable package grammar and reject
+absolute or root-relative forms,
 empty or dot segments, backslashes, percent encoding, NUL, query, excessive
 length/depth, metadata records, directories, unknown files, and cross-payload
 targets. Rust checks each component for links/reparse points, proves canonical
@@ -514,10 +520,137 @@ partial bytes, or existence detail.
 Run `pnpm run check:plugin-resource-service` for the shared Rust/TypeScript
 fixtures, desktop adapter, workspace boundary, Manager generation, Installer
 ownership regressions, and protocol/path/MIME/lifecycle/race/oracle/platform URL
-tests. This service does not create an iframe, execute plugin code, replace the
-Host-owned Plugin Page placeholder, establish Runtime Sessions or Host API
-transport, grant permissions, or claim complete CSP. Those remain Task 4.2,
-Task 4.3, and Task 4.4.
+tests. This service does not create an iframe, execute plugin code, establish
+Runtime Sessions or Host API transport, grant permissions, or claim complete
+CSP by itself. The shipped Task 4.2 container consumes only its validated
+`entry_url`; Sessions, Host API, and complete CSP remain Task 4.3 and Task 4.4.
+
+## Shipped macOS Isolated Plugin Runtime Origin Prerequisite
+
+Each current `(entry_id, resource_generation)` reuses its existing 128-bit
+process-local Resource scope as both the browser-origin key and the path
+authorization key. Repeated resolution within one generation is idempotent.
+Disable/re-enable, replacement, uninstall, and restart revoke the old scope and
+therefore move a future document to a different origin and storage partition;
+an unrelated plugin change does not rotate the current scope. The mapping is
+not persisted or exported separately from the opaque `entry_url`.
+
+The Resource Contract, protocol handler, and frame-aware target normalizer all
+parse one canonical tuple and require byte-for-byte authority/path scope,
+plugin-key, and version agreement. The former shared
+`lensx-plugin://localhost/...` and translated `lensx-plugin.localhost` hosts are
+rejected. Requests do not use `Origin` or `Accept` as authorization and never
+add wildcard or reflected-null CORS. Existing fixed 404/405/500 oracles,
+`no-store`, bounded diagnostics, path/MIME checks, opened-file validation, and
+lifecycle revocation remain in force.
+
+The committed real macOS 26.6 / WKWebView `605.1.15` evidence runs canonical
+normal, malicious, and replacement `.lxp` packages through the real
+`PluginResourceService`. With the downstream policy
+`sandbox="allow-scripts allow-same-origin"`, each isolated authority serializes
+as a stable non-opaque origin, loads HTML, CSS, image, classic script, and a
+package-relative ES Module graph, and retains only its own same-key storage.
+Host storage is unchanged; parent DOM, `frameElement`, and every Tauri surface
+remain unavailable; the representative privileged handler receives zero hits.
+Evidence is bounded and contains no raw URL, scope, path, storage value, or
+invoke secret.
+
+Run:
+
+```bash
+pnpm run check:isolated-plugin-runtime-origin
+```
+
+This is the macOS-only origin prerequisite consumed by the production iframe
+container described below. It does not itself create the iframe or deliver a
+Runtime Session, Host API, permissions, or complete CSP. Parser coverage for
+translated URL shapes is not Windows or Linux Runtime support. The container
+may consume only a validated isolated `entry_url`; it has no shared-origin,
+opaque classic-only, or wildcard/null CORS fallback.
+
+## Shipped macOS Frame-Aware WebView Navigation Prerequisite
+
+The Rust Host installs one process-local navigation policy on the production
+`main` WKWebView before its first document loads. The policy receives
+`main | descendant | unknown` from a reviewed macOS-only Tauri/Wry patch:
+Wry derives the fact from `WKNavigationAction.targetFrame` and `isMainFrame`,
+then `tauri-runtime`, `tauri-runtime-wry`, and Tauri carry it to the application
+callback without changing existing URL-only plugin hooks. Any unknown frame,
+invalid URL, callback failure, or policy denial fails closed before commit.
+
+The main-frame and descendant allowlists are disjoint. Main-frame navigation
+matches only the configured development or production App document. Descendant
+navigation is denied while the policy is idle; the trusted Host Runtime adapter
+atomically activates one exact Plugin Resource entry plus a Host-derived
+fragment through an opaque epoch lease. Replacement invalidates the previous
+target, and only disposal of the current lease clears it. Native
+isolated-authority and origin-key-preserving translated document URLs normalize
+to one internal tuple, while shared hosts, lost translation keys,
+authority/path mismatches, and ambiguous targets are rejected. Ordinary
+subresources remain solely under the Resource Service.
+
+Production installs this policy with no active plugin target. The Host Runtime
+adapter activates it before mounting the current iframe and compare-current
+disposes it on close, retry, replacement, invalidation, or App teardown. The
+policy also denies every WebView new-window request and download, without
+routing the target to the opener. Tauri initialization remains main-frame-only: the Host
+retains `isTauri`, `__TAURI_INTERNALS__`, metadata, invoke initialization, and
+IPC, while descendant documents receive none of those surfaces.
+
+The committed 15-case real WKWebView evidence records macOS, WKWebView
+`605.1.15`, Tauri `2.11.5`, Wry `0.55.1`, native custom-protocol shape, native
+frame class, pre-commit outcome, bootstrap isolation, and bounded callback
+counts without URLs or private identity. Each run also verifies activate,
+replacement, late disposal, current disposal, and idle-to-reactivate lease
+lifecycle before opening the selected document. Host, external, cross-plugin, stale,
+fragment, and data document attempts reach the policy and are denied. WKWebView
+preflight-blocks `file:`, no-op `javascript:`, and same-document `blob:` before
+a navigation callback; evidence records `blocked_by_webview`, the retained
+document, and unchanged callback count instead of claiming a policy denial.
+Popup/targeted-context and blob-download cases reach their independent deny
+hooks. Run:
+
+```bash
+pnpm run check:frame-aware-webview-navigation-policy
+```
+
+This capability is macOS-only and does not claim Windows or Linux support. The
+Task 4.2 container now consumes its exact target lease, while Runtime Session,
+Host API, permissions, and complete CSP remain separate capabilities.
+
+## Shipped macOS Isolated Plugin iframe Runtime
+
+An available external Plugin Page now renders one Host-owned
+`PluginRuntimeFrame` in the existing single-window Page slot. A Host-private
+resolver cross-checks the current Page identity, provider, eligible Registration
+entry, Registration revision, Resource response identity, isolated-origin URL,
+and Registry route. It derives the fragment target from the Host route and never
+falls back to a Manifest path, shared host, stale URL, or plugin-supplied iframe
+policy. Explicit retry refreshes the current projection and creates a new
+attempt identity; there is no automatic retry or hidden iframe reuse.
+
+The container fixes `sandbox="allow-scripts allow-same-origin"`,
+`referrerPolicy="no-referrer"`, and a deny list for camera, microphone,
+geolocation, fullscreen, clipboard, display capture, payment, USB, serial, HID,
+Bluetooth, and screen wake lock. Native lease activation completes before the
+iframe receives `src`. Close, Registry invalidation, replacement, retry, return
+to home/search, and App teardown remove the iframe and compare-current dispose
+its lease. At most one plugin iframe exists; Host Pages remain trusted React
+surfaces.
+
+The UI exposes localized `resolving`, `loading`, `loaded`, and bounded failure
+states with an explicit accessible retry. `loaded` means only that the iframe
+load event fired. It is not SDK or Session `ready`, and this capability adds no
+message bridge, MessagePort, JSON-RPC, Host API, permission dispatcher, general
+timeout/crash recovery, or complete CSP. Plugin Runtime resolver, Resource and
+Registration adapters, iframe policy, native lease boundary, and origin facts
+remain Host-private and are blocked from public packages and plugin workspaces.
+
+Run `pnpm run check:plugin-iframe-runtime` for the resolver, component,
+navigation lease, Page/lifecycle/replacement/resource regressions, real
+normal/malicious/replacement `.lxp` evidence, both prerequisite gates, and
+workspace boundary checks. The real WKWebView evidence is macOS-only; no
+Windows or Linux Runtime support is claimed.
 
 ## Shipped Host-Private Plugin Surface Projection And Page Navigation
 
@@ -583,12 +716,10 @@ provider fallback.
 
 Production composition initializes this coordinator, refreshes it on Launcher
 activation and listener recovery, and destroys the same subscription on
-cleanup. An available Plugin Page renders a localized Host-owned placeholder in
-the existing single-window page surface. The placeholder never reads routes,
-loads entries/assets, creates an iframe, calls Tauri, or executes plugin code.
-The Task 4.1 resource service is shipped but is not consumed by this placeholder;
-Task 4.2 iframe Runtime and Task 5.5 complete permission management remain
-unimplemented.
+cleanup. An available Plugin Page passes its current resolution to the shipped
+Host-private iframe Runtime resolver. Surface projection still does not expose
+routes, entry IDs, revisions, origin facts, resource URLs, or native objects to
+plugins. Task 5.5 complete permission management remains unimplemented.
 
 ## Shipped Public Plugin SDK Foundation
 
@@ -819,9 +950,9 @@ external contract does not depend on React implementation details.
 
 ### External Plugins
 
-When external plugin execution is implemented, plugin UI must run in an
-isolated iframe and communicate only through a controlled Host bridge. External
-plugins must not directly access:
+External plugin UI runs in the shipped isolated iframe. A later Runtime Session
+must add communication only through a controlled Host bridge. External plugins
+must not directly access:
 
 - application React state or component instances;
 - private frontend modules;
@@ -875,9 +1006,9 @@ method exists.
 The static Manifest format, validators, Host-private local installation and
 same-identity replacement, revision-bound enable/disable/uninstall
 infrastructure, scoped package-relative resources, Plugin surface projection,
-production Action activation, Page Registry/navigation, and Runtime-free Host
-placeholder are delivered. Each remaining capability—complete plugin-management
+production Action activation, Page Registry/navigation, and the macOS isolated
+iframe Runtime are delivered. Each remaining capability—complete plugin-management
 UI, complete permissions, Host API methods, public packaging, remote/automatic updates,
-user-initiated rollback history, iframe Runtime execution, or sidecars—requires
+user-initiated rollback history, Runtime Sessions, or sidecars—requires
 its own accepted specification and implementation evidence. This architectural
 document defines direction and boundaries, not a release checklist.

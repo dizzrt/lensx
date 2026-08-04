@@ -1,5 +1,5 @@
-import { describe, expect, test } from '@rstest/core';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { describe, expect, rs, test } from '@rstest/core';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import validCases from '../fixtures/plugin-registration-contract/valid/cases.json';
 import App from '../src/App';
 import { AppProviders } from '../src/app/AppProviders';
@@ -16,6 +16,7 @@ import {
   type PluginRegistrationSnapshot,
   parsePluginRegistrationDetailResponse,
 } from '../src/app/plugins/registration';
+import type { PluginPageRuntimeDescriptor } from '../src/app/plugins/runtime';
 import { createPluginSurfaceProjectionService } from '../src/app/plugins/surfaces';
 import { useAppTheme } from '../src/app/theme';
 
@@ -85,6 +86,17 @@ const collectionsClient = {
   setPinned: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
 };
 
+const runtimeDescriptor: PluginPageRuntimeDescriptor = Object.freeze({
+  runtime_key: 'project-runtime-1',
+  entry_url:
+    'lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost/v1/0123456789abcdef0123456789abcdef/v1-636f6d2e6578616d706c652e776f726b7370616365/1.2.3/index.html',
+  host_fragment: '/open-project',
+  iframe_src:
+    'lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost/v1/0123456789abcdef0123456789abcdef/v1-636f6d2e6578616d706c652e776f726b7370616365/1.2.3/index.html#/open-project',
+  plugin_id: pluginId,
+  version: detail.manifest.version,
+});
+
 const TestProviderControls = () => {
   const { setLocale } = useAppLocale();
   const { setThemeMode } = useAppTheme();
@@ -112,6 +124,11 @@ const renderPluginComposition = () => {
     pageRegistry,
     navigationService,
   });
+  const pluginRuntimeResolver = { resolve: rs.fn(async () => runtimeDescriptor) };
+  const pluginRuntimeNavigationAdapter = {
+    activate: rs.fn(async () => ({ lease_id: '0000000000000001' })),
+    dispose: rs.fn(async () => true),
+  };
   render(
     <AppProviders>
       <TestProviderControls />
@@ -120,16 +137,19 @@ const renderPluginComposition = () => {
         activationSource={{ subscribe: async () => () => undefined }}
         collectionsClient={collectionsClient}
         navigationService={navigationService}
+        pluginRuntimeNavigationAdapter={pluginRuntimeNavigationAdapter}
+        pluginRuntimeResolver={pluginRuntimeResolver}
         surfaceProjectionService={projection}
       />
     </AppProviders>,
   );
-  return { actionService, navigationService, pageRegistry };
+  return { actionService, navigationService, pageRegistry, pluginRuntimeNavigationAdapter, pluginRuntimeResolver };
 };
 
 describe('Plugin Page navigation UI', () => {
-  test('navigates a real projected Action to the localized Runtime-free placeholder and resolves current metadata', async () => {
-    const { actionService, pageRegistry } = renderPluginComposition();
+  test('navigates a projected Action to one isolated Runtime iframe and resolves current metadata', async () => {
+    const { actionService, pageRegistry, pluginRuntimeNavigationAdapter, pluginRuntimeResolver } =
+      renderPluginComposition();
     const input = screen.getByRole('combobox', { name: 'Launcher query' });
     await waitFor(() => expect(actionService.registry.get(`${pluginId}.open_project`)).toBeDefined());
 
@@ -137,16 +157,20 @@ describe('Plugin Page navigation UI', () => {
     const option = await screen.findByRole('option', { name: /Launch Workspace/u });
     fireEvent.click(option);
 
-    const placeholder = await screen.findByRole('region', { name: 'Open Project' });
-    expect(placeholder).toHaveTextContent('Open Project');
-    expect(placeholder).toHaveTextContent(
-      'This plugin page is registered, but its isolated runtime is not available yet.',
+    await waitFor(() => expect(document.querySelectorAll('iframe')).toHaveLength(1));
+    const iframe = document.querySelector('iframe');
+    expect(iframe).toHaveAttribute('src', runtimeDescriptor.iframe_src);
+    expect(iframe).toHaveAttribute('title', 'Open Project plugin runtime');
+    expect(pluginRuntimeResolver.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ attempt: 0, activePage: expect.objectContaining({ owner_id: pluginId }) }),
     );
+    expect(pluginRuntimeNavigationAdapter.activate).toHaveBeenCalledWith({
+      entry_url: runtimeDescriptor.entry_url,
+      host_fragment: runtimeDescriptor.host_fragment,
+    });
     const context = screen.getByRole('region', { name: 'Workspace Tools: Launch Workspace' });
     expect(context.querySelector('[data-owner-icon-token]')).toHaveAttribute('data-owner-icon-token', 'owner-fallback');
-    expect(within(placeholder).queryByRole('button')).not.toBeInTheDocument();
-    expect(placeholder).not.toHaveTextContent(/manage|permission|retry|iframe|Tauri/u);
-    expect(document.body.innerHTML).not.toContain('/open-project');
+    expect(document.querySelectorAll('iframe')).toHaveLength(1);
 
     act(() => {
       actionService.registry.replaceProviderBatch(pluginId, []);
@@ -155,7 +179,7 @@ describe('Plugin Page navigation UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Chinese' }));
     expect(await screen.findByRole('region', { name: '工作区工具: 打开项目' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: '打开项目' })).toHaveTextContent('隔离运行时尚不可用');
+    expect(document.querySelector('iframe')).toHaveAttribute('title', '打开项目插件运行时');
     fireEvent.click(screen.getByRole('button', { name: 'Dark' }));
     expect(document.body).toHaveAttribute('theme-mode', 'dark');
 
@@ -164,6 +188,10 @@ describe('Plugin Page navigation UI', () => {
     });
     const restoredInput = await screen.findByRole('combobox', { name: '启动器查询' });
     await waitFor(() => expect(restoredInput).toHaveFocus());
+    await waitFor(() =>
+      expect(pluginRuntimeNavigationAdapter.dispose).toHaveBeenCalledWith({ lease_id: '0000000000000001' }),
+    );
+    expect(document.querySelector('iframe')).toBeNull();
   });
 
   test('supports keyboard-synthesized and pointer close while restoring the Launcher input', async () => {

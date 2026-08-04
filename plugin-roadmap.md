@@ -30,7 +30,8 @@
   以及同 identity 本地包的两阶段单 active replacement；
 - Host-owned Launcher Action descriptor、Registry、Dispatcher、搜索与集合能力；
 - Host 私有的 Plugin Page Registry、Registration revision 驱动的 Action/Page surface projection、
-  grant snapshot 预检、统一页面导航与不执行插件代码的 Host-owned placeholder；
+  grant snapshot 预检、统一页面导航、scoped Resource Service、per-generation isolated origin、
+  frame-aware exact navigation lease 与仅在 active Page 存在的 Host-owned iframe Runtime；
 - Host 内建的隐藏 Launcher 和打开设置 Action；
 - Host 设置页面中的插件空占位。
 
@@ -38,7 +39,7 @@
 
 - Plugin CLI package；
 - 远程下载、自动更新和用户主动 rollback history；
-- 安全资源服务、iframe Runtime 和 Runtime session；
+- Runtime session、iframe message transport 与完整 CSP/lifecycle recovery；
 - 真实 Host API、SDK transport、权限授权和插件私有存储；
 - 插件管理 UI、开发模式、签名、更新、Catalog 和 Marketplace。
 
@@ -425,9 +426,31 @@ Runtime health rollback、数据迁移、权限 UI 或完整管理 UI。
 
 **完成标准**：插件只能读取自己的已安装资源；路径攻击具有 Rust 集成测试。
 
-- [ ] **Task 4.2：实现隔离 iframe Runtime**
+- [x] **Task 4.1.1：隔离 Plugin Runtime Origin**
 
-**OpenSpec change**：`add-isolated-plugin-iframe-runtime`
+**OpenSpec change**：[add-isolated-plugin-runtime-origin](openspec/changes/archive/2026-08-04-add-isolated-plugin-runtime-origin/)
+（已完成并归档）
+
+**目标**：把每个 current resource generation 映射为独立 browser origin，为安全使用
+`allow-same-origin` 的后续 iframe Runtime 提供前置能力。
+
+**范围**：
+
+- 使用同一个 process-local 128-bit scope 同时绑定独立 authority 与 path authorization。
+- Resource Contract、handler 与 frame-aware policy 严格交叉验证 authority/path scope、identity 与 version。
+- 在真实 macOS WKWebView 中验证 ES Module graph、storage partition、parent/frameElement/Tauri absence，
+  并保持 no-CORS、lifecycle revocation 与 production placeholder。
+
+**依赖**：Task 4.1、
+[add-frame-aware-webview-navigation-policy](openspec/changes/archive/2026-08-04-add-frame-aware-webview-navigation-policy/)（macOS）。
+
+**完成标准**：`pnpm run check:isolated-plugin-runtime-origin` 与完整验证通过；真实 bounded evidence
+证明隔离 authority 和 module/storage/security 边界，且没有启用 production iframe。
+
+- [x] **Task 4.2：实现隔离 iframe Runtime**
+
+**OpenSpec change**：[add-isolated-plugin-iframe-runtime](openspec/changes/archive/2026-08-04-add-isolated-plugin-iframe-runtime/)
+（已完成并归档）
 
 **目标**：在打开插件 Page 时创建不继承 Tauri bridge 的隔离 iframe。
 
@@ -436,10 +459,12 @@ Runtime health rollback、数据迁移、权限 UI 或完整管理 UI。
 - Host 根据 Page registry 和资源服务生成 iframe entry。
 - sandbox token、allow policy、origin 和导航策略由 Host 固定。
 - iframe 不访问主应用 React state、Tauri API、文件系统或其他插件。
-- 提供加载、就绪、失败、重试和页面错误状态。
+- 提供加载中、已加载（不等于 Session ready）、失败、重试和页面错误状态。
 - iframe 只在 Page 活跃时存在。
 
-**依赖**：Task 2.4、Task 4.1。
+**依赖**：Task 2.4、Task 4.1，以及
+[add-frame-aware-webview-navigation-policy](openspec/changes/archive/2026-08-04-add-frame-aware-webview-navigation-policy/)
+→ [add-isolated-plugin-runtime-origin](openspec/changes/archive/2026-08-04-add-isolated-plugin-runtime-origin/)（macOS）。
 
 **完成标准**：有效插件页面可被打开；未注册 URL、跨 origin 导航和 Tauri 访问被拒绝。
 

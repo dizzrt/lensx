@@ -194,8 +194,53 @@ body {
   overflow: hidden;
 }
 
-.plugin-page-placeholder-title.semi-typography {
+.plugin-page-placeholder-title.semi-typography,
+.plugin-runtime-feedback-title.semi-typography {
   margin: 0;
+}
+
+.plugin-runtime-feedback {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+}
+
+.plugin-runtime-container {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  border-radius: var(--semi-border-radius-medium);
+  background: var(--semi-color-bg-0);
+}
+
+.plugin-runtime-loading {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--semi-color-bg-0);
+}
+
+.plugin-runtime-iframe {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
 }
 
 .page-context-control {

@@ -1,0 +1,74 @@
+{
+  "evidence_version": "0.1.0",
+  "run": {
+    "os": "macos",
+    "engine": "wkwebview",
+    "engine_version": "605.1.15",
+    "tauri_revision": "2.11.5",
+    "wry_revision": "0.55.1",
+    "bundle_shape": "native_custom_protocol",
+    "lease_lifecycle_verified": true
+  },
+  "observations": [
+    {
+      "case_id": "host-main-bootstrap",
+      "event": "document_start",
+      "outcome": "observed",
+      "fixture_frame_class": "main",
+      "native_frame_class": "main",
+      "decision": "allow_main_app",
+      "precommit_outcome": "committed",
+      "host_bootstrap_available": true,
+      "descendant_bootstrap_absent": false,
+      "handler_hit_count": 0,
+      "navigation_callback_hits": 1,
+      "popup_callback_hits": 0,
+      "download_callback_hits": 0
+    },
+    {
+      "case_id": "dangerous-blob-self-navigation",
+      "event": "document_start",
+      "outcome": "observed",
+      "fixture_frame_class": "descendant",
+      "native_frame_class": "descendant",
+      "decision": "not_observed",
+      "precommit_outcome": "not_observed",
+      "host_bootstrap_available": true,
+      "descendant_bootstrap_absent": true,
+      "handler_hit_count": 0,
+      "navigation_callback_hits": 2,
+      "popup_callback_hits": 0,
+      "download_callback_hits": 0
+    },
+    {
+      "case_id": "dangerous-blob-self-navigation",
+      "event": "operation_started",
+      "outcome": "observed",
+      "fixture_frame_class": "descendant",
+      "native_frame_class": "descendant",
+      "decision": "not_observed",
+      "precommit_outcome": "not_observed",
+      "host_bootstrap_available": true,
+      "descendant_bootstrap_absent": true,
+      "handler_hit_count": 0,
+      "navigation_callback_hits": 2,
+      "popup_callback_hits": 0,
+      "download_callback_hits": 0
+    },
+    {
+      "case_id": "dangerous-blob-self-navigation",
+      "event": "operation_settled",
+      "outcome": "retained",
+      "fixture_frame_class": "descendant",
+      "native_frame_class": "descendant",
+      "decision": "blocked_by_webview",
+      "precommit_outcome": "rejected",
+      "host_bootstrap_available": true,
+      "descendant_bootstrap_absent": true,
+      "handler_hit_count": 0,
+      "navigation_callback_hits": 2,
+      "popup_callback_hits": 0,
+      "download_callback_hits": 0
+    }
+  ]
+}

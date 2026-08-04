@@ -20,6 +20,18 @@
     "value": { "contract_version": "0.1.0", "entry_id": 7, "expected_revision": "7" }
   },
   {
+    "name": "request_plugin_provided_origin_scope_generation",
+    "type": "request",
+    "value": {
+      "contract_version": "0.1.0",
+      "entry_id": "entry_0123456789abcdef",
+      "expected_revision": "7",
+      "origin": "lensx-plugin://attacker.runtime.localhost",
+      "scope": "0123456789abcdef0123456789abcdef",
+      "generation": 1
+    }
+  },
+  {
     "name": "result_malformed_url",
     "type": "result",
     "value": {
@@ -40,8 +52,68 @@
       "revision": "7",
       "plugin_id": "com.acme.workspace",
       "version": "1.2.3",
-      "entry_url": "lensx-plugin://localhost/v1/0123456789abcdef0123456789abcdef/v1-key/1.2.3/index.html",
+      "entry_url": "lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost/v1/0123456789abcdef0123456789abcdef/v1-636f6d2e61636d65/1.2.3/index.html",
       "digest": "secret"
+    }
+  },
+  {
+    "name": "result_shared_host",
+    "type": "result",
+    "value": {
+      "contract_version": "0.1.0",
+      "entry_id": "entry_0123456789abcdef",
+      "revision": "7",
+      "plugin_id": "com.acme.workspace",
+      "version": "1.2.3",
+      "entry_url": "lensx-plugin://localhost/v1/0123456789abcdef0123456789abcdef/v1-636f6d2e61636d65/1.2.3/index.html"
+    }
+  },
+  {
+    "name": "result_origin_path_scope_mismatch",
+    "type": "result",
+    "value": {
+      "contract_version": "0.1.0",
+      "entry_id": "entry_0123456789abcdef",
+      "revision": "7",
+      "plugin_id": "com.acme.workspace",
+      "version": "1.2.3",
+      "entry_url": "lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost/v1/fedcba9876543210fedcba9876543210/v1-636f6d2e61636d65/1.2.3/index.html"
+    }
+  },
+  {
+    "name": "result_translated_origin_key_loss",
+    "type": "result",
+    "value": {
+      "contract_version": "0.1.0",
+      "entry_id": "entry_0123456789abcdef",
+      "revision": "7",
+      "plugin_id": "com.acme.workspace",
+      "version": "1.2.3",
+      "entry_url": "https://lensx-plugin.localhost/v1/0123456789abcdef0123456789abcdef/v1-636f6d2e61636d65/1.2.3/index.html"
+    }
+  },
+  {
+    "name": "result_plugin_identity_mismatch",
+    "type": "result",
+    "value": {
+      "contract_version": "0.1.0",
+      "entry_id": "entry_0123456789abcdef",
+      "revision": "7",
+      "plugin_id": "com.acme.workspace",
+      "version": "1.2.3",
+      "entry_url": "lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost/v1/0123456789abcdef0123456789abcdef/v1-636f6d2e6f74686572/1.2.3/index.html"
+    }
+  },
+  {
+    "name": "result_version_identity_mismatch",
+    "type": "result",
+    "value": {
+      "contract_version": "0.1.0",
+      "entry_id": "entry_0123456789abcdef",
+      "revision": "7",
+      "plugin_id": "com.acme.workspace",
+      "version": "1.2.3",
+      "entry_url": "lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost/v1/0123456789abcdef0123456789abcdef/v1-636f6d2e61636d652e776f726b7370616365/9.9.9/index.html"
     }
   },
   {

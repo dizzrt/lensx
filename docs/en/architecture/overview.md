@@ -38,8 +38,12 @@ The repository currently provides:
   atomic Page and Action replacement, revision-aware eligibility, and
   fail-closed lifecycle handling;
 - a Rust-owned scoped Plugin Resource Service that serves only the current
-  managed payload through strict package-relative paths, fixed MIME and
-  no-store responses, and generation-bound revocation;
+  managed payload from a per-generation isolated browser authority through
+  strict host/path binding, package-relative paths, fixed MIME and no-store
+  responses, and generation-bound revocation;
+- a macOS-only frame-aware WKWebView navigation policy with disjoint Host and
+  descendant document allowlists, an idle process-local target lease, main-only
+  Tauri initialization, and independent new-window/download denial;
 - a unified Host-owned Page Registry and framework-neutral navigation service
   for protected Host Pages and declarative Plugin Page descriptors;
 - versioned recent-use and pinned Action collections persisted through a narrow
@@ -316,11 +320,15 @@ and metadata changes resolve from current facts.
 
 The App Shell still uses one `home` / `search` / `page` presentation state in
 the existing main window. `lensx.core/settings` renders the trusted Settings
-surface. An available Plugin Page renders only a localized Host-owned
-placeholder inside the existing page error boundary; it does not read the
-private route, load an entry or asset, create an iframe, invoke Tauri, or execute
-plugin code. Task 4.1 scoped resources, Task 4.2 iframe Runtime, and Task 5.5
-complete permission management remain unimplemented.
+surface. An available Plugin Page renders one Host-owned isolated iframe inside
+the existing page error boundary. The Host-private resolver cross-checks the
+current Page, Registration revision, Resource identity, isolated `entry_url`,
+and Registry route, then activates the exact native navigation lease before
+mounting. The iframe fixes `allow-scripts allow-same-origin`, `no-referrer`, and
+a deny-by-default Permissions Policy; close, retry, invalidation, replacement,
+and App teardown remove it. Its load event means only `loaded`, not SDK/Session
+`ready`. Runtime Session, Host API transport, complete CSP, and Task 5.5
+permission management remain unimplemented.
 
 Settings is rendered in the existing `main` Tauri window. It has first-level
 Preferences and Plugins sections. Preferences controls the supported
@@ -386,6 +394,8 @@ Rust owns:
 - persistence and filesystem boundaries;
 - scoped plugin resource authorization, safe file opening, and protocol
   responses;
+- macOS WKWebView frame classification and pre-commit document navigation,
+  new-window, and download enforcement;
 - performance-sensitive background work;
 - stable Tauri commands and events.
 
@@ -408,10 +418,11 @@ The Host-private Resource Contract follows this boundary: trusted TypeScript
 submits only an entry ID and observed Registration revision, Rust derives the
 current plugin identity/version/entry and opaque URL, and every custom-protocol
 request revalidates its process-local scope against the current Manager
-generation and Installer-owned payload. Neither React nor public plugin
-packages receive installation paths, digests, record keys, or a general file
-reader. This is a resource-read foundation only; iframe isolation, Runtime
-Session identity, Host API transport, and complete CSP remain separate work.
+generation and Installer-owned payload. Neither React presentation props nor
+public plugin packages receive installation paths, digests, record keys, or a
+general file reader. The macOS iframe Runtime consumes this resource-read
+foundation through Host-private adapters; Runtime Session identity, Host API
+transport, and complete CSP remain separate work.
 
 ## Dependency Direction
 

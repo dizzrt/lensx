@@ -442,7 +442,10 @@ const validateSourceSpecifier = (
   if (
     (isWithin(join(rootDir, 'src'), resolvedTarget) ||
       isWithin(join(rootDir, 'src-tauri'), resolvedTarget) ||
-      isWithin(join(rootDir, 'tools'), resolvedTarget)) &&
+      isWithin(join(rootDir, 'tools'), resolvedTarget) ||
+      isWithin(join(rootDir, 'vendor', 'frame-aware-navigation'), resolvedTarget) ||
+      isWithin(join(rootDir, 'fixtures', 'frame-aware-webview-navigation'), resolvedTarget) ||
+      isWithin(join(rootDir, 'scripts'), resolvedTarget)) &&
     !isWithin(member.rootDir, resolvedTarget)
   ) {
     if (isHostStylePath(rootDir, resolvedTarget)) {

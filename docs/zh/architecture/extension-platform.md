@@ -122,12 +122,12 @@ change 更新各自版本维度。当前契约不提供更早 Schema、deprecate
 运行时 JavaScript、声明、两个 Schema 入口和 package metadata，不包含 tests、fixtures、生成
 scripts 或 Host 私有源码。
 
-### 明确未实现的能力
+### 静态校验范围外的能力
 
-静态校验本身不会发现或安装包、创建生产 registration、创建 iframe、授予权限、交换 Host API
-消息或运行插件代码。下文的 Host 私有本地安装器可以把一个用户选中的兼容 `.lxp` 添加为 external
-registration。独立的 surface 协调器可以把当前 Registration facts 投影进 Page 与 Action Registry，
-并导航到 Host-owned placeholder，但该 placeholder 不是插件 Runtime。
+静态校验本身不会发现或安装包、创建生产 registration 或 iframe、授予权限、交换 Host API 消息或
+运行插件代码。下文的 Host 私有 capability 会把一个用户选中的兼容 `.lxp` 添加为 external
+registration，把 current Registration facts 投影进 Page 与 Action Registry，并且只在 eligible Plugin
+Page active 时创建隔离 iframe。Runtime Session、Host API 消息与 permission decision 仍是独立工作。
 
 ## 已交付的 Host 私有 Plugin Package Inspection
 
@@ -354,7 +354,11 @@ disable/re-enable、replacement、逻辑 uninstall、incompatible/quarantine 状
 scope；无关的全局 revision 变化不会撤销它。
 
 每个 request 都重新检查 scope 与当前 Manager facts。URL 中的 plugin key 和 version 来自 Host，
-只用于交叉校验，不是 authority。Package-relative path 使用 portable package grammar，并拒绝
+只用于交叉校验，不是 authority。native URL 为
+`lensx-plugin://<scope>.runtime.localhost/v1/<scope>/<plugin-key>/<version>/<path>`；受支持的 translated
+形态为 `http(s)://lensx-plugin.<scope>.runtime.localhost/...`。两者都在 authority 与 path 中保留同一个
+32 位 lowercase hexadecimal scope。shared host、丢失 translation key 或 authority/path mismatch 都会
+在查询 scope 前失败。Package-relative path 使用 portable package grammar，并拒绝
 absolute/root-relative form、空或 dot segment、反斜杠、percent encoding、NUL、query、过长/过深
 path、metadata record、目录、未知文件与跨 payload target。Rust 逐段检查 link/reparse point、证明
 canonical containment、打开一个 regular file、复核打开后的 identity 与 size，并执行最多 64 MiB 的
@@ -375,9 +379,107 @@ digest、record key、absolute path、raw I/O、stack、partial bytes 或存在�
 
 运行 `pnpm run check:plugin-resource-service` 可验证 Rust/TypeScript 共享 fixture、desktop adapter、
 workspace boundary、Manager generation、Installer ownership 回归，以及 protocol/path/MIME/lifecycle/
-race/oracle/platform URL 测试。该 service 不创建 iframe、不执行插件代码、不替换 Host-owned Plugin
-Page placeholder、不建立 Runtime Session 或 Host API transport、不授予权限，也不宣称完整 CSP。
-这些仍分别属于 Task 4.2、Task 4.3 与 Task 4.4。
+race/oracle/platform URL 测试。该 service 本身不创建 iframe、不执行插件代码、不建立 Runtime Session
+或 Host API transport、不授予权限，也不宣称完整 CSP。已交付的 Task 4.2 container 只消费它校验后的
+`entry_url`；Session、Host API 与完整 CSP 仍分别属于 Task 4.3 与 Task 4.4。
+
+## 已交付的 macOS 隔离 Plugin Runtime Origin 前置能力
+
+每个 current `(entry_id, resource_generation)` 都复用现有 128-bit process-local Resource scope，同时
+作为 browser-origin key 与 path authorization key。同一个 generation 重复 resolve 保持幂等。
+disable/re-enable、replacement、uninstall 与 restart 会撤销旧 scope，使未来 document 进入不同 origin
+与 storage partition；无关插件变化不会轮换 current scope。该映射不持久化，也不会在 opaque
+`entry_url` 之外单独导出。
+
+Resource Contract、protocol handler 与 frame-aware target normalizer 解析同一个 canonical tuple，并要求
+authority/path scope、plugin key 与 version 逐字节一致。旧共享 `lensx-plugin://localhost/...` 与 translated
+`lensx-plugin.localhost` host 会被拒绝。request 不使用 `Origin` 或 `Accept` 做授权，也不会添加 wildcard
+或 reflected-null CORS。既有 fixed 404/405/500 oracle、`no-store`、bounded diagnostic、path/MIME 检查、
+opened-file 验证与 lifecycle revocation 保持不变。
+
+已提交的真实 macOS 26.6 / WKWebView `605.1.15` evidence 使用 canonical normal、malicious 与 replacement
+`.lxp`，并让请求经过真实 `PluginResourceService`。在下游策略
+`sandbox="allow-scripts allow-same-origin"` 下，每个隔离 authority 都序列化为稳定 non-opaque origin，
+能够加载 HTML、CSS、image、classic script 与 package-relative ES Module graph，并且同名 storage key
+只保留自身值。Host storage 不变；parent DOM、`frameElement` 与全部 Tauri surface 均不可达；代表性
+privileged handler 保持 zero-hit。evidence 有严格边界，不包含 raw URL、scope、path、storage value 或
+invoke secret。
+
+运行：
+
+```bash
+pnpm run check:isolated-plugin-runtime-origin
+```
+
+这是下文 production iframe container 所消费的 macOS-only origin 前置能力。它本身不创建 iframe，
+也不交付 Runtime Session、Host API、permissions 或完整 CSP。translated URL 形态的 parser coverage
+不代表 Windows 或 Linux Runtime 支持。container 只能消费经过验证的 isolated `entry_url`；没有
+shared-origin、opaque classic-only 或 wildcard/null CORS fallback。
+
+## 已交付的 macOS Frame-Aware WebView Navigation 前置能力
+
+Rust Host 会在 production `main` WKWebView 首个 document 加载前安装唯一的进程内 navigation
+policy。经过审查的 macOS-only Tauri/Wry 补丁向 policy 提供 `main | descendant | unknown`：Wry
+从 `WKNavigationAction.targetFrame` 与 `isMainFrame` 派生事实，再由 `tauri-runtime`、
+`tauri-runtime-wry` 和 Tauri 将其传到应用 callback，同时保留现有 URL-only plugin hook。
+unknown frame、非法 URL、callback failure 或任一 policy deny 都会在 commit 前 fail closed。
+
+main-frame 与 descendant allowlist 完全分离。main-frame navigation 只匹配当前配置的开发或
+production App document。policy idle 时所有 descendant navigation 都被拒绝；可信 Host Runtime
+adapter 会通过 opaque epoch lease 原子激活一个精确 Plugin Resource entry 与 Host-derived
+fragment。replacement 会使旧 target 失效，只有 current lease 的 disposal 才能清空 target。native
+isolated-authority 与保留 origin key 的 translated document URL 会规范化为同一个内部 tuple；shared
+host、丢失 translation key、authority/path mismatch 与歧义 target 都会被拒绝。普通 subresource 仍完全
+由 Resource Service 负责。
+
+production 以无 active plugin target 的状态安装 policy。Host Runtime adapter 会在挂载 current iframe
+前激活，并在 close、retry、replacement、invalidation 或 App teardown 时 compare-current dispose。
+policy 也拒绝全部 WebView new-window request 与 download，不会把 target 转交 opener。Tauri
+initialization 保持 main-frame-only：Host
+继续拥有 `isTauri`、`__TAURI_INTERNALS__`、metadata、invoke initialization 与 IPC，而
+descendant document 看不到这些 surface。
+
+项目提交的 15-case 真实 WKWebView evidence 记录 macOS、WKWebView `605.1.15`、Tauri
+`2.11.5`、Wry `0.55.1`、native custom-protocol shape、native frame class、pre-commit outcome、
+bootstrap isolation 与有界 callback count，且不记录 URL 或私有 identity。每次运行还会在打开目标
+document 前验证 activate、replacement、late disposal、current disposal 与 idle-to-reactivate lease
+lifecycle。Host、external、
+cross-plugin、stale、fragment 与 data document attempt 会进入 policy 并被拒绝。WKWebView 会在
+navigation callback 前 preflight-block `file:`、no-op `javascript:` 与 same-document `blob:`；
+evidence 如实记录 `blocked_by_webview`、原 document 保留和 callback count 不变，而不宣称 policy
+deny。popup/targeted-context 与 blob-download 用例会进入各自独立 deny hook。运行：
+
+```bash
+pnpm run check:frame-aware-webview-navigation-policy
+```
+
+该 capability 仅支持 macOS，不宣称 Windows 或 Linux 支持。Task 4.2 container 现在会消费它的精确
+target lease；Runtime Session、Host API、permissions 与完整 CSP 仍是独立 capability。
+
+## 已交付的 macOS 隔离 Plugin iframe Runtime
+
+available external Plugin Page 现在会在现有单窗口 Page slot 中渲染唯一 Host-owned
+`PluginRuntimeFrame`。Host 私有 resolver 会交叉检查 current Page identity、provider、eligible
+Registration entry、Registration revision、Resource response identity、isolated-origin URL 与 Registry
+route。它只从 Host route 派生 fragment target，绝不回退到 Manifest path、shared host、stale URL 或
+plugin 提供的 iframe policy。显式 retry 会刷新 current projection 并创建新的 attempt identity；没有
+自动 retry 或 hidden iframe 复用。
+
+container 固定 `sandbox="allow-scripts allow-same-origin"`、`referrerPolicy="no-referrer"`，并拒绝
+camera、microphone、geolocation、fullscreen、clipboard、display capture、payment、USB、serial、HID、
+Bluetooth 与 screen wake lock。native lease activation 完成后才会给 iframe 设置 `src`。close、Registry
+invalidation、replacement、retry、返回 home/search 与 App teardown 都会移除 iframe，并 compare-current
+dispose lease。最多存在一个 plugin iframe；Host Page 仍是可信 React surface。
+
+UI 提供本地化 `resolving`、`loading`、`loaded` 与有边界的 failure 状态，以及可访问的显式 retry。
+`loaded` 只表示 iframe load event 已触发，并不等于 SDK 或 Session `ready`。该能力不增加 message
+bridge、MessagePort、JSON-RPC、Host API、permission dispatcher、通用 timeout/crash recovery 或完整
+CSP。Plugin Runtime resolver、Resource/Registration adapter、iframe policy、native lease boundary 与
+origin facts 保持 Host 私有，并由 workspace boundary 阻止公共 package 和 plugin workspace import。
+
+运行 `pnpm run check:plugin-iframe-runtime` 可验证 resolver、component、navigation lease、Page/
+lifecycle/replacement/resource 回归、真实 normal/malicious/replacement `.lxp` evidence、两项前置 gate 与
+workspace boundary。真实 WKWebView evidence 仅适用于 macOS，不宣称 Windows 或 Linux Runtime 支持。
 
 ## 已交付的 Host 私有 Plugin Surface 投影与 Page 导航
 
@@ -424,10 +526,9 @@ descriptor。Registry replacement 只会在 active Plugin Page identity 消失�
 fallback。
 
 生产组合初始化该协调器，在 Launcher activation 与 listener recovery 时刷新，并在 cleanup 时销毁
-同一 subscription。available Plugin Page 在现有单窗口 page surface 中渲染本地化 Host-owned
-placeholder。placeholder 不会读取 route、加载 entry/asset、创建 iframe、调用 Tauri 或执行插件代码。
-Task 4.1 resource service 已交付，但该 placeholder 不会消费它；Task 4.2 iframe Runtime 与 Task 5.5
-完整权限管理仍未实现。
+同一 subscription。available Plugin Page 会把 current resolution 交给已交付的 Host 私有 iframe
+Runtime resolver。surface projection 仍不会向插件暴露 route、entry ID、revision、origin fact、resource
+URL 或 native object。Task 5.5 完整权限管理仍未实现。
 
 ## 已交付的公共 Plugin SDK Foundation
 
@@ -609,7 +710,7 @@ icon 解析、完整权限决策、生命周期写操作和外部 Runtime 执行
 
 ### 外部插件
 
-实现外部插件执行后，插件 UI 必须在隔离的 iframe 中运行，并且只能通过受控 Host Bridge 通信。
+外部插件 UI 运行在已交付的隔离 iframe 中。后续 Runtime Session 只能通过受控 Host Bridge 增加通信。
 外部插件不能直接访问：
 
 - 应用 React 状态或组件实例；
@@ -660,7 +761,7 @@ Host API 方法应当保持小型、类型化、版本化，并且可以独立�
 
 静态 Manifest 格式、校验器、Host 私有本地安装与同 identity replacement、绑定 revision 的
 enable/disable/uninstall 基础设施、scoped package-relative resources、Plugin surface 投影、生产
-Action 激活、Page Registry/navigation 与 Runtime-free Host placeholder 已经交付。其余每项能力——
+Action 激活、Page Registry/navigation 与 macOS 隔离 iframe Runtime 已经交付。其余每项能力——
 完整插件管理 UI、完整权限、
-Host API 方法、公共打包、远程/自动更新、用户主动 rollback history、iframe Runtime 执行或 sidecar——
+Host API 方法、公共打包、远程/自动更新、用户主动 rollback history、Runtime Session 或 sidecar——
 都需要独立的已接受规格和实现证据。本文定义架构方向和边界，不是发布检查清单。

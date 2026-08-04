@@ -96,7 +96,27 @@
               "type": "string",
               "minLength": 1
             },
-            "pluginRuntimeUnavailable": {
+            "pluginRuntimeResolving": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pluginRuntimeLoading": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pluginRuntimeFrameTitle": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pluginRuntimeFailureTitle": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pluginRuntimeFailureDescription": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pluginRuntimeRetry": {
               "type": "string",
               "minLength": 1
             },
@@ -113,7 +133,12 @@
             "closeLabel",
             "closePluginLabel",
             "hostOwner",
-            "pluginRuntimeUnavailable",
+            "pluginRuntimeResolving",
+            "pluginRuntimeLoading",
+            "pluginRuntimeFrameTitle",
+            "pluginRuntimeFailureTitle",
+            "pluginRuntimeFailureDescription",
+            "pluginRuntimeRetry",
             "errorTitle",
             "errorDescription"
           ]

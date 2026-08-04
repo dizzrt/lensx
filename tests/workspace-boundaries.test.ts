@@ -143,10 +143,55 @@ describe('workspace boundary checker', () => {
 
     expect(rustResourceImports.map((item) => item.file)).toEqual([
       'examples/plugins/bad/src/index.ts',
+      'examples/plugins/bad/src/index.ts',
       'packages/public/src/index.ts',
+      'packages/public/src/index.ts',
+      'plugins/official/bad/src/index.ts',
       'plugins/official/bad/src/index.ts',
     ]);
     expect(rustResourceImports.every((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport)).toBe(true);
+  });
+
+  test('rejects Host-private Runtime resolver, iframe policy, navigation adapter, and native lease boundary', () => {
+    const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
+    const runtimeImports = diagnostics.filter(
+      (item) => item.specifier.includes('/plugins/runtime') || item.specifier.includes('plugin_runtime_navigation.rs'),
+    );
+
+    expect(runtimeImports).toHaveLength(12);
+    expect(
+      runtimeImports.every(
+        (item) =>
+          item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport ||
+          item.ruleId === WORKSPACE_BOUNDARY_RULES.hostTauriAdapter,
+      ),
+    ).toBe(true);
+  });
+
+  test('rejects isolated-origin parser and real WebView harness internals for every plugin consumer kind', () => {
+    const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
+    const isolatedOriginImports = diagnostics.filter(
+      (item) =>
+        item.specifier.includes('plugin_resource_url') || item.specifier.includes('plugin_iframe_runtime_harness'),
+    );
+
+    expect(isolatedOriginImports).toHaveLength(6);
+    expect(isolatedOriginImports.every((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport)).toBe(
+      true,
+    );
+  });
+
+  test('rejects frame-aware policy, dependency patch, and harness internals for every plugin consumer kind', () => {
+    const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
+    const frameAwareImports = diagnostics.filter(
+      (item) =>
+        item.specifier.includes('frame_aware_navigation_policy') ||
+        item.specifier.includes('vendor/frame-aware-navigation') ||
+        item.specifier.includes('frame-aware-webview'),
+    );
+
+    expect(frameAwareImports).toHaveLength(9);
+    expect(frameAwareImports.every((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport)).toBe(true);
   });
 
   test('rejects Tauri imports for official and example plugins', () => {

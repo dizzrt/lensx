@@ -3,6 +3,9 @@ pub mod launcher_action_collections;
 pub mod launcher_surface;
 pub mod launcher_window;
 use std::sync::Arc;
+pub(crate) mod frame_aware_navigation_policy;
+#[cfg(target_os = "macos")]
+pub(crate) mod frame_aware_navigation_setup;
 pub(crate) mod plugin_identity;
 pub mod plugin_installation_contract;
 pub mod plugin_installer;
@@ -15,6 +18,8 @@ pub mod plugin_registration;
 pub mod plugin_replacement_contract;
 pub mod plugin_resource_contract;
 pub mod plugin_resource_service;
+pub(crate) mod plugin_resource_url;
+mod plugin_runtime_navigation;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -41,9 +46,13 @@ pub fn run() {
             plugin_lifecycle::uninstall_plugin,
             plugin_registration::read_plugin_registration_detail,
             plugin_registration::read_plugin_registration_snapshot,
-            plugin_resource_service::resolve_plugin_resource_entry
+            plugin_resource_service::resolve_plugin_resource_entry,
+            plugin_runtime_navigation::activate_plugin_runtime_navigation,
+            plugin_runtime_navigation::dispose_plugin_runtime_navigation
         ])
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            frame_aware_navigation_setup::setup_frame_aware_navigation_policy(app.handle())?;
             let plugin_manager = plugin_manager::setup_plugin_manager(app.handle());
             let plugin_installer =
                 plugin_installer::setup_plugin_installer(app.handle(), Arc::clone(&plugin_manager));

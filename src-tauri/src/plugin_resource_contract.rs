@@ -1,7 +1,8 @@
+use crate::plugin_identity::plugin_record_key;
 use crate::plugin_registration::is_valid_plugin_registration_entry_id;
+use crate::plugin_resource_url::parse_plugin_resource_url;
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use url::Url;
 
 pub const PLUGIN_RESOURCE_CONTRACT_VERSION: &str = "0.1.0";
 
@@ -108,20 +109,10 @@ fn is_plugin_id(value: &str) -> bool {
         })
 }
 
-fn is_entry_url(value: &str) -> bool {
-    let Ok(url) = Url::parse(value) else {
-        return false;
-    };
-    let valid_origin = (url.scheme() == "lensx-plugin" && url.host_str() == Some("localhost"))
-        || (matches!(url.scheme(), "http" | "https")
-            && url.host_str() == Some("lensx-plugin.localhost"));
-    valid_origin
-        && url.username().is_empty()
-        && url.password().is_none()
-        && url.port().is_none()
-        && url.query().is_none()
-        && url.fragment().is_none()
-        && url.path().starts_with("/v1/")
+fn is_entry_url(value: &str, plugin_id: &str, version: &str) -> bool {
+    parse_plugin_resource_url(value, false).is_some_and(|parsed| {
+        parsed.plugin_key == plugin_record_key(plugin_id) && parsed.version == version
+    })
 }
 
 pub fn validate_resolve_request(request: &ResolvePluginResourceEntryRequest) -> bool {
@@ -147,7 +138,7 @@ pub fn deserialize_resource_entry(value: serde_json::Value) -> Result<PluginReso
         && is_revision(&entry.revision)
         && is_plugin_id(&entry.plugin_id)
         && Version::parse(&entry.version).is_ok()
-        && is_entry_url(&entry.entry_url))
+        && is_entry_url(&entry.entry_url, &entry.plugin_id, &entry.version))
     .then_some(entry)
     .ok_or(())
 }

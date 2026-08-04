@@ -98,6 +98,68 @@ containment，以及打开后 file identity/size 复核。改变任一依赖决�
 keyboard、accessibility 或 Semi Design surface，因此这些区域需要回归验证，但不需要新增 product copy
 或组件专项验收。
 
+## 隔离 Plugin Runtime Origin 验证
+
+修改隔离 Resource authority、host/path parser、translated URL 形态、origin evidence 或下游 origin
+前置条件时，必须运行：
+
+```bash
+pnpm run check:isolated-plugin-runtime-origin
+```
+
+该门禁组合 canonical `.lxp` fixture 验证、有边界的已提交真实 macOS WKWebView evidence、Resource
+Contract 与 Service tests、frame-aware navigation tests/evidence、workspace-private boundary check，以及
+Plugin Page composition 回归。真实 evidence 必须覆盖 non-opaque serialized origin、完整 ES Module/
+resource graph、same-generation storage roundtrip、Host/other-generation isolation、parent/frame/Tauri
+absence、zero privileged hit，以及 normal/malicious/replacement package 经过真实 Resource Service 的路径。
+它不得包含 raw URL、scope、path、storage value 或 invoke secret。
+
+该门禁只证明 macOS 前置能力，本身不授权 production iframe，也不建立 Windows/Linux Runtime 支持。
+任何 shared host、丢失 translated key、authority/path mismatch、wildcard/null CORS 或 opaque/classic-only
+fallback 都会使验证失败。
+
+## macOS Frame-Aware WebView Navigation 验证
+
+修改 Host navigation policy、Tauri/Wry patch、main-only initialization、WebView harness、
+evidence schema 或 Plugin Page/Resource 回归时，运行：
+
+```bash
+pnpm run check:frame-aware-webview-navigation-policy
+```
+
+该门禁检查全部 15 个维护中的 document、bounded evidence schema、已提交的真实 WKWebView
+matrix、精确的 vendored dependency integrity 与 patch surface、Rust policy/epoch/normalization/
+adapter tests、Resource Service 回归、workspace-private boundary，以及 Plugin Page composition。
+evidence 仅适用于 macOS，必须确认 activate/replace/dispose/reactivate lease preflight，并包含原生
+`main`/`descendant` 事实、pre-commit outcome、Host
+bootstrap 可用、descendant bootstrap/invoke 缺失，以及 popup/download hook count。它绝不能包含
+raw URL、scope、identity、invoke key 或 payload、bootstrap source 或本机路径。
+
+只有在审查 fixture 变更后，才运行 `pnpm run generate:frame-aware-webview-navigation-fixtures`。
+真实 evidence 必须先在目标 macOS WKWebView 重跑，再用
+`pnpm run generate:frame-aware-webview-evidence-matrix` 有意提升。vendored dependency 变更必须先
+审查精确 diff 与 license，再用 `pnpm run generate:frame-aware-navigation-dependency-drift` 更新
+integrity record。这些 generator 不替代 focused gate 或完整 frontend/Rust validation 集合。
+
+## 隔离 Plugin iframe Runtime 验证
+
+修改 Runtime resolver、iframe policy/container、Host navigation adapter、Plugin Page composition 或
+lifecycle cleanup 时，必须运行：
+
+```bash
+pnpm run check:plugin-iframe-runtime
+```
+
+该门禁组合 resolver 与 React state/cancellation tests、精确 sandbox/Permissions Policy/referrer 断言、
+native lease activation 与 compare-current disposal、Page/lifecycle/replacement/resource 回归、workspace
+私有 import、canonical 真实 `.lxp` fixture、有边界的 macOS WKWebView evidence，以及 origin/navigation
+两项前置 gate。evidence 必须继续证明 ES Module graph、route fragment、storage partition、parent/frame/
+Tauri absence、zero privileged hit，以及恶意 navigation/capability rejection。
+
+该门禁只证明 iframe `loaded`，绝不证明 Runtime Session 或 SDK `ready`。它不验证 message bridge、
+Host API、permission dispatcher、完整 CSP、通用 timeout/crash recovery 或 Windows/Linux Runtime。
+应在完整 frontend/Rust validation 集合前运行，但不能替代它们。
+
 ## Rust 验证
 
 检查 Rust 格式：

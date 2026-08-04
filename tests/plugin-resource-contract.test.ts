@@ -117,9 +117,10 @@ describe('Host-private Plugin Resource Contract', () => {
     });
   });
 
-  test('does not connect the contract to the App Shell or replace the Host-owned plugin placeholder', () => {
+  test('connects the Resource adapter only through the Host-private Runtime resolver', () => {
     const shell = readFileSync(fileURLToPath(new URL('../src/App.tsx', import.meta.url)), 'utf8');
-    expect(shell).not.toContain('plugins/resource');
+    expect(shell).toContain('desktopPluginResourceAdapter');
+    expect(shell).toContain('createPluginPageRuntimeResolver');
     expect(shell).not.toContain('resolve_plugin_resource_entry');
     expect(shell).not.toContain('<iframe');
   });

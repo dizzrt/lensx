@@ -20,7 +20,12 @@
       "closeLabel": "关闭设置并返回主页",
       "closePluginLabel": "关闭页面并返回主页",
       "hostOwner": "lensX",
-      "pluginRuntimeUnavailable": "此插件页面已注册，但隔离运行时尚不可用。",
+      "pluginRuntimeResolving": "正在准备隔离插件运行时…",
+      "pluginRuntimeLoading": "正在加载插件页面…",
+      "pluginRuntimeFrameTitle": "{{title}}插件运行时",
+      "pluginRuntimeFailureTitle": "无法加载此插件页面",
+      "pluginRuntimeFailureDescription": "隔离运行时当前不可用。重试将重新解析插件的当前版本。",
+      "pluginRuntimeRetry": "重试",
       "errorTitle": "无法显示此页面",
       "errorDescription": "请关闭页面后重试。"
     },
