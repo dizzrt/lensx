@@ -312,6 +312,23 @@ pub(crate) struct PluginInstallerRecoveryFacts {
     pub quarantined_record_keys: Vec<String>,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct PluginManagerResourceProjection {
+    pub revision: String,
+    pub entry_id: String,
+    pub plugin_id: String,
+    pub record_key: String,
+    pub registration: PluginRegistration,
+    pub resource_generation: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum PluginManagerResourceProjectionError {
+    Degraded,
+    StaleRevision,
+    NotFound,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 struct PluginRecordV1 {
@@ -337,6 +354,8 @@ struct PluginManagerSnapshot {
     revision: u64,
     healthy: BTreeMap<String, PluginRegistration>,
     quarantined: BTreeMap<String, QuarantineStub>,
+    resource_generations: BTreeMap<String, u64>,
+    next_resource_generation: u64,
 }
 
 #[derive(Debug)]
@@ -385,6 +404,9 @@ impl PluginManager {
                 }
                 report.healthy_records = snapshot.healthy.len();
                 report.quarantined_records = snapshot.quarantined.len();
+                for plugin_id in snapshot.healthy.keys().cloned().collect::<Vec<_>>() {
+                    snapshot.advance_resource_generation(&plugin_id);
+                }
             }
             Err(diagnostic) => {
                 report.degraded = true;
@@ -512,6 +534,38 @@ impl PluginManager {
         }
     }
 
+    pub(crate) fn read_resource_projection(
+        &self,
+        entry_id: &str,
+        expected_revision: Option<&str>,
+    ) -> Result<PluginManagerResourceProjection, PluginManagerResourceProjectionError> {
+        if self.recovery_report.degraded {
+            return Err(PluginManagerResourceProjectionError::Degraded);
+        }
+        let snapshot = self.lock_snapshot();
+        if expected_revision.is_some_and(|expected| expected != snapshot.revision.to_string()) {
+            return Err(PluginManagerResourceProjectionError::StaleRevision);
+        }
+        let (plugin_id, registration) = snapshot
+            .healthy
+            .iter()
+            .find(|(_, registration)| healthy_entry_id(registration) == entry_id)
+            .ok_or(PluginManagerResourceProjectionError::NotFound)?;
+        let resource_generation = snapshot
+            .resource_generations
+            .get(plugin_id)
+            .copied()
+            .ok_or(PluginManagerResourceProjectionError::NotFound)?;
+        Ok(PluginManagerResourceProjection {
+            revision: snapshot.revision.to_string(),
+            entry_id: entry_id.to_owned(),
+            plugin_id: plugin_id.clone(),
+            record_key: plugin_record_key(plugin_id),
+            registration: registration.clone(),
+            resource_generation,
+        })
+    }
+
     pub fn read_registration_snapshot(&self) -> PluginRegistrationSnapshot {
         let snapshot = self.lock_snapshot();
         project_plugin_registration_snapshot(
@@ -561,7 +615,8 @@ impl PluginManager {
         self.store
             .write_record(&PluginRecordV1::from_registration(&registration))?;
         snapshot.quarantined.remove(&key);
-        snapshot.healthy.insert(plugin_id, registration);
+        snapshot.healthy.insert(plugin_id.clone(), registration);
+        snapshot.advance_resource_generation(&plugin_id);
         Ok(Some(snapshot.commit_change()))
     }
 
@@ -585,6 +640,7 @@ impl PluginManager {
         self.store
             .write_record(&PluginRecordV1::from_registration(&next))?;
         snapshot.healthy.insert(plugin_id.to_owned(), next);
+        snapshot.advance_resource_generation(plugin_id);
         Ok(Some(snapshot.commit_change()))
     }
 
@@ -634,7 +690,8 @@ impl PluginManager {
         };
         self.store
             .write_record(&PluginRecordV1::from_registration(&registration))?;
-        snapshot.healthy.insert(plugin_id, registration);
+        snapshot.healthy.insert(plugin_id.clone(), registration);
+        snapshot.advance_resource_generation(&plugin_id);
         Ok(PluginManagerReplacement {
             change: snapshot.commit_change(),
         })
@@ -674,7 +731,10 @@ impl PluginManager {
         registration.facts.validate()?;
         self.store
             .write_record(&PluginRecordV1::from_registration(&registration))?;
-        snapshot.healthy.insert(plugin_id, registration.clone());
+        snapshot
+            .healthy
+            .insert(plugin_id.clone(), registration.clone());
+        snapshot.advance_resource_generation(&plugin_id);
         Ok((registration, Some(snapshot.commit_change())))
     }
 
@@ -696,6 +756,7 @@ impl PluginManager {
         match &entry {
             PluginManagerLifecycleEntry::Healthy { plugin_id, .. } => {
                 snapshot.healthy.remove(plugin_id);
+                snapshot.resource_generations.remove(plugin_id);
             }
             PluginManagerLifecycleEntry::Quarantined { record_key, .. } => {
                 snapshot.quarantined.remove(record_key);
@@ -743,6 +804,16 @@ impl PluginManager {
 }
 
 impl PluginManagerSnapshot {
+    fn advance_resource_generation(&mut self, plugin_id: &str) -> u64 {
+        self.next_resource_generation = self
+            .next_resource_generation
+            .checked_add(1)
+            .expect("Plugin resource generation should not overflow during one process");
+        self.resource_generations
+            .insert(plugin_id.to_owned(), self.next_resource_generation);
+        self.next_resource_generation
+    }
+
     fn commit_change(&mut self) -> PluginRegistrationChangedEvent {
         self.revision = self
             .revision
@@ -1816,6 +1887,118 @@ mod tests {
         let recovered = PluginManager::recover(&directory.path, versions("0.1.0"));
         assert_eq!(recovered.registration_revision(), "0");
         assert!(recovered.registration("com.acme.revision").is_some());
+    }
+
+    #[test]
+    fn resource_generation_is_targeted_process_local_and_never_persisted_or_projected() {
+        let directory = TestDirectory::new("resource-generation");
+        let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
+        let plugin_id = "com.acme.resource";
+        manager
+            .register(manifest(plugin_id, "0.2.0"), facts(false))
+            .expect("registration should succeed");
+        let registration = manager
+            .registration(plugin_id)
+            .expect("registration should exist");
+        let entry_id = healthy_entry_id(&registration);
+        let initial = manager
+            .read_resource_projection(&entry_id, Some("1"))
+            .expect("projection should exist");
+
+        assert!(manager
+            .set_enabled(plugin_id, false)
+            .expect("no-op should succeed")
+            .is_none());
+        manager
+            .append_diagnostic(plugin_id, persist_diagnostic(1))
+            .expect("diagnostic should persist");
+        let after_diagnostic = manager
+            .read_resource_projection(&entry_id, None)
+            .expect("projection should remain");
+        assert_eq!(
+            initial.resource_generation,
+            after_diagnostic.resource_generation
+        );
+
+        manager
+            .register(manifest("com.acme.unrelated", "0.2.0"), facts(true))
+            .expect("unrelated registration should succeed");
+        assert_eq!(
+            initial.resource_generation,
+            manager
+                .read_resource_projection(&entry_id, None)
+                .expect("projection should remain")
+                .resource_generation
+        );
+
+        manager
+            .set_enabled(plugin_id, true)
+            .expect("enable should persist");
+        let enabled = manager
+            .read_resource_projection(&entry_id, None)
+            .expect("projection should remain");
+        assert_ne!(initial.resource_generation, enabled.resource_generation);
+
+        manager.set_write_fault(Some(WriteFault::Write));
+        assert!(manager.set_enabled(plugin_id, false).is_err());
+        manager.set_write_fault(None);
+        assert_eq!(
+            enabled.resource_generation,
+            manager
+                .read_resource_projection(&entry_id, None)
+                .expect("failed write should preserve projection")
+                .resource_generation
+        );
+
+        let revision = manager.registration_revision();
+        manager
+            .replace_entry(
+                &entry_id,
+                &revision,
+                manifest(plugin_id, "0.2.0"),
+                facts(true),
+            )
+            .expect("replacement should persist");
+        let replaced = manager
+            .read_resource_projection(&entry_id, None)
+            .expect("replacement projection should exist");
+        assert_ne!(enabled.resource_generation, replaced.resource_generation);
+
+        let store_file = directory
+            .path
+            .join(PLUGIN_MANAGER_DIRECTORY)
+            .join(format!("{}.json", plugin_record_key(plugin_id)));
+        let stored = fs::read_to_string(store_file).expect("record should be readable");
+        assert!(!stored.contains("resource_generation"));
+        let snapshot = serde_json::to_string(&manager.read_registration_snapshot())
+            .expect("snapshot should serialize");
+        let detail = serde_json::to_string(
+            &manager
+                .read_registration_detail(&entry_id)
+                .expect("detail should exist"),
+        )
+        .expect("detail should serialize");
+        assert!(!snapshot.contains("resource_generation"));
+        assert!(!detail.contains("resource_generation"));
+
+        let revision = manager.registration_revision();
+        manager
+            .remove_entry(&entry_id, &revision)
+            .expect("removal should persist");
+        assert!(matches!(
+            manager.read_resource_projection(&entry_id, None),
+            Err(PluginManagerResourceProjectionError::NotFound)
+        ));
+        manager
+            .register(manifest(plugin_id, "0.2.0"), facts(true))
+            .expect("re-registration should succeed");
+        let re_registered = manager
+            .read_resource_projection(&entry_id, None)
+            .expect("re-registration should project");
+        assert_ne!(
+            replaced.resource_generation,
+            re_registered.resource_generation
+        );
     }
 
     #[test]

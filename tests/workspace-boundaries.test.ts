@@ -113,6 +113,42 @@ describe('workspace boundary checker', () => {
     ).toBe(true);
   });
 
+  test('rejects Host-private Resource Contract, adapter, and command entry points for every plugin consumer kind', () => {
+    const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
+    const resourceImports = diagnostics.filter((item) => item.specifier.includes('/plugins/resource'));
+
+    expect(resourceImports.map((item) => item.file)).toEqual([
+      'examples/plugins/bad/src/index.ts',
+      'examples/plugins/bad/src/index.ts',
+      'examples/plugins/bad/src/index.ts',
+      'packages/public/src/index.ts',
+      'packages/public/src/index.ts',
+      'packages/public/src/index.ts',
+      'plugins/official/bad/src/index.ts',
+      'plugins/official/bad/src/index.ts',
+      'plugins/official/bad/src/index.ts',
+    ]);
+    expect(
+      resourceImports.every(
+        (item) =>
+          item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport ||
+          item.ruleId === WORKSPACE_BOUNDARY_RULES.hostTauriAdapter,
+      ),
+    ).toBe(true);
+  });
+
+  test('rejects direct imports of Host-private Rust Resource Contract and service paths', () => {
+    const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
+    const rustResourceImports = diagnostics.filter((item) => item.specifier.includes('src-tauri/src/plugin_resource'));
+
+    expect(rustResourceImports.map((item) => item.file)).toEqual([
+      'examples/plugins/bad/src/index.ts',
+      'packages/public/src/index.ts',
+      'plugins/official/bad/src/index.ts',
+    ]);
+    expect(rustResourceImports.every((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport)).toBe(true);
+  });
+
   test('rejects Tauri imports for official and example plugins', () => {
     const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
     const tauriImports = diagnostics.filter((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.pluginTauriImport);

@@ -73,6 +73,31 @@ incompatible 和 reproducible cases。只有在审查 dependency、parameter、f
 该专项门禁是对 `check:plugin-contract`、workspace boundary/lifecycle checks，以及完整 frontend/shared 与
 Rust 验证集合的补充，不会替代它们。
 
+## Plugin Resource Service 验证
+
+修改 Host 私有 Resource Contract、desktop adapter、Manager generation、Installer ownership proof、
+custom protocol、path/MIME policy 或 resource lifecycle 时，必须运行：
+
+```bash
+pnpm run check:plugin-resource-service
+```
+
+该门禁消费精确的 Rust/TypeScript 共享 contract fixture，检查公共 package 与插件边界，并运行 Manager、
+Installer、protocol、path attack、MIME/method、64 MiB、lifecycle、race、error-oracle，以及 macOS/
+Windows/Linux URL 形态回归。当前主机无法原生执行的平台行为保留为纯 Rust URL/request fixture，同时仍
+要求正常 desktop target CI/build 覆盖。
+
+Resource scope 使用精确直接依赖 `getrandom = 0.3.4`（`MIT OR Apache-2.0`，由 Rust Random project
+维护）。该版本已经存在于 `Cargo.lock`，且只用于从操作系统 CSPRNG 获得至少 128 bit entropy；
+preparation-token hash、时间、进程 ID 与计数器都不能替代它。本 change 未增加 capability-filesystem
+依赖：实现使用标准库 filesystem/platform metadata、逐段 link/reparse rejection、canonical
+containment，以及打开后 file identity/size 复核。改变任一依赖决策前，必须重新审查精确版本、许可证、
+维护情况与 macOS/Windows/Linux 语义。
+
+该 focused gate 不替代完整 frontend 与 Rust 验证集合。本 change 没有可见 UI、locale、theme、
+keyboard、accessibility 或 Semi Design surface，因此这些区域需要回归验证，但不需要新增 product copy
+或组件专项验收。
+
 ## Rust 验证
 
 检查 Rust 格式：

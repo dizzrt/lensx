@@ -1,0 +1,39 @@
+[
+  {
+    "name": "resolve_request",
+    "type": "request",
+    "value": { "contract_version": "0.1.0", "entry_id": "entry_0123456789abcdef", "expected_revision": "7" }
+  },
+  {
+    "name": "resolved_entry",
+    "type": "result",
+    "value": {
+      "contract_version": "0.1.0",
+      "entry_id": "entry_0123456789abcdef",
+      "revision": "7",
+      "plugin_id": "com.acme.workspace",
+      "version": "1.2.3",
+      "entry_url": "lensx-plugin://localhost/v1/0123456789abcdef0123456789abcdef/v1-636f6d2e61636d652e776f726b7370616365/1.2.3/index.html"
+    }
+  },
+  {
+    "name": "stale_revision_error",
+    "type": "error",
+    "value": {
+      "contract_version": "0.1.0",
+      "code": "stale_revision",
+      "operation": "resolve_entry",
+      "message": "Plugin registration revision is stale."
+    }
+  },
+  {
+    "name": "unsafe_state_error",
+    "type": "error",
+    "value": {
+      "contract_version": "0.1.0",
+      "code": "unsafe_state",
+      "operation": "resolve_entry",
+      "message": "Plugin resource storage state is unsafe."
+    }
+  }
+]

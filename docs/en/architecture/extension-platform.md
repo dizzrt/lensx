@@ -5,8 +5,9 @@
 This document separates the shipped static plugin Manifest contract, `.lxp`
 package inspection and local installation, Plugin SDK foundation, Plugin
 Testkit, optional Plugin UI package, Host-private Plugin surface projection and
-Page navigation, Host-private lifecycle controls, and local package replacement
-from the intended runtime extension boundary. Public packaging CLI,
+Page navigation, Host-private lifecycle controls, local package replacement,
+and the Host-private scoped resource service from the intended runtime
+extension boundary. Public packaging CLI,
 distribution, plugin execution, complete permission decisions, iframe
 transport, signing, the Host API, complete plugin-management UI, remote
 updates, and user-initiated rollback history are not currently implemented.
@@ -344,8 +345,8 @@ or automatic authorization. The Registration Contract itself remains read-only:
 it does not install, update, uninstall, enable, disable, execute, or render
 plugins. The downstream Host-private lifecycle and Action projection cores
 consume it without changing that wire contract. Management UI, real Runtime
-sessions, complete permission decisions, signatures, scoped resource
-resolution, and Host API methods remain unimplemented.
+sessions, complete permission decisions, signatures, and Host API methods
+remain unimplemented.
 
 ## Shipped Host-Private Plugin Lifecycle Controls
 
@@ -451,6 +452,73 @@ adapter/service, boundary, package/registration/lifecycle regression, packed
 public-package, and focused Rust gate. The command never publishes packages or
 rewrites fixture baselines.
 
+## Shipped Host-Private Plugin Resource Service
+
+The Rust Host registers one asynchronous `lensx-plugin` custom protocol and
+manages one `PluginResourceService` beside the existing Plugin Manager and
+Installer. Independent Resource Contract `0.1.0` exposes only
+`resolve_plugin_resource_entry` to the trusted root application. Its exact
+request is `{ contract_version, entry_id, expected_revision }`; success contains
+only the current entry ID, revision, plugin ID, version, and opaque `entry_url`.
+Paths, digests, record keys, installation roots, separate scope fields, Manager
+objects, and raw native errors never cross this boundary. The TypeScript parser
+and desktop adapter validate `unknown`, deep-freeze results, do not cache across
+revisions, and remain unavailable to Manifest code, public packages, and
+plugins.
+
+The Manager owns a process-local `resource_generation` for each healthy entry.
+It is absent from Store version 1, Registration snapshot/detail, and changed
+events. Register, committed enable/disable, replacement, removal, and later
+re-registration change only the target generation; idempotent no-ops,
+diagnostics, failed transitions, and unrelated plugin revisions preserve it.
+The scope map is never persisted, so restart invalidates every old URL.
+
+Resolution requires a healthy, enabled plugin compatible with lensX and the
+Host API. Source and Publisher text are not authorization. The service reuses
+the Installer ownership proof for the exact
+`packages/<plugin-key>/<sha256>` active pointer, matching record identity and
+digest, a canonical real payload tree, and a regular non-link Runtime entry.
+Each `(entry_id, resource_generation)` receives at most one 128-bit OS-CSPRNG
+scope. Repeated resolution is idempotent. Disable/re-enable, replacement,
+logical uninstall, incompatible or quarantine state, and restart permanently
+invalidate prior scopes; unrelated global revision changes do not.
+
+Every request rechecks the scope and current Manager facts. URL plugin key and
+version fields are derived cross-checks, not authority. Package-relative paths
+use the portable package grammar and reject absolute or root-relative forms,
+empty or dot segments, backslashes, percent encoding, NUL, query, excessive
+length/depth, metadata records, directories, unknown files, and cross-payload
+targets. Rust checks each component for links/reparse points, proves canonical
+containment, opens one regular file, rechecks opened identity and size, and
+performs one complete bounded read capped at 64 MiB. Validation/open/read races
+return one consistent file or a complete safe failure. The service neither
+lists directories nor rewrites HTML, so plugin HTML, CSS, and JavaScript must
+use package-relative URLs.
+
+Only `GET` and `HEAD` are supported. A fixed case-insensitive table covers
+HTML, JavaScript/ES modules, CSS, JSON, Wasm, PNG, JPEG, GIF, WebP, AVIF, SVG,
+ICO, and WOFF2; there is no sniffing or `application/octet-stream` fallback.
+Success includes exact `Content-Type`/`Content-Length`, `nosniff`, and
+`Cache-Control: no-store`; `HEAD` has the same status and headers with no body.
+Range, conditional requests, query routing, directory indexes, content
+negotiation, wildcard CORS, and downloads are unsupported. Every success and
+error is `no-store`.
+
+Unknown/expired scopes, identity or generation mismatch, unsafe/missing paths,
+metadata, unknown MIME, and unavailable registrations share one fixed `404`.
+Non-GET/HEAD uses fixed `405` with `Allow: GET, HEAD`; unavailable managed state
+or unclassified internal failure uses fixed `500`. Responses and logs contain
+no scope, identity, version, digest, record key, absolute path, raw I/O, stack,
+partial bytes, or existence detail.
+
+Run `pnpm run check:plugin-resource-service` for the shared Rust/TypeScript
+fixtures, desktop adapter, workspace boundary, Manager generation, Installer
+ownership regressions, and protocol/path/MIME/lifecycle/race/oracle/platform URL
+tests. This service does not create an iframe, execute plugin code, replace the
+Host-owned Plugin Page placeholder, establish Runtime Sessions or Host API
+transport, grant permissions, or claim complete CSP. Those remain Task 4.2,
+Task 4.3, and Task 4.4.
+
 ## Shipped Host-Private Plugin Surface Projection And Page Navigation
 
 The trusted TypeScript application ships one production surface projection
@@ -518,8 +586,9 @@ activation and listener recovery, and destroys the same subscription on
 cleanup. An available Plugin Page renders a localized Host-owned placeholder in
 the existing single-window page surface. The placeholder never reads routes,
 loads entries/assets, creates an iframe, calls Tauri, or executes plugin code.
-Task 4.1 scoped resources, Task 4.2 iframe Runtime, and Task 5.5 complete
-permission management remain unimplemented.
+The Task 4.1 resource service is shipped but is not consumed by this placeholder;
+Task 4.2 iframe Runtime and Task 5.5 complete permission management remain
+unimplemented.
 
 ## Shipped Public Plugin SDK Foundation
 
@@ -730,7 +799,7 @@ its own authorization and typed application or Rust boundary.
 Production registers Host hide-launcher and open-settings Actions and publishes
 eligible Plugin Actions through the shipped surface coordinator after their
 available Page targets commit. The static Manifest contract still does not
-register Actions by itself. Safe plugin icon/resource resolution, complete
+register Actions by itself. Safe plugin icon resolution, complete
 permission decisions, lifecycle writes, and external Runtime execution remain
 separate capabilities. Recent and pinned collections continue to store only
 Action IDs, so a projected Action hides while its provider is absent and
@@ -805,10 +874,10 @@ method exists.
 
 The static Manifest format, validators, Host-private local installation and
 same-identity replacement, revision-bound enable/disable/uninstall
-infrastructure, Plugin surface projection, production Action activation, Page
-Registry/navigation, and Runtime-free Host placeholder are delivered. Each
-remaining capability—complete plugin-management UI, complete permissions,
-scoped resources, Host API methods, public packaging, remote/automatic updates,
+infrastructure, scoped package-relative resources, Plugin surface projection,
+production Action activation, Page Registry/navigation, and Runtime-free Host
+placeholder are delivered. Each remaining capability—complete plugin-management
+UI, complete permissions, Host API methods, public packaging, remote/automatic updates,
 user-initiated rollback history, iframe Runtime execution, or sidecars—requires
 its own accepted specification and implementation evidence. This architectural
 document defines direction and boundaries, not a release checklist.

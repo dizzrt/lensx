@@ -32,6 +32,8 @@ lensX 是一款轻量级桌面效率启动器，其设计重点包括：
   键盘优先的四列结果网格；
 - Host 私有 Plugin surface 投影协调器，提供 provider-scoped Page/Action 原子替换、
   revision-aware 资格判断和 fail-closed 生命周期处理；
+- Rust 所有的 scoped Plugin Resource Service，只通过严格 package-relative path、固定 MIME、
+  no-store response 与 generation-bound 撤销提供当前 managed payload；
 - 统一的 Host-owned Page Registry 与框架无关导航 service，用于受保护 Host Page 和声明式
   Plugin Page descriptor；
 - 通过窄化 Rust/Tauri 边界持久化、并按当前 registry snapshot 解析的版本化最近使用与已固定
@@ -280,6 +282,7 @@ Rust 负责：
 - 原生窗口和操作系统集成；
 - 特权操作和安全敏感的校验；
 - 持久化和文件系统边界；
+- scoped plugin resource 授权、安全文件打开与 protocol response；
 - 对性能敏感的后台工作；
 - 稳定的 Tauri command 和 event。
 
@@ -296,6 +299,12 @@ Rust 不能通过 Tauri 边界泄漏内部实现类型。
 - 足够稳定，可以独立测试。
 
 除非已接受的契约另有规定，跨语言序列化字段使用 `snake_case`。
+
+Host 私有 Resource Contract 遵循该边界：可信 TypeScript 只提交 entry ID 与调用方观察到的
+Registration revision；Rust 派生当前 plugin identity/version/entry 与 opaque URL；每个 custom-protocol
+request 都依据当前 Manager generation 与 Installer-owned payload 重新验证进程内 scope。React 与公共
+plugin package 都不会获得 installation path、digest、record key 或通用文件读取器。这只是资源读取
+基础；iframe isolation、Runtime Session identity、Host API transport 与完整 CSP 仍是独立工作。
 
 ## 依赖方向
 

@@ -1,0 +1,38 @@
+name: Desktop Rust checks
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/desktop-rust-check.yml'
+      - 'src-tauri/**'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/desktop-rust-check.yml'
+      - 'src-tauri/**'
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-check:
+    name: Cargo check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - ubuntu-24.04
+          - windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - name: Check Rust workspace
+        run: cargo check --manifest-path src-tauri/Cargo.toml --workspace

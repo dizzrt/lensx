@@ -2,6 +2,7 @@ pub mod app_preferences;
 pub mod launcher_action_collections;
 pub mod launcher_surface;
 pub mod launcher_window;
+use std::sync::Arc;
 pub(crate) mod plugin_identity;
 pub mod plugin_installation_contract;
 pub mod plugin_installer;
@@ -12,10 +13,16 @@ pub mod plugin_manifest;
 pub mod plugin_package_format;
 pub mod plugin_registration;
 pub mod plugin_replacement_contract;
+pub mod plugin_resource_contract;
+pub mod plugin_resource_service;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .register_asynchronous_uri_scheme_protocol(
+            "lensx-plugin",
+            plugin_resource_service::handle_plugin_resource_protocol,
+        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
@@ -33,12 +40,18 @@ pub fn run() {
             plugin_lifecycle::set_plugin_enabled,
             plugin_lifecycle::uninstall_plugin,
             plugin_registration::read_plugin_registration_detail,
-            plugin_registration::read_plugin_registration_snapshot
+            plugin_registration::read_plugin_registration_snapshot,
+            plugin_resource_service::resolve_plugin_resource_entry
         ])
         .setup(|app| {
             let plugin_manager = plugin_manager::setup_plugin_manager(app.handle());
             let plugin_installer =
-                plugin_installer::setup_plugin_installer(app.handle(), plugin_manager);
+                plugin_installer::setup_plugin_installer(app.handle(), Arc::clone(&plugin_manager));
+            plugin_resource_service::setup_plugin_resource_service(
+                app.handle(),
+                plugin_manager,
+                Arc::clone(&plugin_installer),
+            );
             plugin_lifecycle::setup_plugin_lifecycle(app.handle(), plugin_installer);
             launcher_window::setup_launcher_window(app.handle());
             Ok(())

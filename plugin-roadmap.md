@@ -407,7 +407,7 @@ Runtime health rollback、数据迁移、权限 UI 或完整管理 UI。
 
 ## Milestone 4：建立隔离插件 Runtime
 
-- [ ] **Task 4.1：安全提供插件资源**
+- [x] **Task 4.1：安全提供插件资源**
 
 **OpenSpec change**：`serve-plugin-resources-securely`
 

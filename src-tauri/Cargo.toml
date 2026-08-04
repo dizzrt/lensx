@@ -31,6 +31,7 @@ tar = "=0.4.45"
 url = "2"
 zstd = "=0.13.3"
 fs2 = "0.4"
+getrandom = "=0.3.4"
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }

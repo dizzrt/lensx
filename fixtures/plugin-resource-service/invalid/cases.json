@@ -1,0 +1,78 @@
+[
+  {
+    "name": "request_wrong_version",
+    "type": "request",
+    "value": { "contract_version": "0.2.0", "entry_id": "entry_0123456789abcdef", "expected_revision": "7" }
+  },
+  {
+    "name": "request_unknown_field",
+    "type": "request",
+    "value": {
+      "contract_version": "0.1.0",
+      "entry_id": "entry_0123456789abcdef",
+      "expected_revision": "7",
+      "path": "/private/plugin"
+    }
+  },
+  {
+    "name": "request_wrong_type",
+    "type": "request",
+    "value": { "contract_version": "0.1.0", "entry_id": 7, "expected_revision": "7" }
+  },
+  {
+    "name": "result_malformed_url",
+    "type": "result",
+    "value": {
+      "contract_version": "0.1.0",
+      "entry_id": "entry_0123456789abcdef",
+      "revision": "7",
+      "plugin_id": "com.acme.workspace",
+      "version": "1.2.3",
+      "entry_url": "file:///private/plugin/index.html"
+    }
+  },
+  {
+    "name": "result_private_field",
+    "type": "result",
+    "value": {
+      "contract_version": "0.1.0",
+      "entry_id": "entry_0123456789abcdef",
+      "revision": "7",
+      "plugin_id": "com.acme.workspace",
+      "version": "1.2.3",
+      "entry_url": "lensx-plugin://localhost/v1/0123456789abcdef0123456789abcdef/v1-key/1.2.3/index.html",
+      "digest": "secret"
+    }
+  },
+  {
+    "name": "error_wrong_message",
+    "type": "error",
+    "value": {
+      "contract_version": "0.1.0",
+      "code": "internal",
+      "operation": "resolve_entry",
+      "message": "/private/plugin: permission denied"
+    }
+  },
+  {
+    "name": "error_unknown_code",
+    "type": "error",
+    "value": {
+      "contract_version": "0.1.0",
+      "code": "io_error",
+      "operation": "resolve_entry",
+      "message": "Plugin resource resolution failed."
+    }
+  },
+  {
+    "name": "error_private_field",
+    "type": "error",
+    "value": {
+      "contract_version": "0.1.0",
+      "code": "unavailable",
+      "operation": "resolve_entry",
+      "message": "Plugin resource entry is unavailable.",
+      "record_key": "v1-secret"
+    }
+  }
+]

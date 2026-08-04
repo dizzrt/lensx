@@ -190,6 +190,12 @@ impl PluginInstaller {
             .clone()
     }
 
+    pub(crate) fn managed_packages_root(&self) -> Option<PathBuf> {
+        (self.current_availability() == InstallerAvailability::Available)
+            .then(|| self.root.as_ref().map(|root| root.join(PACKAGES_DIRECTORY)))
+            .flatten()
+    }
+
     pub fn prepare_replacement_source(
         &self,
         source: &Path,
@@ -1388,22 +1394,17 @@ impl PluginInstaller {
         let plugin_key = entry.record_key();
         match entry {
             crate::plugin_manager::PluginManagerLifecycleEntry::Healthy {
-                registration, ..
+                plugin_id,
+                registration,
+                ..
             } => {
-                let path = PathBuf::from(&registration.facts.installation_path);
-                let canonical = canonical_payload_path(packages_root, plugin_key, &path)
-                    .ok_or(PluginLifecycleStorageError::OperationNotSupported)?;
-                let digest = canonical
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .ok_or(PluginLifecycleStorageError::OperationNotSupported)?;
-                if registration.facts.package_digest.algorithm != "sha256"
-                    || registration.facts.package_digest.value != digest
-                {
-                    return Err(PluginLifecycleStorageError::OperationNotSupported);
-                }
-                validate_real_tree(&canonical)?;
-                Ok(Some(digest.to_owned()))
+                prove_managed_payload_root(
+                    packages_root,
+                    plugin_key,
+                    plugin_id,
+                    &registration.facts,
+                )?;
+                Ok(Some(registration.facts.package_digest.value.clone()))
             }
             crate::plugin_manager::PluginManagerLifecycleEntry::Quarantined { .. } => {
                 let subtree = packages_root.join(plugin_key);
@@ -2037,6 +2038,36 @@ fn canonical_payload_path(packages_root: &Path, key: &str, path: &Path) -> Optio
         && parent == packages_root.join(key)
         && path == packages_root.join(key).join(digest))
     .then(|| path.to_owned())
+}
+
+pub(crate) fn prove_managed_payload_root(
+    packages_root: &Path,
+    record_key: &str,
+    plugin_id: &str,
+    facts: &PluginRegistrationFacts,
+) -> Result<PathBuf, PluginLifecycleStorageError> {
+    if record_key != plugin_record_key(plugin_id)
+        || facts.package_digest.algorithm != "sha256"
+        || !is_digest(&facts.package_digest.value)
+    {
+        return Err(PluginLifecycleStorageError::OperationNotSupported);
+    }
+    let path = PathBuf::from(&facts.installation_path);
+    let lexical = canonical_payload_path(packages_root, record_key, &path)
+        .ok_or(PluginLifecycleStorageError::OperationNotSupported)?;
+    validate_real_tree(&lexical)?;
+    let canonical_packages = fs::canonicalize(packages_root)
+        .map_err(|_| PluginLifecycleStorageError::OperationNotSupported)?;
+    let canonical_payload = fs::canonicalize(&lexical)
+        .map_err(|_| PluginLifecycleStorageError::OperationNotSupported)?;
+    if canonical_payload
+        != canonical_packages
+            .join(record_key)
+            .join(&facts.package_digest.value)
+    {
+        return Err(PluginLifecycleStorageError::OperationNotSupported);
+    }
+    Ok(canonical_payload)
 }
 
 #[tauri::command]

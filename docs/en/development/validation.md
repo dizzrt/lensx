@@ -85,6 +85,38 @@ This dedicated gate supplements rather than replaces `check:plugin-contract`,
 workspace boundary/lifecycle checks, and the complete frontend/shared and Rust
 validation sets.
 
+## Plugin Resource Service Validation
+
+Changes to the Host-private Resource Contract, desktop adapter, Manager
+generation, Installer ownership proof, custom protocol, path/MIME policy, or
+resource lifecycle must run:
+
+```bash
+pnpm run check:plugin-resource-service
+```
+
+The gate consumes exact shared Rust/TypeScript contract fixtures, checks public
+package and plugin boundaries, and runs Manager, Installer, protocol, path
+attack, MIME/method, 64 MiB, lifecycle, race, error-oracle, and macOS/Windows/
+Linux URL-shape regressions. Platform behavior that cannot execute natively on
+the current host is kept in pure Rust URL/request fixtures and still requires
+the normal desktop target CI/build coverage.
+
+Resource scopes use the direct exact dependency `getrandom = 0.3.4`
+(`MIT OR Apache-2.0`, maintained by the Rust Random project). It was already
+present in `Cargo.lock` and is required only for at least 128 bits of operating-
+system CSPRNG entropy; preparation-token hashes, time, process IDs, and counters
+are not acceptable substitutes. No capability-filesystem dependency was added:
+the implementation uses standard-library filesystem/platform metadata,
+component link/reparse rejection, canonical containment, and opened-file
+identity/size revalidation. Re-review exact version, license, maintenance, and
+macOS/Windows/Linux semantics before changing either dependency decision.
+
+This focused gate supplements rather than replaces the complete frontend and
+Rust validation sets. The change has no visible UI, locale, theme, keyboard,
+accessibility, or Semi Design surface, so those areas require regression
+validation but no new product copy or component-specific acceptance.
+
 ## Rust Validation
 
 Check Rust formatting:

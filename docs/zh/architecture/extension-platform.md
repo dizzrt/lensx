@@ -4,7 +4,8 @@
 
 本文区分已经交付的静态插件 Manifest 契约、`.lxp` package inspection 与本地安装、Plugin SDK
 foundation、Plugin Testkit、可选 Plugin UI package、Host 私有 Plugin surface 投影与 Page 导航、
-Host 私有生命周期控制、本地 package replacement，以及预期的运行时扩展边界。公共 packaging CLI、
+Host 私有生命周期控制、本地 package replacement、Host 私有 scoped resource service，以及预期的
+运行时扩展边界。公共 packaging CLI、
 分发、插件执行、完整权限决策、iframe transport、签名、Host API、完整插件管理 UI、远程更新和用户
 主动 rollback history 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
 
@@ -257,7 +258,7 @@ stack、函数或 Tauri 对象。publisher、source、enabled intent、requested
 grant snapshot 都是相互独立的事实；任何一项都不能建立信任或自动授权。该 contract 不会安装、
 更新、卸载、enable、disable、执行或渲染插件。Registration Contract 本身仍然只读；下文的 Host
 私有 lifecycle 与 Action 投影核心消费它，但不改变 wire contract。管理 UI、真实 Runtime session、
-完整权限决策、签名、scoped resource 解析和 Host API method 仍未实现。
+完整权限决策、签名和 Host API method 仍未实现。
 
 ## 已交付的 Host 私有 Plugin Lifecycle Controls
 
@@ -329,6 +330,55 @@ data migration、权限/管理 UI、签名验证或 quarantine repair。
 package/registration/lifecycle 回归、公共 package 打包与 Rust focused 门禁。该命令不会发布 package，
 也不会重写 fixture baseline。
 
+## 已交付的 Host 私有 Plugin Resource Service
+
+Rust Host 注册唯一异步 `lensx-plugin` custom protocol，并在现有 Plugin Manager 与 Installer 旁管理
+一个 `PluginResourceService`。独立 Resource Contract `0.1.0` 只向可信根应用暴露
+`resolve_plugin_resource_entry`。其精确 request 为
+`{ contract_version, entry_id, expected_revision }`；success 只包含当前 entry ID、revision、plugin ID、
+version 与 opaque `entry_url`。path、digest、record key、installation root、独立 scope 字段、Manager
+object 与原始 native error 都不会跨越该边界。TypeScript parser 和 desktop adapter 校验 `unknown`、
+deep-freeze 结果、不跨 revision cache，并且 Manifest 代码、公共 package 与插件都无法使用它们。
+
+Manager 为每个 healthy entry 持有进程内 `resource_generation`。它不会进入 Store version 1、
+Registration snapshot/detail 或 changed event。register、已提交 enable/disable、replacement、remove
+与后续 re-register 只改变目标 generation；幂等 no-op、diagnostic、失败 transition 与无关插件
+revision 保持不变。Scope map 从不持久化，因此重启会使全部旧 URL 失效。
+
+只有 healthy、enabled，并同时兼容 lensX 与 Host API 的插件才能成功 resolve。Source 和 Publisher
+文本不是授权。Service 复用 Installer ownership proof，要求精确
+`packages/<plugin-key>/<sha256>` active pointer、匹配的 record identity 与 digest、canonical real
+payload tree，以及 regular 且非 link 的 Runtime entry。每个 `(entry_id, resource_generation)` 最多
+获得一个由 OS CSPRNG 生成、具有 128-bit entropy 的 scope。重复 resolve 保持幂等；
+disable/re-enable、replacement、逻辑 uninstall、incompatible/quarantine 状态与重启会永久撤销旧
+scope；无关的全局 revision 变化不会撤销它。
+
+每个 request 都重新检查 scope 与当前 Manager facts。URL 中的 plugin key 和 version 来自 Host，
+只用于交叉校验，不是 authority。Package-relative path 使用 portable package grammar，并拒绝
+absolute/root-relative form、空或 dot segment、反斜杠、percent encoding、NUL、query、过长/过深
+path、metadata record、目录、未知文件与跨 payload target。Rust 逐段检查 link/reparse point、证明
+canonical containment、打开一个 regular file、复核打开后的 identity 与 size，并执行最多 64 MiB 的
+完整 bounded read。validation/open/read race 只能返回一个一致文件或完整安全失败。Service 不列举
+目录也不重写 HTML，因此插件 HTML、CSS 与 JavaScript 必须使用 package-relative URL。
+
+协议只支持 `GET` 与 `HEAD`。固定、大小写不敏感的表覆盖 HTML、JavaScript/ES module、CSS、JSON、
+Wasm、PNG、JPEG、GIF、WebP、AVIF、SVG、ICO 与 WOFF2；不嗅探内容，也不回退
+`application/octet-stream`。成功响应包含准确 `Content-Type`/`Content-Length`、`nosniff` 与
+`Cache-Control: no-store`；`HEAD` 使用相同 status/header 且无 body。不支持 Range、conditional
+request、query routing、directory index、content negotiation、wildcard CORS 或 download。所有成功
+与错误都使用 `no-store`。
+
+unknown/expired scope、identity/generation mismatch、unsafe/missing path、metadata、unknown MIME 与
+unavailable registration 共用固定 `404`。非 GET/HEAD 使用固定 `405` 与 `Allow: GET, HEAD`；managed
+state 不可用或无法分类的内部失败使用固定 `500`。response 与 log 均不包含 scope、identity、version、
+digest、record key、absolute path、raw I/O、stack、partial bytes 或存在性细节。
+
+运行 `pnpm run check:plugin-resource-service` 可验证 Rust/TypeScript 共享 fixture、desktop adapter、
+workspace boundary、Manager generation、Installer ownership 回归，以及 protocol/path/MIME/lifecycle/
+race/oracle/platform URL 测试。该 service 不创建 iframe、不执行插件代码、不替换 Host-owned Plugin
+Page placeholder、不建立 Runtime Session 或 Host API transport、不授予权限，也不宣称完整 CSP。
+这些仍分别属于 Task 4.2、Task 4.3 与 Task 4.4。
+
 ## 已交付的 Host 私有 Plugin Surface 投影与 Page 导航
 
 可信 TypeScript 应用现已在 Plugin Registration Desktop Adapter、统一 Page Registry 与唯一
@@ -376,7 +426,8 @@ fallback。
 生产组合初始化该协调器，在 Launcher activation 与 listener recovery 时刷新，并在 cleanup 时销毁
 同一 subscription。available Plugin Page 在现有单窗口 page surface 中渲染本地化 Host-owned
 placeholder。placeholder 不会读取 route、加载 entry/asset、创建 iframe、调用 Tauri 或执行插件代码。
-Task 4.1 scoped resources、Task 4.2 iframe Runtime 与 Task 5.5 完整权限管理仍未实现。
+Task 4.1 resource service 已交付，但该 placeholder 不会消费它；Task 4.2 iframe Runtime 与 Task 5.5
+完整权限管理仍未实现。
 
 ## 已交付的公共 Plugin SDK Foundation
 
@@ -543,7 +594,7 @@ dispatcher。特权行为仍然必须是明确的 Host capability，并具有自
 
 生产环境注册 Host 内建的隐藏 launcher 和打开设置 Action，并在 available Page target 提交后通过
 已交付 surface 协调器发布合格 Plugin Action。静态 Manifest 契约本身仍不会注册 Action。安全插件
-icon/resource 解析、完整权限决策、生命周期写操作和外部 Runtime 执行仍是独立能力。最近使用与已
+icon 解析、完整权限决策、生命周期写操作和外部 Runtime 执行仍是独立能力。最近使用与已
 固定集合继续只保存 Action ID，因此投影 Action 会在 provider 缺失时隐藏，并在相同稳定 ID 返回时
 恢复解析。
 
@@ -608,7 +659,8 @@ Host API 方法应当保持小型、类型化、版本化，并且可以独立�
 ## 能力交付
 
 静态 Manifest 格式、校验器、Host 私有本地安装与同 identity replacement、绑定 revision 的
-enable/disable/uninstall 基础设施、Plugin surface 投影、生产 Action 激活、Page Registry/navigation 与
-Runtime-free Host placeholder 已经交付。其余每项能力——完整插件管理 UI、完整权限、scoped resources、
+enable/disable/uninstall 基础设施、scoped package-relative resources、Plugin surface 投影、生产
+Action 激活、Page Registry/navigation 与 Runtime-free Host placeholder 已经交付。其余每项能力——
+完整插件管理 UI、完整权限、
 Host API 方法、公共打包、远程/自动更新、用户主动 rollback history、iframe Runtime 执行或 sidecar——
 都需要独立的已接受规格和实现证据。本文定义架构方向和边界，不是发布检查清单。

@@ -37,6 +37,9 @@ The repository currently provides:
 - a Host-private Plugin surface projection coordinator with provider-scoped
   atomic Page and Action replacement, revision-aware eligibility, and
   fail-closed lifecycle handling;
+- a Rust-owned scoped Plugin Resource Service that serves only the current
+  managed payload through strict package-relative paths, fixed MIME and
+  no-store responses, and generation-bound revocation;
 - a unified Host-owned Page Registry and framework-neutral navigation service
   for protected Host Pages and declarative Plugin Page descriptors;
 - versioned recent-use and pinned Action collections persisted through a narrow
@@ -381,6 +384,8 @@ Rust owns:
 - native window and operating-system integration;
 - privileged operations and security-sensitive validation;
 - persistence and filesystem boundaries;
+- scoped plugin resource authorization, safe file opening, and protocol
+  responses;
 - performance-sensitive background work;
 - stable Tauri commands and events.
 
@@ -398,6 +403,15 @@ Frontend, Rust, and extension boundaries must use payloads that are:
 
 Use `snake_case` for serialized cross-language fields unless an accepted
 contract specifies otherwise.
+
+The Host-private Resource Contract follows this boundary: trusted TypeScript
+submits only an entry ID and observed Registration revision, Rust derives the
+current plugin identity/version/entry and opaque URL, and every custom-protocol
+request revalidates its process-local scope against the current Manager
+generation and Installer-owned payload. Neither React nor public plugin
+packages receive installation paths, digests, record keys, or a general file
+reader. This is a resource-read foundation only; iframe isolation, Runtime
+Session identity, Host API transport, and complete CSP remain separate work.
 
 ## Dependency Direction
 
