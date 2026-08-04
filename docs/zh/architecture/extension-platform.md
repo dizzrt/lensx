@@ -4,8 +4,9 @@
 
 本文区分已经交付的静态插件 Manifest 契约、`.lxp` package inspection 与本地安装、Plugin SDK
 foundation、Plugin Testkit、可选 Plugin UI package、Host 私有 Plugin surface 投影与 Page 导航，
-以及预期的运行时扩展边界。公共 packaging CLI、分发、插件执行、完整权限决策、iframe transport、
-签名和 Host API 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
+Host 私有生命周期控制，以及预期的运行时扩展边界。公共 packaging CLI、分发、插件执行、完整权限
+决策、iframe transport、签名、Host API、完整插件管理 UI 和 upgrade/rollback 当前尚未实现。稳定
+spec 和源码共同决定已经交付的子集。
 
 ## 目标
 
@@ -149,8 +150,8 @@ lifecycle 或 trust 结论。
 
 Rust Host 现已交付一个 Plugin Manager 实例。Tauri setup 从 `app_config_dir` 初始化该实例，并通过
 Tauri managed state 在 Host 内部共享。它仍然是 Host 私有核心。它的读取投影是下文所述的私有
-Registration Contract，而当前唯一的生产写入方是下文的本地安装协调器。没有暴露通用生命周期写
-command、前端管理界面或插件执行路径。
+Registration Contract，而当前生产写入方是下文的本地安装协调器和 Host 私有生命周期协调器。
+没有暴露通用的插件侧生命周期 API、前端管理界面或插件执行路径。
 
 每个健康条目明确区分四种生命周期：
 
@@ -176,9 +177,10 @@ registration facts 不一致的记录会变成内存中的 quarantine stub，并
 manager-level degraded 恢复报告启动；Tauri 启动仍然完成，也不会覆盖不可读数据。清除 quarantine
 要求可信 Host 调用方使用完整有效记录进行原子替换，其中 enabled intent 必须显式提供。
 
-这一内部状态只表示 Host 已知一条 installed registration。本地安装器现在可以为一个选中的兼容包
-建立 package digest、payload 和首条 external registration，但 Manager record 本身仍不能证明发现来源。
-卸载、更新、权限决策、Runtime session 和面向插件的公共 registration API 仍是独立能力。
+这一内部状态只表示 Host 已知一条 installed registration。本地安装器可以为一个选中的兼容包建立
+package digest、payload 和首条 external registration。生命周期协调器可以通过绑定 revision 的 opaque
+identity 原子更新 enabled intent，或移除健康、quarantine 条目。Manager record 本身仍不能证明发现
+来源。更新、权限决策、Runtime session 和面向插件的公共 registration API 仍是独立能力。
 
 ## 已交付的 Host 私有从本地文件安装插件
 
@@ -196,11 +198,13 @@ Rust 协调器先检查 source metadata，再把所选普通文件一次性读�
 通用 archive unpack 操作。
 
 Installer state 位于 `app_local_data_dir()/plugins`，与 Manager Store 相互独立。一个进程内 mutex 和
-跨进程 `.install.lock` 会串行化 recovery 与 installation。Staging 使用 `.staging/<random-id>`，
-已提交 payload 使用
-`packages/<v1-plugin-id-utf8-lowercase-hex>/<package-sha256>`。这是 single-registration digest
-layout：它有意不创建 `versions`、`transactions` 或 plugin data directory，也不会把不同 version 或
-digest 解释为 upgrade、downgrade、reinstall 或 repair。
+跨进程 `.install.lock` 会串行化 recovery、installation 与 lifecycle cleanup。Staging 使用
+`.staging/<random-id>`，已提交 payload 使用
+`packages/<v1-plugin-id-utf8-lowercase-hex>/<package-sha256>`，按需插件数据使用
+`data/<v1-plugin-id-utf8-lowercase-hex>`，持久 cleanup intent 使用
+`.cleanup/<v1-plugin-id-utf8-lowercase-hex>.json`。首次安装不会创建 plugin data directory。这仍是
+single-registration digest layout：它有意不创建 `versions` 或 `transactions`，也不会把不同 version
+或 digest 解释为 upgrade、downgrade、reinstall 或 repair。
 
 在已刷新的 staging directory 于同一文件系统原子 rename 后，协调器使用完整 Host facts 注册 normalized
 Manifest：已提交绝对路径、带算法标签的 digest、`source=external`、`enabled=true`、空 grants 和
@@ -208,14 +212,17 @@ Manifest：已提交绝对路径、带算法标签的 digest、`source=external`
 持久化失败会回滚 payload，或留下可证明的 orphan 供 recovery 处理；changed event 发送失败不会撤销
 已经成功持久化和发布的 registration。
 
-Installer startup recovery 只会在 Plugin Manager recovery 之后、并在同一 installation lock 下运行。
-它清理合法的废弃 staging directory，并且只删除能够证明没有 owner 的 canonical digest payload；健康
-installation path、quarantine-key subtree、未知 entry、symlink 以及 installer root 之外的任何内容都会
-保留。证据不可读或不一致时，installer 会转为 unavailable 或 degraded，而不会进行推测性清理。
+Installer startup recovery 只会在 Plugin Manager recovery 之后、并在同一个共享 commit boundary 下
+运行。它先恢复 cleanup record，再处理 orphan；清理合法的废弃 staging directory，并且只删除能够
+证明没有 owner 的 canonical digest payload。Cleanup record 会在 Manager removal 前持久化，并记录
+插件数据应保留还是删除；重试是幂等的，completed evidence 只会在同 identity reinstall 成功提交后
+清除。Recovery 会保留冲突或 malformed cleanup evidence、健康 installation path、没有合法 cleanup
+intent 的 quarantine-key subtree、未知 entry、symlink 以及 installer root 之外的任何内容。证据不可读
+或不一致时，installer 会转为 unavailable 或 degraded，而不会进行推测性清理。
 
 Installer root 属于 application-local data。在 macOS 上，它与已签名的 `lensX.app` bundle 分离，通常位于
-应用的 Application Support 区域；直接删除 `lensX.app` 并不能保证这些数据被清理。专用应用卸载器、
-plugin uninstall 和 upgrade/rollback 都需要后续已接受 change。
+应用的 Application Support 区域；直接删除 `lensX.app` 并不能保证这些数据被清理。Host 私有 plugin
+uninstall 已在下文交付；专用应用卸载器和 upgrade/rollback 仍需要后续已接受 change。
 
 ## 已交付的 Host 私有 Registration Contract
 
@@ -246,9 +253,39 @@ cache 失效。监听恢复和 Launcher activation 后会执行完整刷新；de
 该 contract 永远不暴露安装路径、package digest、Store key 或文件名、损坏记录内容、原始异常、
 stack、函数或 Tauri 对象。publisher、source、enabled intent、requested permissions，以及空或非空
 grant snapshot 都是相互独立的事实；任何一项都不能建立信任或自动授权。该 contract 不会安装、
-更新、卸载、enable、disable、执行或渲染插件。下文的 Host 私有 Action 投影核心消费它，但不改变
-wire contract。管理 UI、真实 Runtime session、完整权限决策、签名、生命周期写操作、scoped
-resource 解析和 Host API method 仍未实现。
+更新、卸载、enable、disable、执行或渲染插件。Registration Contract 本身仍然只读；下文的 Host
+私有 lifecycle 与 Action 投影核心消费它，但不改变 wire contract。管理 UI、真实 Runtime session、
+完整权限决策、签名、scoped resource 解析和 Host API method 仍未实现。
+
+## 已交付的 Host 私有 Plugin Lifecycle Controls
+
+根应用现已交付 Plugin Lifecycle Contract version `0.1.0`，用于 enable、disable 与 uninstall 操作。
+该 contract 只在 Rust、Tauri 和根应用 TypeScript 之间私有共享，不由任何公共 plugin package 导出。
+请求只接受 opaque registration entry identity，以及调用方所观察到的精确 snapshot revision。未知字段、
+stale revision、unmanaged entry、Manager unavailable，以及不受支持或不安全的 cleanup target 都会
+fail closed；有界 code 和 message 不暴露路径、record key、损坏数据、原始异常或 stack。
+
+Enable 与 disable 会原子更新 Host-owned enabled intent，不改变 source、grant、compatibility facts 或
+Runtime state。兼容与不兼容的健康 registration 都可独立保留 enabled intent；quarantine entry 不能
+被 enable。真实变化会递增 Registration revision，并发送既有 snapshot-changed invalidation hint；no-op
+保留 revision。Event 发送失败不会回滚已持久化状态。
+
+Disable 或 uninstall 到达 Rust 前，TypeScript lifecycle service 会先 quiesce provider 的 Action surface，
+再 quiesce Page surface。任一步失败都不会调用 Rust，并按 Page 后 Action 的顺序恢复先前 surface。
+关闭当前活动的插件 Page 时，会先把导航返回 Home，再注销 Page。Rust command 失败时也会尝试同样
+恢复；command 成功后，service 会通过共享 Registration adapter 主动刷新，直到观察到返回的 revision。
+因此 event 丢失只会形成可恢复的 invalidation gap，不会留下 stale search、Recent、Pinned、dispatch
+或 navigation 状态。Enable 会先在 Rust 中提交，再从返回 revision 收敛 provider surface。
+
+Uninstall 必须显式选择 `retain_data` 或 `delete_data` policy。Host 会先证明 program 与可选 data subtree
+是各自专用 root 下规范且真实的 descendant，再持久化 cleanup intent。之后它原子移除 Manager entry，
+并执行幂等 program/data cleanup。逻辑 removal 后的 cleanup 失败会返回成功和
+`cleanup_pending=true`，并在重复操作或 startup recovery 中通过同一进程内、跨进程 commit boundary
+继续执行。Malformed、冲突、symlink 或 root 之外的 evidence 会被保留，并阻止破坏性 cleanup。
+
+专用 Rust、TypeScript、surface convergence、workspace boundary 与公共 package 打包门禁是
+`pnpm run check:plugin-lifecycle-controls`。这些控制有意不增加管理 UI、plugin Runtime、权限决策流程、
+公共 lifecycle API、应用卸载或 upgrade/rollback 行为。
 
 ## 已交付的 Host 私有 Plugin Surface 投影与 Page 导航
 
@@ -257,6 +294,11 @@ Launcher Action Registry 之间交付一个生产 surface 投影协调器。它�
 detail，而不是 event patch。只有 registered、enabled，并同时兼容 lensX 与 Host API 的插件才具备
 资格；quarantine、degraded availability、消失或事实无法验证都会使对应 provider fail closed
 注销。builtin 与 external source 使用完全相同的映射和执行规则。
+
+Production composition 会在 surface coordinator 与 lifecycle service 之间共享同一个 Registration
+adapter。因此 surface coordinator 暴露 provider-scoped quiesce 和显式 revision reconciliation，而不
+创建第二份订阅或 cache。Lifecycle controls 可以立即移除 stale Action/Page projection，再复用正常
+的完整 snapshot 映射完成收敛。
 
 两个 Registry 都支持可信 provider-scoped 完整批次替换，以及用空批次注销。Page Registry 保护
 `lensx.core`，在提交前校验 Page identity、parent ownership、本地化字段、私有 route、排序后的
@@ -523,8 +565,8 @@ Host API 方法应当保持小型、类型化、版本化，并且可以独立�
 
 ## 能力交付
 
-静态 Manifest 格式、校验器、Host 私有本地安装、Plugin surface 投影、生产 Action 激活、Page
-Registry/navigation 与 Runtime-free Host placeholder 已经交付。其余每项能力——完整权限、scoped
-resources、Host API 方法、公共打包、包含 uninstall 与 upgrade/rollback 的生命周期写操作、iframe
-Runtime 执行或 sidecar——都需要独立的已接受规格和实现证据。本文定义架构方向和边界，不是发布
-检查清单。
+静态 Manifest 格式、校验器、Host 私有本地安装、绑定 revision 的 enable/disable/uninstall 基础设施、
+Plugin surface 投影、生产 Action 激活、Page Registry/navigation 与 Runtime-free Host placeholder 已经
+交付。其余每项能力——完整插件管理 UI、完整权限、scoped resources、Host API 方法、公共打包、
+upgrade/rollback、iframe Runtime 执行或 sidecar——都需要独立的已接受规格和实现证据。本文定义架构
+方向和边界，不是发布检查清单。

@@ -354,9 +354,10 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；本 Ta
 
 **完成标准**：有效本地包无需重启即可注册；无效包失败可诊断且无残留。
 
-- [ ] **Task 3.3：实现启用、禁用与卸载**
+- [x] **Task 3.3：实现启用、禁用与卸载**
 
-**OpenSpec change**：`add-plugin-lifecycle-controls`
+**OpenSpec change**：[add-plugin-lifecycle-controls](openspec/changes/archive/2026-08-04-add-plugin-lifecycle-controls/)
+（已完成并归档）
 
 **目标**：形成插件 enabled state 和卸载的完整 Host-owned 生命周期。
 

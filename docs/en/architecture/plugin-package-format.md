@@ -9,9 +9,10 @@ committed corpus and return the same `invalid | compatible | incompatible` resul
 diagnostics, and whole-package digest.
 
 The package protocol itself describes and inspects bytes only. It does not own a source path, installation layout,
-Plugin Manager mutation, lifecycle, public CLI, or development-directory input. The Host-private local installer is
-a separate consumer of this protocol: it can copy one selected compatible package into Host-owned application data
-and create the first external registration, but it does not change what constitutes a valid `.lxp`.
+Plugin Manager mutation, lifecycle, public CLI, or development-directory input. The Host-private local installer and
+lifecycle coordinator are separate consumers of this protocol: installation can copy one selected compatible package
+into Host-owned application data and create the first external registration, while uninstall can delete only a proven
+managed payload. Neither changes what constitutes a valid `.lxp`.
 
 ## Canonical Layout
 
@@ -97,12 +98,13 @@ canonical Zstandard/TAR traversal, header checks, path rules, entry facts, check
 reopen the selected source or call a permissive archive unpack API. Files are created with `create_new` inside a new
 Host-owned staging directory and are flushed before an atomic same-filesystem commit.
 
-The installer, rather than package protocol `0.1.0`, owns the source-file race checks, staging and digest-directory
-layout, Manager registration, locks, rollback, and recovery. Package bytes do not declare their source, installed
-path, enabled intent, grants, Runtime state, or lifecycle operation. The application-local installer store is also
-separate from the signed application bundle: on macOS, deleting `lensX.app` does not guarantee removal of the
-Application Support data. Application uninstall cleanup, plugin uninstall, and upgrade/rollback remain future
-lifecycle changes.
+The installer and lifecycle coordinator, rather than package protocol `0.1.0`, own the source-file race checks,
+staging and digest-directory layout, Manager registration/removal, shared process and file locks, rollback, separate
+on-demand plugin-data and cleanup-record roots, and recovery. Package bytes do not declare their source, installed
+path, enabled intent, grants, Runtime state, lifecycle operation, or data-retention policy. The application-local
+installer store is also separate from the signed application bundle: on macOS, deleting `lensX.app` does not
+guarantee removal of the Application Support data. Host-private plugin uninstall with explicit retain/delete data
+policy is shipped; application uninstall cleanup and upgrade/rollback remain future lifecycle changes.
 
 ## Reviewed Dependencies
 

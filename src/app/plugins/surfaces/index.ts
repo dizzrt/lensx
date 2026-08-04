@@ -10,4 +10,5 @@ export {
   createPluginSurfaceProjectionForLauncher,
   createPluginSurfaceProjectionService,
   createProductionPluginSurfaceProjection,
+  PluginSurfaceProjectionError,
 } from './projection';

@@ -231,3 +231,76 @@ Host API, or permission decision.
   startup
 - **THEN** recovery does not read plugin UI, create an iframe, project an
   Action or Page, or execute plugin code
+
+### Requirement: Plugin Manager must remove healthy and quarantine records atomically
+
+The Plugin Manager MUST provide trusted Host callers with an internal
+transition that removes a healthy record or quarantine Store record by its
+current entry identity. Before removal, the Manager MUST validate the target,
+the complete Store state, and the caller's revision. It MUST persist and flush
+the record's absence before removing the entry from the in-memory snapshot and
+committing a new revision. Failure during record deletion or directory syncing
+MUST preserve the original on-disk record, the original in-memory healthy or
+quarantine entry, and the original revision. Manager removal MUST NOT delete
+the installation payload, plugin data, Launcher collections, or any other
+provider record.
+
+#### Scenario: A healthy record is removed successfully
+
+- **WHEN** a trusted lifecycle coordinator removes a healthy entry matching
+  the current revision and Store deletion and directory syncing succeed
+- **THEN** subsequent snapshots and details no longer contain that entry and
+  the Manager commits exactly one new revision
+- **THEN** the record's enabled intent, grants, and diagnostics no longer exist
+  as a healthy registration
+
+#### Scenario: A quarantine Store record is removed successfully
+
+- **WHEN** a trusted lifecycle coordinator selects the current quarantine
+  record by opaque entry identity
+- **THEN** the Manager removes the corresponding Store record and quarantine
+  stub without parsing or repairing the damaged content
+- **THEN** every other healthy and quarantine entry remains unchanged
+
+#### Scenario: Record removal persistence fails
+
+- **WHEN** Store record deletion, parent-directory flushing, or an injected
+  failure stage fails
+- **THEN** the Manager returns a stable persistence diagnostic and the original
+  entry remains recoverable in memory and on disk
+- **THEN** the revision does not increment and the Host does not publish a
+  Registration changed event
+
+### Requirement: Plugin Manager enabled and removal transitions must preserve no-op and revision semantics
+
+`set_enabled` MUST return a no-op when the target healthy record already has
+the requested intent and MUST NOT write the record, commit a revision, or
+produce a changed event. A real enabled transition and a real removal
+transition MUST each commit exactly one revision, and only after persistence
+and in-memory snapshot publication have both completed. A missing healthy
+identity, an enabled transition targeting quarantine, a stale revision, or a
+degraded Store MUST produce a stable rejection without modifying state.
+
+#### Scenario: Enabled intent already matches the requested value
+
+- **WHEN** a trusted caller sets the same boolean intent again
+- **THEN** the Manager returns a no-op and the record bytes, in-memory snapshot,
+  and revision remain unchanged
+
+#### Scenario: Enabled intent changes
+
+- **WHEN** a healthy record's requested enabled intent differs from its current
+  value and atomic persistence succeeds
+- **THEN** the Manager publishes the updated record and commits exactly one new
+  revision
+- **THEN** compatibility, quarantine, grants, Runtime, and other plugin records
+  do not change automatically because of that boolean transition
+
+#### Scenario: The whole Store is degraded
+
+- **WHEN** Manager recovery cannot establish a trusted Store read-write
+  boundary
+- **THEN** enabled and removal transitions are both rejected without
+  overwriting unreadable evidence
+- **THEN** the application can still read the degraded Registration conclusion
+  and continue Host functions that do not depend on plugins

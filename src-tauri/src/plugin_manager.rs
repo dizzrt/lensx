@@ -4,9 +4,9 @@ use crate::plugin_manifest::{
     PluginManifestCompatibility, PluginManifestValidationStatus, PLUGIN_HOST_API_VERSION,
 };
 use crate::plugin_registration::{
-    project_plugin_registration_detail, project_plugin_registration_snapshot,
-    PluginRegistrationChangedEvent, PluginRegistrationDetailResponse, PluginRegistrationQueryError,
-    PluginRegistrationSnapshot,
+    healthy_entry_id, project_plugin_registration_detail, project_plugin_registration_snapshot,
+    quarantine_entry_id, PluginRegistrationChangedEvent, PluginRegistrationDetailResponse,
+    PluginRegistrationQueryError, PluginRegistrationSnapshot,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -53,6 +53,9 @@ pub enum PluginManagerDiagnosticCode {
     RecordInvalid,
     UnsupportedFormatVersion,
     IdentityMismatch,
+    InvalidState,
+    NotFound,
+    StaleRevision,
 }
 
 impl PluginManagerDiagnosticCode {
@@ -66,6 +69,9 @@ impl PluginManagerDiagnosticCode {
             Self::RecordInvalid => "Plugin record is invalid.",
             Self::UnsupportedFormatVersion => "Plugin record format version is unsupported.",
             Self::IdentityMismatch => "Plugin record identity does not match its record key.",
+            Self::InvalidState => "Plugin registration state does not allow this operation.",
+            Self::NotFound => "Plugin registration entry was not found.",
+            Self::StaleRevision => "Plugin registration revision is stale.",
         }
     }
 }
@@ -251,6 +257,42 @@ pub struct QuarantineStub {
     pub diagnostic: PluginManagerDiagnostic,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum PluginManagerLifecycleEntry {
+    Healthy {
+        entry_id: String,
+        plugin_id: String,
+        record_key: String,
+        registration: PluginRegistration,
+    },
+    Quarantined {
+        entry_id: String,
+        record_key: String,
+        stub: QuarantineStub,
+    },
+}
+
+impl PluginManagerLifecycleEntry {
+    pub(crate) fn record_key(&self) -> &str {
+        match self {
+            Self::Healthy { record_key, .. } | Self::Quarantined { record_key, .. } => record_key,
+        }
+    }
+
+    pub(crate) fn plugin_id(&self) -> Option<&str> {
+        match self {
+            Self::Healthy { plugin_id, .. } => Some(plugin_id),
+            Self::Quarantined { stub, .. } => stub.plugin_id.as_deref(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct PluginManagerRemoval {
+    pub entry: PluginManagerLifecycleEntry,
+    pub change: PluginRegistrationChangedEvent,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PluginManagerRecoveryReport {
     pub degraded: bool,
@@ -384,6 +426,66 @@ impl PluginManager {
         self.lock_snapshot().revision.to_string()
     }
 
+    fn reject_degraded_write(&self) -> Result<(), PluginManagerDiagnostic> {
+        if self.recovery_report.degraded {
+            Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::StoreUnavailable,
+                PluginManagerDiagnosticPhase::Persist,
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn resolve_lifecycle_entry_locked(
+        snapshot: &PluginManagerSnapshot,
+        entry_id: &str,
+    ) -> Result<PluginManagerLifecycleEntry, PluginManagerDiagnostic> {
+        if let Some((plugin_id, registration)) = snapshot
+            .healthy
+            .iter()
+            .find(|(_, registration)| healthy_entry_id(registration) == entry_id)
+        {
+            return Ok(PluginManagerLifecycleEntry::Healthy {
+                entry_id: entry_id.to_owned(),
+                plugin_id: plugin_id.clone(),
+                record_key: plugin_record_key(plugin_id),
+                registration: registration.clone(),
+            });
+        }
+        if let Some((record_key, stub)) = snapshot
+            .quarantined
+            .iter()
+            .find(|(_, stub)| quarantine_entry_id(stub) == entry_id)
+        {
+            return Ok(PluginManagerLifecycleEntry::Quarantined {
+                entry_id: entry_id.to_owned(),
+                record_key: record_key.clone(),
+                stub: stub.clone(),
+            });
+        }
+        Err(PluginManagerDiagnostic::new(
+            PluginManagerDiagnosticCode::NotFound,
+            PluginManagerDiagnosticPhase::Validate,
+        ))
+    }
+
+    pub(crate) fn resolve_lifecycle_entry(
+        &self,
+        entry_id: &str,
+        expected_revision: &str,
+    ) -> Result<PluginManagerLifecycleEntry, PluginManagerDiagnostic> {
+        self.reject_degraded_write()?;
+        let snapshot = self.lock_snapshot();
+        if snapshot.revision.to_string() != expected_revision {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::StaleRevision,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        }
+        Self::resolve_lifecycle_entry_locked(&snapshot, entry_id)
+    }
+
     pub(crate) fn host_versions(&self) -> PluginHostVersions {
         self.versions.clone()
     }
@@ -433,6 +535,7 @@ impl PluginManager {
         manifest: NormalizedPluginManifest,
         facts: PluginRegistrationFacts,
     ) -> Result<Option<PluginRegistrationChangedEvent>, PluginManagerDiagnostic> {
+        self.reject_degraded_write()?;
         facts.validate()?;
         let compatibility = validate_normalized_manifest(&manifest, &self.versions)?;
         let plugin_id = manifest.plugin_id.clone();
@@ -462,6 +565,7 @@ impl PluginManager {
         plugin_id: &str,
         enabled: bool,
     ) -> Result<Option<PluginRegistrationChangedEvent>, PluginManagerDiagnostic> {
+        self.reject_degraded_write()?;
         let mut snapshot = self.lock_snapshot();
         let mut next = snapshot
             .healthy
@@ -479,11 +583,79 @@ impl PluginManager {
         Ok(Some(snapshot.commit_change()))
     }
 
+    pub(crate) fn set_enabled_entry(
+        &self,
+        entry_id: &str,
+        expected_revision: &str,
+        enabled: bool,
+    ) -> Result<(PluginRegistration, Option<PluginRegistrationChangedEvent>), PluginManagerDiagnostic>
+    {
+        self.reject_degraded_write()?;
+        let mut snapshot = self.lock_snapshot();
+        if snapshot.revision.to_string() != expected_revision {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::StaleRevision,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        }
+        let entry = Self::resolve_lifecycle_entry_locked(&snapshot, entry_id)?;
+        let PluginManagerLifecycleEntry::Healthy {
+            plugin_id,
+            mut registration,
+            ..
+        } = entry
+        else {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::InvalidState,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        };
+        if registration.facts.enabled == enabled {
+            return Ok((registration, None));
+        }
+        registration.facts.enabled = enabled;
+        registration.facts.validate()?;
+        self.store
+            .write_record(&PluginRecordV1::from_registration(&registration))?;
+        snapshot.healthy.insert(plugin_id, registration.clone());
+        Ok((registration, Some(snapshot.commit_change())))
+    }
+
+    pub(crate) fn remove_entry(
+        &self,
+        entry_id: &str,
+        expected_revision: &str,
+    ) -> Result<PluginManagerRemoval, PluginManagerDiagnostic> {
+        self.reject_degraded_write()?;
+        let mut snapshot = self.lock_snapshot();
+        if snapshot.revision.to_string() != expected_revision {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::StaleRevision,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        }
+        let entry = Self::resolve_lifecycle_entry_locked(&snapshot, entry_id)?;
+        self.store.remove_record(entry.record_key())?;
+        match &entry {
+            PluginManagerLifecycleEntry::Healthy { plugin_id, .. } => {
+                snapshot.healthy.remove(plugin_id);
+            }
+            PluginManagerLifecycleEntry::Quarantined { record_key, .. } => {
+                snapshot.quarantined.remove(record_key);
+            }
+        }
+        Ok(PluginManagerRemoval {
+            entry,
+            change: snapshot.commit_change(),
+        })
+    }
+
     pub fn append_diagnostic(
         &self,
         plugin_id: &str,
         diagnostic: PluginManagerDiagnostic,
     ) -> Result<Option<PluginRegistrationChangedEvent>, PluginManagerDiagnostic> {
+        self.reject_degraded_write()?;
         let mut snapshot = self.lock_snapshot();
         let mut next = snapshot
             .healthy
@@ -744,6 +916,28 @@ impl PluginManagerStore {
         write_result
     }
 
+    fn remove_record(&self, record_key: &str) -> Result<(), PluginManagerDiagnostic> {
+        let directory = self
+            .directory
+            .as_ref()
+            .ok_or_else(PluginManagerDiagnostic::persist_failed)?;
+        let target_path = directory.join(format!("{record_key}.{RECORD_FILE_EXTENSION}"));
+        let previous =
+            fs::read(&target_path).map_err(|_| PluginManagerDiagnostic::persist_failed())?;
+        self.fail_if_requested(WriteFault::Remove)?;
+        fs::remove_file(&target_path).map_err(|_| PluginManagerDiagnostic::persist_failed())?;
+        let sync_result = (|| {
+            self.fail_if_requested(WriteFault::ParentSync)?;
+            sync_directory(directory)
+        })();
+        if sync_result.is_err() {
+            let _ = restore_record_bytes(&target_path, &previous);
+            let _ = sync_directory(directory);
+            return Err(PluginManagerDiagnostic::persist_failed());
+        }
+        Ok(())
+    }
+
     #[cfg(test)]
     fn fail_if_requested(&self, stage: WriteFault) -> Result<(), PluginManagerDiagnostic> {
         if self
@@ -771,6 +965,34 @@ pub(crate) enum WriteFault {
     Write,
     Sync,
     Replace,
+    Remove,
+    ParentSync,
+}
+
+fn sync_directory(path: &Path) -> Result<(), PluginManagerDiagnostic> {
+    #[cfg(unix)]
+    {
+        fs::File::open(path)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|_| PluginManagerDiagnostic::persist_failed())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        Ok(())
+    }
+}
+
+fn restore_record_bytes(path: &Path, bytes: &[u8]) -> Result<(), PluginManagerDiagnostic> {
+    let mut file = OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(path)
+        .map_err(|_| PluginManagerDiagnostic::persist_failed())?;
+    file.write_all(bytes)
+        .and_then(|_| file.sync_all())
+        .map_err(|_| PluginManagerDiagnostic::persist_failed())
 }
 
 pub fn current_plugin_host_versions(lensx_version: impl Into<String>) -> PluginHostVersions {
@@ -886,6 +1108,27 @@ mod tests {
         assert!(manage_plugin_manager(app.handle(), Arc::clone(&manager)));
         let state = app.state::<Arc<PluginManager>>();
         assert!(Arc::ptr_eq(&manager, &state));
+    }
+
+    fn entry_id(manager: &PluginManager, plugin_id: &str) -> String {
+        manager
+            .read_registration_snapshot()
+            .entries
+            .into_iter()
+            .find_map(|entry| match entry {
+                crate::plugin_registration::PluginRegistrationSummary::Registered {
+                    entry_id,
+                    plugin_id: current,
+                    ..
+                } if current == plugin_id => Some(entry_id),
+                crate::plugin_registration::PluginRegistrationSummary::Quarantined {
+                    entry_id,
+                    plugin_id: Some(current),
+                    ..
+                } if current == plugin_id => Some(entry_id),
+                _ => None,
+            })
+            .expect("entry should be present")
     }
 
     #[test]
@@ -1097,6 +1340,149 @@ mod tests {
                 })
                 .count();
             assert_eq!(temp_files, 0);
+        }
+    }
+
+    #[test]
+    fn lifecycle_resolution_enable_noop_and_removal_use_current_entry_and_revision() {
+        let directory = TestDirectory::new("lifecycle-transitions");
+        let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
+        manager
+            .register(manifest("com.acme.lifecycle", "0.2.0"), facts(false))
+            .expect("registration should succeed");
+        manager
+            .register(manifest("com.acme.independent", "0.2.0"), facts(true))
+            .expect("independent registration should succeed");
+        let entry_id = entry_id(&manager, "com.acme.lifecycle");
+        let revision = manager.registration_revision();
+
+        let resolved = manager
+            .resolve_lifecycle_entry(&entry_id, &revision)
+            .expect("current entry should resolve");
+        match &resolved {
+            PluginManagerLifecycleEntry::Healthy {
+                entry_id: resolved_id,
+                ..
+            } => assert_eq!(resolved_id, &entry_id),
+            PluginManagerLifecycleEntry::Quarantined { .. } => {
+                panic!("healthy entry should resolve as healthy")
+            }
+        }
+        assert_eq!(resolved.plugin_id(), Some("com.acme.lifecycle"));
+
+        let (unchanged, event) = manager
+            .set_enabled_entry(&entry_id, &revision, false)
+            .expect("matching enabled intent should be a no-op");
+        assert!(!unchanged.facts.enabled);
+        assert!(event.is_none());
+        assert_eq!(manager.registration_revision(), revision);
+
+        let (_, event) = manager
+            .set_enabled_entry(&entry_id, &revision, true)
+            .expect("enabled intent should persist");
+        let event = event.expect("real transition should return an event");
+        assert_eq!(event.revision, "3");
+        assert!(
+            manager
+                .registration("com.acme.independent")
+                .expect("independent record should remain")
+                .facts
+                .enabled
+        );
+
+        let removal = manager
+            .remove_entry(&entry_id, &event.revision)
+            .expect("healthy entry removal should persist");
+        assert_eq!(removal.change.revision, "4");
+        assert_eq!(removal.entry.plugin_id(), Some("com.acme.lifecycle"));
+        assert!(manager.registration("com.acme.lifecycle").is_none());
+        assert!(manager.registration("com.acme.independent").is_some());
+
+        let recovered = PluginManager::recover(&directory.path, versions("0.1.0"));
+        assert!(recovered.registration("com.acme.lifecycle").is_none());
+        assert!(recovered.registration("com.acme.independent").is_some());
+    }
+
+    #[test]
+    fn lifecycle_rejects_stale_quarantine_and_degraded_transitions() {
+        let directory = TestDirectory::new("lifecycle-rejections");
+        let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
+        manager
+            .register(manifest("com.acme.current", "0.2.0"), facts(false))
+            .expect("registration should succeed");
+        let current_entry = entry_id(&manager, "com.acme.current");
+        let stale = manager
+            .set_enabled_entry(&current_entry, "0", true)
+            .expect_err("stale revision should fail");
+        assert_eq!(stale.code(), PluginManagerDiagnosticCode::StaleRevision);
+        assert!(
+            !manager
+                .registration("com.acme.current")
+                .expect("record should remain")
+                .facts
+                .enabled
+        );
+
+        let plugin_id = "com.acme.quarantine-lifecycle";
+        let key = plugin_record_key(plugin_id);
+        let store = directory.path.join(PLUGIN_MANAGER_DIRECTORY);
+        fs::write(store.join(format!("{key}.json")), b"{")
+            .expect("damaged record should be written");
+        let recovered = PluginManager::recover(&directory.path, versions("0.1.0"));
+        let quarantine_entry = quarantine_entry_id(
+            &recovered
+                .quarantine(&key)
+                .expect("damaged record should be quarantined"),
+        );
+        let quarantine_error = recovered
+            .set_enabled_entry(&quarantine_entry, &recovered.registration_revision(), true)
+            .expect_err("quarantine cannot be enabled");
+        assert_eq!(
+            quarantine_error.code(),
+            PluginManagerDiagnosticCode::InvalidState
+        );
+        let removal = recovered
+            .remove_entry(&quarantine_entry, &recovered.registration_revision())
+            .expect("quarantine removal should persist");
+        assert_eq!(removal.entry.plugin_id(), None);
+        assert!(recovered.quarantine(&key).is_none());
+
+        let degraded_directory = TestDirectory::new("lifecycle-degraded");
+        fs::write(
+            degraded_directory.path.join(PLUGIN_MANAGER_DIRECTORY),
+            b"preserve",
+        )
+        .expect("blocking file should exist");
+        let degraded = PluginManager::recover(&degraded_directory.path, versions("0.1.0"));
+        let error = degraded
+            .resolve_lifecycle_entry("entry_0000000000000000", "0")
+            .expect_err("degraded Store must reject writes");
+        assert_eq!(error.code(), PluginManagerDiagnosticCode::StoreUnavailable);
+        assert_eq!(
+            fs::read(degraded_directory.path.join(PLUGIN_MANAGER_DIRECTORY)).unwrap(),
+            b"preserve"
+        );
+    }
+
+    #[test]
+    fn removal_faults_preserve_memory_disk_and_revision() {
+        for fault in [WriteFault::Remove, WriteFault::ParentSync] {
+            let directory = TestDirectory::new("remove-fault");
+            let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
+            manager
+                .register(manifest("com.acme.remove", "0.2.0"), facts(true))
+                .expect("registration should succeed");
+            let entry_id = entry_id(&manager, "com.acme.remove");
+            manager.set_write_fault(Some(fault));
+            let error = manager
+                .remove_entry(&entry_id, "1")
+                .expect_err("injected removal failure should fail");
+            assert_eq!(error.code(), PluginManagerDiagnosticCode::PersistFailed);
+            assert_eq!(manager.registration_revision(), "1");
+            assert!(manager.registration("com.acme.remove").is_some());
+            manager.set_write_fault(None);
+            let recovered = PluginManager::recover(&directory.path, versions("0.1.0"));
+            assert!(recovered.registration("com.acme.remove").is_some());
         }
     }
 

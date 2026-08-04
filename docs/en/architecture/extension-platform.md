@@ -5,10 +5,11 @@
 This document separates the shipped static plugin Manifest contract, `.lxp`
 package inspection and local installation, Plugin SDK foundation, Plugin
 Testkit, optional Plugin UI package, and Host-private Plugin surface projection
-and Page navigation from the intended runtime extension boundary. Public
-packaging CLI, distribution, plugin execution, complete permission decisions,
-iframe transport, signing, and the Host API are not currently implemented.
-Stable specs and source code define the shipped subset.
+and Page navigation, and Host-private lifecycle controls from the intended
+runtime extension boundary. Public packaging CLI, distribution, plugin
+execution, complete permission decisions, iframe transport, signing, the Host
+API, complete plugin-management UI, and upgrade/rollback are not currently
+implemented. Stable specs and source code define the shipped subset.
 
 ## Goals
 
@@ -184,9 +185,10 @@ dependency review, diagnostics, and drift gate.
 The Rust Host now ships one Plugin Manager instance initialized during Tauri
 setup from `app_config_dir` and shared through Tauri managed state. It remains a
 Host-private core. Its read projection is the private Registration Contract,
-and its only current production write caller is the local installation
-coordinator described below. No general lifecycle write command, frontend
-management surface, or plugin execution path is exposed.
+and its current production write callers are the local installation and
+Host-private lifecycle coordinators described below. No general plugin-facing
+lifecycle API, frontend management surface, or plugin execution path is
+exposed.
 
 Each healthy entry keeps four lifetimes separate:
 
@@ -226,11 +228,12 @@ quarantine requires a trusted Host caller to atomically replace it with a
 complete valid record whose enabled intent is supplied explicitly.
 
 This internal state records that the Host knows an installed registration. The
-local installer can now establish the package digest, payload, and first
-external registration for one selected compatible package, but Manager records
-alone still do not prove discovery provenance. Uninstallation, updates,
-permission decisions, Runtime sessions, and a public plugin-facing registration
-API remain separate capabilities.
+local installer can establish the package digest, payload, and first external
+registration for one selected compatible package. The lifecycle coordinator
+can atomically update enabled intent or remove one healthy or quarantined entry
+through a revision-bound opaque identity. Manager records alone still do not
+prove discovery provenance. Updates, permission decisions, Runtime sessions,
+and a public plugin-facing registration API remain separate capabilities.
 
 ## Shipped Host-Private Plugin Installation From a Local File
 
@@ -254,12 +257,15 @@ archive unpack operation.
 
 Installer state lives under `app_local_data_dir()/plugins`, independently of
 the Manager Store. One process mutex and the cross-process `.install.lock`
-serialize recovery and installation. Staging uses `.staging/<random-id>` and a
-committed payload uses
-`packages/<v1-plugin-id-utf8-lowercase-hex>/<package-sha256>`. This is a
-single-registration digest layout: it deliberately creates no `versions`,
-`transactions`, or plugin data directory and does not interpret a different
-version or digest as upgrade, downgrade, reinstall, or repair.
+serialize recovery, installation, and lifecycle cleanup. Staging uses
+`.staging/<random-id>`, a committed payload uses
+`packages/<v1-plugin-id-utf8-lowercase-hex>/<package-sha256>`, on-demand plugin
+data uses `data/<v1-plugin-id-utf8-lowercase-hex>`, and durable cleanup intent
+uses `.cleanup/<v1-plugin-id-utf8-lowercase-hex>.json`. First installation does
+not create a plugin data directory. This remains a single-registration digest
+layout: it deliberately creates no `versions` or `transactions` and does not
+interpret a different version or digest as upgrade, downgrade, reinstall, or
+repair.
 
 After the flushed staging directory is atomically renamed on the same
 filesystem, the coordinator registers the normalized Manifest with a complete
@@ -271,17 +277,23 @@ provable orphan for recovery; a changed-event emission failure does not undo a
 successfully persisted and published registration.
 
 Startup installer recovery runs only after Plugin Manager recovery and under
-the same installation lock. It removes valid abandoned staging directories and
-only canonical digest payloads that are provably unowned. It preserves healthy
-installation paths, quarantine-key subtrees, unknown entries, symlinks, and
+the same shared commit boundary. It resumes cleanup records before orphan
+recovery, removes valid abandoned staging directories, and removes only
+canonical digest payloads that are provably unowned. A cleanup record persists
+before Manager removal and records whether plugin data must be retained or
+deleted; retries are idempotent, and completed evidence is cleared only after a
+same-identity reinstall commits successfully. Recovery preserves conflicting
+or malformed cleanup evidence, healthy installation paths, quarantine-key
+subtrees without a valid cleanup intent, unknown entries, symlinks, and
 anything outside the installer root. Unreadable or inconsistent evidence makes
 the installer unavailable or degraded rather than inviting speculative cleanup.
 
 The installer root is application-local data. On macOS it is separate from the
 signed `lensX.app` bundle and normally resides in the application's Application
 Support area; directly deleting `lensX.app` does not guarantee that this data
-is removed. A dedicated application uninstaller, plugin uninstall, and
-upgrade/rollback behavior all require later accepted changes.
+is removed. Host-private plugin uninstall is shipped below. A dedicated
+application uninstaller and upgrade/rollback behavior require later accepted
+changes.
 
 ## Shipped Host-Private Registration Contract
 
@@ -326,12 +338,57 @@ The contract never exposes installation paths, package digests, Store keys or
 filenames, damaged record contents, raw exceptions, stacks, functions, or Tauri
 objects. Publisher, source, enabled intent, requested permissions, and an empty
 or non-empty grant snapshot remain independent facts; none establishes trust
-or automatic authorization. This contract does not install, update, uninstall,
-enable, disable, execute, or render plugins. The downstream Host-private Action
-projection core described below consumes it without changing the wire contract.
-Management UI, real Runtime sessions, complete permission decisions,
-signatures, lifecycle writes, scoped resource resolution, and Host API methods
-remain unimplemented.
+or automatic authorization. The Registration Contract itself remains read-only:
+it does not install, update, uninstall, enable, disable, execute, or render
+plugins. The downstream Host-private lifecycle and Action projection cores
+consume it without changing that wire contract. Management UI, real Runtime
+sessions, complete permission decisions, signatures, scoped resource
+resolution, and Host API methods remain unimplemented.
+
+## Shipped Host-Private Plugin Lifecycle Controls
+
+The root application ships Plugin Lifecycle Contract version `0.1.0` for
+enable, disable, and uninstall operations. The contract remains private to
+Rust, Tauri, and root application TypeScript; it is not exported by any public
+plugin package. Requests accept only an opaque registration entry identity and
+the exact snapshot revision observed by the caller. Unknown fields, stale
+revisions, unmanaged entries, unavailable Manager state, and unsupported or
+unsafe cleanup targets fail closed with bounded codes and messages that expose
+no paths, record keys, damaged data, raw exceptions, or stacks.
+
+Enable and disable update Host-owned enabled intent atomically without changing
+source, grants, compatibility facts, or Runtime state. Compatible and
+incompatible healthy registrations may preserve enabled intent independently
+of effective availability; quarantine entries cannot be enabled. A real change
+increments the Registration revision and emits the existing snapshot-changed
+invalidation hint, while a no-op preserves the revision. Event emission failure
+does not roll back persisted state.
+
+Before disable or uninstall reaches Rust, the TypeScript lifecycle service
+quiesces the provider's Action surface and then its Page surface. If either step
+fails, no Rust command runs and the previous surface is restored in Page-then-
+Action order. Closing an active plugin Page returns navigation to Home before
+Page unregistration. If a Rust command fails, the same restoration is attempted;
+after a successful command, the service actively refreshes through the shared
+Registration adapter until the returned revision is observed. This makes event
+loss a recoverable invalidation gap rather than a source of stale search,
+Recent, Pinned, dispatch, or navigation state. Enable commits in Rust first and
+then converges the provider surface from the returned revision.
+
+Uninstall requires an explicit `retain_data` or `delete_data` policy. The Host
+proves that program and optional data subtrees are canonical, real descendants
+of their dedicated roots before persisting cleanup intent. It then removes the
+Manager entry atomically and performs idempotent program/data cleanup. A cleanup
+failure after logical removal returns success with `cleanup_pending=true` and
+is resumed by a repeated operation or startup recovery under the same process
+and cross-process commit boundary. Malformed, conflicting, symlinked, or
+out-of-root evidence is preserved and blocks destructive cleanup.
+
+Run `pnpm run check:plugin-lifecycle-controls` for the dedicated Rust,
+TypeScript, surface-convergence, workspace-boundary, and packed-public-package
+gate. These controls intentionally add no management UI, plugin Runtime,
+permission decision workflow, public lifecycle API, application uninstall, or
+upgrade/rollback behavior.
 
 ## Shipped Host-Private Plugin Surface Projection And Page Navigation
 
@@ -343,6 +400,12 @@ plugins compatible with both lensX and the Host API are eligible; quarantine,
 degraded availability, disappearance, or unverifiable facts unregister the
 affected provider fail closed. Builtin and external source values follow the
 same mapping and execution rules.
+
+Production composition shares that Registration adapter with the lifecycle
+service. The surface coordinator therefore exposes provider-scoped quiesce and
+explicit revision reconciliation without creating a second subscription or
+cache. Lifecycle controls can remove stale Action/Page projections immediately
+and then reuse the normal complete-snapshot mapping for convergence.
 
 Both Registries support trusted provider-scoped complete-batch replacement and
 empty-batch unregistration. The Page Registry protects `lensx.core`, validates
@@ -680,10 +743,11 @@ method exists.
 ## Capability Delivery
 
 The static Manifest format, validators, Host-private local installation,
-Plugin surface projection, production Action activation, Page
-Registry/navigation, and Runtime-free Host placeholder are delivered. Each
-remaining capability—complete permissions, scoped resources, Host API methods,
-public packaging, lifecycle writes including uninstall and upgrade/rollback,
-iframe Runtime execution, or sidecars—requires its own accepted specification
-and implementation evidence. This architectural document defines direction and
-boundaries, not a release checklist.
+revision-bound enable/disable/uninstall infrastructure, Plugin surface
+projection, production Action activation, Page Registry/navigation, and
+Runtime-free Host placeholder are delivered. Each remaining capability—complete
+plugin-management UI, complete permissions, scoped resources, Host API methods,
+public packaging, upgrade/rollback, iframe Runtime execution, or sidecars—
+requires its own accepted specification and implementation evidence. This
+architectural document defines direction and boundaries, not a release
+checklist.

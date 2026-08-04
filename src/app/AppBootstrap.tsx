@@ -6,7 +6,7 @@ import { desktopLauncherSurfaceController, type LauncherSurfaceController } from
 import { desktopLauncherWindowDragController, type LauncherWindowDragController } from './launcher/windowDrag';
 import { productionAppNavigationService, productionPageRegistry } from './navigation';
 import { desktopLocalPluginInstallationClient, type LocalPluginInstallationClient } from './plugins/installation';
-import { createProductionPluginSurfaceProjection } from './plugins/surfaces';
+import { createProductionPluginLifecycleComposition } from './plugins/lifecycle';
 import {
   type AppPreferences,
   type AppPreferencesClient,
@@ -52,14 +52,21 @@ export const AppBootstrap = ({
   windowDragController = desktopLauncherWindowDragController,
 }: AppBootstrapProps) => {
   const startupRequestRef = useRef<Promise<AppStartupState> | null>(null);
-  const [surfaceProjectionService] = useState(() =>
-    createProductionPluginSurfaceProjection(
+  const [pluginLifecycleComposition] = useState(() =>
+    createProductionPluginLifecycleComposition(
       productionLauncherActionService,
       productionPageRegistry,
       productionAppNavigationService,
     ),
   );
   const [startupState, setStartupState] = useState<AppStartupState>();
+
+  useEffect(
+    () => () => {
+      pluginLifecycleComposition.lifecycleService.destroy();
+    },
+    [pluginLifecycleComposition],
+  );
 
   useEffect(() => {
     let isCurrent = true;
@@ -92,7 +99,7 @@ export const AppBootstrap = ({
           preferencesClient={preferencesClient}
           startupPreferencesErrorCode={startupState.preferencesErrorCode}
           surfaceController={surfaceController}
-          surfaceProjectionService={surfaceProjectionService}
+          surfaceProjectionService={pluginLifecycleComposition.surfaceProjectionService}
           windowDragController={windowDragController}
         />
       )}

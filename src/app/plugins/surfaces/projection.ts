@@ -47,12 +47,31 @@ export interface PluginSurfaceProjectionDependencies {
 }
 
 export interface PluginSurfaceProjectionService {
+  readonly currentSnapshot: () => PluginRegistrationSnapshot | undefined;
   readonly destroy: () => Promise<void>;
   readonly handleLauncherActivation: () => Promise<void>;
   readonly initialize: () => Promise<void>;
   readonly recoverListener: () => Promise<void>;
+  readonly quiesceProvider: (pluginId: string) => Promise<void>;
+  readonly reconcileRevision: (targetRevision: string, pluginId?: string) => Promise<void>;
   readonly refresh: () => Promise<void>;
   readonly whenIdle: () => Promise<void>;
+}
+
+export class PluginSurfaceProjectionError extends Error {
+  readonly code: PluginSurfaceProjectionDiagnosticCode | 'destroyed' | 'revision_not_observed';
+  readonly plugin_id?: string;
+
+  constructor(
+    code: PluginSurfaceProjectionDiagnosticCode | 'destroyed' | 'revision_not_observed',
+    message: string,
+    pluginId?: string,
+  ) {
+    super(message);
+    this.name = 'PluginSurfaceProjectionError';
+    this.code = code;
+    this.plugin_id = pluginId;
+  }
 }
 
 const safeMessages: Readonly<Record<PluginSurfaceProjectionDiagnosticCode, string>> = Object.freeze({
@@ -76,6 +95,7 @@ export const createPluginSurfaceProjectionService = ({
   registrationAdapter,
 }: PluginSurfaceProjectionDependencies): PluginSurfaceProjectionService => {
   const knownProviders = new Set<string>();
+  const providerFailures = new Map<string, PluginSurfaceProjectionDiagnosticCode>();
   let latestObservedSnapshot: PluginRegistrationSnapshot | undefined;
   let pendingSnapshot: PluginRegistrationSnapshot | undefined;
   let lastSettledRevision: string | undefined;
@@ -123,10 +143,16 @@ export const createPluginSurfaceProjectionService = ({
         report('page_registry_replacement_failed', pluginId);
       }
     }
+    if (actionOk && pageOk) {
+      providerFailures.delete(pluginId);
+    }
+    return actionOk && pageOk;
   };
 
   const failClosed = (pluginId: string, code: PluginSurfaceProjectionDiagnosticCode) => {
+    providerFailures.set(pluginId, code);
     unregister(pluginId);
+    providerFailures.set(pluginId, code);
     report(code, pluginId);
   };
 
@@ -205,6 +231,7 @@ export const createPluginSurfaceProjectionService = ({
     }
     try {
       if (replaceActions(entry.plugin_id, actions).ok) {
+        providerFailures.delete(entry.plugin_id);
         return;
       }
     } catch {
@@ -294,11 +321,65 @@ export const createPluginSurfaceProjectionService = ({
     await drain();
   };
 
+  const projectionError = (code: PluginSurfaceProjectionDiagnosticCode, pluginId: string) =>
+    new PluginSurfaceProjectionError(code, safeMessages[code], pluginId);
+
+  const quiesceProvider = async (pluginId: string) => {
+    if (destroyed) {
+      throw new PluginSurfaceProjectionError('destroyed', 'Plugin surface projection is unavailable.', pluginId);
+    }
+    let actionOk = false;
+    try {
+      actionOk = replaceActions(pluginId, []).ok;
+    } catch {
+      actionOk = false;
+    }
+    if (!actionOk) {
+      providerFailures.set(pluginId, 'action_registry_replacement_failed');
+      report('action_registry_replacement_failed', pluginId);
+      throw projectionError('action_registry_replacement_failed', pluginId);
+    }
+    let pageOk = false;
+    try {
+      pageOk = replacePages(pluginId, []).ok;
+    } catch {
+      pageOk = false;
+    }
+    if (!pageOk) {
+      providerFailures.set(pluginId, 'page_registry_replacement_failed');
+      report('page_registry_replacement_failed', pluginId);
+      throw projectionError('page_registry_replacement_failed', pluginId);
+    }
+    knownProviders.add(pluginId);
+    providerFailures.delete(pluginId);
+  };
+
   const service: PluginSurfaceProjectionService = Object.freeze({
+    currentSnapshot: () => latestObservedSnapshot,
     initialize: () => converge(registrationAdapter.initialize),
     refresh: () => converge(registrationAdapter.refresh),
     handleLauncherActivation: () => converge(registrationAdapter.handleLauncherActivation),
     recoverListener: () => converge(registrationAdapter.recoverListener),
+    quiesceProvider,
+    async reconcileRevision(targetRevision: string, pluginId?: string) {
+      if (destroyed) {
+        throw new PluginSurfaceProjectionError('destroyed', 'Plugin surface projection is unavailable.', pluginId);
+      }
+      await converge(registrationAdapter.refresh);
+      if (latestObservedSnapshot === undefined || BigInt(latestObservedSnapshot.revision) < BigInt(targetRevision)) {
+        throw new PluginSurfaceProjectionError(
+          'revision_not_observed',
+          'Plugin surface revision was not observed.',
+          pluginId,
+        );
+      }
+      if (pluginId !== undefined) {
+        const failure = providerFailures.get(pluginId);
+        if (failure !== undefined) {
+          throw projectionError(failure, pluginId);
+        }
+      }
+    },
     whenIdle: async () => {
       while (drainPromise) {
         await drainPromise;
@@ -316,6 +397,7 @@ export const createPluginSurfaceProjectionService = ({
         unregister(pluginId, false);
       }
       knownProviders.clear();
+      providerFailures.clear();
       await registrationAdapter.destroy();
     },
   });
@@ -356,10 +438,14 @@ export const createProductionPluginSurfaceProjection = (
     return current;
   };
   return Object.freeze({
+    currentSnapshot: () => ensure().currentSnapshot(),
     initialize: () => ensure().initialize(),
     refresh: () => ensure().refresh(),
     handleLauncherActivation: () => ensure().handleLauncherActivation(),
     recoverListener: () => ensure().recoverListener(),
+    quiesceProvider: (pluginId: string) => ensure().quiesceProvider(pluginId),
+    reconcileRevision: (targetRevision: string, pluginId?: string) =>
+      ensure().reconcileRevision(targetRevision, pluginId),
     whenIdle: () => ensure().whenIdle(),
     async destroy() {
       const service = current;

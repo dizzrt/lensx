@@ -15,6 +15,7 @@ use crate::{
     plugin_registration::{emit_plugin_registration_changed, PluginRegistrationEventEmitter},
 };
 use fs2::FileExt;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeSet, HashSet},
     fs::{self, File, OpenOptions},
@@ -32,7 +33,10 @@ use tauri_plugin_dialog::DialogExt;
 const MAX_COMPRESSED_BYTES: u64 = 64 * 1024 * 1024;
 const STAGING_DIRECTORY: &str = ".staging";
 const PACKAGES_DIRECTORY: &str = "packages";
+const DATA_DIRECTORY: &str = "data";
+const CLEANUP_DIRECTORY: &str = ".cleanup";
 const INSTALL_LOCK_FILE: &str = ".install.lock";
+const CLEANUP_RECORD_VERSION: u32 = 1;
 const MAX_INSTALLER_DIAGNOSTICS: usize = 32;
 static STAGING_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -58,6 +62,64 @@ pub struct PluginInstaller {
     availability: Mutex<InstallerAvailability>,
     recovered: Mutex<bool>,
     diagnostics: Mutex<Vec<PluginInstallerDiagnostic>>,
+    blocked_plugin_keys: Mutex<HashSet<String>>,
+    #[cfg(test)]
+    cleanup_fault: Mutex<bool>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum PluginCommitBoundaryError {
+    Busy,
+    Unavailable,
+}
+
+pub(crate) struct PluginCommitGuard<'a> {
+    _process: MutexGuard<'a, ()>,
+    _file: File,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum CleanupDataPolicy {
+    RetainData,
+    DeleteData,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct PluginCleanupRecord {
+    version: u32,
+    plugin_key: String,
+    entry_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    plugin_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    package_digest: Option<String>,
+    data_policy: CleanupDataPolicy,
+    program_complete: bool,
+    data_complete: bool,
+    completed: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct PluginUninstallCommit {
+    pub change: Option<crate::plugin_registration::PluginRegistrationChangedEvent>,
+    pub cleanup_pending: bool,
+    pub plugin_id: Option<String>,
+    pub revision: String,
+    pub changed: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum PluginLifecycleStorageError {
+    Busy,
+    Conflict,
+    InvalidState,
+    NotFound,
+    OperationNotSupported,
+    PersistFailed,
+    Unavailable,
+    UnsafeCleanup,
 }
 
 impl PluginInstaller {
@@ -73,6 +135,9 @@ impl PluginInstaller {
             availability: Mutex::new(availability),
             recovered: Mutex::new(false),
             diagnostics: Mutex::new(Vec::new()),
+            blocked_plugin_keys: Mutex::new(HashSet::new()),
+            #[cfg(test)]
+            cleanup_fault: Mutex::new(false),
         });
         if installer.root.is_none() {
             installer.record_diagnostic(PluginInstallerDiagnostic {
@@ -82,13 +147,13 @@ impl PluginInstaller {
             });
             return installer;
         }
-        match installer.acquire_locks() {
-            Ok((_process, _file)) => {
+        match installer.acquire_commit_boundary() {
+            Ok(_guard) => {
                 if installer.recover_locked().is_err() {
                     installer.set_availability(InstallerAvailability::Degraded);
                 }
             }
-            Err(error) if error.code == LocalPluginInstallationErrorCode::Busy => {}
+            Err(PluginCommitBoundaryError::Busy) => {}
             Err(_) => installer.set_availability(InstallerAvailability::Unavailable),
         }
         installer
@@ -101,12 +166,146 @@ impl PluginInstaller {
             .clone()
     }
 
+    pub(crate) fn set_enabled(
+        &self,
+        entry_id: &str,
+        expected_revision: &str,
+        enabled: bool,
+    ) -> Result<
+        (
+            crate::plugin_manager::PluginRegistration,
+            Option<crate::plugin_registration::PluginRegistrationChangedEvent>,
+        ),
+        PluginLifecycleStorageError,
+    > {
+        let _guard = self
+            .acquire_commit_boundary()
+            .map_err(map_commit_boundary_error)?;
+        self.ensure_recovered_locked()
+            .map_err(|_| PluginLifecycleStorageError::Unavailable)?;
+        self.manager
+            .set_enabled_entry(entry_id, expected_revision, enabled)
+            .map_err(map_manager_lifecycle_error)
+    }
+
+    pub(crate) fn uninstall(
+        &self,
+        entry_id: &str,
+        expected_revision: &str,
+        data_policy: CleanupDataPolicy,
+    ) -> Result<PluginUninstallCommit, PluginLifecycleStorageError> {
+        let _guard = self
+            .acquire_commit_boundary()
+            .map_err(map_commit_boundary_error)?;
+        self.ensure_recovered_locked()
+            .map_err(|_| PluginLifecycleStorageError::Unavailable)?;
+        if self.manager.registration_revision() != expected_revision {
+            return Err(PluginLifecycleStorageError::Conflict);
+        }
+
+        let root = self
+            .root
+            .as_ref()
+            .ok_or(PluginLifecycleStorageError::Unavailable)?;
+        let packages_root = root.join(PACKAGES_DIRECTORY);
+        let data_root = root.join(DATA_DIRECTORY);
+        let resolved = match self
+            .manager
+            .resolve_lifecycle_entry(entry_id, expected_revision)
+        {
+            Ok(entry) => Some(entry),
+            Err(error) if error.code() == PluginManagerDiagnosticCode::NotFound => None,
+            Err(error) => return Err(map_manager_lifecycle_error(error)),
+        };
+
+        if resolved.is_none() {
+            let mut record = self
+                .find_cleanup_record_by_entry_id(entry_id)?
+                .ok_or(PluginLifecycleStorageError::NotFound)?;
+            if record.data_policy != data_policy {
+                return Err(PluginLifecycleStorageError::Conflict);
+            }
+            self.complete_cleanup(&mut record, &packages_root, &data_root)?;
+            self.unblock_plugin_key(&record.plugin_key);
+            return Ok(PluginUninstallCommit {
+                change: None,
+                cleanup_pending: !record.completed,
+                plugin_id: record.plugin_id,
+                revision: self.manager.registration_revision(),
+                changed: false,
+            });
+        }
+
+        let entry = resolved.expect("resolved lifecycle entry should be present");
+        let plugin_key = entry.record_key().to_owned();
+        if self.is_plugin_key_blocked(&plugin_key) {
+            return Err(PluginLifecycleStorageError::UnsafeCleanup);
+        }
+        let mut record = match self.read_cleanup_record(&plugin_key)? {
+            Some(record) => {
+                if record.entry_id != entry_id || record.data_policy != data_policy {
+                    return Err(PluginLifecycleStorageError::Conflict);
+                }
+                record
+            }
+            None => {
+                let package_digest = self.prove_managed_payload(&entry, &packages_root)?;
+                self.prove_data_subtree(&plugin_key, &data_root)?;
+                let record = PluginCleanupRecord {
+                    version: CLEANUP_RECORD_VERSION,
+                    plugin_key: plugin_key.clone(),
+                    entry_id: entry_id.to_owned(),
+                    plugin_id: entry.plugin_id().map(str::to_owned),
+                    package_digest,
+                    data_policy,
+                    program_complete: false,
+                    data_complete: data_policy == CleanupDataPolicy::RetainData,
+                    completed: false,
+                };
+                self.write_cleanup_record(&record)?;
+                record
+            }
+        };
+
+        let removal = match self.manager.remove_entry(entry_id, expected_revision) {
+            Ok(removal) => removal,
+            Err(error) => {
+                let _ = self.delete_cleanup_record(&plugin_key);
+                return Err(map_manager_lifecycle_error(error));
+            }
+        };
+        let revision = removal.change.revision.clone();
+        let plugin_id = removal.entry.plugin_id().map(str::to_owned);
+        let cleanup_result = self.complete_cleanup(&mut record, &packages_root, &data_root);
+        let cleanup_pending = cleanup_result.is_err() || !record.completed;
+        if cleanup_result.is_err() {
+            self.block_plugin_key(&plugin_key, "cleanup_pending");
+        }
+        Ok(PluginUninstallCommit {
+            change: Some(removal.change),
+            cleanup_pending,
+            plugin_id,
+            revision,
+            changed: true,
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_cleanup_fault(&self, enabled: bool) {
+        *self
+            .cleanup_fault
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = enabled;
+    }
+
     pub fn install_source(
         &self,
         source: &Path,
         emitter: &impl PluginRegistrationEventEmitter,
     ) -> Result<LocalPluginInstallationResult, LocalPluginInstallationError> {
-        let (_process, _file) = self.acquire_locks()?;
+        let _guard = self
+            .acquire_commit_boundary()
+            .map_err(commit_boundary_installation_error)?;
         self.ensure_recovered_locked()?;
         let bytes = read_source_capped(source)?;
         self.install_bytes_locked(&bytes, emitter)
@@ -118,7 +317,9 @@ impl PluginInstaller {
         bytes: &[u8],
         emitter: &impl PluginRegistrationEventEmitter,
     ) -> Result<LocalPluginInstallationResult, LocalPluginInstallationError> {
-        let (_process, _file) = self.acquire_locks()?;
+        let _guard = self
+            .acquire_commit_boundary()
+            .map_err(commit_boundary_installation_error)?;
         self.ensure_recovered_locked()?;
         self.install_bytes_locked(bytes, emitter)
     }
@@ -156,6 +357,8 @@ impl PluginInstaller {
             } => (manifest, facts),
         };
 
+        let plugin_key = plugin_record_key(&manifest.plugin_id);
+        self.reject_cleanup_conflict(&plugin_key)?;
         self.reject_existing_identity(&manifest.plugin_id)?;
         let root = self.root.as_ref().ok_or_else(|| {
             installation_error(
@@ -163,7 +366,6 @@ impl PluginInstaller {
                 LocalPluginInstallationOperation::Commit,
             )
         })?;
-        let plugin_key = plugin_record_key(&manifest.plugin_id);
         let staging_path = root.join(STAGING_DIRECTORY).join(staging_identity());
         fs::create_dir(&staging_path).map_err(|_| {
             installation_error(
@@ -249,6 +451,9 @@ impl PluginInstaller {
             )
         })?;
         let revision = change.revision.clone();
+        if self.clear_completed_cleanup_record(&plugin_key).is_err() {
+            self.block_plugin_key(&plugin_key, "cleanup_record_clear_failed");
+        }
         let _ = emit_plugin_registration_changed(emitter, &change);
         Ok(LocalPluginInstallationResult::installed(
             plugin_id, version, revision,
@@ -278,53 +483,38 @@ impl PluginInstaller {
         Ok(())
     }
 
-    fn acquire_locks(&self) -> Result<(MutexGuard<'_, ()>, File), LocalPluginInstallationError> {
+    pub(crate) fn acquire_commit_boundary(
+        &self,
+    ) -> Result<PluginCommitGuard<'_>, PluginCommitBoundaryError> {
         if self.current_availability() == InstallerAvailability::Unavailable {
-            return Err(installation_error(
-                LocalPluginInstallationErrorCode::Unavailable,
-                LocalPluginInstallationOperation::Recover,
-            ));
+            return Err(PluginCommitBoundaryError::Unavailable);
         }
-        let process = self.process_lock.try_lock().map_err(|_| {
-            installation_error(
-                LocalPluginInstallationErrorCode::Busy,
-                LocalPluginInstallationOperation::Commit,
-            )
-        })?;
-        let root = self.root.as_ref().ok_or_else(|| {
-            installation_error(
-                LocalPluginInstallationErrorCode::Unavailable,
-                LocalPluginInstallationOperation::Recover,
-            )
-        })?;
-        fs::create_dir_all(root).map_err(|_| {
-            installation_error(
-                LocalPluginInstallationErrorCode::Unavailable,
-                LocalPluginInstallationOperation::Recover,
-            )
-        })?;
+        let process = self
+            .process_lock
+            .try_lock()
+            .map_err(|_| PluginCommitBoundaryError::Busy)?;
+        let root = self
+            .root
+            .as_ref()
+            .ok_or(PluginCommitBoundaryError::Unavailable)?;
+        fs::create_dir_all(root).map_err(|_| PluginCommitBoundaryError::Unavailable)?;
         let lock_file = OpenOptions::new()
             .create(true)
             .read(true)
             .write(true)
             .open(root.join(INSTALL_LOCK_FILE))
-            .map_err(|_| {
-                installation_error(
-                    LocalPluginInstallationErrorCode::Unavailable,
-                    LocalPluginInstallationOperation::Recover,
-                )
-            })?;
+            .map_err(|_| PluginCommitBoundaryError::Unavailable)?;
         lock_file.try_lock_exclusive().map_err(|error| {
-            installation_error(
-                if error.kind() == std::io::ErrorKind::WouldBlock {
-                    LocalPluginInstallationErrorCode::Busy
-                } else {
-                    LocalPluginInstallationErrorCode::Unavailable
-                },
-                LocalPluginInstallationOperation::Commit,
-            )
+            if error.kind() == std::io::ErrorKind::WouldBlock {
+                PluginCommitBoundaryError::Busy
+            } else {
+                PluginCommitBoundaryError::Unavailable
+            }
         })?;
-        Ok((process, lock_file))
+        Ok(PluginCommitGuard {
+            _process: process,
+            _file: lock_file,
+        })
     }
 
     fn ensure_recovered_locked(&self) -> Result<(), LocalPluginInstallationError> {
@@ -351,8 +541,12 @@ impl PluginInstaller {
         let root = self.root.as_ref().ok_or(())?;
         let staging_root = root.join(STAGING_DIRECTORY);
         let packages_root = root.join(PACKAGES_DIRECTORY);
+        let data_root = root.join(DATA_DIRECTORY);
+        let cleanup_root = root.join(CLEANUP_DIRECTORY);
         ensure_real_directory(&staging_root).map_err(|_| ())?;
         ensure_real_directory(&packages_root).map_err(|_| ())?;
+        ensure_real_directory(&data_root).map_err(|_| ())?;
+        ensure_real_directory(&cleanup_root).map_err(|_| ())?;
 
         for entry in fs::read_dir(&staging_root).map_err(|_| ())? {
             let entry = entry.map_err(|_| ())?;
@@ -379,6 +573,14 @@ impl PluginInstaller {
             return Err(());
         }
         let quarantine_keys: HashSet<_> = recovery.quarantined_record_keys.into_iter().collect();
+        let active_keys: HashSet<_> = recovery
+            .healthy_installation_paths
+            .iter()
+            .map(|(key, _)| key.clone())
+            .chain(quarantine_keys.iter().cloned())
+            .collect();
+
+        self.recover_cleanup_records(&cleanup_root, &packages_root, &data_root, &active_keys)?;
 
         for key_entry in fs::read_dir(&packages_root).map_err(|_| ())? {
             let key_entry = key_entry.map_err(|_| ())?;
@@ -445,6 +647,460 @@ impl PluginInstaller {
             diagnostics.remove(0);
         }
         diagnostics.push(diagnostic);
+    }
+
+    fn cleanup_root(&self) -> Result<PathBuf, PluginLifecycleStorageError> {
+        self.root
+            .as_ref()
+            .map(|root| root.join(CLEANUP_DIRECTORY))
+            .ok_or(PluginLifecycleStorageError::Unavailable)
+    }
+
+    fn cleanup_record_path(
+        &self,
+        plugin_key: &str,
+    ) -> Result<PathBuf, PluginLifecycleStorageError> {
+        if !is_plugin_key(plugin_key) {
+            return Err(PluginLifecycleStorageError::UnsafeCleanup);
+        }
+        Ok(self.cleanup_root()?.join(format!("{plugin_key}.json")))
+    }
+
+    fn read_cleanup_record(
+        &self,
+        plugin_key: &str,
+    ) -> Result<Option<PluginCleanupRecord>, PluginLifecycleStorageError> {
+        let path = self.cleanup_record_path(plugin_key)?;
+        let bytes = match fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(_) => return Err(PluginLifecycleStorageError::UnsafeCleanup),
+        };
+        let record: PluginCleanupRecord = serde_json::from_slice(&bytes)
+            .map_err(|_| PluginLifecycleStorageError::UnsafeCleanup)?;
+        validate_cleanup_record(&record, plugin_key)?;
+        Ok(Some(record))
+    }
+
+    fn find_cleanup_record_by_entry_id(
+        &self,
+        entry_id: &str,
+    ) -> Result<Option<PluginCleanupRecord>, PluginLifecycleStorageError> {
+        let cleanup_root = self.cleanup_root()?;
+        let mut match_record = None;
+        for entry in
+            fs::read_dir(&cleanup_root).map_err(|_| PluginLifecycleStorageError::UnsafeCleanup)?
+        {
+            let entry = entry.map_err(|_| PluginLifecycleStorageError::UnsafeCleanup)?;
+            let name = entry
+                .file_name()
+                .to_str()
+                .map(str::to_owned)
+                .ok_or(PluginLifecycleStorageError::UnsafeCleanup)?;
+            let Some(plugin_key) = name.strip_suffix(".json") else {
+                continue;
+            };
+            let Some(record) = self.read_cleanup_record(plugin_key)? else {
+                continue;
+            };
+            if record.entry_id == entry_id {
+                if match_record.is_some() {
+                    return Err(PluginLifecycleStorageError::UnsafeCleanup);
+                }
+                match_record = Some(record);
+            }
+        }
+        Ok(match_record)
+    }
+
+    fn write_cleanup_record(
+        &self,
+        record: &PluginCleanupRecord,
+    ) -> Result<(), PluginLifecycleStorageError> {
+        validate_cleanup_record(record, &record.plugin_key)?;
+        let cleanup_root = self.cleanup_root()?;
+        ensure_real_directory(&cleanup_root)
+            .map_err(|_| PluginLifecycleStorageError::UnsafeCleanup)?;
+        let target = self.cleanup_record_path(&record.plugin_key)?;
+        let sequence = STAGING_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let temporary = cleanup_root.join(format!(
+            ".{}.{}.{}.tmp",
+            record.plugin_key,
+            std::process::id(),
+            sequence
+        ));
+        let bytes = serde_json::to_vec_pretty(record)
+            .map_err(|_| PluginLifecycleStorageError::PersistFailed)?;
+        let result = (|| {
+            let mut file = OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&temporary)
+                .map_err(|_| PluginLifecycleStorageError::PersistFailed)?;
+            file.write_all(&bytes)
+                .and_then(|_| file.write_all(b"\n"))
+                .and_then(|_| file.sync_all())
+                .map_err(|_| PluginLifecycleStorageError::PersistFailed)?;
+            fs::rename(&temporary, &target)
+                .map_err(|_| PluginLifecycleStorageError::PersistFailed)?;
+            sync_directory(&cleanup_root).map_err(|_| PluginLifecycleStorageError::PersistFailed)
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(temporary);
+        }
+        result
+    }
+
+    fn delete_cleanup_record(&self, plugin_key: &str) -> Result<(), PluginLifecycleStorageError> {
+        let path = self.cleanup_record_path(plugin_key)?;
+        match fs::remove_file(path) {
+            Ok(()) => sync_directory(&self.cleanup_root()?)
+                .map_err(|_| PluginLifecycleStorageError::PersistFailed),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(_) => Err(PluginLifecycleStorageError::PersistFailed),
+        }
+    }
+
+    fn clear_completed_cleanup_record(
+        &self,
+        plugin_key: &str,
+    ) -> Result<(), PluginLifecycleStorageError> {
+        if self
+            .read_cleanup_record(plugin_key)?
+            .is_some_and(|record| record.completed)
+        {
+            self.delete_cleanup_record(plugin_key)?;
+        }
+        Ok(())
+    }
+
+    fn recover_cleanup_records(
+        &self,
+        cleanup_root: &Path,
+        packages_root: &Path,
+        data_root: &Path,
+        active_keys: &HashSet<String>,
+    ) -> Result<(), ()> {
+        for entry in fs::read_dir(cleanup_root).map_err(|_| ())? {
+            let entry = entry.map_err(|_| ())?;
+            let metadata = fs::symlink_metadata(entry.path()).map_err(|_| ())?;
+            let name = entry.file_name();
+            let name = name.to_str().ok_or(())?;
+            let Some(plugin_key) = name.strip_suffix(".json") else {
+                if name.starts_with('.') && name.ends_with(".tmp") {
+                    continue;
+                }
+                self.record_recovery_failure("unknown_cleanup_entry");
+                return Err(());
+            };
+            if !is_plugin_key(plugin_key)
+                || !metadata.is_file()
+                || metadata.file_type().is_symlink()
+            {
+                self.record_recovery_failure("unsafe_cleanup_entry");
+                return Err(());
+            }
+            let mut record = match self.read_cleanup_record(plugin_key) {
+                Ok(Some(record)) => record,
+                _ => {
+                    self.block_plugin_key(plugin_key, "malformed_cleanup_record");
+                    continue;
+                }
+            };
+            if active_keys.contains(plugin_key) {
+                self.block_plugin_key(plugin_key, "cleanup_record_conflict");
+                continue;
+            }
+            if self
+                .complete_cleanup(&mut record, packages_root, data_root)
+                .is_err()
+            {
+                self.block_plugin_key(plugin_key, "cleanup_recovery_pending");
+            } else {
+                self.unblock_plugin_key(plugin_key);
+            }
+        }
+        Ok(())
+    }
+
+    fn prove_managed_payload(
+        &self,
+        entry: &crate::plugin_manager::PluginManagerLifecycleEntry,
+        packages_root: &Path,
+    ) -> Result<Option<String>, PluginLifecycleStorageError> {
+        let plugin_key = entry.record_key();
+        match entry {
+            crate::plugin_manager::PluginManagerLifecycleEntry::Healthy {
+                registration, ..
+            } => {
+                let path = PathBuf::from(&registration.facts.installation_path);
+                let canonical = canonical_payload_path(packages_root, plugin_key, &path)
+                    .ok_or(PluginLifecycleStorageError::OperationNotSupported)?;
+                let digest = canonical
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .ok_or(PluginLifecycleStorageError::OperationNotSupported)?;
+                if registration.facts.package_digest.algorithm != "sha256"
+                    || registration.facts.package_digest.value != digest
+                {
+                    return Err(PluginLifecycleStorageError::OperationNotSupported);
+                }
+                validate_real_tree(&canonical)?;
+                Ok(Some(digest.to_owned()))
+            }
+            crate::plugin_manager::PluginManagerLifecycleEntry::Quarantined { .. } => {
+                let subtree = packages_root.join(plugin_key);
+                validate_package_key_tree(&subtree)?;
+                Ok(None)
+            }
+        }
+    }
+
+    fn prove_data_subtree(
+        &self,
+        plugin_key: &str,
+        data_root: &Path,
+    ) -> Result<(), PluginLifecycleStorageError> {
+        let path = data_root.join(plugin_key);
+        if path.exists() {
+            validate_real_tree(&path)?;
+        }
+        Ok(())
+    }
+
+    fn complete_cleanup(
+        &self,
+        record: &mut PluginCleanupRecord,
+        packages_root: &Path,
+        data_root: &Path,
+    ) -> Result<(), PluginLifecycleStorageError> {
+        #[cfg(test)]
+        if *self
+            .cleanup_fault
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+        {
+            return Err(PluginLifecycleStorageError::PersistFailed);
+        }
+        if !record.program_complete {
+            cleanup_program_subtree(record, packages_root)?;
+            record.program_complete = true;
+            self.write_cleanup_record(record)?;
+        }
+        if !record.data_complete {
+            if record.data_policy == CleanupDataPolicy::DeleteData {
+                remove_optional_real_tree(&data_root.join(&record.plugin_key), data_root)?;
+            }
+            record.data_complete = true;
+            self.write_cleanup_record(record)?;
+        }
+        if !record.completed {
+            record.completed = record.program_complete && record.data_complete;
+            self.write_cleanup_record(record)?;
+        }
+        Ok(())
+    }
+
+    fn is_plugin_key_blocked(&self, plugin_key: &str) -> bool {
+        self.blocked_plugin_keys
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .contains(plugin_key)
+    }
+
+    fn block_plugin_key(&self, plugin_key: &str, code: &'static str) {
+        self.blocked_plugin_keys
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(plugin_key.to_owned());
+        self.record_diagnostic(PluginInstallerDiagnostic {
+            code,
+            operation: "recover",
+            message: "Plugin lifecycle cleanup could not complete safely.",
+        });
+    }
+
+    fn unblock_plugin_key(&self, plugin_key: &str) {
+        self.blocked_plugin_keys
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(plugin_key);
+    }
+
+    fn reject_cleanup_conflict(
+        &self,
+        plugin_key: &str,
+    ) -> Result<(), LocalPluginInstallationError> {
+        if self
+            .blocked_plugin_keys
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .contains(plugin_key)
+        {
+            return Err(installation_error(
+                LocalPluginInstallationErrorCode::Busy,
+                LocalPluginInstallationOperation::Recover,
+            ));
+        }
+        let Some(record) = self.read_cleanup_record(plugin_key).map_err(|_| {
+            installation_error(
+                LocalPluginInstallationErrorCode::Unavailable,
+                LocalPluginInstallationOperation::Recover,
+            )
+        })?
+        else {
+            return Ok(());
+        };
+        if record.completed {
+            Ok(())
+        } else {
+            Err(installation_error(
+                LocalPluginInstallationErrorCode::Busy,
+                LocalPluginInstallationOperation::Recover,
+            ))
+        }
+    }
+}
+
+fn commit_boundary_installation_error(
+    error: PluginCommitBoundaryError,
+) -> LocalPluginInstallationError {
+    installation_error(
+        match error {
+            PluginCommitBoundaryError::Busy => LocalPluginInstallationErrorCode::Busy,
+            PluginCommitBoundaryError::Unavailable => LocalPluginInstallationErrorCode::Unavailable,
+        },
+        LocalPluginInstallationOperation::Commit,
+    )
+}
+
+fn map_commit_boundary_error(error: PluginCommitBoundaryError) -> PluginLifecycleStorageError {
+    match error {
+        PluginCommitBoundaryError::Busy => PluginLifecycleStorageError::Busy,
+        PluginCommitBoundaryError::Unavailable => PluginLifecycleStorageError::Unavailable,
+    }
+}
+
+fn map_manager_lifecycle_error(
+    error: crate::plugin_manager::PluginManagerDiagnostic,
+) -> PluginLifecycleStorageError {
+    match error.code() {
+        PluginManagerDiagnosticCode::StaleRevision => PluginLifecycleStorageError::Conflict,
+        PluginManagerDiagnosticCode::InvalidState => PluginLifecycleStorageError::InvalidState,
+        PluginManagerDiagnosticCode::NotFound => PluginLifecycleStorageError::NotFound,
+        PluginManagerDiagnosticCode::StoreUnavailable => PluginLifecycleStorageError::Unavailable,
+        PluginManagerDiagnosticCode::PersistFailed => PluginLifecycleStorageError::PersistFailed,
+        _ => PluginLifecycleStorageError::InvalidState,
+    }
+}
+
+fn validate_cleanup_record(
+    record: &PluginCleanupRecord,
+    expected_plugin_key: &str,
+) -> Result<(), PluginLifecycleStorageError> {
+    if record.version != CLEANUP_RECORD_VERSION
+        || record.plugin_key != expected_plugin_key
+        || !is_plugin_key(&record.plugin_key)
+        || !crate::plugin_registration::is_valid_plugin_registration_entry_id(&record.entry_id)
+        || record.plugin_id.as_ref().is_some_and(String::is_empty)
+        || record
+            .package_digest
+            .as_ref()
+            .is_some_and(|digest| !is_digest(digest))
+        || (record.data_policy == CleanupDataPolicy::RetainData && !record.data_complete)
+        || (record.completed && (!record.program_complete || !record.data_complete))
+    {
+        return Err(PluginLifecycleStorageError::UnsafeCleanup);
+    }
+    Ok(())
+}
+
+fn validate_real_tree(path: &Path) -> Result<(), PluginLifecycleStorageError> {
+    let metadata =
+        fs::symlink_metadata(path).map_err(|_| PluginLifecycleStorageError::UnsafeCleanup)?;
+    if metadata.file_type().is_symlink() {
+        return Err(PluginLifecycleStorageError::UnsafeCleanup);
+    }
+    if metadata.is_file() {
+        return Ok(());
+    }
+    if !metadata.is_dir() {
+        return Err(PluginLifecycleStorageError::UnsafeCleanup);
+    }
+    for entry in fs::read_dir(path).map_err(|_| PluginLifecycleStorageError::UnsafeCleanup)? {
+        let entry = entry.map_err(|_| PluginLifecycleStorageError::UnsafeCleanup)?;
+        validate_real_tree(&entry.path())?;
+    }
+    Ok(())
+}
+
+fn validate_package_key_tree(path: &Path) -> Result<(), PluginLifecycleStorageError> {
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|_| PluginLifecycleStorageError::OperationNotSupported)?;
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return Err(PluginLifecycleStorageError::UnsafeCleanup);
+    }
+    let mut saw_payload = false;
+    for entry in fs::read_dir(path).map_err(|_| PluginLifecycleStorageError::UnsafeCleanup)? {
+        let entry = entry.map_err(|_| PluginLifecycleStorageError::UnsafeCleanup)?;
+        let digest = entry
+            .file_name()
+            .to_str()
+            .map(str::to_owned)
+            .ok_or(PluginLifecycleStorageError::UnsafeCleanup)?;
+        if !is_digest(&digest) {
+            return Err(PluginLifecycleStorageError::UnsafeCleanup);
+        }
+        validate_real_tree(&entry.path())?;
+        saw_payload = true;
+    }
+    if !saw_payload {
+        return Err(PluginLifecycleStorageError::OperationNotSupported);
+    }
+    Ok(())
+}
+
+fn remove_optional_real_tree(
+    path: &Path,
+    expected_parent: &Path,
+) -> Result<(), PluginLifecycleStorageError> {
+    if path.parent() != Some(expected_parent) {
+        return Err(PluginLifecycleStorageError::UnsafeCleanup);
+    }
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(_) => return Err(PluginLifecycleStorageError::UnsafeCleanup),
+    };
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return Err(PluginLifecycleStorageError::UnsafeCleanup);
+    }
+    validate_real_tree(path)?;
+    remove_tree_no_follow(path).map_err(|_| PluginLifecycleStorageError::PersistFailed)?;
+    sync_directory(expected_parent).map_err(|_| PluginLifecycleStorageError::PersistFailed)
+}
+
+fn cleanup_program_subtree(
+    record: &PluginCleanupRecord,
+    packages_root: &Path,
+) -> Result<(), PluginLifecycleStorageError> {
+    let plugin_root = packages_root.join(&record.plugin_key);
+    match &record.package_digest {
+        Some(digest) => {
+            let payload = plugin_root.join(digest);
+            remove_optional_real_tree(&payload, &plugin_root)?;
+            if fs::read_dir(&plugin_root)
+                .map(|mut entries| entries.next().is_none())
+                .unwrap_or(false)
+            {
+                fs::remove_dir(&plugin_root)
+                    .map_err(|_| PluginLifecycleStorageError::PersistFailed)?;
+                sync_directory(packages_root)
+                    .map_err(|_| PluginLifecycleStorageError::PersistFailed)?;
+            }
+            Ok(())
+        }
+        None => remove_optional_real_tree(&plugin_root, packages_root),
     }
 }
 
@@ -807,6 +1463,22 @@ mod tests {
         .expect("valid package fixture should exist")
     }
 
+    fn installed_entry_id(manager: &PluginManager, plugin_id: &str) -> String {
+        manager
+            .read_registration_snapshot()
+            .entries
+            .into_iter()
+            .find_map(|entry| match entry {
+                crate::plugin_registration::PluginRegistrationSummary::Registered {
+                    entry_id,
+                    plugin_id: current,
+                    ..
+                } if current == plugin_id => Some(entry_id),
+                _ => None,
+            })
+            .expect("installed entry should exist")
+    }
+
     #[test]
     fn same_bytes_are_inspected_extracted_committed_and_registered_once() {
         let (_directory, manager, installer) = setup("success");
@@ -840,6 +1512,205 @@ mod tests {
                 .len(),
             1
         );
+        let plugin_key = plugin_record_key(&plugin_id);
+        assert!(!installer
+            .root
+            .as_ref()
+            .expect("root should exist")
+            .join(DATA_DIRECTORY)
+            .join(plugin_key)
+            .exists());
+    }
+
+    #[test]
+    fn uninstall_retain_data_is_idempotent_and_reinstall_clears_completed_evidence() {
+        let (_directory, manager, installer) = setup("uninstall-retain");
+        installer
+            .install_bytes(&valid_package(), &FakeEmitter::default())
+            .expect("installation should succeed");
+        let plugin_id = "com.acme.workspace";
+        let plugin_key = plugin_record_key(plugin_id);
+        let entry_id = installed_entry_id(&manager, plugin_id);
+        let data = installer
+            .root
+            .as_ref()
+            .expect("root should exist")
+            .join(DATA_DIRECTORY)
+            .join(&plugin_key);
+        fs::create_dir_all(&data).expect("data subtree should be created on demand");
+        fs::write(data.join("preserved.json"), b"preserve").expect("data should exist");
+
+        let removed = installer
+            .uninstall(&entry_id, "1", CleanupDataPolicy::RetainData)
+            .expect("uninstall should succeed");
+        assert!(removed.changed);
+        assert!(!removed.cleanup_pending);
+        assert_eq!(removed.revision, "2");
+        assert_eq!(removed.plugin_id.as_deref(), Some(plugin_id));
+        assert!(removed.change.is_some());
+        assert!(manager.registration(plugin_id).is_none());
+        assert_eq!(fs::read(data.join("preserved.json")).unwrap(), b"preserve");
+        assert!(installer
+            .read_cleanup_record(&plugin_key)
+            .expect("cleanup record should parse")
+            .is_some_and(|record| record.completed));
+
+        let repeated = installer
+            .uninstall(&entry_id, "2", CleanupDataPolicy::RetainData)
+            .expect("completed uninstall should be idempotent");
+        assert!(!repeated.changed);
+        assert!(!repeated.cleanup_pending);
+        assert_eq!(manager.registration_revision(), "2");
+
+        installer
+            .install_bytes(&valid_package(), &FakeEmitter::default())
+            .expect("same identity should install after completed cleanup");
+        let registration = manager
+            .registration(plugin_id)
+            .expect("new registration should exist");
+        assert!(registration.facts.enabled);
+        assert!(registration.facts.granted_permission_ids.is_empty());
+        assert!(registration.facts.diagnostics.is_empty());
+        assert_eq!(fs::read(data.join("preserved.json")).unwrap(), b"preserve");
+        assert!(installer
+            .read_cleanup_record(&plugin_key)
+            .expect("cleanup lookup should succeed")
+            .is_none());
+    }
+
+    #[test]
+    fn successful_cleanup_retry_unblocks_same_process_reinstall() {
+        let (_directory, manager, installer) = setup("cleanup-retry-unblocks");
+        installer
+            .install_bytes(&valid_package(), &FakeEmitter::default())
+            .expect("installation should succeed");
+        let plugin_id = "com.acme.workspace";
+        let plugin_key = plugin_record_key(plugin_id);
+        let entry_id = installed_entry_id(&manager, plugin_id);
+
+        installer.set_cleanup_fault(true);
+        let pending = installer
+            .uninstall(&entry_id, "1", CleanupDataPolicy::RetainData)
+            .expect("logical uninstall should succeed despite pending cleanup");
+        assert!(pending.cleanup_pending);
+        assert!(installer.is_plugin_key_blocked(&plugin_key));
+
+        installer.set_cleanup_fault(false);
+        let completed = installer
+            .uninstall(&entry_id, "2", CleanupDataPolicy::RetainData)
+            .expect("cleanup retry should succeed");
+        assert!(!completed.cleanup_pending);
+        assert!(!installer.is_plugin_key_blocked(&plugin_key));
+        installer
+            .install_bytes(&valid_package(), &FakeEmitter::default())
+            .expect("same-process reinstall should proceed after cleanup completion");
+    }
+
+    #[test]
+    fn uninstall_delete_data_and_restart_recovery_remove_only_owned_subtrees() {
+        let (directory, manager, installer) = setup("uninstall-delete-recovery");
+        installer
+            .install_bytes(&valid_package(), &FakeEmitter::default())
+            .expect("installation should succeed");
+        let plugin_id = "com.acme.workspace";
+        let plugin_key = plugin_record_key(plugin_id);
+        let entry_id = installed_entry_id(&manager, plugin_id);
+        let root = installer.root.as_ref().expect("root should exist");
+        let data = root.join(DATA_DIRECTORY).join(&plugin_key);
+        fs::create_dir_all(&data).expect("data subtree should exist");
+        fs::write(data.join("delete.json"), b"delete").expect("data should exist");
+        let unrelated = root.join(DATA_DIRECTORY).join("v1-6162");
+        fs::create_dir_all(&unrelated).expect("unrelated data should exist");
+        fs::write(unrelated.join("keep"), b"keep").expect("unrelated marker should exist");
+
+        let entry = manager
+            .resolve_lifecycle_entry(&entry_id, "1")
+            .expect("entry should resolve");
+        let package_digest = installer
+            .prove_managed_payload(&entry, &root.join(PACKAGES_DIRECTORY))
+            .expect("payload should be managed");
+        let record = PluginCleanupRecord {
+            version: CLEANUP_RECORD_VERSION,
+            plugin_key: plugin_key.clone(),
+            entry_id: entry_id.clone(),
+            plugin_id: Some(plugin_id.to_owned()),
+            package_digest,
+            data_policy: CleanupDataPolicy::DeleteData,
+            program_complete: false,
+            data_complete: false,
+            completed: false,
+        };
+        installer
+            .write_cleanup_record(&record)
+            .expect("cleanup intent should persist");
+        manager
+            .remove_entry(&entry_id, "1")
+            .expect("logical removal should persist");
+        drop(installer);
+
+        let recovered = PluginInstaller::initialize(
+            Ok(directory.0.join("local-data/plugins")),
+            Arc::clone(&manager),
+        );
+        assert!(!data.exists());
+        assert_eq!(fs::read(unrelated.join("keep")).unwrap(), b"keep");
+        assert!(recovered
+            .read_cleanup_record(&plugin_key)
+            .expect("cleanup record should parse")
+            .is_some_and(|record| record.completed));
+        assert_eq!(manager.registration_revision(), "2");
+    }
+
+    #[test]
+    fn quarantine_uninstall_is_managed_but_symlink_and_malformed_cleanup_are_preserved() {
+        let quarantine_directory = TestDirectory::new("quarantine-uninstall");
+        let plugin_id = "com.acme.workspace";
+        let key = plugin_record_key(plugin_id);
+        let store = quarantine_directory.0.join("config/plugin-manager");
+        fs::create_dir_all(&store).expect("manager store should exist");
+        fs::write(store.join(format!("{key}.json")), b"{").expect("damaged record should exist");
+        let manager = PluginManager::recover(quarantine_directory.0.join("config"), versions());
+        let payload = quarantine_directory
+            .0
+            .join("local-data/plugins/packages")
+            .join(&key)
+            .join("c".repeat(64));
+        fs::create_dir_all(&payload).expect("quarantine payload should exist");
+        fs::write(payload.join("evidence"), b"payload").expect("payload should exist");
+        let installer = PluginInstaller::initialize(
+            Ok(quarantine_directory.0.join("local-data/plugins")),
+            Arc::clone(&manager),
+        );
+        let stub = manager.quarantine(&key).expect("quarantine should exist");
+        let entry_id = crate::plugin_registration::quarantine_entry_id(&stub);
+        let removed = installer
+            .uninstall(&entry_id, "0", CleanupDataPolicy::RetainData)
+            .expect("managed quarantine should uninstall");
+        assert!(removed.changed);
+        assert!(!payload.exists());
+        assert!(manager.quarantine(&key).is_none());
+
+        let malformed_directory = TestDirectory::new("malformed-cleanup");
+        fs::create_dir_all(malformed_directory.0.join("local-data/plugins/.cleanup"))
+            .expect("cleanup root should exist");
+        fs::write(
+            malformed_directory
+                .0
+                .join(format!("local-data/plugins/.cleanup/{key}.json")),
+            b"{not-json",
+        )
+        .expect("malformed cleanup should exist");
+        let malformed_manager =
+            PluginManager::recover(malformed_directory.0.join("config"), versions());
+        let malformed = PluginInstaller::initialize(
+            Ok(malformed_directory.0.join("local-data/plugins")),
+            malformed_manager,
+        );
+        assert!(malformed.is_plugin_key_blocked(&key));
+        assert!(malformed_directory
+            .0
+            .join(format!("local-data/plugins/.cleanup/{key}.json"))
+            .exists());
     }
 
     #[test]
@@ -1107,6 +1978,33 @@ mod tests {
             LocalPluginInstallationErrorCode::Busy
         );
         assert_eq!(manager.registration_revision(), "0");
+    }
+
+    #[test]
+    fn installation_and_uninstall_share_the_same_process_commit_boundary() {
+        let (_directory, manager, installer) = setup("shared-boundary");
+        installer
+            .install_bytes(&valid_package(), &FakeEmitter::default())
+            .expect("installation should succeed");
+        let entry_id = installed_entry_id(&manager, "com.acme.workspace");
+        let _guard = installer
+            .acquire_commit_boundary()
+            .expect("test should hold the shared boundary");
+        assert_eq!(
+            installer
+                .uninstall(&entry_id, "1", CleanupDataPolicy::RetainData)
+                .expect_err("uninstall should see the held boundary"),
+            PluginLifecycleStorageError::Busy
+        );
+        assert_eq!(
+            installer
+                .install_bytes(&valid_package(), &FakeEmitter::default())
+                .expect_err("installation should see the held boundary")
+                .code,
+            LocalPluginInstallationErrorCode::Busy
+        );
+        assert!(manager.registration("com.acme.workspace").is_some());
+        assert_eq!(manager.registration_revision(), "1");
     }
 
     #[test]

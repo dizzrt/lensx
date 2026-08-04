@@ -1,0 +1,42 @@
+[
+  {
+    "name": "set-enabled-changed",
+    "type": "result",
+    "value": {
+      "operation": "set_enabled",
+      "contract_version": "0.1.0",
+      "outcome": "changed",
+      "entry_id": "entry_0123456789abcdef",
+      "plugin_id": "com.acme.plugin",
+      "revision": "7",
+      "enabled": true,
+      "effective_available": true,
+      "cleanup": "not_applicable"
+    }
+  },
+  {
+    "name": "uninstall-cleanup-pending",
+    "type": "result",
+    "value": {
+      "operation": "uninstall",
+      "contract_version": "0.1.0",
+      "outcome": "changed",
+      "entry_id": "entry_fedcba9876543210",
+      "plugin_id": "com.acme.plugin",
+      "revision": "8",
+      "effective_available": false,
+      "cleanup": "pending",
+      "data_policy": "delete_data"
+    }
+  },
+  {
+    "name": "stable-conflict-error",
+    "type": "error",
+    "value": {
+      "contract_version": "0.1.0",
+      "code": "conflict",
+      "operation": "uninstall",
+      "message": "Plugin lifecycle request conflicts with current state."
+    }
+  }
+]

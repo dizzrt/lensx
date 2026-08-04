@@ -421,11 +421,11 @@ fn is_sorted_unique(values: &[String]) -> bool {
     values.windows(2).all(|pair| pair[0] < pair[1])
 }
 
-fn healthy_entry_id(registration: &PluginRegistration) -> String {
+pub(crate) fn healthy_entry_id(registration: &PluginRegistration) -> String {
     entry_identity("registered", &registration.manifest.plugin_id)
 }
 
-fn quarantine_entry_id(stub: &QuarantineStub) -> String {
+pub(crate) fn quarantine_entry_id(stub: &QuarantineStub) -> String {
     entry_identity("quarantined", &stub.record_key)
 }
 

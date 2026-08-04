@@ -394,3 +394,131 @@ plugin code.
   settings provides no later lifecycle controls
 - **THEN** Task 3.4 owns upgrade and rollback, Task 3.3 owns enable, disable, and
   uninstall, and Task 6.1 owns the complete management UI
+
+### Requirement: Installer-owned program, data, and cleanup roots must remain separated
+
+The Host-owned `app_local_data_dir()/plugins` root MUST keep program payloads,
+plugin-private data, and lifecycle cleanup evidence separate. Program payloads
+MUST continue to use `packages/<plugin-key>/<package-sha256>`, the data boundary
+MUST use `data/<plugin-key>`, and each cleanup record MUST reside in a separate
+restricted root and be unique to a safe plugin identity. First installation
+MUST NOT create an empty data directory merely to establish that boundary. An
+author Manifest, React caller, public plugin package, or Runtime MUST NOT
+provide or receive a real root, plugin key, digest path, or cleanup path.
+
+#### Scenario: First installation has no existing plugin data
+
+- **WHEN** a compatible `.lxp` completes an ordinary first installation
+- **THEN** its payload is committed to the existing digest path and the Manager
+  installation path remains the only active payload pointer
+- **THEN** the installer does not create an empty `data/<plugin-key>` directory
+  or expose any real path to the frontend
+
+#### Scenario: Data is retained after a lifecycle operation
+
+- **WHEN** the same plugin identity has been logically uninstalled while
+  `retain_data` preserves its canonical data subtree
+- **THEN** the program payload, data subtree, and cleanup evidence retain
+  separate ownership
+- **THEN** orphan-package recovery does not treat retained data as a package
+  orphan and delete it
+
+### Requirement: Installation and lifecycle commits must share one serialization boundary
+
+Plugin installation, enabled and uninstall commits, cleanup recovery, and
+reinstallation of the same identity MUST share the existing in-process mutex
+and cross-process installer lock, or an equivalent single serialization
+boundary. Code holding the lock MUST reread Manager, cleanup, and canonical
+filesystem facts before mutation and MUST NOT rely on stale preflight results
+obtained outside the lock. Concurrent requests MUST wait in a defined bounded
+order or return a stable busy or conflict result, and MUST NOT clean or
+overwrite another request's staging area, payload, data, or cleanup record.
+
+#### Scenario: Installation races with uninstall
+
+- **WHEN** one process is committing an uninstall for a plugin identity while
+  another process requests installation
+- **THEN** the operations cannot modify the Manager, package subtree, or
+  cleanup record concurrently
+- **THEN** the request that acquires the lock later revalidates against the
+  earlier committed result instead of continuing from an outside-lock
+  conclusion
+
+#### Scenario: Concurrent requests target different plugins
+
+- **WHEN** lifecycle or installation requests for multiple plugins contend for
+  the shared commit boundary
+- **THEN** the requests complete in a safe serial order or receive a stable
+  busy result
+- **THEN** cleanup for one plugin neither reads, deletes, nor blocks content
+  outside the canonical subtree owned by that plugin
+
+### Requirement: Startup recovery must reconcile lifecycle cleanup before accepting new writes
+
+After Plugin Manager recovery and before accepting new installation or
+lifecycle writes, the Host MUST read and strictly validate versioned cleanup
+records while holding the shared lock. When the Manager no longer contains the
+target entry, recovery MAY delete only the canonical package subtree whose
+ownership the cleanup record proves and MAY delete the canonical data subtree
+only for `delete_data`. When the Manager still contains the target healthy or
+quarantine entry, recovery MUST preserve its active evidence and MUST NOT let
+cleanup leave a missing payload. A damaged record, symbolic link, abnormal
+name, root escape, or ambiguous ownership MUST be preserved and produce a
+bounded degraded diagnostic.
+
+#### Scenario: Restart recovers pending program cleanup
+
+- **WHEN** the previous uninstall removed the Manager entry but the process
+  exited before deleting the canonical package subtree
+- **THEN** startup recovery completes package cleanup while holding the lock
+  and updates the cleanup conclusion
+- **THEN** recovery does not recreate a registration, increment a fabricated
+  revision, or touch retained data
+
+#### Scenario: Restart recovers delete-data intent
+
+- **WHEN** a cleanup record explicitly stores `delete_data` and the Manager no
+  longer contains the target entry
+- **THEN** recovery deletes only that canonical data subtree until the cleanup
+  conclusion is complete
+- **THEN** recovery cannot downgrade the policy to retain data or delete data
+  owned by another plugin key
+
+#### Scenario: Pending cleanup conflicts with a healthy record
+
+- **WHEN** the identity referenced by a cleanup record currently has a healthy
+  or quarantine Manager entry
+- **THEN** recovery preserves the active or quarantine package and data
+  evidence and records a safe conflict
+- **THEN** the Host rejects writes that could overwrite the evidence until
+  trusted recovery resolves the conflict
+
+### Requirement: Reinstallation after lifecycle removal must preserve data policy and reset Host grants
+
+A later successful installation of the same identity MUST clear an old
+completed cleanup record only after there is no pending cleanup conflict and
+both package commit and Manager registration have succeeded. A data subtree
+left by `retain_data` MUST remain unchanged. Grants, diagnostics, and enabled
+intent from the previous Manager record MUST NOT be restored from a cleanup
+record or retained data. The new installation MUST continue to follow the
+current first-install rules: `enabled=true`, empty grants, and an `inactive`
+Runtime. The revision or operation identity of an old uninstall request MUST
+NOT delete the new payload.
+
+#### Scenario: Reinstallation follows retained-data uninstall
+
+- **WHEN** an old uninstall of the same plugin identity has completed, its data
+  was retained, and a new compatible package installs successfully
+- **THEN** the new Manager record points to the new canonical payload with an
+  empty grant snapshot and enabled intent set to true
+- **THEN** the retained data remains in place and the completed cleanup record
+  is cleared only after the new registration succeeds
+
+#### Scenario: Reinstallation is attempted while cleanup is pending
+
+- **WHEN** the old identity still has incomplete or conflicting cleanup
+  evidence
+- **THEN** the installer returns a stable cleanup-pending or busy result and
+  creates neither staging nor a new Manager record
+- **THEN** the old intent is completed or resolved by trusted recovery before
+  any new installation can prevent an old retry from deleting a new payload

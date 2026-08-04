@@ -339,4 +339,49 @@ describe('Plugin surface projection coordinator', () => {
     expect(adapter.destroyCalls).toHaveBeenCalledTimes(1);
     expect(pageReplace.mock.calls.every(([, batch]) => Array.isArray(batch))).toBe(true);
   });
+
+  test('explicit quiesce withdraws Action before Page, closes the active Page, and can reconcile', async () => {
+    const pluginId = 'com.acme.quiesce';
+    const entryId = 'entry_0000000000000046';
+    const summary = summaryFor(pluginId, entryId);
+    let adapter!: ControlledAdapter;
+    adapter = new ControlledAdapter(snapshotFor('1', [summary]), async () =>
+      detailFor(adapter.current.revision, entryId, pluginId),
+    );
+    const actionRegistry = new LauncherActionRegistry();
+    const pageRegistry = new PageRegistry([hostPage]);
+    const navigationService = new AppNavigationService(pageRegistry);
+    const activePages: Array<{ readonly owner_id: string; readonly page_id: string } | undefined> = [];
+    navigationService.registerHandler((page) => activePages.push(page));
+    const operations: string[] = [];
+    const projection = createPluginSurfaceProjectionService({
+      registrationAdapter: adapter,
+      navigationService,
+      actionRegistry: {
+        replaceProviderBatch: (owner, registrations) => {
+          operations.push(`action:${registrations.length}`);
+          return actionRegistry.replaceProviderBatch(owner, registrations);
+        },
+      },
+      pageRegistry: {
+        replaceProviderBatch: (owner, batch) => {
+          operations.push(`page:${'pages' in batch ? batch.pages.length : 0}`);
+          return pageRegistry.replaceProviderBatch(owner, batch);
+        },
+      },
+    });
+    await projection.initialize();
+    navigationService.openPage({ owner_id: pluginId, page_id: 'home' }, `${pluginId}.open_project`);
+    operations.length = 0;
+    await projection.quiesceProvider(pluginId);
+    expect(operations).toEqual(['action:0', 'page:0']);
+    expect(activePages.at(-1)).toBeUndefined();
+    expect(actionRegistry.get(`${pluginId}.open_project`)).toBeUndefined();
+
+    adapter.current = snapshotFor('2', [summary]);
+    await projection.reconcileRevision('2', pluginId);
+    expect(operations.slice(-2)).toEqual(['page:2', 'action:1']);
+    expect(actionRegistry.get(`${pluginId}.open_project`)).toBeDefined();
+    await projection.destroy();
+  });
 });
