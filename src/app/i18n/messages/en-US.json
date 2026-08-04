@@ -81,8 +81,26 @@
       "zhCN": "Simplified Chinese"
     },
     "plugins": {
-      "emptyTitle": "No plugins to manage",
-      "emptyDescription": "Plugin management is not available in this version."
+      "title": "Plugins",
+      "description": "Choose a compatible .lxp package on this Mac to install. Plugin management actions are not available yet.",
+      "install": "Install from file",
+      "pending": "Installing…",
+      "cancelled": "No plugin was selected.",
+      "success": "Installed {{pluginId}} version {{version}}.",
+      "failure": {
+        "invalidPackage": "The selected file is not a valid lensX plugin package.",
+        "incompatible": "The selected plugin is not compatible with this version of lensX.",
+        "alreadyInstalled": "A plugin with this identity is already installed.",
+        "identityQuarantined": "This plugin identity is quarantined and cannot be replaced by installation.",
+        "busy": "Another plugin installation is in progress. Try again shortly.",
+        "unavailable": "Installation from a local file is unavailable right now.",
+        "sourceReadFailed": "The selected plugin package could not be read.",
+        "extractionFailed": "The plugin package could not be extracted safely.",
+        "commitFailed": "The plugin package could not be committed.",
+        "registrationFailed": "The plugin registration could not be saved.",
+        "internal": "Installation from a local file failed.",
+        "invalidBoundaryPayload": "lensX received an invalid installation response."
+      }
     },
     "save": {
       "inProgress": "Saving…",

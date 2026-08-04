@@ -1,0 +1,91 @@
+[
+  {
+    "name": "unknown_result_version",
+    "type": "result",
+    "value": {
+      "status": "cancelled",
+      "contract_version": "0.2.0"
+    }
+  },
+  {
+    "name": "unknown_result_field",
+    "type": "result",
+    "value": {
+      "status": "cancelled",
+      "contract_version": "0.1.0",
+      "path": "/Users/private/plugin.lxp"
+    }
+  },
+  {
+    "name": "unknown_result_variant",
+    "type": "result",
+    "value": {
+      "status": "reinstalled",
+      "contract_version": "0.1.0",
+      "plugin_id": "com.acme.workspace",
+      "version": "1.2.3",
+      "revision": "8"
+    }
+  },
+  {
+    "name": "installed_result_contains_digest",
+    "type": "result",
+    "value": {
+      "status": "installed",
+      "contract_version": "0.1.0",
+      "plugin_id": "com.acme.workspace",
+      "version": "1.2.3",
+      "revision": "7",
+      "package_digest": "sha256:secret"
+    }
+  },
+  {
+    "name": "malformed_installed_result",
+    "type": "result",
+    "value": {
+      "status": "installed",
+      "contract_version": "0.1.0",
+      "plugin_id": "Not Valid",
+      "version": "latest",
+      "revision": "01"
+    }
+  },
+  {
+    "name": "unknown_error_field",
+    "type": "error",
+    "value": {
+      "contract_version": "0.1.0",
+      "code": "busy",
+      "operation": "commit",
+      "message": "Another plugin installation is in progress.",
+      "stack": "private stack"
+    }
+  },
+  {
+    "name": "raw_error_message",
+    "type": "error",
+    "value": {
+      "contract_version": "0.1.0",
+      "code": "source_read_failed",
+      "operation": "read",
+      "message": "/Users/private/plugin.lxp: permission denied"
+    }
+  },
+  {
+    "name": "diagnostics_on_non_package_error",
+    "type": "error",
+    "value": {
+      "contract_version": "0.1.0",
+      "code": "busy",
+      "operation": "commit",
+      "message": "Another plugin installation is in progress.",
+      "diagnostics": [
+        {
+          "code": "frame_invalid",
+          "path": "/frame",
+          "message": "The package is not a supported Zstandard frame."
+        }
+      ]
+    }
+  }
+]

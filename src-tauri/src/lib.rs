@@ -2,6 +2,9 @@ pub mod app_preferences;
 pub mod launcher_action_collections;
 pub mod launcher_surface;
 pub mod launcher_window;
+pub(crate) mod plugin_identity;
+pub mod plugin_installation_contract;
+pub mod plugin_installer;
 pub mod plugin_manager;
 pub mod plugin_manifest;
 #[doc(hidden)]
@@ -11,6 +14,7 @@ pub mod plugin_registration;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             app_preferences::read_app_preferences,
@@ -20,11 +24,13 @@ pub fn run() {
             launcher_action_collections::set_launcher_action_pinned,
             launcher_surface::set_launcher_surface_mode,
             launcher_window::hide_launcher,
+            plugin_installer::install_local_plugin,
             plugin_registration::read_plugin_registration_detail,
             plugin_registration::read_plugin_registration_snapshot
         ])
         .setup(|app| {
-            plugin_manager::setup_plugin_manager(app.handle());
+            let plugin_manager = plugin_manager::setup_plugin_manager(app.handle());
+            plugin_installer::setup_plugin_installer(app.handle(), plugin_manager);
             launcher_window::setup_launcher_window(app.handle());
             Ok(())
         })

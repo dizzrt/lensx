@@ -79,7 +79,16 @@ pub enum PackageInspectionResult {
 }
 
 fn diagnostic(code: &'static str, path: impl Into<String>) -> PackageDiagnostic {
-    let message = match code {
+    let message = package_diagnostic_message(code).unwrap_or("The plugin package is invalid.");
+    PackageDiagnostic {
+        code,
+        path: path.into(),
+        message,
+    }
+}
+
+pub(crate) fn package_diagnostic_message(code: &str) -> Option<&'static str> {
+    Some(match code {
         "archive_header_invalid" => "The package TAR header is invalid.",
         "archive_incomplete" => "The package TAR stream is incomplete.",
         "archive_metadata_invalid" => "The package TAR metadata is not canonical.",
@@ -112,13 +121,8 @@ fn diagnostic(code: &'static str, path: impl Into<String>) -> PackageDiagnostic 
         "path_reserved" => "The package path uses a reserved name.",
         "resource_missing" => "A Manifest resource does not resolve to a package file.",
         "tar_size_exceeded" => "The decompressed TAR stream exceeds the size limit.",
-        _ => "The plugin package is invalid.",
-    };
-    PackageDiagnostic {
-        code,
-        path: path.into(),
-        message,
-    }
+        _ => return None,
+    })
 }
 
 fn sort_diagnostics(diagnostics: &mut Vec<PackageDiagnostic>) {
@@ -360,7 +364,47 @@ struct TarInspection {
     diagnostics: Vec<PackageDiagnostic>,
 }
 
-fn inspect_tar(reader: &mut impl Read) -> TarInspection {
+pub(crate) trait PackageEntrySink {
+    fn start_entry(&mut self, path: &str, size: u64) -> Result<(), ()>;
+    fn write_chunk(&mut self, path: &str, bytes: &[u8]) -> Result<(), ()>;
+    fn finish_entry(&mut self, path: &str) -> Result<(), ()>;
+    fn finish_archive(&mut self) -> Result<(), ()>;
+}
+
+struct NoopEntrySink;
+
+impl PackageEntrySink for NoopEntrySink {
+    fn start_entry(&mut self, _path: &str, _size: u64) -> Result<(), ()> {
+        Ok(())
+    }
+
+    fn write_chunk(&mut self, _path: &str, _bytes: &[u8]) -> Result<(), ()> {
+        Ok(())
+    }
+
+    fn finish_entry(&mut self, _path: &str) -> Result<(), ()> {
+        Ok(())
+    }
+
+    fn finish_archive(&mut self) -> Result<(), ()> {
+        Ok(())
+    }
+}
+
+pub(crate) enum PackageTraversalFailure {
+    Invalid(Vec<PackageDiagnostic>),
+    Sink,
+}
+
+pub(crate) struct CanonicalPackageTraversal {
+    pub files: Vec<PackageFileFact>,
+    pub decompressed_size: u64,
+}
+
+fn inspect_tar(
+    reader: &mut impl Read,
+    sink: &mut impl PackageEntrySink,
+) -> Result<TarInspection, ()> {
     let mut files = Vec::new();
     let mut manifest_bytes = None;
     let mut checksums_bytes = None;
@@ -383,6 +427,9 @@ fn inspect_tar(reader: &mut impl Read) -> TarInspection {
                 match reader.read(&mut trailing) {
                     Ok(0) => {}
                     _ => diagnostics.push(diagnostic("archive_termination_invalid", "/archive")),
+                }
+                if diagnostics.is_empty() {
+                    sink.finish_archive()?;
                 }
                 break;
             }
@@ -442,6 +489,10 @@ fn inspect_tar(reader: &mut impl Read) -> TarInspection {
         if header != canonical_tar_header(&path, size) {
             diagnostics.push(diagnostic("archive_metadata_invalid", &path));
         }
+        if !diagnostics.is_empty() {
+            break;
+        }
+        sink.start_entry(&path, size)?;
         let mut hasher = Sha256::new();
         let mut metadata = if matches!(path.as_str(), MANIFEST_PATH | CHECKSUMS_PATH) {
             Some(Vec::with_capacity(size as usize))
@@ -459,6 +510,7 @@ fn inspect_tar(reader: &mut impl Read) -> TarInspection {
                 break;
             }
             hasher.update(&chunk[..length]);
+            sink.write_chunk(&path, &chunk[..length])?;
             if let Some(bytes) = metadata.as_mut() {
                 bytes.extend_from_slice(&chunk[..length]);
             }
@@ -490,19 +542,20 @@ fn inspect_tar(reader: &mut impl Read) -> TarInspection {
             sha256: format!("{:x}", hasher.finalize()),
             checksum_covered: path != CHECKSUMS_PATH,
         });
+        sink.finish_entry(&path)?;
         if decompressed_size > MAX_TAR_BYTES {
             diagnostics.push(diagnostic("tar_size_exceeded", "/archive"));
             break;
         }
     }
     sort_diagnostics(&mut diagnostics);
-    TarInspection {
+    Ok(TarInspection {
         files,
         manifest_bytes,
         checksums_bytes,
         decompressed_size,
         diagnostics,
-    }
+    })
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -647,29 +700,52 @@ fn validate_manifest(
     }
 }
 
+fn traverse_package_with_sink(
+    package_bytes: &[u8],
+    sink: &mut impl PackageEntrySink,
+) -> Result<TarInspection, PackageTraversalFailure> {
+    let frame = scan_zstandard_frame(package_bytes).map_err(PackageTraversalFailure::Invalid)?;
+    let mut decoder =
+        zstd::stream::read::Decoder::new(Cursor::new(package_bytes)).map_err(|_| {
+            PackageTraversalFailure::Invalid(vec![diagnostic("frame_corrupt", "/frame")])
+        })?;
+    decoder.window_log_max(26).map_err(|_| {
+        PackageTraversalFailure::Invalid(vec![diagnostic("frame_corrupt", "/frame")])
+    })?;
+    let mut decoder = decoder.single_frame();
+    let archive = inspect_tar(&mut decoder, sink).map_err(|()| PackageTraversalFailure::Sink)?;
+    if !archive.diagnostics.is_empty() {
+        return Err(PackageTraversalFailure::Invalid(archive.diagnostics));
+    }
+    if archive.decompressed_size != frame.content_size {
+        return Err(PackageTraversalFailure::Invalid(vec![diagnostic(
+            "frame_content_size_invalid",
+            "/frame",
+        )]));
+    }
+    Ok(archive)
+}
+
+pub(crate) fn traverse_plugin_package(
+    package_bytes: &[u8],
+    sink: &mut impl PackageEntrySink,
+) -> Result<CanonicalPackageTraversal, PackageTraversalFailure> {
+    let archive = traverse_package_with_sink(package_bytes, sink)?;
+    Ok(CanonicalPackageTraversal {
+        files: archive.files,
+        decompressed_size: archive.decompressed_size,
+    })
+}
+
 pub fn inspect_plugin_package(
     package_bytes: &[u8],
     current_versions: &PluginHostVersions,
 ) -> PackageInspectionResult {
-    let frame = match scan_zstandard_frame(package_bytes) {
-        Ok(frame) => frame,
-        Err(diagnostics) => return invalid(diagnostics),
+    let archive = match traverse_package_with_sink(package_bytes, &mut NoopEntrySink) {
+        Ok(archive) => archive,
+        Err(PackageTraversalFailure::Invalid(diagnostics)) => return invalid(diagnostics),
+        Err(PackageTraversalFailure::Sink) => unreachable!("the no-op package sink cannot fail"),
     };
-    let mut decoder = match zstd::stream::read::Decoder::new(Cursor::new(package_bytes)) {
-        Ok(decoder) => decoder,
-        Err(_) => return invalid(vec![diagnostic("frame_corrupt", "/frame")]),
-    };
-    if decoder.window_log_max(26).is_err() {
-        return invalid(vec![diagnostic("frame_corrupt", "/frame")]);
-    }
-    let mut decoder = decoder.single_frame();
-    let archive = inspect_tar(&mut decoder);
-    if !archive.diagnostics.is_empty() {
-        return invalid(archive.diagnostics);
-    }
-    if archive.decompressed_size != frame.content_size {
-        return invalid(vec![diagnostic("frame_content_size_invalid", "/frame")]);
-    }
     let mut missing = Vec::new();
     if archive.manifest_bytes.is_none() {
         missing.push(diagnostic("archive_order_invalid", MANIFEST_PATH));

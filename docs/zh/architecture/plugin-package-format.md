@@ -7,8 +7,10 @@ lensX 已定义并实现用于单文件插件交付的 package protocol `0.1.0`�
 TypeScript reference implementation 与 Host-private Rust inspector 消费同一份已提交 corpus，并返回一致的
 `invalid | compatible | incompatible` 结果、inspection facts、安全 diagnostics 和整包 digest。
 
-该能力只检查字节。它不提供公共 CLI，不接受开发目录，不创建安装目录，不修改 Plugin Manager，不注册
-Action 或 Page，不加载 asset，不创建 iframe，不执行插件代码，不授予权限，不验证签名，也不推断 provenance。
+Package protocol 本身只描述并检查字节；它不拥有 source path、installation layout、Plugin Manager
+mutation、lifecycle、公共 CLI 或 development-directory input。Host 私有本地安装器是该协议的独立消费方：
+它可以把一个选中的兼容包复制到 Host-owned application data，并创建首条 external registration，但不会
+改变有效 `.lxp` 的定义。
 
 ## Canonical Layout
 
@@ -82,6 +84,20 @@ metadata record。Inspection 会读取 metadata bytes，但不会加载 HTML/ass
 
 Invalid 结果只暴露排序、去重后的 `{ code, path, message }` diagnostics。它不包含 partial Manifest、file map、
 可信 digest fact、Host state、绝对路径、raw exception、stack 或文件内容。
+
+## Installer 消费边界
+
+Host 私有 installer 会执行 source metadata 检查和一次 capped read，之后把得到的 `.lxp` bytes 视为不可变
+输入。它先 inspection，并且只 extraction 一个 `compatible` 结果。Extraction 复用相同的 canonical
+Zstandard/TAR traversal、header 检查、path rules、entry facts、checksums 与 hard limits；不会重新打开所选
+source，也不会调用宽松 archive unpack API。文件通过 `create_new` 创建在新的 Host-owned staging directory
+内，并在同文件系统原子 commit 前完成刷新。
+
+Source-file race 检查、staging 与 digest-directory layout、Manager registration、locks、rollback 和 recovery
+由 installer 拥有，而不是 package protocol `0.1.0`。Package bytes 不能声明 source、installed path、enabled
+intent、grants、Runtime state 或 lifecycle operation。Application-local installer store 也与已签名 application
+bundle 分离：在 macOS 上，删除 `lensX.app` 并不能保证 Application Support 数据被清理。应用卸载清理、
+plugin uninstall 和 upgrade/rollback 仍是后续 lifecycle change。
 
 ## 已审查依赖
 

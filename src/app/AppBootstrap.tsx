@@ -5,6 +5,7 @@ import { productionLauncherActionService } from './launcher/actions';
 import { desktopLauncherSurfaceController, type LauncherSurfaceController } from './launcher/surface';
 import { desktopLauncherWindowDragController, type LauncherWindowDragController } from './launcher/windowDrag';
 import { productionAppNavigationService, productionPageRegistry } from './navigation';
+import { desktopLocalPluginInstallationClient, type LocalPluginInstallationClient } from './plugins/installation';
 import { createProductionPluginSurfaceProjection } from './plugins/surfaces';
 import {
   type AppPreferences,
@@ -36,6 +37,7 @@ export const resolveInitialAppPreferences = async (
 };
 
 interface AppBootstrapProps {
+  installationClient?: LocalPluginInstallationClient;
   preferencesClient?: AppPreferencesClient;
   renderApp?: (startupState: AppStartupState) => ReactNode;
   surfaceController?: LauncherSurfaceController;
@@ -43,6 +45,7 @@ interface AppBootstrapProps {
 }
 
 export const AppBootstrap = ({
+  installationClient = desktopLocalPluginInstallationClient,
   preferencesClient = desktopAppPreferencesClient,
   renderApp,
   surfaceController = desktopLauncherSurfaceController,
@@ -85,6 +88,7 @@ export const AppBootstrap = ({
         renderApp(startupState)
       ) : (
         <App
+          installationClient={installationClient}
           preferencesClient={preferencesClient}
           startupPreferencesErrorCode={startupState.preferencesErrorCode}
           surfaceController={surfaceController}

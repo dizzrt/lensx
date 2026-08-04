@@ -8,9 +8,10 @@ The workspace-private TypeScript reference implementation and the Host-private R
 committed corpus and return the same `invalid | compatible | incompatible` result, inspection facts, safe
 diagnostics, and whole-package digest.
 
-This capability inspects bytes only. It does not provide a public CLI, accept a development directory, create an
-installation directory, mutate the Plugin Manager, register Actions or Pages, load assets, create an iframe, execute
-plugin code, grant permissions, verify signatures, or infer provenance.
+The package protocol itself describes and inspects bytes only. It does not own a source path, installation layout,
+Plugin Manager mutation, lifecycle, public CLI, or development-directory input. The Host-private local installer is
+a separate consumer of this protocol: it can copy one selected compatible package into Host-owned application data
+and create the first external registration, but it does not change what constitutes a valid `.lxp`.
 
 ## Canonical Layout
 
@@ -87,6 +88,21 @@ permit a metadata record target. Inspection reads metadata bytes but never loads
 
 Invalid results expose only sorted, deduplicated `{ code, path, message }` diagnostics. They contain no partial
 Manifest, file map, trusted digest fact, Host state, absolute path, raw exception, stack, or file content.
+
+## Installer Consumption Boundary
+
+The Host-private installer performs source metadata checks and one capped read, then treats the resulting `.lxp`
+bytes as immutable. It inspects those bytes first and only extracts a `compatible` result. Extraction reuses the same
+canonical Zstandard/TAR traversal, header checks, path rules, entry facts, checksums, and hard limits; it does not
+reopen the selected source or call a permissive archive unpack API. Files are created with `create_new` inside a new
+Host-owned staging directory and are flushed before an atomic same-filesystem commit.
+
+The installer, rather than package protocol `0.1.0`, owns the source-file race checks, staging and digest-directory
+layout, Manager registration, locks, rollback, and recovery. Package bytes do not declare their source, installed
+path, enabled intent, grants, Runtime state, or lifecycle operation. The application-local installer store is also
+separate from the signed application bundle: on macOS, deleting `lensX.app` does not guarantee removal of the
+Application Support data. Application uninstall cleanup, plugin uninstall, and upgrade/rollback remain future
+lifecycle changes.
 
 ## Reviewed Dependencies
 

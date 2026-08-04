@@ -2,10 +2,10 @@
 
 ## 文档状态
 
-本文区分已经交付的静态插件 Manifest 契约、`.lxp` package inspection、Plugin SDK foundation、
-Plugin Testkit、可选 Plugin UI package、Host 私有 Plugin surface 投影与 Page 导航和预期的运行时
-扩展边界。安装、公共 packaging CLI、分发、插件执行、完整权限决策、iframe transport、签名和
-Host API 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
+本文区分已经交付的静态插件 Manifest 契约、`.lxp` package inspection 与本地安装、Plugin SDK
+foundation、Plugin Testkit、可选 Plugin UI package、Host 私有 Plugin surface 投影与 Page 导航，
+以及预期的运行时扩展边界。公共 packaging CLI、分发、插件执行、完整权限决策、iframe transport、
+签名和 Host API 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
 
 ## 目标
 
@@ -123,8 +123,9 @@ scripts 或 Host 私有源码。
 ### 明确未实现的能力
 
 静态校验本身不会发现或安装包、创建生产 registration、创建 iframe、授予权限、交换 Host API
-消息或运行插件代码。Host 私有生产协调器现在可以把当前 Registration facts 投影进 Page 与 Action
-Registry，并导航到 Host-owned placeholder，但该 placeholder 不是插件 Runtime。
+消息或运行插件代码。下文的 Host 私有本地安装器可以把一个用户选中的兼容 `.lxp` 添加为 external
+registration。独立的 surface 协调器可以把当前 Registration facts 投影进 Page 与 Action Registry，
+并导航到 Host-owned placeholder，但该 placeholder 不是插件 Runtime。
 
 ## 已交付的 Host 私有 Plugin Package Inspection
 
@@ -147,9 +148,9 @@ lifecycle 或 trust 结论。
 ## 已交付的 Host 私有 Plugin Manager
 
 Rust Host 现已交付一个 Plugin Manager 实例。Tauri setup 从 `app_config_dir` 初始化该实例，并通过
-Tauri managed state 在 Host 内部共享。它仍然是 Host 私有核心。Manager 对应用侧唯一的投影是
-下文所述的私有只读 Registration Contract；没有暴露生命周期写 command、前端管理界面、
-直接 Action/Page 投影、安装器或插件执行路径。
+Tauri managed state 在 Host 内部共享。它仍然是 Host 私有核心。它的读取投影是下文所述的私有
+Registration Contract，而当前唯一的生产写入方是下文的本地安装协调器。没有暴露通用生命周期写
+command、前端管理界面或插件执行路径。
 
 每个健康条目明确区分四种生命周期：
 
@@ -175,8 +176,46 @@ registration facts 不一致的记录会变成内存中的 quarantine stub，并
 manager-level degraded 恢复报告启动；Tauri 启动仍然完成，也不会覆盖不可读数据。清除 quarantine
 要求可信 Host 调用方使用完整有效记录进行原子替换，其中 enabled intent 必须显式提供。
 
-这一内部状态只表示 Host 已知一条 installed registration；它不证明包发现、摘要计算、安装、卸载、
-更新、权限决策、Runtime session 或面向插件的公共 registration API 已经交付。这些仍是独立能力。
+这一内部状态只表示 Host 已知一条 installed registration。本地安装器现在可以为一个选中的兼容包
+建立 package digest、payload 和首条 external registration，但 Manager record 本身仍不能证明发现来源。
+卸载、更新、权限决策、Runtime session 和面向插件的公共 registration API 仍是独立能力。
+
+## 已交付的 Host 私有从本地文件安装插件
+
+设置页的 Plugins tab 提供一个 Host-owned **从本地安装** 操作。“本地”只描述本次安装来源，
+不是一种独立的插件类别。无路径参数的
+`install_local_plugin` command 打开原生文件选择器并只选择一个 `.lxp`；取消选择返回普通的
+cancelled 结果。前端只会看到严格的 installation contract `0.1.0` 成功、取消或有界错误值，
+不会提供或接收所选 source path、package digest、installation path、Store key、原始 native error
+或内部恢复事实。
+
+Rust 协调器先检查 source metadata，再把所选普通文件一次性读入有上限的不可变 byte buffer，并确认
+文件在读取期间没有增长、截断或变化。只有 `compatible` inspection 才能继续。Inspection 与 extraction
+复用同一个 canonical Zstandard/TAR traversal 和 limits。Extraction 使用 `create_new` 把普通文件写入
+新的 Host-owned staging directory，再次校验 entry facts 与 checksums，刷新文件和目录，并且绝不调用
+通用 archive unpack 操作。
+
+Installer state 位于 `app_local_data_dir()/plugins`，与 Manager Store 相互独立。一个进程内 mutex 和
+跨进程 `.install.lock` 会串行化 recovery 与 installation。Staging 使用 `.staging/<random-id>`，
+已提交 payload 使用
+`packages/<v1-plugin-id-utf8-lowercase-hex>/<package-sha256>`。这是 single-registration digest
+layout：它有意不创建 `versions`、`transactions` 或 plugin data directory，也不会把不同 version 或
+digest 解释为 upgrade、downgrade、reinstall 或 repair。
+
+在已刷新的 staging directory 于同一文件系统原子 rename 后，协调器使用完整 Host facts 注册 normalized
+Manifest：已提交绝对路径、带算法标签的 digest、`source=external`、`enabled=true`、空 grants 和
+`inactive` Runtime。已有健康 registration 或 quarantined identity 会在 commit 前 fail closed。Manager
+持久化失败会回滚 payload，或留下可证明的 orphan 供 recovery 处理；changed event 发送失败不会撤销
+已经成功持久化和发布的 registration。
+
+Installer startup recovery 只会在 Plugin Manager recovery 之后、并在同一 installation lock 下运行。
+它清理合法的废弃 staging directory，并且只删除能够证明没有 owner 的 canonical digest payload；健康
+installation path、quarantine-key subtree、未知 entry、symlink 以及 installer root 之外的任何内容都会
+保留。证据不可读或不一致时，installer 会转为 unavailable 或 degraded，而不会进行推测性清理。
+
+Installer root 属于 application-local data。在 macOS 上，它与已签名的 `lensX.app` bundle 分离，通常位于
+应用的 Application Support 区域；直接删除 `lensX.app` 并不能保证这些数据被清理。专用应用卸载器、
+plugin uninstall 和 upgrade/rollback 都需要后续已接受 change。
 
 ## 已交付的 Host 私有 Registration Contract
 
@@ -484,7 +523,8 @@ Host API 方法应当保持小型、类型化、版本化，并且可以独立�
 
 ## 能力交付
 
-静态 Manifest 格式、校验器、Host 私有 Plugin surface 投影、生产 Action 激活、Page
-Registry/navigation 与 Runtime-free Host placeholder 已经交付。其余每项能力——安装、完整权限、
-scoped resources、Host API 方法、打包、生命周期写操作、iframe Runtime 执行或 sidecar——都需要
-独立的已接受规格和实现证据。本文定义架构方向和边界，不是发布检查清单。
+静态 Manifest 格式、校验器、Host 私有本地安装、Plugin surface 投影、生产 Action 激活、Page
+Registry/navigation 与 Runtime-free Host placeholder 已经交付。其余每项能力——完整权限、scoped
+resources、Host API 方法、公共打包、包含 uninstall 与 upgrade/rollback 的生命周期写操作、iframe
+Runtime 执行或 sidecar——都需要独立的已接受规格和实现证据。本文定义架构方向和边界，不是发布
+检查清单。

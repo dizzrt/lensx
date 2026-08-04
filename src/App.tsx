@@ -54,6 +54,7 @@ import {
 import { PageErrorBoundary } from './app/pages/PageErrorBoundary';
 import { PluginPagePlaceholder } from './app/pages/PluginPagePlaceholder';
 import { SettingsPage } from './app/pages/SettingsPage';
+import { desktopLocalPluginInstallationClient, type LocalPluginInstallationClient } from './app/plugins/installation';
 import type { PluginSurfaceProjectionService } from './app/plugins/surfaces';
 import { type AppPreferencesClient, desktopAppPreferencesClient } from './app/preferences';
 
@@ -61,6 +62,7 @@ export interface AppProps {
   activationSource?: LauncherActivationSource;
   actionService?: LauncherActionService;
   collectionsClient?: LauncherActionCollectionsClient;
+  installationClient?: LocalPluginInstallationClient;
   navigationService?: AppNavigationService;
   preferencesClient?: AppPreferencesClient;
   renderPage?: (activePage: ActivePage) => ReactNode;
@@ -89,6 +91,7 @@ const App = ({
   activationSource = desktopLauncherActivationSource,
   actionService = productionLauncherActionService,
   collectionsClient = desktopLauncherActionCollectionsClient,
+  installationClient = desktopLocalPluginInstallationClient,
   navigationService = productionAppNavigationService,
   preferencesClient = desktopAppPreferencesClient,
   renderPage,
@@ -549,7 +552,7 @@ const App = ({
                 ) : pageResolution?.provider.kind === 'host' &&
                   activePage.owner_id === 'lensx.core' &&
                   activePage.page_id === 'settings' ? (
-                  <SettingsPage preferencesClient={preferencesClient} />
+                  <SettingsPage installationClient={installationClient} preferencesClient={preferencesClient} />
                 ) : pageResolution?.provider.kind === 'plugin' && pageContext ? (
                   <PluginPagePlaceholder pageTitle={pageContext.page_title} />
                 ) : null}

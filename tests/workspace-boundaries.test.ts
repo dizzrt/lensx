@@ -94,6 +94,25 @@ describe('workspace boundary checker', () => {
     ).toBe(true);
   });
 
+  test('rejects Host-private local installation contracts and adapters', () => {
+    const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
+    const installationImports = diagnostics.filter((item) => item.specifier.includes('/plugins/installation'));
+
+    expect(installationImports.map((item) => item.file)).toEqual([
+      'examples/plugins/bad/src/index.ts',
+      'examples/plugins/bad/src/index.ts',
+      'plugins/official/bad/src/index.ts',
+      'plugins/official/bad/src/index.ts',
+    ]);
+    expect(
+      installationImports.every(
+        (item) =>
+          item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport ||
+          item.ruleId === WORKSPACE_BOUNDARY_RULES.hostTauriAdapter,
+      ),
+    ).toBe(true);
+  });
+
   test('rejects Tauri imports for official and example plugins', () => {
     const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
     const tauriImports = diagnostics.filter((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.pluginTauriImport);

@@ -1,11 +1,17 @@
-import { Banner, Radio, RadioGroup, TabPane, Tabs, Typography } from '@douyinfe/semi-ui';
-import { useCallback, useRef, useState } from 'react';
+import { Banner, Button, Radio, RadioGroup, TabPane, Tabs, Typography } from '@douyinfe/semi-ui';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppLocale } from '../i18n';
+import {
+  type LocalPluginInstallationClient,
+  LocalPluginInstallationError,
+  type LocalPluginInstallationErrorCode,
+} from '../plugins/installation';
 import type { AppPreferences, AppPreferencesClient, AppPreferencesErrorCode } from '../preferences';
 import { useAppTheme } from '../theme';
 
 interface SettingsPageProps {
+  installationClient: LocalPluginInstallationClient;
   preferencesClient: AppPreferencesClient;
 }
 
@@ -15,7 +21,27 @@ const isThemeMode = (value: unknown): value is AppPreferences['theme_mode'] => v
 
 const isLocale = (value: unknown): value is AppPreferences['locale'] => value === 'en-US' || value === 'zh-CN';
 
-export const SettingsPage = ({ preferencesClient }: SettingsPageProps) => {
+type InstallationFeedback =
+  | { readonly kind: 'cancelled' }
+  | { readonly kind: 'installed'; readonly pluginId: string; readonly version: string }
+  | { readonly kind: 'error'; readonly code: LocalPluginInstallationErrorCode | 'invalid_boundary_payload' };
+
+const installationFailureMessageKeys = {
+  already_installed: 'settings.plugins.failure.alreadyInstalled',
+  busy: 'settings.plugins.failure.busy',
+  commit_failed: 'settings.plugins.failure.commitFailed',
+  extraction_failed: 'settings.plugins.failure.extractionFailed',
+  identity_quarantined: 'settings.plugins.failure.identityQuarantined',
+  incompatible: 'settings.plugins.failure.incompatible',
+  internal: 'settings.plugins.failure.internal',
+  invalid_boundary_payload: 'settings.plugins.failure.invalidBoundaryPayload',
+  invalid_package: 'settings.plugins.failure.invalidPackage',
+  registration_failed: 'settings.plugins.failure.registrationFailed',
+  source_read_failed: 'settings.plugins.failure.sourceReadFailed',
+  unavailable: 'settings.plugins.failure.unavailable',
+} as const;
+
+export const SettingsPage = ({ installationClient, preferencesClient }: SettingsPageProps) => {
   const { t } = useTranslation();
   const { locale, setLocale } = useAppLocale();
   const { setThemeMode, themeMode } = useAppTheme();
@@ -25,7 +51,18 @@ export const SettingsPage = ({ preferencesClient }: SettingsPageProps) => {
   });
   const [pendingPreference, setPendingPreference] = useState<PreferenceKey>();
   const [saveErrorCode, setSaveErrorCode] = useState<AppPreferencesErrorCode>();
+  const [installationPending, setInstallationPending] = useState(false);
+  const [installationFeedback, setInstallationFeedback] = useState<InstallationFeedback>();
   const saveChainRef = useRef(Promise.resolve());
+  const installationPendingRef = useRef(false);
+  const restoreInstallationFocusRef = useRef(false);
+
+  useEffect(() => {
+    if (!installationPending && restoreInstallationFocusRef.current) {
+      restoreInstallationFocusRef.current = false;
+      document.getElementById('settings-install-local-plugin')?.focus({ preventScroll: true });
+    }
+  }, [installationPending]);
 
   const savePreference = useCallback(
     (key: PreferenceKey, value: AppPreferences[PreferenceKey]) => {
@@ -82,6 +119,52 @@ export const SettingsPage = ({ preferencesClient }: SettingsPageProps) => {
     },
     [savePreference],
   );
+
+  const installLocalPlugin = useCallback(() => {
+    if (installationPendingRef.current) {
+      return;
+    }
+    installationPendingRef.current = true;
+    setInstallationPending(true);
+    setInstallationFeedback(undefined);
+    void installationClient
+      .install()
+      .then((result) => {
+        setInstallationFeedback(
+          result.status === 'cancelled'
+            ? { kind: 'cancelled' }
+            : {
+                kind: 'installed',
+                pluginId: result.plugin_id,
+                version: result.version,
+              },
+        );
+      })
+      .catch((error: unknown) => {
+        setInstallationFeedback({
+          kind: 'error',
+          code: error instanceof LocalPluginInstallationError ? error.code : 'invalid_boundary_payload',
+        });
+      })
+      .finally(() => {
+        installationPendingRef.current = false;
+        restoreInstallationFocusRef.current = true;
+        setInstallationPending(false);
+      });
+  }, [installationClient]);
+
+  const installationMessage = installationPending
+    ? t('settings.plugins.pending')
+    : installationFeedback?.kind === 'cancelled'
+      ? t('settings.plugins.cancelled')
+      : installationFeedback?.kind === 'installed'
+        ? t('settings.plugins.success', {
+            pluginId: installationFeedback.pluginId,
+            version: installationFeedback.version,
+          })
+        : installationFeedback?.kind === 'error'
+          ? t(installationFailureMessageKeys[installationFeedback.code])
+          : '';
 
   return (
     <div className="settings-page min-h-0 flex flex-1 flex-col">
@@ -149,12 +232,34 @@ export const SettingsPage = ({ preferencesClient }: SettingsPageProps) => {
         <TabPane itemKey="plugins" tab={t('settings.sections.plugins')}>
           <section
             aria-labelledby="settings-plugins-heading"
-            className="settings-section settings-plugin-empty flex flex-col items-center justify-center gap-2 text-center"
+            className="settings-section flex flex-col items-start gap-3"
           >
             <Typography.Title heading={3} id="settings-plugins-heading">
-              {t('settings.plugins.emptyTitle')}
+              {t('settings.plugins.title')}
             </Typography.Title>
-            <Typography.Paragraph type="tertiary">{t('settings.plugins.emptyDescription')}</Typography.Paragraph>
+            <Typography.Paragraph id="settings-plugins-description" type="tertiary">
+              {t('settings.plugins.description')}
+            </Typography.Paragraph>
+            <Button
+              aria-describedby="settings-plugins-description"
+              disabled={installationPending}
+              id="settings-install-local-plugin"
+              loading={installationPending}
+              onClick={installLocalPlugin}
+              theme="solid"
+              type="primary"
+            >
+              {installationPending ? t('settings.plugins.pending') : t('settings.plugins.install')}
+            </Button>
+            <Typography.Text
+              aria-atomic="true"
+              aria-live={installationFeedback?.kind === 'error' ? 'assertive' : 'polite'}
+              className="settings-installation-status"
+              role={installationFeedback?.kind === 'error' ? 'alert' : 'status'}
+              type={installationFeedback?.kind === 'error' ? 'danger' : 'tertiary'}
+            >
+              {installationMessage}
+            </Typography.Text>
           </section>
         </TabPane>
       </Tabs>

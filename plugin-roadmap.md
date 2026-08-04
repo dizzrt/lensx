@@ -336,7 +336,7 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；本 Ta
 
 **完成标准**：固定 tool revision 对相同 canonical file map 产生 byte-for-byte 相同 `.lxp`；TypeScript 与 Rust 对 status、facts、diagnostics 和 digest 给出一致结论；本 Task 不实现 installer、CLI、Runtime 或 signing。
 
-- [ ] **Task 3.2：实现本地插件安装**
+- [x] **Task 3.2：实现本地插件安装**
 
 **OpenSpec change**：`add-local-plugin-installation`
 

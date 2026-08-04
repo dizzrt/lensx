@@ -1,3 +1,4 @@
+use crate::plugin_identity::plugin_record_key;
 use crate::plugin_manifest::{
     validate_plugin_manifest, NormalizedPluginManifest, PluginHostVersions,
     PluginManifestCompatibility, PluginManifestValidationStatus, PLUGIN_HOST_API_VERSION,
@@ -258,6 +259,12 @@ pub struct PluginManagerRecoveryReport {
     pub diagnostics: Vec<PluginManagerDiagnostic>,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct PluginInstallerRecoveryFacts {
+    pub healthy_installation_paths: Vec<(String, PathBuf)>,
+    pub quarantined_record_keys: Vec<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 struct PluginRecordV1 {
@@ -271,7 +278,7 @@ impl PluginRecordV1 {
     fn from_registration(registration: &PluginRegistration) -> Self {
         Self {
             format_version: RECORD_FORMAT_VERSION,
-            record_key: record_key(&registration.manifest.plugin_id),
+            record_key: plugin_record_key(&registration.manifest.plugin_id),
             manifest: registration.manifest.clone(),
             registration: registration.facts.clone(),
         }
@@ -308,7 +315,7 @@ impl PluginManager {
                         Ok(registration) => {
                             let plugin_id = registration.manifest.plugin_id.clone();
                             if snapshot.healthy.contains_key(&plugin_id) {
-                                let key = record_key(&plugin_id);
+                                let key = plugin_record_key(&plugin_id);
                                 snapshot.quarantined.insert(
                                     key.clone(),
                                     QuarantineStub {
@@ -377,6 +384,27 @@ impl PluginManager {
         self.lock_snapshot().revision.to_string()
     }
 
+    pub(crate) fn host_versions(&self) -> PluginHostVersions {
+        self.versions.clone()
+    }
+
+    pub(crate) fn installer_recovery_facts(&self) -> PluginInstallerRecoveryFacts {
+        let snapshot = self.lock_snapshot();
+        PluginInstallerRecoveryFacts {
+            healthy_installation_paths: snapshot
+                .healthy
+                .values()
+                .map(|registration| {
+                    (
+                        plugin_record_key(&registration.manifest.plugin_id),
+                        PathBuf::from(&registration.facts.installation_path),
+                    )
+                })
+                .collect(),
+            quarantined_record_keys: snapshot.quarantined.keys().cloned().collect(),
+        }
+    }
+
     pub fn read_registration_snapshot(&self) -> PluginRegistrationSnapshot {
         let snapshot = self.lock_snapshot();
         project_plugin_registration_snapshot(
@@ -408,7 +436,7 @@ impl PluginManager {
         facts.validate()?;
         let compatibility = validate_normalized_manifest(&manifest, &self.versions)?;
         let plugin_id = manifest.plugin_id.clone();
-        let key = record_key(&plugin_id);
+        let key = plugin_record_key(&plugin_id);
         let mut snapshot = self.lock_snapshot();
         if snapshot.healthy.contains_key(&plugin_id) {
             return Err(PluginManagerDiagnostic::new(
@@ -476,7 +504,7 @@ impl PluginManager {
     }
 
     #[cfg(test)]
-    fn set_write_fault(&self, fault: Option<WriteFault>) {
+    pub(crate) fn set_write_fault(&self, fault: Option<WriteFault>) {
         *self
             .store
             .write_fault
@@ -510,15 +538,6 @@ fn validate_normalized_manifest(
     result
         .compatibility
         .ok_or_else(PluginManagerDiagnostic::invalid_registration)
-}
-
-fn record_key(plugin_id: &str) -> String {
-    let encoded = plugin_id
-        .as_bytes()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
-    format!("v1-{encoded}")
 }
 
 enum StoredCandidate {
@@ -570,7 +589,7 @@ fn recover_candidate(
         ),
     })?;
     let plugin_id = record.manifest.plugin_id.clone();
-    if record.record_key != candidate_key || record_key(&plugin_id) != candidate_key {
+    if record.record_key != candidate_key || plugin_record_key(&plugin_id) != candidate_key {
         return Err(QuarantineStub {
             record_key: candidate_key,
             plugin_id: Some(plugin_id),
@@ -680,7 +699,7 @@ impl PluginManagerStore {
     fn write_record(&self, record: &PluginRecordV1) -> Result<(), PluginManagerDiagnostic> {
         record.registration.validate()?;
         if record.format_version != RECORD_FORMAT_VERSION
-            || record.record_key != record_key(&record.manifest.plugin_id)
+            || record.record_key != plugin_record_key(&record.manifest.plugin_id)
         {
             return Err(PluginManagerDiagnostic::invalid_registration());
         }
@@ -747,7 +766,7 @@ impl PluginManagerStore {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum WriteFault {
+pub(crate) enum WriteFault {
     Create,
     Write,
     Sync,
@@ -775,12 +794,13 @@ fn manage_plugin_manager<R: Runtime>(app: &AppHandle<R>, manager: Arc<PluginMana
     app.manage(manager)
 }
 
-pub fn setup_plugin_manager<R: Runtime>(app: &AppHandle<R>) {
+pub fn setup_plugin_manager<R: Runtime>(app: &AppHandle<R>) -> Arc<PluginManager> {
     let versions = current_plugin_host_versions(app.package_info().version.to_string());
     let config_dir = app.path().app_config_dir().map_err(|_| ());
     let manager = initialize_plugin_manager(config_dir, versions);
-    let managed = manage_plugin_manager(app, manager);
+    let managed = manage_plugin_manager(app, Arc::clone(&manager));
     debug_assert!(managed, "Plugin Manager state should only be managed once");
+    manager
 }
 
 #[cfg(test)]
@@ -1107,7 +1127,7 @@ mod tests {
         )
         .expect("mismatch record should be written");
         let inconsistent_manifest = manifest("com.acme.inconsistent", "0.2.0");
-        let inconsistent_key = record_key(&inconsistent_manifest.plugin_id);
+        let inconsistent_key = plugin_record_key(&inconsistent_manifest.plugin_id);
         let mut inconsistent_facts = facts(false);
         inconsistent_facts.granted_permission_ids =
             vec!["files.read".to_owned(), "clipboard.read".to_owned()];
@@ -1164,7 +1184,7 @@ mod tests {
     fn quarantine_is_replaced_only_by_a_complete_healthy_registration() {
         let directory = TestDirectory::new("quarantine-replacement");
         let plugin_id = "com.acme.replacement";
-        let key = record_key(plugin_id);
+        let key = plugin_record_key(plugin_id);
         let store_dir = directory.path.join(PLUGIN_MANAGER_DIRECTORY);
         fs::create_dir_all(&store_dir).expect("store should exist");
         fs::write(store_dir.join(format!("{key}.json")), b"{")

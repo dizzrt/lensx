@@ -1,0 +1,48 @@
+[
+  {
+    "name": "cancelled",
+    "type": "result",
+    "value": {
+      "status": "cancelled",
+      "contract_version": "0.1.0"
+    }
+  },
+  {
+    "name": "installed",
+    "type": "result",
+    "value": {
+      "status": "installed",
+      "contract_version": "0.1.0",
+      "plugin_id": "com.acme.workspace",
+      "version": "1.2.3",
+      "revision": "7"
+    }
+  },
+  {
+    "name": "invalid_package_error",
+    "type": "error",
+    "value": {
+      "contract_version": "0.1.0",
+      "code": "invalid_package",
+      "operation": "inspect",
+      "message": "The selected file is not a valid lensX plugin package.",
+      "diagnostics": [
+        {
+          "code": "frame_invalid",
+          "path": "/frame",
+          "message": "The package is not a supported Zstandard frame."
+        }
+      ]
+    }
+  },
+  {
+    "name": "busy_error",
+    "type": "error",
+    "value": {
+      "contract_version": "0.1.0",
+      "code": "busy",
+      "operation": "commit",
+      "message": "Another plugin installation is in progress."
+    }
+  }
+]

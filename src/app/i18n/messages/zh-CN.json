@@ -81,8 +81,26 @@
       "zhCN": "简体中文"
     },
     "plugins": {
-      "emptyTitle": "没有可管理的插件",
-      "emptyDescription": "当前版本尚未提供插件管理功能。"
+      "title": "插件",
+      "description": "从这台 Mac 选择一个兼容的 .lxp 包进行安装。暂不提供插件管理操作。",
+      "install": "从本地安装",
+      "pending": "正在安装…",
+      "cancelled": "未选择插件。",
+      "success": "已安装 {{pluginId}}，版本 {{version}}。",
+      "failure": {
+        "invalidPackage": "所选文件不是有效的 lensX 插件包。",
+        "incompatible": "所选插件与当前 lensX 版本不兼容。",
+        "alreadyInstalled": "已安装具有相同标识的插件。",
+        "identityQuarantined": "该插件标识已被隔离，无法通过安装进行替换。",
+        "busy": "另一个插件正在安装，请稍后重试。",
+        "unavailable": "当前无法从本地安装插件。",
+        "sourceReadFailed": "无法读取所选插件包。",
+        "extractionFailed": "无法安全提取插件包。",
+        "commitFailed": "无法提交插件包。",
+        "registrationFailed": "无法保存插件注册信息。",
+        "internal": "从本地安装插件失败。",
+        "invalidBoundaryPayload": "lensX 收到了无效的安装响应。"
+      }
     },
     "save": {
       "inProgress": "正在保存…",

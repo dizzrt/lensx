@@ -3,11 +3,11 @@
 ## Document Status
 
 This document separates the shipped static plugin Manifest contract, `.lxp`
-package inspection, Plugin SDK foundation, Plugin Testkit, optional Plugin UI
-package, and Host-private Plugin surface projection and Page navigation from the
-intended runtime extension boundary. Installation, public packaging CLI,
-distribution, plugin execution, complete permission decisions, iframe
-transport, signing, and the Host API are not currently implemented.
+package inspection and local installation, Plugin SDK foundation, Plugin
+Testkit, optional Plugin UI package, and Host-private Plugin surface projection
+and Page navigation from the intended runtime extension boundary. Public
+packaging CLI, distribution, plugin execution, complete permission decisions,
+iframe transport, signing, and the Host API are not currently implemented.
 Stable specs and source code define the shipped subset.
 
 ## Goals
@@ -149,9 +149,11 @@ source.
 
 Static validation alone does not discover or install packages, create a
 production registration, create iframes, grant permissions, exchange Host API
-messages, or run plugin code. The Host-private production coordinator can now
-project current Registration facts into Page and Action Registries and navigate
-to a Host-owned placeholder, but that placeholder is not plugin Runtime.
+messages, or run plugin code. The Host-private local installer described below
+adds one selected compatible `.lxp` as an external registration. The separate
+surface coordinator can project current Registration facts into Page and Action
+Registries and navigate to a Host-owned placeholder, but that placeholder is
+not plugin Runtime.
 
 ## Shipped Host-Private Plugin Package Inspection
 
@@ -181,10 +183,10 @@ dependency review, diagnostics, and drift gate.
 
 The Rust Host now ships one Plugin Manager instance initialized during Tauri
 setup from `app_config_dir` and shared through Tauri managed state. It remains a
-Host-private core. Its only application-facing projection is the private,
-read-only Registration Contract described below; no lifecycle write command,
-frontend management surface, direct Action/Page projection, installer, or plugin
-execution path is exposed.
+Host-private core. Its read projection is the private Registration Contract,
+and its only current production write caller is the local installation
+coordinator described below. No general lifecycle write command, frontend
+management surface, or plugin execution path is exposed.
 
 Each healthy entry keeps four lifetimes separate:
 
@@ -223,10 +225,63 @@ startup still completes and the unreadable data is not overwritten. Clearing a
 quarantine requires a trusted Host caller to atomically replace it with a
 complete valid record whose enabled intent is supplied explicitly.
 
-This internal state records that the Host knows an installed registration; it
-does not prove that package discovery, digest computation, installation,
-uninstallation, updates, permission decisions, Runtime sessions, or a public
-plugin-facing registration API have shipped. Those remain separate capabilities.
+This internal state records that the Host knows an installed registration. The
+local installer can now establish the package digest, payload, and first
+external registration for one selected compatible package, but Manager records
+alone still do not prove discovery provenance. Uninstallation, updates,
+permission decisions, Runtime sessions, and a public plugin-facing registration
+API remain separate capabilities.
+
+## Shipped Host-Private Plugin Installation From a Local File
+
+The Plugins settings tab exposes one Host-owned **Install from file** action.
+“Local” describes this installation source, not a distinct kind of plugin.
+Its pathless `install_local_plugin` command opens the native file picker for one
+`.lxp`; cancellation returns an ordinary cancelled result. The frontend sees
+only strict installation contract `0.1.0` success, cancellation, or bounded
+error values. It never supplies or receives the selected source path, package
+digest, installation path, Store key, raw native error, or internal recovery
+fact.
+
+The Rust coordinator reads the selected regular file once into a capped
+immutable byte buffer after checking source metadata, then checks that the file
+did not grow, truncate, or change during the read. Only a `compatible`
+inspection may proceed. Inspection and extraction reuse the same canonical
+Zstandard/TAR traversal and limits. Extraction writes regular files with
+`create_new` into a new Host-owned staging directory, verifies the entry facts
+and checksums again, flushes files and directories, and never invokes a general
+archive unpack operation.
+
+Installer state lives under `app_local_data_dir()/plugins`, independently of
+the Manager Store. One process mutex and the cross-process `.install.lock`
+serialize recovery and installation. Staging uses `.staging/<random-id>` and a
+committed payload uses
+`packages/<v1-plugin-id-utf8-lowercase-hex>/<package-sha256>`. This is a
+single-registration digest layout: it deliberately creates no `versions`,
+`transactions`, or plugin data directory and does not interpret a different
+version or digest as upgrade, downgrade, reinstall, or repair.
+
+After the flushed staging directory is atomically renamed on the same
+filesystem, the coordinator registers the normalized Manifest with a complete
+Host fact set: the committed absolute path, algorithm-labelled digest,
+`source=external`, `enabled=true`, empty grants, and an `inactive` Runtime.
+Existing healthy registrations and quarantined identities fail closed before
+commit. Manager persistence failure rolls the payload back or leaves a
+provable orphan for recovery; a changed-event emission failure does not undo a
+successfully persisted and published registration.
+
+Startup installer recovery runs only after Plugin Manager recovery and under
+the same installation lock. It removes valid abandoned staging directories and
+only canonical digest payloads that are provably unowned. It preserves healthy
+installation paths, quarantine-key subtrees, unknown entries, symlinks, and
+anything outside the installer root. Unreadable or inconsistent evidence makes
+the installer unavailable or degraded rather than inviting speculative cleanup.
+
+The installer root is application-local data. On macOS it is separate from the
+signed `lensX.app` bundle and normally resides in the application's Application
+Support area; directly deleting `lensX.app` does not guarantee that this data
+is removed. A dedicated application uninstaller, plugin uninstall, and
+upgrade/rollback behavior all require later accepted changes.
 
 ## Shipped Host-Private Registration Contract
 
@@ -624,10 +679,11 @@ method exists.
 
 ## Capability Delivery
 
-The static Manifest format, validators, Host-private Plugin surface projection,
-production Action activation, Page Registry/navigation, and Runtime-free Host
-placeholder are delivered. Each remaining capability—installation, complete
-permissions, scoped resources, Host API methods, packaging, lifecycle writes,
+The static Manifest format, validators, Host-private local installation,
+Plugin surface projection, production Action activation, Page
+Registry/navigation, and Runtime-free Host placeholder are delivered. Each
+remaining capability—complete permissions, scoped resources, Host API methods,
+public packaging, lifecycle writes including uninstall and upgrade/rollback,
 iframe Runtime execution, or sidecars—requires its own accepted specification
 and implementation evidence. This architectural document defines direction and
 boundaries, not a release checklist.

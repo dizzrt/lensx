@@ -334,16 +334,64 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "emptyTitle": {
+            "title": {
               "type": "string",
               "minLength": 1
             },
-            "emptyDescription": {
+            "description": {
               "type": "string",
               "minLength": 1
+            },
+            "install": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pending": {
+              "type": "string",
+              "minLength": 1
+            },
+            "cancelled": {
+              "type": "string",
+              "minLength": 1
+            },
+            "success": {
+              "type": "string",
+              "minLength": 1
+            },
+            "failure": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "invalidPackage": { "type": "string", "minLength": 1 },
+                "incompatible": { "type": "string", "minLength": 1 },
+                "alreadyInstalled": { "type": "string", "minLength": 1 },
+                "identityQuarantined": { "type": "string", "minLength": 1 },
+                "busy": { "type": "string", "minLength": 1 },
+                "unavailable": { "type": "string", "minLength": 1 },
+                "sourceReadFailed": { "type": "string", "minLength": 1 },
+                "extractionFailed": { "type": "string", "minLength": 1 },
+                "commitFailed": { "type": "string", "minLength": 1 },
+                "registrationFailed": { "type": "string", "minLength": 1 },
+                "internal": { "type": "string", "minLength": 1 },
+                "invalidBoundaryPayload": { "type": "string", "minLength": 1 }
+              },
+              "required": [
+                "invalidPackage",
+                "incompatible",
+                "alreadyInstalled",
+                "identityQuarantined",
+                "busy",
+                "unavailable",
+                "sourceReadFailed",
+                "extractionFailed",
+                "commitFailed",
+                "registrationFailed",
+                "internal",
+                "invalidBoundaryPayload"
+              ]
             }
           },
-          "required": ["emptyTitle", "emptyDescription"]
+          "required": ["title", "description", "install", "pending", "cancelled", "success", "failure"]
         },
         "save": {
           "type": "object",
