@@ -26,6 +26,8 @@
 - Host 私有的持久化 Plugin Manager、逐插件原子记录、兼容性重算与 quarantine 恢复；
 - Host 私有的 Plugin Registration Contract、只读 snapshot/detail 查询、revision 失效通知与
   TypeScript 恢复 adapter；
+- canonical `.lxp` package format、跨语言 inspector、受限本地首次安装、enable/disable/uninstall，
+  以及同 identity 本地包的两阶段单 active replacement；
 - Host-owned Launcher Action descriptor、Registry、Dispatcher、搜索与集合能力；
 - Host 私有的 Plugin Page Registry、Registration revision 驱动的 Action/Page surface projection、
   grant snapshot 预检、统一页面导航与不执行插件代码的 Host-owned placeholder；
@@ -35,8 +37,8 @@
 当前尚未实现：
 
 - Plugin CLI package；
-- 真实插件安装与升级事务；
-- 插件包格式、安全资源服务、iframe Runtime 和 Runtime session；
+- 远程下载、自动更新和用户主动 rollback history；
+- 安全资源服务、iframe Runtime 和 Runtime session；
 - 真实 Host API、SDK transport、权限授权和插件私有存储；
 - 插件管理 UI、开发模式、签名、更新、Catalog 和 Marketplace。
 
@@ -373,7 +375,7 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；本 Ta
 
 **完成标准**：状态变化无需重启生效；重启后保持；生命周期失败可恢复到一致状态。
 
-- [ ] **Task 3.4：实现插件升级与回滚**
+- [x] **Task 3.4：实现插件升级与回滚**
 
 **OpenSpec change**：`add-plugin-upgrade-and-rollback`
 
@@ -382,14 +384,21 @@ fixture、SDK 初始化、观测和销毁，不依赖 Host 私有模块；本 Ta
 **范围**：
 
 - 区分重复安装、升级、降级、重装和 package identity 冲突。
-- 使用并行版本目录和原子 active-version 指针。
-- 升级前检查兼容范围、包 hash、签名状态和新增权限。
-- 升级失败恢复旧版本及其注册状态。
-- 默认禁止静默降级。
+- 通过 prepare/commit/cancel 两阶段 Host-private contract 先检查候选，再协调 surface 并提交。
+- 使用同 plugin key 下的 sibling digest directory，并让 version-1 Plugin Manager record 保持为唯一
+  active pointer；不保留 previous pointer 或版本历史。
+- 替换前检查 compatibility、完整 package digest、identity、revision 与 permission diff；当前 unsigned
+  local policy 不伪造 signature status。
+- 提交前失败保持旧 payload、record 与 projection；提交成功后删除旧 payload，清理失败进入可恢复 pending。
+- 用户显式选择的 compatible 本地包允许升级、降级与同版本重装；该语义不授权未来静默自动降级。
+- 保留 source、enabled intent 与独立 data subtree，并把 grants 收缩为旧 grants 与新 requested
+  permissions 的交集。
 
 **依赖**：Task 3.2、Task 3.3。
 
-**完成标准**：失败升级不会破坏可用旧版本；新增权限未经确认不会自动生效。
+**完成标准**：失败替换不会破坏可用旧版本；durable commit 后只有新 record active；新增权限不会自动
+生效；专用门禁与完整前端/Rust 验证全部通过。本 Task 不提供远程更新、主动 rollback、多版本、签名、
+Runtime health rollback、数据迁移、权限 UI 或完整管理 UI。
 
 ### Milestone 3 完成标准
 

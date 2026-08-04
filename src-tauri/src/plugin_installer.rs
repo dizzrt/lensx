@@ -13,9 +13,17 @@ use crate::{
         PackageTraversalFailure,
     },
     plugin_registration::{emit_plugin_registration_changed, PluginRegistrationEventEmitter},
+    plugin_replacement_contract::{
+        is_preparation_token, CancelPluginReplacementRequest, CommitPluginReplacementRequest,
+        PluginReplacementClassification, PluginReplacementCleanupConclusion,
+        PluginReplacementError, PluginReplacementErrorCode, PluginReplacementOperation,
+        PluginReplacementResult, PreparePluginReplacementRequest,
+        PLUGIN_REPLACEMENT_CONTRACT_VERSION,
+    },
 };
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeSet, HashSet},
     fs::{self, File, OpenOptions},
@@ -63,8 +71,22 @@ pub struct PluginInstaller {
     recovered: Mutex<bool>,
     diagnostics: Mutex<Vec<PluginInstallerDiagnostic>>,
     blocked_plugin_keys: Mutex<HashSet<String>>,
+    preparation: Mutex<Option<PluginReplacementPreparation>>,
+    pending_replacement_cleanup: Mutex<HashSet<PathBuf>>,
     #[cfg(test)]
     cleanup_fault: Mutex<bool>,
+}
+
+#[derive(Debug)]
+struct PluginReplacementPreparation {
+    token: String,
+    entry_id: String,
+    expected_revision: String,
+    staging_path: PathBuf,
+    bytes: Vec<u8>,
+    manifest: crate::plugin_manifest::NormalizedPluginManifest,
+    facts: crate::plugin_package_format::PackageFacts,
+    classification: PluginReplacementClassification,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -136,6 +158,8 @@ impl PluginInstaller {
             recovered: Mutex::new(false),
             diagnostics: Mutex::new(Vec::new()),
             blocked_plugin_keys: Mutex::new(HashSet::new()),
+            preparation: Mutex::new(None),
+            pending_replacement_cleanup: Mutex::new(HashSet::new()),
             #[cfg(test)]
             cleanup_fault: Mutex::new(false),
         });
@@ -164,6 +188,454 @@ impl PluginInstaller {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone()
+    }
+
+    pub fn prepare_replacement_source(
+        &self,
+        source: &Path,
+        request: &PreparePluginReplacementRequest,
+    ) -> Result<PluginReplacementResult, PluginReplacementError> {
+        if !crate::plugin_replacement_contract::validate_prepare_request(request) {
+            return Err(replacement_error(
+                PluginReplacementErrorCode::InvalidRequest,
+                PluginReplacementOperation::Prepare,
+            ));
+        }
+        if self
+            .preparation
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .is_some()
+        {
+            return Err(replacement_error(
+                PluginReplacementErrorCode::Busy,
+                PluginReplacementOperation::Prepare,
+            ));
+        }
+        let bytes = read_source_capped(source).map_err(map_installation_read_error)?;
+        self.prepare_replacement_bytes_inner(&bytes, request)
+    }
+
+    #[cfg(test)]
+    fn prepare_replacement_bytes(
+        &self,
+        bytes: &[u8],
+        request: &PreparePluginReplacementRequest,
+    ) -> Result<PluginReplacementResult, PluginReplacementError> {
+        self.prepare_replacement_bytes_inner(bytes, request)
+    }
+
+    fn prepare_replacement_bytes_inner(
+        &self,
+        bytes: &[u8],
+        request: &PreparePluginReplacementRequest,
+    ) -> Result<PluginReplacementResult, PluginReplacementError> {
+        if !crate::plugin_replacement_contract::validate_prepare_request(request) {
+            return Err(replacement_error(
+                PluginReplacementErrorCode::InvalidRequest,
+                PluginReplacementOperation::Prepare,
+            ));
+        }
+        let mut preparation = self.preparation.try_lock().map_err(|_| {
+            replacement_error(
+                PluginReplacementErrorCode::Busy,
+                PluginReplacementOperation::Prepare,
+            )
+        })?;
+        if preparation.is_some() {
+            return Err(replacement_error(
+                PluginReplacementErrorCode::Busy,
+                PluginReplacementOperation::Prepare,
+            ));
+        }
+        let _guard = self
+            .acquire_commit_boundary()
+            .map_err(map_replacement_commit_boundary_error)?;
+        self.ensure_recovered_locked().map_err(|_| {
+            replacement_error(
+                PluginReplacementErrorCode::Unavailable,
+                PluginReplacementOperation::Prepare,
+            )
+        })?;
+        let entry = self
+            .manager
+            .resolve_lifecycle_entry(&request.entry_id, &request.expected_revision)
+            .map_err(map_manager_replacement_error)?;
+        let crate::plugin_manager::PluginManagerLifecycleEntry::Healthy {
+            registration: current,
+            record_key,
+            ..
+        } = entry
+        else {
+            return Err(replacement_error(
+                PluginReplacementErrorCode::IdentityQuarantined,
+                PluginReplacementOperation::Prepare,
+            ));
+        };
+        let root = self.root.as_ref().ok_or_else(|| {
+            replacement_error(
+                PluginReplacementErrorCode::Unavailable,
+                PluginReplacementOperation::Prepare,
+            )
+        })?;
+        let packages_root = root.join(PACKAGES_DIRECTORY);
+        let current_path = canonical_payload_path(
+            &packages_root,
+            &record_key,
+            Path::new(&current.facts.installation_path),
+        )
+        .ok_or_else(|| {
+            replacement_error(
+                PluginReplacementErrorCode::UnsafeState,
+                PluginReplacementOperation::Prepare,
+            )
+        })?;
+        if current.facts.package_digest.algorithm != "sha256"
+            || current.facts.package_digest.value
+                != current_path
+                    .file_name()
+                    .and_then(|value| value.to_str())
+                    .unwrap_or_default()
+            || validate_real_tree(&current_path).is_err()
+        {
+            return Err(replacement_error(
+                PluginReplacementErrorCode::UnsafeState,
+                PluginReplacementOperation::Prepare,
+            ));
+        }
+        let (manifest, facts) = match inspect_plugin_package(bytes, &self.manager.host_versions()) {
+            PackageInspectionResult::Invalid { .. } => {
+                return Err(replacement_error(
+                    PluginReplacementErrorCode::InvalidPackage,
+                    PluginReplacementOperation::Inspect,
+                ));
+            }
+            PackageInspectionResult::Incompatible { .. } => {
+                return Err(replacement_error(
+                    PluginReplacementErrorCode::Incompatible,
+                    PluginReplacementOperation::Inspect,
+                ));
+            }
+            PackageInspectionResult::Compatible {
+                manifest, facts, ..
+            } => (manifest, facts),
+        };
+        if manifest.plugin_id != current.manifest.plugin_id {
+            return Err(replacement_error(
+                PluginReplacementErrorCode::IdentityMismatch,
+                PluginReplacementOperation::Inspect,
+            ));
+        }
+        if facts.package_digest.value == current.facts.package_digest.value {
+            return Ok(PluginReplacementResult::Duplicate {
+                contract_version: PLUGIN_REPLACEMENT_CONTRACT_VERSION.to_owned(),
+                entry_id: request.entry_id.clone(),
+                current_version: current.manifest.version,
+                candidate_version: manifest.version,
+            });
+        }
+        let classification = classify_replacement(&current.manifest.version, &manifest.version)?;
+        let current_permissions: BTreeSet<_> = current
+            .manifest
+            .requested_permissions
+            .iter()
+            .map(|permission| permission.permission_id.clone())
+            .collect();
+        let candidate_permissions: BTreeSet<_> = manifest
+            .requested_permissions
+            .iter()
+            .map(|permission| permission.permission_id.clone())
+            .collect();
+        let added_permission_ids = candidate_permissions
+            .difference(&current_permissions)
+            .cloned()
+            .collect();
+        let removed_permission_ids = current_permissions
+            .difference(&candidate_permissions)
+            .cloned()
+            .collect();
+        let staging_path = root.join(STAGING_DIRECTORY).join(staging_identity());
+        fs::create_dir(&staging_path).map_err(|_| {
+            replacement_error(
+                PluginReplacementErrorCode::ExtractionFailed,
+                PluginReplacementOperation::Extract,
+            )
+        })?;
+        if extract_package(bytes, &facts.files, facts.decompressed_size, &staging_path).is_err() {
+            let _ = remove_tree_no_follow(&staging_path);
+            return Err(replacement_error(
+                PluginReplacementErrorCode::ExtractionFailed,
+                PluginReplacementOperation::Extract,
+            ));
+        }
+        let token = preparation_token(&staging_path, &facts.package_digest.value);
+        debug_assert!(is_preparation_token(&token));
+        *preparation = Some(PluginReplacementPreparation {
+            token: token.clone(),
+            entry_id: request.entry_id.clone(),
+            expected_revision: request.expected_revision.clone(),
+            staging_path,
+            bytes: bytes.to_vec(),
+            manifest: manifest.clone(),
+            facts,
+            classification,
+        });
+        Ok(PluginReplacementResult::Prepared {
+            contract_version: PLUGIN_REPLACEMENT_CONTRACT_VERSION.to_owned(),
+            preparation_token: token,
+            entry_id: request.entry_id.clone(),
+            current_version: current.manifest.version,
+            candidate_version: manifest.version,
+            classification,
+            added_permission_ids,
+            removed_permission_ids,
+        })
+    }
+
+    pub fn cancel_replacement(
+        &self,
+        request: &CancelPluginReplacementRequest,
+    ) -> Result<PluginReplacementResult, PluginReplacementError> {
+        if !crate::plugin_replacement_contract::validate_cancel_request(request) {
+            return Err(replacement_error(
+                PluginReplacementErrorCode::InvalidRequest,
+                PluginReplacementOperation::Cancel,
+            ));
+        }
+        let mut slot = self
+            .preparation
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if slot
+            .as_ref()
+            .is_none_or(|prepared| prepared.token != request.preparation_token)
+        {
+            return Err(replacement_error(
+                PluginReplacementErrorCode::InvalidPreparation,
+                PluginReplacementOperation::Cancel,
+            ));
+        }
+        let prepared = slot.take().expect("matching preparation should exist");
+        remove_tree_no_follow(&prepared.staging_path).map_err(|_| {
+            replacement_error(
+                PluginReplacementErrorCode::UnsafeState,
+                PluginReplacementOperation::Cleanup,
+            )
+        })?;
+        Ok(PluginReplacementResult::cancelled())
+    }
+
+    pub fn commit_replacement(
+        &self,
+        request: &CommitPluginReplacementRequest,
+        emitter: &impl PluginRegistrationEventEmitter,
+    ) -> Result<PluginReplacementResult, PluginReplacementError> {
+        if !crate::plugin_replacement_contract::validate_commit_request(request) {
+            return Err(replacement_error(
+                PluginReplacementErrorCode::InvalidRequest,
+                PluginReplacementOperation::Commit,
+            ));
+        }
+        let prepared = {
+            let mut slot = self
+                .preparation
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if slot.as_ref().is_none_or(|prepared| {
+                prepared.token != request.preparation_token
+                    || prepared.entry_id != request.entry_id
+                    || prepared.expected_revision != request.expected_revision
+            }) {
+                return Err(replacement_error(
+                    PluginReplacementErrorCode::InvalidPreparation,
+                    PluginReplacementOperation::Commit,
+                ));
+            }
+            slot.take().expect("matching preparation should exist")
+        };
+        let result = self.commit_prepared_replacement(prepared, request, emitter);
+        result
+    }
+
+    fn commit_prepared_replacement(
+        &self,
+        prepared: PluginReplacementPreparation,
+        request: &CommitPluginReplacementRequest,
+        emitter: &impl PluginRegistrationEventEmitter,
+    ) -> Result<PluginReplacementResult, PluginReplacementError> {
+        let cleanup_staging = || {
+            let _ = remove_tree_no_follow(&prepared.staging_path);
+        };
+        let _guard = match self.acquire_commit_boundary() {
+            Ok(guard) => guard,
+            Err(error) => {
+                cleanup_staging();
+                return Err(map_replacement_commit_boundary_error(error));
+            }
+        };
+        if self.ensure_recovered_locked().is_err() {
+            cleanup_staging();
+            return Err(replacement_error(
+                PluginReplacementErrorCode::Unavailable,
+                PluginReplacementOperation::Commit,
+            ));
+        }
+        let entry = match self
+            .manager
+            .resolve_lifecycle_entry(&request.entry_id, &request.expected_revision)
+        {
+            Ok(entry) => entry,
+            Err(error) => {
+                cleanup_staging();
+                return Err(map_manager_replacement_error(error));
+            }
+        };
+        let crate::plugin_manager::PluginManagerLifecycleEntry::Healthy {
+            registration: current,
+            record_key,
+            ..
+        } = entry
+        else {
+            cleanup_staging();
+            return Err(replacement_error(
+                PluginReplacementErrorCode::IdentityQuarantined,
+                PluginReplacementOperation::Commit,
+            ));
+        };
+        let reinspection = inspect_plugin_package(&prepared.bytes, &self.manager.host_versions());
+        let PackageInspectionResult::Compatible {
+            manifest, facts, ..
+        } = reinspection
+        else {
+            cleanup_staging();
+            return Err(replacement_error(
+                PluginReplacementErrorCode::UnsafeState,
+                PluginReplacementOperation::Commit,
+            ));
+        };
+        if manifest != prepared.manifest
+            || facts != prepared.facts
+            || manifest.plugin_id != current.manifest.plugin_id
+        {
+            cleanup_staging();
+            return Err(replacement_error(
+                PluginReplacementErrorCode::UnsafeState,
+                PluginReplacementOperation::Commit,
+            ));
+        }
+        if validate_extracted_payload(&prepared.staging_path, &facts.files).is_err() {
+            cleanup_staging();
+            return Err(replacement_error(
+                PluginReplacementErrorCode::UnsafeState,
+                PluginReplacementOperation::Commit,
+            ));
+        }
+        let root = self.root.as_ref().ok_or_else(|| {
+            replacement_error(
+                PluginReplacementErrorCode::Unavailable,
+                PluginReplacementOperation::Commit,
+            )
+        })?;
+        let packages_root = root.join(PACKAGES_DIRECTORY);
+        let old_path = canonical_payload_path(
+            &packages_root,
+            &record_key,
+            Path::new(&current.facts.installation_path),
+        )
+        .ok_or_else(|| {
+            replacement_error(
+                PluginReplacementErrorCode::UnsafeState,
+                PluginReplacementOperation::Commit,
+            )
+        })?;
+        if current.facts.package_digest.algorithm != "sha256"
+            || current.facts.package_digest.value
+                != old_path
+                    .file_name()
+                    .and_then(|value| value.to_str())
+                    .unwrap_or_default()
+            || validate_real_tree(&old_path).is_err()
+        {
+            cleanup_staging();
+            return Err(replacement_error(
+                PluginReplacementErrorCode::UnsafeState,
+                PluginReplacementOperation::Commit,
+            ));
+        }
+        let plugin_directory = packages_root.join(&record_key);
+        let final_path = plugin_directory.join(&facts.package_digest.value);
+        if final_path.exists() || fs::rename(&prepared.staging_path, &final_path).is_err() {
+            cleanup_staging();
+            return Err(replacement_error(
+                PluginReplacementErrorCode::CommitFailed,
+                PluginReplacementOperation::Commit,
+            ));
+        }
+        if sync_directory(&plugin_directory).is_err() {
+            let _ = remove_tree_no_follow(&final_path);
+            return Err(replacement_error(
+                PluginReplacementErrorCode::CommitFailed,
+                PluginReplacementOperation::Commit,
+            ));
+        }
+        let requested: BTreeSet<_> = manifest
+            .requested_permissions
+            .iter()
+            .map(|permission| permission.permission_id.as_str())
+            .collect();
+        let grants = current
+            .facts
+            .granted_permission_ids
+            .iter()
+            .filter(|permission| requested.contains(permission.as_str()))
+            .cloned()
+            .collect();
+        let mut next_facts = current.facts.clone();
+        next_facts.installation_path = final_path.to_string_lossy().into_owned();
+        next_facts.package_digest = PackageDigest {
+            algorithm: "sha256".to_owned(),
+            value: facts.package_digest.value,
+        };
+        next_facts.granted_permission_ids = grants;
+        let replacement = match self.manager.replace_entry(
+            &request.entry_id,
+            &request.expected_revision,
+            manifest.clone(),
+            next_facts,
+        ) {
+            Ok(replacement) => replacement,
+            Err(error) => {
+                let _ = remove_tree_no_follow(&final_path);
+                return Err(map_manager_replacement_error(error));
+            }
+        };
+        let cleanup = if !self.replacement_cleanup_fault()
+            && remove_tree_no_follow(&old_path).is_ok()
+            && sync_directory(&plugin_directory).is_ok()
+        {
+            PluginReplacementCleanupConclusion::Complete
+        } else {
+            self.pending_replacement_cleanup
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .insert(old_path);
+            self.record_diagnostic(PluginInstallerDiagnostic {
+                code: "replacement_cleanup_pending",
+                operation: "cleanup",
+                message: "A non-active plugin payload is pending safe cleanup.",
+            });
+            PluginReplacementCleanupConclusion::Pending
+        };
+        let _ = emit_plugin_registration_changed(emitter, &replacement.change);
+        Ok(PluginReplacementResult::Committed {
+            contract_version: PLUGIN_REPLACEMENT_CONTRACT_VERSION.to_owned(),
+            entry_id: request.entry_id.clone(),
+            plugin_id: manifest.plugin_id,
+            version: manifest.version,
+            classification: prepared.classification,
+            revision: replacement.change.revision,
+            cleanup,
+        })
     }
 
     pub(crate) fn set_enabled(
@@ -296,6 +768,19 @@ impl PluginInstaller {
             .cleanup_fault
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = enabled;
+    }
+
+    #[cfg(test)]
+    fn replacement_cleanup_fault(&self) -> bool {
+        *self
+            .cleanup_fault
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    #[cfg(not(test))]
+    fn replacement_cleanup_fault(&self) -> bool {
+        false
     }
 
     pub fn install_source(
@@ -523,6 +1008,7 @@ impl PluginInstaller {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
         {
+            self.retry_replacement_cleanup_locked();
             return Ok(());
         }
         self.recover_locked().map_err(|()| {
@@ -582,6 +1068,28 @@ impl PluginInstaller {
 
         self.recover_cleanup_records(&cleanup_root, &packages_root, &data_root, &active_keys)?;
 
+        self.recover_non_active_payloads_locked()?;
+        *self
+            .recovered
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = true;
+        Ok(())
+    }
+
+    fn recover_non_active_payloads_locked(&self) -> Result<(), ()> {
+        let root = self.root.as_ref().ok_or(())?;
+        let packages_root = root.join(PACKAGES_DIRECTORY);
+        let recovery = self.manager.installer_recovery_facts();
+        let active_paths: HashSet<_> = recovery
+            .healthy_installation_paths
+            .iter()
+            .filter_map(|(key, path)| canonical_payload_path(&packages_root, key, path))
+            .collect();
+        if active_paths.len() != recovery.healthy_installation_paths.len() {
+            self.record_recovery_failure("noncanonical_registration_path");
+            return Err(());
+        }
+        let quarantine_keys: HashSet<_> = recovery.quarantined_record_keys.into_iter().collect();
         for key_entry in fs::read_dir(&packages_root).map_err(|_| ())? {
             let key_entry = key_entry.map_err(|_| ())?;
             let key = key_entry.file_name();
@@ -608,11 +1116,60 @@ impl PluginInstaller {
                 }
             }
         }
-        *self
-            .recovered
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = true;
         Ok(())
+    }
+
+    fn retry_replacement_cleanup_locked(&self) {
+        let Some(root) = self.root.as_ref() else {
+            return;
+        };
+        let packages_root = root.join(PACKAGES_DIRECTORY);
+        let active_paths: HashSet<_> = self
+            .manager
+            .installer_recovery_facts()
+            .healthy_installation_paths
+            .iter()
+            .filter_map(|(key, path)| canonical_payload_path(&packages_root, key, path))
+            .collect();
+        let pending: Vec<_> = self
+            .pending_replacement_cleanup
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .iter()
+            .cloned()
+            .collect();
+        for path in pending {
+            let Some(plugin_directory) = path.parent() else {
+                continue;
+            };
+            let Some(plugin_key) = plugin_directory
+                .file_name()
+                .and_then(|value| value.to_str())
+            else {
+                continue;
+            };
+            if active_paths.contains(&path)
+                || canonical_payload_path(&packages_root, plugin_key, &path).is_none()
+            {
+                self.block_plugin_key(plugin_key, "replacement_cleanup_conflict");
+                continue;
+            }
+            let removed = match fs::symlink_metadata(&path) {
+                Ok(_) => {
+                    validate_real_tree(&path).is_ok()
+                        && remove_tree_no_follow(&path).is_ok()
+                        && sync_directory(plugin_directory).is_ok()
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+                Err(_) => false,
+            };
+            if removed {
+                self.pending_replacement_cleanup
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .remove(&path);
+            }
+        }
     }
 
     fn current_availability(&self) -> InstallerAvailability {
@@ -960,6 +1517,140 @@ impl PluginInstaller {
             ))
         }
     }
+}
+
+impl Drop for PluginInstaller {
+    fn drop(&mut self) {
+        if let Some(prepared) = self
+            .preparation
+            .get_mut()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()
+        {
+            let _ = remove_tree_no_follow(&prepared.staging_path);
+        }
+    }
+}
+
+fn replacement_error(
+    code: PluginReplacementErrorCode,
+    operation: PluginReplacementOperation,
+) -> PluginReplacementError {
+    PluginReplacementError::new(code, operation)
+}
+
+fn map_installation_read_error(_error: LocalPluginInstallationError) -> PluginReplacementError {
+    replacement_error(
+        PluginReplacementErrorCode::SourceReadFailed,
+        PluginReplacementOperation::Read,
+    )
+}
+
+fn map_replacement_commit_boundary_error(
+    error: PluginCommitBoundaryError,
+) -> PluginReplacementError {
+    replacement_error(
+        match error {
+            PluginCommitBoundaryError::Busy => PluginReplacementErrorCode::Busy,
+            PluginCommitBoundaryError::Unavailable => PluginReplacementErrorCode::Unavailable,
+        },
+        PluginReplacementOperation::Commit,
+    )
+}
+
+fn map_manager_replacement_error(
+    error: crate::plugin_manager::PluginManagerDiagnostic,
+) -> PluginReplacementError {
+    let code = match error.code() {
+        PluginManagerDiagnosticCode::StaleRevision => PluginReplacementErrorCode::StaleRevision,
+        PluginManagerDiagnosticCode::NotFound => PluginReplacementErrorCode::IdentityMismatch,
+        PluginManagerDiagnosticCode::InvalidState => {
+            PluginReplacementErrorCode::IdentityQuarantined
+        }
+        PluginManagerDiagnosticCode::IdentityMismatch => {
+            PluginReplacementErrorCode::IdentityMismatch
+        }
+        PluginManagerDiagnosticCode::StoreUnavailable => PluginReplacementErrorCode::Unavailable,
+        PluginManagerDiagnosticCode::PersistFailed => {
+            PluginReplacementErrorCode::RegistrationFailed
+        }
+        _ => PluginReplacementErrorCode::UnsafeState,
+    };
+    replacement_error(code, PluginReplacementOperation::Register)
+}
+
+fn classify_replacement(
+    current: &str,
+    candidate: &str,
+) -> Result<PluginReplacementClassification, PluginReplacementError> {
+    let current = semver::Version::parse(current).map_err(|_| {
+        replacement_error(
+            PluginReplacementErrorCode::UnsafeState,
+            PluginReplacementOperation::Inspect,
+        )
+    })?;
+    let candidate = semver::Version::parse(candidate).map_err(|_| {
+        replacement_error(
+            PluginReplacementErrorCode::InvalidPackage,
+            PluginReplacementOperation::Inspect,
+        )
+    })?;
+    Ok(match candidate.cmp(&current) {
+        std::cmp::Ordering::Greater => PluginReplacementClassification::Upgrade,
+        std::cmp::Ordering::Less => PluginReplacementClassification::Downgrade,
+        std::cmp::Ordering::Equal => PluginReplacementClassification::Reinstall,
+    })
+}
+
+fn preparation_token(path: &Path, digest: &str) -> String {
+    let sequence = STAGING_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let mut hasher = Sha256::new();
+    hasher.update(path.as_os_str().to_string_lossy().as_bytes());
+    hasher.update(digest.as_bytes());
+    hasher.update(std::process::id().to_le_bytes());
+    hasher.update(sequence.to_le_bytes());
+    format!("prep_{:x}", hasher.finalize())
+}
+
+fn validate_extracted_payload(
+    root: &Path,
+    files: &[crate::plugin_package_format::PackageFileFact],
+) -> Result<(), ()> {
+    validate_real_tree(root).map_err(|_| ())?;
+    let mut expected = BTreeSet::new();
+    for fact in files {
+        let path = root.join(&fact.path);
+        if path.parent().is_none() || !path.starts_with(root) {
+            return Err(());
+        }
+        let bytes = fs::read(&path).map_err(|_| ())?;
+        if bytes.len() as u64 != fact.size || format!("{:x}", Sha256::digest(&bytes)) != fact.sha256
+        {
+            return Err(());
+        }
+        expected.insert(path);
+    }
+    let mut actual = BTreeSet::new();
+    collect_payload_files(root, &mut actual)?;
+    (actual == expected).then_some(()).ok_or(())
+}
+
+fn collect_payload_files(root: &Path, files: &mut BTreeSet<PathBuf>) -> Result<(), ()> {
+    for entry in fs::read_dir(root).map_err(|_| ())? {
+        let entry = entry.map_err(|_| ())?;
+        let metadata = fs::symlink_metadata(entry.path()).map_err(|_| ())?;
+        if metadata.file_type().is_symlink() {
+            return Err(());
+        }
+        if metadata.is_dir() {
+            collect_payload_files(&entry.path(), files)?;
+        } else if metadata.is_file() {
+            files.insert(entry.path());
+        } else {
+            return Err(());
+        }
+    }
+    Ok(())
 }
 
 fn commit_boundary_installation_error(
@@ -1370,6 +2061,52 @@ pub async fn install_local_plugin<R: Runtime>(
     installer.install_source(&source, &app)
 }
 
+#[tauri::command]
+pub async fn prepare_local_plugin_replacement<R: Runtime>(
+    app: AppHandle<R>,
+    installer: State<'_, Arc<PluginInstaller>>,
+    request: PreparePluginReplacementRequest,
+) -> Result<PluginReplacementResult, PluginReplacementError> {
+    if !crate::plugin_replacement_contract::validate_prepare_request(&request) {
+        return Err(replacement_error(
+            PluginReplacementErrorCode::InvalidRequest,
+            PluginReplacementOperation::Prepare,
+        ));
+    }
+    let selected = app
+        .dialog()
+        .file()
+        .add_filter("lensX plugin", &["lxp"])
+        .blocking_pick_file();
+    let Some(selected) = selected else {
+        return Ok(PluginReplacementResult::cancelled());
+    };
+    let source = selected.into_path().map_err(|_| {
+        replacement_error(
+            PluginReplacementErrorCode::SourceReadFailed,
+            PluginReplacementOperation::Select,
+        )
+    })?;
+    installer.prepare_replacement_source(&source, &request)
+}
+
+#[tauri::command]
+pub fn commit_local_plugin_replacement<R: Runtime>(
+    app: AppHandle<R>,
+    installer: State<'_, Arc<PluginInstaller>>,
+    request: CommitPluginReplacementRequest,
+) -> Result<PluginReplacementResult, PluginReplacementError> {
+    installer.commit_replacement(&request, &app)
+}
+
+#[tauri::command]
+pub fn cancel_plugin_replacement(
+    installer: State<'_, Arc<PluginInstaller>>,
+    request: CancelPluginReplacementRequest,
+) -> Result<PluginReplacementResult, PluginReplacementError> {
+    installer.cancel_replacement(&request)
+}
+
 pub fn setup_plugin_installer<R: Runtime>(
     app: &AppHandle<R>,
     manager: Arc<PluginManager>,
@@ -1479,6 +2216,61 @@ mod tests {
             .expect("installed entry should exist")
     }
 
+    fn replacement_request(
+        manager: &PluginManager,
+        plugin_id: &str,
+    ) -> PreparePluginReplacementRequest {
+        PreparePluginReplacementRequest {
+            contract_version: PLUGIN_REPLACEMENT_CONTRACT_VERSION.to_owned(),
+            entry_id: installed_entry_id(manager, plugin_id),
+            expected_revision: manager.registration_revision(),
+        }
+    }
+
+    fn seed_replacement_target(
+        manager: &PluginManager,
+        installer: &PluginInstaller,
+        plugin_id: &str,
+        version: &str,
+        digest: &str,
+        grants: Vec<String>,
+    ) -> PathBuf {
+        let PackageInspectionResult::Compatible { mut manifest, .. } =
+            inspect_plugin_package(&valid_package(), &versions())
+        else {
+            panic!("replacement fixture should be compatible");
+        };
+        manifest.plugin_id = plugin_id.to_owned();
+        manifest.version = version.to_owned();
+        let plugin_key = plugin_record_key(plugin_id);
+        let path = installer
+            .root
+            .as_ref()
+            .expect("installer root should exist")
+            .join(PACKAGES_DIRECTORY)
+            .join(plugin_key)
+            .join(digest);
+        fs::create_dir_all(&path).expect("active payload should be created");
+        fs::write(path.join("active.txt"), b"current").expect("active payload should be writable");
+        manager
+            .register(
+                manifest,
+                PluginRegistrationFacts::with_grants(
+                    path.to_string_lossy().into_owned(),
+                    PackageDigest {
+                        algorithm: "sha256".to_owned(),
+                        value: digest.to_owned(),
+                    },
+                    PluginSource::External,
+                    true,
+                    grants,
+                )
+                .expect("seed facts should be valid"),
+            )
+            .expect("replacement target should register");
+        path
+    }
+
     #[test]
     fn same_bytes_are_inspected_extracted_committed_and_registered_once() {
         let (_directory, manager, installer) = setup("success");
@@ -1520,6 +2312,350 @@ mod tests {
             .join(DATA_DIRECTORY)
             .join(plugin_key)
             .exists());
+    }
+
+    #[test]
+    fn replacement_prepare_classifies_duplicate_upgrade_downgrade_and_reinstall() {
+        let cases = [
+            ("0.0.1", "upgrade"),
+            ("99.0.0", "downgrade"),
+            ("1.2.0", "reinstall"),
+        ];
+        for (current_version, expected) in cases {
+            let (_directory, manager, installer) = setup(expected);
+            let PackageInspectionResult::Compatible { manifest, .. } =
+                inspect_plugin_package(&valid_package(), &versions())
+            else {
+                panic!("fixture should be compatible");
+            };
+            seed_replacement_target(
+                &manager,
+                &installer,
+                &manifest.plugin_id,
+                current_version,
+                &"1".repeat(64),
+                Vec::new(),
+            );
+            let request = replacement_request(&manager, &manifest.plugin_id);
+            let result = installer
+                .prepare_replacement_bytes(&valid_package(), &request)
+                .expect("replacement should prepare");
+            let PluginReplacementResult::Prepared {
+                preparation_token,
+                classification,
+                ..
+            } = result
+            else {
+                panic!("expected prepared result");
+            };
+            assert_eq!(
+                classification,
+                match expected {
+                    "upgrade" => PluginReplacementClassification::Upgrade,
+                    "downgrade" => PluginReplacementClassification::Downgrade,
+                    _ => PluginReplacementClassification::Reinstall,
+                }
+            );
+            installer
+                .cancel_replacement(&CancelPluginReplacementRequest {
+                    contract_version: PLUGIN_REPLACEMENT_CONTRACT_VERSION.to_owned(),
+                    preparation_token,
+                })
+                .expect("preparation should cancel");
+        }
+
+        let (_directory, manager, installer) = setup("duplicate-replacement");
+        let PackageInspectionResult::Compatible {
+            manifest, facts, ..
+        } = inspect_plugin_package(&valid_package(), &versions())
+        else {
+            panic!("fixture should be compatible");
+        };
+        seed_replacement_target(
+            &manager,
+            &installer,
+            &manifest.plugin_id,
+            &manifest.version,
+            &facts.package_digest.value,
+            Vec::new(),
+        );
+        let result = installer
+            .prepare_replacement_bytes(
+                &valid_package(),
+                &replacement_request(&manager, &manifest.plugin_id),
+            )
+            .expect("duplicate is a normal result");
+        assert!(matches!(result, PluginReplacementResult::Duplicate { .. }));
+        assert!(installer
+            .preparation
+            .lock()
+            .expect("preparation should be readable")
+            .is_none());
+    }
+
+    #[test]
+    fn replacement_prepare_rejects_invalid_incompatible_and_cross_plugin_candidates() {
+        let fixture = |path: &str| {
+            fs::read(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../fixtures/plugin-package-format")
+                    .join(path),
+            )
+            .expect("package fixture should exist")
+        };
+        let candidates = [
+            (
+                fixture("invalid/not-zstandard.lxp"),
+                PluginReplacementErrorCode::InvalidPackage,
+            ),
+            (
+                fixture("incompatible/manifest-incompatible.lxp"),
+                PluginReplacementErrorCode::Incompatible,
+            ),
+        ];
+        for (index, (candidate, expected)) in candidates.into_iter().enumerate() {
+            let (_directory, manager, installer) = setup(&format!("replacement-reject-{index}"));
+            let PackageInspectionResult::Compatible { manifest, .. } =
+                inspect_plugin_package(&valid_package(), &versions())
+            else {
+                panic!("fixture should be compatible");
+            };
+            seed_replacement_target(
+                &manager,
+                &installer,
+                &manifest.plugin_id,
+                "0.0.1",
+                &"5".repeat(64),
+                Vec::new(),
+            );
+            let error = installer
+                .prepare_replacement_bytes(
+                    &candidate,
+                    &replacement_request(&manager, &manifest.plugin_id),
+                )
+                .expect_err("unsafe candidate should fail");
+            assert_eq!(error.code, expected);
+            assert_eq!(manager.registration_revision(), "1");
+        }
+
+        let (_directory, manager, installer) = setup("replacement-cross-plugin");
+        seed_replacement_target(
+            &manager,
+            &installer,
+            "com.other.plugin",
+            "0.0.1",
+            &"6".repeat(64),
+            Vec::new(),
+        );
+        let error = installer
+            .prepare_replacement_bytes(
+                &valid_package(),
+                &replacement_request(&manager, "com.other.plugin"),
+            )
+            .expect_err("cross-plugin candidate should fail");
+        assert_eq!(error.code, PluginReplacementErrorCode::IdentityMismatch);
+        assert_eq!(manager.registration_revision(), "1");
+    }
+
+    #[test]
+    fn replacement_commit_preserves_state_narrows_grants_and_cleans_old_payload() {
+        let (_directory, manager, installer) = setup("replacement-commit");
+        let PackageInspectionResult::Compatible { manifest, .. } =
+            inspect_plugin_package(&valid_package(), &versions())
+        else {
+            panic!("fixture should be compatible");
+        };
+        let requested = manifest.requested_permissions[0].permission_id.clone();
+        let old_path = seed_replacement_target(
+            &manager,
+            &installer,
+            &manifest.plugin_id,
+            "0.0.1",
+            &"2".repeat(64),
+            vec![requested.clone(), "removed.permission".to_owned()],
+        );
+        let data_path = installer
+            .root
+            .as_ref()
+            .expect("root should exist")
+            .join(DATA_DIRECTORY)
+            .join(plugin_record_key(&manifest.plugin_id));
+        fs::create_dir_all(&data_path).expect("data subtree should be created");
+        fs::write(data_path.join("state.json"), b"preserved").expect("data should be writable");
+        let request = replacement_request(&manager, &manifest.plugin_id);
+        let prepared = installer
+            .prepare_replacement_bytes(&valid_package(), &request)
+            .expect("replacement should prepare");
+        let PluginReplacementResult::Prepared {
+            preparation_token,
+            classification,
+            ..
+        } = prepared
+        else {
+            panic!("expected prepared replacement");
+        };
+        assert_eq!(classification, PluginReplacementClassification::Upgrade);
+        let emitter = FakeEmitter::default();
+        let committed = installer
+            .commit_replacement(
+                &CommitPluginReplacementRequest {
+                    contract_version: PLUGIN_REPLACEMENT_CONTRACT_VERSION.to_owned(),
+                    preparation_token,
+                    entry_id: request.entry_id,
+                    expected_revision: request.expected_revision,
+                },
+                &emitter,
+            )
+            .expect("replacement should commit");
+        assert!(matches!(
+            committed,
+            PluginReplacementResult::Committed {
+                cleanup: PluginReplacementCleanupConclusion::Complete,
+                ref revision,
+                ..
+            } if revision == "2"
+        ));
+        let registration = manager
+            .registration(&manifest.plugin_id)
+            .expect("replacement registration should exist");
+        assert_eq!(registration.manifest.version, manifest.version);
+        assert!(registration.facts.enabled);
+        assert_eq!(registration.facts.source, PluginSource::External);
+        assert_eq!(registration.facts.granted_permission_ids, vec![requested]);
+        assert!(!old_path.exists());
+        assert_eq!(
+            fs::read(data_path.join("state.json")).expect("data should remain"),
+            b"preserved"
+        );
+        assert_eq!(
+            emitter
+                .events
+                .lock()
+                .expect("events should be readable")
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn committed_replacement_survives_event_loss_and_retries_pending_cleanup() {
+        let (_directory, manager, installer) = setup("replacement-cleanup-pending");
+        let PackageInspectionResult::Compatible { manifest, .. } =
+            inspect_plugin_package(&valid_package(), &versions())
+        else {
+            panic!("fixture should be compatible");
+        };
+        let old_path = seed_replacement_target(
+            &manager,
+            &installer,
+            &manifest.plugin_id,
+            "0.0.1",
+            &"4".repeat(64),
+            Vec::new(),
+        );
+        let request = replacement_request(&manager, &manifest.plugin_id);
+        let PluginReplacementResult::Prepared {
+            preparation_token, ..
+        } = installer
+            .prepare_replacement_bytes(&valid_package(), &request)
+            .expect("replacement should prepare")
+        else {
+            panic!("expected prepared replacement");
+        };
+        installer.set_cleanup_fault(true);
+        let result = installer
+            .commit_replacement(
+                &CommitPluginReplacementRequest {
+                    contract_version: PLUGIN_REPLACEMENT_CONTRACT_VERSION.to_owned(),
+                    preparation_token,
+                    entry_id: request.entry_id,
+                    expected_revision: request.expected_revision,
+                },
+                &FakeEmitter {
+                    fail: true,
+                    ..FakeEmitter::default()
+                },
+            )
+            .expect("event and cleanup failures are post-commit");
+        assert!(matches!(
+            result,
+            PluginReplacementResult::Committed {
+                cleanup: PluginReplacementCleanupConclusion::Pending,
+                ..
+            }
+        ));
+        assert_eq!(manager.registration_revision(), "2");
+        assert!(old_path.exists());
+
+        installer.set_cleanup_fault(false);
+        let entry_id = installed_entry_id(&manager, &manifest.plugin_id);
+        installer
+            .set_enabled(&entry_id, "2", false)
+            .expect("next trusted operation should retry orphan cleanup");
+        assert!(!old_path.exists());
+        assert_eq!(manager.registration_revision(), "3");
+        assert_eq!(
+            manager
+                .registration(&manifest.plugin_id)
+                .expect("new registration should remain")
+                .manifest
+                .version,
+            manifest.version
+        );
+    }
+
+    #[test]
+    fn replacement_is_single_use_busy_cancelable_and_stale_safe() {
+        let (_directory, manager, installer) = setup("replacement-stale");
+        let PackageInspectionResult::Compatible { manifest, .. } =
+            inspect_plugin_package(&valid_package(), &versions())
+        else {
+            panic!("fixture should be compatible");
+        };
+        let old_path = seed_replacement_target(
+            &manager,
+            &installer,
+            &manifest.plugin_id,
+            "0.0.1",
+            &"3".repeat(64),
+            Vec::new(),
+        );
+        let request = replacement_request(&manager, &manifest.plugin_id);
+        let prepared = installer
+            .prepare_replacement_bytes(&valid_package(), &request)
+            .expect("replacement should prepare");
+        let PluginReplacementResult::Prepared {
+            preparation_token, ..
+        } = prepared
+        else {
+            panic!("expected prepared replacement");
+        };
+        let busy = installer
+            .prepare_replacement_bytes(&valid_package(), &request)
+            .expect_err("only one preparation may exist");
+        assert_eq!(busy.code, PluginReplacementErrorCode::Busy);
+        manager
+            .set_enabled(&manifest.plugin_id, false)
+            .expect("concurrent lifecycle mutation should commit");
+        let error = installer
+            .commit_replacement(
+                &CommitPluginReplacementRequest {
+                    contract_version: PLUGIN_REPLACEMENT_CONTRACT_VERSION.to_owned(),
+                    preparation_token,
+                    entry_id: request.entry_id,
+                    expected_revision: request.expected_revision,
+                },
+                &FakeEmitter::default(),
+            )
+            .expect_err("stale preparation must fail");
+        assert_eq!(error.code, PluginReplacementErrorCode::StaleRevision);
+        assert!(old_path.exists());
+        assert_eq!(manager.registration_revision(), "2");
+        assert!(installer
+            .preparation
+            .lock()
+            .expect("preparation should be readable")
+            .is_none());
     }
 
     #[test]

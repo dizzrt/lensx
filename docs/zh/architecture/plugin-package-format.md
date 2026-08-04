@@ -9,9 +9,9 @@ TypeScript reference implementation 与 Host-private Rust inspector 消费同一
 
 Package protocol 本身只描述并检查字节；它不拥有 source path、installation layout、Plugin Manager
 mutation、lifecycle、公共 CLI 或 development-directory input。Host 私有本地安装器和 lifecycle
-coordinator 是该协议的独立消费方：installation 可以把一个选中的兼容包复制到 Host-owned application
-data 并创建首条 external registration，uninstall 只能删除已证明受管理的 payload。两者都不会改变有效
-`.lxp` 的定义。
+lifecycle/replacement coordinator 是该协议的独立消费方：installation 可以把一个选中的兼容包复制到
+Host-owned application data 并创建首条 external registration，replacement 可以分类并原子激活同 identity
+的兼容包，uninstall 只能删除已证明受管理的 payload。三者都不会改变有效 `.lxp` 的定义。
 
 ## Canonical Layout
 
@@ -46,7 +46,8 @@ Path 是使用 `/` 分隔的 NFC UTF-8 相对路径，最多 100 UTF-8 bytes 和
 - Zstandard frame checksum 用于快速发现传输损坏；
 - 每文件 SHA-256 records 建立内部文件/checksum 一致性；
 - algorithm-labelled package digest 是完整 `.lxp` 每个字节的 SHA-256，并建立后续可信 Host workflow 消费的
-  package identity。
+  package identity。本地 replacement 使用 digest 相等判断 `duplicate`，并结合不同 digest 与 SemVer 顺序
+  分类 `upgrade | downgrade | reinstall`；digest 是完整性/identity fact，不是 authenticity 或 update 授权。
 
 Author Manifest 不能声明 package digest、安装来源/路径、enabled state、grant、lifecycle、Runtime state、
 signature status 或 official/verified provenance。Publisher 文本仍是不可信 author data。
@@ -94,13 +95,14 @@ Zstandard/TAR traversal、header 检查、path rules、entry facts、checksums �
 source，也不会调用宽松 archive unpack API。文件通过 `create_new` 创建在新的 Host-owned staging directory
 内，并在同文件系统原子 commit 前完成刷新。
 
-Source-file race 检查、staging 与 digest-directory layout、Manager registration/removal、共享进程与文件
-lock、rollback、独立的按需 plugin-data 与 cleanup-record root，以及 recovery 由 installer 和 lifecycle
-coordinator 拥有，而不是 package protocol `0.1.0`。Package bytes 不能声明 source、installed path、
-enabled intent、grants、Runtime state、lifecycle operation 或 data-retention policy。Application-local
-installer store 也与已签名 application bundle 分离：在 macOS 上，删除 `lensX.app` 并不能保证
-Application Support 数据被清理。带显式 retain/delete data policy 的 Host 私有 plugin uninstall 已交付；
-应用卸载清理和 upgrade/rollback 仍是后续 lifecycle change。
+Source-file race 检查、staging 与 digest-directory layout、唯一 active Manager pointer、registration
+replacement/removal、共享进程与文件 lock、提交前恢复、独立的按需 plugin-data 与 cleanup-record root，以及
+orphan cleanup 由 installer 和 lifecycle/replacement coordinator 拥有，而不是 package protocol `0.1.0`。
+Package bytes 不能声明 source、installed path、enabled intent、grants、Runtime state、lifecycle operation、
+active pointer、update policy、rollback history 或 data-retention policy；package protocol 也不验证签名或决定
+source 是否可信。Application-local installer store 与已签名 application bundle 分离：在 macOS 上，删除
+`lensX.app` 并不能保证 Application Support 数据被清理。Host 私有 plugin uninstall 和同 identity 本地
+replacement 已交付；应用卸载清理、远程/自动更新策略、签名与用户主动 rollback history 仍是独立后续工作。
 
 ## 已审查依赖
 

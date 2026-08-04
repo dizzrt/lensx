@@ -10,9 +10,10 @@ diagnostics, and whole-package digest.
 
 The package protocol itself describes and inspects bytes only. It does not own a source path, installation layout,
 Plugin Manager mutation, lifecycle, public CLI, or development-directory input. The Host-private local installer and
-lifecycle coordinator are separate consumers of this protocol: installation can copy one selected compatible package
-into Host-owned application data and create the first external registration, while uninstall can delete only a proven
-managed payload. Neither changes what constitutes a valid `.lxp`.
+lifecycle/replacement coordinators are separate consumers of this protocol: installation can copy one selected
+compatible package into Host-owned application data and create the first external registration, replacement can
+classify and atomically activate a same-identity compatible package, and uninstall can delete only a proven managed
+payload. None changes what constitutes a valid `.lxp`.
 
 ## Canonical Layout
 
@@ -49,7 +50,9 @@ Three integrity values have different roles:
 - the Zstandard frame checksum catches transport corruption quickly;
 - per-file SHA-256 records establish internal file/checksum consistency;
 - the algorithm-labelled package digest is SHA-256 over every byte of the complete `.lxp` file and establishes the
-  package identity consumed by later trusted Host workflows.
+  package identity consumed by later trusted Host workflows. Local replacement uses digest equality for `duplicate`
+  and uses a different digest plus SemVer ordering for `upgrade | downgrade | reinstall` classification; a digest is
+  an integrity/identity fact, not authenticity or update authorization.
 
 The author Manifest cannot declare the package digest, installation source/path, enabled state, grants, lifecycle,
 Runtime state, signature status, or official/verified provenance. Publisher text remains untrusted author data.
@@ -98,13 +101,15 @@ canonical Zstandard/TAR traversal, header checks, path rules, entry facts, check
 reopen the selected source or call a permissive archive unpack API. Files are created with `create_new` inside a new
 Host-owned staging directory and are flushed before an atomic same-filesystem commit.
 
-The installer and lifecycle coordinator, rather than package protocol `0.1.0`, own the source-file race checks,
-staging and digest-directory layout, Manager registration/removal, shared process and file locks, rollback, separate
-on-demand plugin-data and cleanup-record roots, and recovery. Package bytes do not declare their source, installed
-path, enabled intent, grants, Runtime state, lifecycle operation, or data-retention policy. The application-local
-installer store is also separate from the signed application bundle: on macOS, deleting `lensX.app` does not
-guarantee removal of the Application Support data. Host-private plugin uninstall with explicit retain/delete data
-policy is shipped; application uninstall cleanup and upgrade/rollback remain future lifecycle changes.
+The installer and lifecycle/replacement coordinators, rather than package protocol `0.1.0`, own the source-file race
+checks, staging and digest-directory layout, the single active Manager pointer, registration replacement/removal,
+shared process and file locks, pre-commit recovery, separate on-demand plugin-data and cleanup-record roots, and
+orphan cleanup. Package bytes do not declare their source, installed path, enabled intent, grants, Runtime state,
+lifecycle operation, active pointer, update policy, rollback history, or data-retention policy. The package protocol
+also does not verify signatures or decide whether a source is trusted. The application-local installer store is
+separate from the signed application bundle: on macOS, deleting `lensX.app` does not guarantee removal of the
+Application Support data. Host-private plugin uninstall and local same-identity replacement are shipped; application
+uninstall cleanup, remote/automatic update policy, signing, and user-initiated rollback history remain separate work.
 
 ## Reviewed Dependencies
 

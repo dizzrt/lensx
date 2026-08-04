@@ -4,12 +4,13 @@
 
 This document separates the shipped static plugin Manifest contract, `.lxp`
 package inspection and local installation, Plugin SDK foundation, Plugin
-Testkit, optional Plugin UI package, and Host-private Plugin surface projection
-and Page navigation, and Host-private lifecycle controls from the intended
-runtime extension boundary. Public packaging CLI, distribution, plugin
-execution, complete permission decisions, iframe transport, signing, the Host
-API, complete plugin-management UI, and upgrade/rollback are not currently
-implemented. Stable specs and source code define the shipped subset.
+Testkit, optional Plugin UI package, Host-private Plugin surface projection and
+Page navigation, Host-private lifecycle controls, and local package replacement
+from the intended runtime extension boundary. Public packaging CLI,
+distribution, plugin execution, complete permission decisions, iframe
+transport, signing, the Host API, complete plugin-management UI, remote
+updates, and user-initiated rollback history are not currently implemented.
+Stable specs and source code define the shipped subset.
 
 ## Goals
 
@@ -262,10 +263,11 @@ serialize recovery, installation, and lifecycle cleanup. Staging uses
 `packages/<v1-plugin-id-utf8-lowercase-hex>/<package-sha256>`, on-demand plugin
 data uses `data/<v1-plugin-id-utf8-lowercase-hex>`, and durable cleanup intent
 uses `.cleanup/<v1-plugin-id-utf8-lowercase-hex>.json`. First installation does
-not create a plugin data directory. This remains a single-registration digest
-layout: it deliberately creates no `versions` or `transactions` and does not
-interpret a different version or digest as upgrade, downgrade, reinstall, or
-repair.
+not create a plugin data directory. This is a single-active-registration digest
+layout. First installation still rejects an existing healthy or quarantined
+identity; the separate replacement workflow below may commit a different
+compatible digest for the same healthy identity without changing this
+installation command's semantics.
 
 After the flushed staging directory is atomically renamed on the same
 filesystem, the coordinator registers the normalized Manifest with a complete
@@ -291,9 +293,9 @@ the installer unavailable or degraded rather than inviting speculative cleanup.
 The installer root is application-local data. On macOS it is separate from the
 signed `lensX.app` bundle and normally resides in the application's Application
 Support area; directly deleting `lensX.app` does not guarantee that this data
-is removed. Host-private plugin uninstall is shipped below. A dedicated
-application uninstaller and upgrade/rollback behavior require later accepted
-changes.
+is removed. Host-private plugin uninstall and local replacement are shipped
+below. A dedicated application uninstaller, remote update policy, and
+user-initiated rollback history require later accepted changes.
 
 ## Shipped Host-Private Registration Contract
 
@@ -388,7 +390,66 @@ Run `pnpm run check:plugin-lifecycle-controls` for the dedicated Rust,
 TypeScript, surface-convergence, workspace-boundary, and packed-public-package
 gate. These controls intentionally add no management UI, plugin Runtime,
 permission decision workflow, public lifecycle API, application uninstall, or
-upgrade/rollback behavior.
+replacement behavior; replacement is the separate private capability below.
+
+## Shipped Host-Private Local Plugin Replacement
+
+The root application now has an independent private Plugin Replacement
+Contract `0.1.0`. Its pathless prepare command accepts only the current healthy
+entry identity and observed Registration revision, opens one native `.lxp`
+picker, and returns `cancelled`, `duplicate`, or a bounded `prepared` result.
+Prepared results contain an opaque process-local token, from/to versions, an
+`upgrade | downgrade | reinstall` classification, and sorted added/removed
+permission IDs. They never contain the source or staging path, package digest,
+Store key, package bytes, or a native error. The commit and cancel commands
+accept only that token and its original entry/revision binding. The Contract,
+desktop adapter, token, and service remain unavailable to public packages and
+plugin code.
+
+Prepare reuses the immutable capped source read, package inspection,
+compatibility policy, and restricted extraction used by first installation.
+An identical complete package digest is `duplicate` and creates no token.
+Otherwise SemVer ordering classifies the explicit local choice but never blocks
+a compatible downgrade or same-version reinstall. A mismatched plugin ID,
+quarantine entry, noncanonical current path/digest, stale revision, or changed
+staging evidence fails closed. At most one preparation exists in a Host process;
+cancel, failed commit, service destruction, and startup recovery remove its
+staging, and tokens do not survive restart.
+
+Commit shares the installation/lifecycle process mutex and `.install.lock`. It
+re-reads Manager and canonical filesystem facts, re-inspects the immutable
+bytes, verifies every staged file, atomically renames the candidate to a sibling
+digest directory, flushes that directory, and asks the Manager for one
+revision-bound complete record replacement. The version-1 Manager record's
+Manifest, installation path, and digest remain the only active pointer; there
+is no second pointer, `previous` record, version history, or rollback catalog.
+Manager persistence and in-memory publication are the durable commit point.
+
+The next registration preserves source, enabled intent, bounded diagnostics,
+and the independent plugin-data subtree; recomputes compatibility; and resets
+Runtime to `inactive`. Grants become exactly the intersection of the old grants
+and the candidate's requested permission IDs, so new requests are never granted
+automatically and removed requests cannot retain grants. Before the Rust commit,
+the trusted TypeScript service withdraws Action then Page surfaces. A pre-commit
+failure restores the original Page then Action projection. After commit it
+refreshes and waits for the committed revision in Page-then-Action order; a
+convergence failure reports the committed revision and leaves surfaces fail
+closed rather than rolling back durable state.
+
+After the Manager commit, the old canonical payload is deleted without
+following links. A deletion or changed-event failure cannot roll back the new
+record: the result remains `committed` with cleanup `pending`, and a later
+trusted operation or startup recovery retries only canonical non-active
+siblings. Unsafe names, symlinks, root escapes, and healthy/quarantine ownership
+conflicts are preserved as evidence and block unsafe writes. This capability
+does not provide remote or automatic updates, user-initiated rollback,
+multi-version retention, Runtime health rollback, data migration, a permission
+or management UI, signature verification, or quarantine repair.
+
+Run `pnpm run check:plugin-upgrade-and-rollback` for the private contract,
+adapter/service, boundary, package/registration/lifecycle regression, packed
+public-package, and focused Rust gate. The command never publishes packages or
+rewrites fixture baselines.
 
 ## Shipped Host-Private Plugin Surface Projection And Page Navigation
 
@@ -742,12 +803,12 @@ method exists.
 
 ## Capability Delivery
 
-The static Manifest format, validators, Host-private local installation,
-revision-bound enable/disable/uninstall infrastructure, Plugin surface
-projection, production Action activation, Page Registry/navigation, and
-Runtime-free Host placeholder are delivered. Each remaining capability—complete
-plugin-management UI, complete permissions, scoped resources, Host API methods,
-public packaging, upgrade/rollback, iframe Runtime execution, or sidecars—
-requires its own accepted specification and implementation evidence. This
-architectural document defines direction and boundaries, not a release
-checklist.
+The static Manifest format, validators, Host-private local installation and
+same-identity replacement, revision-bound enable/disable/uninstall
+infrastructure, Plugin surface projection, production Action activation, Page
+Registry/navigation, and Runtime-free Host placeholder are delivered. Each
+remaining capability—complete plugin-management UI, complete permissions,
+scoped resources, Host API methods, public packaging, remote/automatic updates,
+user-initiated rollback history, iframe Runtime execution, or sidecars—requires
+its own accepted specification and implementation evidence. This architectural
+document defines direction and boundaries, not a release checklist.

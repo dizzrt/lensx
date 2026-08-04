@@ -11,6 +11,7 @@ pub mod plugin_manifest;
 #[doc(hidden)]
 pub mod plugin_package_format;
 pub mod plugin_registration;
+pub mod plugin_replacement_contract;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -25,7 +26,10 @@ pub fn run() {
             launcher_action_collections::set_launcher_action_pinned,
             launcher_surface::set_launcher_surface_mode,
             launcher_window::hide_launcher,
+            plugin_installer::cancel_plugin_replacement,
+            plugin_installer::commit_local_plugin_replacement,
             plugin_installer::install_local_plugin,
+            plugin_installer::prepare_local_plugin_replacement,
             plugin_lifecycle::set_plugin_enabled,
             plugin_lifecycle::uninstall_plugin,
             plugin_registration::read_plugin_registration_detail,

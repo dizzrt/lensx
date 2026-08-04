@@ -3,10 +3,10 @@
 ## 文档状态
 
 本文区分已经交付的静态插件 Manifest 契约、`.lxp` package inspection 与本地安装、Plugin SDK
-foundation、Plugin Testkit、可选 Plugin UI package、Host 私有 Plugin surface 投影与 Page 导航，
-Host 私有生命周期控制，以及预期的运行时扩展边界。公共 packaging CLI、分发、插件执行、完整权限
-决策、iframe transport、签名、Host API、完整插件管理 UI 和 upgrade/rollback 当前尚未实现。稳定
-spec 和源码共同决定已经交付的子集。
+foundation、Plugin Testkit、可选 Plugin UI package、Host 私有 Plugin surface 投影与 Page 导航、
+Host 私有生命周期控制、本地 package replacement，以及预期的运行时扩展边界。公共 packaging CLI、
+分发、插件执行、完整权限决策、iframe transport、签名、Host API、完整插件管理 UI、远程更新和用户
+主动 rollback history 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
 
 ## 目标
 
@@ -202,9 +202,10 @@ Installer state 位于 `app_local_data_dir()/plugins`，与 Manager Store 相互
 `.staging/<random-id>`，已提交 payload 使用
 `packages/<v1-plugin-id-utf8-lowercase-hex>/<package-sha256>`，按需插件数据使用
 `data/<v1-plugin-id-utf8-lowercase-hex>`，持久 cleanup intent 使用
-`.cleanup/<v1-plugin-id-utf8-lowercase-hex>.json`。首次安装不会创建 plugin data directory。这仍是
-single-registration digest layout：它有意不创建 `versions` 或 `transactions`，也不会把不同 version
-或 digest 解释为 upgrade、downgrade、reinstall 或 repair。
+`.cleanup/<v1-plugin-id-utf8-lowercase-hex>.json`。首次安装不会创建 plugin data directory。这是
+single-active-registration digest layout。首次安装仍拒绝已有健康或 quarantine identity；下文独立的
+replacement workflow 可以为同一健康 identity 提交另一个兼容 digest，但不会改变首次安装 command
+的语义。
 
 在已刷新的 staging directory 于同一文件系统原子 rename 后，协调器使用完整 Host facts 注册 normalized
 Manifest：已提交绝对路径、带算法标签的 digest、`source=external`、`enabled=true`、空 grants 和
@@ -222,7 +223,8 @@ intent 的 quarantine-key subtree、未知 entry、symlink 以及 installer root
 
 Installer root 属于 application-local data。在 macOS 上，它与已签名的 `lensX.app` bundle 分离，通常位于
 应用的 Application Support 区域；直接删除 `lensX.app` 并不能保证这些数据被清理。Host 私有 plugin
-uninstall 已在下文交付；专用应用卸载器和 upgrade/rollback 仍需要后续已接受 change。
+uninstall 与本地 replacement 已在下文交付；专用应用卸载器、远程更新策略和用户主动 rollback
+history 仍需要后续已接受 change。
 
 ## 已交付的 Host 私有 Registration Contract
 
@@ -285,7 +287,47 @@ Uninstall 必须显式选择 `retain_data` 或 `delete_data` policy。Host 会�
 
 专用 Rust、TypeScript、surface convergence、workspace boundary 与公共 package 打包门禁是
 `pnpm run check:plugin-lifecycle-controls`。这些控制有意不增加管理 UI、plugin Runtime、权限决策流程、
-公共 lifecycle API、应用卸载或 upgrade/rollback 行为。
+公共 lifecycle API、应用卸载或 replacement 行为；replacement 是下文独立的私有能力。
+
+## 已交付的 Host 私有本地插件替换
+
+根应用现已交付独立的私有 Plugin Replacement Contract `0.1.0`。无路径参数的 prepare command
+只接受当前健康 entry identity 与调用方观察到的 Registration revision，打开一个原生 `.lxp` picker，
+并返回 `cancelled`、`duplicate` 或有界 `prepared` 结果。Prepared 结果包含进程内 opaque token、
+from/to version、`upgrade | downgrade | reinstall` 分类，以及排序后的新增/移除 permission ID；不会包含
+source/staging path、package digest、Store key、package bytes 或原始 native error。Commit 与 cancel
+只接受该 token 及其原 entry/revision 绑定。Contract、desktop adapter、token 与 service 都不会向公共
+package 或插件代码开放。
+
+Prepare 复用首次安装的不可变 capped source read、package inspection、compatibility policy 与受限
+extraction。完整 package digest 相同即为 `duplicate`，不会创建 token。否则 SemVer 顺序只分类用户
+显式选择，不阻止 compatible downgrade 或同版本 reinstall。plugin ID 不匹配、quarantine entry、当前
+path/digest 非规范、revision 过期或 staging evidence 改变都会 fail closed。每个 Host 进程最多保留一个
+preparation；cancel、失败 commit、service destroy 和 startup recovery 会清理 staging，token 不跨重启。
+
+Commit 与 installation/lifecycle 共用进程 mutex 和 `.install.lock`。它重新读取 Manager 与 canonical
+filesystem facts，重新 inspection 不可变 bytes，校验每个 staging 文件，把候选原子 rename 到 sibling
+digest directory 并刷新，然后要求 Manager 完成一次绑定 revision 的完整 record replacement。Version-1
+Manager record 中的 Manifest、installation path 和 digest 继续是唯一 active pointer；不存在第二 pointer、
+`previous` record、version history 或 rollback catalog。Manager persistence 与内存发布是 durable commit
+point。
+
+Next registration 保留 source、enabled intent、有界 diagnostics 和独立 plugin-data subtree，重新计算
+compatibility，并把 Runtime 重置为 `inactive`。Grants 精确收缩为旧 grants 与候选 requested permission
+ID 的交集，因此新增请求不会自动授权，移除请求也不会残留 grant。在 Rust commit 前，可信 TypeScript
+service 先撤销 Action 再撤销 Page surface；提交前失败按 Page 后 Action 恢复原投影。提交后 service 主动
+刷新并等待 committed revision 按 Page 后 Action 收敛；收敛失败会报告 committed revision 并让 surface
+fail closed，而不会回滚 durable state。
+
+Manager commit 后，Host 以 no-follow 方式删除旧 canonical payload。删除或 changed-event 失败不能回滚
+新 record：结果仍为 `committed` 且 cleanup 为 `pending`，后续可信操作或 startup recovery 只重试 canonical
+non-active sibling。异常名称、symlink、root escape 以及 healthy/quarantine ownership 冲突会被保留为证据，
+并阻止不安全写入。本能力不提供远程/自动更新、用户主动 rollback、多版本保留、Runtime health rollback、
+data migration、权限/管理 UI、签名验证或 quarantine repair。
+
+运行 `pnpm run check:plugin-upgrade-and-rollback` 可执行私有 contract、adapter/service、boundary、
+package/registration/lifecycle 回归、公共 package 打包与 Rust focused 门禁。该命令不会发布 package，
+也不会重写 fixture baseline。
 
 ## 已交付的 Host 私有 Plugin Surface 投影与 Page 导航
 
@@ -565,8 +607,8 @@ Host API 方法应当保持小型、类型化、版本化，并且可以独立�
 
 ## 能力交付
 
-静态 Manifest 格式、校验器、Host 私有本地安装、绑定 revision 的 enable/disable/uninstall 基础设施、
-Plugin surface 投影、生产 Action 激活、Page Registry/navigation 与 Runtime-free Host placeholder 已经
-交付。其余每项能力——完整插件管理 UI、完整权限、scoped resources、Host API 方法、公共打包、
-upgrade/rollback、iframe Runtime 执行或 sidecar——都需要独立的已接受规格和实现证据。本文定义架构
-方向和边界，不是发布检查清单。
+静态 Manifest 格式、校验器、Host 私有本地安装与同 identity replacement、绑定 revision 的
+enable/disable/uninstall 基础设施、Plugin surface 投影、生产 Action 激活、Page Registry/navigation 与
+Runtime-free Host placeholder 已经交付。其余每项能力——完整插件管理 UI、完整权限、scoped resources、
+Host API 方法、公共打包、远程/自动更新、用户主动 rollback history、iframe Runtime 执行或 sidecar——
+都需要独立的已接受规格和实现证据。本文定义架构方向和边界，不是发布检查清单。

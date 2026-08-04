@@ -293,6 +293,11 @@ pub(crate) struct PluginManagerRemoval {
     pub change: PluginRegistrationChangedEvent,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct PluginManagerReplacement {
+    pub change: PluginRegistrationChangedEvent,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PluginManagerRecoveryReport {
     pub degraded: bool,
@@ -581,6 +586,58 @@ impl PluginManager {
             .write_record(&PluginRecordV1::from_registration(&next))?;
         snapshot.healthy.insert(plugin_id.to_owned(), next);
         Ok(Some(snapshot.commit_change()))
+    }
+
+    pub(crate) fn replace_entry(
+        &self,
+        entry_id: &str,
+        expected_revision: &str,
+        manifest: NormalizedPluginManifest,
+        facts: PluginRegistrationFacts,
+    ) -> Result<PluginManagerReplacement, PluginManagerDiagnostic> {
+        self.reject_degraded_write()?;
+        facts.validate()?;
+        let compatibility = validate_normalized_manifest(&manifest, &self.versions)?;
+        let mut snapshot = self.lock_snapshot();
+        if snapshot.revision.to_string() != expected_revision {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::StaleRevision,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        }
+        let entry = Self::resolve_lifecycle_entry_locked(&snapshot, entry_id)?;
+        let PluginManagerLifecycleEntry::Healthy {
+            plugin_id,
+            registration: current,
+            ..
+        } = entry
+        else {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::InvalidState,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        };
+        if manifest.plugin_id != plugin_id
+            || facts.source != current.facts.source
+            || facts.enabled != current.facts.enabled
+        {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::IdentityMismatch,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        }
+        let registration = PluginRegistration {
+            manifest,
+            facts,
+            compatibility,
+            runtime: PluginRuntimeState::Inactive,
+        };
+        self.store
+            .write_record(&PluginRecordV1::from_registration(&registration))?;
+        snapshot.healthy.insert(plugin_id, registration);
+        Ok(PluginManagerReplacement {
+            change: snapshot.commit_change(),
+        })
     }
 
     pub(crate) fn set_enabled_entry(
@@ -883,6 +940,11 @@ impl PluginManagerStore {
         let contents = serde_json::to_vec_pretty(record)
             .map_err(|_| PluginManagerDiagnostic::persist_failed())?;
         let target_path = directory.join(format!("{}.json", record.record_key));
+        let previous = match fs::read(&target_path) {
+            Ok(bytes) => Some(bytes),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(_) => return Err(PluginManagerDiagnostic::persist_failed()),
+        };
         let sequence = TEMP_FILE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let temp_path = directory.join(format!(
             ".{}.{}.{}.tmp",
@@ -907,11 +969,22 @@ impl PluginManagerStore {
                 .sync_all()
                 .map_err(|_| PluginManagerDiagnostic::persist_failed())?;
             self.fail_if_requested(WriteFault::Replace)?;
-            fs::rename(&temp_path, target_path)
-                .map_err(|_| PluginManagerDiagnostic::persist_failed())
+            fs::rename(&temp_path, &target_path)
+                .map_err(|_| PluginManagerDiagnostic::persist_failed())?;
+            self.fail_if_requested(WriteFault::ParentSync)?;
+            sync_directory(directory)
         })();
         if write_result.is_err() {
             let _ = fs::remove_file(&temp_path);
+            match previous {
+                Some(bytes) => {
+                    let _ = restore_record_bytes(&target_path, &bytes);
+                }
+                None => {
+                    let _ = fs::remove_file(&target_path);
+                }
+            }
+            let _ = sync_directory(directory);
         }
         write_result
     }
@@ -1198,6 +1271,114 @@ mod tests {
                 .facts
                 .enabled
         );
+    }
+
+    #[test]
+    fn replacement_is_revision_bound_atomic_and_keeps_register_duplicate_semantics() {
+        let directory = TestDirectory::new("replacement");
+        let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
+        let mut current = manifest("com.acme.replace", "0.2.0");
+        current.version = "1.0.0".to_owned();
+        manager
+            .register(current, facts(true))
+            .expect("initial registration should succeed");
+        let entry = entry_id(&manager, "com.acme.replace");
+        let mut candidate = manifest("com.acme.replace", "0.2.0");
+        candidate.version = "2.0.0".to_owned();
+        let next_facts = PluginRegistrationFacts::with_grants(
+            "/tmp/lensx-plugin-next",
+            PackageDigest {
+                algorithm: "sha256".to_owned(),
+                value: "eeff0011".to_owned(),
+            },
+            PluginSource::External,
+            true,
+            vec!["lensx.filesystem.read_selected".to_owned()],
+        )
+        .expect("replacement facts should be valid");
+
+        let stale = manager
+            .replace_entry(&entry, "0", candidate.clone(), next_facts.clone())
+            .expect_err("stale revision should fail");
+        assert_eq!(stale.code(), PluginManagerDiagnosticCode::StaleRevision);
+        assert_eq!(manager.registration_revision(), "1");
+
+        let cross_identity = manager
+            .replace_entry(
+                &entry,
+                "1",
+                manifest("com.other.plugin", "0.2.0"),
+                next_facts.clone(),
+            )
+            .expect_err("cross identity replacement should fail");
+        assert_eq!(
+            cross_identity.code(),
+            PluginManagerDiagnosticCode::IdentityMismatch
+        );
+
+        let replacement = manager
+            .replace_entry(&entry, "1", candidate, next_facts)
+            .expect("replacement should commit");
+        assert_eq!(replacement.change.revision, "2");
+        let current = manager
+            .registration("com.acme.replace")
+            .expect("replacement registration should exist");
+        assert_eq!(current.manifest.version, "2.0.0");
+        assert_eq!(current.runtime, PluginRuntimeState::Inactive);
+        assert_eq!(manager.registration_revision(), "2");
+        let duplicate = manager
+            .register(manifest("com.acme.replace", "0.2.0"), facts(true))
+            .expect_err("register must continue rejecting duplicate identity");
+        assert_eq!(
+            duplicate.code(),
+            PluginManagerDiagnosticCode::DuplicateIdentity
+        );
+        assert_eq!(manager.registration_revision(), "2");
+    }
+
+    #[test]
+    fn replacement_write_faults_preserve_old_memory_and_disk_record() {
+        for fault in [
+            WriteFault::Create,
+            WriteFault::Write,
+            WriteFault::Sync,
+            WriteFault::Replace,
+            WriteFault::ParentSync,
+        ] {
+            let directory = TestDirectory::new("replacement-write-fault");
+            let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
+            let mut current = manifest("com.acme.atomicreplace", "0.2.0");
+            current.version = "1.0.0".to_owned();
+            manager
+                .register(current, facts(true))
+                .expect("initial registration should succeed");
+            let entry = entry_id(&manager, "com.acme.atomicreplace");
+            let mut candidate = manifest("com.acme.atomicreplace", "0.2.0");
+            candidate.version = "2.0.0".to_owned();
+            manager.set_write_fault(Some(fault));
+            manager
+                .replace_entry(&entry, "1", candidate, facts(true))
+                .expect_err("write fault should preserve current registration");
+            assert_eq!(manager.registration_revision(), "1");
+            assert_eq!(
+                manager
+                    .registration("com.acme.atomicreplace")
+                    .expect("current registration should remain")
+                    .manifest
+                    .version,
+                "1.0.0"
+            );
+            manager.set_write_fault(None);
+            let recovered = PluginManager::recover(&directory.path, versions("0.1.0"));
+            assert_eq!(
+                recovered
+                    .registration("com.acme.atomicreplace")
+                    .expect("old disk record should remain")
+                    .manifest
+                    .version,
+                "1.0.0"
+            );
+        }
     }
 
     #[test]
