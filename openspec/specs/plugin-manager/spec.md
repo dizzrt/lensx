@@ -4,10 +4,10 @@
 
 Define the accepted Host-private Plugin Manager state, persistence, recovery,
 compatibility, quarantine, diagnostics, and Tauri managed-state boundaries.
-This capability establishes an internal installed-registration fact source but
-does not claim delivery of a public registration contract, package installer,
-plugin Runtime, permission decision system, Action or Page projection, or
-frontend management surface.
+This capability establishes an internal installed-registration fact source and
+revision-bound grant mutation, but does not claim delivery of a public
+registration contract, package installer, plugin Runtime, user-facing
+permission workflow, Action or Page projection, or frontend management surface.
 
 ## Requirements
 
@@ -210,19 +210,21 @@ retain its current isolation reason.
 - **THEN** persisted diagnostics omit the raw error object, stack, and
   unnecessary sensitive paths
 
-### Requirement: The first Plugin Manager capability MUST remain Host-private
+### Requirement: Plugin Manager authority MUST remain Host-private
 
-This capability MUST deliver only the Rust Host-private Manager, Store,
-recovery report, and Tauri managed state. It MUST NOT claim delivery of a
-public Registration Contract, Tauri command, frontend query or management UI,
-Action or Page projection, plugin installation or removal, iframe Runtime,
-Host API, or permission decision.
+The Plugin Manager MUST expose its Manager, Store, recovery report, lifecycle
+transitions, and revision-bound grant mutation only to trusted Host services.
+It MUST NOT expose raw Manager state or a general mutation boundary to plugins,
+the public Registration Contract, or frontend product code. This capability
+MUST NOT by itself claim delivery of a frontend query or management UI, Action
+or Page projection, package installation, iframe Runtime, public Host API, or
+user-facing permission workflow.
 
 #### Scenario: A consumer inspects the public application boundary
 
 - **WHEN** the Host-private Plugin Manager capability is present
-- **THEN** the frontend has no new Plugin Manager Tauri command, shared
-  registration payload, or management interface from this capability
+- **THEN** the frontend has no raw Plugin Manager Tauri command, shared Manager
+  payload, or management interface from this capability
 - **THEN** existing Launcher behavior remains unchanged
 
 #### Scenario: The Host recovers a registration record
@@ -304,3 +306,69 @@ degraded Store MUST produce a stable rejection without modifying state.
   overwriting unreadable evidence
 - **THEN** the application can still read the degraded Registration conclusion
   and continue Host functions that do not depend on plugins
+
+### Requirement: Grant snapshot mutations MUST be revision-bound, declaration-limited, and atomic
+
+The Plugin Manager MUST provide a Host-private mutation that changes one
+permission grant on a healthy Registration while preserving the normalized
+Manifest and every unrelated Host fact. Every mutation MUST require the current
+opaque entry identity and exact Registration revision. Granting MUST require the
+current normalized Manifest to request the permission and the current Host
+permission catalog to support it. Revocation MUST be able to remove an existing
+grant even if the permission is no longer requested or supported.
+
+The candidate grant snapshot MUST remain sorted, deduplicated, bounded, and
+Host-owned. A changed snapshot MUST be persisted through the existing atomic
+record replacement before the in-memory state is published, after which the
+Registration revision MUST advance exactly once. An idempotent target state
+MUST return unchanged without writing or advancing the revision. Source,
+Publisher text, version direction, enabled intent, and author-controlled fields
+MUST NOT affect this transition.
+
+#### Scenario: A currently requested permission is granted
+
+- **WHEN** a trusted Host caller grants a current Manifest request using the
+  current entry identity and revision
+- **THEN** the Manager atomically persists the normalized next grant snapshot
+  and publishes one new revision
+- **THEN** the normalized Manifest and unrelated Host facts remain unchanged
+
+#### Scenario: An existing permission is revoked
+
+- **WHEN** a trusted Host caller revokes an existing grant using the current
+  entry identity and revision
+- **THEN** the Manager atomically removes only that grant and publishes one new
+  revision
+- **THEN** other grants and unrelated plugin records remain unchanged
+
+#### Scenario: A grant is undeclared or unsupported
+
+- **WHEN** a caller attempts to add a permission that the current Manifest did
+  not request or the Host catalog does not support
+- **THEN** the Manager rejects the transition with a stable diagnostic
+- **THEN** memory, disk, revision, and the previous grant snapshot remain
+  unchanged
+
+#### Scenario: A grant mutation is idempotent
+
+- **WHEN** a caller grants an already granted permission or revokes a permission
+  absent from the current grant snapshot
+- **THEN** the Manager returns the current Registration without writing a record
+- **THEN** the revision and resource generation remain unchanged
+
+#### Scenario: A grant mutation loses a revision race
+
+- **WHEN** another lifecycle, replacement, installation, or permission mutation
+  advances the Registration revision before the current mutation commits
+- **THEN** the stale mutation fails with a stable conflict diagnostic
+- **THEN** it cannot overwrite the newly committed Manifest, grants, enabled
+  intent, diagnostics, or payload facts
+
+#### Scenario: Grant persistence fails
+
+- **WHEN** creation, writing, flushing, or atomic replacement of the changed
+  grant snapshot fails
+- **THEN** the Manager returns a stable persistence diagnostic and does not
+  publish a new revision
+- **THEN** the last successful in-memory and on-disk record remains
+  authoritative after restart

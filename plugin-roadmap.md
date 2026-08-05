@@ -591,9 +591,10 @@ Runtime health rollback、数据迁移、权限 UI 或完整管理 UI。
 
 **完成标准**：两个插件无法读写彼此数据；数据可跨重启恢复；超限和损坏有稳定诊断。
 
-- [ ] **Task 5.5：实现 Plugin Permission Management**
+- [x] **Task 5.5：实现 Plugin Permission Management**
 
-**OpenSpec change**：`add-plugin-permission-management`
+**OpenSpec change**：[add-plugin-permission-management](openspec/changes/archive/2026-08-05-add-plugin-permission-management/)
+（已完成并归档）
 
 **目标**：区分 Manifest 请求、用户授权、Host 支持和当前 session 有效权限。
 

@@ -25,20 +25,22 @@ MUST be rejected by the Contract or transport before reaching a handler. A
 defensive direct dispatch MUST fail with stable `method_not_found`. A declared
 method without a current production provider MUST fail with stable
 `unavailable` and MUST NOT produce a side effect. The five `storage.*` methods
-MUST route only to the Host-private scoped-storage provider; `clipboard.*`
-MUST remain unavailable until its native and permission providers are complete.
+MUST route only to the Host-private scoped-storage provider. `clipboard.read`
+and `clipboard.write` MUST route only to the Host-private, permission-backed
+plain-text clipboard provider, and MUST reauthorize the current Session against
+current Host facts before every native effect.
 
 #### Scenario: Current Session calls an implemented method
 
 - **WHEN** a current ready Session sends a Contract-valid
   `runtime.get_context`, `ui.close`, `actions.open`, `storage.get`,
-  `storage.set`, `storage.delete`, `storage.list`, or `storage.get_quota`
-  request through its authenticated Port
+  `storage.set`, `storage.delete`, `storage.list`, `storage.get_quota`,
+  `clipboard.read`, or `clipboard.write` request through its authenticated Port
 - **THEN** the Host adapter passes the lease identity, validated request, and
   Host-owned cancellation signal to that Session's Dispatcher
 - **THEN** the Dispatcher invokes only the narrow provider for that method and
-  does not allow the request to select an identity, storage namespace, path, or
-  executor
+  does not allow the request to select an identity, storage namespace, path,
+  native clipboard object, permission decision, or executor
 
 #### Scenario: Plugin attempts to forge authority
 
@@ -51,15 +53,23 @@ MUST remain unavailable until its native and permission providers are complete.
 - **THEN** no plugin, Page, Registration, permission, storage namespace, or
   Host service is operated through the forged value
 
-#### Scenario: Method is unknown or not yet implemented
+#### Scenario: Method is unknown or its provider is unavailable
 
 - **WHEN** a caller invokes a method outside the Host API catalog, invokes a
-  storage method while its provider is not currently available, or invokes
-  `clipboard.*` before complete native and permission providers exist
+  storage method while its provider is unavailable, or invokes a clipboard
+  method while its native or permission provider is unavailable
 - **THEN** an unknown method fails with stable `method_not_found`, and a
   declared but unavailable method fails with stable `unavailable`
-- **THEN** the Dispatcher invokes no fallback storage, clipboard, native,
-  permission, or arbitrary executor
+- **THEN** the Dispatcher invokes no fallback storage, clipboard, browser,
+  native, permission, or arbitrary executor
+
+#### Scenario: Clipboard authorization is absent
+
+- **WHEN** a current Session invokes a clipboard method that its Manifest did
+  not request or its current Registration did not grant
+- **THEN** the Dispatcher returns stable `permission_denied`
+- **THEN** no native clipboard read or write occurs, and clipboard content does
+  not enter an error or diagnostic
 
 ### Requirement: Runtime Context MUST derive from current Host facts and real provider availability
 
@@ -75,10 +85,12 @@ the call. Production capabilities delivered through the Dispatcher MUST include
 the real `runtime.get_context`, `ui.close`, `actions.open`, `storage.get`,
 `storage.set`, `storage.delete`, `storage.list`, and `storage.get_quota`
 providers while their corresponding Host services and current namespace remain
-available. `clipboard.*` without complete current permission and native
-providers MUST NOT appear. Context MUST NOT include plugin or Page identity,
+available. `clipboard.read` and `clipboard.write` MUST appear independently only
+when the current platform has the narrow native provider, the permission
+catalog supports that method, and the Session identity contains the
+corresponding actual grant. Context MUST NOT include plugin or Page identity,
 source, Manifest requests, raw grants, Registration revision, storage usage,
-paths, executors, or Host lifecycle objects.
+clipboard content, paths, executors, or Host lifecycle objects.
 
 While the same Session remains current, a real locale, theme, or capability
 snapshot change, including confirmed storage-provider degradation or recovery,
@@ -90,20 +102,22 @@ MUST terminate the old Session and MUST NOT reauthorize it through an event.
 #### Scenario: SDK initializes from a real Context
 
 - **WHEN** the official iframe transport sends its initialization
-  `runtime.get_context` request on a current ready Session whose storage provider
-  is available
+  `runtime.get_context` request on a current ready Session whose storage
+  provider is available and whose identity has one currently supported
+  clipboard grant
 - **THEN** the Dispatcher returns the current Host API version, locale, theme,
   and sorted callable capability snapshot including all five storage methods
-- **THEN** the SDK can pass Contract validation and call storage without
+  and only the granted clipboard method
+- **THEN** the SDK passes Contract validation and can call those methods without
   receiving the former production placeholder `unavailable`
 
 #### Scenario: Unavailable capabilities are excluded from Context
 
-- **WHEN** the scoped-storage provider is unavailable for the current identity,
-  or clipboard native and permission providers are not delivered
-- **THEN** Context capabilities exclude the affected methods
+- **WHEN** scoped storage is unavailable, the native clipboard provider is
+  unavailable, or the Session lacks one clipboard grant
+- **THEN** Context capabilities exclude only the affected methods
 - **THEN** catalog membership, a Manifest permission request, official
-  provenance, or old grant snapshot does not turn a method into a current
+  provenance, or a stale grant snapshot does not turn a method into a current
   capability
 
 #### Scenario: Storage namespace becomes degraded
@@ -129,7 +143,8 @@ MUST terminate the old Session and MUST NOT reauthorize it through an event.
 - **WHEN** a Registration revision, resource generation, Runtime attempt, or
   grant snapshot change makes the old Session identity no longer current
 - **THEN** the old Session terminates through the existing lifecycle and
-  rejects new calls
+  rejects new calls, including clipboard calls initiated before event
+  convergence
 - **THEN** `runtime.context_changed` does not give the old Session a new
   identity or reauthorize it
 
@@ -265,35 +280,38 @@ Production `PluginRuntimeFrame` MUST install a real Session-scoped Dispatcher
 for a current ready lease instead of a fixed unavailable handler. Tests MUST
 retain explicit fake or unavailable binding injection. Delivery MUST cover
 Dispatcher unit tests, Navigation and Action regressions, all five scoped
-storage methods, real SDK and MessageChannel round trips, concurrency,
-cancellation, replacement, cleanup, malicious or stale identity, complete
-Context events, response-before-close ordering, persistent storage restart and
-target macOS WKWebView evidence.
+storage methods, both independently authorized clipboard methods, real SDK and
+MessageChannel round trips, concurrency, cancellation, replacement, cleanup,
+malicious or stale identity, complete Context events, response-before-close
+ordering, persistent storage restart, permission revocation, bounded native
+clipboard evidence, and target macOS WKWebView evidence.
 
 English architecture, workspace, and validation documentation and their
 same-path Simplified Chinese mirrors MUST distinguish delivery status for the
 Host API Contract, transport, Dispatcher, permission, storage, and RPC
 validation. Root frontend build, type checking, tests, formatting and static
 checks, plus Rust formatting, tests, and static checks, MUST pass without
-regression. This capability MUST NOT claim delivery of clipboard native
-execution, complete permission management, general RPC limits, templates, CLI,
-or development mode.
+regression. This capability MUST NOT claim delivery of permission prompts or
+settings, general RPC limits, templates, CLI, or development mode.
 
-#### Scenario: Production Dispatcher and storage loop passes
+#### Scenario: Production Dispatcher, storage, and clipboard loops pass
 
 - **WHEN** an external plugin uses only the public Contract and SDK tarballs to
-  initialize and call the eight implemented methods on a real Runtime Session
-- **THEN** Context, Page close, same-plugin Action and scoped persistent storage
-  complete through the same authenticated Port and real Host providers with
-  stable results, errors, isolation and terminal cleanup
+  initialize and call the ten implemented methods on a real Runtime Session
+- **THEN** Context, Page close, same-plugin Action, scoped persistent storage,
+  and independently granted plain-text clipboard operations complete through
+  the same authenticated Port and real Host providers with stable results,
+  errors, isolation, per-call authorization, and terminal cleanup
 - **THEN** the plugin neither needs nor can import Host-private modules, private
-  wire types, Tauri, storage paths, cursor codecs, or executors
+  wire types, Tauri, storage paths, cursor codecs, native clipboard objects,
+  permission coordinators, or executors
 
-#### Scenario: Later methods remain undelivered
+#### Scenario: Permission UI and RPC limits remain undelivered
 
-- **WHEN** the Task 5.4 focused and complete validation gates pass while the
-  permission or RPC-limit changes remain incomplete
-- **THEN** scoped `storage.*` methods are callable, while `clipboard.*` remains
-  excluded from current capabilities and fails closed with stable errors
-- **THEN** the Roadmap and documentation mark Task 5.4 complete but do not
-  describe Task 5.5, Task 5.6, or Milestone 5 as complete
+- **WHEN** the Task 5.5 focused and complete validation gates pass while the
+  permission UI and RPC-limit changes remain incomplete
+- **THEN** scoped `storage.*` methods and currently granted clipboard methods
+  are callable, while permission prompts, settings, and general RPC limits
+  remain unavailable
+- **THEN** the Roadmap and documentation mark Task 5.5 complete but do not
+  describe Task 5.6 or Milestone 5 as complete

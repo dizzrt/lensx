@@ -8,7 +8,8 @@ package。workspace 为公共 package 和插件建立开发拓扑、lifecycle �
 `@lensx/plugin-ui` package，但仓库验证不会执行 registry 发布操作。workspace 尚未提供插件 CLI。
 Host 已能安装/注册并打开受支持的本地插件，SDK 也提供认证 iframe transport；production Host 私有
 Dispatcher 已实现 `runtime.get_context`、`ui.close`、`actions.open` 与五个 plugin-scoped `storage.*` method。
-clipboard method 不会进入当前 capabilities，并稳定返回 `unavailable`。Contract package 独立交付完整十方法 Host API
+只有 current Session 获得对应 grant 且 native provider 可用时，每个 clipboard method 才会独立进入 capabilities。
+Contract package 独立交付完整十方法 Host API
 语义 catalog 与 validator，不代表所有 provider 都可用。
 
 已经交付的静态 Manifest 契约仍然只负责验证。package 位于本 workspace 内，并不代表它

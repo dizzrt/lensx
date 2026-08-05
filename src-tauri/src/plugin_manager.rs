@@ -298,6 +298,19 @@ pub(crate) struct PluginManagerReplacement {
     pub change: PluginRegistrationChangedEvent,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct PluginManagerGrantMutation {
+    pub change: Option<PluginRegistrationChangedEvent>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum PluginManagerPermissionCheckError {
+    InvalidIdentity,
+    PermissionDenied,
+    StaleSession,
+    Unavailable,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PluginManagerRecoveryReport {
     pub degraded: bool,
@@ -355,6 +368,7 @@ struct PluginManagerSnapshot {
     healthy: BTreeMap<String, PluginRegistration>,
     quarantined: BTreeMap<String, QuarantineStub>,
     resource_generations: BTreeMap<String, u64>,
+    relevant_revisions: BTreeMap<String, u64>,
     next_resource_generation: u64,
 }
 
@@ -394,6 +408,7 @@ impl PluginManager {
                                     },
                                 );
                             } else {
+                                snapshot.relevant_revisions.insert(plugin_id.clone(), 0);
                                 snapshot.healthy.insert(plugin_id, registration);
                             }
                         }
@@ -637,7 +652,7 @@ impl PluginManager {
         snapshot.quarantined.remove(&key);
         snapshot.healthy.insert(plugin_id.clone(), registration);
         snapshot.advance_resource_generation(&plugin_id);
-        Ok(Some(snapshot.commit_change()))
+        Ok(Some(snapshot.commit_relevant_change(&plugin_id)))
     }
 
     pub fn set_enabled(
@@ -661,7 +676,7 @@ impl PluginManager {
             .write_record(&PluginRecordV1::from_registration(&next))?;
         snapshot.healthy.insert(plugin_id.to_owned(), next);
         snapshot.advance_resource_generation(plugin_id);
-        Ok(Some(snapshot.commit_change()))
+        Ok(Some(snapshot.commit_relevant_change(plugin_id)))
     }
 
     pub(crate) fn replace_entry(
@@ -713,7 +728,7 @@ impl PluginManager {
         snapshot.healthy.insert(plugin_id.clone(), registration);
         snapshot.advance_resource_generation(&plugin_id);
         Ok(PluginManagerReplacement {
-            change: snapshot.commit_change(),
+            change: snapshot.commit_relevant_change(&plugin_id),
         })
     }
 
@@ -755,7 +770,143 @@ impl PluginManager {
             .healthy
             .insert(plugin_id.clone(), registration.clone());
         snapshot.advance_resource_generation(&plugin_id);
-        Ok((registration, Some(snapshot.commit_change())))
+        Ok((
+            registration,
+            Some(snapshot.commit_relevant_change(&plugin_id)),
+        ))
+    }
+
+    pub(crate) fn set_permission_grant(
+        &self,
+        entry_id: &str,
+        expected_revision: &str,
+        permission_id: &str,
+        granted: bool,
+        host_supported: bool,
+    ) -> Result<PluginManagerGrantMutation, PluginManagerDiagnostic> {
+        self.reject_degraded_write()?;
+        if !is_safe_permission_id(permission_id) {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::InvalidState,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        }
+        let mut snapshot = self.lock_snapshot();
+        if snapshot.revision.to_string() != expected_revision {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::StaleRevision,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        }
+        let entry = Self::resolve_lifecycle_entry_locked(&snapshot, entry_id)?;
+        let PluginManagerLifecycleEntry::Healthy {
+            plugin_id,
+            mut registration,
+            ..
+        } = entry
+        else {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::InvalidState,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        };
+        let currently_granted = registration
+            .facts
+            .granted_permission_ids
+            .binary_search_by(|candidate| candidate.as_str().cmp(permission_id))
+            .is_ok();
+        if currently_granted == granted {
+            return Ok(PluginManagerGrantMutation { change: None });
+        }
+        if granted
+            && (!host_supported
+                || !registration
+                    .manifest
+                    .requested_permissions
+                    .iter()
+                    .any(|request| request.permission_id == permission_id))
+        {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::InvalidState,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        }
+        if granted {
+            registration
+                .facts
+                .granted_permission_ids
+                .push(permission_id.to_owned());
+            registration.facts.granted_permission_ids.sort();
+            registration.facts.granted_permission_ids.dedup();
+        } else {
+            registration
+                .facts
+                .granted_permission_ids
+                .retain(|candidate| candidate != permission_id);
+        }
+        registration.facts.validate()?;
+        self.store
+            .write_record(&PluginRecordV1::from_registration(&registration))?;
+        snapshot
+            .healthy
+            .insert(plugin_id.clone(), registration.clone());
+        let change = snapshot.commit_relevant_change(&plugin_id);
+        Ok(PluginManagerGrantMutation {
+            change: Some(change),
+        })
+    }
+
+    pub(crate) fn authorize_permission_call(
+        &self,
+        entry_id: &str,
+        plugin_id: &str,
+        version: &str,
+        session_revision: &str,
+        permission_id: &str,
+    ) -> Result<(), PluginManagerPermissionCheckError> {
+        if self.recovery_report.degraded {
+            return Err(PluginManagerPermissionCheckError::Unavailable);
+        }
+        let session_revision = session_revision
+            .parse::<u64>()
+            .map_err(|_| PluginManagerPermissionCheckError::InvalidIdentity)?;
+        let snapshot = self.lock_snapshot();
+        let registration = snapshot
+            .healthy
+            .get(plugin_id)
+            .ok_or(PluginManagerPermissionCheckError::InvalidIdentity)?;
+        if healthy_entry_id(registration) != entry_id || registration.manifest.version != version {
+            return Err(PluginManagerPermissionCheckError::InvalidIdentity);
+        }
+        if session_revision
+            < snapshot
+                .relevant_revisions
+                .get(plugin_id)
+                .copied()
+                .unwrap_or_default()
+        {
+            return Err(PluginManagerPermissionCheckError::StaleSession);
+        }
+        if !registration.facts.enabled
+            || !registration.compatibility.lensx
+            || !registration.compatibility.host_api
+        {
+            return Err(PluginManagerPermissionCheckError::Unavailable);
+        }
+        if !registration
+            .manifest
+            .requested_permissions
+            .iter()
+            .any(|request| request.permission_id == permission_id)
+            || registration
+                .facts
+                .granted_permission_ids
+                .binary_search_by(|candidate| candidate.as_str().cmp(permission_id))
+                .is_err()
+        {
+            return Err(PluginManagerPermissionCheckError::PermissionDenied);
+        }
+        Ok(())
     }
 
     pub(crate) fn remove_entry(
@@ -777,6 +928,7 @@ impl PluginManager {
             PluginManagerLifecycleEntry::Healthy { plugin_id, .. } => {
                 snapshot.healthy.remove(plugin_id);
                 snapshot.resource_generations.remove(plugin_id);
+                snapshot.relevant_revisions.remove(plugin_id);
             }
             PluginManagerLifecycleEntry::Quarantined { record_key, .. } => {
                 snapshot.quarantined.remove(record_key);
@@ -840,6 +992,13 @@ impl PluginManagerSnapshot {
             .checked_add(1)
             .expect("Plugin Manager revision should not overflow during one process");
         PluginRegistrationChangedEvent::new(self.revision)
+    }
+
+    fn commit_relevant_change(&mut self, plugin_id: &str) -> PluginRegistrationChangedEvent {
+        let change = self.commit_change();
+        self.relevant_revisions
+            .insert(plugin_id.to_owned(), self.revision);
+        change
     }
 }
 

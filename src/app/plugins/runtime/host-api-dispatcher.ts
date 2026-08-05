@@ -17,6 +17,12 @@ import {
 import type { LauncherActionService } from '../../launcher/actions';
 import type { HostPageTarget } from '../../navigation';
 import {
+  PLUGIN_PERMISSION_CATALOG,
+  PluginClipboardBoundaryError,
+  type PluginClipboardProviderFactory,
+  type PluginClipboardRequest,
+} from '../permission';
+import {
   PLUGIN_SCOPED_STORAGE_METHODS,
   PluginScopedStorageBoundaryError,
   type PluginScopedStorageProviderFactory,
@@ -35,6 +41,7 @@ const BASE_IMPLEMENTED_METHODS = Object.freeze([
 ] as const satisfies readonly HostApiMethod[]);
 const baseImplementedMethodSet = new Set<HostApiMethod>(BASE_IMPLEMENTED_METHODS);
 const storageMethodSet = new Set<HostApiMethod>(PLUGIN_SCOPED_STORAGE_METHODS);
+const clipboardMethodSet = new Set<HostApiMethod>(['clipboard.read', 'clipboard.write']);
 const catalogMethodSet = new Set<HostApiMethod>(HOST_API_METHOD_CATALOG.map(({ method }) => method));
 
 const errors = Object.freeze({
@@ -45,6 +52,7 @@ const errors = Object.freeze({
   methodNotFound: Object.freeze({ code: 'method_not_found', message: 'The Host API method was not found.' }),
   limitExceeded: Object.freeze({ code: 'limit_exceeded', message: 'The Host API limit was exceeded.' }),
   notFound: Object.freeze({ code: 'not_found', message: 'The requested Host resource was not found.' }),
+  permissionDenied: Object.freeze({ code: 'permission_denied', message: 'The Host API permission was denied.' }),
   unavailable: Object.freeze({ code: 'unavailable', message: 'The Host API is unavailable.' }),
 }) satisfies Readonly<Record<string, HostApiError>>;
 
@@ -72,6 +80,7 @@ export interface PluginHostApiDispatcherDependencies {
   readonly context: PluginHostApiContextSource;
   readonly navigation: PluginHostApiNavigation;
   readonly storage?: PluginScopedStorageProviderFactory;
+  readonly clipboard?: PluginClipboardProviderFactory;
 }
 
 export interface CreatePluginHostApiDispatcherBindingInput {
@@ -137,10 +146,18 @@ const validateResult = (result: HostApiResult): HostApiResult | HostApiError =>
 const availableMethods = (
   identity: PluginRuntimeSessionIdentity,
   storageAvailable: boolean,
+  clipboardAvailable: boolean,
 ): readonly HostApiMethod[] =>
   Object.freeze(
     HOST_API_METHOD_CATALOG.flatMap(({ method, permission }) =>
-      (baseImplementedMethodSet.has(method) || (storageAvailable && storageMethodSet.has(method))) &&
+      (baseImplementedMethodSet.has(method) ||
+        (storageAvailable && storageMethodSet.has(method)) ||
+        (clipboardAvailable &&
+          clipboardMethodSet.has(method) &&
+          permission !== null &&
+          PLUGIN_PERMISSION_CATALOG.some(
+            (entry) => entry.permission_id === permission && entry.supported && entry.methods.includes(method),
+          ))) &&
       (permission === null || identity.granted_permission_ids.includes(permission))
         ? [method]
         : [],
@@ -151,13 +168,14 @@ const createContextSnapshot = (
   source: PluginHostApiContextSource,
   identity: PluginRuntimeSessionIdentity,
   storageAvailable: boolean,
+  clipboardAvailable: boolean,
 ): PluginRuntimeContext => {
   const state = source.snapshot();
   const validation = validatePluginRuntimeContext({
     hostApiVersion: PLUGIN_HOST_API_VERSION,
     locale: state.locale,
     theme: state.theme,
-    capabilities: availableMethods(identity, storageAvailable),
+    capabilities: availableMethods(identity, storageAvailable, clipboardAvailable),
   });
   if (validation.status === 'invalid') throw new TypeError('Invalid Host-owned Runtime Context snapshot.');
   return validation.value;
@@ -179,9 +197,15 @@ export const createPluginHostApiDispatcherFactory = (
       let emitterAttached = false;
       let latestContext: PluginRuntimeContext | undefined;
       const storage = dependencies.storage?.create({ identity, isCurrent });
+      const clipboard = dependencies.clipboard?.create({ identity, isCurrent });
 
       const readContext = (): PluginRuntimeContext => {
-        const context = createContextSnapshot(dependencies.context, identity, storage?.available() ?? false);
+        const context = createContextSnapshot(
+          dependencies.context,
+          identity,
+          storage?.available() ?? false,
+          clipboard?.available() ?? false,
+        );
         latestContext = context;
         return context;
       };
@@ -196,7 +220,12 @@ export const createPluginHostApiDispatcherFactory = (
         if (disposed || !isCurrent()) return;
         try {
           const previous = latestContext;
-          const next = createContextSnapshot(dependencies.context, identity, storage?.available() ?? false);
+          const next = createContextSnapshot(
+            dependencies.context,
+            identity,
+            storage?.available() ?? false,
+            clipboard?.available() ?? false,
+          );
           latestContext = next;
           if (previous && sameContext(previous, next)) return;
           emitter?.(Object.freeze({ event: 'runtime.context_changed', payload: next }));
@@ -206,6 +235,7 @@ export const createPluginHostApiDispatcherFactory = (
       };
       const unsubscribeContext = dependencies.context.subscribe(publishContext);
       const unsubscribeStorage = storage?.subscribeAvailability(publishContext) ?? (() => undefined);
+      const unsubscribeClipboard = clipboard?.subscribeAvailability(publishContext) ?? (() => undefined);
 
       const handler: PluginRuntimeTransportHandler = async ({ request: requestInput, signal }) => {
         const unavailable = isAvailable(disposed, isCurrent, signal);
@@ -279,8 +309,34 @@ export const createPluginHostApiDispatcherFactory = (
               }
             }
             case 'clipboard.read':
-            case 'clipboard.write':
-              return errors.unavailable;
+            case 'clipboard.write': {
+              const requiredPermission = HOST_API_METHOD_CATALOG.find(
+                ({ method }) => method === request.method,
+              )?.permission;
+              if (!requiredPermission || !identity.granted_permission_ids.includes(requiredPermission)) {
+                return errors.permissionDenied;
+              }
+              if (!clipboard?.available()) return errors.unavailable;
+              const current = isAvailable(disposed, isCurrent, signal);
+              if (current) return current;
+              try {
+                const result = await clipboard.execute(request as PluginClipboardRequest, signal);
+                const completed = isAvailable(disposed, isCurrent, signal);
+                if (completed) return completed;
+                return validateResult(result);
+              } catch (error) {
+                if (!(error instanceof PluginClipboardBoundaryError)) return errors.internal;
+                return error.code === 'cancelled'
+                  ? errors.cancelled
+                  : error.code === 'permission_denied'
+                    ? errors.permissionDenied
+                    : error.code === 'limit_exceeded'
+                      ? errors.limitExceeded
+                      : error.code === 'unavailable'
+                        ? errors.unavailable
+                        : errors.internal;
+              }
+            }
           }
         } catch {
           return errors.internal;
@@ -306,7 +362,9 @@ export const createPluginHostApiDispatcherFactory = (
           emitter = undefined;
           unsubscribeContext();
           unsubscribeStorage();
+          unsubscribeClipboard();
           storage?.dispose();
+          clipboard?.dispose();
         },
       });
       return binding;

@@ -6,8 +6,8 @@
 foundation、Plugin Testkit、可选 Plugin UI package、Host 私有 Plugin surface 投影与 Page 导航、
 Host 私有生命周期控制、本地 package replacement、Host 私有 scoped resource service、隔离 iframe
 Runtime、进程内 Runtime Session、公共 SDK iframe transport、Host 私有 Port adapter、公共 Host API
-语义契约与预期的运行时扩展边界。公共 packaging CLI、分发、完整插件执行 lifecycle、完整权限决策、
-签名、storage 与 permission-backed Host API 执行、完整插件管理 UI、远程更新和用户
+语义契约、Host 私有 permission core 与 macOS 文本剪贴板 provider 和预期的运行时扩展边界。公共
+packaging CLI、分发、完整插件执行 lifecycle、permission prompt/settings/history、签名、完整插件管理 UI、远程更新和用户
 主动 rollback history 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
 
 ## 目标
@@ -294,7 +294,7 @@ stack、函数或 Tauri 对象。publisher、source、enabled intent、requested
 grant snapshot 都是相互独立的事实；任何一项都不能建立信任或自动授权。该 contract 不会安装、
 更新、卸载、enable、disable、执行或渲染插件。Registration Contract 本身仍然只读；下文的 Host
 私有 lifecycle 与 Action 投影核心消费它，但不改变 wire contract。管理 UI、真实 Runtime session、
-完整权限决策、签名和 Host API method 仍未实现。
+Host API method 与 permission core 已在本文其他章节交付；permission prompt/settings/history 与签名仍未实现。
 
 ## 已交付的 Host 私有 Plugin Lifecycle Controls
 
@@ -643,7 +643,8 @@ fallback。
 生产组合初始化该协调器，在 Launcher activation 与 listener recovery 时刷新，并在 cleanup 时销毁
 同一 subscription。available Plugin Page 会把 current resolution 交给已交付的 Host 私有 iframe
 Runtime resolver。surface projection 仍不会向插件暴露 route、entry ID、revision、origin fact、resource
-URL 或 native object。Task 5.5 完整权限管理仍未实现。
+URL 或 native object。Host 私有 Task 5.5 permission core 与文本剪贴板路径现已实现；permission prompt、
+settings 与 decision history 仍不属于本次交付。
 
 ## 已交付的公共 Plugin SDK 与 iframe Transport
 
@@ -703,7 +704,8 @@ Host 最多消费 ready lease 一次。私有 adapter 向窄 handler 注入不�
 cancellation signal，校验所有 result/error/event，支持并发乱序 settle，并让 Session/Page replacement
 与 dispose 收敛到幂等 cleanup。Production 会为每个 current ready Session 创建一个 Host 私有 Dispatcher
 binding。该 binding 实现 `runtime.get_context`、`ui.close`、`actions.open` 与五个 `storage.*` method；
-clipboard method 继续稳定返回 `unavailable`，并且不会进入 Context capabilities。私有 post-response outcome 让 adapter
+当匹配的 Session grant 与 native provider current 时，它还会分别暴露 `clipboard.read` 与
+`clipboard.write`。私有 post-response outcome 让 adapter
 先校验并发送成功的 `ui.close` result，再执行匹配目标的关闭 effect。该 outcome 永不跨 wire，也不改变
 公共 SDK transport。
 
@@ -719,7 +721,8 @@ request 不能选择 owner、Page、provider、executor、route、Tauri command�
 
 `runtime.get_context` 返回 Host API `0.1.0`、当前 `en-US | zh-CN` locale、当前 `light | dark` theme，
 以及排序并冻结的 `actions.open`、`runtime.get_context`、五个 `storage.*` method 与 `ui.close` capability
-snapshot（scoped-storage provider 可用时）。只有当前 locale、
+snapshot（scoped-storage provider 可用时）；每个 clipboard method 仅在自身 grant 与 provider 可用时独立进入
+snapshot。只有当前 locale、
 theme 或 capability snapshot 实际变化时才发送完整 `runtime.context_changed` replacement。identity、
 Registration revision、Runtime attempt、source、Manifest request、raw grant、path 与 Host lifecycle state
 继续保持私有。
@@ -731,13 +734,40 @@ core、跨插件、缺失、禁用、不兼容或已移除的 Action 都会失�
 
 storage 调用只使用认证 Session lease 中冻结的 identity。Dispatcher 把该 identity 注入 Host 私有 desktop
 provider，绝不接受插件选择的 namespace、path、plugin key、command 或 executor。确认 namespace 损坏或
-blocked 后，Host 只发送一次移除五个 storage capability 的完整 Context replacement；clipboard 在 native
-与 permission provider 交付前继续不可用。
+blocked 后，Host 只发送一次移除五个 storage capability 的完整 Context replacement；它不会改变独立授权的
+clipboard capability。
 
 运行 `pnpm run check:plugin-host-api-dispatcher` 可执行 Dispatcher、Navigation、Action、Runtime、
 MessageChannel、公共 tarball、export、dependency 与 workspace boundary 聚焦门禁。该能力不增加公共 export、
-wire frame 或 SDK dependency，也不交付 clipboard execution、permission management、
-通用 RPC resource limit、项目模板、CLI 或开发模式。
+wire frame 或 SDK dependency。通用 RPC resource limit、项目模板、CLI 与开发模式仍是独立能力。
+
+## 已交付的 Host 私有 Plugin Permission Core 与文本剪贴板
+
+Host 从公共 Host API method/permission catalog 推导唯一闭集 permission catalog。`clipboard.read` 与
+`clipboard.write` 是两个独立的 sensitive permission。Manifest request 与本地化 author reason 只用于展示；
+持久化 Host grant 与它们保持分离，effective view 报告 `not_requested`、`unsupported`、`not_granted` 或
+`granted`。官方与外部插件遵循完全相同的规则。
+
+grant mutation 仅接受 main Host window 发起且携带精确 current Manager revision 的请求。grant 要求健康的已安装
+entry、current Manifest request 与 Host 支持；replacement Manifest 不再请求某权限后，revoke 仍可清理残留 grant。
+幂等 decision 不写盘也不推进 revision。Manager durable commit 是 decision point；之后 invalidation event 发送失败
+不会回滚已提交 grant。
+
+每次 native effect 都会用不可变 Runtime Session identity 对 live Manager entry、相关 plugin revision、
+compatibility、enabled state、Manifest request 与当前持久化 grant 重新授权。grant mutation 与 clipboard effect
+共享同一进程 coordinator，因此已经完成的 revoke 不会与之后的 privileged effect 竞态；其他插件的变更也不会
+使原本 current 的 Session 失效。
+
+macOS Host 在 main thread 直接使用 AppKit `NSPasteboard` 执行纯文本读写，严格校验 request/result/error 边界，
+并限制为 1,048,576 个字符。空或非文本读取返回空字符串；其他目标平台报告 provider unavailable。隔离 iframe
+仍由 Permissions Policy 禁用 browser clipboard，且不会获得 Tauri command、native clipboard object、path、
+raw grant 或 fallback channel。
+
+运行 `pnpm run check:plugin-permission-management` 可验证共享 TypeScript/Rust fixture、持久化/recovery、
+revision 与竞态行为、Dispatcher 与真实 SDK/MessageChannel、package boundary，以及既有 macOS WKWebView
+transport evidence。在 macOS 串行运行 `pnpm run check:plugin-permission-management:native` 可执行真实 pasteboard
+smoke。本交付不增加 prompt/settings/history UI、产品 copy、通用 permission framework、通用 RPC limit、模板、
+CLI、签名、marketplace 或 browser clipboard fallback。
 
 ## 已交付的插件 Scoped Storage
 
@@ -895,7 +925,7 @@ dispatcher。特权行为仍然必须是明确的 Host capability，并具有自
 
 生产环境注册 Host 内建的隐藏 launcher 和打开设置 Action，并在 available Page target 提交后通过
 已交付 surface 协调器发布合格 Plugin Action。静态 Manifest 契约本身仍不会注册 Action。安全插件
-icon 解析、完整权限决策、生命周期写操作和外部 Runtime 执行仍是独立能力。最近使用与已
+icon 解析、permission UI/history、生命周期写操作和外部 Runtime 执行仍是独立能力。最近使用与已
 固定集合继续只保存 Action ID，因此投影 Action 会在 provider 缺失时隐藏，并在相同稳定 ID 返回时
 恢复解析。
 
@@ -938,8 +968,8 @@ iframe
   -> 私有闭合 request/response/event/cancel wire
   -> 注入 Session-derived identity 的 Host Port adapter
   -> Session-scoped Host 私有 Dispatcher
-  -> Context / 匹配当前 Page 的关闭 / 当前插件 Action
-  -. 后续 storage、permission 与 native provider .-> 窄 Rust command
+  -> Context / 匹配当前 Page 的关闭 / 当前插件 Action / scoped storage
+  -> permission-authorized 文本剪贴板 -> 窄 Rust command
 ```
 
 Bridge 必须校验真实消息来源和受限制的 origin。已声明权限不等于已授予权限。特权方法必须在
@@ -971,6 +1001,7 @@ Host API 方法保持小型、类型化、版本化，并且可以独立测试�
 enable/disable/uninstall 基础设施、scoped package-relative resources、Plugin surface 投影、生产
 Action 激活、Page Registry/navigation、macOS 隔离 iframe Runtime、Host 私有进程内 Runtime Session、
 公共 SDK iframe transport/Host Port adapter、公共 Host API 语义契约、Host 私有 Dispatcher 与插件 scoped
-storage provider 已经交付。其余每项能力——完整插件管理 UI、完整权限、clipboard provider、通用 RPC limit、公共打包、
+storage provider、permission core 与 macOS 文本剪贴板 provider 已经交付。其余每项能力——完整插件管理 UI、
+permission prompt/settings/history、通用 RPC limit、公共打包、
 远程/自动更新、用户主动 rollback history 或 sidecar——
 都需要独立的已接受规格和实现证据。本文定义架构方向和边界，不是发布检查清单。

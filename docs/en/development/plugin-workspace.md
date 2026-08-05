@@ -12,8 +12,8 @@ provide a plugin CLI. The Host can install/register and open a supported local
 plugin, the SDK supplies the authenticated iframe transport, and the production
 Host-private Dispatcher implements `runtime.get_context`, `ui.close`,
 `actions.open`, and the five plugin-scoped `storage.*` methods. Clipboard
-methods are omitted from current capabilities and return stable `unavailable`
-errors. The Contract
+methods are exposed independently only for a current granted Session while the
+native provider is available. The Contract
 package ships the complete ten-method semantic catalog and validators
 independently of provider availability.
 

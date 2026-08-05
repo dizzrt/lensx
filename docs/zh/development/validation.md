@@ -206,8 +206,8 @@ SDK/Host-adapter fixture。
 result/error/event round-trip、乱序 response、取消、replacement/close cleanup、pending termination 与
 privileged handler zero-hit。evidence 不含 URL、nonce、Port 内容、payload、token、identity、path、grant
 或 private error。该门禁证明公共 transport 与 Host adapter；独立 Dispatcher 与 scoped-storage 门禁证明
-当前 production provider。它不证明 clipboard permission/native execution、通用 RPC limit 或 Windows/Linux
-Runtime transport。
+当前 production provider。permission-management 门禁补充 clipboard authorization、provider 与真实 native
+smoke evidence。两者都不证明通用 RPC limit 或 Windows/Linux Runtime transport。
 
 ## Plugin Host API Dispatcher 验证
 
@@ -222,12 +222,38 @@ pnpm run check:plugin-host-api-dispatcher
 workspace boundary 聚焦测试。它还打包真实公共 Contract/SDK tarball，并验证 Dispatcher binding、
 Session identity、private wire value、Host service 与 post-response effect 不进入公共 export 或 declaration。
 Context capability snapshot 在当前 namespace 可用时包含 `actions.open`、`runtime.get_context`、`ui.close`
-与五个 `storage.*` method；`clipboard.*` 继续不可用。
+与五个 `storage.*` method；每个 `clipboard.*` method 仅在 current matching grant 与 native provider 可用时
+独立进入 snapshot。
 
 现有目标 macOS WKWebView transport evidence 仍用于验证认证 Port、取消、replacement 与 terminal cleanup。
 production-style MessageChannel fixture 增加 Dispatcher Context、Action、storage 与 response-before-close
-证据，但不把 fake native boundary 描述成 Rust persistence、clipboard、permission 或通用 RPC 交付。该聚焦门禁只补充
+证据，但不把 fake native boundary 描述成 Rust persistence、真实 native clipboard execution 或通用 RPC 交付。该聚焦门禁只补充
 完整 frontend/Rust validation 集合，不能替代它们。
+
+## Plugin Permission Management 验证
+
+修改 Host 私有 permission catalog、effective view、Manager grant mutation、clipboard command/provider、
+Dispatcher clipboard routing、Runtime capability、共享 fixture 或 permission 文档时，必须运行：
+
+```bash
+pnpm run check:plugin-permission-management
+```
+
+该门禁验证 TypeScript/Rust 完全共享的 exact contract fixture、闭集 catalog 推导、request/reason/grant 分离、
+绑定 revision 且幂等 durable 的 grant mutation、重启 recovery、degraded/quarantined fail-closed、残留 grant
+revoke、event delivery failure、其他插件变更稳定性与 grant/native-effect linearization。它还覆盖独立 Dispatcher
+capability、不可变 trusted Session identity、cancellation/currentness、安全 error、真实 SDK/MessageChannel loop、
+公共 package boundary 与既有有界 macOS WKWebView transport evidence。
+
+在目标 macOS 上串行运行真实纯文本 pasteboard smoke：
+
+```bash
+pnpm run check:plugin-permission-management:native
+```
+
+smoke 会在 read/write/empty 检查后恢复原始纯文本 clipboard。WKWebView evidence 证明隔离认证 Port，且 iframe
+没有 browser clipboard 或 Tauri fallback；native smoke 证明直接 AppKit boundary。这两组互补检查都不能被描述为
+Windows/Linux provider 支持或 prompt/settings/history UI 测试。
 
 ## Plugin Scoped Storage 验证
 

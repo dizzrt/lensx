@@ -8,10 +8,10 @@ Testkit, optional Plugin UI package, Host-private Plugin surface projection and
 Page navigation, Host-private lifecycle controls, local package replacement,
 the Host-private scoped resource service, isolated iframe Runtime,
 process-local Runtime Session, public SDK iframe transport, Host-private Port
-adapter, and public Host API semantic contract from the
-intended runtime extension boundary. Public packaging CLI,
-distribution, complete plugin execution lifecycle, complete permission
-decisions, signing, storage and permission-backed Host API execution, complete plugin-management UI, remote
+adapter, public Host API semantic contract, Host-private permission core, and
+the macOS text-clipboard provider from the intended runtime extension boundary.
+Public packaging CLI, distribution, complete plugin execution lifecycle,
+permission prompts/settings/history, signing, complete plugin-management UI, remote
 updates, and user-initiated rollback history are not currently implemented.
 Stable specs and source code define the shipped subset.
 
@@ -388,8 +388,9 @@ or automatic authorization. The Registration Contract itself remains read-only:
 it does not install, update, uninstall, enable, disable, execute, or render
 plugins. The downstream Host-private lifecycle and Action projection cores
 consume it without changing that wire contract. Management UI, real Runtime
-sessions, complete permission decisions, signatures, and Host API methods
-remain unimplemented.
+sessions, Host API methods, and the permission core are delivered elsewhere in
+this document. Permission prompts/settings/history and signatures remain
+unimplemented.
 
 ## Shipped Host-Private Plugin Lifecycle Controls
 
@@ -875,7 +876,9 @@ activation and listener recovery, and destroys the same subscription on
 cleanup. An available Plugin Page passes its current resolution to the shipped
 Host-private iframe Runtime resolver. Surface projection still does not expose
 routes, entry IDs, revisions, origin facts, resource URLs, or native objects to
-plugins. Task 5.5 complete permission management remains unimplemented.
+plugins. The Host-private Task 5.5 permission core and text clipboard path are
+now implemented; permission prompts, settings, and decision history remain
+outside this delivery.
 
 ## Shipped Public Plugin SDK And iframe Transport
 
@@ -958,8 +961,9 @@ out-of-order settlement, and converges Session/Page replacement and disposal
 on idempotent cleanup. Production creates one Host-private Dispatcher binding
 for every current ready Session. That binding implements
 `runtime.get_context`, `ui.close`, `actions.open`, and the five `storage.*`
-methods; clipboard methods remain stable `unavailable` results and are omitted
-from Context capabilities. A private post-response outcome lets the adapter validate and
+methods. It also exposes `clipboard.read` and `clipboard.write` independently
+when the matching Session grant and native provider are current. A private
+post-response outcome lets the adapter validate and
 post a successful `ui.close` result before running the target-matched close
 effect. It never crosses the wire or changes the public SDK transport.
 
@@ -979,7 +983,9 @@ executor, route, Tauri command, grant, or other Host object.
 `runtime.get_context` returns Host API `0.1.0`, the current `en-US | zh-CN`
 locale, current `light | dark` theme, and the sorted frozen capability snapshot
 `actions.open`, `runtime.get_context`, all five `storage.*` methods, and
-`ui.close` while the scoped-storage provider is available. Complete
+`ui.close` while the scoped-storage provider is available; each clipboard
+method is included independently only while its grant and provider are
+available. Complete
 `runtime.context_changed` replacements are emitted only when the current
 locale, theme, or capability snapshot actually changes. Identity, Registration
 revision, Runtime attempt, source, Manifest requests, raw grants, paths, and
@@ -997,15 +1003,53 @@ Storage calls use only the identity frozen in the authenticated Session lease.
 The Dispatcher injects that identity into a Host-private desktop provider and
 never accepts a plugin-selected namespace, path, plugin key, command, or
 executor. A confirmed damaged or blocked namespace produces one complete
-Context replacement without the five storage capabilities; clipboard remains
-unavailable pending its native and permission providers.
+Context replacement without the five storage capabilities; it does not alter
+independently authorized clipboard capabilities.
 
 Run `pnpm run check:plugin-host-api-dispatcher` for the focused Dispatcher,
 Navigation, Action, Runtime, MessageChannel, public-tarball, export, dependency,
 and workspace-boundary gate. This capability adds no public export, wire frame,
-or SDK dependency. It does not add clipboard execution,
-permission-management system, general RPC resource limits, project template,
-CLI, or development mode.
+or SDK dependency. General RPC resource limits, project template, CLI, and
+development mode remain separate capabilities.
+
+## Shipped Host-Private Plugin Permission Core And Text Clipboard
+
+The Host derives one closed permission catalog from the public Host API method
+and permission catalogs. `clipboard.read` and `clipboard.write` are sensitive,
+independent permissions. A Manifest request and localized author reason are
+display facts only; the persisted Host grant remains separate, and the
+effective view reports `not_requested`, `unsupported`, `not_granted`, or
+`granted`. Official and external plugins follow the same rules.
+
+Grant mutation is accepted only from the main Host window with an exact current
+Manager revision. Granting requires a healthy installed entry, a current
+Manifest request, and Host support. Revocation may remove a residual grant after
+a replacement Manifest stops requesting it. Idempotent decisions do not write
+or advance revision. Durable Manager commit is the decision point; a later
+invalidation-event delivery failure does not roll back the committed grant.
+
+Every native effect reauthorizes the immutable Runtime Session identity against
+the live Manager entry, relevant plugin revision, compatibility, enabled state,
+Manifest request, and current persisted grant. Grant mutation and clipboard
+effects share one process coordinator, so a completed revoke cannot race with a
+later privileged effect. Unrelated plugin changes do not invalidate an otherwise
+current Session.
+
+On macOS, the Host uses AppKit `NSPasteboard` directly on the main thread for
+plain-text reads and writes, with strict request/result/error boundaries and a
+1,048,576-character limit. Empty or non-text reads return an empty string.
+Other target platforms report the provider unavailable. The isolated iframe
+still has browser clipboard disabled by Permissions Policy and receives no
+Tauri command, native clipboard object, path, raw grant, or fallback channel.
+
+Run `pnpm run check:plugin-permission-management` for shared TypeScript/Rust
+fixtures, persistence/recovery, revision and race behavior, Dispatcher and real
+SDK/MessageChannel coverage, package boundaries, and the existing macOS
+WKWebView transport evidence. Run
+`pnpm run check:plugin-permission-management:native` serially on macOS for the
+real pasteboard smoke. This delivery adds no prompt, settings or history UI,
+product copy, generic permission framework, general RPC limit, template, CLI,
+signing, marketplace, or browser clipboard fallback.
 
 ## Shipped Plugin-Scoped Storage
 
@@ -1204,7 +1248,7 @@ Production registers Host hide-launcher and open-settings Actions and publishes
 eligible Plugin Actions through the shipped surface coordinator after their
 available Page targets commit. The static Manifest contract still does not
 register Actions by itself. Safe plugin icon resolution, complete
-permission decisions, lifecycle writes, and external Runtime execution remain
+permission UI/history, lifecycle writes, and external Runtime execution remain
 separate capabilities. Recent and pinned collections continue to store only
 Action IDs, so a projected Action hides while its provider is absent and
 resolves again if the same stable ID returns.
@@ -1255,8 +1299,8 @@ iframe
   -> private closed request/response/event/cancel wire
   -> Host Port adapter with Session-derived identity
   -> Session-scoped Host-private Dispatcher
-  -> Context / matching Page close / current plugin Action
-  -. future storage, permission, and native providers .-> narrow Rust command
+  -> Context / matching Page close / current plugin Action / scoped storage
+  -> permission-authorized text clipboard -> narrow Rust command
 ```
 
 The bridge must validate the actual message source and a restricted origin. A
@@ -1293,9 +1337,10 @@ infrastructure, scoped package-relative resources, Plugin surface projection,
 production Action activation, Page Registry/navigation, the macOS isolated
 iframe Runtime, Host-private process-local Runtime Session, public SDK iframe
 transport/Host Port adapter, public Host API semantic contract, and the
-Host-private Dispatcher and plugin-scoped storage provider are delivered. Each
-remaining capability—complete plugin-management UI, complete permissions,
-clipboard providers, general RPC limits, public packaging, remote/automatic updates,
+Host-private Dispatcher, plugin-scoped storage provider, permission core, and
+macOS text-clipboard provider are delivered. Each remaining
+capability—complete plugin-management UI, permission prompts/settings/history,
+general RPC limits, public packaging, remote/automatic updates,
 user-initiated rollback history, or sidecars—requires
 its own accepted specification and implementation evidence. This architectural
 document defines direction and boundaries, not a release checklist.

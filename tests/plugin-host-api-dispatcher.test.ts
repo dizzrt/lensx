@@ -150,7 +150,11 @@ describe('Host-private Plugin Host API dispatcher', () => {
       { method: 'storage.list', params: {} },
       { method: 'storage.set', params: { key: 'x', value: 'value' } },
     ]) {
-      await expect(requestInput(binding, request)).resolves.toEqual(expect.objectContaining({ code: 'unavailable' }));
+      await expect(requestInput(binding, request)).resolves.toEqual(
+        expect.objectContaining({
+          code: request.method.startsWith('clipboard.') ? 'permission_denied' : 'unavailable',
+        }),
+      );
     }
 
     const cancelled = new AbortController();

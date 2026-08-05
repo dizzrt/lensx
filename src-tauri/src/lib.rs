@@ -16,6 +16,7 @@ pub mod plugin_manager;
 pub mod plugin_manifest;
 #[doc(hidden)]
 pub mod plugin_package_format;
+pub mod plugin_permission;
 pub mod plugin_registration;
 pub mod plugin_replacement_contract;
 pub mod plugin_resource_contract;
@@ -24,6 +25,7 @@ pub(crate) mod plugin_resource_url;
 mod plugin_runtime_navigation;
 pub(crate) mod plugin_runtime_security_policy;
 pub mod plugin_scoped_storage;
+pub(crate) mod plugin_text_clipboard;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -48,6 +50,8 @@ pub fn run() {
             plugin_installer::prepare_local_plugin_replacement,
             plugin_lifecycle::set_plugin_enabled,
             plugin_lifecycle::uninstall_plugin,
+            plugin_permission::plugin_clipboard,
+            plugin_permission::set_plugin_permission_grant,
             plugin_registration::read_plugin_registration_detail,
             plugin_registration::read_plugin_registration_snapshot,
             plugin_resource_service::resolve_plugin_resource_entry,
@@ -61,6 +65,7 @@ pub fn run() {
             let plugin_manager = plugin_manager::setup_plugin_manager(app.handle());
             let plugin_installer =
                 plugin_installer::setup_plugin_installer(app.handle(), Arc::clone(&plugin_manager));
+            plugin_permission::setup_plugin_permission(app.handle(), Arc::clone(&plugin_manager));
             plugin_resource_service::setup_plugin_resource_service(
                 app.handle(),
                 Arc::clone(&plugin_manager),

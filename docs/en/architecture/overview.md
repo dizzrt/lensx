@@ -336,7 +336,9 @@ and App teardown remove it. Its load event means only `loaded`, not SDK/Session
 version, Page, resource generation, Runtime attempt, and actual grants to the
 real `contentWindow`; only an exact acknowledgement on the newly transferred
 Port produces Session `ready`. SDK `ready`, Host API transport, complete CSP,
-and Task 5.5 permission management remain unimplemented.
+the Host-private Dispatcher, scoped storage, and the Task 5.5 permission-backed
+text clipboard are delivered. Complete CSP and permission prompts/settings/history
+remain unimplemented.
 
 Settings is rendered in the existing `main` Tauri window. It has first-level
 Preferences and Plugins sections. Preferences controls the supported

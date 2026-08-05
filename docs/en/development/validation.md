@@ -252,9 +252,9 @@ responses, cancellation, replacement/close cleanup, pending termination, and
 zero privileged handler hits. Evidence contains no URL, nonce, Port content,
 payload, token, identity, path, grant, or private error. The gate proves the
 public transport and its Host adapter; the separate Dispatcher and scoped-storage
-gates prove the current production providers. It does not prove clipboard
-permission/native execution, general RPC limits, or Windows/Linux Runtime
-transport.
+gates prove the current production providers. The permission-management gate
+adds clipboard authorization, provider, and real native-smoke evidence. Neither
+gate proves general RPC limits or Windows/Linux Runtime transport.
 
 ## Plugin Host API Dispatcher Validation
 
@@ -272,16 +272,48 @@ real public Contract and SDK tarballs and verifies that Dispatcher bindings,
 Session identity, private wire values, Host services, and post-response effects
 remain absent from public exports and declarations. The Context capability
 snapshot contains `actions.open`, `runtime.get_context`, `ui.close`, and all
-five `storage.*` methods while the current namespace is available. `clipboard.*`
-remains unavailable.
+five `storage.*` methods while the current namespace is available. Each
+`clipboard.*` method is included independently only for a current matching
+grant while the native provider is available.
 
 The existing target macOS WKWebView transport evidence remains required for
 the authenticated Port, cancellation, replacement, and terminal cleanup. The
 production-style MessageChannel fixture adds Dispatcher Context, Action,
 storage, and response-before-close evidence without treating its fake native
-boundary as Rust persistence, clipboard, permission, or general RPC delivery. This focused gate
+boundary as Rust persistence, native clipboard execution, or general RPC delivery. This focused gate
 supplements rather than replaces the complete frontend and Rust validation
 sets.
+
+## Plugin Permission Management Validation
+
+Changes to the Host-private permission catalog, effective view, Manager grant
+mutation, clipboard command/provider, Dispatcher clipboard routing, Runtime
+capabilities, shared fixtures, or permission documentation must run:
+
+```bash
+pnpm run check:plugin-permission-management
+```
+
+The gate verifies exact shared TypeScript/Rust contract fixtures, closed catalog
+derivation, requested/reason/grant separation, revision-bound idempotent durable
+grant mutation, restart recovery, fail-closed degraded and quarantined states,
+residual revoke, event-delivery failure, unrelated-plugin stability, and
+grant/native-effect linearization. It also covers independent Dispatcher
+capabilities, immutable trusted Session identity, cancellation/currentness,
+safe errors, a real SDK/MessageChannel loop, public package boundaries, and the
+existing bounded macOS WKWebView transport evidence.
+
+On target macOS, run the real plain-text pasteboard smoke serially:
+
+```bash
+pnpm run check:plugin-permission-management:native
+```
+
+The smoke restores the original plain-text clipboard after read/write/empty
+checks. The WKWebView evidence proves the isolated authenticated Port and that
+the iframe has no browser clipboard or Tauri fallback; the native smoke proves
+the direct AppKit boundary. These complementary checks must not be described as
+Windows/Linux provider support or as a prompt/settings/history UI test.
 
 ## Plugin Scoped Storage Validation
 

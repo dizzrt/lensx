@@ -4,6 +4,7 @@ import { createPluginSdk } from '../packages/plugin-sdk/src';
 import { createPluginIframeTransport } from '../packages/plugin-sdk/src/iframe';
 import { LauncherActionDispatcher, LauncherActionRegistry } from '../src/app/launcher/actions';
 import { AppNavigationService, PageRegistry } from '../src/app/navigation';
+import { createPluginClipboardProviderFactory } from '../src/app/plugins/permission';
 import {
   attachPluginRuntimeTransport,
   createMutablePluginHostApiContextSource,
@@ -162,6 +163,10 @@ describe('real MessageChannel Plugin SDK transport integration', () => {
   });
 
   test('runs the public SDK through a production-style Dispatcher for Context, Action, close, and cleanup', async () => {
+    const permissionIdentity = Object.freeze({
+      ...identity,
+      granted_permission_ids: Object.freeze(['clipboard.read', 'clipboard.write']),
+    });
     const child = new ChildWindow();
     const restore = installWindow(child);
     const pageRegistry = new PageRegistry([]);
@@ -229,8 +234,28 @@ describe('real MessageChannel Plugin SDK transport integration', () => {
       }
       return { contract_version: '0.1.0', operation: operation.kind, result };
     });
+    let clipboardText = 'initial';
+    const clipboardInvoke = rs.fn(async (_command: string, args?: Record<string, unknown>) => {
+      const request = args?.request as {
+        readonly identity: { readonly plugin_id: string; readonly registration_revision: string };
+        readonly operation: { readonly kind: 'read' | 'write'; readonly text?: string };
+      };
+      expect(request.identity).toEqual({
+        entry_id: identity.entry_id,
+        plugin_id: identity.plugin_id,
+        version: identity.version,
+        registration_revision: identity.registration_revision,
+      });
+      expect(JSON.stringify(request)).not.toContain('granted_permission_ids');
+      if (request.operation.kind === 'write') {
+        clipboardText = request.operation.text ?? '';
+        return { contract_version: '0.1.0', operation: 'write', written: true };
+      }
+      return { contract_version: '0.1.0', operation: 'read', text: clipboardText };
+    });
     const factory = createPluginHostApiDispatcherFactory({
       actions: { registry: actionRegistry, dispatcher: new LauncherActionDispatcher(actionRegistry) },
+      clipboard: createPluginClipboardProviderFactory(clipboardInvoke),
       context,
       navigation,
       storage: createPluginScopedStorageProviderFactory(storageInvoke),
@@ -245,7 +270,7 @@ describe('real MessageChannel Plugin SDK transport integration', () => {
       const initialization = client.initialize();
       await Promise.resolve();
       session = sessionService.start({
-        identity,
+        identity: permissionIdentity,
         targetOrigin: identity.expected_origin,
         targetWindow: { postMessage: (message, _targetOrigin, ports) => child.deliver(message, ports) },
         consumeReadyLease: (lease) => {
@@ -271,6 +296,8 @@ describe('real MessageChannel Plugin SDK transport integration', () => {
         theme: 'light',
         capabilities: [
           'actions.open',
+          'clipboard.read',
+          'clipboard.write',
           'runtime.get_context',
           'storage.delete',
           'storage.get',
@@ -280,6 +307,13 @@ describe('real MessageChannel Plugin SDK transport integration', () => {
           'ui.close',
         ],
       });
+
+      await expect(client.request({ method: 'clipboard.read', params: {} })).resolves.toEqual({ text: 'initial' });
+      await expect(client.request({ method: 'clipboard.write', params: { text: 'changed' } })).resolves.toEqual({
+        written: true,
+      });
+      await expect(client.request({ method: 'clipboard.read', params: {} })).resolves.toEqual({ text: 'changed' });
+      expect(clipboardInvoke).toHaveBeenCalledTimes(3);
 
       await expect(
         client.request({ method: 'storage.set', params: { key: 'settings', value: { mode: 'dark' } } }),
