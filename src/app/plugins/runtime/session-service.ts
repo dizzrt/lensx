@@ -43,6 +43,7 @@ export interface StartPluginRuntimeSessionInput {
   readonly targetWindow: PluginRuntimeSessionTargetWindow;
   readonly targetOrigin: string;
   readonly owningAttempt?: Pick<PluginRuntimeAttempt, 'isCurrent' | 'fail'>;
+  readonly consumeReadyLease?: (lease: PluginRuntimeHostPortLease) => () => void;
 }
 
 export interface PluginRuntimeSessionService {
@@ -70,7 +71,7 @@ export const createPluginRuntimeSessionService = (
 
   const service: PluginRuntimeSessionService = Object.freeze({
     start(input: StartPluginRuntimeSessionInput) {
-      const { identity: identityInput, targetWindow, targetOrigin, owningAttempt } = input;
+      const { identity: identityInput, targetWindow, targetOrigin, owningAttempt, consumeReadyLease } = input;
       active?.dispose();
       const identity = freezePluginRuntimeSessionIdentity(identityInput);
       if (targetOrigin !== identity.expected_origin) {
@@ -85,6 +86,7 @@ export const createPluginRuntimeSessionService = (
       let errorCode: PluginRuntimeSessionErrorCode | undefined;
       let lease: PluginRuntimeHostPortLease | undefined;
       let handshakeTimer: unknown;
+      let leaseCleanup: (() => void) | undefined;
 
       const snapshot = (): PluginRuntimeSessionSnapshot =>
         Object.freeze({
@@ -98,6 +100,13 @@ export const createPluginRuntimeSessionService = (
         for (const listener of listeners) listener(value);
       };
       const closePorts = () => {
+        const cleanup = leaseCleanup;
+        leaseCleanup = undefined;
+        try {
+          cleanup?.();
+        } catch {
+          // Lease consumer cleanup cannot expose a private failure.
+        }
         safeClose(channel.port1);
         safeClose(channel.port2);
       };
@@ -167,8 +176,18 @@ export const createPluginRuntimeSessionService = (
         }
         pendingNonce = undefined;
         clearHandshakeDeadline();
-        state = 'ready';
         lease = Object.freeze({ identity, port: channel.port1 });
+        if (consumeReadyLease) {
+          channel.port1.onmessage = null;
+          channel.port1.onmessageerror = null;
+          try {
+            leaseCleanup = consumeReadyLease(lease);
+          } catch {
+            transitionDisconnected('port_disconnected');
+            return;
+          }
+        }
+        state = 'ready';
         publish();
       };
       channel.port1.onmessageerror = () => transitionDisconnected('port_disconnected');

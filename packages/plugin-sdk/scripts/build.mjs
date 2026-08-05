@@ -15,4 +15,6 @@ if (result.error !== undefined) {
 }
 if (result.status !== 0) {
   process.exitCode = result.status ?? 1;
+} else {
+  await rm(resolve(packageRoot, 'dist/src/internal/transport-contract.d.ts'), { force: true });
 }

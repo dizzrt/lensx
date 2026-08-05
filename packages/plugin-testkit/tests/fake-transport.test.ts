@@ -31,10 +31,8 @@ describe('Fake Plugin SDK transport', () => {
       },
     });
 
-    await expect(fake.request({ method: 'abstract.example', params: { value: 1 }, signal })).rejects.toBe(
-      privateFailure,
-    );
-    expect(fake.observation.requests).toEqual([{ method: 'abstract.example', params: { value: 1 }, signal }]);
+    await expect(fake.request({ method: 'ui.close', params: {}, signal })).rejects.toBe(privateFailure);
+    expect(fake.observation.requests).toEqual([{ method: 'ui.close', params: {}, signal }]);
     expect(JSON.stringify(fake.observation)).not.toContain('private transport stack');
   });
 
@@ -42,15 +40,15 @@ describe('Fake Plugin SDK transport', () => {
     const fake = new FakePluginSdkTransport();
     const events: unknown[] = [];
     let disconnects = 0;
-    const unsubscribe = fake.subscribe('changed', (payload) => events.push(payload));
+    const unsubscribe = fake.subscribe('runtime.context_changed', (payload) => events.push(payload));
     fake.onDisconnect(() => {
       disconnects += 1;
     });
 
-    fake.emit('changed', { value: 1 });
+    fake.emit('runtime.context_changed', { value: 1 });
     unsubscribe();
     unsubscribe();
-    fake.emit('changed', { value: 2 });
+    fake.emit('runtime.context_changed', { value: 2 });
     fake.disconnect();
     fake.disconnect();
     fake.dispose();
@@ -62,7 +60,7 @@ describe('Fake Plugin SDK transport', () => {
       disconnectCalls: 2,
       disconnectListenerCount: 0,
       disposeCalls: 1,
-      subscriptions: [{ active: false, event: 'changed' }],
+      subscriptions: [{ active: false, event: 'runtime.context_changed' }],
     });
   });
 

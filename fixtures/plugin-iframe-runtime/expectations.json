@@ -6,7 +6,7 @@
       "file": "normal/runtime-compatible.lxp",
       "digest": {
         "algorithm": "sha256",
-        "value": "6caa0a458f21aad8520eb75a1729f9764e1d23bfbc21b82cc66d891b532eee4d"
+        "value": "4cd6c3d99c7eb9c105ba4dbb46088ef37380d100fa57ba27b277648012614299"
       },
       "coverage": [
         "html",
@@ -113,8 +113,8 @@
         },
         "facts": {
           "packageFormatVersion": "0.1.0",
-          "compressedSize": 3263,
-          "decompressedSize": 18944,
+          "compressedSize": 3676,
+          "decompressedSize": 20992,
           "fileCount": 12,
           "files": [
             {
@@ -125,8 +125,8 @@
             },
             {
               "path": "checksums.json",
-              "size": 1344,
-              "sha256": "344b724bec1790353c38d4f8beb23149cfb82024ed0c187bcb8b4ff2f3de62bc",
+              "size": 1345,
+              "sha256": "34e739e08b0c0c550157f1162c0fb947b4465674227579928f8f8106c423c377",
               "checksumCovered": false
             },
             {
@@ -173,8 +173,8 @@
             },
             {
               "path": "dist/private-session.js",
-              "size": 953,
-              "sha256": "fbd873874f22c3b39af489f1e725bf950e704e3442becd6f608290ee7ab1457f",
+              "size": 3056,
+              "sha256": "af11874d185dadbdf6f7e5882178cb2d052873259af8c1d8684f52677c89cd31",
               "checksumCovered": true
             },
             {
@@ -192,7 +192,7 @@
           ],
           "packageDigest": {
             "algorithm": "sha256",
-            "value": "6caa0a458f21aad8520eb75a1729f9764e1d23bfbc21b82cc66d891b532eee4d"
+            "value": "4cd6c3d99c7eb9c105ba4dbb46088ef37380d100fa57ba27b277648012614299"
           }
         },
         "diagnostics": []
@@ -203,7 +203,7 @@
       "file": "malicious/runtime-adversarial.lxp",
       "digest": {
         "algorithm": "sha256",
-        "value": "d83923a75339000203fc67df59181624b6ff944283072ba12a62cfe20e86bfb6"
+        "value": "8ab24d764d27be37888aa6bf3d1a2ae5a47f3c8ca3e5a190bfc207fb52843b07"
       },
       "coverage": [
         "tauri_internals",
@@ -333,8 +333,8 @@
         },
         "facts": {
           "packageFormatVersion": "0.1.0",
-          "compressedSize": 3692,
-          "decompressedSize": 16384,
+          "compressedSize": 4094,
+          "decompressedSize": 18432,
           "fileCount": 7,
           "files": [
             {
@@ -345,8 +345,8 @@
             },
             {
               "path": "checksums.json",
-              "size": 771,
-              "sha256": "59a30480b0e42762dcabfce966fec38f5982e958e95ca1d3bf3dea06cbfd00ff",
+              "size": 772,
+              "sha256": "dfec1c6c1c23e4f737ef97c6382777ec7044223dadd58f4f931ec2f8250afc7f",
               "checksumCovered": false
             },
             {
@@ -369,8 +369,8 @@
             },
             {
               "path": "dist/private-session.js",
-              "size": 953,
-              "sha256": "fbd873874f22c3b39af489f1e725bf950e704e3442becd6f608290ee7ab1457f",
+              "size": 3056,
+              "sha256": "af11874d185dadbdf6f7e5882178cb2d052873259af8c1d8684f52677c89cd31",
               "checksumCovered": true
             },
             {
@@ -382,7 +382,7 @@
           ],
           "packageDigest": {
             "algorithm": "sha256",
-            "value": "d83923a75339000203fc67df59181624b6ff944283072ba12a62cfe20e86bfb6"
+            "value": "8ab24d764d27be37888aa6bf3d1a2ae5a47f3c8ca3e5a190bfc207fb52843b07"
           }
         },
         "diagnostics": []

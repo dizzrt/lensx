@@ -1,4 +1,4 @@
-import { PluginSdkError, toPluginSdkError } from './error.js';
+import { PluginSdkError, toPluginSdkOperationError } from './error.js';
 import type { PluginSdkCancellationSignal } from './types.js';
 
 interface TimerRuntime {
@@ -150,7 +150,12 @@ export const runSdkOperation = <Result>({
           cleanup();
           resolve(value);
         },
-        (error: unknown) => rejectOnce(toPluginSdkError(error), false),
+        (error: unknown) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(toPluginSdkOperationError(error));
+        },
       );
   });
 };

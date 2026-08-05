@@ -128,10 +128,44 @@ const privateSessionConsumer = `
             typeof value.nonce !== 'string' || !/^[0-9a-f]{32}$/.test(value.nonce)
           ) return;
           const port = event.ports[0];
+          const responses = new Set();
+          let contextEvent = false;
+          let proofSent = false;
+          port.onmessage = ({ data }) => {
+            if (!exactKeys(data, ['contract_version', 'type', ...(data?.type === 'lensx.plugin_transport.event' ? ['event'] : data?.type === 'lensx.plugin_transport.disconnect' ? [] : data?.error ? ['request_id', 'error'] : ['request_id', 'result'])]) ||
+                data.contract_version !== '0.1.0') return;
+            if (data.type === 'lensx.plugin_transport.event' &&
+                data.event?.event === 'runtime.context_changed') contextEvent = true;
+            if (data.type === 'lensx.plugin_transport.response') responses.add(data.request_id);
+            if (!proofSent && contextEvent &&
+                ['request_0000000000000001', 'request_0000000000000002', 'request_0000000000000003']
+                  .every((id) => responses.has(id))) {
+              proofSent = true;
+              port.postMessage(Object.freeze({
+                contract_version: '0.1.0', type: 'lensx.plugin_transport.request',
+                request_id: 'request_0000000000000005',
+                request: Object.freeze({ method: 'storage.get', params: Object.freeze({ key: 'proof' }) }),
+              }));
+            }
+          };
+          port.start();
           port.postMessage(Object.freeze({
             contract_version: '0.1.0',
             type: 'lensx.plugin_runtime.ready',
             nonce: value.nonce,
+          }));
+          for (const [request_id, request] of [
+            ['request_0000000000000001', { method: 'runtime.get_context', params: {} }],
+            ['request_0000000000000002', { method: 'storage.get', params: { key: 'example' } }],
+            ['request_0000000000000003', { method: 'ui.close', params: {} }],
+            ['request_0000000000000004', { method: 'storage.get', params: { key: 'cancel' } }],
+          ]) port.postMessage(Object.freeze({
+            contract_version: '0.1.0', type: 'lensx.plugin_transport.request', request_id,
+            request: Object.freeze(request),
+          }));
+          port.postMessage(Object.freeze({
+            contract_version: '0.1.0', type: 'lensx.plugin_transport.cancel',
+            request_id: 'request_0000000000000004',
           }));
         });
       })();

@@ -8,4 +8,6 @@ export * from './scheduler';
 export * from './session-adapters';
 export * from './session-contract';
 export * from './session-service';
+export * from './transport-adapter';
+export * from './transport-contract';
 export * from './types';

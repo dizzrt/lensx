@@ -15,6 +15,7 @@ describe('bounded macOS Plugin Runtime Session evidence', () => {
     expect(value).toMatchObject({
       evidence_version: '0.1.0',
       session_contract_version: '0.1.0',
+      transport_contract_version: '0.1.0',
       os: 'macos',
       engine: 'wkwebview',
       fixture,
@@ -31,6 +32,12 @@ describe('bounded macOS Plugin Runtime Session evidence', () => {
       replacement_old_port_invalid: true,
       unrelated_registration_stable: true,
       window_forgery_ignored: true,
+      transport_roundtrip: true,
+      transport_result_error_event: true,
+      transport_out_of_order: true,
+      transport_cancel_observed: true,
+      transport_pending_terminated: true,
+      transport_cleanup_zero_handler_hits: true,
       privileged_handler_hits: 0,
     });
     expect(Object.values(value.csp_checks as Record<string, unknown>)).not.toContain(false);

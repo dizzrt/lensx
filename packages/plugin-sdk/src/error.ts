@@ -1,3 +1,5 @@
+import { type HostApiError, validateHostApiError } from '@lensx/plugin-contract';
+
 export type PluginSdkErrorCode =
   | 'cancelled'
   | 'timeout'
@@ -31,3 +33,9 @@ export class PluginSdkError extends Error {
 
 export const toPluginSdkError = (error: unknown): PluginSdkError =>
   error instanceof PluginSdkError ? error : new PluginSdkError('transport_failure');
+
+export const toPluginSdkOperationError = (error: unknown): PluginSdkError | HostApiError => {
+  if (error instanceof PluginSdkError) return error;
+  const hostError = validateHostApiError(error);
+  return hostError.status === 'valid' ? hostError.value : new PluginSdkError('transport_failure');
+};

@@ -24,6 +24,7 @@ import {
   type PluginRuntimeSession,
   type PluginRuntimeSessionService,
 } from './session-service';
+import { attachPluginRuntimeTransport, unavailablePluginRuntimeTransportHandler } from './transport-adapter';
 import type { PluginPageRuntimeDescriptor, PluginPageRuntimeResolver, PluginRuntimeNavigationAdapter } from './types';
 
 export type PluginRuntimeFrameState =
@@ -211,7 +212,8 @@ export const PluginRuntimeFrame = ({
     dispatch({ type: 'load', runtimeKey: descriptor.runtime_key });
     binding.attempt.completeLoad();
     try {
-      const session = effectiveSessionService.start({
+      let session: PluginRuntimeSession | undefined;
+      session = effectiveSessionService.start({
         identity: {
           entry_id: descriptor.entry_id,
           plugin_id: descriptor.plugin_id,
@@ -226,6 +228,15 @@ export const PluginRuntimeFrame = ({
         targetWindow: targetWindow as unknown as Parameters<PluginRuntimeSessionService['start']>[0]['targetWindow'],
         targetOrigin: descriptor.expected_origin,
         owningAttempt: binding.attempt,
+        consumeReadyLease: (lease) => {
+          const adapter = attachPluginRuntimeTransport({
+            lease,
+            handler: unavailablePluginRuntimeTransportHandler,
+            isCurrent: () => binding.attempt.isCurrent() && activeBindingRef.current === binding,
+            onDisconnect: () => session?.disconnect(),
+          });
+          return adapter.dispose;
+        },
       });
       binding.session = session;
       binding.attempt.bindSession(() => session.dispose());

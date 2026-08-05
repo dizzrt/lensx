@@ -1,3 +1,4 @@
+import type { HostApiEventName } from '@lensx/plugin-contract';
 import type {
   PluginSdkCancellationSignal,
   PluginSdkTransport,
@@ -24,7 +25,7 @@ export interface FakePluginSdkRequestObservation {
 
 export interface FakePluginSdkSubscriptionObservation {
   readonly active: boolean;
-  readonly event: string;
+  readonly event: HostApiEventName;
 }
 
 export interface FakePluginSdkTransportObservation {
@@ -39,7 +40,7 @@ export interface FakePluginSdkTransportObservation {
 
 interface SubscriptionRecord {
   active: boolean;
-  readonly event: string;
+  readonly event: HostApiEventName;
   readonly listener: (payload: unknown) => void;
 }
 
@@ -99,7 +100,7 @@ export class FakePluginSdkTransport implements PluginSdkTransport {
       .then((result) => result as Result);
   }
 
-  subscribe(event: string, listener: (payload: unknown) => void): PluginSdkUnsubscribe {
+  subscribe(event: HostApiEventName, listener: (payload: unknown) => void): PluginSdkUnsubscribe {
     if (this.#disposed) {
       return () => undefined;
     }
@@ -118,7 +119,7 @@ export class FakePluginSdkTransport implements PluginSdkTransport {
     return this.#idempotent(() => this.#disconnectListeners.delete(listener));
   }
 
-  emit(event: string, payload: unknown): void {
+  emit(event: HostApiEventName, payload: unknown): void {
     if (this.#disposed) {
       return;
     }

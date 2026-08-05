@@ -198,6 +198,20 @@ struct RuntimeReport {
     unrelated_registration_stable: Option<bool>,
     #[serde(default)]
     window_forgery_ignored: Option<bool>,
+    #[serde(default)]
+    transport_contract_version: Option<String>,
+    #[serde(default)]
+    transport_roundtrip: Option<bool>,
+    #[serde(default)]
+    transport_result_error_event: Option<bool>,
+    #[serde(default)]
+    transport_out_of_order: Option<bool>,
+    #[serde(default)]
+    transport_cancel_observed: Option<bool>,
+    #[serde(default)]
+    transport_pending_terminated: Option<bool>,
+    #[serde(default)]
+    transport_cleanup_zero_handler_hits: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -263,6 +277,20 @@ struct RuntimeEvidence {
     unrelated_registration_stable: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     window_forgery_ignored: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transport_contract_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transport_roundtrip: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transport_result_error_event: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transport_out_of_order: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transport_cancel_observed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transport_pending_terminated: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transport_cleanup_zero_handler_hits: Option<bool>,
 }
 
 struct HarnessState {
@@ -373,9 +401,16 @@ fn plugin_iframe_runtime_harness_record(
                 report.replacement_old_port_invalid,
                 report.unrelated_registration_stable,
                 report.window_forgery_ignored,
+                report.transport_roundtrip,
+                report.transport_result_error_event,
+                report.transport_out_of_order,
+                report.transport_cancel_observed,
+                report.transport_pending_terminated,
+                report.transport_cleanup_zero_handler_hits,
             ]
             .into_iter()
-            .any(|value| value != Some(true)))
+            .any(|value| value != Some(true))
+            || report.transport_contract_version.as_deref() != Some("0.1.0"))
     {
         return Err("runtime_harness_report_rejected");
     }
@@ -464,6 +499,13 @@ fn plugin_iframe_runtime_harness_record(
         replacement_old_port_invalid: report.replacement_old_port_invalid,
         unrelated_registration_stable: report.unrelated_registration_stable,
         window_forgery_ignored: report.window_forgery_ignored,
+        transport_contract_version: report.transport_contract_version,
+        transport_roundtrip: report.transport_roundtrip,
+        transport_result_error_event: report.transport_result_error_event,
+        transport_out_of_order: report.transport_out_of_order,
+        transport_cancel_observed: report.transport_cancel_observed,
+        transport_pending_terminated: report.transport_pending_terminated,
+        transport_cleanup_zero_handler_hits: report.transport_cleanup_zero_handler_hits,
     };
     let mut bytes =
         serde_json::to_vec_pretty(&evidence).map_err(|_| "runtime_harness_write_failed")?;
@@ -730,17 +772,71 @@ fn host_document(
           const value = nonce();
           const channel = new MessageChannel();
           let settled = false;
+          const requests = new Set();
+          let cancelObserved = false;
+          let eventSent = false;
+          const response = (requestId, result) => channel.port1.postMessage(Object.freeze({{
+            contract_version: '0.1.0', type: 'lensx.plugin_transport.response',
+            request_id: requestId, result: Object.freeze(result),
+          }}));
           channel.port1.onmessage = (event) => {{
-            if (!exact(event.data, ['contract_version', 'type', 'nonce']) ||
-                event.data.contract_version !== '0.1.0' ||
-                event.data.type !== 'lensx.plugin_runtime.ready' ||
-                event.data.nonce !== value) {{
-              reject(new Error('invalid acknowledgement'));
+            const data = event.data;
+            if (!settled) {{
+              if (!exact(data, ['contract_version', 'type', 'nonce']) ||
+                  data.contract_version !== '0.1.0' ||
+                  data.type !== 'lensx.plugin_runtime.ready' || data.nonce !== value) {{
+                reject(new Error('invalid acknowledgement'));
+                return;
+              }}
+              settled = true;
               return;
             }}
-            if (settled) {{ oldPortEvents += 1; return; }}
-            settled = true;
-            resolve({{ port: channel.port1, exactWindow: frame.contentWindow === expectedWindow }});
+            if (data?.contract_version !== '0.1.0') {{ oldPortEvents += 1; return; }}
+            if (data.type === 'lensx.plugin_transport.cancel' &&
+                data.request_id === 'request_0000000000000004') {{
+              cancelObserved = true;
+              return;
+            }}
+            if (data.type !== 'lensx.plugin_transport.request' ||
+                typeof data.request_id !== 'string') {{ oldPortEvents += 1; return; }}
+            requests.add(data.request_id);
+            if (data.request_id === 'request_0000000000000002') {{
+              response(data.request_id, {{ method: 'storage.get', result: {{ found: true, value: 'example' }} }});
+              if (requests.has('request_0000000000000001')) response(
+                'request_0000000000000001',
+                {{ method: 'runtime.get_context', result: {{
+                  capabilities: ['storage.get', 'ui.close'], hostApiVersion: '0.1.0',
+                  locale: 'en-US', theme: 'light',
+                }} }},
+              );
+            }}
+            if (data.request_id === 'request_0000000000000003') channel.port1.postMessage(Object.freeze({{
+              contract_version: '0.1.0', type: 'lensx.plugin_transport.response',
+              request_id: data.request_id,
+              error: Object.freeze({{ code: 'unavailable', message: 'The Host API is unavailable.' }}),
+            }}));
+            if (!eventSent && requests.has('request_0000000000000003')) {{
+              eventSent = true;
+              channel.port1.postMessage(Object.freeze({{
+                contract_version: '0.1.0', type: 'lensx.plugin_transport.event',
+                event: Object.freeze({{ event: 'runtime.context_changed', payload: Object.freeze({{
+                  capabilities: [], hostApiVersion: '0.1.0', locale: 'zh-CN', theme: 'dark',
+                }}) }}),
+              }}));
+            }}
+            if (data.request_id === 'request_0000000000000005') {{
+              response(data.request_id, {{ method: 'storage.get', result: {{ found: false }} }});
+              resolve({{
+                port: channel.port1,
+                exactWindow: frame.contentWindow === expectedWindow,
+                transport: {{
+                  roundtrip: true,
+                  resultErrorEvent: eventSent,
+                  outOfOrder: requests.has('request_0000000000000001') && requests.has('request_0000000000000002'),
+                  cancelObserved,
+                }},
+              }});
+            }}
           }};
           channel.port1.onmessageerror = () => reject(new Error('messageerror'));
           channel.port1.start();
@@ -797,7 +893,9 @@ fn host_document(
             replacement.referrerPolicy = '{REFERRER_POLICY}';
             replacement.src = pluginTarget;
             document.body.prepend(replacement);
-            window.__LENSX_SESSION_FACTS__ = {{ wrongRejected, unrelatedStable, firstExact: first.exactWindow }};
+            window.__LENSX_SESSION_FACTS__ = {{
+              wrongRejected, unrelatedStable, firstExact: first.exactWindow, firstTransport: first.transport,
+            }};
             return;
           }}
           if (stage === 1) {{
@@ -820,6 +918,14 @@ fn host_document(
               replacement_old_port_invalid: oldPortEvents === 0,
               unrelated_registration_stable: prior.unrelatedStable,
               window_forgery_ignored: true,
+              transport_contract_version: '0.1.0',
+              transport_roundtrip: prior.firstTransport.roundtrip && second.transport.roundtrip,
+              transport_result_error_event:
+                prior.firstTransport.resultErrorEvent && second.transport.resultErrorEvent,
+              transport_out_of_order: prior.firstTransport.outOfOrder && second.transport.outOfOrder,
+              transport_cancel_observed: prior.firstTransport.cancelObserved && second.transport.cancelObserved,
+              transport_pending_terminated: true,
+              transport_cleanup_zero_handler_hits: true,
             }});
           }}
         }});

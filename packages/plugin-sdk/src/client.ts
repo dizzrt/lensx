@@ -1,3 +1,11 @@
+import {
+  type HostApiEventName,
+  type HostApiRequest,
+  validateHostApiEvent,
+  validateHostApiRequest,
+  validateHostApiResult,
+} from '@lensx/plugin-contract';
+
 import { DEFAULT_PLUGIN_SDK_TIMEOUT_MS } from './constants.js';
 import { validateRuntimeContext } from './context.js';
 import { PluginSdkError, toPluginSdkError } from './error.js';
@@ -13,7 +21,9 @@ import type {
   CreatePluginSdkOptions,
   PluginRuntimeContext,
   PluginSdkClient,
+  PluginSdkEvent,
   PluginSdkOperationOptions,
+  PluginSdkRequestResult,
   PluginSdkState,
   PluginSdkUnsubscribe,
 } from './types.js';
@@ -33,6 +43,7 @@ class PluginSdkClientImplementation implements PluginSdkClient {
   readonly #defaultTimeoutMs: number;
   readonly #pendingOperations: PendingOperationSet = new Set();
   readonly #stateListeners = new Set<(state: PluginSdkState) => void>();
+  readonly #eventUnsubscribes = new Set<PluginSdkUnsubscribe>();
   readonly #transport: CreatePluginSdkOptions['transport'];
   #context: PluginRuntimeContext | undefined;
   #disconnectUnsubscribe: PluginSdkUnsubscribe | undefined;
@@ -116,6 +127,77 @@ class PluginSdkClientImplementation implements PluginSdkClient {
     return initializePromise;
   }
 
+  async request<Request extends HostApiRequest>(
+    request: Request,
+    options: PluginSdkOperationOptions = {},
+  ): Promise<PluginSdkRequestResult<Request>> {
+    if (this.#state === 'disposed') throw new PluginSdkError('disposed');
+    if (this.#state === 'disconnected') throw new PluginSdkError('disconnected');
+    if (this.#state !== 'ready' || this.#context === undefined) {
+      throw new PluginSdkError('transport_failure');
+    }
+    const validated = validateHostApiRequest(request);
+    if (validated.status === 'invalid' || !this.#context.capabilities.includes(validated.value.method)) {
+      throw new PluginSdkError('invalid_argument');
+    }
+    const timeoutMs = options.timeoutMs ?? this.#defaultTimeoutMs;
+    try {
+      validateTimeout(timeoutMs);
+      validateCancellationSignal(options.signal);
+    } catch (error) {
+      throw toPluginSdkError(error);
+    }
+    const rawResult = await runSdkOperation({
+      operation: (signal) =>
+        this.#transport.request({ method: validated.value.method, params: validated.value.params, signal }),
+      pendingOperations: this.#pendingOperations,
+      signal: options.signal,
+      timeoutMs,
+    });
+    const result = validateHostApiResult(rawResult);
+    if (result.status === 'invalid' || result.value.method !== validated.value.method) {
+      throw new PluginSdkError('transport_failure');
+    }
+    return result.value.result as unknown as PluginSdkRequestResult<Request>;
+  }
+
+  subscribe<EventName extends HostApiEventName>(
+    event: EventName,
+    listener: (event: PluginSdkEvent<EventName>) => void,
+  ): PluginSdkUnsubscribe {
+    if (this.#state === 'disposed') throw new PluginSdkError('disposed');
+    if (this.#state === 'disconnected') throw new PluginSdkError('disconnected');
+    if (this.#state !== 'ready') throw new PluginSdkError('transport_failure');
+    let active = true;
+    const transportUnsubscribe = this.#transport.subscribe(event, (payload) => {
+      if (!active || this.#state !== 'ready') return;
+      const validated = validateHostApiEvent({ event, payload });
+      if (validated.status === 'invalid') {
+        this.#terminateInvalidTransport();
+        return;
+      }
+      if (validated.value.event === 'runtime.context_changed') {
+        this.#context = validated.value.payload;
+      }
+      try {
+        listener(validated.value as PluginSdkEvent<EventName>);
+      } catch {
+        // A plugin listener cannot corrupt SDK lifecycle or transport state.
+      }
+    });
+    const unsubscribe = idempotent(() => {
+      active = false;
+      this.#eventUnsubscribes.delete(unsubscribe);
+      try {
+        transportUnsubscribe();
+      } catch {
+        // Transport cleanup cannot expose a private error.
+      }
+    });
+    this.#eventUnsubscribes.add(unsubscribe);
+    return unsubscribe;
+  }
+
   subscribeState(listener: (state: PluginSdkState) => void): PluginSdkUnsubscribe {
     if (this.#state === 'disposed') {
       return () => undefined;
@@ -132,6 +214,7 @@ class PluginSdkClientImplementation implements PluginSdkClient {
     this.#transition('disposed');
     abortPendingOperations(this.#pendingOperations, new PluginSdkError('disposed'));
     this.#removeDisconnectListener();
+    this.#removeEventListeners();
     this.#stateListeners.clear();
 
     this.#disposePromise = Promise.resolve()
@@ -167,6 +250,17 @@ class PluginSdkClientImplementation implements PluginSdkClient {
     this.#transition('disconnected');
     abortPendingOperations(this.#pendingOperations, new PluginSdkError('disconnected'));
     this.#removeDisconnectListener();
+    this.#removeEventListeners();
+  }
+
+  #removeEventListeners(): void {
+    for (const unsubscribe of [...this.#eventUnsubscribes]) unsubscribe();
+    this.#eventUnsubscribes.clear();
+  }
+
+  #terminateInvalidTransport(): void {
+    this.#handleDisconnect();
+    Promise.resolve(this.#transport.dispose()).catch(() => undefined);
   }
 
   #transition(state: PluginSdkState): void {

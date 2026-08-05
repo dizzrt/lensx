@@ -5,9 +5,10 @@
 本仓库是一个 pnpm workspace，并将 `lensx` React/Tauri Host 保留为 private 根
 package。workspace 为公共 package 和插件建立开发拓扑、lifecycle 聚合及依赖检查，并包含
 可发布的 `@lensx/plugin-contract`、`@lensx/plugin-sdk`、`@lensx/plugin-testkit` 与可选
-`@lensx/plugin-ui` package，但仓库验证不会执行 registry 发布操作。workspace 尚未提供插件 CLI，
-也不会发现、安装、注册或执行插件。SDK、Testkit 与 UI package 是开发基础，不是可工作的 iframe
-Runtime 或可执行 Host API。Contract package 会独立交付 Host API 语义 catalog 与 validator。
+`@lensx/plugin-ui` package，但仓库验证不会执行 registry 发布操作。workspace 尚未提供插件 CLI。
+Host 已能安装/注册并打开受支持的本地插件，SDK 现在也提供认证 iframe transport；但 production
+handler 仍为 `unavailable`，不会执行任何 Host API 副作用。Contract package 会独立交付 Host API
+语义 catalog 与 validator。
 
 已经交付的静态 Manifest 契约仍然只负责验证。package 位于本 workspace 内，并不代表它
 获得 Host 信任、Tauri 访问权、权限或 Runtime 能力。
@@ -101,10 +102,12 @@ Host-private tool、Rust source、fixture generator 或 codec dependency。未�
 ## Plugin SDK Package
 
 `packages/plugin-sdk` 持有框架无关的 SDK client lifecycle、经过校验的 Runtime context、版本
-兼容、稳定 SDK error、取消/超时行为与语义 transport interface。唯一受支持的 import 是：
+兼容、稳定 SDK error、取消/超时行为、语义 transport interface 与官方 iframe transport。受支持的
+import 是：
 
 ```text
 @lensx/plugin-sdk
+@lensx/plugin-sdk/iframe
 ```
 
 package 只有一个直接 Runtime 依赖 `@lensx/plugin-contract`，并从该 package 导入
@@ -115,18 +118,22 @@ package 只有一个直接 Runtime 依赖 `@lensx/plugin-contract`，并从该 p
 使用显式实例和注入的 transport：
 
 ```ts
-import { createPluginSdk, type PluginSdkTransport } from '@lensx/plugin-sdk';
+import { createPluginSdk } from '@lensx/plugin-sdk';
+import { createPluginIframeTransport } from '@lensx/plugin-sdk/iframe';
 
-declare const transport: PluginSdkTransport;
-const client = createPluginSdk({ transport });
+const client = createPluginSdk({ transport: createPluginIframeTransport() });
 const context = await client.initialize();
+if (context.capabilities.includes('ui.close')) {
+  await client.request({ method: 'ui.close', params: {} });
+}
 await client.dispose();
 ```
 
 Context capability 是闭集 Contract method catalog 中排序去重的值，表示当前可调用 snapshot，
-不是 grant。client 不提供任意 raw 或具体 Host method 调用。transport interface 用于未来可信 adapter 和测试，不是
-iframe 实现或公共 wire protocol。package 内部白盒测试保留私有 fake；公共黑盒控制由 Plugin
-Testkit 提供。
+不是 grant。client 不提供任意 raw method 调用；typed request/event API 使用闭集 Contract，并让
+Host API error 与 SDK lifecycle error 保持可判别。iframe factory 不暴露 identity、origin、nonce、
+Port、wire 或 Host 配置；frame 与 Host lease adapter 仍为私有边界。package 内部白盒测试保留私有
+fake；公共黑盒控制由 Plugin Testkit 提供。
 
 使用以下命令验证 SDK：
 
@@ -139,10 +146,12 @@ pnpm --dir packages/plugin-sdk run test:pack
 pnpm run check:plugin-sdk
 ```
 
-pack gate 会构建真实 Contract 与 SDK tarball，校验 SDK 文件清单、仅根 exports、声明与 Runtime
-依赖 metadata，并把两个 tarball 安装进隔离 external consumer。consumer 使用
+pack gate 会构建真实 Contract 与 SDK tarball，校验 SDK 文件清单、root/iframe exports、声明与 Runtime
+依赖 metadata，并把两个 tarball 安装进隔离 external consumer。root consumer 使用
 `lib: ["ES2022"]` 且不包含 DOM 类型完成 typecheck，运行 ESM lifecycle smoke，并证明未声明的
-SDK deep import 会被拒绝。tarball 排除 tests、fixtures、scripts 和 Host 私有源码。
+SDK deep import 会被拒绝。browser consumer 会 typecheck、bundle、在真实 browser 中加载 iframe
+entry，并拒绝私有 transport deep import。tarball 排除 tests、fixtures、scripts、schema、Host
+projection 与 Host 私有源码。完整跨边界门禁使用 `pnpm run check:plugin-sdk-transport`。
 
 ## Plugin Testkit Package
 

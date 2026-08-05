@@ -7,10 +7,11 @@ package inspection and local installation, Plugin SDK foundation, Plugin
 Testkit, optional Plugin UI package, Host-private Plugin surface projection and
 Page navigation, Host-private lifecycle controls, local package replacement,
 the Host-private scoped resource service, isolated iframe Runtime,
-process-local Runtime Session, and public Host API semantic contract from the
+process-local Runtime Session, public SDK iframe transport, Host-private Port
+adapter, and public Host API semantic contract from the
 intended runtime extension boundary. Public packaging CLI,
-distribution, complete plugin execution lifecycle, complete permission decisions, iframe
-transport, signing, Host API dispatch and execution, complete plugin-management UI, remote
+distribution, complete plugin execution lifecycle, complete permission
+decisions, signing, Host API dispatch and execution, complete plugin-management UI, remote
 updates, and user-initiated rollback history are not currently implemented.
 Stable specs and source code define the shipped subset.
 
@@ -729,20 +730,23 @@ idempotent terminal cleanup. Sessions, nonces, Ports, window references, and
 message state are never persisted, and Registration continues to report only
 `inactive` after process recovery.
 
-Three readiness layers remain distinct:
+Four readiness layers remain distinct:
 
 1. iframe `loaded` means only browser load completion;
 2. Session `ready` means only that the current window/origin/nonce/Port binding
    authenticated;
-3. future SDK `ready` requires a later public transport to connect and validate
-   a Runtime context.
+3. transport connected means the shipped iframe transport adopted that Port,
+   acknowledged the nonce, and uses only the Port for later frames;
+4. SDK `ready` means `runtime.get_context` returned a Contract-valid compatible
+   Runtime context; it still does not mean a production Host method executed.
 
 The Session contract, parser, adapters, identity, and Port lease remain private
 to the root Host and are excluded from Contract, SDK, UI, Testkit, official,
-example, and external plugin imports and tarballs. This capability defines no
-public SDK iframe transport, JSON-RPC/request ID, Host API method, permission
-decision or UI, privileged dispatch, plugin storage, background Runtime,
-sidecar, or Windows/Linux support. The security lifecycle adds the private
+example, and external plugin imports and tarballs. This capability itself
+defines no public wire or Host adapter, permission decision or UI, privileged
+dispatch, plugin storage, background Runtime, sidecar, or Windows/Linux
+support. The shipped SDK transport and Host adapter consume this private lease
+without changing the Session contract. The security lifecycle adds the private
 handshake deadline and cleanup described next. Run `pnpm run check:plugin-runtime-session` for focused logic/React,
 real package, boundary, prerequisite, and bounded real macOS WKWebView evidence.
 
@@ -798,9 +802,9 @@ Chinese copy in the existing accessible feedback surface. Diagnostics and
 evidence exclude full or blocked URLs, origin/scope values, paths, nonce/Port
 content, grants, payloads, storage values, raw exceptions, and stacks; there is
 no remote CSP reporting channel. The committed real WKWebView matrices are
-macOS-only. Task 5.2 still owns the future public SDK iframe transport and does
-not inherit these Host-private attempts, timers, breaker records, or failure
-codes. Run `pnpm run check:plugin-runtime-security-lifecycle` for the focused
+macOS-only. The public SDK iframe transport does not inherit these Host-private
+attempts, timers, breaker records, or failure codes. Run
+`pnpm run check:plugin-runtime-security-lifecycle` for the focused
 gate and its Resource, origin, navigation, iframe, Session, workspace, and
 public-tarball prerequisites.
 
@@ -873,10 +877,10 @@ Host-private iframe Runtime resolver. Surface projection still does not expose
 routes, entry IDs, revisions, origin facts, resource URLs, or native objects to
 plugins. Task 5.5 complete permission management remains unimplemented.
 
-## Shipped Public Plugin SDK Foundation
+## Shipped Public Plugin SDK And iframe Transport
 
 lensX ships the framework-neutral `@lensx/plugin-sdk@0.1.0` workspace package.
-The package has one public root entry and depends only on
+The package has public root and `@lensx/plugin-sdk/iframe` entries and depends only on
 `@lensx/plugin-contract` at Runtime. Undeclared deep imports are unsupported,
 and its public declarations do not require React, Semi Design, Tauri, DOM
 globals, Node filesystem types, or Host-private modules.
@@ -928,6 +932,38 @@ does not define request IDs, nonce, identity, origin, `Window`, `MessagePort`,
 does not expose an arbitrary string-based Host method call. The SDK package's
 white-box test fake remains private; public black-box controls live in the
 separate Testkit package.
+
+`PluginSdkClient.request()` accepts only the Contract `HostApiRequest`
+discriminated union, validates and freezes it before transport, derives the
+paired result payload type from its method, and rejects calls before `ready` or
+when the current capability snapshot omits the method. `subscribe()` accepts
+only `runtime.context_changed`; the complete validated and frozen replacement
+becomes `client.context` before subscribers run. Contract-valid Host API errors
+remain distinct from SDK cancellation, timeout, disconnect, disposal, invalid
+argument, and transport failures.
+
+`createPluginIframeTransport()` has no trust configuration. It accepts one
+exact current-parent bootstrap from the SDK-owned Host origin policy, returns
+the existing nonce acknowledgement once, and then uses only the transferred
+Port. Its package-private `0.1.0` wire has exact request, response, event,
+cancel, and disconnect frames with transport-owned bounded request IDs. It
+contains no plugin/Page identity, origin, grant, path, executor, Tauri object,
+Host object, stack, or raw exception. The package does not export the frame,
+codec, fixture, Host projection, nonce/origin policy, or a deep-import path.
+
+The Host consumes each ready lease at most once. Its private adapter injects
+the immutable Session identity and a Host-owned cancellation signal into a
+narrow handler, validates every result/error/event, supports concurrent
+out-of-order settlement, and converges Session/Page replacement and disposal
+on idempotent cleanup. Production installs only the stable `unavailable`
+handler. Test fixtures can prove complete round-trips, but no production
+`runtime.get_context`, `ui.close`, Action, storage, clipboard, permission,
+application service, Rust command, or other side effect is implemented here.
+
+Run `pnpm run check:plugin-sdk-transport` for codec drift, SDK/Testkit,
+iframe/Host adapter, real tarball no-DOM and browser consumers, real
+MessageChannel integration, Runtime lifecycle, and bounded macOS WKWebView
+evidence. This delivery does not claim Windows/Linux Runtime transport support.
 
 ## Shipped Public Plugin Testkit
 
@@ -1107,7 +1143,8 @@ external contract does not depend on React implementation details.
 
 External plugin UI runs in the shipped isolated iframe. The shipped private
 Runtime Session authenticates one dedicated Port through a controlled Host
-bootstrap; plugins still have no public transport or executable Host API. External plugins
+bootstrap, and the public iframe SDK consumes it through the private closed
+wire. Production still has no executable Host API. External plugins
 must not directly access:
 
 - application React state or component instances;
@@ -1122,19 +1159,20 @@ External runtime resources must resolve inside the installed plugin boundary.
 
 The shipped public semantic contract defines the ten method IDs, exact
 params/results, `runtime.context_changed`, `PluginRuntimeContext`, permissions,
-errors, and capability/version rules described above. Contract validation does
-not send or execute a request, and the public SDK client exposes no raw or
-concrete Host API method.
+errors, and capability/version rules described above. Contract validation alone
+does not send or execute a request. The public SDK client now exposes one
+Contract-closed typed request operation, not a raw string method or a concrete
+side-effect provider.
 
 The intended communication flow is:
 
 ```text
 iframe
-  -> future typed Plugin SDK transport over the authenticated Port
-  -> future JSON-RPC/request protocol
-  -> source, identity, method, params, and permission validation
-  -> Host API dispatcher
-  -> application service or Rust command
+  -> typed Plugin SDK over the authenticated Port
+  -> private closed request/response/event/cancel wire
+  -> Host Port adapter with Session-derived identity
+  -> production unavailable handler
+  -. future Dispatcher and permission decision .-> application service or Rust command
 ```
 
 The bridge must validate the actual message source and a restricted origin. A
@@ -1168,10 +1206,11 @@ method exists.
 The static Manifest format, validators, Host-private local installation and
 same-identity replacement, revision-bound enable/disable/uninstall
 infrastructure, scoped package-relative resources, Plugin surface projection,
-production Action activation, Page Registry/navigation, and the macOS isolated
-iframe Runtime, Host-private process-local Runtime Session, and public Host API
-semantic contract are delivered. Each remaining capability—complete plugin-management
-UI, complete permissions, Host API transport/dispatch/execution, public packaging, remote/automatic updates,
+production Action activation, Page Registry/navigation, the macOS isolated
+iframe Runtime, Host-private process-local Runtime Session, public SDK iframe
+transport/Host Port adapter, and public Host API semantic contract are
+delivered. Each remaining capability—complete plugin-management UI, complete
+permissions, Host API dispatch/execution, public packaging, remote/automatic updates,
 user-initiated rollback history, or sidecars—requires
 its own accepted specification and implementation evidence. This architectural
 document defines direction and boundaries, not a release checklist.

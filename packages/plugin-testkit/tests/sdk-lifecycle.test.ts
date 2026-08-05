@@ -96,4 +96,34 @@ describe('real Plugin SDK lifecycle through the public Testkit', () => {
     expect(client.state).toBe('disconnected');
     expect(states).toEqual(['initializing', 'disconnected']);
   });
+
+  test('drives typed requests, Host errors, context events, and request cancellation without exposing wire controls', async () => {
+    const pending = createDeferred<unknown>();
+    const fake = new FakePluginSdkTransport({
+      connect: async () => createPluginRuntimeContextFixture({ capabilities: ['storage.get', 'ui.close'] }),
+      request: (request) => {
+        if (request.method === 'ui.close') {
+          throw { code: 'unavailable', message: 'The Host API is unavailable.' };
+        }
+        return pending.promise;
+      },
+    });
+    const client = createPluginSdk({ transport: fake });
+    await client.initialize();
+    const operation = client.request({ method: 'storage.get', params: { key: 'example' } });
+    pending.resolve({ method: 'storage.get', result: { found: true, value: 'value' } });
+    await expect(operation).resolves.toEqual({ found: true, value: 'value' });
+    await expect(client.request({ method: 'ui.close', params: {} })).rejects.toEqual({
+      code: 'unavailable',
+      message: 'The Host API is unavailable.',
+    });
+
+    const observed: unknown[] = [];
+    client.subscribe('runtime.context_changed', (event) => observed.push([client.context, event]));
+    fake.emit('runtime.context_changed', createPluginRuntimeContextFixture({ capabilities: [], theme: 'dark' }));
+    expect(observed).toEqual([[client.context, { event: 'runtime.context_changed', payload: client.context }]]);
+    expect(fake.observation).not.toHaveProperty('origin');
+    expect(fake.observation).not.toHaveProperty('port');
+    expect(fake.observation).not.toHaveProperty('identity');
+  });
 });

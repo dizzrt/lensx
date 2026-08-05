@@ -222,11 +222,38 @@ origin/resource token, nonce, Port content, entry/plugin/Page identity, local
 path, raw payload, or private error.
 
 This is a macOS-only delivery gate and does not establish Windows or Linux
-Runtime Session support. It proves only the private authenticated Session and
-Port lease: it does not deliver public SDK iframe transport, RPC/request IDs,
+Runtime Session support. By itself it proves only the private authenticated
+Session and Port lease; it does not by itself prove the SDK iframe transport,
 Host API methods, permission decisions, complete CSP, general handshake
 timeouts/crash recovery, or background Runtime. The focused gate supplements
 and never replaces the complete frontend and Rust validation sets.
+
+## Plugin SDK Transport Validation
+
+Changes to the typed SDK request/event API, private transport codec, iframe
+entry, Host Port adapter, Runtime Session lease handoff, transport fixtures,
+package exports, or target WebView evidence must run:
+
+```bash
+pnpm run check:plugin-sdk-transport
+```
+
+The gate checks deterministic plugin/Host codec drift, strict unknown parsing,
+request/result pairing, safe errors, concurrent out-of-order responses,
+cancellation, timeout, events, disconnect/disposal, stale Page and Port
+isolation, and production `unavailable`. It packs real Contract and SDK
+tarballs, retains the no-DOM ES2022 root consumer, builds and runs the declared
+iframe entry in an isolated browser consumer, rejects private deep imports,
+and runs a real MessageChannel SDK/Host-adapter fixture.
+
+Bounded macOS WKWebView evidence additionally covers exact parent/origin/Port,
+single-use nonce, transport result/error/event round-trip, out-of-order
+responses, cancellation, replacement/close cleanup, pending termination, and
+zero privileged handler hits. Evidence contains no URL, nonce, Port content,
+payload, token, identity, path, grant, or private error. The gate proves
+transport delivery only: production still performs no Host API dispatch,
+permission decision, application/native side effect, or Windows/Linux Runtime
+transport.
 
 ## Rust Validation
 

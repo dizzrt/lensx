@@ -8,9 +8,10 @@ lifecycle aggregation, and dependency checks for public packages and plugins.
 It contains the publishable `@lensx/plugin-contract`, `@lensx/plugin-sdk`,
 `@lensx/plugin-testkit`, and optional `@lensx/plugin-ui` packages, but repository
 validation does not perform a registry publish. The workspace does not yet
-provide a plugin CLI, and it does not discover, install, register, or execute
-plugins. The SDK, Testkit, and UI packages are development foundations, not a
-working iframe Runtime or executable Host API. The Contract package does ship
+provide a plugin CLI. The Host can install/register and open a supported local
+plugin, and the SDK now supplies the authenticated iframe transport, but the
+production handler remains `unavailable` and executes no Host API side effect.
+The Contract package does ship
 the Host API semantic catalog and validators independently of execution.
 
 The shipped static Manifest contract remains validation-only. A package being
@@ -117,11 +118,12 @@ approved change; no public CLI or package-format import exists today.
 
 `packages/plugin-sdk` owns the framework-neutral SDK client lifecycle, validated
 Runtime context, version compatibility, stable SDK errors, cancellation and
-timeout behavior, and the semantic transport interface. Its only supported
-import is:
+timeout behavior, the semantic transport interface, and the official iframe
+transport. Its supported imports are:
 
 ```text
 @lensx/plugin-sdk
+@lensx/plugin-sdk/iframe
 ```
 
 The package has one direct Runtime dependency, `@lensx/plugin-contract`, and
@@ -133,19 +135,24 @@ re-export or duplicate the current Host API version.
 Use an explicit instance and injected transport:
 
 ```ts
-import { createPluginSdk, type PluginSdkTransport } from '@lensx/plugin-sdk';
+import { createPluginSdk } from '@lensx/plugin-sdk';
+import { createPluginIframeTransport } from '@lensx/plugin-sdk/iframe';
 
-declare const transport: PluginSdkTransport;
-const client = createPluginSdk({ transport });
+const client = createPluginSdk({ transport: createPluginIframeTransport() });
 const context = await client.initialize();
+if (context.capabilities.includes('ui.close')) {
+  await client.request({ method: 'ui.close', params: {} });
+}
 await client.dispose();
 ```
 
 Context capabilities are sorted unique values from the closed Contract method
 catalog; they are current-callability snapshots rather than grants. The client
-has no arbitrary raw or concrete Host method call. The transport interface is
-for future trusted adapters and tests; it is not an iframe implementation or a
-public wire protocol. Package-internal white-box tests keep their private fake;
+has no arbitrary raw method call. Its typed request and event APIs use the
+closed Contract and preserve Host API errors separately from SDK lifecycle
+errors. The iframe factory exposes no identity, origin, nonce, Port, wire, or
+Host configuration; those frames and the Host lease adapter remain private.
+Package-internal white-box tests keep their private fake;
 public black-box controls are provided by Plugin Testkit.
 
 Validate the SDK with:
@@ -160,11 +167,14 @@ pnpm run check:plugin-sdk
 ```
 
 The pack gate builds real Contract and SDK tarballs, verifies the SDK file list,
-root-only exports, declarations, and Runtime dependency metadata, and installs
-both tarballs into an isolated external consumer. That consumer typechecks with
+root/iframe exports, declarations, and Runtime dependency metadata, and installs
+both tarballs into isolated external consumers. The root consumer typechecks with
 `lib: ["ES2022"]` and no DOM types, runs an ESM lifecycle smoke test, and proves
-that an undeclared SDK deep import is rejected. Tests, fixtures, scripts, and
-Host-private source are excluded from the tarball.
+that an undeclared SDK deep import is rejected. The browser consumer typechecks,
+bundles, loads the iframe entry in a real browser, and rejects private transport
+deep imports. Tests, fixtures, scripts, schemas, Host projections, and
+Host-private source are excluded from the tarball. Run
+`pnpm run check:plugin-sdk-transport` for the complete cross-boundary gate.
 
 ## Plugin Testkit Package
 

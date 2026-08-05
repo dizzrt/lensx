@@ -12,7 +12,7 @@ describe('SDK operation runner and abstract transport events', () => {
 
     await expect(
       runSdkOperation({
-        operation: (signal) => transport.request({ method: 'typed.adapter.operation', params: {}, signal }),
+        operation: (signal) => transport.request({ method: 'ui.close', params: {}, signal }),
         pendingOperations: pending,
         timeoutMs: 100,
       }),
@@ -28,7 +28,7 @@ describe('SDK operation runner and abstract transport events', () => {
     const callerSignal = new FakeCancellationSignal();
     let delivered = false;
     const operation = runSdkOperation({
-      operation: (signal) => transport.request({ method: 'typed.adapter.operation', params: {}, signal }),
+      operation: (signal) => transport.request({ method: 'ui.close', params: {}, signal }),
       pendingOperations: new Set() as PendingOperationSet,
       signal: callerSignal,
       timeoutMs: 100,
@@ -50,7 +50,7 @@ describe('SDK operation runner and abstract transport events', () => {
 
     await expect(
       runSdkOperation({
-        operation: (signal) => transport.request({ method: 'typed.adapter.operation', params: {}, signal }),
+        operation: (signal) => transport.request({ method: 'ui.close', params: {}, signal }),
         pendingOperations: new Set() as PendingOperationSet,
         timeoutMs: 5,
       }),
@@ -78,12 +78,12 @@ describe('SDK operation runner and abstract transport events', () => {
   test('uses idempotent event unsubscribe semantics in the package fake', () => {
     const transport = new FakePluginSdkTransport();
     const payloads: unknown[] = [];
-    const unsubscribe = transport.subscribe('runtime.changed', (payload) => payloads.push(payload));
+    const unsubscribe = transport.subscribe('runtime.context_changed', (payload) => payloads.push(payload));
 
-    transport.emit('runtime.changed', 1);
+    transport.emit('runtime.context_changed', 1);
     unsubscribe();
     unsubscribe();
-    transport.emit('runtime.changed', 2);
+    transport.emit('runtime.context_changed', 2);
 
     expect(payloads).toEqual([1]);
   });

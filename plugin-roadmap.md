@@ -533,9 +533,10 @@ Runtime health rollback、数据迁移、权限 UI 或完整管理 UI。
 
 **完成标准**：每个方法都有规范、Schema、权限需求和成功/失败场景；无占位方法进入公共 API。
 
-- [ ] **Task 5.2：实现 SDK iframe Transport**
+- [x] **Task 5.2：实现 SDK iframe Transport**
 
-**OpenSpec change**：`implement-plugin-sdk-transport`
+**OpenSpec change**：[implement-plugin-sdk-transport](openspec/changes/archive/2026-08-05-implement-plugin-sdk-transport/)
+（已完成并归档）
 
 **目标**：让公共 SDK 通过受控 MessagePort/`postMessage` transport 使用 Runtime session。
 

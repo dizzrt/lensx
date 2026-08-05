@@ -182,10 +182,31 @@ MessagePort transfer、cryptographic single-use nonce、ready/disconnect/dispose
 URL、origin/resource token、nonce、Port 内容、entry/plugin/Page identity、本机路径、raw payload 或
 private error。
 
-这是 macOS-only delivery gate，不建立 Windows 或 Linux Runtime Session 支持。它只证明私有认证
-Session 与 Port lease；不会交付公共 SDK iframe transport、RPC/request ID、Host API method、permission
-decision、完整 CSP、通用 handshake timeout/crash recovery 或 background Runtime。focused gate 只补充
+这是 macOS-only delivery gate，不建立 Windows 或 Linux Runtime Session 支持。它单独只证明私有认证
+Session 与 Port lease；不会单独证明 SDK iframe transport、Host API method、permission decision、
+完整 CSP、通用 handshake timeout/crash recovery 或 background Runtime。focused gate 只补充
 完整 frontend/Rust validation 集合，绝不能替代它们。
+
+## Plugin SDK Transport 验证
+
+修改 typed SDK request/event API、私有 transport codec、iframe entry、Host Port adapter、Runtime
+Session lease handoff、transport fixture、package export 或目标 WebView evidence 时，必须运行：
+
+```bash
+pnpm run check:plugin-sdk-transport
+```
+
+该门禁检查 plugin/Host codec 的确定性 drift、strict `unknown` parsing、request/result 配对、安全 error、
+并发乱序 response、取消、timeout、event、disconnect/dispose、stale Page/Port 隔离与 production
+`unavailable`。它打包真实 Contract/SDK tarball，保留 no-DOM ES2022 root consumer，在隔离 browser
+consumer 中构建并运行声明的 iframe entry，拒绝私有 deep import，并运行真实 MessageChannel
+SDK/Host-adapter fixture。
+
+有界 macOS WKWebView evidence 还覆盖 exact parent/origin/Port、single-use nonce、transport
+result/error/event round-trip、乱序 response、取消、replacement/close cleanup、pending termination 与
+privileged handler zero-hit。evidence 不含 URL、nonce、Port 内容、payload、token、identity、path、grant
+或 private error。该门禁只证明 transport 交付；production 仍不执行 Host API dispatch、permission
+decision、应用/native 副作用，也不交付 Windows/Linux Runtime transport。
 
 ## Rust 验证
 

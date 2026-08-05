@@ -5,8 +5,9 @@
 本文区分已经交付的静态插件 Manifest 契约、`.lxp` package inspection 与本地安装、Plugin SDK
 foundation、Plugin Testkit、可选 Plugin UI package、Host 私有 Plugin surface 投影与 Page 导航、
 Host 私有生命周期控制、本地 package replacement、Host 私有 scoped resource service、隔离 iframe
-Runtime、进程内 Runtime Session、公共 Host API 语义契约与预期的运行时扩展边界。公共 packaging CLI、
-分发、完整插件执行 lifecycle、完整权限决策、iframe transport、签名、Host API dispatch/执行、完整插件管理 UI、远程更新和用户
+Runtime、进程内 Runtime Session、公共 SDK iframe transport、Host 私有 Port adapter、公共 Host API
+语义契约与预期的运行时扩展边界。公共 packaging CLI、分发、完整插件执行 lifecycle、完整权限决策、
+签名、Host API dispatch/执行、完整插件管理 UI、远程更新和用户
 主动 rollback history 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
 
 ## 目标
@@ -540,16 +541,18 @@ generation。close、retry、replacement、进入 Home/Search/Host Page 与 App 
 清理。Session、nonce、Port、window reference 与 message state 永不持久化；进程恢复后 Registration
 仍只报告 `inactive`。
 
-三层 ready 语义保持分离：
+四层 ready 语义保持分离：
 
 1. iframe `loaded` 只表示 browser load completion；
 2. Session `ready` 只表示 current window/origin/nonce/Port binding 已认证；
-3. 未来 SDK `ready` 还需要后续公共 transport 完成连接并校验 Runtime context。
+3. transport connected 表示已交付的 iframe transport 接管该 Port、确认 nonce，后续 frame 只走 Port；
+4. SDK `ready` 表示 `runtime.get_context` 返回 Contract-valid 且兼容的 Runtime context；它仍不表示
+   production Host method 已执行。
 
 Session contract、parser、adapter、identity 与 Port lease 都只属于 root Host，不进入 Contract、SDK、UI、
-Testkit、官方/示例/外部插件 import 或 tarball。该能力不定义公共 SDK iframe transport、JSON-RPC/
-request ID、Host API method、permission decision/UI、privileged dispatch、plugin storage、
-background Runtime、sidecar 或 Windows/Linux 支持。安全生命周期会增加下述私有 handshake deadline
+Testkit、官方/示例/外部插件 import 或 tarball。该能力本身不定义公共 wire/Host adapter、permission
+decision/UI、privileged dispatch、plugin storage、background Runtime、sidecar 或 Windows/Linux 支持。
+已交付的 SDK transport 与 Host adapter 会消费该私有 lease，但不改变 Session contract。安全生命周期会增加下述私有 handshake deadline
 与清理。运行
 `pnpm run check:plugin-runtime-session` 可验证 focused logic/React、真实 package、边界、前置 gate 与
 有界真实 macOS WKWebView evidence。
@@ -589,8 +592,8 @@ graceful exit 不计数；generation 变化或连续 30,000 ms 健康 `ready` �
 `runtime_unavailable`，并通过现有可访问 feedback surface 提供 canonical English 和语义一致的简体中文
 文案。diagnostic/evidence 不包含完整或 blocked URL、origin/scope、path、nonce/Port 内容、grant、payload、
 storage value、raw exception 或 stack，也没有远程 CSP report channel。已提交的真实 WKWebView matrix
-仅支持 macOS。Task 5.2 仍负责未来公共 SDK iframe transport，不会继承这些 Host 私有 attempt、timer、
-breaker record 或 failure code。运行 `pnpm run check:plugin-runtime-security-lifecycle` 可执行 focused gate
+仅支持 macOS。公共 SDK iframe transport 不会继承这些 Host 私有 attempt、timer、breaker record 或
+failure code。运行 `pnpm run check:plugin-runtime-security-lifecycle` 可执行 focused gate
 及其 Resource、origin、navigation、iframe、Session、workspace 与 public-tarball 前置门禁。
 
 ## 已交付的 Host 私有 Plugin Surface 投影与 Page 导航
@@ -642,10 +645,10 @@ fallback。
 Runtime resolver。surface projection 仍不会向插件暴露 route、entry ID、revision、origin fact、resource
 URL 或 native object。Task 5.5 完整权限管理仍未实现。
 
-## 已交付的公共 Plugin SDK Foundation
+## 已交付的公共 Plugin SDK 与 iframe Transport
 
-lensX 已交付框架无关的 `@lensx/plugin-sdk@0.1.0` workspace package。package 只有一个公共
-根入口，Runtime 只依赖 `@lensx/plugin-contract`。未声明的 deep import 不受支持；其公共声明
+lensX 已交付框架无关的 `@lensx/plugin-sdk@0.1.0` workspace package。package 具有公共 root 与
+`@lensx/plugin-sdk/iframe` 入口，Runtime 只依赖 `@lensx/plugin-contract`。未声明的 deep import 不受支持；其公共声明
 不要求 React、Semi Design、Tauri、DOM 全局、Node filesystem 类型或 Host 私有模块。
 
 根入口公开 `createPluginSdk`、`PluginSdkError`、SDK lifecycle、Runtime context、取消和
@@ -682,6 +685,29 @@ Host 对象或 wire 数据。Host method、参数、权限、domain 与 internal
 它不定义 request ID、nonce、identity、origin、`Window`、`MessagePort`、`postMessage` 或
 JSON-RPC envelope。公共 `PluginSdkClient` 特意不提供任意字符串 Host method 调用。SDK package
 的白盒测试 fake 仍是私有 fixture；公共黑盒控制位于独立 Testkit package。
+
+`PluginSdkClient.request()` 只接受 Contract `HostApiRequest` 判别联合；进入 transport 前完成校验与
+冻结，并从 method 推导配对 result payload 类型。client 会拒绝 `ready` 前调用，也会拒绝当前
+capability snapshot 未包含的 method。`subscribe()` 只接受 `runtime.context_changed`；完整校验并冻结的
+replacement 会先成为 `client.context`，再通知 subscriber。Contract-valid Host API error 与 SDK 的
+cancellation、timeout、disconnect、dispose、invalid argument、transport failure 保持可判别。
+
+`createPluginIframeTransport()` 不接受 trust 配置。它只接受 SDK 自有 Host origin policy 下 current
+parent 发出的首个 exact bootstrap，只返回一次现有 nonce acknowledgement，之后只使用 transferred
+Port。package 私有 `0.1.0` wire 由 exact request/response/event/cancel/disconnect frame 与 transport
+自有 bounded request ID 组成；不含 plugin/Page identity、origin、grant、path、executor、Tauri/Host
+object、stack 或 raw exception。package 不 export frame、codec、fixture、Host projection、nonce/origin
+policy 或 deep-import path。
+
+Host 最多消费 ready lease 一次。私有 adapter 向窄 handler 注入不可变 Session identity 与 Host-owned
+cancellation signal，校验所有 result/error/event，支持并发乱序 settle，并让 Session/Page replacement
+与 dispose 收敛到幂等 cleanup。Production 只安装稳定 `unavailable` handler；fixture 虽可证明完整
+round-trip，但这里不实现 production `runtime.get_context`、`ui.close`、Action、storage、clipboard、
+permission、application service、Rust command 或其他副作用。
+
+运行 `pnpm run check:plugin-sdk-transport` 可验证 codec drift、SDK/Testkit、iframe/Host adapter、真实
+tarball no-DOM/browser consumer、真实 MessageChannel integration、Runtime lifecycle 与有界 macOS
+WKWebView evidence。本交付不声称 Windows/Linux Runtime transport 支持。
 
 ## 已交付的公共 Plugin Testkit
 
@@ -826,7 +852,7 @@ icon 解析、完整权限决策、生命周期写操作和外部 Runtime 执行
 ### 外部插件
 
 外部插件 UI 运行在已交付的隔离 iframe 中。已交付的私有 Runtime Session 会通过受控 Host bootstrap
-认证唯一专用 Port；插件仍没有公共 transport 或可执行 Host API。
+认证唯一专用 Port，公共 iframe SDK 会通过私有闭合 wire 消费它；production 仍没有可执行 Host API。
 外部插件不能直接访问：
 
 - 应用 React 状态或组件实例；
@@ -841,17 +867,18 @@ icon 解析、完整权限决策、生命周期写操作和外部 Runtime 执行
 
 已交付的公共语义契约定义了上文十个 method ID、exact params/result、
 `runtime.context_changed`、`PluginRuntimeContext`、permission、error 与 capability/version 规则。
-Contract 校验不会发送或执行请求，公共 SDK client 也没有 raw 或具体 Host API method。
+Contract 校验本身不会发送或执行请求。公共 SDK client 现在提供一个 Contract-closed typed request
+operation，而不是 raw string method 或具体副作用 provider。
 
 预期通信流程为：
 
 ```text
 iframe
-  -> 未来基于已认证 Port 的类型化 Plugin SDK transport
-  -> 未来 JSON-RPC/request 协议
-  -> 来源、身份、方法、参数和权限校验
-  -> Host API dispatcher
-  -> 应用服务或 Rust command
+  -> 基于已认证 Port 的类型化 Plugin SDK
+  -> 私有闭合 request/response/event/cancel wire
+  -> 注入 Session-derived identity 的 Host Port adapter
+  -> production unavailable handler
+  -. 未来 Dispatcher 与 permission decision .-> 应用服务或 Rust command
 ```
 
 Bridge 必须校验真实消息来源和受限制的 origin。已声明权限不等于已授予权限。特权方法必须在
@@ -881,8 +908,8 @@ Host API 方法保持小型、类型化、版本化，并且可以独立测试�
 
 静态 Manifest 格式、校验器、Host 私有本地安装与同 identity replacement、绑定 revision 的
 enable/disable/uninstall 基础设施、scoped package-relative resources、Plugin surface 投影、生产
-Action 激活、Page Registry/navigation、macOS 隔离 iframe Runtime、Host 私有进程内 Runtime Session
-与公共 Host API 语义契约已经交付。其余每项能力——
+Action 激活、Page Registry/navigation、macOS 隔离 iframe Runtime、Host 私有进程内 Runtime Session、
+公共 SDK iframe transport/Host Port adapter 与公共 Host API 语义契约已经交付。其余每项能力——
 完整插件管理 UI、完整权限、
-Host API transport/dispatch/执行、公共打包、远程/自动更新、用户主动 rollback history 或 sidecar——
+Host API dispatch/执行、公共打包、远程/自动更新、用户主动 rollback history 或 sidecar——
 都需要独立的已接受规格和实现证据。本文定义架构方向和边界，不是发布检查清单。

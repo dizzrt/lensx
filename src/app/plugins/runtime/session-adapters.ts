@@ -5,6 +5,7 @@ export interface PluginRuntimeSessionMessageEvent {
 export interface PluginRuntimeSessionMessagePort {
   onmessage: ((event: PluginRuntimeSessionMessageEvent) => void) | null;
   onmessageerror: (() => void) | null;
+  postMessage: (value: unknown) => void;
   start: () => void;
   close: () => void;
 }

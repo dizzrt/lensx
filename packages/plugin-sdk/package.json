@@ -28,6 +28,10 @@
     ".": {
       "types": "./dist/src/index.d.ts",
       "import": "./dist/src/index.js"
+    },
+    "./iframe": {
+      "types": "./dist/src/iframe.d.ts",
+      "import": "./dist/src/iframe.js"
     }
   },
   "main": "./dist/src/index.js",

@@ -30,6 +30,7 @@ class FakePort implements PluginRuntimeSessionMessagePort {
   onmessageerror: (() => void) | null = null;
   readonly start = rs.fn();
   readonly close = rs.fn();
+  readonly postMessage = rs.fn();
 
   emit(data: unknown) {
     this.onmessage?.({ data });

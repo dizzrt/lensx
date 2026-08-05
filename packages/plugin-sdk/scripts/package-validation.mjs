@@ -19,8 +19,8 @@ export const validatePackedPackage = ({ declarationSources, files, metadata, run
   if (metadata.private === true) {
     diagnostics.push('The public package must not be private.');
   }
-  if (Object.keys(metadata.exports ?? {}).join('\0') !== '.') {
-    diagnostics.push('The SDK package must expose only its root entry.');
+  if (Object.keys(metadata.exports ?? {}).join('\0') !== '.\0./iframe') {
+    diagnostics.push('The SDK package must expose only its root and iframe entries.');
   }
   if (Object.keys(dependencies).join('\0') !== '@lensx/plugin-contract') {
     diagnostics.push('The SDK must publish Plugin Contract as its only Runtime dependency.');
