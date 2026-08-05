@@ -23,7 +23,7 @@ use lensx_lib::{
     plugin_resource_service::PluginResourceService,
 };
 use plugin_package_format::{traverse_plugin_package, PackageEntrySink};
-use plugin_resource_url::parse_plugin_resource_url;
+use plugin_resource_url::{parse_plugin_resource_url, translated_resource_url};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -162,6 +162,8 @@ struct RuntimeReport {
     tauri_absent: bool,
     #[serde(default)]
     attempts: BTreeMap<String, String>,
+    #[serde(default)]
+    csp_checks: BTreeMap<String, bool>,
     document_origin: String,
     engine_version: String,
     origin_non_opaque: bool,
@@ -210,6 +212,9 @@ struct RuntimeEvidence {
     fixture: FixtureKind,
     bundle_shape: &'static str,
     resource_service_path_verified: bool,
+    plugin_csp_native_get_head_verified: bool,
+    plugin_csp_translated_get_head_verified: bool,
+    csp_checks: BTreeMap<String, bool>,
     sandbox: &'static str,
     permissions_policy: &'static str,
     referrer_policy: &'static str,
@@ -272,6 +277,32 @@ struct HarnessState {
     download_callback_hits: Arc<AtomicUsize>,
     reported: Arc<AtomicBool>,
     session_mode: bool,
+    plugin_csp_native_get_head_verified: bool,
+    plugin_csp_translated_get_head_verified: bool,
+}
+
+fn expected_csp_checks(fixture: FixtureKind) -> &'static [&'static str] {
+    match fixture.package_kind() {
+        FixtureKind::Normal | FixtureKind::Replacement => &[
+            "classic_script_allowed",
+            "es_module_allowed",
+            "style_allowed",
+            "image_allowed",
+        ],
+        FixtureKind::Malicious => &[
+            "remote_script_blocked",
+            "inline_script_blocked",
+            "eval_blocked",
+            "connect_blocked",
+            "worker_blocked",
+            "frame_blocked",
+            "object_blocked",
+            "base_blocked",
+            "form_blocked",
+            "data_blocked",
+            "blob_blocked",
+        ],
+    }
 }
 
 fn expected_malicious_attempts() -> [&'static str; 9] {
@@ -312,6 +343,20 @@ fn plugin_iframe_runtime_harness_record(
             .bytes()
             .all(|byte| byte.is_ascii_digit() || byte == b'.')
     {
+        return Err("runtime_harness_report_rejected");
+    }
+    let expected_csp = expected_csp_checks(state.fixture);
+    if report.csp_checks.len() != expected_csp.len()
+        || expected_csp
+            .iter()
+            .any(|key| report.csp_checks.get(*key) != Some(&true))
+    {
+        let failed = expected_csp
+            .iter()
+            .filter(|key| report.csp_checks.get(**key) != Some(&true))
+            .copied()
+            .collect::<Vec<_>>();
+        eprintln!("runtime harness bounded CSP checks failed: {failed:?}");
         return Err("runtime_harness_report_rejected");
     }
     if state.session_mode
@@ -368,6 +413,9 @@ fn plugin_iframe_runtime_harness_record(
         fixture: state.fixture,
         bundle_shape: "canonical_lxp_plugin_resource_service",
         resource_service_path_verified: true,
+        plugin_csp_native_get_head_verified: state.plugin_csp_native_get_head_verified,
+        plugin_csp_translated_get_head_verified: state.plugin_csp_translated_get_head_verified,
+        csp_checks: report.csp_checks,
         sandbox: SANDBOX,
         permissions_policy: PERMISSIONS_POLICY,
         referrer_policy: REFERRER_POLICY,
@@ -559,7 +607,10 @@ fn initialize_resource_service(
     .map_err(|_| ())?;
     let plugin_id = manifest.plugin_id.clone();
     manager.register(manifest, facts).map_err(|_| ())?;
-    let service = PluginResourceService::initialize(Arc::clone(&manager), Some(packages_root));
+    let service = PluginResourceService::initialize_for_macos_harness(
+        Arc::clone(&manager),
+        Some(packages_root),
+    );
     let entry = service
         .resolve_entry(&ResolvePluginResourceEntryRequest {
             contract_version: PLUGIN_RESOURCE_CONTRACT_VERSION.to_owned(),
@@ -599,6 +650,44 @@ fn response(body: Vec<u8>, mime: &'static str, status: StatusCode) -> Response<V
         .header("x-content-type-options", "nosniff")
         .body(body)
         .expect("static Runtime harness response should be valid")
+}
+
+fn plugin_csp_header_matrix(service: &PluginResourceService, native_entry: &str) -> (bool, bool) {
+    fn headers_match(service: &PluginResourceService, entry: &str) -> bool {
+        let get = service.handle_request(
+            tauri::http::Request::builder()
+                .method(tauri::http::Method::GET)
+                .uri(entry)
+                .body(Vec::new())
+                .expect("harness GET request should be valid"),
+        );
+        let head = service.handle_request(
+            tauri::http::Request::builder()
+                .method(tauri::http::Method::HEAD)
+                .uri(entry)
+                .body(Vec::new())
+                .expect("harness HEAD request should be valid"),
+        );
+        get.status() == StatusCode::OK
+            && head.status() == StatusCode::OK
+            && head.body().is_empty()
+            && get.headers() == head.headers()
+            && get
+                .headers()
+                .get(tauri::http::header::CONTENT_SECURITY_POLICY)
+                .is_some_and(|value| {
+                    value.to_str().is_ok_and(|policy| {
+                        policy.starts_with("default-src 'none'")
+                            && policy.contains("frame-ancestors lensx-runtime-harness://localhost")
+                            && !policy.contains('*')
+                    })
+                })
+    }
+
+    let native = headers_match(service, native_entry);
+    let translated = translated_resource_url(native_entry, "https")
+        .is_some_and(|entry| headers_match(service, &entry));
+    (native, translated)
 }
 
 fn host_document(
@@ -794,6 +883,12 @@ pub fn run(session_mode: bool) {
             eprintln!("plugin iframe Runtime Resource Service fixture is invalid");
             process::exit(2);
         });
+    let (plugin_csp_native_get_head_verified, plugin_csp_translated_get_head_verified) =
+        plugin_csp_header_matrix(&resource_service, &entry);
+    if !plugin_csp_native_get_head_verified || !plugin_csp_translated_get_head_verified {
+        eprintln!("plugin Runtime CSP response Header matrix failed");
+        process::exit(2);
+    }
     let os_version = macos_version().unwrap_or_else(|_| {
         eprintln!("macOS version is unavailable");
         process::exit(2);
@@ -870,6 +965,8 @@ pub fn run(session_mode: bool) {
             download_callback_hits,
             reported,
             session_mode,
+            plugin_csp_native_get_head_verified,
+            plugin_csp_translated_get_head_verified,
         })
         .invoke_handler(tauri::generate_handler![
             plugin_iframe_runtime_harness_record,

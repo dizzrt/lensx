@@ -1,3 +1,5 @@
+import type { PluginRuntimeAttempt } from './lifecycle-controller';
+import { browserPluginRuntimeScheduler, type PluginRuntimeScheduler } from './scheduler';
 import {
   browserPluginRuntimeSessionAdapters,
   type PluginRuntimeSessionAdapters,
@@ -14,6 +16,8 @@ import {
   type PluginRuntimeSessionState,
   parsePluginRuntimeSessionReadyAcknowledgement,
 } from './session-contract';
+
+export const PLUGIN_RUNTIME_SESSION_HANDSHAKE_DEADLINE_MS = 5_000;
 
 export interface PluginRuntimeHostPortLease {
   readonly identity: PluginRuntimeSessionIdentity;
@@ -38,6 +42,7 @@ export interface StartPluginRuntimeSessionInput {
   readonly identity: PluginRuntimeSessionIdentityInput;
   readonly targetWindow: PluginRuntimeSessionTargetWindow;
   readonly targetOrigin: string;
+  readonly owningAttempt?: Pick<PluginRuntimeAttempt, 'isCurrent' | 'fail'>;
 }
 
 export interface PluginRuntimeSessionService {
@@ -59,12 +64,13 @@ const safeClose = (port: PluginRuntimeSessionMessagePort) => {
 
 export const createPluginRuntimeSessionService = (
   adapters: PluginRuntimeSessionAdapters = browserPluginRuntimeSessionAdapters,
+  scheduler: PluginRuntimeScheduler = browserPluginRuntimeScheduler,
 ): PluginRuntimeSessionService => {
   let active: PluginRuntimeSession | undefined;
 
   const service: PluginRuntimeSessionService = Object.freeze({
     start(input: StartPluginRuntimeSessionInput) {
-      const { identity: identityInput, targetWindow, targetOrigin } = input;
+      const { identity: identityInput, targetWindow, targetOrigin, owningAttempt } = input;
       active?.dispose();
       const identity = freezePluginRuntimeSessionIdentity(identityInput);
       if (targetOrigin !== identity.expected_origin) {
@@ -78,6 +84,7 @@ export const createPluginRuntimeSessionService = (
       let pendingNonce: string | undefined = nonce;
       let errorCode: PluginRuntimeSessionErrorCode | undefined;
       let lease: PluginRuntimeHostPortLease | undefined;
+      let handshakeTimer: unknown;
 
       const snapshot = (): PluginRuntimeSessionSnapshot =>
         Object.freeze({
@@ -94,14 +101,28 @@ export const createPluginRuntimeSessionService = (
         safeClose(channel.port1);
         safeClose(channel.port2);
       };
-      const transitionDisconnected = (code: PluginRuntimeSessionErrorCode) => {
+      const clearHandshakeDeadline = () => {
+        if (handshakeTimer !== undefined) scheduler.clearTimeout(handshakeTimer);
+        handshakeTimer = undefined;
+      };
+      const transitionDisconnected = (code: PluginRuntimeSessionErrorCode, notifyOwner = true) => {
         if (state === 'disconnected' || state === 'disposed') return;
         state = 'disconnected';
+        clearHandshakeDeadline();
         pendingNonce = undefined;
         lease = undefined;
         errorCode = code;
         closePorts();
         publish();
+        if (notifyOwner && owningAttempt?.isCurrent()) {
+          void owningAttempt.fail(
+            code === 'handshake_timeout'
+              ? 'runtime_handshake_timeout'
+              : code === 'port_disconnected'
+                ? 'runtime_session_disconnected'
+                : 'runtime_unavailable',
+          );
+        }
       };
 
       const session: PluginRuntimeSession = Object.freeze({
@@ -115,6 +136,7 @@ export const createPluginRuntimeSessionService = (
         dispose() {
           if (state === 'disposed') return;
           state = 'disposed';
+          clearHandshakeDeadline();
           pendingNonce = undefined;
           lease = undefined;
           errorCode = undefined;
@@ -126,6 +148,10 @@ export const createPluginRuntimeSessionService = (
       });
 
       channel.port1.onmessage = ({ data }) => {
+        if (owningAttempt && !owningAttempt.isCurrent()) {
+          session.dispose();
+          return;
+        }
         if (state !== 'awaiting_handshake' || pendingNonce === undefined) {
           transitionDisconnected('invalid_acknowledgement');
           return;
@@ -140,6 +166,7 @@ export const createPluginRuntimeSessionService = (
           return;
         }
         pendingNonce = undefined;
+        clearHandshakeDeadline();
         state = 'ready';
         lease = Object.freeze({ identity, port: channel.port1 });
         publish();
@@ -149,9 +176,14 @@ export const createPluginRuntimeSessionService = (
         channel.port1.start();
         targetWindow.postMessage(bootstrap, targetOrigin, [channel.port2 as unknown as Transferable]);
       } catch {
-        transitionDisconnected('bootstrap_failed');
+        transitionDisconnected('bootstrap_failed', false);
         throw new PluginRuntimeSessionError('bootstrap_failed');
       }
+      handshakeTimer = scheduler.setTimeout(() => {
+        if (state === 'awaiting_handshake' && (!owningAttempt || owningAttempt.isCurrent())) {
+          transitionDisconnected('handshake_timeout');
+        }
+      }, PLUGIN_RUNTIME_SESSION_HANDSHAKE_DEADLINE_MS);
       active = session;
       return session;
     },

@@ -112,9 +112,25 @@
               "type": "string",
               "minLength": 1
             },
-            "pluginRuntimeFailureDescription": {
-              "type": "string",
-              "minLength": 1
+            "pluginRuntimeFailure": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "loadTimeout": { "type": "string", "minLength": 1 },
+                "handshakeTimeout": { "type": "string", "minLength": 1 },
+                "disconnected": { "type": "string", "minLength": 1 },
+                "securityPolicy": { "type": "string", "minLength": 1 },
+                "crashLoop": { "type": "string", "minLength": 1 },
+                "unavailable": { "type": "string", "minLength": 1 }
+              },
+              "required": [
+                "loadTimeout",
+                "handshakeTimeout",
+                "disconnected",
+                "securityPolicy",
+                "crashLoop",
+                "unavailable"
+              ]
             },
             "pluginRuntimeRetry": {
               "type": "string",
@@ -137,7 +153,7 @@
             "pluginRuntimeLoading",
             "pluginRuntimeFrameTitle",
             "pluginRuntimeFailureTitle",
-            "pluginRuntimeFailureDescription",
+            "pluginRuntimeFailure",
             "pluginRuntimeRetry",
             "errorTitle",
             "errorDescription"

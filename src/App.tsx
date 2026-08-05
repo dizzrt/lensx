@@ -57,10 +57,12 @@ import { desktopLocalPluginInstallationClient, type LocalPluginInstallationClien
 import { desktopPluginResourceAdapter } from './app/plugins/resource';
 import {
   createPluginPageRuntimeResolver,
+  createPluginRuntimeLifecycleService,
   createPluginRuntimeSessionService,
   desktopPluginRuntimeNavigationAdapter,
   type PluginPageRuntimeResolver,
   PluginRuntimeFrame,
+  type PluginRuntimeLifecycleService,
   type PluginRuntimeNavigationAdapter,
   type PluginRuntimeSessionService,
 } from './app/plugins/runtime';
@@ -75,6 +77,7 @@ export interface AppProps {
   navigationService?: AppNavigationService;
   preferencesClient?: AppPreferencesClient;
   pluginRuntimeNavigationAdapter?: PluginRuntimeNavigationAdapter;
+  pluginRuntimeLifecycleService?: PluginRuntimeLifecycleService;
   pluginRuntimeResolver?: PluginPageRuntimeResolver;
   pluginRuntimeSessionService?: PluginRuntimeSessionService;
   renderPage?: (activePage: ActivePage) => ReactNode;
@@ -107,6 +110,7 @@ const App = ({
   navigationService = productionAppNavigationService,
   preferencesClient = desktopAppPreferencesClient,
   pluginRuntimeNavigationAdapter = desktopPluginRuntimeNavigationAdapter,
+  pluginRuntimeLifecycleService,
   pluginRuntimeResolver,
   pluginRuntimeSessionService,
   renderPage,
@@ -159,6 +163,23 @@ const App = ({
     () => pluginRuntimeSessionService ?? createPluginRuntimeSessionService(),
     [pluginRuntimeSessionService],
   );
+  const effectivePluginRuntimeLifecycleService = useMemo(
+    () => pluginRuntimeLifecycleService ?? createPluginRuntimeLifecycleService(),
+    [pluginRuntimeLifecycleService],
+  );
+
+  useEffect(() => {
+    const terminateForReload = () => {
+      void effectivePluginRuntimeLifecycleService.terminateCurrent('host_reload');
+    };
+    window.addEventListener('beforeunload', terminateForReload);
+    window.addEventListener('pagehide', terminateForReload);
+    return () => {
+      window.removeEventListener('beforeunload', terminateForReload);
+      window.removeEventListener('pagehide', terminateForReload);
+      void effectivePluginRuntimeLifecycleService.dispose();
+    };
+  }, [effectivePluginRuntimeLifecycleService]);
   const results = useMemo(
     () =>
       searchLauncherActions({
@@ -586,6 +607,7 @@ const App = ({
                 ) : pageResolution?.provider.kind === 'plugin' && pageContext && effectivePluginRuntimeResolver ? (
                   <PluginRuntimeFrame
                     activePage={activePage}
+                    lifecycleService={effectivePluginRuntimeLifecycleService}
                     navigationAdapter={pluginRuntimeNavigationAdapter}
                     pageResolution={pageResolution}
                     pageTitle={pageContext.page_title}

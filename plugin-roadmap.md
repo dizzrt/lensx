@@ -31,7 +31,8 @@
 - Host-owned Launcher Action descriptor、Registry、Dispatcher、搜索与集合能力；
 - Host 私有的 Plugin Page Registry、Registration revision 驱动的 Action/Page surface projection、
   grant snapshot 预检、统一页面导航、scoped Resource Service、per-generation isolated origin、
-  frame-aware exact navigation lease 与仅在 active Page 存在的 Host-owned iframe Runtime；
+  frame-aware exact navigation lease、仅在 active Page 存在的 Host-owned iframe Runtime、Host 私有
+  Runtime Session，以及 Runtime CSP/deadline/统一清理/进程内熔断；
 - Host 内建的隐藏 Launcher 和打开设置 Action；
 - Host 设置页面中的插件空占位。
 
@@ -39,7 +40,7 @@
 
 - Plugin CLI package；
 - 远程下载、自动更新和用户主动 rollback history；
-- Runtime session、iframe message transport 与完整 CSP/lifecycle recovery；
+- 公共 iframe SDK transport 与 Host API message protocol；
 - 真实 Host API、SDK transport、权限授权和插件私有存储；
 - 插件管理 UI、开发模式、签名、更新、Catalog 和 Marketplace。
 
@@ -487,9 +488,10 @@ Runtime health rollback、数据迁移、权限 UI 或完整管理 UI。
 
 **完成标准**：只有当前活跃 iframe 能以其真实身份建立 Host 通信；伪造消息稳定失败。
 
-- [ ] **Task 4.4：完善 Runtime CSP 与生命周期**
+- [x] **Task 4.4：完善 Runtime CSP 与生命周期**
 
-**OpenSpec change**：`complete-plugin-runtime-security-lifecycle`
+**OpenSpec change**：[complete-plugin-runtime-security-lifecycle](openspec/changes/archive/2026-08-05-complete-plugin-runtime-security-lifecycle/)
+（已完成并归档）
 
 **目标**：确保插件资源、iframe、监听器和 pending 调用只在授权页面会话期间存在。
 

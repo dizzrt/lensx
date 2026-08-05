@@ -15,6 +15,9 @@ const expectedKeys = [
   'fixture',
   'bundle_shape',
   'resource_service_path_verified',
+  'plugin_csp_native_get_head_verified',
+  'plugin_csp_translated_get_head_verified',
+  'csp_checks',
   'sandbox',
   'permissions_policy',
   'referrer_policy',
@@ -42,6 +45,8 @@ const expectedKeys = [
 ] as const;
 const requiredTrue = [
   'resource_service_path_verified',
+  'plugin_csp_native_get_head_verified',
+  'plugin_csp_translated_get_head_verified',
   'origin_non_opaque',
   'origin_serialization_verified',
   'storage_initially_absent',
@@ -85,6 +90,32 @@ for (const fixture of fixtures) {
   }
   for (const key of requiredTrue) {
     if (value[key] !== true) fail(`${fixture}.${key} did not pass`);
+  }
+  const expectedCspChecks =
+    fixture === 'malicious'
+      ? [
+          'base_blocked',
+          'blob_blocked',
+          'connect_blocked',
+          'data_blocked',
+          'eval_blocked',
+          'form_blocked',
+          'frame_blocked',
+          'inline_script_blocked',
+          'object_blocked',
+          'remote_script_blocked',
+          'worker_blocked',
+        ]
+      : ['classic_script_allowed', 'es_module_allowed', 'image_allowed', 'style_allowed'];
+  const cspChecks = value.csp_checks;
+  if (
+    typeof cspChecks !== 'object' ||
+    cspChecks === null ||
+    Array.isArray(cspChecks) ||
+    JSON.stringify(Object.keys(cspChecks)) !== JSON.stringify(expectedCspChecks) ||
+    expectedCspChecks.some((key) => (cspChecks as Record<string, unknown>)[key] !== true)
+  ) {
+    fail(`${fixture} CSP matrix drifted`);
   }
   if (
     value.privileged_handler_hits !== 0 ||

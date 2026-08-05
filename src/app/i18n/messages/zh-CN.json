@@ -24,7 +24,14 @@
       "pluginRuntimeLoading": "正在加载插件页面…",
       "pluginRuntimeFrameTitle": "{{title}}插件运行时",
       "pluginRuntimeFailureTitle": "无法加载此插件页面",
-      "pluginRuntimeFailureDescription": "隔离运行时当前不可用。重试将重新解析插件的当前版本。",
+      "pluginRuntimeFailure": {
+        "loadTimeout": "插件页面未能及时完成加载。请重试以启动新的运行时。",
+        "handshakeTimeout": "插件运行时未能及时完成安全握手。请重试以重新启动。",
+        "disconnected": "插件运行时意外断开。请重试以启动新的运行时。",
+        "securityPolicy": "应用安全策略已停止此插件运行时。",
+        "crashLoop": "此插件已连续失败。请稍候，然后手动重试。",
+        "unavailable": "隔离运行时当前不可用。重试将重新解析插件的当前版本。"
+      },
       "pluginRuntimeRetry": "重试",
       "errorTitle": "无法显示此页面",
       "errorDescription": "请关闭页面后重试。"

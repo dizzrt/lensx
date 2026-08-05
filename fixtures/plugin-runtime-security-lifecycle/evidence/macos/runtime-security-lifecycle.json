@@ -1,0 +1,17 @@
+{
+  "evidence_version": "0.1.0",
+  "platform": "macos-wkwebview",
+  "checks": {
+    "exact_load_deadline_observed": true,
+    "exact_handshake_deadline_observed": true,
+    "third_failure_opened_breaker": true,
+    "cooldown_blocked_hidden_construction": true,
+    "no_automatic_retry": true,
+    "exact_single_iframe": true,
+    "terminal_cleanup_removed_iframe": true,
+    "terminal_cleanup_released_lease": true,
+    "session_ports_disposed": true,
+    "fixed_policy_constants_observed": true,
+    "host_csp_header_verified": true
+  }
+}

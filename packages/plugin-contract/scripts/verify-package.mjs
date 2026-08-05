@@ -24,6 +24,7 @@ const run = (command, arguments_, cwd, options = {}) => {
 };
 
 try {
+  const pnpmStorePath = run('pnpm', ['store', 'path'], repositoryRoot).trim();
   run('pnpm', ['run', 'build'], packageRoot, { stdio: 'inherit' });
   const packOutput = run('pnpm', ['pack', '--json', '--pack-destination', temporaryRoot], packageRoot);
   const packMetadata = JSON.parse(packOutput);
@@ -102,12 +103,9 @@ try {
     'utf8',
   );
 
-  run(
-    'pnpm',
-    ['install', '--offline', '--ignore-scripts', '--store-dir', resolve(repositoryRoot, '.pnpm-store/v11')],
-    consumerRoot,
-    { stdio: 'inherit' },
-  );
+  run('pnpm', ['install', '--offline', '--ignore-scripts', '--store-dir', pnpmStorePath], consumerRoot, {
+    stdio: 'inherit',
+  });
   run(resolve(repositoryRoot, 'node_modules/.bin/tsc'), ['-p', 'tsconfig.json'], consumerRoot, { stdio: 'inherit' });
   const runtimeOutput = run(
     'node',

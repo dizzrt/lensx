@@ -1,11 +1,15 @@
 import { describe, expect, rs, test } from '@rstest/core';
 import type {
+  PluginRuntimeScheduler,
   PluginRuntimeSessionAdapters,
   PluginRuntimeSessionMessageChannel,
   PluginRuntimeSessionMessageEvent,
   PluginRuntimeSessionMessagePort,
 } from '../src/app/plugins/runtime';
-import { createPluginRuntimeSessionService } from '../src/app/plugins/runtime';
+import {
+  createPluginRuntimeSessionService,
+  PLUGIN_RUNTIME_SESSION_HANDSHAKE_DEADLINE_MS,
+} from '../src/app/plugins/runtime';
 
 const nonce = '0123456789abcdef0123456789abcdef';
 const secondNonce = 'fedcba9876543210fedcba9876543210';
@@ -36,7 +40,27 @@ class FakePort implements PluginRuntimeSessionMessagePort {
   }
 }
 
-const harness = (nonces: readonly string[] = [nonce]) => {
+class VirtualScheduler implements PluginRuntimeScheduler {
+  readonly callbacks = new Map<number, () => void>();
+  #sequence = 0;
+  readonly now = () => 0;
+  readonly setTimeout = (callback: () => void) => {
+    const handle = ++this.#sequence;
+    this.callbacks.set(handle, callback);
+    return handle;
+  };
+  readonly clearTimeout = (handle: unknown) => {
+    if (typeof handle === 'number') this.callbacks.delete(handle);
+  };
+  expireAll() {
+    for (const [handle, callback] of [...this.callbacks]) {
+      this.callbacks.delete(handle);
+      callback();
+    }
+  }
+}
+
+const harness = (nonces: readonly string[] = [nonce], scheduler?: PluginRuntimeScheduler) => {
   const channels: PluginRuntimeSessionMessageChannel[] = [];
   let nonceIndex = 0;
   const adapters: PluginRuntimeSessionAdapters = {
@@ -48,7 +72,7 @@ const harness = (nonces: readonly string[] = [nonce]) => {
     },
   };
   const postMessage = rs.fn();
-  const service = createPluginRuntimeSessionService(adapters);
+  const service = createPluginRuntimeSessionService(adapters, scheduler);
   const start = () =>
     service.start({
       identity,
@@ -167,5 +191,35 @@ describe('PluginRuntimeSessionService', () => {
     expect(() => current.start()).toThrow(expect.objectContaining({ code: 'bootstrap_failed' }));
     expect(current.channels[0]?.port1.close).toHaveBeenCalledTimes(1);
     expect(current.channels[0]?.port2.close).toHaveBeenCalledTimes(1);
+  });
+
+  test('starts the fixed deadline only after bootstrap, clears it on ready, and fails a never-acknowledged Session', async () => {
+    expect(PLUGIN_RUNTIME_SESSION_HANDSHAKE_DEADLINE_MS).toBe(5_000);
+    const scheduler = new VirtualScheduler();
+    const fail = rs.fn(async () => undefined);
+    const current = harness([nonce, secondNonce], scheduler);
+    const session = current.service.start({
+      identity,
+      targetWindow: { postMessage: current.postMessage },
+      targetOrigin: identity.expected_origin,
+      owningAttempt: { isCurrent: () => true, fail },
+    });
+    expect(scheduler.callbacks.size).toBe(1);
+    scheduler.expireAll();
+    expect(session.snapshot()).toMatchObject({ state: 'disconnected', error_code: 'handshake_timeout' });
+    expect(fail).toHaveBeenCalledWith('runtime_handshake_timeout');
+
+    const ready = current.service.start({
+      identity: { ...identity, runtime_attempt_key: 'attempt-2' },
+      targetWindow: { postMessage: current.postMessage },
+      targetOrigin: identity.expected_origin,
+      owningAttempt: { isCurrent: () => true, fail },
+    });
+    const second = current.channels[1] as { port1: FakePort; port2: FakePort };
+    second.port1.emit(acknowledgement(secondNonce));
+    expect(ready.snapshot().state).toBe('ready');
+    expect(scheduler.callbacks.size).toBe(0);
+    scheduler.expireAll();
+    expect(ready.snapshot().state).toBe('ready');
   });
 });

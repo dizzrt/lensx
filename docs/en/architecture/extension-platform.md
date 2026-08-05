@@ -507,7 +507,8 @@ Only `GET` and `HEAD` are supported. A fixed case-insensitive table covers
 HTML, JavaScript/ES modules, CSS, JSON, Wasm, PNG, JPEG, GIF, WebP, AVIF, SVG,
 ICO, and WOFF2; there is no sniffing or `application/octet-stream` fallback.
 Success includes exact `Content-Type`/`Content-Length`, `nosniff`, and
-`Cache-Control: no-store`; `HEAD` has the same status and headers with no body.
+`Cache-Control: no-store`; successful HTML also receives the exact Host-owned
+Plugin Runtime CSP. `HEAD` has the same status and headers with no body.
 Range, conditional requests, query routing, directory indexes, content
 negotiation, wildcard CORS, and downloads are unsupported. Every success and
 error is `no-store`.
@@ -523,10 +524,9 @@ Run `pnpm run check:plugin-resource-service` for the shared Rust/TypeScript
 fixtures, desktop adapter, workspace boundary, Manager generation, Installer
 ownership regressions, and protocol/path/MIME/lifecycle/race/oracle/platform URL
 tests. This service does not create an iframe, execute plugin code, establish
-Runtime Sessions or Host API transport, grant permissions, or claim complete
-CSP by itself. The shipped iframe container and downstream Runtime Session
-consume its validated `entry_url`; Host API transport and complete CSP remain
-separate later capabilities.
+Runtime Sessions or Host API transport, or grant permissions. It enforces the
+document policy selected by the Host-private security profile; the iframe
+container and downstream Runtime Session consume its validated `entry_url`.
 
 ## Shipped macOS Isolated Plugin Runtime Origin Prerequisite
 
@@ -566,7 +566,7 @@ pnpm run check:isolated-plugin-runtime-origin
 
 This is the macOS-only origin prerequisite consumed by the production iframe
 container described below. It does not itself create the iframe or deliver a
-Runtime Session, Host API, permissions, or complete CSP. Parser coverage for
+Runtime Session, Host API, permissions, or select the CSP profile. Parser coverage for
 translated URL shapes is not Windows or Linux Runtime support. The container
 may consume only a validated isolated `entry_url`; it has no shared-origin,
 opaque classic-only, or wildcard/null CORS fallback.
@@ -619,8 +619,8 @@ pnpm run check:frame-aware-webview-navigation-policy
 
 This capability is macOS-only and does not claim Windows or Linux support. The
 Task 4.2 container consumes its exact target lease. The shipped Session below
-also consumes that lease without changing the native policy contract; Host API,
-permissions, and complete CSP remain separate later capabilities.
+also consumes that lease without changing the native policy contract; Host API
+and permissions remain separate later capabilities.
 
 ## Shipped macOS Isolated Plugin iframe Runtime
 
@@ -646,8 +646,9 @@ The UI exposes localized `resolving`, `loading`, `loaded`, and bounded failure
 states with an explicit accessible retry. `loaded` means only that the iframe
 load event fired. It is not SDK or Session `ready`, and this capability adds no
 readiness claim by itself. The downstream Session capability adds only its
-private MessagePort bootstrap; JSON-RPC, Host API, permission dispatch, general
-timeout/crash recovery, and complete CSP remain absent. Plugin Runtime resolver, Resource and
+private MessagePort bootstrap. The security lifecycle described below adds
+deadlines, bounded crash-loop recovery, and CSP without introducing JSON-RPC,
+Host API, or permission dispatch. Plugin Runtime resolver, Resource and
 Registration adapters, iframe policy, native lease boundary, and origin facts
 remain Host-private and are blocked from public packages and plugin workspaces.
 
@@ -700,10 +701,68 @@ The Session contract, parser, adapters, identity, and Port lease remain private
 to the root Host and are excluded from Contract, SDK, UI, Testkit, official,
 example, and external plugin imports and tarballs. This capability defines no
 public SDK iframe transport, JSON-RPC/request ID, Host API method, permission
-decision or UI, privileged dispatch, plugin storage, complete CSP, general
-handshake timeout/crash recovery, background Runtime, sidecar, or Windows/Linux
-support. Run `pnpm run check:plugin-runtime-session` for focused logic/React,
+decision or UI, privileged dispatch, plugin storage, background Runtime,
+sidecar, or Windows/Linux support. The security lifecycle adds the private
+handshake deadline and cleanup described next. Run `pnpm run check:plugin-runtime-session` for focused logic/React,
 real package, boundary, prerequisite, and bounded real macOS WKWebView evidence.
+
+## Shipped Plugin Runtime CSP And Security Lifecycle
+
+The Host and external-plugin documents use separate immutable CSP profiles.
+The production Host profile permits only bundled Host resources, the existing
+Tauri IPC endpoints, and `lensx-plugin:` child frames. Its only style exception
+is `style-src 'unsafe-inline'`, required by the current Semi Design runtime;
+script inline, eval, wildcard, remote script, object, base, form, and ancestor
+relaxations remain denied. Every successful current plugin HTML `GET` and
+`HEAD` receives the same Plugin Runtime profile from the Resource Service. That
+profile defaults to deny, permits only same-origin script, style, image, and
+font resources, disables connect, worker, child frame, media, object, base, and
+form destinations, and admits exactly the production Host ancestor. Manifest,
+publisher, source, grant, query, request-header, and plugin-authored meta values
+cannot change either profile.
+
+CSP, isolated origin, iframe sandbox, Permissions Policy, native navigation,
+and Runtime Session are complementary boundaries. CSP controls resource and
+document destinations; the per-generation origin separates DOM and storage;
+the sandbox and Permissions Policy constrain frame capabilities; the native
+lease controls top-level and descendant navigation; and the Session authenticates
+one current window and dedicated Port. None of these boundaries creates a Host
+API grant.
+
+A Host-private controller owns one Runtime attempt and one external-plugin
+iframe globally. It starts the 10,000 ms load deadline only after the navigation
+lease is active and `src` is committed. The Session starts its 5,000 ms
+handshake deadline only after bootstrap transfer succeeds. Close, navigation,
+quiescence, disable, uninstall, replacement, relevant fact or grant changes,
+retry, timeout, Session failure, Host reload, and App teardown all converge on
+one idempotent terminal operation: make work stale, cancel timers and
+subscriptions, dispose Session and Ports, unbind and remove the iframe,
+compare-current release the navigation lease, then discard references. Late
+promise, load, acknowledgement, timer, and Port events therefore cannot affect
+a newer attempt. There is no preload, hidden pool, background Runtime,
+cross-Page reuse, automatic retry, or persisted Runtime state.
+
+The process-local breaker is keyed by trusted entry identity and resource
+generation. A third qualifying load, handshake, or unexpected-disconnect
+failure in 60,000 ms opens a 30,000 ms cooldown before resolve, lease, iframe,
+or Session creation. Cooldown expiry still requires an explicit user retry.
+Close, navigation, invalidation, and graceful exit do not count; a generation
+change or 30,000 ms continuously healthy `ready` state clears the record, and
+process exit forgets it.
+
+Visible failures use only `runtime_load_timeout`,
+`runtime_handshake_timeout`, `runtime_session_disconnected`,
+`runtime_security_policy_failure`, `runtime_crash_loop`, or
+`runtime_unavailable`, with canonical English and equivalent Simplified
+Chinese copy in the existing accessible feedback surface. Diagnostics and
+evidence exclude full or blocked URLs, origin/scope values, paths, nonce/Port
+content, grants, payloads, storage values, raw exceptions, and stacks; there is
+no remote CSP reporting channel. The committed real WKWebView matrices are
+macOS-only. Task 5.2 still owns the future public SDK iframe transport and does
+not inherit these Host-private attempts, timers, breaker records, or failure
+codes. Run `pnpm run check:plugin-runtime-security-lifecycle` for the focused
+gate and its Resource, origin, navigation, iframe, Session, workspace, and
+public-tarball prerequisites.
 
 ## Shipped Host-Private Plugin Surface Projection And Page Navigation
 

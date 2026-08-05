@@ -18,6 +18,8 @@ describe('bounded macOS Plugin Runtime Session evidence', () => {
       os: 'macos',
       engine: 'wkwebview',
       fixture,
+      plugin_csp_native_get_head_verified: true,
+      plugin_csp_translated_get_head_verified: true,
       exact_target_window: true,
       exact_target_origin: true,
       message_port_transferred: true,
@@ -31,5 +33,6 @@ describe('bounded macOS Plugin Runtime Session evidence', () => {
       window_forgery_ignored: true,
       privileged_handler_hits: 0,
     });
+    expect(Object.values(value.csp_checks as Record<string, unknown>)).not.toContain(false);
   });
 });

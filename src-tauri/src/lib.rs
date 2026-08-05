@@ -20,6 +20,7 @@ pub mod plugin_resource_contract;
 pub mod plugin_resource_service;
 pub(crate) mod plugin_resource_url;
 mod plugin_runtime_navigation;
+pub(crate) mod plugin_runtime_security_policy;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

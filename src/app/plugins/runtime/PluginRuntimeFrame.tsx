@@ -1,5 +1,5 @@
 import { Button, Spin, Typography } from '@douyinfe/semi-ui';
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ActivePage, PageResolution } from '../../navigation';
 import {
@@ -8,6 +8,12 @@ import {
   pluginRuntimeIframeSrc,
   pluginRuntimeOriginFromEntryUrl,
 } from './helpers';
+import {
+  createPluginRuntimeLifecycleService,
+  type PluginRuntimeAttempt,
+  type PluginRuntimeFailureCode,
+  type PluginRuntimeLifecycleService,
+} from './lifecycle-controller';
 import {
   PLUGIN_RUNTIME_IFRAME_SANDBOX,
   PLUGIN_RUNTIME_PERMISSIONS_POLICY,
@@ -18,24 +24,19 @@ import {
   type PluginRuntimeSession,
   type PluginRuntimeSessionService,
 } from './session-service';
-import type {
-  PluginPageRuntimeDescriptor,
-  PluginPageRuntimeResolver,
-  PluginRuntimeNavigationAdapter,
-  PluginRuntimeNavigationLease,
-} from './types';
+import type { PluginPageRuntimeDescriptor, PluginPageRuntimeResolver, PluginRuntimeNavigationAdapter } from './types';
 
 export type PluginRuntimeFrameState =
   | { readonly status: 'resolving' }
   | { readonly status: 'loading' | 'loaded'; readonly descriptor: PluginPageRuntimeDescriptor }
-  | { readonly status: 'failed' }
+  | { readonly status: 'failed'; readonly failureCode: PluginRuntimeFailureCode }
   | { readonly status: 'disposed' };
 
 export type PluginRuntimeFrameEvent =
   | { readonly type: 'resolve' }
   | { readonly type: 'mount'; readonly descriptor: PluginPageRuntimeDescriptor }
   | { readonly type: 'load'; readonly runtimeKey: string }
-  | { readonly type: 'fail' }
+  | { readonly type: 'fail'; readonly failureCode: PluginRuntimeFailureCode }
   | { readonly type: 'dispose' };
 
 export const reducePluginRuntimeFrameState = (
@@ -53,7 +54,7 @@ export const reducePluginRuntimeFrameState = (
         ? { status: 'loaded', descriptor: state.descriptor }
         : state;
     case 'fail':
-      return { status: 'failed' };
+      return { status: 'failed', failureCode: event.failureCode };
     case 'dispose':
       return { status: 'disposed' };
   }
@@ -65,14 +66,14 @@ export interface PluginRuntimeFrameProps {
   readonly pageResolution: PageResolution;
   readonly pageTitle: string;
   readonly resolver: PluginPageRuntimeResolver;
+  readonly lifecycleService?: PluginRuntimeLifecycleService;
   readonly sessionService?: PluginRuntimeSessionService;
 }
 
 interface ActiveRuntimeBinding {
   readonly descriptor: PluginPageRuntimeDescriptor;
-  readonly release: () => void;
+  readonly attempt: PluginRuntimeAttempt;
   session?: PluginRuntimeSession;
-  unsubscribeSession?: () => void;
 }
 
 export const PluginRuntimeFrame = ({
@@ -81,6 +82,7 @@ export const PluginRuntimeFrame = ({
   pageResolution,
   pageTitle,
   resolver,
+  lifecycleService,
   sessionService,
 }: PluginRuntimeFrameProps) => {
   const { t } = useTranslation();
@@ -88,41 +90,45 @@ export const PluginRuntimeFrame = ({
   const [state, dispatch] = useReducer(reducePluginRuntimeFrameState, { status: 'resolving' });
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const activeBindingRef = useRef<ActiveRuntimeBinding | undefined>(undefined);
+  const effectiveLifecycleService = useMemo(
+    () => lifecycleService ?? createPluginRuntimeLifecycleService(),
+    [lifecycleService],
+  );
   const effectiveSessionService = useMemo(
     () => sessionService ?? createPluginRuntimeSessionService(),
     [sessionService],
   );
   const request = useMemo(() => ({ activePage, pageResolution, attempt }), [activePage, attempt, pageResolution]);
+  const bindIframeElement = useCallback((iframe: HTMLIFrameElement | null) => {
+    iframeRef.current = iframe;
+    if (iframe) activeBindingRef.current?.attempt.startLoadDeadline();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    let activeLease: PluginRuntimeNavigationLease | undefined;
-    let leaseReleased = false;
-    let unsubscribeInvalidation: (() => void) | undefined;
-    let revalidationRunning = false;
-    let revalidationPending = false;
+    let lifecycleAttempt: PluginRuntimeAttempt | undefined;
     dispatch({ type: 'resolve' });
+    const targetKey = `${activePage.owner_id}\u0000${activePage.page_id}`;
 
-    const releaseLease = () => {
-      if (leaseReleased) return;
-      leaseReleased = true;
-      if (activeLease) void navigationAdapter.dispose(activeLease);
-    };
-
-    const revoke = () => {
-      const binding = activeBindingRef.current;
-      if (binding) {
-        binding.unsubscribeSession?.();
-        binding.session?.dispose();
-        activeBindingRef.current = undefined;
-      }
-      releaseLease();
-    };
-
-    void resolver
-      .resolve(request)
-      .then(async (descriptor) => {
-        if (cancelled) return;
+    void effectiveLifecycleService
+      .start({
+        targetKey,
+        onFailure: (failureCode) => {
+          if (!cancelled) dispatch({ type: 'fail', failureCode });
+        },
+      })
+      .then(async (runtimeAttempt) => {
+        if (!runtimeAttempt) return;
+        lifecycleAttempt = runtimeAttempt;
+        runtimeAttempt.bindCancellable(() => {
+          cancelled = true;
+        });
+        if (cancelled || !runtimeAttempt.isCurrent()) {
+          await runtimeAttempt.terminate('navigation');
+          return;
+        }
+        const descriptor = await resolver.resolve(request);
+        if (cancelled || !runtimeAttempt.isCurrent()) return;
         if (
           descriptor.runtime_key.length === 0 ||
           descriptor.plugin_id !== activePage.owner_id ||
@@ -134,57 +140,76 @@ export const PluginRuntimeFrame = ({
         ) {
           throw new TypeError('Invalid Host-private Plugin Runtime descriptor.');
         }
+        if (!runtimeAttempt.bindTrustedIdentity(descriptor.entry_id, descriptor.resource_generation)) {
+          await runtimeAttempt.fail('runtime_crash_loop');
+          return;
+        }
         const lease = await navigationAdapter.activate({
           entry_url: descriptor.entry_url,
           host_fragment: descriptor.host_fragment,
         });
-        if (cancelled) {
+        if (cancelled || !runtimeAttempt.isCurrent()) {
           await navigationAdapter.dispose(lease);
           return;
         }
-        activeLease = lease;
-        activeBindingRef.current = { descriptor, release: releaseLease };
+        runtimeAttempt.bindNavigationLease(async () => {
+          await navigationAdapter.dispose(lease);
+        });
+        const binding: ActiveRuntimeBinding = { descriptor, attempt: runtimeAttempt };
+        activeBindingRef.current = binding;
+        runtimeAttempt.bindIframe(() => {
+          if (activeBindingRef.current === binding) activeBindingRef.current = undefined;
+        });
         dispatch({ type: 'mount', descriptor });
 
+        let revalidationRunning = false;
+        let revalidationPending = false;
         const revalidate = async () => {
           revalidationPending = true;
           if (revalidationRunning || !resolver.isCurrent) return;
           revalidationRunning = true;
-          while (!cancelled && revalidationPending) {
+          while (!cancelled && runtimeAttempt.isCurrent() && revalidationPending) {
             revalidationPending = false;
             if (!(await resolver.isCurrent(request, descriptor))) {
-              if (!cancelled) {
-                revoke();
-                dispatch({ type: 'fail' });
-              }
+              if (!cancelled && runtimeAttempt.isCurrent()) await runtimeAttempt.fail('runtime_unavailable');
               break;
             }
           }
           revalidationRunning = false;
         };
-        unsubscribeInvalidation = resolver.subscribeInvalidation?.(() => {
+        const unsubscribeInvalidation = resolver.subscribeInvalidation?.(() => {
           void revalidate();
         });
+        if (unsubscribeInvalidation) runtimeAttempt.bindSubscription(unsubscribeInvalidation);
       })
       .catch(() => {
-        if (!cancelled) dispatch({ type: 'fail' });
+        if (!cancelled && lifecycleAttempt?.isCurrent()) {
+          void lifecycleAttempt.fail('runtime_unavailable');
+        } else if (!cancelled) {
+          dispatch({ type: 'fail', failureCode: 'runtime_unavailable' });
+        }
       });
 
     return () => {
       cancelled = true;
-      unsubscribeInvalidation?.();
       dispatch({ type: 'dispose' });
-      revoke();
+      if (lifecycleAttempt) void lifecycleAttempt.terminate('navigation');
     };
-  }, [activePage.owner_id, activePage.page_id, navigationAdapter, request, resolver]);
+  }, [activePage.owner_id, activePage.page_id, effectiveLifecycleService, navigationAdapter, request, resolver]);
 
   const handleLoad = (descriptor: PluginPageRuntimeDescriptor) => {
-    dispatch({ type: 'load', runtimeKey: descriptor.runtime_key });
     const binding = activeBindingRef.current;
     const targetWindow = iframeRef.current?.contentWindow;
-    if (!binding || binding.descriptor.runtime_key !== descriptor.runtime_key || binding.session || !targetWindow) {
+    if (
+      !binding?.attempt.isCurrent() ||
+      binding.descriptor.runtime_key !== descriptor.runtime_key ||
+      binding.session ||
+      !targetWindow
+    ) {
       return;
     }
+    dispatch({ type: 'load', runtimeKey: descriptor.runtime_key });
+    binding.attempt.completeLoad();
     try {
       const session = effectiveSessionService.start({
         identity: {
@@ -200,29 +225,54 @@ export const PluginRuntimeFrame = ({
         },
         targetWindow: targetWindow as unknown as Parameters<PluginRuntimeSessionService['start']>[0]['targetWindow'],
         targetOrigin: descriptor.expected_origin,
+        owningAttempt: binding.attempt,
       });
       binding.session = session;
-      binding.unsubscribeSession = session.subscribe((snapshot) => {
+      binding.attempt.bindSession(() => session.dispose());
+      const unsubscribeSession = session.subscribe((snapshot) => {
+        if (snapshot.state === 'ready' && binding.attempt.isCurrent()) {
+          binding.attempt.markReady();
+        }
         if (snapshot.state === 'disconnected' && activeBindingRef.current === binding) {
-          binding.release();
-          activeBindingRef.current = undefined;
-          dispatch({ type: 'fail' });
+          const code =
+            snapshot.error_code === 'handshake_timeout'
+              ? 'runtime_handshake_timeout'
+              : snapshot.error_code === 'port_disconnected'
+                ? 'runtime_session_disconnected'
+                : 'runtime_unavailable';
+          void binding.attempt.fail(code);
         }
       });
+      binding.attempt.bindSubscription(unsubscribeSession);
     } catch {
-      binding.release();
-      activeBindingRef.current = undefined;
-      dispatch({ type: 'fail' });
+      void binding.attempt.fail('runtime_unavailable');
     }
   };
 
   if (state.status === 'failed') {
+    const failureDescriptionKey =
+      state.failureCode === 'runtime_load_timeout'
+        ? 'launcher.page.pluginRuntimeFailure.loadTimeout'
+        : state.failureCode === 'runtime_handshake_timeout'
+          ? 'launcher.page.pluginRuntimeFailure.handshakeTimeout'
+          : state.failureCode === 'runtime_session_disconnected'
+            ? 'launcher.page.pluginRuntimeFailure.disconnected'
+            : state.failureCode === 'runtime_security_policy_failure'
+              ? 'launcher.page.pluginRuntimeFailure.securityPolicy'
+              : state.failureCode === 'runtime_crash_loop'
+                ? 'launcher.page.pluginRuntimeFailure.crashLoop'
+                : 'launcher.page.pluginRuntimeFailure.unavailable';
     return (
-      <section aria-label={pageTitle} className="plugin-runtime-feedback" role="alert">
+      <section
+        aria-label={pageTitle}
+        className="plugin-runtime-feedback"
+        data-runtime-failure-code={state.failureCode}
+        role="alert"
+      >
         <Typography.Title className="plugin-runtime-feedback-title" heading={5}>
           {t('launcher.page.pluginRuntimeFailureTitle')}
         </Typography.Title>
-        <Typography.Text type="secondary">{t('launcher.page.pluginRuntimeFailureDescription')}</Typography.Text>
+        <Typography.Text type="secondary">{t(failureDescriptionKey)}</Typography.Text>
         <Button autoFocus onClick={() => setAttempt((current) => current + 1)} theme="solid" type="primary">
           {t('launcher.page.pluginRuntimeRetry')}
         </Button>
@@ -264,7 +314,7 @@ export const PluginRuntimeFrame = ({
         className="plugin-runtime-iframe"
         key={descriptor.runtime_key}
         onLoad={() => handleLoad(descriptor)}
-        ref={iframeRef}
+        ref={bindIframeElement}
         referrerPolicy={PLUGIN_RUNTIME_REFERRER_POLICY}
         sandbox={PLUGIN_RUNTIME_IFRAME_SANDBOX}
         src={descriptor.iframe_src}

@@ -14,6 +14,7 @@ use crate::{
         build_native_resource_url, is_portable_resource_path, parse_plugin_resource_url,
         PluginResourceUrl,
     },
+    plugin_runtime_security_policy::PLUGIN_RUNTIME_DOCUMENT_CSP,
 };
 use std::{
     collections::HashMap,
@@ -46,6 +47,7 @@ struct ScopeState {
 pub struct PluginResourceService {
     manager: Arc<PluginManager>,
     packages_root: Option<PathBuf>,
+    html_csp: &'static str,
     scopes: Mutex<ScopeState>,
     #[cfg(test)]
     read_hook: Mutex<Option<Arc<dyn Fn(ResourceReadHookPoint, &Path) + Send + Sync>>>,
@@ -53,9 +55,30 @@ pub struct PluginResourceService {
 
 impl PluginResourceService {
     pub fn initialize(manager: Arc<PluginManager>, packages_root: Option<PathBuf>) -> Arc<Self> {
+        Self::initialize_with_html_csp(manager, packages_root, PLUGIN_RUNTIME_DOCUMENT_CSP)
+    }
+
+    #[doc(hidden)]
+    pub fn initialize_for_macos_harness(
+        manager: Arc<PluginManager>,
+        packages_root: Option<PathBuf>,
+    ) -> Arc<Self> {
+        Self::initialize_with_html_csp(
+            manager,
+            packages_root,
+            crate::plugin_runtime_security_policy::PLUGIN_RUNTIME_HARNESS_DOCUMENT_CSP,
+        )
+    }
+
+    fn initialize_with_html_csp(
+        manager: Arc<PluginManager>,
+        packages_root: Option<PathBuf>,
+        html_csp: &'static str,
+    ) -> Arc<Self> {
         Arc::new(Self {
             manager,
             packages_root,
+            html_csp,
             scopes: Mutex::new(ScopeState::default()),
             #[cfg(test)]
             read_hook: Mutex::new(None),
@@ -127,9 +150,12 @@ impl PluginResourceService {
             return fixed_error(http::StatusCode::NOT_FOUND, NOT_FOUND_BODY, false);
         }
         match self.read_request(&request) {
-            Ok((mime, bytes)) => {
-                success_response(request.method() == http::Method::HEAD, mime, bytes)
-            }
+            Ok((mime, bytes)) => success_response(
+                request.method() == http::Method::HEAD,
+                mime,
+                bytes,
+                self.html_csp,
+            ),
             Err(ProtocolFailure::Unavailable) => {
                 fixed_error(http::StatusCode::NOT_FOUND, NOT_FOUND_BODY, false)
             }
@@ -452,14 +478,23 @@ fn has_unsupported_read_headers(headers: &http::HeaderMap) -> bool {
     .any(|name| headers.contains_key(name))
 }
 
-fn success_response(head: bool, mime: &'static str, bytes: Vec<u8>) -> http::Response<Vec<u8>> {
+fn success_response(
+    head: bool,
+    mime: &'static str,
+    bytes: Vec<u8>,
+    html_csp: &'static str,
+) -> http::Response<Vec<u8>> {
     let length = bytes.len().to_string();
-    http::Response::builder()
+    let mut response = http::Response::builder()
         .status(http::StatusCode::OK)
         .header(http::header::CONTENT_TYPE, mime)
         .header(http::header::CONTENT_LENGTH, length)
         .header(http::header::CACHE_CONTROL, "no-store")
-        .header("x-content-type-options", "nosniff")
+        .header("x-content-type-options", "nosniff");
+    if mime == "text/html; charset=utf-8" {
+        response = response.header(http::header::CONTENT_SECURITY_POLICY, html_csp);
+    }
+    response
         .body(if head { Vec::new() } else { bytes })
         .expect("fixed plugin resource success response should be valid")
 }
@@ -702,6 +737,13 @@ mod tests {
             .contains_key(http::header::ACCESS_CONTROL_ALLOW_ORIGIN));
     }
 
+    fn assert_plugin_document_csp(response: &http::Response<Vec<u8>>) {
+        assert_eq!(
+            response.headers()[http::header::CONTENT_SECURITY_POLICY],
+            PLUGIN_RUNTIME_DOCUMENT_CSP
+        );
+    }
+
     #[test]
     fn resolves_idempotently_and_serves_get_head_and_static_mime_matrix() {
         let fixture = fixture("success-matrix");
@@ -746,6 +788,13 @@ mod tests {
             );
             assert_eq!(get.body(), path.as_bytes());
             assert_security_headers(&get);
+            if mime == "text/html; charset=utf-8" {
+                assert_plugin_document_csp(&get);
+            } else {
+                assert!(!get
+                    .headers()
+                    .contains_key(http::header::CONTENT_SECURITY_POLICY));
+            }
             let head = fixture
                 .service
                 .handle_request(request(http::Method::HEAD, &url));
@@ -757,6 +806,14 @@ mod tests {
             );
             assert!(head.body().is_empty());
             assert_security_headers(&head);
+            if mime == "text/html; charset=utf-8" {
+                assert_plugin_document_csp(&head);
+                assert_eq!(get.headers(), head.headers());
+            } else {
+                assert!(!head
+                    .headers()
+                    .contains_key(http::header::CONTENT_SECURITY_POLICY));
+            }
         }
     }
 

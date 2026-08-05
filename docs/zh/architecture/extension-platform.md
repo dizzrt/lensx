@@ -369,7 +369,7 @@ canonical containment、打开一个 regular file、复核打开后的 identity 
 协议只支持 `GET` 与 `HEAD`。固定、大小写不敏感的表覆盖 HTML、JavaScript/ES module、CSS、JSON、
 Wasm、PNG、JPEG、GIF、WebP、AVIF、SVG、ICO 与 WOFF2；不嗅探内容，也不回退
 `application/octet-stream`。成功响应包含准确 `Content-Type`/`Content-Length`、`nosniff` 与
-`Cache-Control: no-store`；`HEAD` 使用相同 status/header 且无 body。不支持 Range、conditional
+`Cache-Control: no-store`；成功 HTML 还会获得准确的 Host-owned Plugin Runtime CSP。`HEAD` 使用相同 status/header 且无 body。不支持 Range、conditional
 request、query routing、directory index、content negotiation、wildcard CORS 或 download。所有成功
 与错误都使用 `no-store`。
 
@@ -381,8 +381,8 @@ digest、record key、absolute path、raw I/O、stack、partial bytes 或存在�
 运行 `pnpm run check:plugin-resource-service` 可验证 Rust/TypeScript 共享 fixture、desktop adapter、
 workspace boundary、Manager generation、Installer ownership 回归，以及 protocol/path/MIME/lifecycle/
 race/oracle/platform URL 测试。该 service 本身不创建 iframe、不执行插件代码、不建立 Runtime Session
-或 Host API transport、不授予权限，也不宣称完整 CSP。已交付的 iframe container 与下游 Runtime
-Session 会消费它校验后的 `entry_url`；Host API transport 与完整 CSP 仍是后续独立能力。
+或 Host API transport，也不授予权限。它会强制执行由 Host 私有安全 profile 选择的 document policy；
+iframe container 与下游 Runtime Session 会消费它校验后的 `entry_url`。
 
 ## 已交付的 macOS 隔离 Plugin Runtime Origin 前置能力
 
@@ -413,7 +413,7 @@ pnpm run check:isolated-plugin-runtime-origin
 ```
 
 这是下文 production iframe container 所消费的 macOS-only origin 前置能力。它本身不创建 iframe，
-也不交付 Runtime Session、Host API、permissions 或完整 CSP。translated URL 形态的 parser coverage
+也不交付 Runtime Session、Host API、permissions 或选择 CSP profile。translated URL 形态的 parser coverage
 不代表 Windows 或 Linux Runtime 支持。container 只能消费经过验证的 isolated `entry_url`；没有
 shared-origin、opaque classic-only 或 wildcard/null CORS fallback。
 
@@ -455,8 +455,8 @@ pnpm run check:frame-aware-webview-navigation-policy
 ```
 
 该 capability 仅支持 macOS，不宣称 Windows 或 Linux 支持。Task 4.2 container 会消费它的精确
-target lease；下文已交付的 Session 也消费该 lease，但不会改变 native policy contract。Host API、
-permissions 与完整 CSP 仍是后续独立 capability。
+target lease；下文已交付的 Session 也消费该 lease，但不会改变 native policy contract。Host API 与
+permissions 仍是后续独立 capability。
 
 ## 已交付的 macOS 隔离 Plugin iframe Runtime
 
@@ -475,8 +475,9 @@ dispose lease。最多存在一个 plugin iframe；Host Page 仍是可信 React 
 
 UI 提供本地化 `resolving`、`loading`、`loaded` 与有边界的 failure 状态，以及可访问的显式 retry。
 `loaded` 只表示 iframe load event 已触发，并不等于 SDK 或 Session `ready`。该能力不增加 message
-readiness 声明。下游 Session capability 只增加私有 MessagePort bootstrap；JSON-RPC、Host API、
-permission dispatcher、通用 timeout/crash recovery 与完整 CSP 仍未实现。Plugin Runtime resolver、Resource/Registration adapter、iframe policy、native lease boundary 与
+readiness 声明。下游 Session capability 只增加私有 MessagePort bootstrap；下述安全生命周期会增加
+deadline、有边界的 crash-loop recovery 与 CSP，但不会引入 JSON-RPC、Host API 或 permission dispatcher。
+Plugin Runtime resolver、Resource/Registration adapter、iframe policy、native lease boundary 与
 origin facts 保持 Host 私有，并由 workspace boundary 阻止公共 package 和 plugin workspace import。
 
 运行 `pnpm run check:plugin-iframe-runtime` 可验证 resolver、component、navigation lease、Page/
@@ -513,10 +514,50 @@ generation。close、retry、replacement、进入 Home/Search/Host Page 与 App 
 
 Session contract、parser、adapter、identity 与 Port lease 都只属于 root Host，不进入 Contract、SDK、UI、
 Testkit、官方/示例/外部插件 import 或 tarball。该能力不定义公共 SDK iframe transport、JSON-RPC/
-request ID、Host API method、permission decision/UI、privileged dispatch、plugin storage、完整 CSP、
-通用 handshake timeout/crash recovery、background Runtime、sidecar 或 Windows/Linux 支持。运行
+request ID、Host API method、permission decision/UI、privileged dispatch、plugin storage、
+background Runtime、sidecar 或 Windows/Linux 支持。安全生命周期会增加下述私有 handshake deadline
+与清理。运行
 `pnpm run check:plugin-runtime-session` 可验证 focused logic/React、真实 package、边界、前置 gate 与
 有界真实 macOS WKWebView evidence。
+
+## 已交付的 Plugin Runtime CSP 与安全生命周期
+
+Host document 与外部插件 document 使用两套相互独立、不可修改的 CSP profile。production Host
+profile 只允许打包的 Host resource、现有 Tauri IPC endpoint 与 `lensx-plugin:` child frame。当前
+Semi Design Runtime 唯一需要的 style 例外是 `style-src 'unsafe-inline'`；script inline/eval、wildcard、
+remote script、object、base、form 与 ancestor 放宽仍被拒绝。Resource Service 会给每个成功且 current
+的 plugin HTML `GET`/`HEAD` 添加同一套 Plugin Runtime profile。该 profile 默认拒绝，只允许同 origin
+script、style、image 与 font，禁用 connect、worker、child frame、media、object、base 与 form
+destination，并且只接纳准确的 production Host ancestor。Manifest、publisher、source、grant、query、
+request header 与 plugin-authored meta 都不能修改这两套 profile。
+
+CSP、隔离 origin、iframe sandbox、Permissions Policy、native navigation 与 Runtime Session 是互补
+边界。CSP 控制 resource/document destination；per-generation origin 分离 DOM 与 storage；sandbox 和
+Permissions Policy 约束 frame capability；native lease 控制顶层与 descendant navigation；Session
+认证一个 current window 与专用 Port。这些边界都不会创建 Host API grant。
+
+Host 私有 controller 会拥有一个 Runtime attempt，并在全局最多创建一个 external-plugin iframe。
+navigation lease 激活且 `src` 提交后才启动 10,000 ms load deadline；bootstrap transfer 成功后，Session
+才启动 5,000 ms handshake deadline。close、navigation、quiescence、disable、uninstall、replacement、
+相关 fact/grant 变化、retry、timeout、Session failure、Host reload 与 App teardown 全部收敛到同一幂等
+terminal operation：先让工作 stale，再取消 timer/subscription，dispose Session/Port，unbind/remove
+iframe，compare-current 释放 navigation lease，最后丢弃引用。因此迟到 promise、load、acknowledgement、
+timer 与 Port event 无法影响新 attempt。不存在 preload、hidden pool、background Runtime、跨 Page
+复用、自动 retry 或持久化 Runtime state。
+
+进程内 breaker 以 trusted entry identity 与 resource generation 为 key。60,000 ms 内第三次 qualifying
+load、handshake 或 unexpected-disconnect failure 会在 resolve、lease、iframe 或 Session 创建前开启
+30,000 ms cooldown；cooldown 到期后仍必须由用户显式 retry。close、navigation、invalidation 与
+graceful exit 不计数；generation 变化或连续 30,000 ms 健康 `ready` 会清除记录，进程退出也会忘记它。
+
+可见 failure 只使用 `runtime_load_timeout`、`runtime_handshake_timeout`、
+`runtime_session_disconnected`、`runtime_security_policy_failure`、`runtime_crash_loop` 或
+`runtime_unavailable`，并通过现有可访问 feedback surface 提供 canonical English 和语义一致的简体中文
+文案。diagnostic/evidence 不包含完整或 blocked URL、origin/scope、path、nonce/Port 内容、grant、payload、
+storage value、raw exception 或 stack，也没有远程 CSP report channel。已提交的真实 WKWebView matrix
+仅支持 macOS。Task 5.2 仍负责未来公共 SDK iframe transport，不会继承这些 Host 私有 attempt、timer、
+breaker record 或 failure code。运行 `pnpm run check:plugin-runtime-security-lifecycle` 可执行 focused gate
+及其 Resource、origin、navigation、iframe、Session、workspace 与 public-tarball 前置门禁。
 
 ## 已交付的 Host 私有 Plugin Surface 投影与 Page 导航
 

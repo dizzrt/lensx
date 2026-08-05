@@ -9,6 +9,21 @@
   "fixture": "malicious",
   "bundle_shape": "canonical_lxp_plugin_resource_service",
   "resource_service_path_verified": true,
+  "plugin_csp_native_get_head_verified": true,
+  "plugin_csp_translated_get_head_verified": true,
+  "csp_checks": {
+    "base_blocked": true,
+    "blob_blocked": true,
+    "connect_blocked": true,
+    "data_blocked": true,
+    "eval_blocked": true,
+    "form_blocked": true,
+    "frame_blocked": true,
+    "inline_script_blocked": true,
+    "object_blocked": true,
+    "remote_script_blocked": true,
+    "worker_blocked": true
+  },
   "sandbox": "allow-scripts allow-same-origin",
   "permissions_policy": "camera 'none'; microphone 'none'; geolocation 'none'; fullscreen 'none'; clipboard-read 'none'; clipboard-write 'none'; display-capture 'none'; payment 'none'; usb 'none'; serial 'none'; hid 'none'; bluetooth 'none'; screen-wake-lock 'none'",
   "referrer_policy": "no-referrer",
@@ -31,6 +46,6 @@
   "navigation_callback_hits": 2,
   "popup_callback_hits": 0,
   "download_callback_hits": 0,
-  "resource_paths": ["dist/index.html", "dist/malicious.js"],
+  "resource_paths": ["dist/early-runtime-probe.js", "dist/index.html", "dist/malicious.js", "dist/private-session.js"],
   "malicious_attempts_rejected": true
 }

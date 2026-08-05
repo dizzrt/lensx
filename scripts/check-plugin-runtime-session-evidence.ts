@@ -36,12 +36,23 @@ for (const fixture of fixtures) {
     value.fixture !== fixture ||
     value.bundle_shape !== 'canonical_lxp_plugin_resource_service' ||
     value.resource_service_path_verified !== true ||
+    value.plugin_csp_native_get_head_verified !== true ||
+    value.plugin_csp_translated_get_head_verified !== true ||
     value.privileged_handler_hits !== 0
   ) {
     fail(`${fixture} platform, package, contract, or privilege facts drifted`);
   }
   for (const key of sessionBooleanKeys) {
     if (value[key] !== true) fail(`${fixture}.${key} did not pass`);
+  }
+  const cspChecks = value.csp_checks;
+  if (
+    typeof cspChecks !== 'object' ||
+    cspChecks === null ||
+    Array.isArray(cspChecks) ||
+    Object.values(cspChecks).some((result) => result !== true)
+  ) {
+    fail(`${fixture} CSP checks are invalid`);
   }
   if (!Array.isArray(value.resource_paths) || value.resource_paths.some((item) => typeof item !== 'string')) {
     fail(`${fixture} resource summary is invalid`);

@@ -10,6 +10,16 @@ const writeMode = process.argv.includes('--write');
 const bytes = (value: string): Uint8Array => Buffer.from(value, 'utf8');
 const manifestBytes = (value: unknown): Uint8Array => bytes(`${JSON.stringify(value)}\n`);
 
+type FixtureKind =
+  | 'normal'
+  | 'malicious'
+  | 'slow-load'
+  | 'never-acknowledge'
+  | 'unexpected-disconnect'
+  | 'repeated-failure'
+  | 'host-reload'
+  | 'replacement';
+
 const originProbe = (kind: 'normal' | 'malicious') => `
       (() => {
         const fragmentParts = location.hash.split('?', 2);
@@ -50,14 +60,14 @@ const originProbe = (kind: 'normal' | 'malicious') => `
       })();
 `;
 
-const manifest = (kind: 'normal' | 'malicious') => ({
+const manifest = (kind: FixtureKind) => ({
   manifest_version: '0.1.0',
   plugin_id: `com.lensx.fixture.runtime.${kind}`,
   version: '1.0.0',
   display: {
     name: {
-      'en-US': kind === 'normal' ? 'Runtime Fixture' : 'Adversarial Runtime Fixture',
-      'zh-CN': kind === 'normal' ? '运行时夹具' : '恶意运行时夹具',
+      'en-US': kind === 'normal' ? 'Runtime Fixture' : `${kind} Runtime Fixture`,
+      'zh-CN': kind === 'normal' ? '运行时夹具' : `${kind} 运行时夹具`,
     },
     description: {
       'en-US': 'A maintained iframe Runtime security fixture.',
@@ -127,26 +137,7 @@ const privateSessionConsumer = `
       })();
 `;
 
-const normalHtml = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>lensX Runtime Fixture</title>
-    <script>${originProbe('normal')}</script>
-    <script>${privateSessionConsumer}</script>
-    <link rel="stylesheet" href="./styles.css">
-    <script src="./classic.js" defer></script>
-    <script type="module" src="./module.js"></script>
-  </head>
-  <body>
-    <main>
-      <h1>Runtime Fixture</h1>
-      <img alt="Runtime fixture" src="./image.svg">
-      <output id="route"></output>
-    </main>
-    <script>
-      document.querySelector('#route').textContent = location.hash;
+const normalReporter = `
       window.addEventListener('load', () => {
         window.parent.postMessage(Object.freeze({
           ...window.__LENSX_EARLY_RUNTIME_PROBE__,
@@ -157,9 +148,35 @@ const normalHtml = `<!doctype html>
           module: document.documentElement.dataset.module === 'loaded',
           css: getComputedStyle(document.documentElement).getPropertyValue('--lensx-runtime-fixture').trim() === 'loaded',
           image: document.querySelector('img').complete && document.querySelector('img').naturalWidth > 0,
+          csp_checks: Object.freeze({
+            classic_script_allowed: document.documentElement.dataset.classic === 'loaded',
+            es_module_allowed: document.documentElement.dataset.module === 'loaded',
+            style_allowed: getComputedStyle(document.documentElement).getPropertyValue('--lensx-runtime-fixture').trim() === 'loaded',
+            image_allowed: document.querySelector('img').complete && document.querySelector('img').naturalWidth > 0,
+          }),
         }), '*');
       });
-    </script>
+`;
+
+const normalHtml = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>lensX Runtime Fixture</title>
+    <script src="./early-runtime-probe.js"></script>
+    <script src="./private-session.js"></script>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./classic.js" defer></script>
+    <script type="module" src="./module.js"></script>
+  </head>
+  <body>
+    <main>
+      <h1>Runtime Fixture</h1>
+      <img alt="Runtime fixture" src="./image.svg">
+      <output id="route"></output>
+    </main>
+    <script src="./report.js"></script>
   </body>
 </html>
 `;
@@ -170,8 +187,9 @@ const maliciousHtml = `<!doctype html>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>lensX Adversarial Runtime Fixture</title>
-    <script>${originProbe('malicious')}</script>
-    <script>${privateSessionConsumer}</script>
+    <script src="./early-runtime-probe.js"></script>
+    <script src="./private-session.js"></script>
+    <script>window.__LENSX_INLINE_SCRIPT_RAN__ = true;</script>
     <script type="module" src="./malicious.js"></script>
   </head>
   <body>
@@ -185,10 +203,27 @@ const maliciousHtml = `<!doctype html>
 `;
 
 const maliciousModule = `const result = Object.create(null);
+const cspChecks = Object.create(null);
 const attempt = async (name, operation) => {
   try { await operation(); result[name] = 'resolved'; }
   catch { result[name] = 'rejected'; }
 };
+const expectViolation = (name, directives, operation) => new Promise((resolve) => {
+  let settled = false;
+  const finish = (passed) => {
+    if (settled) return;
+    settled = true;
+    window.removeEventListener('securitypolicyviolation', onViolation);
+    cspChecks[name] = passed;
+    resolve();
+  };
+  const onViolation = (event) => {
+    if (directives.includes(event.effectiveDirective)) finish(true);
+  };
+  window.addEventListener('securitypolicyviolation', onViolation);
+  try { operation(); } catch { finish(true); }
+  setTimeout(() => finish(false), 250);
+});
 await attempt('tauri-internals', () => window.__TAURI_INTERNALS__.invoke('plugin_iframe_runtime_harness_probe'));
 await attempt('tauri-api-import', () => import('@tauri-apps/api/core'));
 await attempt('parent-dom', () => window.parent.document.documentElement.outerHTML);
@@ -198,6 +233,32 @@ await attempt('camera', () => navigator.mediaDevices.getUserMedia({ video: true 
 await attempt('microphone', () => navigator.mediaDevices.getUserMedia({ audio: true }));
 await attempt('geolocation', () => new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject)));
 await attempt('fullscreen', () => document.documentElement.requestFullscreen());
+await expectViolation('remote_script_blocked', ['script-src', 'script-src-elem'], () => {
+  const script = document.createElement('script'); script.src = 'https://example.invalid/runtime.js'; document.head.append(script);
+});
+cspChecks.inline_script_blocked = window.__LENSX_INLINE_SCRIPT_RAN__ !== true;
+await expectViolation('eval_blocked', ['script-src'], () => { Function('return 1')(); });
+await expectViolation('connect_blocked', ['connect-src'], () => { void fetch('https://example.invalid/runtime'); });
+await expectViolation('worker_blocked', ['worker-src'], () => { void new Worker('./worker.js'); });
+await expectViolation('frame_blocked', ['frame-src', 'child-src'], () => {
+  const frame = document.createElement('iframe'); frame.src = './frame.html'; document.body.append(frame);
+});
+await expectViolation('object_blocked', ['object-src'], () => {
+  const object = document.createElement('object'); object.data = './image.svg'; document.body.append(object);
+});
+await expectViolation('base_blocked', ['base-uri'], () => {
+  const base = document.createElement('base'); base.href = 'https://example.invalid/'; document.head.append(base);
+});
+await expectViolation('data_blocked', ['img-src'], () => {
+  const image = document.createElement('img'); image.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>'; document.body.append(image);
+});
+await expectViolation('blob_blocked', ['img-src'], () => {
+  const image = document.createElement('img'); image.src = URL.createObjectURL(new Blob(['x'], { type: 'image/svg+xml' })); document.body.append(image);
+});
+const formLocation = location.href;
+document.querySelector('form').requestSubmit();
+await new Promise((resolve) => setTimeout(resolve, 100));
+cspChecks.form_blocked = location.href === formLocation;
 window.parent.postMessage(Object.freeze({
   contract_version: '0.1.0',
   type: 'lensx.plugin_runtime.ready',
@@ -211,8 +272,60 @@ window.parent.postMessage(Object.freeze({
   namespace: 'lensx.plugin-iframe-runtime-harness',
   kind: 'malicious',
   attempts: Object.freeze({ ...result }),
+  csp_checks: Object.freeze({ ...cspChecks }),
 }), '*');
 `;
+
+const lifecycleScenarioHtml = (kind: FixtureKind) => `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>lensX ${kind} Runtime Fixture</title>
+    <script src="./early-runtime-probe.js"></script>
+    <script src="./scenario.js"></script>
+  </head>
+  <body><main data-runtime-scenario="${kind}">${kind}</main></body>
+</html>
+`;
+
+const lifecycleScenarioScript = (kind: FixtureKind) => `
+(() => {
+  const scenario = '${kind}';
+  let sessionPort;
+  window.addEventListener('message', (event) => {
+    const value = event.data;
+    if (event.source !== window.parent || event.ports.length !== 1 ||
+        value?.contract_version !== '0.1.0' || value?.type !== 'lensx.plugin_runtime.bootstrap' ||
+        typeof value?.nonce !== 'string') return;
+    sessionPort = event.ports[0];
+    if (scenario !== 'never-acknowledge' && scenario !== 'repeated-failure') {
+      sessionPort.postMessage(Object.freeze({
+        contract_version: '0.1.0', type: 'lensx.plugin_runtime.ready', nonce: value.nonce,
+      }));
+    }
+    if (scenario === 'unexpected-disconnect') setTimeout(() => sessionPort.close(), 50);
+  });
+  window.addEventListener('pagehide', () => {
+    if (scenario === 'host-reload') sessionPort?.close();
+  });
+  window.addEventListener('load', () => window.parent.postMessage(Object.freeze({
+    namespace: 'lensx.plugin-runtime-security-lifecycle-fixture', scenario,
+  }), '*'));
+})();
+`;
+
+const lifecycleScenarioFixture = (kind: FixtureKind) => ({
+  kind,
+  file: `${kind}/runtime-${kind}.lxp`,
+  coverage: [kind.replaceAll('-', '_'), 'host_owned_deadline', 'unified_terminal_cleanup'],
+  files: [
+    { path: 'manifest.json', bytes: manifestBytes(manifest(kind)) },
+    { path: 'dist/early-runtime-probe.js', bytes: bytes(originProbe('normal')) },
+    { path: 'dist/index.html', bytes: bytes(lifecycleScenarioHtml(kind)) },
+    { path: 'dist/scenario.js', bytes: bytes(lifecycleScenarioScript(kind)) },
+  ],
+});
 
 const fixtureInputs = [
   {
@@ -237,6 +350,7 @@ const fixtureInputs = [
       { path: 'manifest.json', bytes: manifestBytes(manifest('normal')) },
       { path: 'dist/classic.js', bytes: bytes("document.documentElement.dataset.classic = 'loaded';\n") },
       { path: 'dist/data.json', bytes: bytes('{"runtime":"fixture"}\n') },
+      { path: 'dist/early-runtime-probe.js', bytes: bytes(originProbe('normal')) },
       {
         path: 'dist/image.svg',
         bytes: bytes(
@@ -244,6 +358,8 @@ const fixtureInputs = [
         ),
       },
       { path: 'dist/index.html', bytes: bytes(normalHtml) },
+      { path: 'dist/private-session.js', bytes: bytes(privateSessionConsumer) },
+      { path: 'dist/report.js', bytes: bytes(normalReporter) },
       {
         path: 'dist/module-dependency.js',
         bytes: bytes("export const moduleValue = 'loaded';\n"),
@@ -291,13 +407,33 @@ const fixtureInputs = [
       'cross_plugin_session_forgery',
       'old_generation_session_replay',
       'wrong_origin_bootstrap',
+      'csp_remote_script',
+      'csp_inline_script',
+      'csp_eval',
+      'csp_connect',
+      'csp_worker',
+      'csp_frame',
+      'csp_object',
+      'csp_base',
+      'csp_data',
+      'csp_blob',
+      'csp_form',
     ],
     files: [
       { path: 'manifest.json', bytes: manifestBytes(manifest('malicious')) },
+      { path: 'dist/early-runtime-probe.js', bytes: bytes(originProbe('malicious')) },
       { path: 'dist/index.html', bytes: bytes(maliciousHtml) },
       { path: 'dist/malicious.js', bytes: bytes(maliciousModule) },
+      { path: 'dist/private-session.js', bytes: bytes(privateSessionConsumer) },
+      { path: 'dist/worker.js', bytes: bytes("self.postMessage('unexpected');\n") },
     ],
   },
+  lifecycleScenarioFixture('slow-load'),
+  lifecycleScenarioFixture('never-acknowledge'),
+  lifecycleScenarioFixture('unexpected-disconnect'),
+  lifecycleScenarioFixture('repeated-failure'),
+  lifecycleScenarioFixture('host-reload'),
+  lifecycleScenarioFixture('replacement'),
 ] as const;
 
 const outputs = new Map<string, Buffer>();

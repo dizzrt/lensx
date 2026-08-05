@@ -3,11 +3,15 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { AppProviders } from '../src/app/AppProviders';
 import type { ActivePage, PageResolution } from '../src/app/navigation';
 import {
+  createPluginRuntimeLifecycleService,
   PLUGIN_RUNTIME_IFRAME_SANDBOX,
+  PLUGIN_RUNTIME_LOAD_DEADLINE_MS,
   PLUGIN_RUNTIME_PERMISSIONS_POLICY,
   PLUGIN_RUNTIME_REFERRER_POLICY,
   type PluginPageRuntimeDescriptor,
   PluginRuntimeFrame,
+  type PluginRuntimeLifecycleService,
+  type PluginRuntimeScheduler,
   type PluginRuntimeSessionService,
   reducePluginRuntimeFrameState,
 } from '../src/app/plugins/runtime';
@@ -64,6 +68,7 @@ const renderFrame = (options?: {
   };
   readonly locale?: 'en-US' | 'zh-CN';
   readonly sessionService?: PluginRuntimeSessionService;
+  readonly lifecycleService?: PluginRuntimeLifecycleService;
 }) => {
   const resolver = options?.resolver ?? { resolve: rs.fn(async () => descriptor) };
   const navigationAdapter = options?.navigationAdapter ?? {
@@ -93,6 +98,7 @@ const renderFrame = (options?: {
       <PluginRuntimeFrame
         activePage={activePage}
         navigationAdapter={navigationAdapter}
+        lifecycleService={options?.lifecycleService}
         pageResolution={pageResolution}
         pageTitle={options?.locale === 'zh-CN' ? '工作区主页' : 'Workspace Home'}
         resolver={resolver}
@@ -102,6 +108,27 @@ const renderFrame = (options?: {
   );
   return { ...view, navigationAdapter, resolver, sessionService };
 };
+
+class ManualScheduler implements PluginRuntimeScheduler {
+  #now = 0;
+  #sequence = 0;
+  readonly callbacks = new Map<number, { readonly at: number; readonly callback: () => void }>();
+  readonly now = () => this.#now;
+  readonly setTimeout = (callback: () => void, delayMs: number) => {
+    const handle = ++this.#sequence;
+    this.callbacks.set(handle, { at: this.#now + delayMs, callback });
+    return handle;
+  };
+  readonly clearTimeout = (handle: unknown) => {
+    if (typeof handle === 'number') this.callbacks.delete(handle);
+  };
+  advance(milliseconds: number) {
+    this.#now += milliseconds;
+    for (const [handle, timer] of [...this.callbacks]) {
+      if (timer.at <= this.#now && this.callbacks.delete(handle)) timer.callback();
+    }
+  }
+}
 
 describe('PluginRuntimeFrame', () => {
   test('mounts exactly one iframe only after exact lease activation and treats load as loaded, not ready', async () => {
@@ -137,21 +164,24 @@ describe('PluginRuntimeFrame', () => {
     fireEvent.load(iframe as HTMLIFrameElement);
     expect(document.querySelector('[data-runtime-state="loaded"]')).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(/ready/u);
-    expect(view.sessionService.start).toHaveBeenCalledWith({
-      identity: {
-        entry_id: descriptor.entry_id,
-        plugin_id: descriptor.plugin_id,
-        version: descriptor.version,
-        page_id: descriptor.page_id,
-        expected_origin: descriptor.expected_origin,
-        resource_generation: descriptor.resource_generation,
-        runtime_attempt_key: descriptor.runtime_attempt_key,
-        registration_revision: descriptor.registration_revision,
-        granted_permission_ids: descriptor.granted_permission_ids,
-      },
-      targetWindow: (iframe as HTMLIFrameElement).contentWindow,
-      targetOrigin: descriptor.expected_origin,
-    });
+    expect(view.sessionService.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identity: {
+          entry_id: descriptor.entry_id,
+          plugin_id: descriptor.plugin_id,
+          version: descriptor.version,
+          page_id: descriptor.page_id,
+          expected_origin: descriptor.expected_origin,
+          resource_generation: descriptor.resource_generation,
+          runtime_attempt_key: descriptor.runtime_attempt_key,
+          registration_revision: descriptor.registration_revision,
+          granted_permission_ids: descriptor.granted_permission_ids,
+        },
+        targetWindow: (iframe as HTMLIFrameElement).contentWindow,
+        targetOrigin: descriptor.expected_origin,
+        owningAttempt: expect.objectContaining({ key: 1 }),
+      }),
+    );
     fireEvent.load(iframe as HTMLIFrameElement);
     expect(view.sessionService.start).toHaveBeenCalledTimes(1);
 
@@ -279,5 +309,43 @@ describe('PluginRuntimeFrame', () => {
     expect(document.querySelector('iframe')).toBeNull();
     expect(sessionDispose).toHaveBeenCalledTimes(1);
     expect(view.navigationAdapter.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  test('enforces the load deadline, removes the iframe and lease, and ignores a late load', async () => {
+    const scheduler = new ManualScheduler();
+    const lifecycleService = createPluginRuntimeLifecycleService({ scheduler });
+    const view = renderFrame({ lifecycleService });
+    const iframe = (await waitFor(() => expect(document.querySelector('iframe')).not.toBeNull()).then(() =>
+      document.querySelector('iframe'),
+    )) as HTMLIFrameElement;
+    await act(async () => scheduler.advance(PLUGIN_RUNTIME_LOAD_DEADLINE_MS));
+    expect(await screen.findByRole('alert')).toHaveTextContent('did not finish loading in time');
+    expect(screen.getByRole('alert')).toHaveAttribute('data-runtime-failure-code', 'runtime_load_timeout');
+    expect(document.querySelector('iframe')).toBeNull();
+    await waitFor(() => expect(view.navigationAdapter.dispose).toHaveBeenCalledTimes(1));
+    fireEvent.load(iframe);
+    expect(view.sessionService.start).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['runtime_handshake_timeout', '未能及时完成安全握手'],
+    ['runtime_session_disconnected', '意外断开'],
+    ['runtime_security_policy_failure', '安全策略已停止'],
+    ['runtime_crash_loop', '已连续失败'],
+  ] as const)('shows bounded localized %s feedback without private diagnostics', async (failureCode, copy) => {
+    const lifecycleService: PluginRuntimeLifecycleService = {
+      start: async ({ onFailure }) => {
+        onFailure(failureCode);
+        return undefined;
+      },
+      terminateCurrent: async () => undefined,
+      dispose: async () => undefined,
+    };
+    renderFrame({ lifecycleService, locale: 'zh-CN' });
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(copy);
+    expect(alert).toHaveAttribute('data-runtime-failure-code', failureCode);
+    expect(alert).not.toHaveTextContent(/(?:lensx-plugin:\/\/|runtime\.localhost|nonce|\/private\/)/u);
+    expect(screen.getByRole('button', { name: '重试' })).toHaveFocus();
   });
 });

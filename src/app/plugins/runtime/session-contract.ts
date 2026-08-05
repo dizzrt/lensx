@@ -26,6 +26,7 @@ export type PluginRuntimeSessionErrorCode =
   | 'invalid_identity'
   | 'bootstrap_failed'
   | 'invalid_acknowledgement'
+  | 'handshake_timeout'
   | 'port_disconnected';
 
 export class PluginRuntimeSessionError extends Error {
@@ -37,9 +38,11 @@ export class PluginRuntimeSessionError extends Error {
         ? 'Plugin Runtime Session identity is invalid.'
         : code === 'bootstrap_failed'
           ? 'Plugin Runtime Session bootstrap failed.'
-          : code === 'port_disconnected'
-            ? 'Plugin Runtime Session port disconnected.'
-            : 'Plugin Runtime Session acknowledgement is invalid.',
+          : code === 'handshake_timeout'
+            ? 'Plugin Runtime Session handshake timed out.'
+            : code === 'port_disconnected'
+              ? 'Plugin Runtime Session port disconnected.'
+              : 'Plugin Runtime Session acknowledgement is invalid.',
     );
     this.name = 'PluginRuntimeSessionError';
     this.code = code;

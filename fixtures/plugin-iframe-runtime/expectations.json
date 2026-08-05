@@ -6,7 +6,7 @@
       "file": "normal/runtime-compatible.lxp",
       "digest": {
         "algorithm": "sha256",
-        "value": "32f2fd77b65d9a3b78ea64e474a8b162e0d193b687ada319e6325d7a5ef1ff1a"
+        "value": "6caa0a458f21aad8520eb75a1729f9764e1d23bfbc21b82cc66d891b532eee4d"
       },
       "coverage": [
         "html",
@@ -113,9 +113,9 @@
         },
         "facts": {
           "packageFormatVersion": "0.1.0",
-          "compressedSize": 2962,
-          "decompressedSize": 15872,
-          "fileCount": 9,
+          "compressedSize": 3263,
+          "decompressedSize": 18944,
+          "fileCount": 12,
           "files": [
             {
               "path": "manifest.json",
@@ -125,8 +125,8 @@
             },
             {
               "path": "checksums.json",
-              "size": 982,
-              "sha256": "15c992b561bf5b92074d9e8bbf849c465b2b1fcde30c6432eb763a165f9a8f00",
+              "size": 1344,
+              "sha256": "344b724bec1790353c38d4f8beb23149cfb82024ed0c187bcb8b4ff2f3de62bc",
               "checksumCovered": false
             },
             {
@@ -142,6 +142,12 @@
               "checksumCovered": true
             },
             {
+              "path": "dist/early-runtime-probe.js",
+              "size": 1902,
+              "sha256": "44d17281e66c84e37aa6f51548da34ca1a546523ebd4923908a8243419756359",
+              "checksumCovered": true
+            },
+            {
               "path": "dist/image.svg",
               "size": 115,
               "sha256": "bef9d88a29805c457501e4b39c2c2a0ade9d0009a3479f07cd4ac4b0e6afac8a",
@@ -149,8 +155,8 @@
             },
             {
               "path": "dist/index.html",
-              "size": 4173,
-              "sha256": "f8c68191bd79a5f6201fd7c99b6b656a12083b3f39417abab8c12491976b1b7d",
+              "size": 652,
+              "sha256": "b783afb835df1b5527b0bcf4d0f364b0344843b2c64a6d2a3e57f86c0116d26e",
               "checksumCovered": true
             },
             {
@@ -166,6 +172,18 @@
               "checksumCovered": true
             },
             {
+              "path": "dist/private-session.js",
+              "size": 953,
+              "sha256": "fbd873874f22c3b39af489f1e725bf950e704e3442becd6f608290ee7ab1457f",
+              "checksumCovered": true
+            },
+            {
+              "path": "dist/report.js",
+              "size": 1150,
+              "sha256": "a4cf95b68e680c74707ecce3ceb2650e35702c06d0646eb782c4fcbce0a88e17",
+              "checksumCovered": true
+            },
+            {
               "path": "dist/styles.css",
               "size": 113,
               "sha256": "5d9ed8b9029ace4efabdbeb2bce30b817e2082f46b42c99e9e73d76dc9e37621",
@@ -174,7 +192,7 @@
           ],
           "packageDigest": {
             "algorithm": "sha256",
-            "value": "32f2fd77b65d9a3b78ea64e474a8b162e0d193b687ada319e6325d7a5ef1ff1a"
+            "value": "6caa0a458f21aad8520eb75a1729f9764e1d23bfbc21b82cc66d891b532eee4d"
           }
         },
         "diagnostics": []
@@ -185,7 +203,7 @@
       "file": "malicious/runtime-adversarial.lxp",
       "digest": {
         "algorithm": "sha256",
-        "value": "c093e7029ecea8caf5d0e8deeb932c426c614d11093513a57ef451da655ae678"
+        "value": "d83923a75339000203fc67df59181624b6ff944283072ba12a62cfe20e86bfb6"
       },
       "coverage": [
         "tauri_internals",
@@ -212,7 +230,18 @@
         "fullscreen",
         "cross_plugin_session_forgery",
         "old_generation_session_replay",
-        "wrong_origin_bootstrap"
+        "wrong_origin_bootstrap",
+        "csp_remote_script",
+        "csp_inline_script",
+        "csp_eval",
+        "csp_connect",
+        "csp_worker",
+        "csp_frame",
+        "csp_object",
+        "csp_base",
+        "csp_data",
+        "csp_blob",
+        "csp_form"
       ],
       "expected": {
         "status": "compatible",
@@ -222,8 +251,8 @@
           "version": "1.0.0",
           "display": {
             "name": {
-              "en-US": "Adversarial Runtime Fixture",
-              "zh-CN": "恶意运行时夹具"
+              "en-US": "malicious Runtime Fixture",
+              "zh-CN": "malicious 运行时夹具"
             },
             "description": {
               "en-US": "A maintained iframe Runtime security fixture.",
@@ -304,38 +333,926 @@
         },
         "facts": {
           "packageFormatVersion": "0.1.0",
-          "compressedSize": 2729,
-          "decompressedSize": 10752,
-          "fileCount": 4,
+          "compressedSize": 3692,
+          "decompressedSize": 16384,
+          "fileCount": 7,
           "files": [
             {
               "path": "manifest.json",
-              "size": 1248,
-              "sha256": "90791557ee4e5070b48ec786f6d315c40af047000aa221db67aeb09fac7872c3",
+              "size": 1250,
+              "sha256": "fa01bc970c0717266b7c548c953a4dc3e78bbe59abba771ab884b500ab29f2d8",
               "checksumCovered": true
             },
             {
               "path": "checksums.json",
-              "size": 411,
-              "sha256": "461b4cd6ab7df8ab7ffd1cb8f993e032fc5b0b9794f060c732d8b9bb5fa59532",
+              "size": 771,
+              "sha256": "59a30480b0e42762dcabfce966fec38f5982e958e95ca1d3bf3dea06cbfd00ff",
               "checksumCovered": false
             },
             {
+              "path": "dist/early-runtime-probe.js",
+              "size": 1905,
+              "sha256": "e4872623f2baf43b86908a744d025e499560f58be81b470599f16582f9e6ba44",
+              "checksumCovered": true
+            },
+            {
               "path": "dist/index.html",
-              "size": 3534,
-              "sha256": "631fde2a70d872a22536afbbde538c31052c99cb5a5b0ddc076c60a65563978d",
+              "size": 798,
+              "sha256": "307b31eff29f7d037237350400e4405f157e4f1210c1923b11eaa88a378c4a37",
               "checksumCovered": true
             },
             {
               "path": "dist/malicious.js",
-              "size": 1680,
-              "sha256": "2b975a8dedeaa487708e6bc54f05852ea1ba8fda5ad66462912b9ea3ddc11c56",
+              "size": 4123,
+              "sha256": "5da95d678d63e5ba10016a4a3bdc11c2802d8223943883029995430291998351",
+              "checksumCovered": true
+            },
+            {
+              "path": "dist/private-session.js",
+              "size": 953,
+              "sha256": "fbd873874f22c3b39af489f1e725bf950e704e3442becd6f608290ee7ab1457f",
+              "checksumCovered": true
+            },
+            {
+              "path": "dist/worker.js",
+              "size": 32,
+              "sha256": "8f2b9bae5db27cc918ac8fd9514f0d82f5ea6d360126df5fa0de5b37080aa157",
               "checksumCovered": true
             }
           ],
           "packageDigest": {
             "algorithm": "sha256",
-            "value": "c093e7029ecea8caf5d0e8deeb932c426c614d11093513a57ef451da655ae678"
+            "value": "d83923a75339000203fc67df59181624b6ff944283072ba12a62cfe20e86bfb6"
+          }
+        },
+        "diagnostics": []
+      }
+    },
+    {
+      "kind": "slow-load",
+      "file": "slow-load/runtime-slow-load.lxp",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "3ea34f3612b56cad673f11da4bd697d9e81e550f8868f62a5b580ea5ec200551"
+      },
+      "coverage": [
+        "slow_load",
+        "host_owned_deadline",
+        "unified_terminal_cleanup"
+      ],
+      "expected": {
+        "status": "compatible",
+        "manifest": {
+          "manifest_version": "0.1.0",
+          "plugin_id": "com.lensx.fixture.runtime.slow-load",
+          "version": "1.0.0",
+          "display": {
+            "name": {
+              "en-US": "slow-load Runtime Fixture",
+              "zh-CN": "slow-load 运行时夹具"
+            },
+            "description": {
+              "en-US": "A maintained iframe Runtime security fixture.",
+              "zh-CN": "项目维护的 iframe Runtime 安全夹具。"
+            }
+          },
+          "publisher": {
+            "author": "lensX",
+            "homepage": "https://example.com/lensx-runtime-fixture",
+            "repository": "https://example.com/lensx-runtime-fixture.git"
+          },
+          "compatibility": {
+            "lensx": {
+              "min_version": "0.1.0",
+              "max_version_exclusive": "0.2.0"
+            },
+            "host_api": {
+              "min_version": "0.1.0",
+              "max_version_exclusive": "0.2.0"
+            }
+          },
+          "runtime": {
+            "kind": "iframe",
+            "entry": "dist/index.html"
+          },
+          "requested_permissions": [],
+          "contributes": {
+            "pages": [
+              {
+                "id": "home",
+                "title": {
+                  "en-US": "Runtime Fixture",
+                  "zh-CN": "运行时夹具"
+                },
+                "route": "/",
+                "required_permissions": []
+              },
+              {
+                "id": "route_probe",
+                "title": {
+                  "en-US": "Route Probe",
+                  "zh-CN": "路由探测"
+                },
+                "route": "/route-probe",
+                "parent_page_id": "home",
+                "required_permissions": []
+              }
+            ],
+            "actions": [
+              {
+                "id": "open",
+                "title": {
+                  "en-US": "Open Runtime Fixture",
+                  "zh-CN": "打开运行时夹具"
+                },
+                "default_keywords": {
+                  "en-US": [
+                    "runtime fixture"
+                  ],
+                  "zh-CN": [
+                    "运行时夹具"
+                  ]
+                },
+                "target": {
+                  "kind": "page",
+                  "page_id": "route_probe"
+                }
+              }
+            ],
+            "launcher": {
+              "default_action_id": "open"
+            }
+          }
+        },
+        "compatibility": {
+          "lensx": true,
+          "host_api": true
+        },
+        "facts": {
+          "packageFormatVersion": "0.1.0",
+          "compressedSize": 2260,
+          "decompressedSize": 9728,
+          "fileCount": 5,
+          "files": [
+            {
+              "path": "manifest.json",
+              "size": 1250,
+              "sha256": "c7ab009f4bab117b5b33dabb2278c1134ee791a985b15fcb2ef75db971414a55",
+              "checksumCovered": true
+            },
+            {
+              "path": "checksums.json",
+              "size": 536,
+              "sha256": "7ffb353b7235bfa1f4371e6beefe50d6f5ab1e531d0867049b4fd3be060884de",
+              "checksumCovered": false
+            },
+            {
+              "path": "dist/early-runtime-probe.js",
+              "size": 1902,
+              "sha256": "44d17281e66c84e37aa6f51548da34ca1a546523ebd4923908a8243419756359",
+              "checksumCovered": true
+            },
+            {
+              "path": "dist/index.html",
+              "size": 378,
+              "sha256": "d944cf3083e713da846502834092abab49cbf5eb674c877b8363f59c2c49499a",
+              "checksumCovered": true
+            },
+            {
+              "path": "dist/scenario.js",
+              "size": 1009,
+              "sha256": "afacc4f9d9696e1f93fb4ed46663ae9737605dc3c76c058a7b92c1a78d048b40",
+              "checksumCovered": true
+            }
+          ],
+          "packageDigest": {
+            "algorithm": "sha256",
+            "value": "3ea34f3612b56cad673f11da4bd697d9e81e550f8868f62a5b580ea5ec200551"
+          }
+        },
+        "diagnostics": []
+      }
+    },
+    {
+      "kind": "never-acknowledge",
+      "file": "never-acknowledge/runtime-never-acknowledge.lxp",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "9bb8f8f05f606bc5cf921052ed7c6a6ae3323b7064682778a19f72586a0201e6"
+      },
+      "coverage": [
+        "never_acknowledge",
+        "host_owned_deadline",
+        "unified_terminal_cleanup"
+      ],
+      "expected": {
+        "status": "compatible",
+        "manifest": {
+          "manifest_version": "0.1.0",
+          "plugin_id": "com.lensx.fixture.runtime.never-acknowledge",
+          "version": "1.0.0",
+          "display": {
+            "name": {
+              "en-US": "never-acknowledge Runtime Fixture",
+              "zh-CN": "never-acknowledge 运行时夹具"
+            },
+            "description": {
+              "en-US": "A maintained iframe Runtime security fixture.",
+              "zh-CN": "项目维护的 iframe Runtime 安全夹具。"
+            }
+          },
+          "publisher": {
+            "author": "lensX",
+            "homepage": "https://example.com/lensx-runtime-fixture",
+            "repository": "https://example.com/lensx-runtime-fixture.git"
+          },
+          "compatibility": {
+            "lensx": {
+              "min_version": "0.1.0",
+              "max_version_exclusive": "0.2.0"
+            },
+            "host_api": {
+              "min_version": "0.1.0",
+              "max_version_exclusive": "0.2.0"
+            }
+          },
+          "runtime": {
+            "kind": "iframe",
+            "entry": "dist/index.html"
+          },
+          "requested_permissions": [],
+          "contributes": {
+            "pages": [
+              {
+                "id": "home",
+                "title": {
+                  "en-US": "Runtime Fixture",
+                  "zh-CN": "运行时夹具"
+                },
+                "route": "/",
+                "required_permissions": []
+              },
+              {
+                "id": "route_probe",
+                "title": {
+                  "en-US": "Route Probe",
+                  "zh-CN": "路由探测"
+                },
+                "route": "/route-probe",
+                "parent_page_id": "home",
+                "required_permissions": []
+              }
+            ],
+            "actions": [
+              {
+                "id": "open",
+                "title": {
+                  "en-US": "Open Runtime Fixture",
+                  "zh-CN": "打开运行时夹具"
+                },
+                "default_keywords": {
+                  "en-US": [
+                    "runtime fixture"
+                  ],
+                  "zh-CN": [
+                    "运行时夹具"
+                  ]
+                },
+                "target": {
+                  "kind": "page",
+                  "page_id": "route_probe"
+                }
+              }
+            ],
+            "launcher": {
+              "default_action_id": "open"
+            }
+          }
+        },
+        "compatibility": {
+          "lensx": true,
+          "host_api": true
+        },
+        "facts": {
+          "packageFormatVersion": "0.1.0",
+          "compressedSize": 2259,
+          "decompressedSize": 9728,
+          "fileCount": 5,
+          "files": [
+            {
+              "path": "manifest.json",
+              "size": 1274,
+              "sha256": "03d9352be8639d58f5f516df41f05f954b6176d48e6d003abc79fbb5cb8f932e",
+              "checksumCovered": true
+            },
+            {
+              "path": "checksums.json",
+              "size": 536,
+              "sha256": "148b6bc37426fbbaef209b530065b9afc22eabc7f556e6a36c4c7848d0ff3157",
+              "checksumCovered": false
+            },
+            {
+              "path": "dist/early-runtime-probe.js",
+              "size": 1902,
+              "sha256": "44d17281e66c84e37aa6f51548da34ca1a546523ebd4923908a8243419756359",
+              "checksumCovered": true
+            },
+            {
+              "path": "dist/index.html",
+              "size": 402,
+              "sha256": "e1f54a4b856b787e3fc775239dcbf993efae79bea6e6a5847f95be3af3e7d317",
+              "checksumCovered": true
+            },
+            {
+              "path": "dist/scenario.js",
+              "size": 1017,
+              "sha256": "991c406376030a3192aa039e024d9d0bd534cfab124e30a2dc8e4621928f9b28",
+              "checksumCovered": true
+            }
+          ],
+          "packageDigest": {
+            "algorithm": "sha256",
+            "value": "9bb8f8f05f606bc5cf921052ed7c6a6ae3323b7064682778a19f72586a0201e6"
+          }
+        },
+        "diagnostics": []
+      }
+    },
+    {
+      "kind": "unexpected-disconnect",
+      "file": "unexpected-disconnect/runtime-unexpected-disconnect.lxp",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "5420c5377aa0274861533f08c6ca00072298c235dc69e364dda74c0e09d93248"
+      },
+      "coverage": [
+        "unexpected_disconnect",
+        "host_owned_deadline",
+        "unified_terminal_cleanup"
+      ],
+      "expected": {
+        "status": "compatible",
+        "manifest": {
+          "manifest_version": "0.1.0",
+          "plugin_id": "com.lensx.fixture.runtime.unexpected-disconnect",
+          "version": "1.0.0",
+          "display": {
+            "name": {
+              "en-US": "unexpected-disconnect Runtime Fixture",
+              "zh-CN": "unexpected-disconnect 运行时夹具"
+            },
+            "description": {
+              "en-US": "A maintained iframe Runtime security fixture.",
+              "zh-CN": "项目维护的 iframe Runtime 安全夹具。"
+            }
+          },
+          "publisher": {
+            "author": "lensX",
+            "homepage": "https://example.com/lensx-runtime-fixture",
+            "repository": "https://example.com/lensx-runtime-fixture.git"
+          },
+          "compatibility": {
+            "lensx": {
+              "min_version": "0.1.0",
+              "max_version_exclusive": "0.2.0"
+            },
+            "host_api": {
+              "min_version": "0.1.0",
+              "max_version_exclusive": "0.2.0"
+            }
+          },
+          "runtime": {
+            "kind": "iframe",
+            "entry": "dist/index.html"
+          },
+          "requested_permissions": [],
+          "contributes": {
+            "pages": [
+              {
+                "id": "home",
+                "title": {
+                  "en-US": "Runtime Fixture",
+                  "zh-CN": "运行时夹具"
+                },
+                "route": "/",
+                "required_permissions": []
+              },
+              {
+                "id": "route_probe",
+                "title": {
+                  "en-US": "Route Probe",
+                  "zh-CN": "路由探测"
+                },
+                "route": "/route-probe",
+                "parent_page_id": "home",
+                "required_permissions": []
+              }
+            ],
+            "actions": [
+              {
+                "id": "open",
+                "title": {
+                  "en-US": "Open Runtime Fixture",
+                  "zh-CN": "打开运行时夹具"
+                },
+                "default_keywords": {
+                  "en-US": [
+                    "runtime fixture"
+                  ],
+                  "zh-CN": [
+                    "运行时夹具"
+                  ]
+                },
+                "target": {
+                  "kind": "page",
+                  "page_id": "route_probe"
+                }
+              }
+            ],
+            "launcher": {
+              "default_action_id": "open"
+            }
+          }
+        },
+        "compatibility": {
+          "lensx": true,
+          "host_api": true
+        },
+        "facts": {
+          "packageFormatVersion": "0.1.0",
+          "compressedSize": 2259,
+          "decompressedSize": 9728,
+          "fileCount": 5,
+          "files": [
+            {
+              "path": "manifest.json",
+              "size": 1286,
+              "sha256": "3a78dc47cf9db1e437301506397296ff0953413daea19b5f70a4dff90e462934",
+              "checksumCovered": true
+            },
+            {
+              "path": "checksums.json",
+              "size": 536,
+              "sha256": "bd5af925e5ac7d32395060627c8e852769d764a659e1d4b3c8d1bd7e47284dbe",
+              "checksumCovered": false
+            },
+            {
+              "path": "dist/early-runtime-probe.js",
+              "size": 1902,
+              "sha256": "44d17281e66c84e37aa6f51548da34ca1a546523ebd4923908a8243419756359",
+              "checksumCovered": true
+            },
+            {
+              "path": "dist/index.html",
+              "size": 414,
+              "sha256": "62b3ca8ebb19623b90c14a846f4c1a9a3c4f20bcd0a7c8e765ed49b0cfc7c7e2",
+              "checksumCovered": true
+            },
+            {
+              "path": "dist/scenario.js",
+              "size": 1021,
+              "sha256": "222c22bc9cce27983af920b1c75fff8ffd1930169cd3041c441144afa300084b",
+              "checksumCovered": true
+            }
+          ],
+          "packageDigest": {
+            "algorithm": "sha256",
+            "value": "5420c5377aa0274861533f08c6ca00072298c235dc69e364dda74c0e09d93248"
+          }
+        },
+        "diagnostics": []
+      }
+    },
+    {
+      "kind": "repeated-failure",
+      "file": "repeated-failure/runtime-repeated-failure.lxp",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "070fd3aee434a70c6b77b043360da9f2f5958d5a74cccfbae9183de3d42711dd"
+      },
+      "coverage": [
+        "repeated_failure",
+        "host_owned_deadline",
+        "unified_terminal_cleanup"
+      ],
+      "expected": {
+        "status": "compatible",
+        "manifest": {
+          "manifest_version": "0.1.0",
+          "plugin_id": "com.lensx.fixture.runtime.repeated-failure",
+          "version": "1.0.0",
+          "display": {
+            "name": {
+              "en-US": "repeated-failure Runtime Fixture",
+              "zh-CN": "repeated-failure 运行时夹具"
+            },
+            "description": {
+              "en-US": "A maintained iframe Runtime security fixture.",
+              "zh-CN": "项目维护的 iframe Runtime 安全夹具。"
+            }
+          },
+          "publisher": {
+            "author": "lensX",
+            "homepage": "https://example.com/lensx-runtime-fixture",
+            "repository": "https://example.com/lensx-runtime-fixture.git"
+          },
+          "compatibility": {
+            "lensx": {
+              "min_version": "0.1.0",
+              "max_version_exclusive": "0.2.0"
+            },
+            "host_api": {
+              "min_version": "0.1.0",
+              "max_version_exclusive": "0.2.0"
+            }
+          },
+          "runtime": {
+            "kind": "iframe",
+            "entry": "dist/index.html"
+          },
+          "requested_permissions": [],
+          "contributes": {
+            "pages": [
+              {
+                "id": "home",
+                "title": {
+                  "en-US": "Runtime Fixture",
+                  "zh-CN": "运行时夹具"
+                },
+                "route": "/",
+                "required_permissions": []
+              },
+              {
+                "id": "route_probe",
+                "title": {
+                  "en-US": "Route Probe",
+                  "zh-CN": "路由探测"
+                },
+                "route": "/route-probe",
+                "parent_page_id": "home",
+                "required_permissions": []
+              }
+            ],
+            "actions": [
+              {
+                "id": "open",
+                "title": {
+                  "en-US": "Open Runtime Fixture",
+                  "zh-CN": "打开运行时夹具"
+                },
+                "default_keywords": {
+                  "en-US": [
+                    "runtime fixture"
+                  ],
+                  "zh-CN": [
+                    "运行时夹具"
+                  ]
+                },
+                "target": {
+                  "kind": "page",
+                  "page_id": "route_probe"
+                }
+              }
+            ],
+            "launcher": {
+              "default_action_id": "open"
+            }
+          }
+        },
+        "compatibility": {
+          "lensx": true,
+          "host_api": true
+        },
+        "facts": {
+          "packageFormatVersion": "0.1.0",
+          "compressedSize": 2253,
+          "decompressedSize": 9728,
+          "fileCount": 5,
+          "files": [
+            {
+              "path": "manifest.json",
+              "size": 1271,
+              "sha256": "9d97324bcc3a447b3fbefdfae79c562f13a145a7ddf725a51a3555ba687d6e70",
+              "checksumCovered": true
+            },
+            {
+              "path": "checksums.json",
+              "size": 536,
+              "sha256": "89db57092bbc9ef3454237c033a73762020e51cc0b5dc4d47cd7cf909ed702cd",
+              "checksumCovered": false
+            },
+            {
+              "path": "dist/early-runtime-probe.js",
+              "size": 1902,
+              "sha256": "44d17281e66c84e37aa6f51548da34ca1a546523ebd4923908a8243419756359",
+              "checksumCovered": true
+            },
+            {
+              "path": "dist/index.html",
+              "size": 399,
+              "sha256": "a03730dce27efff6e5b4339c782fb57c5bcb13132e32ebfcfaeb2a417d228d20",
+              "checksumCovered": true
+            },
+            {
+              "path": "dist/scenario.js",
+              "size": 1016,
+              "sha256": "8a8402cdce5fb656d36e764385a96425a5cbfad3ad4a5f71c663d8fd2f5da582",
+              "checksumCovered": true
+            }
+          ],
+          "packageDigest": {
+            "algorithm": "sha256",
+            "value": "070fd3aee434a70c6b77b043360da9f2f5958d5a74cccfbae9183de3d42711dd"
+          }
+        },
+        "diagnostics": []
+      }
+    },
+    {
+      "kind": "host-reload",
+      "file": "host-reload/runtime-host-reload.lxp",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "2719e55e1a61c98c8a483602764bf8a9c5490387c1309f9e365cde929f7bd268"
+      },
+      "coverage": [
+        "host_reload",
+        "host_owned_deadline",
+        "unified_terminal_cleanup"
+      ],
+      "expected": {
+        "status": "compatible",
+        "manifest": {
+          "manifest_version": "0.1.0",
+          "plugin_id": "com.lensx.fixture.runtime.host-reload",
+          "version": "1.0.0",
+          "display": {
+            "name": {
+              "en-US": "host-reload Runtime Fixture",
+              "zh-CN": "host-reload 运行时夹具"
+            },
+            "description": {
+              "en-US": "A maintained iframe Runtime security fixture.",
+              "zh-CN": "项目维护的 iframe Runtime 安全夹具。"
+            }
+          },
+          "publisher": {
+            "author": "lensX",
+            "homepage": "https://example.com/lensx-runtime-fixture",
+            "repository": "https://example.com/lensx-runtime-fixture.git"
+          },
+          "compatibility": {
+            "lensx": {
+              "min_version": "0.1.0",
+              "max_version_exclusive": "0.2.0"
+            },
+            "host_api": {
+              "min_version": "0.1.0",
+              "max_version_exclusive": "0.2.0"
+            }
+          },
+          "runtime": {
+            "kind": "iframe",
+            "entry": "dist/index.html"
+          },
+          "requested_permissions": [],
+          "contributes": {
+            "pages": [
+              {
+                "id": "home",
+                "title": {
+                  "en-US": "Runtime Fixture",
+                  "zh-CN": "运行时夹具"
+                },
+                "route": "/",
+                "required_permissions": []
+              },
+              {
+                "id": "route_probe",
+                "title": {
+                  "en-US": "Route Probe",
+                  "zh-CN": "路由探测"
+                },
+                "route": "/route-probe",
+                "parent_page_id": "home",
+                "required_permissions": []
+              }
+            ],
+            "actions": [
+              {
+                "id": "open",
+                "title": {
+                  "en-US": "Open Runtime Fixture",
+                  "zh-CN": "打开运行时夹具"
+                },
+                "default_keywords": {
+                  "en-US": [
+                    "runtime fixture"
+                  ],
+                  "zh-CN": [
+                    "运行时夹具"
+                  ]
+                },
+                "target": {
+                  "kind": "page",
+                  "page_id": "route_probe"
+                }
+              }
+            ],
+            "launcher": {
+              "default_action_id": "open"
+            }
+          }
+        },
+        "compatibility": {
+          "lensx": true,
+          "host_api": true
+        },
+        "facts": {
+          "packageFormatVersion": "0.1.0",
+          "compressedSize": 2253,
+          "decompressedSize": 9728,
+          "fileCount": 5,
+          "files": [
+            {
+              "path": "manifest.json",
+              "size": 1256,
+              "sha256": "bc92bed0ad6cd8592c61f25cc9f27207200a2fe12da07d467b556ec557f22468",
+              "checksumCovered": true
+            },
+            {
+              "path": "checksums.json",
+              "size": 536,
+              "sha256": "ee61ee356050efd63db644b57cef7d1f961b8350b900b743b378f23252d7a9a4",
+              "checksumCovered": false
+            },
+            {
+              "path": "dist/early-runtime-probe.js",
+              "size": 1902,
+              "sha256": "44d17281e66c84e37aa6f51548da34ca1a546523ebd4923908a8243419756359",
+              "checksumCovered": true
+            },
+            {
+              "path": "dist/index.html",
+              "size": 384,
+              "sha256": "c9bc419ba38f4f2d7ae62c78af85c6295d084706b65a77408574db3dbc2033af",
+              "checksumCovered": true
+            },
+            {
+              "path": "dist/scenario.js",
+              "size": 1011,
+              "sha256": "c79610212e4b2082e1c94348c5fd7f49bdb737a0e7e0bb5d14538825e6bcda54",
+              "checksumCovered": true
+            }
+          ],
+          "packageDigest": {
+            "algorithm": "sha256",
+            "value": "2719e55e1a61c98c8a483602764bf8a9c5490387c1309f9e365cde929f7bd268"
+          }
+        },
+        "diagnostics": []
+      }
+    },
+    {
+      "kind": "replacement",
+      "file": "replacement/runtime-replacement.lxp",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "e5a82460285a7e385fe897106bdddee300f212d9e98be8b44e093034024de212"
+      },
+      "coverage": [
+        "replacement",
+        "host_owned_deadline",
+        "unified_terminal_cleanup"
+      ],
+      "expected": {
+        "status": "compatible",
+        "manifest": {
+          "manifest_version": "0.1.0",
+          "plugin_id": "com.lensx.fixture.runtime.replacement",
+          "version": "1.0.0",
+          "display": {
+            "name": {
+              "en-US": "replacement Runtime Fixture",
+              "zh-CN": "replacement 运行时夹具"
+            },
+            "description": {
+              "en-US": "A maintained iframe Runtime security fixture.",
+              "zh-CN": "项目维护的 iframe Runtime 安全夹具。"
+            }
+          },
+          "publisher": {
+            "author": "lensX",
+            "homepage": "https://example.com/lensx-runtime-fixture",
+            "repository": "https://example.com/lensx-runtime-fixture.git"
+          },
+          "compatibility": {
+            "lensx": {
+              "min_version": "0.1.0",
+              "max_version_exclusive": "0.2.0"
+            },
+            "host_api": {
+              "min_version": "0.1.0",
+              "max_version_exclusive": "0.2.0"
+            }
+          },
+          "runtime": {
+            "kind": "iframe",
+            "entry": "dist/index.html"
+          },
+          "requested_permissions": [],
+          "contributes": {
+            "pages": [
+              {
+                "id": "home",
+                "title": {
+                  "en-US": "Runtime Fixture",
+                  "zh-CN": "运行时夹具"
+                },
+                "route": "/",
+                "required_permissions": []
+              },
+              {
+                "id": "route_probe",
+                "title": {
+                  "en-US": "Route Probe",
+                  "zh-CN": "路由探测"
+                },
+                "route": "/route-probe",
+                "parent_page_id": "home",
+                "required_permissions": []
+              }
+            ],
+            "actions": [
+              {
+                "id": "open",
+                "title": {
+                  "en-US": "Open Runtime Fixture",
+                  "zh-CN": "打开运行时夹具"
+                },
+                "default_keywords": {
+                  "en-US": [
+                    "runtime fixture"
+                  ],
+                  "zh-CN": [
+                    "运行时夹具"
+                  ]
+                },
+                "target": {
+                  "kind": "page",
+                  "page_id": "route_probe"
+                }
+              }
+            ],
+            "launcher": {
+              "default_action_id": "open"
+            }
+          }
+        },
+        "compatibility": {
+          "lensx": true,
+          "host_api": true
+        },
+        "facts": {
+          "packageFormatVersion": "0.1.0",
+          "compressedSize": 2252,
+          "decompressedSize": 9728,
+          "fileCount": 5,
+          "files": [
+            {
+              "path": "manifest.json",
+              "size": 1256,
+              "sha256": "7cd822be6e9f8670127a1d2249ffa344043012cb9b38aa8c88dddecfe23520ca",
+              "checksumCovered": true
+            },
+            {
+              "path": "checksums.json",
+              "size": 536,
+              "sha256": "0d0ed265018e0b5f62c9cdb9066c0b02ee1aac0b64d8bdcfdb80c2e23bb48eca",
+              "checksumCovered": false
+            },
+            {
+              "path": "dist/early-runtime-probe.js",
+              "size": 1902,
+              "sha256": "44d17281e66c84e37aa6f51548da34ca1a546523ebd4923908a8243419756359",
+              "checksumCovered": true
+            },
+            {
+              "path": "dist/index.html",
+              "size": 384,
+              "sha256": "daef1a9ec8b4a52e7afa45fbd0c0b37cb086b3485db246686928f88efb57694b",
+              "checksumCovered": true
+            },
+            {
+              "path": "dist/scenario.js",
+              "size": 1011,
+              "sha256": "8b29f43adc3386d610caf42a6078287f7c6c4695f174888c73820f5e23c442d3",
+              "checksumCovered": true
+            }
+          ],
+          "packageDigest": {
+            "algorithm": "sha256",
+            "value": "e5a82460285a7e385fe897106bdddee300f212d9e98be8b44e093034024de212"
           }
         },
         "diagnostics": []

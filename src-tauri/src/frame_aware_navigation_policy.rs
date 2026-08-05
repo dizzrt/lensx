@@ -296,7 +296,11 @@ fn normalize_app_document(raw: &str) -> Option<AppDocumentTarget> {
         scheme: url.scheme().to_owned(),
         host,
         port: url.port(),
-        path: url.path().to_owned(),
+        path: if url.path().is_empty() {
+            "/".to_owned()
+        } else {
+            url.path().to_owned()
+        },
     })
 }
 
@@ -352,6 +356,21 @@ mod tests {
 
     fn policy() -> FrameAwareNavigationPolicy {
         FrameAwareNavigationPolicy::new(APP_PROD).expect("app target should be valid")
+    }
+
+    #[test]
+    fn production_tauri_root_with_or_without_serialized_slash_is_the_same_main_target() {
+        let policy = policy();
+        for target in ["tauri://localhost", "tauri://localhost/"] {
+            assert_eq!(
+                policy.decide(NavigationFrame::Main, target),
+                NavigationDecision::Allow(NavigationAllow::MainApp)
+            );
+        }
+        assert_eq!(
+            denied_code(policy.decide(NavigationFrame::Main, "tauri://localhost/index.html")),
+            NavigationDiagnosticCode::TargetMismatch
+        );
     }
 
     fn denied_code(decision: NavigationDecision) -> NavigationDiagnosticCode {

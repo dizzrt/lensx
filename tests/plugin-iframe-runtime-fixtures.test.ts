@@ -5,7 +5,15 @@ import { describe, expect, test } from '@rstest/core';
 import { inspectPluginPackage } from '../tools/plugin-package-format';
 
 interface FixtureExpectation {
-  readonly kind: 'normal' | 'malicious';
+  readonly kind:
+    | 'normal'
+    | 'malicious'
+    | 'slow-load'
+    | 'never-acknowledge'
+    | 'unexpected-disconnect'
+    | 'repeated-failure'
+    | 'host-reload'
+    | 'replacement';
   readonly file: string;
   readonly coverage: readonly string[];
   readonly expected: {
@@ -22,13 +30,39 @@ const expectations = JSON.parse(readFileSync(join(fixtureRoot, 'expectations.jso
 };
 
 describe('plugin iframe Runtime package fixtures', () => {
-  test('keeps one compatible normal package and one compatible adversarial package', async () => {
+  test('keeps compatible security and lifecycle packages', async () => {
     expect(expectations.fixture_version).toBe('0.1.0');
-    expect(expectations.packages.map(({ kind }) => kind)).toEqual(['normal', 'malicious']);
+    expect(expectations.packages.map(({ kind }) => kind)).toEqual([
+      'normal',
+      'malicious',
+      'slow-load',
+      'never-acknowledge',
+      'unexpected-disconnect',
+      'repeated-failure',
+      'host-reload',
+      'replacement',
+    ]);
     for (const fixture of expectations.packages) {
       const inspection = await inspectPluginPackage(readFileSync(join(fixtureRoot, fixture.file)));
       expect(inspection).toEqual(fixture.expected);
       expect(inspection.status).toBe('compatible');
+    }
+  });
+
+  test('covers each terminal lifecycle scenario with Host-owned control points', () => {
+    for (const kind of [
+      'slow-load',
+      'never-acknowledge',
+      'unexpected-disconnect',
+      'repeated-failure',
+      'host-reload',
+      'replacement',
+    ] as const) {
+      const fixture = expectations.packages.find((candidate) => candidate.kind === kind);
+      expect(fixture?.coverage).toEqual([kind.replaceAll('-', '_'), 'host_owned_deadline', 'unified_terminal_cleanup']);
+      expect(fixture?.expected.facts.files.map(({ path }) => path)).toEqual(
+        expect.arrayContaining(['dist/index.html', 'dist/early-runtime-probe.js', 'dist/scenario.js']),
+      );
     }
   });
 
@@ -90,6 +124,17 @@ describe('plugin iframe Runtime package fixtures', () => {
         'cross_plugin_session_forgery',
         'old_generation_session_replay',
         'wrong_origin_bootstrap',
+        'csp_remote_script',
+        'csp_inline_script',
+        'csp_eval',
+        'csp_connect',
+        'csp_worker',
+        'csp_frame',
+        'csp_object',
+        'csp_base',
+        'csp_form',
+        'csp_data',
+        'csp_blob',
       ]),
     );
   });
