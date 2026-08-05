@@ -5,8 +5,8 @@
 本文区分已经交付的静态插件 Manifest 契约、`.lxp` package inspection 与本地安装、Plugin SDK
 foundation、Plugin Testkit、可选 Plugin UI package、Host 私有 Plugin surface 投影与 Page 导航、
 Host 私有生命周期控制、本地 package replacement、Host 私有 scoped resource service，以及预期的
-运行时扩展边界。公共 packaging CLI、
-分发、插件执行、完整权限决策、iframe transport、签名、Host API、完整插件管理 UI、远程更新和用户
+隔离 iframe Runtime、进程内 Runtime Session 与预期的运行时扩展边界。公共 packaging CLI、
+分发、完整插件执行 lifecycle、完整权限决策、iframe transport、签名、Host API、完整插件管理 UI、远程更新和用户
 主动 rollback history 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
 
 ## 目标
@@ -127,7 +127,8 @@ scripts 或 Host 私有源码。
 静态校验本身不会发现或安装包、创建生产 registration 或 iframe、授予权限、交换 Host API 消息或
 运行插件代码。下文的 Host 私有 capability 会把一个用户选中的兼容 `.lxp` 添加为 external
 registration，把 current Registration facts 投影进 Page 与 Action Registry，并且只在 eligible Plugin
-Page active 时创建隔离 iframe。Runtime Session、Host API 消息与 permission decision 仍是独立工作。
+Page active 时创建隔离 iframe。Runtime Session、Host API 消息与 permission decision 是独立 capability；
+其中下文的 Host 私有进程内 Runtime Session 已经交付。
 
 ## 已交付的 Host 私有 Plugin Package Inspection
 
@@ -380,8 +381,8 @@ digest、record key、absolute path、raw I/O、stack、partial bytes 或存在�
 运行 `pnpm run check:plugin-resource-service` 可验证 Rust/TypeScript 共享 fixture、desktop adapter、
 workspace boundary、Manager generation、Installer ownership 回归，以及 protocol/path/MIME/lifecycle/
 race/oracle/platform URL 测试。该 service 本身不创建 iframe、不执行插件代码、不建立 Runtime Session
-或 Host API transport、不授予权限，也不宣称完整 CSP。已交付的 Task 4.2 container 只消费它校验后的
-`entry_url`；Session、Host API 与完整 CSP 仍分别属于 Task 4.3 与 Task 4.4。
+或 Host API transport、不授予权限，也不宣称完整 CSP。已交付的 iframe container 与下游 Runtime
+Session 会消费它校验后的 `entry_url`；Host API transport 与完整 CSP 仍是后续独立能力。
 
 ## 已交付的 macOS 隔离 Plugin Runtime Origin 前置能力
 
@@ -453,8 +454,9 @@ deny。popup/targeted-context 与 blob-download 用例会进入各自独立 deny
 pnpm run check:frame-aware-webview-navigation-policy
 ```
 
-该 capability 仅支持 macOS，不宣称 Windows 或 Linux 支持。Task 4.2 container 现在会消费它的精确
-target lease；Runtime Session、Host API、permissions 与完整 CSP 仍是独立 capability。
+该 capability 仅支持 macOS，不宣称 Windows 或 Linux 支持。Task 4.2 container 会消费它的精确
+target lease；下文已交付的 Session 也消费该 lease，但不会改变 native policy contract。Host API、
+permissions 与完整 CSP 仍是后续独立 capability。
 
 ## 已交付的 macOS 隔离 Plugin iframe Runtime
 
@@ -473,13 +475,48 @@ dispose lease。最多存在一个 plugin iframe；Host Page 仍是可信 React 
 
 UI 提供本地化 `resolving`、`loading`、`loaded` 与有边界的 failure 状态，以及可访问的显式 retry。
 `loaded` 只表示 iframe load event 已触发，并不等于 SDK 或 Session `ready`。该能力不增加 message
-bridge、MessagePort、JSON-RPC、Host API、permission dispatcher、通用 timeout/crash recovery 或完整
-CSP。Plugin Runtime resolver、Resource/Registration adapter、iframe policy、native lease boundary 与
+readiness 声明。下游 Session capability 只增加私有 MessagePort bootstrap；JSON-RPC、Host API、
+permission dispatcher、通用 timeout/crash recovery 与完整 CSP 仍未实现。Plugin Runtime resolver、Resource/Registration adapter、iframe policy、native lease boundary 与
 origin facts 保持 Host 私有，并由 workspace boundary 阻止公共 package 和 plugin workspace import。
 
 运行 `pnpm run check:plugin-iframe-runtime` 可验证 resolver、component、navigation lease、Page/
 lifecycle/replacement/resource 回归、真实 normal/malicious/replacement `.lxp` evidence、两项前置 gate 与
 workspace boundary。真实 WKWebView evidence 仅适用于 macOS，不宣称 Windows 或 Linux Runtime 支持。
+
+## 已交付的 Host 私有 Plugin Runtime Session
+
+current iframe 报告 `load` 后，`PluginRuntimeFrame` 只把真实 `contentWindow` 与 Host 派生 descriptor
+交给进程内 `PluginRuntimeSessionService`。resolver 会收敛 Registration summary/detail、Page route、
+Resource entry 与 current revision，并绑定包含 opaque entry、plugin/version/Page、隔离 origin 与
+resource generation、Runtime attempt、排序后实际 grant snapshot 的不可变 identity。Manifest request、
+source、publisher 文本、enabled 文本与 plugin message 都不能创建或覆盖 identity/grant。
+
+每次 attempt 都由 Host 新建 128-bit 小写十六进制 nonce 与 `MessageChannel`，只向记录的 window 和
+精确隔离 `targetOrigin` 发送私有 `0.1.0` bootstrap，并且只 transfer 一次 child Port。只有 Host Port
+收到首个 exact、携带相同 nonce 的 ready acknowledgement，Session 才会从 `awaiting_handshake`
+进入 `ready`。bootstrap/ack 不含 plugin、entry、Page、grant、revision、resource token、URL 或 Host
+object。非法 Port input、重复或迟到 acknowledgement、`messageerror`、Host reload 或 current fact
+失效都会断开 Session，不提供 oracle，也不会自动重连。
+
+每次 Registration invalidation 后，currentness 会比较受影响的 entry、Page、version、origin/generation、
+attempt、availability 与 grants。任一相关事实改变都会撤销旧 Session、Port、iframe 与 navigation
+lease；只有其他插件导致的 global revision 变化会保留这四者，revision 只是竞态检测值而不是 Session
+generation。close、retry、replacement、进入 Home/Search/Host Page 与 App unmount 都进行幂等终止
+清理。Session、nonce、Port、window reference 与 message state 永不持久化；进程恢复后 Registration
+仍只报告 `inactive`。
+
+三层 ready 语义保持分离：
+
+1. iframe `loaded` 只表示 browser load completion；
+2. Session `ready` 只表示 current window/origin/nonce/Port binding 已认证；
+3. 未来 SDK `ready` 还需要后续公共 transport 完成连接并校验 Runtime context。
+
+Session contract、parser、adapter、identity 与 Port lease 都只属于 root Host，不进入 Contract、SDK、UI、
+Testkit、官方/示例/外部插件 import 或 tarball。该能力不定义公共 SDK iframe transport、JSON-RPC/
+request ID、Host API method、permission decision/UI、privileged dispatch、plugin storage、完整 CSP、
+通用 handshake timeout/crash recovery、background Runtime、sidecar 或 Windows/Linux 支持。运行
+`pnpm run check:plugin-runtime-session` 可验证 focused logic/React、真实 package、边界、前置 gate 与
+有界真实 macOS WKWebView evidence。
 
 ## 已交付的 Host 私有 Plugin Surface 投影与 Page 导航
 
@@ -710,7 +747,8 @@ icon 解析、完整权限决策、生命周期写操作和外部 Runtime 执行
 
 ### 外部插件
 
-外部插件 UI 运行在已交付的隔离 iframe 中。后续 Runtime Session 只能通过受控 Host Bridge 增加通信。
+外部插件 UI 运行在已交付的隔离 iframe 中。已交付的私有 Runtime Session 会通过受控 Host bootstrap
+认证唯一专用 Port；插件仍没有公共 transport 或 Host API。
 外部插件不能直接访问：
 
 - 应用 React 状态或组件实例；
@@ -727,8 +765,8 @@ icon 解析、完整权限决策、生命周期写操作和外部 Runtime 执行
 
 ```text
 iframe
-  -> 类型化 Plugin SDK
-  -> 基于 postMessage 的 JSON-RPC
+  -> 未来基于已认证 Port 的类型化 Plugin SDK transport
+  -> 未来 JSON-RPC/request 协议
   -> 来源、身份、方法、参数和权限校验
   -> Host API dispatcher
   -> 应用服务或 Rust command
@@ -761,7 +799,8 @@ Host API 方法应当保持小型、类型化、版本化，并且可以独立�
 
 静态 Manifest 格式、校验器、Host 私有本地安装与同 identity replacement、绑定 revision 的
 enable/disable/uninstall 基础设施、scoped package-relative resources、Plugin surface 投影、生产
-Action 激活、Page Registry/navigation 与 macOS 隔离 iframe Runtime 已经交付。其余每项能力——
+Action 激活、Page Registry/navigation、macOS 隔离 iframe Runtime 与 Host 私有进程内 Runtime Session
+已经交付。其余每项能力——
 完整插件管理 UI、完整权限、
-Host API 方法、公共打包、远程/自动更新、用户主动 rollback history、Runtime Session 或 sidecar——
+Host API 方法、公共打包、远程/自动更新、用户主动 rollback history 或 sidecar——
 都需要独立的已接受规格和实现证据。本文定义架构方向和边界，不是发布检查清单。

@@ -55,3 +55,18 @@ export const pluginRuntimeFragmentFromRoute = (route: string): string | undefine
   isValidPluginRuntimeRoute(route) ? route : undefined;
 
 export const pluginRuntimeIframeSrc = (entryUrl: string, fragment: string): string => `${entryUrl}#${fragment}`;
+
+export const pluginRuntimeOriginFromEntryUrl = (entryUrl: string): string | undefined => {
+  if (!isValidIsolatedPluginRuntimeEntryUrl(entryUrl)) return undefined;
+  const parsed = new URL(entryUrl);
+  return `${parsed.protocol}//${parsed.hostname}`;
+};
+
+export const pluginRuntimeGenerationFromEntryUrl = (entryUrl: string): string | undefined => {
+  if (!isValidIsolatedPluginRuntimeEntryUrl(entryUrl)) return undefined;
+  const parsed = new URL(entryUrl);
+  return (
+    /^([0-9a-f]{32})\.runtime\.localhost$/u.exec(parsed.hostname)?.[1] ??
+    /^lensx-plugin\.([0-9a-f]{32})\.runtime\.localhost$/u.exec(parsed.hostname)?.[1]
+  );
+};

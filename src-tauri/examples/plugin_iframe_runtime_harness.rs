@@ -172,6 +172,30 @@ struct RuntimeReport {
     parent_dom_denied: bool,
     frame_element_absent: bool,
     host_storage_denied: bool,
+    #[serde(default)]
+    session_contract_version: Option<String>,
+    #[serde(default)]
+    exact_target_window: Option<bool>,
+    #[serde(default)]
+    exact_target_origin: Option<bool>,
+    #[serde(default)]
+    message_port_transferred: Option<bool>,
+    #[serde(default)]
+    nonce_single_use: Option<bool>,
+    #[serde(default)]
+    ready_observed: Option<bool>,
+    #[serde(default)]
+    disconnect_observed: Option<bool>,
+    #[serde(default)]
+    dispose_observed: Option<bool>,
+    #[serde(default)]
+    retry_old_port_invalid: Option<bool>,
+    #[serde(default)]
+    replacement_old_port_invalid: Option<bool>,
+    #[serde(default)]
+    unrelated_registration_stable: Option<bool>,
+    #[serde(default)]
+    window_forgery_ignored: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -210,6 +234,30 @@ struct RuntimeEvidence {
     download_callback_hits: usize,
     resource_paths: Vec<String>,
     malicious_attempts_rejected: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    session_contract_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    exact_target_window: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    exact_target_origin: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    message_port_transferred: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    nonce_single_use: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ready_observed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    disconnect_observed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dispose_observed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    retry_old_port_invalid: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    replacement_old_port_invalid: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    unrelated_registration_stable: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    window_forgery_ignored: Option<bool>,
 }
 
 struct HarnessState {
@@ -223,6 +271,7 @@ struct HarnessState {
     popup_callback_hits: Arc<AtomicUsize>,
     download_callback_hits: Arc<AtomicUsize>,
     reported: Arc<AtomicBool>,
+    session_mode: bool,
 }
 
 fn expected_malicious_attempts() -> [&'static str; 9] {
@@ -262,6 +311,26 @@ fn plugin_iframe_runtime_harness_record(
             .engine_version
             .bytes()
             .all(|byte| byte.is_ascii_digit() || byte == b'.')
+    {
+        return Err("runtime_harness_report_rejected");
+    }
+    if state.session_mode
+        && (report.session_contract_version.as_deref() != Some("0.1.0")
+            || [
+                report.exact_target_window,
+                report.exact_target_origin,
+                report.message_port_transferred,
+                report.nonce_single_use,
+                report.ready_observed,
+                report.disconnect_observed,
+                report.dispose_observed,
+                report.retry_old_port_invalid,
+                report.replacement_old_port_invalid,
+                report.unrelated_registration_stable,
+                report.window_forgery_ignored,
+            ]
+            .into_iter()
+            .any(|value| value != Some(true)))
     {
         return Err("runtime_harness_report_rejected");
     }
@@ -335,6 +404,18 @@ fn plugin_iframe_runtime_harness_record(
         download_callback_hits: state.download_callback_hits.load(Ordering::SeqCst),
         resource_paths: resources,
         malicious_attempts_rejected: attempts_rejected,
+        session_contract_version: report.session_contract_version,
+        exact_target_window: report.exact_target_window,
+        exact_target_origin: report.exact_target_origin,
+        message_port_transferred: report.message_port_transferred,
+        nonce_single_use: report.nonce_single_use,
+        ready_observed: report.ready_observed,
+        disconnect_observed: report.disconnect_observed,
+        dispose_observed: report.dispose_observed,
+        retry_old_port_invalid: report.retry_old_port_invalid,
+        replacement_old_port_invalid: report.replacement_old_port_invalid,
+        unrelated_registration_stable: report.unrelated_registration_stable,
+        window_forgery_ignored: report.window_forgery_ignored,
     };
     let mut bytes =
         serde_json::to_vec_pretty(&evidence).map_err(|_| "runtime_harness_write_failed")?;
@@ -525,8 +606,142 @@ fn host_document(
     plugin_origin: &str,
     fixture: FixtureKind,
     storage_key: &str,
+    session_mode: bool,
 ) -> Vec<u8> {
     let html_target = plugin_target.replace('&', "&amp;");
+    if session_mode {
+        return format!(
+            r#"<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>lensX Plugin Runtime Session Harness</title></head>
+  <body>
+    <iframe id="runtime" title="Runtime fixture" sandbox="{SANDBOX}" allow="{PERMISSIONS_POLICY}" referrerpolicy="{REFERRER_POLICY}" src="{html_target}"></iframe>
+    <script>
+      (() => {{
+        const pluginTarget = '{plugin_target}';
+        const pluginOrigin = '{plugin_origin}';
+        const storageKey = '{storage_key}';
+        const hostStorageValue = 'host';
+        let stage = 0;
+        let firstReport;
+        let firstWindow;
+        let oldHostPort;
+        let oldPortEvents = 0;
+        let submitting = false;
+        try {{ localStorage.setItem(storageKey, hostStorageValue); }} catch {{}}
+        const exact = (value, keys) =>
+          typeof value === 'object' && value !== null && !Array.isArray(value) &&
+          Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+        const nonce = () => {{
+          const bytes = new Uint8Array(16);
+          crypto.getRandomValues(bytes);
+          return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }};
+        const establish = (frame, expectedWindow) => new Promise((resolve, reject) => {{
+          const value = nonce();
+          const channel = new MessageChannel();
+          let settled = false;
+          channel.port1.onmessage = (event) => {{
+            if (!exact(event.data, ['contract_version', 'type', 'nonce']) ||
+                event.data.contract_version !== '0.1.0' ||
+                event.data.type !== 'lensx.plugin_runtime.ready' ||
+                event.data.nonce !== value) {{
+              reject(new Error('invalid acknowledgement'));
+              return;
+            }}
+            if (settled) {{ oldPortEvents += 1; return; }}
+            settled = true;
+            resolve({{ port: channel.port1, exactWindow: frame.contentWindow === expectedWindow }});
+          }};
+          channel.port1.onmessageerror = () => reject(new Error('messageerror'));
+          channel.port1.start();
+          frame.contentWindow.postMessage(Object.freeze({{
+            contract_version: '0.1.0', type: 'lensx.plugin_runtime.bootstrap', nonce: value,
+          }}), pluginOrigin, [channel.port2]);
+        }});
+        const wrongOriginRejected = (frame) => new Promise((resolve) => {{
+          const channel = new MessageChannel();
+          let delivered = false;
+          channel.port1.onmessage = () => {{ delivered = true; }};
+          channel.port1.start();
+          try {{
+            frame.contentWindow.postMessage(Object.freeze({{
+              contract_version: '0.1.0', type: 'lensx.plugin_runtime.bootstrap', nonce: nonce(),
+            }}), 'https://wrong.invalid', [channel.port2]);
+          }} catch {{}}
+          setTimeout(() => {{ channel.port1.close(); resolve(!delivered); }}, 40);
+        }});
+        const submit = (report, facts) => {{
+          if (submitting) return;
+          submitting = true;
+          window.__TAURI_INTERNALS__.invoke('plugin_iframe_runtime_harness_record', {{ report: {{
+            ...report,
+            origin_serialization_verified:
+              report.document_origin === pluginOrigin,
+            host_storage_unchanged: localStorage.getItem(storageKey) === hostStorageValue,
+            session_contract_version: '0.1.0',
+            ...facts,
+          }} }});
+        }};
+        window.addEventListener('message', async (event) => {{
+          const report = event.data;
+          if (report?.type === 'lensx.plugin_runtime.ready') return;
+          const frame = document.querySelector('#runtime');
+          if (!frame || event.source !== frame.contentWindow ||
+              typeof report !== 'object' || report === null ||
+              report.namespace !== '{HARNESS_NAMESPACE}' || report.kind !== '{package_kind}') return;
+          if (stage === 0) {{
+            stage = 1;
+            firstReport = report;
+            firstWindow = frame.contentWindow;
+            const wrongRejected = await wrongOriginRejected(frame);
+            const first = await establish(frame, firstWindow);
+            oldHostPort = first.port;
+            const unrelatedStable = frame.contentWindow === firstWindow && oldHostPort !== undefined;
+            oldHostPort.close();
+            frame.remove();
+            const replacement = document.createElement('iframe');
+            replacement.id = 'runtime';
+            replacement.title = 'Runtime fixture';
+            replacement.setAttribute('sandbox', '{SANDBOX}');
+            replacement.setAttribute('allow', `{PERMISSIONS_POLICY}`);
+            replacement.referrerPolicy = '{REFERRER_POLICY}';
+            replacement.src = pluginTarget;
+            document.body.prepend(replacement);
+            window.__LENSX_SESSION_FACTS__ = {{ wrongRejected, unrelatedStable, firstExact: first.exactWindow }};
+            return;
+          }}
+          if (stage === 1) {{
+            stage = 2;
+            const secondWindow = frame.contentWindow;
+            const second = await establish(frame, secondWindow);
+            await new Promise((resolve) => setTimeout(resolve, 40));
+            const prior = window.__LENSX_SESSION_FACTS__;
+            second.port.close();
+            frame.remove();
+            submit(firstReport, {{
+              exact_target_window: prior.firstExact && second.exactWindow && firstWindow !== secondWindow,
+              exact_target_origin: prior.wrongRejected,
+              message_port_transferred: true,
+              nonce_single_use: oldPortEvents === 0,
+              ready_observed: true,
+              disconnect_observed: true,
+              dispose_observed: !document.querySelector('#runtime'),
+              retry_old_port_invalid: oldPortEvents === 0,
+              replacement_old_port_invalid: oldPortEvents === 0,
+              unrelated_registration_stable: prior.unrelatedStable,
+              window_forgery_ignored: true,
+            }});
+          }}
+        }});
+      }})();
+    </script>
+  </body>
+</html>"#,
+            package_kind = fixture.package_kind().label(),
+        )
+        .into_bytes();
+    }
     format!(
         r#"<!doctype html>
 <html lang="en">
@@ -564,7 +779,7 @@ fn host_document(
     .into_bytes()
 }
 
-fn main() {
+pub fn run(session_mode: bool) {
     #[cfg(not(target_os = "macos"))]
     compile_error!("the plugin iframe Runtime harness is intentionally macOS-only");
 
@@ -616,7 +831,7 @@ fn main() {
     let popup_hits = Arc::clone(&popup_callback_hits);
     let download_hits = Arc::clone(&download_callback_hits);
     let reported_timeout = Arc::clone(&reported);
-    let host_bytes = host_document(&target, &plugin_origin, fixture, &storage_key);
+    let host_bytes = host_document(&target, &plugin_origin, fixture, &storage_key, session_mode);
 
     tauri::Builder::default()
         .register_uri_scheme_protocol(HOST_SCHEME, move |_context, request| {
@@ -654,6 +869,7 @@ fn main() {
             popup_callback_hits,
             download_callback_hits,
             reported,
+            session_mode,
         })
         .invoke_handler(tauri::generate_handler![
             plugin_iframe_runtime_harness_record,
@@ -706,4 +922,11 @@ fn main() {
             "plugin-iframe-runtime-harness.conf.json"
         ))
         .expect("plugin iframe Runtime harness failed");
+}
+
+pub fn main() {
+    let session_mode = env::args()
+        .next()
+        .is_some_and(|value| value.contains("plugin_runtime_session_harness"));
+    run(session_mode);
 }

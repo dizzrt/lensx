@@ -160,6 +160,33 @@ Tauri absence、zero privileged hit，以及恶意 navigation/capability rejecti
 Host API、permission dispatcher、完整 CSP、通用 timeout/crash recovery 或 Windows/Linux Runtime。
 应在完整 frontend/Rust validation 集合前运行，但不能替代它们。
 
+## Plugin Runtime Session 验证
+
+修改 Host 私有 Session contract/parser/service、nonce 或 MessageChannel adapter、Runtime descriptor/
+currentness、iframe ref/bootstrap、canonical Session fixture、evidence schema 或 workspace/package
+boundary 时，必须运行：
+
+```bash
+pnpm run check:plugin-runtime-session
+```
+
+该门禁组合 strict parser/state-machine tests、resolver/detail/grant 收敛、相关与无关 invalidation、React
+iframe lifecycle、Registration/Page/lifecycle/replacement/resource 回归、canonical 真实 `.lxp` drift
+检查、公共 tarball consumer，以及完整 iframe/origin/navigation 前置 gate。专用 macOS
+`plugin_runtime_session_harness` 会在 WKWebView 中复用 production Resource Service、隔离 origin 的真实
+package path、sandbox、Permissions Policy 与 frame-aware navigation policy。
+
+已提交的有界 evidence 必须对 normal、malicious 与 replacement fixture 证明 exact target window/origin、
+MessagePort transfer、cryptographic single-use nonce、ready/disconnect/dispose、retry 与同版本 replacement
+后 old Port 失效、无关 Registration 变化稳定，以及 privileged Tauri handler zero-hit。evidence 不得包含
+URL、origin/resource token、nonce、Port 内容、entry/plugin/Page identity、本机路径、raw payload 或
+private error。
+
+这是 macOS-only delivery gate，不建立 Windows 或 Linux Runtime Session 支持。它只证明私有认证
+Session 与 Port lease；不会交付公共 SDK iframe transport、RPC/request ID、Host API method、permission
+decision、完整 CSP、通用 handshake timeout/crash recovery 或 background Runtime。focused gate 只补充
+完整 frontend/Rust validation 集合，绝不能替代它们。
+
 ## Rust 验证
 
 检查 Rust 格式：

@@ -6,7 +6,7 @@
       "file": "normal/runtime-compatible.lxp",
       "digest": {
         "algorithm": "sha256",
-        "value": "d70bda1bd7c8abfb1718eef31abaa6ab23db35afa0a31e1d89c44c23b1da4614"
+        "value": "32f2fd77b65d9a3b78ea64e474a8b162e0d193b687ada319e6325d7a5ef1ff1a"
       },
       "coverage": [
         "html",
@@ -18,7 +18,10 @@
         "host_route_fragment",
         "origin_serialization",
         "same_key_storage",
-        "parent_frame_isolation"
+        "parent_frame_isolation",
+        "private_session_bootstrap_consumer",
+        "single_use_nonce",
+        "message_port_transfer"
       ],
       "expected": {
         "status": "compatible",
@@ -110,8 +113,8 @@
         },
         "facts": {
           "packageFormatVersion": "0.1.0",
-          "compressedSize": 2675,
-          "decompressedSize": 14848,
+          "compressedSize": 2962,
+          "decompressedSize": 15872,
           "fileCount": 9,
           "files": [
             {
@@ -123,7 +126,7 @@
             {
               "path": "checksums.json",
               "size": 982,
-              "sha256": "fbca249f839b0fbd0019ee842f5f35deab0d906d715e82ff5cc01a838a61e1df",
+              "sha256": "15c992b561bf5b92074d9e8bbf849c465b2b1fcde30c6432eb763a165f9a8f00",
               "checksumCovered": false
             },
             {
@@ -146,8 +149,8 @@
             },
             {
               "path": "dist/index.html",
-              "size": 3198,
-              "sha256": "8371c62975505cb6738ab53f6a3e54cbb46bcc51c14d536f8e833d456b278484",
+              "size": 4173,
+              "sha256": "f8c68191bd79a5f6201fd7c99b6b656a12083b3f39417abab8c12491976b1b7d",
               "checksumCovered": true
             },
             {
@@ -171,7 +174,7 @@
           ],
           "packageDigest": {
             "algorithm": "sha256",
-            "value": "d70bda1bd7c8abfb1718eef31abaa6ab23db35afa0a31e1d89c44c23b1da4614"
+            "value": "32f2fd77b65d9a3b78ea64e474a8b162e0d193b687ada319e6325d7a5ef1ff1a"
           }
         },
         "diagnostics": []
@@ -182,7 +185,7 @@
       "file": "malicious/runtime-adversarial.lxp",
       "digest": {
         "algorithm": "sha256",
-        "value": "ae66cc0a1c9c5accb371f5c45e2d8c171b5378a7731737e04e5807ca39aff289"
+        "value": "c093e7029ecea8caf5d0e8deeb932c426c614d11093513a57ef451da655ae678"
       },
       "coverage": [
         "tauri_internals",
@@ -206,7 +209,10 @@
         "camera",
         "microphone",
         "geolocation",
-        "fullscreen"
+        "fullscreen",
+        "cross_plugin_session_forgery",
+        "old_generation_session_replay",
+        "wrong_origin_bootstrap"
       ],
       "expected": {
         "status": "compatible",
@@ -298,8 +304,8 @@
         },
         "facts": {
           "packageFormatVersion": "0.1.0",
-          "compressedSize": 2423,
-          "decompressedSize": 9216,
+          "compressedSize": 2729,
+          "decompressedSize": 10752,
           "fileCount": 4,
           "files": [
             {
@@ -311,25 +317,25 @@
             {
               "path": "checksums.json",
               "size": 411,
-              "sha256": "67bfe37f7f43b214330d90641e338178f5a12f2c211df9374589e344c1dba6fd",
+              "sha256": "461b4cd6ab7df8ab7ffd1cb8f993e032fc5b0b9794f060c732d8b9bb5fa59532",
               "checksumCovered": false
             },
             {
               "path": "dist/index.html",
-              "size": 2559,
-              "sha256": "6a9300d3d2643327386f76b6a5310dd725879b58f7b2fab454f8fe366bfdbf1b",
+              "size": 3534,
+              "sha256": "631fde2a70d872a22536afbbde538c31052c99cb5a5b0ddc076c60a65563978d",
               "checksumCovered": true
             },
             {
               "path": "dist/malicious.js",
-              "size": 1516,
-              "sha256": "d0d30dfb3a19083687b06441709b7ceee293a6aabbea68a3134b71f5f71fb68b",
+              "size": 1680,
+              "sha256": "2b975a8dedeaa487708e6bc54f05852ea1ba8fda5ad66462912b9ea3ddc11c56",
               "checksumCovered": true
             }
           ],
           "packageDigest": {
             "algorithm": "sha256",
-            "value": "ae66cc0a1c9c5accb371f5c45e2d8c171b5378a7731737e04e5807ca39aff289"
+            "value": "c093e7029ecea8caf5d0e8deeb932c426c614d11093513a57ef451da655ae678"
           }
         },
         "diagnostics": []

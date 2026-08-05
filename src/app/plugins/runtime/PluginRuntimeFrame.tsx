@@ -1,13 +1,23 @@
 import { Button, Spin, Typography } from '@douyinfe/semi-ui';
-import { useEffect, useReducer, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ActivePage, PageResolution } from '../../navigation';
-import { isValidIsolatedPluginRuntimeEntryUrl, isValidPluginRuntimeRoute, pluginRuntimeIframeSrc } from './helpers';
+import {
+  isValidIsolatedPluginRuntimeEntryUrl,
+  isValidPluginRuntimeRoute,
+  pluginRuntimeIframeSrc,
+  pluginRuntimeOriginFromEntryUrl,
+} from './helpers';
 import {
   PLUGIN_RUNTIME_IFRAME_SANDBOX,
   PLUGIN_RUNTIME_PERMISSIONS_POLICY,
   PLUGIN_RUNTIME_REFERRER_POLICY,
 } from './policy';
+import {
+  createPluginRuntimeSessionService,
+  type PluginRuntimeSession,
+  type PluginRuntimeSessionService,
+} from './session-service';
 import type {
   PluginPageRuntimeDescriptor,
   PluginPageRuntimeResolver,
@@ -55,6 +65,14 @@ export interface PluginRuntimeFrameProps {
   readonly pageResolution: PageResolution;
   readonly pageTitle: string;
   readonly resolver: PluginPageRuntimeResolver;
+  readonly sessionService?: PluginRuntimeSessionService;
+}
+
+interface ActiveRuntimeBinding {
+  readonly descriptor: PluginPageRuntimeDescriptor;
+  readonly release: () => void;
+  session?: PluginRuntimeSession;
+  unsubscribeSession?: () => void;
 }
 
 export const PluginRuntimeFrame = ({
@@ -63,25 +81,55 @@ export const PluginRuntimeFrame = ({
   pageResolution,
   pageTitle,
   resolver,
+  sessionService,
 }: PluginRuntimeFrameProps) => {
   const { t } = useTranslation();
   const [attempt, setAttempt] = useState(0);
   const [state, dispatch] = useReducer(reducePluginRuntimeFrameState, { status: 'resolving' });
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const activeBindingRef = useRef<ActiveRuntimeBinding | undefined>(undefined);
+  const effectiveSessionService = useMemo(
+    () => sessionService ?? createPluginRuntimeSessionService(),
+    [sessionService],
+  );
+  const request = useMemo(() => ({ activePage, pageResolution, attempt }), [activePage, attempt, pageResolution]);
 
   useEffect(() => {
     let cancelled = false;
     let activeLease: PluginRuntimeNavigationLease | undefined;
+    let leaseReleased = false;
+    let unsubscribeInvalidation: (() => void) | undefined;
+    let revalidationRunning = false;
+    let revalidationPending = false;
     dispatch({ type: 'resolve' });
 
+    const releaseLease = () => {
+      if (leaseReleased) return;
+      leaseReleased = true;
+      if (activeLease) void navigationAdapter.dispose(activeLease);
+    };
+
+    const revoke = () => {
+      const binding = activeBindingRef.current;
+      if (binding) {
+        binding.unsubscribeSession?.();
+        binding.session?.dispose();
+        activeBindingRef.current = undefined;
+      }
+      releaseLease();
+    };
+
     void resolver
-      .resolve({ activePage, pageResolution, attempt })
+      .resolve(request)
       .then(async (descriptor) => {
         if (cancelled) return;
         if (
           descriptor.runtime_key.length === 0 ||
           descriptor.plugin_id !== activePage.owner_id ||
+          descriptor.page_id !== activePage.page_id ||
           !isValidIsolatedPluginRuntimeEntryUrl(descriptor.entry_url) ||
           !isValidPluginRuntimeRoute(descriptor.host_fragment) ||
+          descriptor.expected_origin !== pluginRuntimeOriginFromEntryUrl(descriptor.entry_url) ||
           descriptor.iframe_src !== pluginRuntimeIframeSrc(descriptor.entry_url, descriptor.host_fragment)
         ) {
           throw new TypeError('Invalid Host-private Plugin Runtime descriptor.');
@@ -95,7 +143,28 @@ export const PluginRuntimeFrame = ({
           return;
         }
         activeLease = lease;
+        activeBindingRef.current = { descriptor, release: releaseLease };
         dispatch({ type: 'mount', descriptor });
+
+        const revalidate = async () => {
+          revalidationPending = true;
+          if (revalidationRunning || !resolver.isCurrent) return;
+          revalidationRunning = true;
+          while (!cancelled && revalidationPending) {
+            revalidationPending = false;
+            if (!(await resolver.isCurrent(request, descriptor))) {
+              if (!cancelled) {
+                revoke();
+                dispatch({ type: 'fail' });
+              }
+              break;
+            }
+          }
+          revalidationRunning = false;
+        };
+        unsubscribeInvalidation = resolver.subscribeInvalidation?.(() => {
+          void revalidate();
+        });
       })
       .catch(() => {
         if (!cancelled) dispatch({ type: 'fail' });
@@ -103,10 +172,49 @@ export const PluginRuntimeFrame = ({
 
     return () => {
       cancelled = true;
+      unsubscribeInvalidation?.();
       dispatch({ type: 'dispose' });
-      if (activeLease) void navigationAdapter.dispose(activeLease);
+      revoke();
     };
-  }, [activePage, attempt, navigationAdapter, pageResolution, resolver]);
+  }, [activePage.owner_id, activePage.page_id, navigationAdapter, request, resolver]);
+
+  const handleLoad = (descriptor: PluginPageRuntimeDescriptor) => {
+    dispatch({ type: 'load', runtimeKey: descriptor.runtime_key });
+    const binding = activeBindingRef.current;
+    const targetWindow = iframeRef.current?.contentWindow;
+    if (!binding || binding.descriptor.runtime_key !== descriptor.runtime_key || binding.session || !targetWindow) {
+      return;
+    }
+    try {
+      const session = effectiveSessionService.start({
+        identity: {
+          entry_id: descriptor.entry_id,
+          plugin_id: descriptor.plugin_id,
+          version: descriptor.version,
+          page_id: descriptor.page_id,
+          expected_origin: descriptor.expected_origin,
+          resource_generation: descriptor.resource_generation,
+          runtime_attempt_key: descriptor.runtime_attempt_key,
+          registration_revision: descriptor.registration_revision,
+          granted_permission_ids: descriptor.granted_permission_ids,
+        },
+        targetWindow: targetWindow as unknown as Parameters<PluginRuntimeSessionService['start']>[0]['targetWindow'],
+        targetOrigin: descriptor.expected_origin,
+      });
+      binding.session = session;
+      binding.unsubscribeSession = session.subscribe((snapshot) => {
+        if (snapshot.state === 'disconnected' && activeBindingRef.current === binding) {
+          binding.release();
+          activeBindingRef.current = undefined;
+          dispatch({ type: 'fail' });
+        }
+      });
+    } catch {
+      binding.release();
+      activeBindingRef.current = undefined;
+      dispatch({ type: 'fail' });
+    }
+  };
 
   if (state.status === 'failed') {
     return (
@@ -155,7 +263,8 @@ export const PluginRuntimeFrame = ({
         allow={PLUGIN_RUNTIME_PERMISSIONS_POLICY}
         className="plugin-runtime-iframe"
         key={descriptor.runtime_key}
-        onLoad={() => dispatch({ type: 'load', runtimeKey: descriptor.runtime_key })}
+        onLoad={() => handleLoad(descriptor)}
+        ref={iframeRef}
         referrerPolicy={PLUGIN_RUNTIME_REFERRER_POLICY}
         sandbox={PLUGIN_RUNTIME_IFRAME_SANDBOX}
         src={descriptor.iframe_src}

@@ -44,6 +44,9 @@ The repository currently provides:
 - a macOS-only frame-aware WKWebView navigation policy with disjoint Host and
   descendant document allowlists, an idle process-local target lease, main-only
   Tauri initialization, and independent new-window/download denial;
+- one current isolated Plugin Page iframe plus a Host-private process-local
+  Runtime Session that authenticates the actual window and exact origin with a
+  single-use nonce and dedicated MessagePort;
 - a unified Host-owned Page Registry and framework-neutral navigation service
   for protected Host Pages and declarative Plugin Page descriptors;
 - versioned recent-use and pinned Action collections persisted through a narrow
@@ -288,8 +291,10 @@ successful Action result. Pin and unpin use an optimistic view but restore the
 last confirmed snapshot after failure, and a ninth pin is rejected without
 dropping an existing one.
 
-Plugin management, safe plugin resource/icon resolution, iframe Runtime,
-lifecycle writes, and complete permission decisions remain future capabilities.
+Complete plugin management, safe plugin icon resolution, and complete
+permission decisions remain future capabilities. Scoped resources, lifecycle
+writes, the isolated iframe Runtime, and its private Session are delivered
+separately and do not change Action collection semantics.
 Production Plugin Actions now appear only while their projected target Page is
 available. Persisted plugin Action IDs can disappear and reappear naturally
 without being removed from recent or pinned storage.
@@ -327,8 +332,11 @@ and Registry route, then activates the exact native navigation lease before
 mounting. The iframe fixes `allow-scripts allow-same-origin`, `no-referrer`, and
 a deny-by-default Permissions Policy; close, retry, invalidation, replacement,
 and App teardown remove it. Its load event means only `loaded`, not SDK/Session
-`ready`. Runtime Session, Host API transport, complete CSP, and Task 5.5
-permission management remain unimplemented.
+`ready`. After load, the Host-private Session binds current entry, plugin,
+version, Page, resource generation, Runtime attempt, and actual grants to the
+real `contentWindow`; only an exact acknowledgement on the newly transferred
+Port produces Session `ready`. SDK `ready`, Host API transport, complete CSP,
+and Task 5.5 permission management remain unimplemented.
 
 Settings is rendered in the existing `main` Tauri window. It has first-level
 Preferences and Plugins sections. Preferences controls the supported
@@ -421,8 +429,11 @@ request revalidates its process-local scope against the current Manager
 generation and Installer-owned payload. Neither React presentation props nor
 public plugin packages receive installation paths, digests, record keys, or a
 general file reader. The macOS iframe Runtime consumes this resource-read
-foundation through Host-private adapters; Runtime Session identity, Host API
-transport, and complete CSP remain separate work.
+foundation through Host-private adapters. Its shipped process-local Session
+authenticates a dedicated Port and compares relevant current facts without
+treating unrelated Registration revision changes as identity changes. Session
+state is not persisted and does not change Registration's `inactive` read
+model; public SDK transport, Host API, and complete CSP remain separate work.
 
 ## Dependency Direction
 

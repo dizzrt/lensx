@@ -167,6 +167,16 @@ pnpm run src-tauri:format
 If an executable is unavailable from `PATH`, run `source ~/.zshrc` before
 retrying it.
 
+## pnpm Store Policy
+
+- Use the machine-configured global pnpm store for commands executed from the
+  repository root.
+- Never pass `--store-dir` to pnpm commands executed from the repository root.
+- Never use the repository-local `.pnpm-store` as the store for the root
+  workspace.
+- Package-consumer smoke tests must run inside their temporary consumer
+  directory and must not recreate the repository root `node_modules`.
+
 ## Completion Standard
 
 Before claiming completion:

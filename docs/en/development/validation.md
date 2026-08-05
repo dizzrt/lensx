@@ -193,6 +193,41 @@ not validate a message bridge, Host API, permission dispatcher, complete CSP,
 general timeout/crash recovery, or Windows/Linux Runtime. Run it before the
 complete frontend and Rust validation sets; it does not replace them.
 
+## Plugin Runtime Session Validation
+
+Changes to the Host-private Session contract/parser/service, nonce or
+MessageChannel adapters, Runtime descriptor/currentness, iframe ref/bootstrap,
+canonical Session fixtures, evidence schema, or workspace/package boundaries
+must run:
+
+```bash
+pnpm run check:plugin-runtime-session
+```
+
+The gate combines strict parser and state-machine tests, resolver/detail/grant
+convergence, relevant versus unrelated invalidation, React iframe lifecycle,
+Registration/Page/lifecycle/replacement/resource regressions, canonical real
+`.lxp` drift checks, public tarball consumers, and the complete iframe/origin/
+navigation prerequisites. Its dedicated macOS
+`plugin_runtime_session_harness` uses the production Resource Service,
+isolated-origin package path, sandbox, Permissions Policy, and frame-aware
+navigation policy in WKWebView.
+
+Committed bounded evidence must prove exact target window and origin,
+MessagePort transfer, cryptographic single-use nonce, ready/disconnect/dispose,
+retry and same-version replacement old-Port invalidation, stability across an
+unrelated Registration change, and zero privileged Tauri handler hits for the
+normal, malicious, and replacement fixtures. Evidence must not contain a URL,
+origin/resource token, nonce, Port content, entry/plugin/Page identity, local
+path, raw payload, or private error.
+
+This is a macOS-only delivery gate and does not establish Windows or Linux
+Runtime Session support. It proves only the private authenticated Session and
+Port lease: it does not deliver public SDK iframe transport, RPC/request IDs,
+Host API methods, permission decisions, complete CSP, general handshake
+timeouts/crash recovery, or background Runtime. The focused gate supplements
+and never replaces the complete frontend and Rust validation sets.
+
 ## Rust Validation
 
 Check Rust formatting:

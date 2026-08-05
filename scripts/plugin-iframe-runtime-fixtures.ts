@@ -103,6 +103,30 @@ const manifest = (kind: 'normal' | 'malicious') => ({
   },
 });
 
+const privateSessionConsumer = `
+      (() => {
+        const exactKeys = (value, keys) =>
+          typeof value === 'object' && value !== null && !Array.isArray(value) &&
+          Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+        window.addEventListener('message', (event) => {
+          const value = event.data;
+          if (
+            event.source !== window.parent || event.ports.length !== 1 ||
+            !exactKeys(value, ['contract_version', 'type', 'nonce']) ||
+            value.contract_version !== '0.1.0' ||
+            value.type !== 'lensx.plugin_runtime.bootstrap' ||
+            typeof value.nonce !== 'string' || !/^[0-9a-f]{32}$/.test(value.nonce)
+          ) return;
+          const port = event.ports[0];
+          port.postMessage(Object.freeze({
+            contract_version: '0.1.0',
+            type: 'lensx.plugin_runtime.ready',
+            nonce: value.nonce,
+          }));
+        });
+      })();
+`;
+
 const normalHtml = `<!doctype html>
 <html lang="en">
   <head>
@@ -110,6 +134,7 @@ const normalHtml = `<!doctype html>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>lensX Runtime Fixture</title>
     <script>${originProbe('normal')}</script>
+    <script>${privateSessionConsumer}</script>
     <link rel="stylesheet" href="./styles.css">
     <script src="./classic.js" defer></script>
     <script type="module" src="./module.js"></script>
@@ -146,6 +171,7 @@ const maliciousHtml = `<!doctype html>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>lensX Adversarial Runtime Fixture</title>
     <script>${originProbe('malicious')}</script>
+    <script>${privateSessionConsumer}</script>
     <script type="module" src="./malicious.js"></script>
   </head>
   <body>
@@ -172,6 +198,11 @@ await attempt('camera', () => navigator.mediaDevices.getUserMedia({ video: true 
 await attempt('microphone', () => navigator.mediaDevices.getUserMedia({ audio: true }));
 await attempt('geolocation', () => new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject)));
 await attempt('fullscreen', () => document.documentElement.requestFullscreen());
+window.parent.postMessage(Object.freeze({
+  contract_version: '0.1.0',
+  type: 'lensx.plugin_runtime.ready',
+  nonce: '00000000000000000000000000000000',
+}), '*');
 document.querySelector('[data-probe="popup"]').addEventListener('click', () => window.open('https://example.invalid/', '_blank'));
 document.querySelector('[data-probe="top-navigation"]').addEventListener('click', () => window.top.location.assign('https://example.invalid/'));
 window.__LENSX_RUNTIME_FIXTURE_RESULT__ = Object.freeze(result);
@@ -198,6 +229,9 @@ const fixtureInputs = [
       'origin_serialization',
       'same_key_storage',
       'parent_frame_isolation',
+      'private_session_bootstrap_consumer',
+      'single_use_nonce',
+      'message_port_transfer',
     ],
     files: [
       { path: 'manifest.json', bytes: manifestBytes(manifest('normal')) },
@@ -254,6 +288,9 @@ const fixtureInputs = [
       'microphone',
       'geolocation',
       'fullscreen',
+      'cross_plugin_session_forgery',
+      'old_generation_session_replay',
+      'wrong_origin_bootstrap',
     ],
     files: [
       { path: 'manifest.json', bytes: manifestBytes(manifest('malicious')) },

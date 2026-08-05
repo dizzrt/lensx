@@ -16,7 +16,7 @@ import {
   type PluginRegistrationSnapshot,
   parsePluginRegistrationDetailResponse,
 } from '../src/app/plugins/registration';
-import type { PluginPageRuntimeDescriptor } from '../src/app/plugins/runtime';
+import type { PluginPageRuntimeDescriptor, PluginRuntimeSessionService } from '../src/app/plugins/runtime';
 import { createPluginSurfaceProjectionService } from '../src/app/plugins/surfaces';
 import { useAppTheme } from '../src/app/theme';
 
@@ -93,8 +93,15 @@ const runtimeDescriptor: PluginPageRuntimeDescriptor = Object.freeze({
   host_fragment: '/open-project',
   iframe_src:
     'lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost/v1/0123456789abcdef0123456789abcdef/v1-636f6d2e6578616d706c652e776f726b7370616365/1.2.3/index.html#/open-project',
+  entry_id: detail.entry_id,
   plugin_id: pluginId,
   version: detail.manifest.version,
+  page_id: 'open_project',
+  expected_origin: 'lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost',
+  resource_generation: '0123456789abcdef0123456789abcdef',
+  runtime_attempt_key: 'attempt-1',
+  registration_revision: '1',
+  granted_permission_ids: ['lensx.filesystem.read_selected'],
 });
 
 const TestProviderControls = () => {
@@ -129,6 +136,17 @@ const renderPluginComposition = () => {
     activate: rs.fn(async () => ({ lease_id: '0000000000000001' })),
     dispose: rs.fn(async () => true),
   };
+  const pluginRuntimeSessionService = {
+    start: rs.fn(({ identity }) => ({
+      snapshot: () => ({ state: 'awaiting_handshake' as const, identity }),
+      subscribe: () => () => undefined,
+      disconnect: () => undefined,
+      dispose: () => undefined,
+    })),
+    current: () => undefined,
+    disconnect: () => undefined,
+    dispose: () => undefined,
+  } as unknown as PluginRuntimeSessionService;
   render(
     <AppProviders>
       <TestProviderControls />
@@ -139,6 +157,7 @@ const renderPluginComposition = () => {
         navigationService={navigationService}
         pluginRuntimeNavigationAdapter={pluginRuntimeNavigationAdapter}
         pluginRuntimeResolver={pluginRuntimeResolver}
+        pluginRuntimeSessionService={pluginRuntimeSessionService}
         surfaceProjectionService={projection}
       />
     </AppProviders>,

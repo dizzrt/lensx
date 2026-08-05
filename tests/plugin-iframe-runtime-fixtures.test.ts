@@ -45,6 +45,9 @@ describe('plugin iframe Runtime package fixtures', () => {
       'origin_serialization',
       'same_key_storage',
       'parent_frame_isolation',
+      'private_session_bootstrap_consumer',
+      'single_use_nonce',
+      'message_port_transfer',
     ]);
     expect(fixture?.expected.facts.files.map(({ path }) => path)).toEqual(
       expect.arrayContaining([
@@ -84,6 +87,9 @@ describe('plugin iframe Runtime package fixtures', () => {
         'geolocation',
         'fullscreen',
         'dangerous_scheme',
+        'cross_plugin_session_forgery',
+        'old_generation_session_replay',
+        'wrong_origin_bootstrap',
       ]),
     );
   });

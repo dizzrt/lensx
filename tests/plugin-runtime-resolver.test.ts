@@ -1,7 +1,13 @@
 import { describe, expect, rs, test } from '@rstest/core';
+import validRegistrationCases from '../fixtures/plugin-registration-contract/valid/cases.json';
 import validResourceCases from '../fixtures/plugin-resource-service/valid/cases.json';
 import type { ActivePage, PageResolution } from '../src/app/navigation';
-import type { PluginRegistrationSnapshot, PluginRegistrationSummary } from '../src/app/plugins/registration';
+import {
+  type PluginRegistrationDetailResponse,
+  type PluginRegistrationSnapshot,
+  type PluginRegistrationSummary,
+  parsePluginRegistrationDetailResponse,
+} from '../src/app/plugins/registration';
 import { type PluginResourceEntry, PluginResourceError, parsePluginResourceEntry } from '../src/app/plugins/resource';
 import {
   createPluginPageRuntimeResolver,
@@ -46,6 +52,34 @@ const registeredEntry: Extract<PluginRegistrationSummary, { readonly kind: 'regi
   runtime: { kind: 'inactive' },
 };
 
+const parsedDetail = parsePluginRegistrationDetailResponse(
+  structuredClone(validRegistrationCases.find(({ name }) => name === 'healthy_detail')?.value),
+);
+if (parsedDetail.detail.kind !== 'registered') throw new Error('Expected registered detail fixture.');
+const [firstManifestPage, ...remainingManifestPages] = parsedDetail.detail.manifest.contributes.pages;
+const registrationDetail: Extract<PluginRegistrationDetailResponse['detail'], { readonly kind: 'registered' }> = {
+  ...parsedDetail.detail,
+  entry_id: entry.entry_id,
+  manifest: {
+    ...parsedDetail.detail.manifest,
+    plugin_id: entry.plugin_id,
+    version: entry.version,
+    contributes: {
+      ...parsedDetail.detail.manifest.contributes,
+      pages: [
+        {
+          ...firstManifestPage,
+          id: activePage.page_id,
+          route: pageResolution.page.route,
+          required_permissions: [],
+        },
+        ...remainingManifestPages,
+      ],
+    },
+  },
+  granted_permission_ids: [],
+};
+
 const snapshot = (overrides: Partial<PluginRegistrationSnapshot> = {}): PluginRegistrationSnapshot => ({
   contract_version: '0.1.0',
   revision: entry.revision,
@@ -59,23 +93,47 @@ const harness = (
   result: PluginResourceEntry = entry,
 ) => {
   let current: PluginRegistrationSnapshot | undefined = initial === null ? snapshot() : initial;
+  let currentDetail = registrationDetail;
+  let detailRevision: string | undefined;
   const refresh = rs.fn(async () => undefined);
   const whenIdle = rs.fn(async () => undefined);
-  const resolveEntry = rs.fn(async () => result);
+  const resolveEntry = rs.fn(async () => ({ ...result, revision: current?.revision ?? result.revision }));
+  const readRegistrationDetail = rs.fn(
+    async (): Promise<PluginRegistrationDetailResponse> => ({
+      contract_version: '0.1.0' as const,
+      revision: detailRevision ?? current?.revision ?? entry.revision,
+      detail: currentDetail,
+    }),
+  );
+  const listeners = new Set<(snapshot: PluginRegistrationSnapshot) => void>();
   const resolver = createPluginPageRuntimeResolver({
     resourceAdapter: { resolveEntry },
     surfaceProjectionService: {
       currentSnapshot: () => current,
+      readRegistrationDetail,
       refresh,
+      subscribeSnapshot: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
       whenIdle,
     },
   });
   return {
     resolver,
     refresh,
+    readRegistrationDetail,
     resolveEntry,
+    publish: (value: PluginRegistrationSnapshot) => {
+      current = value;
+      for (const listener of listeners) listener(value);
+    },
     setCurrent: (value: PluginRegistrationSnapshot | undefined) => {
       current = value;
+    },
+    setDetail: (value: typeof registrationDetail, revision?: string) => {
+      currentDetail = value;
+      detailRevision = revision;
     },
     whenIdle,
   };
@@ -94,8 +152,14 @@ describe('Host-private Plugin Page Runtime resolver', () => {
       entry_url: entry.entry_url,
       host_fragment: '/route-probe',
       iframe_src: `${entry.entry_url}#/route-probe`,
+      entry_id: entry.entry_id,
       plugin_id: entry.plugin_id,
       version: entry.version,
+      page_id: activePage.page_id,
+      expected_origin: 'lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost',
+      resource_generation: '0123456789abcdef0123456789abcdef',
+      registration_revision: entry.revision,
+      granted_permission_ids: [],
     });
     expect(Object.isFrozen(descriptor)).toBe(true);
     expect(pageResolution.page).not.toHaveProperty('entry_id');
@@ -195,6 +259,131 @@ describe('Host-private Plugin Page Runtime resolver', () => {
     expect(retry.whenIdle).toHaveBeenCalledTimes(1);
     expect(retry.resolveEntry).toHaveBeenCalledTimes(2);
     expect(second.runtime_key).not.toBe(first.runtime_key);
+  });
+
+  test('binds only sorted actual grants and rejects detail/Page/revision divergence', async () => {
+    const granted = harness();
+    granted.setDetail({
+      ...registrationDetail,
+      granted_permission_ids: ['lensx.runtime.actual'],
+    });
+    const descriptor = await granted.resolver.resolve({ activePage, pageResolution, attempt: 0 });
+    expect(descriptor.granted_permission_ids).toEqual(['lensx.runtime.actual']);
+    expect(Object.isFrozen(descriptor.granted_permission_ids)).toBe(true);
+    expect(descriptor.granted_permission_ids).not.toEqual(
+      registrationDetail.manifest.requested_permissions.map(({ permission_id: permissionId }) => permissionId),
+    );
+
+    const staleDetail = harness();
+    staleDetail.setDetail(registrationDetail, '999');
+    await expect(staleDetail.resolver.resolve({ activePage, pageResolution, attempt: 0 })).rejects.toMatchObject({
+      code: 'runtime_stale',
+    });
+
+    const wrongPage = harness();
+    wrongPage.setDetail({
+      ...registrationDetail,
+      manifest: {
+        ...registrationDetail.manifest,
+        contributes: {
+          ...registrationDetail.manifest.contributes,
+          pages: [
+            { ...firstManifestPage, id: activePage.page_id, route: '/different', required_permissions: [] },
+            ...remainingManifestPages,
+          ],
+        },
+      },
+    });
+    await expect(wrongPage.resolver.resolve({ activePage, pageResolution, attempt: 0 })).rejects.toMatchObject({
+      code: 'runtime_stale',
+    });
+  });
+
+  test('keeps current facts across unrelated global revisions and invalidates affected identity facts', async () => {
+    const current = harness();
+    const request = { activePage, pageResolution, attempt: 0 };
+    const descriptor = await current.resolver.resolve(request);
+    const invalidated = rs.fn();
+    const unsubscribe = current.resolver.subscribeInvalidation?.(invalidated);
+
+    current.publish(
+      snapshot({
+        revision: '8',
+        entries: [
+          registeredEntry,
+          {
+            ...registeredEntry,
+            entry_id: 'entry_fedcba9876543210',
+            plugin_id: 'com.other.plugin',
+          },
+        ],
+      }),
+    );
+    expect(invalidated).toHaveBeenCalledTimes(1);
+    await expect(current.resolver.isCurrent?.(request, descriptor)).resolves.toBe(true);
+
+    current.setDetail({
+      ...registrationDetail,
+      granted_permission_ids: ['lensx.filesystem.read_selected'],
+    });
+    current.publish(snapshot({ revision: '9' }));
+    await expect(current.resolver.isCurrent?.(request, descriptor)).resolves.toBe(false);
+    unsubscribe?.();
+    current.publish(snapshot({ revision: '10' }));
+    expect(invalidated).toHaveBeenCalledTimes(2);
+  });
+
+  test.each([
+    ['disabled', { ...registeredEntry, enabled: false }],
+    ['incompatible', { ...registeredEntry, compatibility: { lensx: false, host_api: true } }],
+    [
+      'quarantined',
+      {
+        kind: 'quarantined',
+        entry_id: entry.entry_id,
+        diagnostic: { code: 'bad', phase: 'read', message: 'Unavailable.' },
+      },
+    ],
+  ] as const)('invalidates the current descriptor when the provider becomes %s', async (_name, changedEntry) => {
+    const current = harness();
+    const request = { activePage, pageResolution, attempt: 0 };
+    const descriptor = await current.resolver.resolve(request);
+    current.publish(snapshot({ revision: '8', entries: [changedEntry] }));
+    await expect(current.resolver.isCurrent?.(request, descriptor)).resolves.toBe(false);
+  });
+
+  test('invalidates retry, cross-Page, old generation, and same-version replacement', async () => {
+    const current = harness();
+    const request = { activePage, pageResolution, attempt: 0 };
+    const descriptor = await current.resolver.resolve(request);
+    await expect(current.resolver.isCurrent?.({ ...request, attempt: 1 }, descriptor)).resolves.toBe(false);
+    await expect(
+      current.resolver.isCurrent?.(
+        {
+          ...request,
+          activePage: { ...activePage, page_id: 'other' },
+          pageResolution: {
+            ...pageResolution,
+            page: { ...pageResolution.page, page_id: 'other' },
+          },
+        },
+        descriptor,
+      ),
+    ).resolves.toBe(false);
+
+    current.publish(
+      snapshot({
+        revision: '8',
+        entries: [{ ...registeredEntry, entry_id: 'entry_fedcba9876543210' }],
+      }),
+    );
+    await expect(current.resolver.isCurrent?.(request, descriptor)).resolves.toBe(false);
+
+    const oldGeneration = harness(undefined, {
+      ...entry,
+      entry_url: entry.entry_url.replaceAll('0123456789abcdef0123456789abcdef', 'fedcba9876543210fedcba9876543210'),
+    });
+    await expect(oldGeneration.resolver.isCurrent?.(request, descriptor)).resolves.toBe(false);
   });
 
   test('accepts only the isolated native/translated origin and strict Host route grammar', () => {

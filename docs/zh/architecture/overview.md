@@ -38,6 +38,8 @@ lensX 是一款轻量级桌面效率启动器，其设计重点包括：
 - macOS-only frame-aware WKWebView navigation policy，提供完全分离的 Host/descendant document
   allowlist、idle 的进程内 target lease、main-only Tauri initialization，以及独立的
   new-window/download deny；
+- 唯一 current 隔离 Plugin Page iframe，以及通过 single-use nonce 与专用 MessagePort 认证真实
+  window 和精确 origin 的 Host 私有进程内 Runtime Session；
 - 统一的 Host-owned Page Registry 与框架无关导航 service，用于受保护 Host Page 和声明式
   Plugin Page descriptor；
 - 通过窄化 Rust/Tauri 边界持久化、并按当前 registry snapshot 解析的版本化最近使用与已固定
@@ -204,7 +206,8 @@ snapshot 解析已存 ID，保持顺序，隐藏缺失或禁用 Action，但不�
 取消固定使用 optimistic 视图，但失败后恢复最后确认 snapshot；第九个固定请求会被拒绝，且不会删除
 现有项。
 
-插件管理、安全插件资源/icon 解析、iframe Runtime、生命周期写操作和完整权限决策仍属于未来能力。
+完整插件管理、安全插件 icon 解析与完整权限决策仍属于未来能力。scoped resource、生命周期写操作、
+隔离 iframe Runtime 及其私有 Session 已分别交付，但不会改变 Action collection 语义。
 生产 Plugin Action 现在只会在其投影目标 Page available 时出现。持久化 Plugin Action ID 可以自然
 隐藏和恢复，而不会从最近使用或已固定存储中删除。
 
@@ -232,7 +235,10 @@ App Shell 继续在现有 main window 中使用唯一 `home` / `search` / `page`
 Resource identity、isolated `entry_url` 与 Registry route，然后在挂载前激活精确 native navigation lease。
 iframe 固定 `allow-scripts allow-same-origin`、`no-referrer` 与 deny-by-default Permissions Policy；close、
 retry、invalidation、replacement 与 App teardown 都会移除它。load event 只表示 `loaded`，不等于 SDK/
-Session `ready`。Runtime Session、Host API transport、完整 CSP 与 Task 5.5 权限管理仍未实现。
+Session `ready`。load 后，Host 私有 Session 会把 current entry、plugin、version、Page、resource
+generation、Runtime attempt 与实际 grants 绑定到真实 `contentWindow`；只有新 transfer Port 上的 exact
+acknowledgement 才产生 Session `ready`。SDK `ready`、Host API transport、完整 CSP 与 Task 5.5 权限
+管理仍未实现。
 
 设置在现有 `main` Tauri 窗口中渲染，包含“偏好”和“插件”两个一级部分。“偏好”控制受支持的
 `light`/`dark` 主题与 `en-US`/`zh-CN` locale；“插件”只是不可操作的空占位，不代表插件管理
@@ -312,8 +318,10 @@ Host 私有 Resource Contract 遵循该边界：可信 TypeScript 只提交 entr
 Registration revision；Rust 派生当前 plugin identity/version/entry 与 opaque URL；每个 custom-protocol
 request 都依据当前 Manager generation 与 Installer-owned payload 重新验证进程内 scope。React
 presentation prop 与公共 plugin package 都不会获得 installation path、digest、record key 或通用文件
-读取器。macOS iframe Runtime 通过 Host 私有 adapter 消费该资源读取基础；Runtime Session identity、
-Host API transport 与完整 CSP 仍是独立工作。
+读取器。macOS iframe Runtime 通过 Host 私有 adapter 消费该资源读取基础。已交付的进程内 Session
+会认证专用 Port 并比较相关 current facts，不会把无关 Registration revision 变化当成 identity 变化。
+Session state 不持久化，也不改变 Registration 的 `inactive` read model；公共 SDK transport、Host API
+与完整 CSP 仍是独立工作。
 
 ## 依赖方向
 

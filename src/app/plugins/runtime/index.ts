@@ -3,4 +3,7 @@ export * from './navigation';
 export * from './PluginRuntimeFrame';
 export * from './policy';
 export * from './resolver';
+export * from './session-adapters';
+export * from './session-contract';
+export * from './session-service';
 export * from './types';

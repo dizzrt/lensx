@@ -151,6 +151,9 @@ What would you like to do?
 - Update task checkbox immediately after completing each task
 - Pause on errors, blockers, or unclear requirements - don't guess
 - Use contextFiles from CLI output, don't assume specific file names
+- Use the machine-configured global pnpm store for commands run from the repository root
+- Never pass `--store-dir` to pnpm commands run from the repository root or use `.pnpm-store` as its store
+- Run package-consumer smoke tests inside their temporary consumer directory so they cannot recreate the repository root `node_modules`
 
 **Fluid Workflow Integration**
 

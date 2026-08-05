@@ -38,6 +38,10 @@ const surface = (
   let current = snapshot();
   return {
     currentSnapshot: () => current,
+    readRegistrationDetail: async () => {
+      throw new Error('not used');
+    },
+    subscribeSnapshot: () => () => undefined,
     initialize: async () => undefined,
     refresh: async () => undefined,
     handleLauncherActivation: async () => undefined,

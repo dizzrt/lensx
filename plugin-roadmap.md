@@ -468,9 +468,10 @@ Runtime health rollback、数据迁移、权限 UI 或完整管理 UI。
 
 **完成标准**：有效插件页面可被打开；未注册 URL、跨 origin 导航和 Tauri 访问被拒绝。
 
-- [ ] **Task 4.3：绑定 Runtime Session 与消息来源**
+- [x] **Task 4.3：绑定 Runtime Session 与消息来源**
 
-**OpenSpec change**：`bind-plugin-runtime-sessions`
+**OpenSpec change**：[bind-plugin-runtime-sessions](openspec/changes/archive/2026-08-05-bind-plugin-runtime-sessions/)
+（已完成并归档）
 
 **目标**：将消息来源、插件身份、Page、权限和生命周期绑定为不可伪造的 session。
 

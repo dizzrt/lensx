@@ -57,10 +57,12 @@ import { desktopLocalPluginInstallationClient, type LocalPluginInstallationClien
 import { desktopPluginResourceAdapter } from './app/plugins/resource';
 import {
   createPluginPageRuntimeResolver,
+  createPluginRuntimeSessionService,
   desktopPluginRuntimeNavigationAdapter,
   type PluginPageRuntimeResolver,
   PluginRuntimeFrame,
   type PluginRuntimeNavigationAdapter,
+  type PluginRuntimeSessionService,
 } from './app/plugins/runtime';
 import type { PluginSurfaceProjectionService } from './app/plugins/surfaces';
 import { type AppPreferencesClient, desktopAppPreferencesClient } from './app/preferences';
@@ -74,6 +76,7 @@ export interface AppProps {
   preferencesClient?: AppPreferencesClient;
   pluginRuntimeNavigationAdapter?: PluginRuntimeNavigationAdapter;
   pluginRuntimeResolver?: PluginPageRuntimeResolver;
+  pluginRuntimeSessionService?: PluginRuntimeSessionService;
   renderPage?: (activePage: ActivePage) => ReactNode;
   surfaceProjectionService?: PluginSurfaceProjectionService;
   startupPreferencesErrorCode?: string;
@@ -105,6 +108,7 @@ const App = ({
   preferencesClient = desktopAppPreferencesClient,
   pluginRuntimeNavigationAdapter = desktopPluginRuntimeNavigationAdapter,
   pluginRuntimeResolver,
+  pluginRuntimeSessionService,
   renderPage,
   startupPreferencesErrorCode,
   surfaceController = inertLauncherSurfaceController,
@@ -150,6 +154,10 @@ const App = ({
           })
         : undefined),
     [pluginRuntimeResolver, surfaceProjectionService],
+  );
+  const effectivePluginRuntimeSessionService = useMemo(
+    () => pluginRuntimeSessionService ?? createPluginRuntimeSessionService(),
+    [pluginRuntimeSessionService],
   );
   const results = useMemo(
     () =>
@@ -582,6 +590,7 @@ const App = ({
                     pageResolution={pageResolution}
                     pageTitle={pageContext.page_title}
                     resolver={effectivePluginRuntimeResolver}
+                    sessionService={effectivePluginRuntimeSessionService}
                   />
                 ) : null}
               </PageErrorBoundary>

@@ -158,7 +158,7 @@ describe('workspace boundary checker', () => {
       (item) => item.specifier.includes('/plugins/runtime') || item.specifier.includes('plugin_runtime_navigation.rs'),
     );
 
-    expect(runtimeImports).toHaveLength(12);
+    expect(runtimeImports).toHaveLength(21);
     expect(
       runtimeImports.every(
         (item) =>
@@ -172,10 +172,12 @@ describe('workspace boundary checker', () => {
     const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
     const isolatedOriginImports = diagnostics.filter(
       (item) =>
-        item.specifier.includes('plugin_resource_url') || item.specifier.includes('plugin_iframe_runtime_harness'),
+        item.specifier.includes('plugin_resource_url') ||
+        item.specifier.includes('plugin_iframe_runtime_harness') ||
+        item.specifier.includes('plugin_runtime_session_harness'),
     );
 
-    expect(isolatedOriginImports).toHaveLength(6);
+    expect(isolatedOriginImports).toHaveLength(9);
     expect(isolatedOriginImports.every((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport)).toBe(
       true,
     );

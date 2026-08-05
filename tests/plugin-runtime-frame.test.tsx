@@ -8,6 +8,7 @@ import {
   PLUGIN_RUNTIME_REFERRER_POLICY,
   type PluginPageRuntimeDescriptor,
   PluginRuntimeFrame,
+  type PluginRuntimeSessionService,
   reducePluginRuntimeFrameState,
 } from '../src/app/plugins/runtime';
 
@@ -34,8 +35,15 @@ const descriptor: PluginPageRuntimeDescriptor = Object.freeze({
   host_fragment: '/route-probe',
   iframe_src:
     'lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost/v1/0123456789abcdef0123456789abcdef/v1-636f6d2e61636d652e776f726b7370616365/1.2.3/index.html#/route-probe',
+  entry_id: 'entry_0123456789abcdef',
   plugin_id: activePage.owner_id,
   version: '1.2.3',
+  page_id: activePage.page_id,
+  expected_origin: 'lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost',
+  resource_generation: '0123456789abcdef0123456789abcdef',
+  runtime_attempt_key: 'attempt-1',
+  registration_revision: '7',
+  granted_permission_ids: [],
 });
 
 const deferred = <T,>() => {
@@ -55,12 +63,31 @@ const renderFrame = (options?: {
     dispose: ReturnType<typeof rs.fn>;
   };
   readonly locale?: 'en-US' | 'zh-CN';
+  readonly sessionService?: PluginRuntimeSessionService;
 }) => {
   const resolver = options?.resolver ?? { resolve: rs.fn(async () => descriptor) };
   const navigationAdapter = options?.navigationAdapter ?? {
     activate: rs.fn(async () => ({ lease_id: '0000000000000001' })),
     dispose: rs.fn(async () => true),
   };
+  const sessionService =
+    options?.sessionService ??
+    ({
+      start: rs.fn(({ identity }) => ({
+        snapshot: () => ({ state: 'awaiting_handshake' as const, identity }),
+        subscribe: (
+          listener: (snapshot: { readonly state: 'awaiting_handshake'; readonly identity: typeof identity }) => void,
+        ) => {
+          listener({ state: 'awaiting_handshake', identity });
+          return () => undefined;
+        },
+        disconnect: () => undefined,
+        dispose: () => undefined,
+      })),
+      current: () => undefined,
+      disconnect: () => undefined,
+      dispose: () => undefined,
+    } as unknown as PluginRuntimeSessionService);
   const view = render(
     <AppProviders initialLocale={options?.locale}>
       <PluginRuntimeFrame
@@ -69,10 +96,11 @@ const renderFrame = (options?: {
         pageResolution={pageResolution}
         pageTitle={options?.locale === 'zh-CN' ? '工作区主页' : 'Workspace Home'}
         resolver={resolver}
+        sessionService={sessionService}
       />
     </AppProviders>,
   );
-  return { ...view, navigationAdapter, resolver };
+  return { ...view, navigationAdapter, resolver, sessionService };
 };
 
 describe('PluginRuntimeFrame', () => {
@@ -109,6 +137,23 @@ describe('PluginRuntimeFrame', () => {
     fireEvent.load(iframe as HTMLIFrameElement);
     expect(document.querySelector('[data-runtime-state="loaded"]')).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(/ready/u);
+    expect(view.sessionService.start).toHaveBeenCalledWith({
+      identity: {
+        entry_id: descriptor.entry_id,
+        plugin_id: descriptor.plugin_id,
+        version: descriptor.version,
+        page_id: descriptor.page_id,
+        expected_origin: descriptor.expected_origin,
+        resource_generation: descriptor.resource_generation,
+        runtime_attempt_key: descriptor.runtime_attempt_key,
+        registration_revision: descriptor.registration_revision,
+        granted_permission_ids: descriptor.granted_permission_ids,
+      },
+      targetWindow: (iframe as HTMLIFrameElement).contentWindow,
+      targetOrigin: descriptor.expected_origin,
+    });
+    fireEvent.load(iframe as HTMLIFrameElement);
+    expect(view.sessionService.start).toHaveBeenCalledTimes(1);
 
     view.unmount();
     await waitFor(() => expect(navigationAdapter.dispose).toHaveBeenCalledWith({ lease_id: '0000000000000001' }));
@@ -185,5 +230,54 @@ describe('PluginRuntimeFrame', () => {
       status: 'loaded',
     });
     expect(reducePluginRuntimeFrameState(loading, { type: 'dispose' })).toEqual({ status: 'disposed' });
+  });
+
+  test('keeps the iframe for unrelated invalidation and revokes it when current facts diverge', async () => {
+    const invalidationListeners = new Set<() => void>();
+    let current = true;
+    const resolver = {
+      resolve: rs.fn(async () => descriptor),
+      isCurrent: rs.fn(async () => current),
+      subscribeInvalidation: (listener: () => void) => {
+        invalidationListeners.add(listener);
+        return () => invalidationListeners.delete(listener);
+      },
+    };
+    const sessionDispose = rs.fn();
+    const sessionService = {
+      start: rs.fn(({ identity }) => ({
+        snapshot: () => ({ state: 'awaiting_handshake' as const, identity }),
+        subscribe: () => () => undefined,
+        disconnect: () => undefined,
+        dispose: sessionDispose,
+      })),
+      current: () => undefined,
+      disconnect: () => undefined,
+      dispose: () => undefined,
+    } as unknown as PluginRuntimeSessionService;
+    const view = renderFrame({ resolver, sessionService });
+    const iframe = (await waitFor(() => expect(document.querySelector('iframe')).not.toBeNull()).then(() =>
+      document.querySelector('iframe'),
+    )) as HTMLIFrameElement;
+    fireEvent.load(iframe);
+
+    await act(async () => {
+      for (const listener of invalidationListeners) listener();
+      await Promise.resolve();
+    });
+    expect(resolver.isCurrent).toHaveBeenCalled();
+    expect(document.querySelector('iframe')).toBe(iframe);
+    expect(sessionDispose).not.toHaveBeenCalled();
+    expect(view.navigationAdapter.dispose).not.toHaveBeenCalled();
+
+    current = false;
+    await act(async () => {
+      for (const listener of invalidationListeners) listener();
+      await Promise.resolve();
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent('This plugin page could not be loaded');
+    expect(document.querySelector('iframe')).toBeNull();
+    expect(sessionDispose).toHaveBeenCalledTimes(1);
+    expect(view.navigationAdapter.dispose).toHaveBeenCalledTimes(1);
   });
 });

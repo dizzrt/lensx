@@ -9,12 +9,16 @@ import type { PluginRegistrationChangedEvent } from '@/app/plugins/registration/
 import type { PluginResourceEntry } from '@/app/plugins/resource/types';
 import '@/app/plugins/runtime';
 import '@/app/plugins/runtime/navigation';
+import '@/app/plugins/runtime/session-adapters';
+import '@/app/plugins/runtime/session-contract';
+import '@/app/plugins/runtime/session-service';
 import type { PluginPageRuntimeDescriptor } from '@/app/plugins/runtime/types';
 import '@tauri-apps/api/core';
 import '../../../../tools/plugin-package-format/index.ts';
 import '../../../../src-tauri/src/plugin_resource_service.rs';
 import '../../../../src-tauri/src/plugin_resource_url.rs';
 import '../../../../src-tauri/examples/plugin_iframe_runtime_harness.rs';
+import '../../../../src-tauri/examples/plugin_runtime_session_harness.rs';
 import '../../../../src-tauri/src/frame_aware_navigation_policy.rs';
 import '../../../../src-tauri/src/plugin_runtime_navigation.rs';
 import '../../../../vendor/frame-aware-navigation/wry/src/lib.rs';

@@ -58,6 +58,10 @@ const setup = (
   const operations: string[] = [];
   const surface: PluginSurfaceProjectionService = {
     currentSnapshot: () => snapshot,
+    readRegistrationDetail: async () => {
+      throw new Error('not used');
+    },
+    subscribeSnapshot: () => () => undefined,
     initialize: async () => {
       operations.push('initialize');
     },

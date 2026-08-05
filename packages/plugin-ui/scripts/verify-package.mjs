@@ -112,6 +112,9 @@ try {
         devDependencies: {
           '@rsbuild/core': '2.1.9',
           '@rsbuild/plugin-react': '2.1.0',
+          ...(process.platform === 'darwin' && process.arch === 'arm64'
+            ? { '@rspack/binding-darwin-arm64': '2.1.8' }
+            : {}),
           '@types/node': '24.13.3',
           '@types/react': '19.2.17',
           '@types/react-dom': '19.2.3',
@@ -131,6 +134,8 @@ try {
       `  '@lensx/plugin-sdk': file:${sdkPack.path}`,
       `  '@lensx/plugin-ui': file:${uiPack.path}`,
       "  '@douyinfe/semi-ui': 2.101.1",
+      "  '@types/react': 19.2.17",
+      "  '@types/react-dom': 19.2.3",
       "  'ajv': 8.20.0",
       "  'fast-deep-equal': 3.1.3",
       "  'fast-uri': 3.1.4",

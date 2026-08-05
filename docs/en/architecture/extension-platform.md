@@ -6,9 +6,10 @@ This document separates the shipped static plugin Manifest contract, `.lxp`
 package inspection and local installation, Plugin SDK foundation, Plugin
 Testkit, optional Plugin UI package, Host-private Plugin surface projection and
 Page navigation, Host-private lifecycle controls, local package replacement,
-and the Host-private scoped resource service from the intended runtime
+the Host-private scoped resource service, isolated iframe Runtime, and
+process-local Runtime Session from the intended runtime
 extension boundary. Public packaging CLI,
-distribution, plugin execution, complete permission decisions, iframe
+distribution, complete plugin execution lifecycle, complete permission decisions, iframe
 transport, signing, the Host API, complete plugin-management UI, remote
 updates, and user-initiated rollback history are not currently implemented.
 Stable specs and source code define the shipped subset.
@@ -156,7 +157,8 @@ messages, or run plugin code. The Host-private capabilities described below add
 one selected compatible `.lxp` as an external registration, project current
 Registration facts into Page and Action Registries, and create the isolated
 iframe only while an eligible Plugin Page is active. Runtime Sessions, Host API
-messages, and permission decisions remain separate work.
+messages, and permission decisions are separate capabilities; the Host-private
+process-local Runtime Session described below is now shipped.
 
 ## Shipped Host-Private Plugin Package Inspection
 
@@ -522,8 +524,9 @@ fixtures, desktop adapter, workspace boundary, Manager generation, Installer
 ownership regressions, and protocol/path/MIME/lifecycle/race/oracle/platform URL
 tests. This service does not create an iframe, execute plugin code, establish
 Runtime Sessions or Host API transport, grant permissions, or claim complete
-CSP by itself. The shipped Task 4.2 container consumes only its validated
-`entry_url`; Sessions, Host API, and complete CSP remain Task 4.3 and Task 4.4.
+CSP by itself. The shipped iframe container and downstream Runtime Session
+consume its validated `entry_url`; Host API transport and complete CSP remain
+separate later capabilities.
 
 ## Shipped macOS Isolated Plugin Runtime Origin Prerequisite
 
@@ -615,8 +618,9 @@ pnpm run check:frame-aware-webview-navigation-policy
 ```
 
 This capability is macOS-only and does not claim Windows or Linux support. The
-Task 4.2 container now consumes its exact target lease, while Runtime Session,
-Host API, permissions, and complete CSP remain separate capabilities.
+Task 4.2 container consumes its exact target lease. The shipped Session below
+also consumes that lease without changing the native policy contract; Host API,
+permissions, and complete CSP remain separate later capabilities.
 
 ## Shipped macOS Isolated Plugin iframe Runtime
 
@@ -641,8 +645,9 @@ surfaces.
 The UI exposes localized `resolving`, `loading`, `loaded`, and bounded failure
 states with an explicit accessible retry. `loaded` means only that the iframe
 load event fired. It is not SDK or Session `ready`, and this capability adds no
-message bridge, MessagePort, JSON-RPC, Host API, permission dispatcher, general
-timeout/crash recovery, or complete CSP. Plugin Runtime resolver, Resource and
+readiness claim by itself. The downstream Session capability adds only its
+private MessagePort bootstrap; JSON-RPC, Host API, permission dispatch, general
+timeout/crash recovery, and complete CSP remain absent. Plugin Runtime resolver, Resource and
 Registration adapters, iframe policy, native lease boundary, and origin facts
 remain Host-private and are blocked from public packages and plugin workspaces.
 
@@ -651,6 +656,54 @@ navigation lease, Page/lifecycle/replacement/resource regressions, real
 normal/malicious/replacement `.lxp` evidence, both prerequisite gates, and
 workspace boundary checks. The real WKWebView evidence is macOS-only; no
 Windows or Linux Runtime support is claimed.
+
+## Shipped Host-Private Plugin Runtime Session
+
+After the current iframe reports `load`, `PluginRuntimeFrame` passes only its
+actual `contentWindow` and the Host-derived descriptor to the process-local
+`PluginRuntimeSessionService`. The resolver converges Registration summary and
+detail, Page route, Resource entry, and current revision, then binds an immutable
+identity containing the opaque entry, plugin/version/Page, isolated origin and
+resource generation, Runtime attempt, and sorted actual grant snapshot.
+Manifest requests, source, publisher text, enabled text, and plugin messages
+cannot create or replace identity or grants.
+
+For each attempt the Host creates a new 128-bit lowercase hexadecimal nonce and
+`MessageChannel`, sends the exact private `0.1.0` bootstrap only to the recorded
+window and exact isolated `targetOrigin`, and transfers the child Port once.
+Only the first exact ready acknowledgement received on the Host Port with the
+same nonce changes the Session from `awaiting_handshake` to `ready`. The
+bootstrap and acknowledgement contain no plugin, entry, Page, grant, revision,
+resource token, URL, or Host object. Invalid Port input, duplicate or late
+acknowledgements, `messageerror`, Host reload, or current-fact loss disconnects
+the Session without an oracle or automatic reconnect.
+
+Currentness compares the affected entry, Page, version, origin/generation,
+attempt, availability, and grants after each Registration invalidation. A
+change to those facts revokes the old Session, Port, iframe, and navigation
+lease. A global revision change caused only by another plugin retains all four;
+the revision is a race detector, not a Session generation. Close, retry,
+replacement, navigation to Home/Search/a Host Page, and App unmount perform
+idempotent terminal cleanup. Sessions, nonces, Ports, window references, and
+message state are never persisted, and Registration continues to report only
+`inactive` after process recovery.
+
+Three readiness layers remain distinct:
+
+1. iframe `loaded` means only browser load completion;
+2. Session `ready` means only that the current window/origin/nonce/Port binding
+   authenticated;
+3. future SDK `ready` requires a later public transport to connect and validate
+   a Runtime context.
+
+The Session contract, parser, adapters, identity, and Port lease remain private
+to the root Host and are excluded from Contract, SDK, UI, Testkit, official,
+example, and external plugin imports and tarballs. This capability defines no
+public SDK iframe transport, JSON-RPC/request ID, Host API method, permission
+decision or UI, privileged dispatch, plugin storage, complete CSP, general
+handshake timeout/crash recovery, background Runtime, sidecar, or Windows/Linux
+support. Run `pnpm run check:plugin-runtime-session` for focused logic/React,
+real package, boundary, prerequisite, and bounded real macOS WKWebView evidence.
 
 ## Shipped Host-Private Plugin Surface Projection And Page Navigation
 
@@ -950,8 +1003,9 @@ external contract does not depend on React implementation details.
 
 ### External Plugins
 
-External plugin UI runs in the shipped isolated iframe. A later Runtime Session
-must add communication only through a controlled Host bridge. External plugins
+External plugin UI runs in the shipped isolated iframe. The shipped private
+Runtime Session authenticates one dedicated Port through a controlled Host
+bootstrap; plugins still have no public transport or Host API. External plugins
 must not directly access:
 
 - application React state or component instances;
@@ -968,8 +1022,8 @@ The intended communication flow is:
 
 ```text
 iframe
-  -> typed Plugin SDK
-  -> JSON-RPC over postMessage
+  -> future typed Plugin SDK transport over the authenticated Port
+  -> future JSON-RPC/request protocol
   -> source, identity, method, params, and permission validation
   -> Host API dispatcher
   -> application service or Rust command
@@ -1007,8 +1061,8 @@ The static Manifest format, validators, Host-private local installation and
 same-identity replacement, revision-bound enable/disable/uninstall
 infrastructure, scoped package-relative resources, Plugin surface projection,
 production Action activation, Page Registry/navigation, and the macOS isolated
-iframe Runtime are delivered. Each remaining capability—complete plugin-management
+iframe Runtime and Host-private process-local Runtime Session are delivered. Each remaining capability—complete plugin-management
 UI, complete permissions, Host API methods, public packaging, remote/automatic updates,
-user-initiated rollback history, Runtime Sessions, or sidecars—requires
+user-initiated rollback history, or sidecars—requires
 its own accepted specification and implementation evidence. This architectural
 document defines direction and boundaries, not a release checklist.

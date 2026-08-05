@@ -48,6 +48,8 @@ export interface PluginSurfaceProjectionDependencies {
 
 export interface PluginSurfaceProjectionService {
   readonly currentSnapshot: () => PluginRegistrationSnapshot | undefined;
+  readonly readRegistrationDetail: (entryId: string) => Promise<PluginRegistrationDetailResponse>;
+  readonly subscribeSnapshot: (listener: (snapshot: PluginRegistrationSnapshot) => void) => () => void;
   readonly destroy: () => Promise<void>;
   readonly handleLauncherActivation: () => Promise<void>;
   readonly initialize: () => Promise<void>;
@@ -95,6 +97,7 @@ export const createPluginSurfaceProjectionService = ({
   registrationAdapter,
 }: PluginSurfaceProjectionDependencies): PluginSurfaceProjectionService => {
   const knownProviders = new Set<string>();
+  const snapshotSubscribers = new Set<(snapshot: PluginRegistrationSnapshot) => void>();
   const providerFailures = new Map<string, PluginSurfaceProjectionDiagnosticCode>();
   let latestObservedSnapshot: PluginRegistrationSnapshot | undefined;
   let pendingSnapshot: PluginRegistrationSnapshot | undefined;
@@ -306,6 +309,9 @@ export const createPluginSurfaceProjectionService = ({
       return;
     }
     latestObservedSnapshot = snapshot;
+    for (const listener of snapshotSubscribers) {
+      listener(snapshot);
+    }
     pendingSnapshot = snapshot;
     void drain();
   };
@@ -356,6 +362,11 @@ export const createPluginSurfaceProjectionService = ({
 
   const service: PluginSurfaceProjectionService = Object.freeze({
     currentSnapshot: () => latestObservedSnapshot,
+    readRegistrationDetail: (entryId: string) => registrationAdapter.readDetail(entryId),
+    subscribeSnapshot(listener: (snapshot: PluginRegistrationSnapshot) => void) {
+      snapshotSubscribers.add(listener);
+      return () => snapshotSubscribers.delete(listener);
+    },
     initialize: () => converge(registrationAdapter.initialize),
     refresh: () => converge(registrationAdapter.refresh),
     handleLauncherActivation: () => converge(registrationAdapter.handleLauncherActivation),
@@ -398,6 +409,7 @@ export const createPluginSurfaceProjectionService = ({
       }
       knownProviders.clear();
       providerFailures.clear();
+      snapshotSubscribers.clear();
       await registrationAdapter.destroy();
     },
   });
@@ -439,6 +451,9 @@ export const createProductionPluginSurfaceProjection = (
   };
   return Object.freeze({
     currentSnapshot: () => ensure().currentSnapshot(),
+    readRegistrationDetail: (entryId: string) => ensure().readRegistrationDetail(entryId),
+    subscribeSnapshot: (listener: (snapshot: PluginRegistrationSnapshot) => void) =>
+      ensure().subscribeSnapshot(listener),
     initialize: () => ensure().initialize(),
     refresh: () => ensure().refresh(),
     handleLauncherActivation: () => ensure().handleLauncherActivation(),

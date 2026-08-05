@@ -36,12 +36,21 @@ export interface PluginPageRuntimeDescriptor {
   readonly iframe_src: string;
   readonly entry_url: string;
   readonly host_fragment: string;
+  readonly entry_id: string;
   readonly plugin_id: string;
   readonly version: string;
+  readonly page_id: string;
+  readonly expected_origin: string;
+  readonly resource_generation: string;
+  readonly runtime_attempt_key: string;
+  readonly registration_revision: string;
+  readonly granted_permission_ids: readonly string[];
 }
 
 export interface PluginPageRuntimeResolver {
   resolve: (request: PluginPageRuntimeRequest) => Promise<PluginPageRuntimeDescriptor>;
+  isCurrent?: (request: PluginPageRuntimeRequest, descriptor: PluginPageRuntimeDescriptor) => Promise<boolean>;
+  subscribeInvalidation?: (listener: () => void) => () => void;
 }
 
 export interface PluginRuntimeNavigationLease {
