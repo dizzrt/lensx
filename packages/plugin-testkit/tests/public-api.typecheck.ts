@@ -18,7 +18,7 @@ const mutations: readonly PluginManifestFixtureMutation[] = [
 ];
 const candidate: unknown = mutatePluginManifestFixture(manifest, mutations);
 const context: PluginRuntimeContext = createPluginRuntimeContextFixture({
-  capabilities: ['lensx.example'],
+  capabilities: ['storage.get'],
   locale: 'zh-CN',
   theme: 'dark',
 });

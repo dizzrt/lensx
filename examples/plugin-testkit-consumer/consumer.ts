@@ -1,6 +1,12 @@
-import { normalizePluginManifest, PLUGIN_HOST_API_VERSION, validatePluginManifest } from '@lensx/plugin-contract';
+import {
+  normalizePluginManifest,
+  PLUGIN_HOST_API_VERSION,
+  validatePluginManifest,
+  validatePluginRuntimeContext,
+} from '@lensx/plugin-contract';
 import { createPluginSdk } from '@lensx/plugin-sdk';
 import {
+  createInvalidPluginRuntimeContextFixture,
   createPluginManifestFixture,
   createPluginRuntimeContextFixture,
   FakePluginSdkTransport,
@@ -21,6 +27,10 @@ const client = createPluginSdk({ transport });
 const states: string[] = [];
 client.subscribeState((state) => states.push(state));
 const context = await client.initialize();
+const invalidContext = createInvalidPluginRuntimeContextFixture('unknown-capability');
+if (validatePluginRuntimeContext(invalidContext).status !== 'invalid') {
+  throw new Error('The Testkit invalid Context fixture was unexpectedly accepted.');
+}
 const snapshot = transport.observation;
 await client.dispose();
 

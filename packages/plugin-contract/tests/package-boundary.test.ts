@@ -22,7 +22,13 @@ describe('public package boundary', () => {
   test('declares bounded exports, publish files, runtime dependencies, and real lifecycle scripts', () => {
     const metadata = readJson<PackageMetadata>(resolve(packageRoot, 'package.json'));
 
-    expect(Object.keys(metadata.exports ?? {})).toEqual(['.', './schema', './manifest.schema.json']);
+    expect(Object.keys(metadata.exports ?? {})).toEqual([
+      '.',
+      './schema',
+      './manifest.schema.json',
+      './host-api-schema',
+      './host-api.schema.json',
+    ]);
     expect(metadata.files).toEqual(['dist', 'LICENSE', 'README.md']);
     expect(metadata.dependencies).toEqual({ ajv: '^8.20.0' });
     expect(Object.values(metadata.dependencies ?? {}).some((version) => version.startsWith('workspace:'))).toBe(false);
@@ -32,9 +38,16 @@ describe('public package boundary', () => {
   });
 
   test('runtime source has no Host, React, DOM, Tauri, Node, or undeclared package imports', () => {
-    const runtimeSources = ['src/constants.ts', 'src/index.ts', 'src/schema.ts', 'src/types.ts', 'src/validate.ts'].map(
-      (path) => readFileSync(resolve(packageRoot, path), 'utf8'),
-    );
+    const runtimeSources = [
+      'src/constants.ts',
+      'src/host-api-schema.ts',
+      'src/host-api-types.ts',
+      'src/host-api.ts',
+      'src/index.ts',
+      'src/schema.ts',
+      'src/types.ts',
+      'src/validate.ts',
+    ].map((path) => readFileSync(resolve(packageRoot, path), 'utf8'));
     const source = runtimeSources.join('\n');
 
     for (const forbidden of [
@@ -50,7 +63,7 @@ describe('public package boundary', () => {
       expect(source).not.toContain(forbidden);
     }
     const externalImports = [...source.matchAll(/from\s+['"]([^.'"][^'"]*)['"]/gu)].map((match) => match[1]);
-    expect(externalImports).toEqual(['ajv/dist/2020.js']);
+    expect(externalImports).toEqual(['ajv/dist/2020.js', 'ajv/dist/2020.js']);
   });
 
   test('generated type drift check fails for missing and stale output', () => {
@@ -82,10 +95,15 @@ describe('public package boundary', () => {
         '.': { types: './dist/src/index.d.ts', import: './dist/src/index.js' },
         './schema': { types: './dist/src/schema.d.ts', import: './dist/src/schema.js' },
         './manifest.schema.json': './dist/schema/manifest.schema.json',
+        './host-api-schema': { types: './dist/src/host-api-schema.d.ts', import: './dist/src/host-api-schema.js' },
+        './host-api.schema.json': './dist/schema/host-api.schema.json',
       },
     };
     const files = [
       'dist/schema/manifest.schema.json',
+      'dist/schema/host-api.schema.json',
+      'dist/src/host-api-schema.d.ts',
+      'dist/src/host-api-schema.js',
       'dist/src/index.d.ts',
       'dist/src/index.js',
       'dist/src/schema.d.ts',
@@ -108,6 +126,13 @@ describe('public package boundary', () => {
         runtimeImports: [],
       }),
     ).toContain('Export target is missing from the tarball: dist/schema/manifest.schema.json.');
+    expect(
+      validatePackedPackage({
+        metadata,
+        files: files.filter((path) => path !== 'dist/schema/host-api.schema.json'),
+        runtimeImports: [],
+      }),
+    ).toContain('Export target is missing from the tarball: dist/schema/host-api.schema.json.');
     expect(validatePackedPackage({ metadata, files, runtimeImports: ['missing-runtime-package'] })).toContain(
       'Runtime import missing-runtime-package is not declared in dependencies.',
     );

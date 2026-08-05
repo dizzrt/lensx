@@ -514,9 +514,10 @@ Runtime health rollback、数据迁移、权限 UI 或完整管理 UI。
 
 ## Milestone 5：实现 Host API 与权限系统
 
-- [ ] **Task 5.1：定义 Host API v1 Contract**
+- [x] **Task 5.1：定义 Host API v1 Contract**
 
-**OpenSpec change**：`define-plugin-host-api-v1`
+**OpenSpec change**：[define-plugin-host-api-v1](openspec/changes/archive/2026-08-05-define-plugin-host-api-v1/)
+（已归档）
 
 **目标**：定义少量、真实、版本化且可独立验证的首版 Host API。
 

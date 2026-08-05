@@ -1,3 +1,5 @@
+import type { HostApiMethod } from '@lensx/plugin-contract';
+
 import type {
   PluginSdkCancellationSignal,
   PluginSdkTransport,
@@ -6,7 +8,7 @@ import type {
   PluginSdkUnsubscribe,
 } from '../../src/index.js';
 
-export const validRuntimeContext = (capabilities: readonly string[] = []) => ({
+export const validRuntimeContext = (capabilities: readonly HostApiMethod[] = []) => ({
   capabilities,
   hostApiVersion: '0.1.0',
   locale: 'en-US',

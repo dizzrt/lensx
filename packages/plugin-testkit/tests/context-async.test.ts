@@ -1,7 +1,12 @@
-import { PLUGIN_HOST_API_VERSION } from '@lensx/plugin-contract';
+import { type HostApiMethod, PLUGIN_HOST_API_VERSION } from '@lensx/plugin-contract';
 import { describe, expect, test } from '@rstest/core';
 
-import { createDeferred, createPluginRuntimeContextFixture, PluginTestCancellationController } from '../src/index.js';
+import {
+  createDeferred,
+  createInvalidPluginRuntimeContextFixture,
+  createPluginRuntimeContextFixture,
+  PluginTestCancellationController,
+} from '../src/index.js';
 
 describe('Plugin Runtime context fixture', () => {
   test('creates frozen current-version English light defaults with isolated capabilities', () => {
@@ -21,12 +26,12 @@ describe('Plugin Runtime context fixture', () => {
   });
 
   test('copies and freezes whole-field Chinese dark capability overrides', () => {
-    const capabilities = ['lensx.example.read'];
+    const capabilities: HostApiMethod[] = ['clipboard.read'];
     const context = createPluginRuntimeContextFixture({ capabilities, locale: 'zh-CN', theme: 'dark' });
-    capabilities.push('mutated.after.creation');
+    capabilities.push('clipboard.write');
 
     expect(context).toEqual({
-      capabilities: ['lensx.example.read'],
+      capabilities: ['clipboard.read'],
       hostApiVersion: PLUGIN_HOST_API_VERSION,
       locale: 'zh-CN',
       theme: 'dark',
@@ -34,6 +39,19 @@ describe('Plugin Runtime context fixture', () => {
     expect(() => (context.capabilities as string[]).push('mutation')).toThrow();
     expect('permission' in context).toBe(false);
     expect('pluginIdentity' in context).toBe(false);
+  });
+
+  test('provides explicit invalid Context fixtures without pretending they are grants', () => {
+    expect(createInvalidPluginRuntimeContextFixture('unknown-capability')).toMatchObject({
+      capabilities: ['system.open_external'],
+    });
+    expect(createInvalidPluginRuntimeContextFixture('duplicate-capability')).toMatchObject({
+      capabilities: ['storage.get', 'storage.get'],
+    });
+    expect(createInvalidPluginRuntimeContextFixture('unsorted-capability')).toMatchObject({
+      capabilities: ['storage.get', 'actions.open'],
+    });
+    expect(createInvalidPluginRuntimeContextFixture('trusted-field')).toHaveProperty('pluginId');
   });
 });
 

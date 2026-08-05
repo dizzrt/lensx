@@ -1,0 +1,138 @@
+[
+  {
+    "name": "unknown-method",
+    "kind": "request",
+    "value": { "method": "system.open_external", "params": {} },
+    "expected": [{ "code": "method_not_found", "path": "/method" }]
+  },
+  {
+    "name": "context-unknown-capability",
+    "kind": "context",
+    "value": {
+      "hostApiVersion": "0.1.0",
+      "locale": "en-US",
+      "theme": "light",
+      "capabilities": ["system.open_external"]
+    },
+    "expected": [{ "code": "invalid_value", "path": "/capabilities/0" }]
+  },
+  {
+    "name": "context-duplicate-capability",
+    "kind": "context",
+    "value": {
+      "hostApiVersion": "0.1.0",
+      "locale": "en-US",
+      "theme": "light",
+      "capabilities": ["storage.get", "storage.get"]
+    },
+    "expected": [{ "code": "duplicate_value", "path": "/capabilities" }]
+  },
+  {
+    "name": "context-unsorted-capability",
+    "kind": "context",
+    "value": {
+      "hostApiVersion": "0.1.0",
+      "locale": "en-US",
+      "theme": "light",
+      "capabilities": ["storage.get", "actions.open"]
+    },
+    "expected": [{ "code": "unsorted_value", "path": "/capabilities/1" }]
+  },
+  {
+    "name": "context-trusted-field",
+    "kind": "context",
+    "value": {
+      "hostApiVersion": "0.1.0",
+      "locale": "en-US",
+      "theme": "light",
+      "capabilities": [],
+      "pluginId": "com.attacker.plugin"
+    },
+    "expected": [{ "code": "additional_property", "path": "/pluginId" }]
+  },
+  {
+    "name": "event-is-patch",
+    "kind": "event",
+    "value": { "event": "runtime.context_changed", "payload": { "theme": "dark" } },
+    "expected": [
+      { "code": "required", "path": "/payload/capabilities" },
+      { "code": "required", "path": "/payload/hostApiVersion" },
+      { "code": "required", "path": "/payload/locale" }
+    ]
+  },
+  {
+    "name": "ui-close-target",
+    "kind": "request",
+    "value": { "method": "ui.close", "params": { "windowId": "main" } },
+    "expected": [{ "code": "additional_property", "path": "/params/windowId" }]
+  },
+  {
+    "name": "actions-global-id",
+    "kind": "request",
+    "value": { "method": "actions.open", "params": { "actionId": "lensx.core.settings" } },
+    "expected": [{ "code": "invalid_value", "path": "/params/actionId" }]
+  },
+  {
+    "name": "actions-executor-injection",
+    "kind": "request",
+    "value": { "method": "actions.open", "params": { "actionId": "settings", "executor": "host" } },
+    "expected": [{ "code": "additional_property", "path": "/params/executor" }]
+  },
+  {
+    "name": "storage-namespace-injection",
+    "kind": "request",
+    "value": { "method": "storage.get", "params": { "key": "theme", "namespace": "other" } },
+    "expected": [{ "code": "additional_property", "path": "/params/namespace" }]
+  },
+  {
+    "name": "storage-path-injection",
+    "kind": "request",
+    "value": { "method": "storage.delete", "params": { "key": "theme", "path": "/private/data" } },
+    "expected": [{ "code": "additional_property", "path": "/params/path" }]
+  },
+  {
+    "name": "storage-list-unsorted",
+    "kind": "result",
+    "value": { "method": "storage.list", "result": { "keys": ["beta", "alpha"] } },
+    "expected": [{ "code": "unsorted_value", "path": "/result/keys/1" }]
+  },
+  {
+    "name": "storage-quota-unsafe",
+    "kind": "result",
+    "value": {
+      "method": "storage.get_quota",
+      "result": { "usedBytes": 9007199254740992, "limitBytes": 9007199254740992 }
+    },
+    "expected": [
+      { "code": "invalid_value", "path": "/result/limitBytes" },
+      { "code": "invalid_value", "path": "/result/usedBytes" }
+    ]
+  },
+  {
+    "name": "clipboard-wrong-payload",
+    "kind": "request",
+    "value": { "method": "clipboard.write", "params": { "key": "text" } },
+    "expected": [
+      { "code": "additional_property", "path": "/params/key" },
+      { "code": "required", "path": "/params/text" }
+    ]
+  },
+  {
+    "name": "unknown-permission",
+    "kind": "permission",
+    "value": "system.open_external",
+    "expected": [{ "code": "invalid_value", "path": "" }]
+  },
+  {
+    "name": "unknown-error",
+    "kind": "error",
+    "value": { "code": "raw_exception", "message": "unsafe" },
+    "expected": [{ "code": "invalid_value", "path": "/code" }]
+  },
+  {
+    "name": "error-extra-path",
+    "kind": "error",
+    "value": { "code": "internal_error", "message": "failed", "path": "/private/plugin" },
+    "expected": [{ "code": "additional_property", "path": "/path" }]
+  }
+]

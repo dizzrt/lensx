@@ -10,6 +10,6 @@
     "rootDir": ".",
     "sourceMap": false
   },
-  "include": ["src/**/*.ts", "schema/manifest.schema.json"],
+  "include": ["src/**/*.ts", "schema/*.json"],
   "exclude": ["tests"]
 }

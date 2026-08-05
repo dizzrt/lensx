@@ -34,7 +34,12 @@
       "types": "./dist/src/schema.d.ts",
       "import": "./dist/src/schema.js"
     },
-    "./manifest.schema.json": "./dist/schema/manifest.schema.json"
+    "./manifest.schema.json": "./dist/schema/manifest.schema.json",
+    "./host-api-schema": {
+      "types": "./dist/src/host-api-schema.d.ts",
+      "import": "./dist/src/host-api-schema.js"
+    },
+    "./host-api.schema.json": "./dist/schema/host-api.schema.json"
   },
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
@@ -43,8 +48,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "rstest run",
     "check": "pnpm run check:generated && pnpm run typecheck",
-    "generate": "node scripts/generate-plugin-manifest-types.mjs",
-    "check:generated": "node scripts/generate-plugin-manifest-types.mjs --check",
+    "generate": "node scripts/generate-plugin-manifest-types.mjs && node scripts/generate-plugin-host-api-types.mjs",
+    "check:generated": "node scripts/generate-plugin-manifest-types.mjs --check && node scripts/generate-plugin-host-api-types.mjs --check",
     "test:pack": "node scripts/verify-package.mjs"
   },
   "dependencies": {

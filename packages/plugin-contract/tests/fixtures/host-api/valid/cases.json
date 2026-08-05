@@ -1,0 +1,189 @@
+[
+  {
+    "name": "context-empty-capabilities",
+    "kind": "context",
+    "value": { "hostApiVersion": "0.1.0", "locale": "en-US", "theme": "light", "capabilities": [] }
+  },
+  {
+    "name": "context-known-sorted-capabilities",
+    "kind": "context",
+    "value": {
+      "hostApiVersion": "0.1.0",
+      "locale": "zh-CN",
+      "theme": "dark",
+      "capabilities": ["actions.open", "clipboard.read", "storage.get"]
+    }
+  },
+  {
+    "name": "context-replacement-event",
+    "kind": "event",
+    "value": {
+      "event": "runtime.context_changed",
+      "payload": {
+        "hostApiVersion": "0.1.0",
+        "locale": "zh-CN",
+        "theme": "dark",
+        "capabilities": ["clipboard.write", "storage.set"]
+      }
+    }
+  },
+  {
+    "name": "runtime-get-context-request",
+    "kind": "request",
+    "value": { "method": "runtime.get_context", "params": {} }
+  },
+  {
+    "name": "runtime-get-context-result",
+    "kind": "result",
+    "value": {
+      "method": "runtime.get_context",
+      "result": { "hostApiVersion": "0.1.0", "locale": "en-US", "theme": "light", "capabilities": [] }
+    }
+  },
+  { "name": "ui-close-request", "kind": "request", "value": { "method": "ui.close", "params": {} } },
+  { "name": "ui-close-result", "kind": "result", "value": { "method": "ui.close", "result": { "accepted": true } } },
+  {
+    "name": "actions-open-request",
+    "kind": "request",
+    "value": { "method": "actions.open", "params": { "actionId": "open_settings" } }
+  },
+  {
+    "name": "actions-open-result",
+    "kind": "result",
+    "value": { "method": "actions.open", "result": { "opened": true } }
+  },
+  {
+    "name": "storage-get-request",
+    "kind": "request",
+    "value": { "method": "storage.get", "params": { "key": "settings/theme" } }
+  },
+  {
+    "name": "storage-get-found",
+    "kind": "result",
+    "value": {
+      "method": "storage.get",
+      "result": { "found": true, "value": { "theme": "dark", "nested": [true, null, 3] } }
+    }
+  },
+  {
+    "name": "storage-get-missing",
+    "kind": "result",
+    "value": { "method": "storage.get", "result": { "found": false } }
+  },
+  {
+    "name": "storage-set-request",
+    "kind": "request",
+    "value": { "method": "storage.set", "params": { "key": "settings/theme", "value": { "theme": "light" } } }
+  },
+  {
+    "name": "storage-set-result",
+    "kind": "result",
+    "value": { "method": "storage.set", "result": { "stored": true } }
+  },
+  {
+    "name": "storage-delete-request",
+    "kind": "request",
+    "value": { "method": "storage.delete", "params": { "key": "settings/theme" } }
+  },
+  {
+    "name": "storage-delete-existing",
+    "kind": "result",
+    "value": { "method": "storage.delete", "result": { "deleted": true } }
+  },
+  {
+    "name": "storage-delete-missing",
+    "kind": "result",
+    "value": { "method": "storage.delete", "result": { "deleted": false } }
+  },
+  { "name": "storage-list-request-empty", "kind": "request", "value": { "method": "storage.list", "params": {} } },
+  {
+    "name": "storage-list-request-paged",
+    "kind": "request",
+    "value": { "method": "storage.list", "params": { "cursor": "opaque-page-2", "limit": 25 } }
+  },
+  {
+    "name": "storage-list-result-empty",
+    "kind": "result",
+    "value": { "method": "storage.list", "result": { "keys": [] } }
+  },
+  {
+    "name": "storage-list-result-paged",
+    "kind": "result",
+    "value": { "method": "storage.list", "result": { "keys": ["alpha", "beta"], "nextCursor": "opaque-page-3" } }
+  },
+  { "name": "storage-quota-request", "kind": "request", "value": { "method": "storage.get_quota", "params": {} } },
+  {
+    "name": "storage-quota-result",
+    "kind": "result",
+    "value": { "method": "storage.get_quota", "result": { "usedBytes": 0, "limitBytes": 1048576 } }
+  },
+  { "name": "clipboard-read-request", "kind": "request", "value": { "method": "clipboard.read", "params": {} } },
+  {
+    "name": "clipboard-read-empty",
+    "kind": "result",
+    "value": { "method": "clipboard.read", "result": { "text": "" } }
+  },
+  {
+    "name": "clipboard-write-empty",
+    "kind": "request",
+    "value": { "method": "clipboard.write", "params": { "text": "" } }
+  },
+  {
+    "name": "clipboard-write-result",
+    "kind": "result",
+    "value": { "method": "clipboard.write", "result": { "written": true } }
+  },
+  { "name": "permission-read", "kind": "permission", "value": "clipboard.read" },
+  { "name": "permission-write", "kind": "permission", "value": "clipboard.write" },
+  {
+    "name": "error-invalid-request",
+    "kind": "error",
+    "value": { "code": "invalid_request", "message": "The request is invalid." }
+  },
+  {
+    "name": "error-invalid-params",
+    "kind": "error",
+    "value": { "code": "invalid_params", "message": "The parameters are invalid." }
+  },
+  {
+    "name": "error-method-not-found",
+    "kind": "error",
+    "value": { "code": "method_not_found", "message": "The method is unavailable." }
+  },
+  {
+    "name": "error-permission-denied",
+    "kind": "error",
+    "value": { "code": "permission_denied", "message": "Permission is denied." }
+  },
+  {
+    "name": "error-not-found",
+    "kind": "error",
+    "value": { "code": "not_found", "message": "The target was not found." }
+  },
+  {
+    "name": "error-conflict",
+    "kind": "error",
+    "value": { "code": "conflict", "message": "The operation conflicts with current state." }
+  },
+  {
+    "name": "error-limit-exceeded",
+    "kind": "error",
+    "value": { "code": "limit_exceeded", "message": "A Host limit was exceeded." }
+  },
+  {
+    "name": "error-unavailable",
+    "kind": "error",
+    "value": { "code": "unavailable", "message": "The capability is unavailable." }
+  },
+  {
+    "name": "error-cancelled",
+    "kind": "error",
+    "value": { "code": "cancelled", "message": "The operation was cancelled." }
+  },
+  { "name": "error-timeout", "kind": "error", "value": { "code": "timeout", "message": "The operation timed out." } },
+  {
+    "name": "error-internal",
+    "kind": "error",
+    "value": { "code": "internal_error", "message": "The Host operation failed." }
+  }
+]

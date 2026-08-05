@@ -1,16 +1,33 @@
 import {
+  HOST_API_METHOD_CATALOG,
   normalizePluginManifest,
   PLUGIN_HOST_API_VERSION,
   PLUGIN_MANIFEST_VERSION,
   type PluginManifestInput,
+  type PluginRuntimeContextInput,
+  validateHostApiError,
+  validateHostApiEvent,
+  validateHostApiMethod,
+  validateHostApiPermission,
+  validateHostApiRequest,
+  validateHostApiResult,
   validatePluginManifest,
+  validatePluginRuntimeContext,
 } from '@lensx/plugin-contract';
+import rawHostApiSchema from '@lensx/plugin-contract/host-api.schema.json' with { type: 'json' };
+import hostApiSchema from '@lensx/plugin-contract/host-api-schema';
 import rawManifestSchema from '@lensx/plugin-contract/manifest.schema.json' with { type: 'json' };
 import manifestSchema from '@lensx/plugin-contract/schema';
 
 import manifestJson from './manifest.json' with { type: 'json' };
 
 const manifestInput = manifestJson as PluginManifestInput;
+const runtimeContext: PluginRuntimeContextInput = {
+  capabilities: ['runtime.get_context'],
+  hostApiVersion: PLUGIN_HOST_API_VERSION,
+  locale: 'en-US',
+  theme: 'light',
+};
 const validation = validatePluginManifest(manifestInput);
 if (validation.status === 'invalid') {
   throw new TypeError(`Example Manifest is invalid: ${JSON.stringify(validation.diagnostics)}`);
@@ -23,7 +40,16 @@ const result = normalizePluginManifest(validation, {
 if (
   PLUGIN_MANIFEST_VERSION !== '0.1.0' ||
   result.status !== 'compatible' ||
-  manifestSchema.$id !== rawManifestSchema.$id
+  manifestSchema.$id !== rawManifestSchema.$id ||
+  hostApiSchema.$id !== rawHostApiSchema.$id ||
+  HOST_API_METHOD_CATALOG.length !== 10 ||
+  validateHostApiMethod('runtime.get_context').status !== 'valid' ||
+  validateHostApiPermission('clipboard.read').status !== 'valid' ||
+  validatePluginRuntimeContext(runtimeContext).status !== 'valid' ||
+  validateHostApiRequest({ method: 'runtime.get_context', params: {} }).status !== 'valid' ||
+  validateHostApiResult({ method: 'runtime.get_context', result: runtimeContext }).status !== 'valid' ||
+  validateHostApiEvent({ event: 'runtime.context_changed', payload: runtimeContext }).status !== 'valid' ||
+  validateHostApiError({ code: 'unavailable', message: 'The capability is unavailable.' }).status !== 'valid'
 ) {
   throw new TypeError('Packed Contract package did not expose a coherent 0.1.0 contract.');
 }

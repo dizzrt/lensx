@@ -7,7 +7,7 @@ package。workspace 为公共 package 和插件建立开发拓扑、lifecycle �
 可发布的 `@lensx/plugin-contract`、`@lensx/plugin-sdk`、`@lensx/plugin-testkit` 与可选
 `@lensx/plugin-ui` package，但仓库验证不会执行 registry 发布操作。workspace 尚未提供插件 CLI，
 也不会发现、安装、注册或执行插件。SDK、Testkit 与 UI package 是开发基础，不是可工作的 iframe
-Runtime 或 Host API。
+Runtime 或可执行 Host API。Contract package 会独立交付 Host API 语义 catalog 与 validator。
 
 已经交付的静态 Manifest 契约仍然只负责验证。package 位于本 workspace 内，并不代表它
 获得 Host 信任、Tauri 访问权、权限或 Runtime 能力。
@@ -46,13 +46,15 @@ examples/plugins/*
 
 ## Plugin Contract Package
 
-`packages/plugin-contract` 持有公共 Manifest Schema、生成的 `PluginManifestInput`、规范化
-类型、协议常量、诊断和纯两阶段校验 API。受支持的 import 仅限：
+`packages/plugin-contract` 持有公共 Manifest/Host API Schema、生成输入、规范化类型、协议
+常量、诊断、不可变 catalog 和纯校验 API。受支持的 import 仅限：
 
 ```text
 @lensx/plugin-contract
 @lensx/plugin-contract/schema
 @lensx/plugin-contract/manifest.schema.json
+@lensx/plugin-contract/host-api-schema
+@lensx/plugin-contract/host-api.schema.json
 ```
 
 package 将 `ajv` 声明为直接 runtime 依赖，并复用现有 TypeScript 与 Rstest 工具链；其 runtime
@@ -61,12 +63,15 @@ package 将 `ajv` 声明为直接 runtime 依赖，并复用现有 TypeScript �
 
 ```bash
 pnpm run generate:plugin-manifest-types
+pnpm run generate:plugin-host-api-types
+pnpm run check:plugin-host-api-contract
 pnpm run check:plugin-contract
 ```
 
-完整检查会重建生成类型，运行 package 与 Host 边界测试，检查 TypeScript/Rust 共享 fixtures，
-打出真实 tarball 并验证文件清单和 exports，最后将其安装到隔离消费者中执行 typecheck 和 runtime
-smoke test。
+完整检查会重建两组生成类型，运行 package 与 Host 边界测试，检查 Manifest/Host API 的
+TypeScript/Rust 共享 fixtures，打出真实 Contract/SDK/Testkit tarball 并验证文件清单和 exports，
+最后将其安装到隔离 no-DOM consumer 中执行 typecheck 与 Runtime smoke。它证明语义有效，
+但不声称已经 dispatch 或执行副作用。
 
 ## Host-Private Package-Format Tool
 
@@ -103,7 +108,8 @@ Host-private tool、Rust source、fixture generator 或 codec dependency。未�
 ```
 
 package 只有一个直接 Runtime 依赖 `@lensx/plugin-contract`，并从该 package 导入
-`PLUGIN_HOST_API_VERSION` 作为当前 Host API 事实。它公开独立的 `PLUGIN_SDK_VERSION` 与
+`PLUGIN_HOST_API_VERSION`、共享 `PluginRuntimeContext` shape 与 Context validator 作为当前 Host API
+事实。它公开独立的 `PLUGIN_SDK_VERSION` 与
 `PLUGIN_SDK_SUPPORTED_HOST_API_RANGE`，不会重新导出或复制当前 Host API 版本。
 
 使用显式实例和注入的 transport：
@@ -117,7 +123,8 @@ const context = await client.initialize();
 await client.dispose();
 ```
 
-client 不提供任意 raw Host method 调用。transport interface 用于未来可信 adapter 和测试，不是
+Context capability 是闭集 Contract method catalog 中排序去重的值，表示当前可调用 snapshot，
+不是 grant。client 不提供任意 raw 或具体 Host method 调用。transport interface 用于未来可信 adapter 和测试，不是
 iframe 实现或公共 wire protocol。package 内部白盒测试保留私有 fake；公共黑盒控制由 Plugin
 Testkit 提供。
 
@@ -147,7 +154,7 @@ SDK deep import 会被拒绝。tarball 排除 tests、fixtures、scripts 和 Hos
 ```
 
 package 的 Runtime dependency 只有 Contract 与 SDK 的公共根入口。它提供全新的 Manifest fixture、
-显式 JSON Pointer mutation、冻结的 Runtime context fixture、取消 controller、deferred promise，
+显式 JSON Pointer mutation、冻结的有效 Runtime Context fixture、显式无效 Context fixture、取消 controller、deferred promise，
 以及带不可变 observation 的语义 fake transport。fake 可以配置 connect/request handler、发送抽象
 event、断开和销毁，但不会模拟 wire envelope、iframe、Host identity、permission decision 或真实
 Host API method。
@@ -168,8 +175,9 @@ await client.initialize();
 await client.dispose();
 ```
 
-context fixture 中的 capability ID 是不透明 ID，不是 grant。无效或不兼容 context、取消、超时、
-transport failure、重试、断开、状态发布与迟到完成由真实 SDK 判断。使用以下命令验证 Testkit：
+context fixture 中的 capability ID 是共享 Contract method ID，不是 grant。Testkit 提供 unknown、
+duplicate、unsorted 与 trusted-field 负向 fixture。无效或不兼容 context、取消、超时、transport
+failure、重试、断开、状态发布与迟到完成由真实 SDK 判断。使用以下命令验证 Testkit：
 
 ```bash
 pnpm --dir packages/plugin-testkit run build

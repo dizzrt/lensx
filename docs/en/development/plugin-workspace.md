@@ -10,7 +10,8 @@ It contains the publishable `@lensx/plugin-contract`, `@lensx/plugin-sdk`,
 validation does not perform a registry publish. The workspace does not yet
 provide a plugin CLI, and it does not discover, install, register, or execute
 plugins. The SDK, Testkit, and UI packages are development foundations, not a
-working iframe Runtime or Host API.
+working iframe Runtime or executable Host API. The Contract package does ship
+the Host API semantic catalog and validators independently of execution.
 
 The shipped static Manifest contract remains validation-only. A package being
 inside this workspace does not grant it Host trust, Tauri access, permissions,
@@ -53,14 +54,16 @@ members.
 
 ## Plugin Contract Package
 
-`packages/plugin-contract` owns the public Manifest Schema, generated
-`PluginManifestInput`, normalized types, protocol constants, diagnostics, and
-the pure two-stage validation API. Supported imports are limited to:
+`packages/plugin-contract` owns the public Manifest and Host API Schemas,
+generated inputs, normalized types, protocol constants, diagnostics, immutable
+catalogs, and pure validation APIs. Supported imports are limited to:
 
 ```text
 @lensx/plugin-contract
 @lensx/plugin-contract/schema
 @lensx/plugin-contract/manifest.schema.json
+@lensx/plugin-contract/host-api-schema
+@lensx/plugin-contract/host-api.schema.json
 ```
 
 The package owns `ajv` as a direct runtime dependency and uses the existing
@@ -70,13 +73,16 @@ validate the Contract with:
 
 ```bash
 pnpm run generate:plugin-manifest-types
+pnpm run generate:plugin-host-api-types
+pnpm run check:plugin-host-api-contract
 pnpm run check:plugin-contract
 ```
 
-The complete check rebuilds generated types, runs package and Host boundary
-tests, checks TypeScript/Rust shared fixtures, packs a real tarball, verifies
-its file list and exports, and installs it into an isolated consumer for
-typecheck and runtime smoke testing.
+The complete check rebuilds both generated type sets, runs package and Host
+boundary tests, checks Manifest and Host API TypeScript/Rust shared fixtures,
+packs real Contract/SDK/Testkit tarballs, verifies file lists and exports, and
+installs them into isolated no-DOM consumers for typecheck and Runtime smoke
+testing. It proves semantic validity without claiming dispatch or side effects.
 
 ## Host-Private Package-Format Tool
 
@@ -118,9 +124,9 @@ import is:
 @lensx/plugin-sdk
 ```
 
-The package has one direct Runtime dependency,
-`@lensx/plugin-contract`, and imports `PLUGIN_HOST_API_VERSION` from that
-package as the current Host API fact. It exposes its independent
+The package has one direct Runtime dependency, `@lensx/plugin-contract`, and
+imports `PLUGIN_HOST_API_VERSION`, the shared `PluginRuntimeContext` shape, and
+Context validation from that package as current Host API facts. It exposes its independent
 `PLUGIN_SDK_VERSION` and `PLUGIN_SDK_SUPPORTED_HOST_API_RANGE`; it does not
 re-export or duplicate the current Host API version.
 
@@ -135,7 +141,9 @@ const context = await client.initialize();
 await client.dispose();
 ```
 
-The client has no arbitrary raw Host method call. The transport interface is
+Context capabilities are sorted unique values from the closed Contract method
+catalog; they are current-callability snapshots rather than grants. The client
+has no arbitrary raw or concrete Host method call. The transport interface is
 for future trusted adapters and tests; it is not an iframe implementation or a
 public wire protocol. Package-internal white-box tests keep their private fake;
 public black-box controls are provided by Plugin Testkit.
@@ -168,8 +176,9 @@ public Contract and SDK lifecycle. Its only supported import is:
 ```
 
 The package depends at Runtime only on the public Contract and SDK roots. It
-provides fresh Manifest fixtures, explicit JSON Pointer mutations, frozen
-Runtime context fixtures, a cancellation controller, deferred promises, and a
+provides fresh Manifest fixtures, explicit JSON Pointer mutations, frozen valid
+Runtime Context fixtures, explicit invalid Context fixtures, a cancellation
+controller, deferred promises, and a
 semantic fake transport with immutable observations. The fake can configure
 connect/request handlers, emit abstract events, disconnect, and dispose, but it
 does not model a wire envelope, iframe, Host identity, permission decision, or
@@ -191,8 +200,10 @@ await client.initialize();
 await client.dispose();
 ```
 
-Capability IDs in a context fixture are opaque IDs, not grants. Invalid or
-incompatible context, cancellation, timeout, transport failure, retry,
+Capability IDs in a context fixture are shared Contract method IDs, not grants.
+Unknown, duplicate, unsorted, and trusted-field invalid fixtures are available
+for negative initialization tests. Invalid or incompatible context,
+cancellation, timeout, transport failure, retry,
 disconnect, state publication, and late completion are evaluated by the real
 SDK. Validate Testkit with:
 

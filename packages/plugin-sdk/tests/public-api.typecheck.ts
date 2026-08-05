@@ -1,4 +1,9 @@
-import { createPluginSdk, type PluginSdkCancellationSignal, type PluginSdkTransport } from '../src/index.js';
+import {
+  createPluginSdk,
+  type HostApiError,
+  type PluginSdkCancellationSignal,
+  type PluginSdkTransport,
+} from '../src/index.js';
 
 declare const transport: PluginSdkTransport;
 declare const nativeSignal: AbortSignal;
@@ -10,6 +15,8 @@ const structuralSignal: PluginSdkCancellationSignal = {
 };
 
 const client = createPluginSdk({ transport });
+declare const hostError: HostApiError;
+void hostError.code;
 void client.initialize({ signal: structuralSignal });
 void client.initialize({ signal: nativeSignal });
 

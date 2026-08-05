@@ -29,7 +29,7 @@ export const validatePackedPackage = ({ metadata, files, runtimeImports }) => {
     diagnostics.push('Published dependencies must not contain workspace: ranges.');
   }
 
-  for (const subpath of ['.', './schema', './manifest.schema.json']) {
+  for (const subpath of ['.', './schema', './manifest.schema.json', './host-api-schema', './host-api.schema.json']) {
     if (!Object.hasOwn(metadata.exports ?? {}, subpath)) {
       diagnostics.push(`Missing public export ${subpath}.`);
     }

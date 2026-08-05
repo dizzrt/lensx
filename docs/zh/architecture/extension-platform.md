@@ -4,9 +4,9 @@
 
 本文区分已经交付的静态插件 Manifest 契约、`.lxp` package inspection 与本地安装、Plugin SDK
 foundation、Plugin Testkit、可选 Plugin UI package、Host 私有 Plugin surface 投影与 Page 导航、
-Host 私有生命周期控制、本地 package replacement、Host 私有 scoped resource service，以及预期的
-隔离 iframe Runtime、进程内 Runtime Session 与预期的运行时扩展边界。公共 packaging CLI、
-分发、完整插件执行 lifecycle、完整权限决策、iframe transport、签名、Host API、完整插件管理 UI、远程更新和用户
+Host 私有生命周期控制、本地 package replacement、Host 私有 scoped resource service、隔离 iframe
+Runtime、进程内 Runtime Session、公共 Host API 语义契约与预期的运行时扩展边界。公共 packaging CLI、
+分发、完整插件执行 lifecycle、完整权限决策、iframe transport、签名、Host API dispatch/执行、完整插件管理 UI、远程更新和用户
 主动 rollback history 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
 
 ## 目标
@@ -54,11 +54,12 @@ Plugin
 
 ## 已交付的公共契约与静态 Manifest
 
-lensX 已交付可发布的 `@lensx/plugin-contract@0.1.0` workspace package。根 export
-提供 `PLUGIN_MANIFEST_VERSION`、`PLUGIN_HOST_API_VERSION`、生成的作者输入类型、
-规范化类型、稳定诊断、`validatePluginManifest`、`normalizePluginManifest` 和本地化文本
-解析 helper。额外公共入口仅有 `@lensx/plugin-contract/schema` 与
-`@lensx/plugin-contract/manifest.schema.json`；未声明的 deep import 不受支持。
+lensX 已交付可发布的 `@lensx/plugin-contract@0.1.0` workspace package。根 export 提供
+Manifest/Host API 版本、生成输入类型、规范化值、稳定诊断、catalog 与纯 validator。Manifest
+Schema 入口是 `@lensx/plugin-contract/schema` 与
+`@lensx/plugin-contract/manifest.schema.json`；Host API Schema 入口是
+`@lensx/plugin-contract/host-api-schema` 与
+`@lensx/plugin-contract/host-api.schema.json`。未声明的 deep import 不受支持。
 
 package 拥有作者可控的 `manifest_version: "0.1.0"` 协议，并将其实现为严格的 Draft
 2020-12 JSON Schema。Schema 是 wire format 的结构真源，已提交的 `PluginManifestInput`
@@ -116,10 +117,11 @@ Contract package 版本、Manifest 协议、Host API 协议与 lensX 应用版�
 change 更新各自版本维度。当前契约不提供更早 Schema、deprecated symbol alias、兼容 adapter
 或迁移分支。
 
-运行 `pnpm run generate:plugin-manifest-types` 可重新生成已提交的输入类型，运行
+运行 `pnpm run generate:plugin-manifest-types` 与
+`pnpm run generate:plugin-host-api-types` 可重新生成已提交的输入类型，运行
 `pnpm run check:plugin-contract` 可执行完整 drift gate。门禁覆盖生成类型、package tests、Host
 边界、Rust 共享 fixtures，以及把真实 tarball 安装到隔离外部消费者中的验证。tarball 只包含
-运行时 JavaScript、声明、两个 Schema 入口和 package metadata，不包含 tests、fixtures、生成
+运行时 JavaScript、声明、两个公共 JSON Schema 和 package metadata，不包含 tests、fixtures、生成
 scripts 或 Host 私有源码。
 
 ### 静态校验范围外的能力
@@ -127,8 +129,40 @@ scripts 或 Host 私有源码。
 静态校验本身不会发现或安装包、创建生产 registration 或 iframe、授予权限、交换 Host API 消息或
 运行插件代码。下文的 Host 私有 capability 会把一个用户选中的兼容 `.lxp` 添加为 external
 registration，把 current Registration facts 投影进 Page 与 Action Registry，并且只在 eligible Plugin
-Page active 时创建隔离 iframe。Runtime Session、Host API 消息与 permission decision 是独立 capability；
-其中下文的 Host 私有进程内 Runtime Session 已经交付。
+Page active 时创建隔离 iframe。Runtime Session、Host API 执行与 permission decision 是独立
+capability；其中下文的 Host 私有进程内 Runtime Session 与公共语义契约已经交付。
+
+## 已交付的公共 Host API 语义契约
+
+`@lensx/plugin-contract` 现在持有 Host API protocol `0.1.0`：闭集 Draft 2020-12 Schema、
+生成的 TypeScript 输入、深度冻结的规范值、不可变 catalog，以及接受 `unknown` 的纯 validator。
+TypeScript 与测试专用 Rust consumer 读取同一批 package-owned valid/invalid fixtures，并对
+validity 及按 JSON Pointer 排序的诊断 `code`/`path` 达成一致。
+
+catalog 精确包含以下方法：
+
+| 范围 | 方法 | 显式权限 |
+| --- | --- | --- |
+| Runtime | `runtime.get_context` | 无 |
+| 当前 Page 与 Action | `ui.close`、`actions.open` | 无 |
+| 插件私有 storage | `storage.get`、`storage.set`、`storage.delete`、`storage.list`、`storage.get_quota` | 无 |
+| 文本剪贴板 | `clipboard.read`、`clipboard.write` | 分别为 `clipboard.read`、`clipboard.write` |
+
+`PluginRuntimeContext` 由 Contract 与 SDK 共享，只包含 `hostApiVersion`、locale、theme 与排序去重的
+当前可调用 method ID snapshot。空 capability 有效。`runtime.context_changed` 携带完整 replacement
+Context，而不是 patch。capability 同时表示当前 Host 支持、实现可用与授权有效，但不是持久 grant。
+plugin identity、Page、source、Manifest request、raw grant、path 与 executor 都会作为作者可控
+Context/method 字段被拒绝。
+
+Host API error 使用稳定闭集 code 与有界安全英文 message，并与 SDK 的 `disconnected`、`disposed`、
+`transport_failure` 等 lifecycle error 保持可判别。package、Manifest protocol、Host API protocol、SDK
+与应用版本独立演进。兼容新增 method 需要 Host API minor 版本并通过 capability discovery 暴露；
+不兼容改形或删除需要 major 版本，且删除前必须先废弃。
+
+本次交付是可独立消费的语义契约，不是执行路径。它不注册 Tauri command，也不实现 iframe
+transport、私有 RPC envelope、request ID、Dispatcher、Action/close 副作用、storage persistence、
+clipboard native 调用、permission decision 或 RPC resource limit。`system.open_external` 与外链权限
+明确不作为占位能力发布。
 
 ## 已交付的 Host 私有 Plugin Package Inspection
 
@@ -629,9 +663,9 @@ transport 类型，以及下列独立版本事实：
 自动重连。销毁是幂等的，会取消 SDK 管理的 pending operation、移除 listener，并且最多销毁一次
 transport。
 
-进入 `ready` 前，SDK 校验、复制并冻结 `PluginRuntimeContext`。该 context 包含兼容的
+进入 `ready` 前，SDK 通过 Contract validator 校验、复制并冻结共享 `PluginRuntimeContext`。该 context 包含兼容的
 `hostApiVersion`、`en-US | zh-CN` locale、`light | dark` theme，以及唯一且只读的 capability
-ID snapshot。空 capability 列表有效，并不代表存在任何 Host API method。plugin identity、Page
+已声明 Host API method ID 的排序去重只读 snapshot。空 capability 列表有效，并不代表存在任何 method。plugin identity、Page
 identity、已授予权限、安装来源和 Host lifecycle 事实都不是受支持的 context 输入。
 
 SDK 管理的 operation 默认超时为 10000 毫秒，并允许正有限整数覆盖。取消输入使用与原生
@@ -641,7 +675,8 @@ SDK 管理的 operation 默认超时为 10000 毫秒，并允许正有限整数�
 `PluginSdkError.code` 提供稳定的 SDK 级分支：`cancelled`、`timeout`、`disconnected`、
 `disposed`、`incompatible_host_api`、`invalid_runtime_context`、`invalid_argument` 和
 `transport_failure`。transport exception 会映射为安全 SDK error，不暴露原始异常、私有 stack、
-Host 对象或 wire 数据。权限、未知 method 和 Host 参数错误仍属于后续 Host API contract。
+Host 对象或 wire 数据。Host method、参数、权限、domain 与 internal error 类型来自 Contract，
+并与 SDK lifecycle failure 保持可判别；SDK 仍不会执行它们。
 
 `PluginSdkTransport` 是连接、抽象请求、抽象事件、断开通知与销毁的语义 adapter 注入边界。
 它不定义 request ID、nonce、identity、origin、`Window`、`MessagePort`、`postMessage` 或
@@ -660,7 +695,9 @@ module 或测试运行器。
 - `createPluginManifestFixture()`：创建满足当前 Contract 的全新最小输入；
 - `mutatePluginManifestFixture()`：按顺序执行基于 JSON Pointer 的 `set`/`remove`，并返回深拷贝；
 - `createPluginRuntimeContextFixture()`：创建复制并冻结的 locale、theme、Host API version 与
-  capability snapshot；
+  已知 method capability snapshot；
+- `createInvalidPluginRuntimeContextFixture()`：创建 unknown、duplicate、unsorted 与 trusted-field
+  负向 Context case；
 - `PluginTestCancellationController` 与 `createDeferred()`：提供 runner-neutral 的取消和 pending
   operation 控制；
 - `FakePluginSdkTransport`：提供语义 connect/request handler、抽象 event、disconnect、dispose 和
@@ -682,13 +719,13 @@ await client.dispose();
 Manifest fixture 由真实 Contract validator/normalizer 校验；Runtime context 失败、取消、超时、
 transport failure、断开、重试与迟到结果抑制仍由真实 SDK 决定。fake transport 不定义 RPC
 envelope、request identity、nonce、origin、browser messaging object 或可信 Host identity。它的抽象
-request hook 不是已交付的 Host API method client。capability ID 仍是不透明 context 数据，不是权限
+request hook 不是已交付的 Host API method client。capability ID 使用共享闭集 method 类型，不是权限
 请求、grant 或 decision。
 
 `pnpm run check:plugin-testkit` 校验 package 测试与声明、Contract -> SDK -> Testkit 依赖方向、真实
 tarball 内容，以及安装到 workspace 外的无 DOM ES2022 consumer。该 consumer 是发布 smoke fixture，
 不是正式插件项目模板。Testkit 不提供 permission harness、iframe Runtime、插件执行或真实 Host API
-method/error；后续 Host API、权限和 Runtime change 只能在对应契约接受后扩展此 package。
+执行；后续 transport、权限和 Runtime change 只能在对应契约接受后扩展此 package。
 
 ## 已交付的可选 Plugin UI Package
 
@@ -745,7 +782,7 @@ UI，继续只消费 Contract 与 SDK。
 
 package tests、真实 tarball Rsbuild consumer、module graph/bundle 检查和 `650×600` browser
 visual matrix 共同覆盖公共边界、locale/theme、可访问性、键盘恢复、focus 与双语长内容。本次
-交付不会创建 iframe、Runtime session、Host API、installer、registry、template 或插件执行路径。
+交付不会创建 iframe、Runtime session、可执行 Host API、installer、registry、template 或插件执行路径。
 
 ## Host Action Registry
 
@@ -789,7 +826,7 @@ icon 解析、完整权限决策、生命周期写操作和外部 Runtime 执行
 ### 外部插件
 
 外部插件 UI 运行在已交付的隔离 iframe 中。已交付的私有 Runtime Session 会通过受控 Host bootstrap
-认证唯一专用 Port；插件仍没有公共 transport 或 Host API。
+认证唯一专用 Port；插件仍没有公共 transport 或可执行 Host API。
 外部插件不能直接访问：
 
 - 应用 React 状态或组件实例；
@@ -801,6 +838,10 @@ icon 解析、完整权限决策、生命周期写操作和外部 Runtime 执行
 外部运行时资源必须解析在已安装插件的边界内。
 
 ## Host API
+
+已交付的公共语义契约定义了上文十个 method ID、exact params/result、
+`runtime.context_changed`、`PluginRuntimeContext`、permission、error 与 capability/version 规则。
+Contract 校验不会发送或执行请求，公共 SDK client 也没有 raw 或具体 Host API method。
 
 预期通信流程为：
 
@@ -816,7 +857,7 @@ iframe
 Bridge 必须校验真实消息来源和受限制的 origin。已声明权限不等于已授予权限。特权方法必须在
 分发前检查当前授权状态。
 
-Host API 方法应当保持小型、类型化、版本化，并且可以独立测试。官方 SDK 已经提供相应方法时，
+Host API 方法保持小型、类型化、版本化，并且可以独立测试。官方 SDK 已经提供相应方法时，
 插件不能手写私有传输消息。
 
 ## 加载与性能
@@ -840,8 +881,8 @@ Host API 方法应当保持小型、类型化、版本化，并且可以独立�
 
 静态 Manifest 格式、校验器、Host 私有本地安装与同 identity replacement、绑定 revision 的
 enable/disable/uninstall 基础设施、scoped package-relative resources、Plugin surface 投影、生产
-Action 激活、Page Registry/navigation、macOS 隔离 iframe Runtime 与 Host 私有进程内 Runtime Session
-已经交付。其余每项能力——
+Action 激活、Page Registry/navigation、macOS 隔离 iframe Runtime、Host 私有进程内 Runtime Session
+与公共 Host API 语义契约已经交付。其余每项能力——
 完整插件管理 UI、完整权限、
-Host API 方法、公共打包、远程/自动更新、用户主动 rollback history 或 sidecar——
+Host API transport/dispatch/执行、公共打包、远程/自动更新、用户主动 rollback history 或 sidecar——
 都需要独立的已接受规格和实现证据。本文定义架构方向和边界，不是发布检查清单。

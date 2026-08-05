@@ -6,11 +6,11 @@ This document separates the shipped static plugin Manifest contract, `.lxp`
 package inspection and local installation, Plugin SDK foundation, Plugin
 Testkit, optional Plugin UI package, Host-private Plugin surface projection and
 Page navigation, Host-private lifecycle controls, local package replacement,
-the Host-private scoped resource service, isolated iframe Runtime, and
-process-local Runtime Session from the intended runtime
-extension boundary. Public packaging CLI,
+the Host-private scoped resource service, isolated iframe Runtime,
+process-local Runtime Session, and public Host API semantic contract from the
+intended runtime extension boundary. Public packaging CLI,
 distribution, complete plugin execution lifecycle, complete permission decisions, iframe
-transport, signing, the Host API, complete plugin-management UI, remote
+transport, signing, Host API dispatch and execution, complete plugin-management UI, remote
 updates, and user-initiated rollback history are not currently implemented.
 Stable specs and source code define the shipped subset.
 
@@ -63,13 +63,12 @@ boundaries must have stable machine-readable codes and locations.
 ## Shipped Public Contract And Static Manifest
 
 lensX ships the publishable `@lensx/plugin-contract@0.1.0` workspace package.
-Its root export provides `PLUGIN_MANIFEST_VERSION`,
-`PLUGIN_HOST_API_VERSION`, generated author-input types, normalized types,
-stable diagnostics, `validatePluginManifest`, `normalizePluginManifest`, and
-the localized-text resolver. The only additional public entries are
-`@lensx/plugin-contract/schema` and
-`@lensx/plugin-contract/manifest.schema.json`; undeclared deep imports are not
-supported.
+Its root export provides Manifest and Host API versions, generated input types,
+normalized values, stable diagnostics, catalogs, and pure validators. Manifest
+Schema entries are `@lensx/plugin-contract/schema` and
+`@lensx/plugin-contract/manifest.schema.json`; Host API Schema entries are
+`@lensx/plugin-contract/host-api-schema` and
+`@lensx/plugin-contract/host-api.schema.json`. Undeclared deep imports are not supported.
 
 The package owns the author-controlled `manifest_version: "0.1.0"` protocol as
 a strict Draft 2020-12 JSON Schema. The Schema is the structural source of
@@ -141,11 +140,12 @@ API changes update their own version dimension. The current contract provides
 no earlier Schema, deprecated symbol alias, compatibility adapter, or
 migration branch.
 
-Run `pnpm run generate:plugin-manifest-types` to regenerate the committed input
-type and `pnpm run check:plugin-contract` for the complete drift gate. The gate
+Run `pnpm run generate:plugin-manifest-types` and
+`pnpm run generate:plugin-host-api-types` to regenerate committed input types,
+and `pnpm run check:plugin-contract` for the complete drift gate. The gate
 checks generated types, package tests, Host boundaries, shared Rust fixtures,
 and a real tarball installed into an isolated external consumer. The tarball
-contains runtime JavaScript, declarations, the two Schema entries, and package
+contains runtime JavaScript, declarations, the two public JSON Schemas, and package
 metadata; it excludes tests, fixtures, generation scripts, and Host private
 source.
 
@@ -157,8 +157,48 @@ messages, or run plugin code. The Host-private capabilities described below add
 one selected compatible `.lxp` as an external registration, project current
 Registration facts into Page and Action Registries, and create the isolated
 iframe only while an eligible Plugin Page is active. Runtime Sessions, Host API
-messages, and permission decisions are separate capabilities; the Host-private
-process-local Runtime Session described below is now shipped.
+execution, and permission decisions are separate capabilities; the Host-private
+process-local Runtime Session and public semantic contract described below are now shipped.
+
+## Shipped Public Host API Semantic Contract
+
+`@lensx/plugin-contract` now owns Host API protocol `0.1.0` as a closed Draft
+2020-12 Schema, generated TypeScript inputs, deeply frozen normalized values,
+immutable catalogs, and pure `unknown` validators. TypeScript and test-only Rust
+consumers read the same package-owned valid and invalid fixtures and agree on
+validity plus sorted JSON Pointer diagnostic `code`/`path` values.
+
+The catalog contains exactly these methods:
+
+| Area | Methods | Explicit permission |
+| --- | --- | --- |
+| Runtime | `runtime.get_context` | None |
+| Current Page and Action | `ui.close`, `actions.open` | None |
+| Plugin-private storage | `storage.get`, `storage.set`, `storage.delete`, `storage.list`, `storage.get_quota` | None |
+| Text clipboard | `clipboard.read`, `clipboard.write` | `clipboard.read`, `clipboard.write` respectively |
+
+`PluginRuntimeContext` is shared by Contract and SDK. It contains only
+`hostApiVersion`, locale, theme, and a sorted unique snapshot of currently
+callable method IDs. Empty capabilities are valid. `runtime.context_changed`
+carries a complete replacement Context, not a patch. Capabilities combine
+current Host support, implementation availability, and authorization; they are
+not persistent grants. Plugin identity, Page, source, Manifest requests, raw
+grants, paths, and executors are rejected as author-controlled Context or
+method fields.
+
+Host API errors have stable closed codes and a bounded safe English message.
+They remain distinguishable from SDK lifecycle errors such as `disconnected`,
+`disposed`, and `transport_failure`. Package, Manifest protocol, Host API
+protocol, SDK, and application versions evolve independently. Compatible new
+methods require a Host API minor version plus capability discovery; incompatible
+shape or removal requires a major version, and deprecation must precede removal.
+
+This delivery is an independently usable semantic contract, not an execution
+path. It registers no Tauri command and implements no iframe transport, private
+RPC envelope, request ID, Dispatcher, Action/close side effect, storage
+persistence, clipboard native call, permission decision, or RPC resource
+limit. `system.open_external` and an external-link permission are deliberately
+absent rather than published as placeholders.
 
 ## Shipped Host-Private Plugin Package Inspection
 
@@ -859,11 +899,11 @@ connection attempt. A cancelled, timed-out, or failed attempt returns to
 automatically reconnect. Disposal is idempotent, cancels pending SDK-managed
 operations, removes listeners, and disposes the transport at most once.
 
-Before entering `ready`, the SDK validates, copies, and freezes a
-`PluginRuntimeContext` containing a compatible `hostApiVersion`,
-`en-US | zh-CN` locale, `light | dark` theme, and a unique readonly capability
-ID snapshot. An empty capability list is valid and does not imply any Host API
-method. Plugin identity, Page identity, granted permissions, installation
+Before entering `ready`, the SDK uses the Contract validator to copy and freeze
+the shared `PluginRuntimeContext` containing a compatible `hostApiVersion`,
+`en-US | zh-CN` locale, `light | dark` theme, and a sorted unique readonly
+snapshot of declared Host API method IDs. An empty capability list is valid and
+does not imply any method. Plugin identity, Page identity, granted permissions, installation
 source, and Host lifecycle facts are not supported context inputs.
 
 SDK-managed operations use a 10,000 millisecond default timeout with positive
@@ -877,8 +917,9 @@ results.
 `timeout`, `disconnected`, `disposed`, `incompatible_host_api`,
 `invalid_runtime_context`, `invalid_argument`, and `transport_failure`.
 Transport exceptions are mapped to safe SDK errors without exposing the raw
-exception, private stack, Host object, or wire data. Permission, unknown-method,
-and Host parameter errors remain future Host API contract work.
+exception, private stack, Host object, or wire data. Host method, parameter,
+permission, domain, and internal error types come from Contract and remain
+discriminable from SDK lifecycle failures; the SDK still executes none of them.
 
 `PluginSdkTransport` is a semantic adapter injection boundary for connection,
 abstract requests, abstract events, disconnect notification, and disposal. It
@@ -902,7 +943,9 @@ The root entry provides:
 - `mutatePluginManifestFixture()` for ordered JSON Pointer `set` and `remove`
   operations that return a deep copy;
 - `createPluginRuntimeContextFixture()` for copied and frozen locale, theme,
-  Host API version, and capability snapshots;
+  Host API version, and known-method capability snapshots;
+- `createInvalidPluginRuntimeContextFixture()` for explicit unknown,
+  duplicate, unsorted, and trusted-field negative Context cases;
 - `PluginTestCancellationController` and `createDeferred()` for runner-neutral
   cancellation and pending-operation control;
 - `FakePluginSdkTransport` for semantic connect/request handlers, abstract
@@ -926,15 +969,15 @@ Runtime context failures, cancellation, timeout, transport failure,
 disconnect, retry, and late-result suppression remain real SDK behavior. The
 fake transport does not define an RPC envelope, request identity, nonce,
 origin, browser messaging object, or trusted Host identity. Its abstract
-request hook is not a delivered Host API method client. Capability IDs remain
-opaque context data and are not permission requests, grants, or decisions.
+request hook is not a delivered Host API method client. Capability IDs use the
+shared closed method type and are not permission requests, grants, or decisions.
 
 `pnpm run check:plugin-testkit` verifies package tests and declarations,
 Contract -> SDK -> Testkit dependency direction, real tarball contents, and a
 no-DOM ES2022 consumer installed outside the workspace. That consumer is a
 release smoke fixture, not the formal plugin project template. Testkit does not
 provide permission harnesses, iframe Runtime, plugin execution, or real Host API
-methods or errors; later Host API, permission, and Runtime changes may extend
+execution; later transport, permission, and Runtime changes may extend
 the package only after their contracts are accepted.
 
 ## Shipped Optional Plugin UI Package
@@ -1003,7 +1046,7 @@ and SDK.
 Package tests, a real-tarball Rsbuild consumer, module-graph and bundle checks,
 and a `650×600` browser visual matrix cover public boundaries, locale/theme,
 accessibility, keyboard recovery, focus, and long bilingual content. This
-delivery does not create an iframe, Runtime session, Host API, installer,
+delivery does not create an iframe, Runtime session, executable Host API, installer,
 registry, template, or plugin execution path.
 
 ## Host Action Registry
@@ -1064,7 +1107,7 @@ external contract does not depend on React implementation details.
 
 External plugin UI runs in the shipped isolated iframe. The shipped private
 Runtime Session authenticates one dedicated Port through a controlled Host
-bootstrap; plugins still have no public transport or Host API. External plugins
+bootstrap; plugins still have no public transport or executable Host API. External plugins
 must not directly access:
 
 - application React state or component instances;
@@ -1076,6 +1119,12 @@ must not directly access:
 External runtime resources must resolve inside the installed plugin boundary.
 
 ## Host API
+
+The shipped public semantic contract defines the ten method IDs, exact
+params/results, `runtime.context_changed`, `PluginRuntimeContext`, permissions,
+errors, and capability/version rules described above. Contract validation does
+not send or execute a request, and the public SDK client exposes no raw or
+concrete Host API method.
 
 The intended communication flow is:
 
@@ -1092,7 +1141,7 @@ The bridge must validate the actual message source and a restricted origin. A
 declared permission is not the same as a granted permission. Privileged methods
 must check current authorization before dispatch.
 
-Host API methods should be small, typed, versioned, and independently testable.
+Host API methods remain small, typed, versioned, and independently testable.
 Plugins must not handcraft private transport messages when an official SDK
 method exists.
 
@@ -1120,8 +1169,9 @@ The static Manifest format, validators, Host-private local installation and
 same-identity replacement, revision-bound enable/disable/uninstall
 infrastructure, scoped package-relative resources, Plugin surface projection,
 production Action activation, Page Registry/navigation, and the macOS isolated
-iframe Runtime and Host-private process-local Runtime Session are delivered. Each remaining capability—complete plugin-management
-UI, complete permissions, Host API methods, public packaging, remote/automatic updates,
+iframe Runtime, Host-private process-local Runtime Session, and public Host API
+semantic contract are delivered. Each remaining capability—complete plugin-management
+UI, complete permissions, Host API transport/dispatch/execution, public packaging, remote/automatic updates,
 user-initiated rollback history, or sidecars—requires
 its own accepted specification and implementation evidence. This architectural
 document defines direction and boundaries, not a release checklist.

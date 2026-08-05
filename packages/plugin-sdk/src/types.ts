@@ -1,14 +1,7 @@
+import type { PluginRuntimeContext, PluginRuntimeLocale, PluginRuntimeTheme } from '@lensx/plugin-contract';
+
 export type PluginSdkState = 'idle' | 'initializing' | 'ready' | 'disconnected' | 'disposed';
-
-export type PluginRuntimeLocale = 'en-US' | 'zh-CN';
-export type PluginRuntimeTheme = 'light' | 'dark';
-
-export interface PluginRuntimeContext {
-  readonly hostApiVersion: string;
-  readonly locale: PluginRuntimeLocale;
-  readonly theme: PluginRuntimeTheme;
-  readonly capabilities: readonly string[];
-}
+export type { PluginRuntimeContext, PluginRuntimeLocale, PluginRuntimeTheme };
 
 export interface PluginSdkCancellationSignal {
   readonly aborted: boolean;

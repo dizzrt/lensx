@@ -119,7 +119,13 @@ try {
   if (runtimeOutput !== 'com.acme.workspace:compatible') {
     throw new Error(`Unexpected external consumer output: ${runtimeOutput}`);
   }
-  for (const specifier of ['@lensx/plugin-contract/dist/src/validate.js', '@lensx/plugin-contract/registration']) {
+  for (const specifier of [
+    '@lensx/plugin-contract/dist/src/validate.js',
+    '@lensx/plugin-contract/dist/src/generated/plugin-host-api-input.js',
+    '@lensx/plugin-contract/tests/fixtures/host-api/valid/cases.json',
+    '@lensx/plugin-contract/rpc',
+    '@lensx/plugin-contract/registration',
+  ]) {
     const deepImport = spawnSync(
       'node',
       ['--input-type=module', '--eval', `await import(${JSON.stringify(specifier)})`],

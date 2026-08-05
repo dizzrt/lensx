@@ -1,0 +1,444 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json",
+  "title": "PluginHostApiInput",
+  "description": "Public semantic Host API 0.1.0 contract. This schema intentionally excludes private RPC transport and Host identity facts.",
+  "oneOf": [
+    { "$ref": "#/$defs/HostApiRequestInput" },
+    { "$ref": "#/$defs/HostApiResultInput" },
+    { "$ref": "#/$defs/HostApiEventInput" },
+    { "$ref": "#/$defs/HostApiErrorInput" },
+    { "$ref": "#/$defs/PluginRuntimeContextInput" },
+    { "$ref": "#/$defs/HostApiPermissionInput" },
+    { "$ref": "#/$defs/HostApiEventNameInput" }
+  ],
+  "$defs": {
+    "HostApiMethodInput": {
+      "type": "string",
+      "enum": [
+        "actions.open",
+        "clipboard.read",
+        "clipboard.write",
+        "runtime.get_context",
+        "storage.delete",
+        "storage.get",
+        "storage.get_quota",
+        "storage.list",
+        "storage.set",
+        "ui.close"
+      ]
+    },
+    "HostApiPermissionInput": {
+      "type": "string",
+      "enum": ["clipboard.read", "clipboard.write"]
+    },
+    "HostApiEventNameInput": {
+      "type": "string",
+      "enum": ["runtime.context_changed"]
+    },
+    "HostApiErrorCodeInput": {
+      "type": "string",
+      "enum": [
+        "cancelled",
+        "conflict",
+        "internal_error",
+        "invalid_params",
+        "invalid_request",
+        "limit_exceeded",
+        "method_not_found",
+        "not_found",
+        "permission_denied",
+        "timeout",
+        "unavailable"
+      ]
+    },
+    "Semver": {
+      "type": "string",
+      "maxLength": 255,
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "PluginRuntimeContextInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hostApiVersion", "locale", "theme", "capabilities"],
+      "properties": {
+        "hostApiVersion": { "$ref": "#/$defs/Semver" },
+        "locale": { "type": "string", "enum": ["en-US", "zh-CN"] },
+        "theme": { "type": "string", "enum": ["light", "dark"] },
+        "capabilities": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/HostApiMethodInput" }
+        }
+      }
+    },
+    "EmptyParams": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "LocalActionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "StorageKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[^\\u0000-\\u001F\\u007F]+$"
+    },
+    "OpaqueCursor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "BoundedText": {
+      "type": "string",
+      "maxLength": 1048576
+    },
+    "JsonValue": {
+      "anyOf": [
+        { "type": "null" },
+        { "type": "boolean" },
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "array", "items": { "$ref": "#/$defs/JsonValue" } },
+        {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/JsonValue" }
+        }
+      ]
+    },
+    "RuntimeGetContextRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "params"],
+      "properties": {
+        "method": { "const": "runtime.get_context" },
+        "params": { "$ref": "#/$defs/EmptyParams" }
+      }
+    },
+    "UiCloseRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "params"],
+      "properties": {
+        "method": { "const": "ui.close" },
+        "params": { "$ref": "#/$defs/EmptyParams" }
+      }
+    },
+    "ActionsOpenRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "params"],
+      "properties": {
+        "method": { "const": "actions.open" },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["actionId"],
+          "properties": { "actionId": { "$ref": "#/$defs/LocalActionId" } }
+        }
+      }
+    },
+    "StorageGetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "params"],
+      "properties": {
+        "method": { "const": "storage.get" },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key"],
+          "properties": { "key": { "$ref": "#/$defs/StorageKey" } }
+        }
+      }
+    },
+    "StorageSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "params"],
+      "properties": {
+        "method": { "const": "storage.set" },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key", "value"],
+          "properties": {
+            "key": { "$ref": "#/$defs/StorageKey" },
+            "value": { "$ref": "#/$defs/JsonValue" }
+          }
+        }
+      }
+    },
+    "StorageDeleteRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "params"],
+      "properties": {
+        "method": { "const": "storage.delete" },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key"],
+          "properties": { "key": { "$ref": "#/$defs/StorageKey" } }
+        }
+      }
+    },
+    "StorageListRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "params"],
+      "properties": {
+        "method": { "const": "storage.list" },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cursor": { "$ref": "#/$defs/OpaqueCursor" },
+            "limit": { "type": "integer", "minimum": 1, "maximum": 1000 }
+          }
+        }
+      }
+    },
+    "StorageGetQuotaRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "params"],
+      "properties": {
+        "method": { "const": "storage.get_quota" },
+        "params": { "$ref": "#/$defs/EmptyParams" }
+      }
+    },
+    "ClipboardReadRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "params"],
+      "properties": {
+        "method": { "const": "clipboard.read" },
+        "params": { "$ref": "#/$defs/EmptyParams" }
+      }
+    },
+    "ClipboardWriteRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "params"],
+      "properties": {
+        "method": { "const": "clipboard.write" },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text"],
+          "properties": { "text": { "$ref": "#/$defs/BoundedText" } }
+        }
+      }
+    },
+    "HostApiRequestInput": {
+      "oneOf": [
+        { "$ref": "#/$defs/ActionsOpenRequest" },
+        { "$ref": "#/$defs/ClipboardReadRequest" },
+        { "$ref": "#/$defs/ClipboardWriteRequest" },
+        { "$ref": "#/$defs/RuntimeGetContextRequest" },
+        { "$ref": "#/$defs/StorageDeleteRequest" },
+        { "$ref": "#/$defs/StorageGetRequest" },
+        { "$ref": "#/$defs/StorageGetQuotaRequest" },
+        { "$ref": "#/$defs/StorageListRequest" },
+        { "$ref": "#/$defs/StorageSetRequest" },
+        { "$ref": "#/$defs/UiCloseRequest" }
+      ]
+    },
+    "RuntimeGetContextResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "result"],
+      "properties": {
+        "method": { "const": "runtime.get_context" },
+        "result": { "$ref": "#/$defs/PluginRuntimeContextInput" }
+      }
+    },
+    "UiCloseResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "result"],
+      "properties": {
+        "method": { "const": "ui.close" },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["accepted"],
+          "properties": { "accepted": { "const": true } }
+        }
+      }
+    },
+    "ActionsOpenResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "result"],
+      "properties": {
+        "method": { "const": "actions.open" },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["opened"],
+          "properties": { "opened": { "const": true } }
+        }
+      }
+    },
+    "StorageGetResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "result"],
+      "properties": {
+        "method": { "const": "storage.get" },
+        "result": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["found"],
+              "properties": { "found": { "const": false } }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["found", "value"],
+              "properties": {
+                "found": { "const": true },
+                "value": { "$ref": "#/$defs/JsonValue" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "StorageSetResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "result"],
+      "properties": {
+        "method": { "const": "storage.set" },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["stored"],
+          "properties": { "stored": { "const": true } }
+        }
+      }
+    },
+    "StorageDeleteResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "result"],
+      "properties": {
+        "method": { "const": "storage.delete" },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["deleted"],
+          "properties": { "deleted": { "type": "boolean" } }
+        }
+      }
+    },
+    "StorageListResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "result"],
+      "properties": {
+        "method": { "const": "storage.list" },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["keys"],
+          "properties": {
+            "keys": {
+              "type": "array",
+              "maxItems": 1000,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/StorageKey" }
+            },
+            "nextCursor": { "$ref": "#/$defs/OpaqueCursor" }
+          }
+        }
+      }
+    },
+    "StorageGetQuotaResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "result"],
+      "properties": {
+        "method": { "const": "storage.get_quota" },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["usedBytes", "limitBytes"],
+          "properties": {
+            "usedBytes": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "limitBytes": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+          }
+        }
+      }
+    },
+    "ClipboardReadResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "result"],
+      "properties": {
+        "method": { "const": "clipboard.read" },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text"],
+          "properties": { "text": { "$ref": "#/$defs/BoundedText" } }
+        }
+      }
+    },
+    "ClipboardWriteResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "result"],
+      "properties": {
+        "method": { "const": "clipboard.write" },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["written"],
+          "properties": { "written": { "const": true } }
+        }
+      }
+    },
+    "HostApiResultInput": {
+      "oneOf": [
+        { "$ref": "#/$defs/ActionsOpenResult" },
+        { "$ref": "#/$defs/ClipboardReadResult" },
+        { "$ref": "#/$defs/ClipboardWriteResult" },
+        { "$ref": "#/$defs/RuntimeGetContextResult" },
+        { "$ref": "#/$defs/StorageDeleteResult" },
+        { "$ref": "#/$defs/StorageGetResult" },
+        { "$ref": "#/$defs/StorageGetQuotaResult" },
+        { "$ref": "#/$defs/StorageListResult" },
+        { "$ref": "#/$defs/StorageSetResult" },
+        { "$ref": "#/$defs/UiCloseResult" }
+      ]
+    },
+    "HostApiEventInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "payload"],
+      "properties": {
+        "event": { "const": "runtime.context_changed" },
+        "payload": { "$ref": "#/$defs/PluginRuntimeContextInput" }
+      }
+    },
+    "HostApiErrorInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "$ref": "#/$defs/HostApiErrorCodeInput" },
+        "message": { "type": "string", "minLength": 1, "maxLength": 512 }
+      }
+    }
+  }
+}

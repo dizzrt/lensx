@@ -6,6 +6,8 @@ use std::sync::Arc;
 pub(crate) mod frame_aware_navigation_policy;
 #[cfg(target_os = "macos")]
 pub(crate) mod frame_aware_navigation_setup;
+#[cfg(test)]
+mod plugin_host_api_contract;
 pub(crate) mod plugin_identity;
 pub mod plugin_installation_contract;
 pub mod plugin_installer;

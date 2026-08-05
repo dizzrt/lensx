@@ -33,16 +33,16 @@ describe('SemVer and Host API compatibility', () => {
 
 describe('Runtime context validation', () => {
   test('copies and freezes valid and empty capability snapshots', () => {
-    const sourceCapabilities = ['runtime.context'];
+    const sourceCapabilities = ['runtime.get_context'];
     const context = validateRuntimeContext({
       capabilities: sourceCapabilities,
       hostApiVersion: '0.1.8',
       locale: 'zh-CN',
       theme: 'dark',
     });
-    sourceCapabilities.push('later.change');
+    sourceCapabilities.push('storage.get');
 
-    expect(context.capabilities).toEqual(['runtime.context']);
+    expect(context.capabilities).toEqual(['runtime.get_context']);
     expect(Object.isFrozen(context)).toBe(true);
     expect(Object.isFrozen(context.capabilities)).toBe(true);
     expect(() => (context.capabilities as string[]).push('forbidden')).toThrow();
@@ -58,8 +58,9 @@ describe('Runtime context validation', () => {
     { capabilities: [], hostApiVersion: 'invalid', locale: 'en-US', theme: 'light' },
     { capabilities: [], hostApiVersion: '0.1.0', locale: 'fr-FR', theme: 'light' },
     { capabilities: [], hostApiVersion: '0.1.0', locale: 'en-US', theme: 'system' },
-    { capabilities: [''], hostApiVersion: '0.1.0', locale: 'en-US', theme: 'light' },
-    { capabilities: ['same', 'same'], hostApiVersion: '0.1.0', locale: 'en-US', theme: 'light' },
+    { capabilities: ['unknown.method'], hostApiVersion: '0.1.0', locale: 'en-US', theme: 'light' },
+    { capabilities: ['storage.get', 'storage.get'], hostApiVersion: '0.1.0', locale: 'en-US', theme: 'light' },
+    { capabilities: ['storage.get', 'actions.open'], hostApiVersion: '0.1.0', locale: 'en-US', theme: 'light' },
     {
       capabilities: [],
       hostApiVersion: '0.1.0',

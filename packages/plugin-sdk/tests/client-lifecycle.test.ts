@@ -12,9 +12,9 @@ describe('Plugin SDK client lifecycle', () => {
   test('keeps clients, state subscriptions, context, and disposal isolated', async () => {
     const firstTransport = new FakePluginSdkTransport();
     const secondTransport = new FakePluginSdkTransport();
-    firstTransport.connectImplementation = async () => validRuntimeContext(['first']);
+    firstTransport.connectImplementation = async () => validRuntimeContext(['actions.open']);
     secondTransport.connectImplementation = async () => ({
-      ...validRuntimeContext(['second']),
+      ...validRuntimeContext(['storage.get']),
       locale: 'zh-CN',
       theme: 'dark',
     });
@@ -23,8 +23,8 @@ describe('Plugin SDK client lifecycle', () => {
     const firstStates: string[] = [];
     first.subscribeState((state) => firstStates.push(state));
 
-    await expect(first.initialize()).resolves.toMatchObject({ capabilities: ['first'] });
-    await expect(second.initialize()).resolves.toMatchObject({ capabilities: ['second'], locale: 'zh-CN' });
+    await expect(first.initialize()).resolves.toMatchObject({ capabilities: ['actions.open'] });
+    await expect(second.initialize()).resolves.toMatchObject({ capabilities: ['storage.get'], locale: 'zh-CN' });
     expect(firstStates).toEqual(['initializing', 'ready']);
     expect(first.state).toBe('ready');
     expect(second.state).toBe('ready');
