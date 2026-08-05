@@ -35,10 +35,11 @@ if (Object.keys(metadata.dependencies ?? {}).join('\0') !== '@lensx/plugin-contr
   fail('a new SDK Runtime dependency was introduced');
 }
 const frame = readFileSync(join(root, 'src/app/plugins/runtime/PluginRuntimeFrame.tsx'), 'utf8');
-if (!frame.includes('unavailablePluginRuntimeTransportHandler'))
-  fail('production Runtime does not install unavailable');
+const app = readFileSync(join(root, 'src/App.tsx'), 'utf8');
+if (!frame.includes('hostApiDispatcherFactory.create')) fail('Runtime Frame does not install a Session binding');
+if (!app.includes('createPluginHostApiDispatcherFactory')) fail('App does not compose the production Dispatcher');
 for (const forbidden of ['invoke(', '@tauri-apps/api/core', 'storage.get', 'clipboard.read']) {
   if (frame.includes(forbidden)) fail(`production Runtime Frame gained a forbidden dispatch surface: ${forbidden}`);
 }
 
-console.log('Checked Plugin SDK transport constants, exports, dependencies, and production unavailable boundary.');
+console.log('Checked Plugin SDK transport constants, exports, dependencies, and production Dispatcher boundary.');

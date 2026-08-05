@@ -38,6 +38,12 @@ describe('bounded macOS Plugin Runtime Session evidence', () => {
       transport_cancel_observed: true,
       transport_pending_terminated: true,
       transport_cleanup_zero_handler_hits: true,
+      host_api_dispatcher_version: '0.1.0',
+      host_api_context: true,
+      host_api_actions_open: true,
+      host_api_ui_close_response_before_effect: true,
+      host_api_context_replacement: true,
+      host_api_unimplemented_unavailable: true,
       privileged_handler_hits: 0,
     });
     expect(Object.values(value.csp_checks as Record<string, unknown>)).not.toContain(false);

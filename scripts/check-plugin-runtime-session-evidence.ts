@@ -22,6 +22,11 @@ const sessionBooleanKeys = [
   'transport_cancel_observed',
   'transport_pending_terminated',
   'transport_cleanup_zero_handler_hits',
+  'host_api_context',
+  'host_api_actions_open',
+  'host_api_ui_close_response_before_effect',
+  'host_api_context_replacement',
+  'host_api_unimplemented_unavailable',
 ] as const;
 const forbiddenValue =
   /(?:lensx-plugin:\/\/|runtime\.localhost|\/Users\/|\/private\/|entry_[0-9a-f]|[0-9a-f]{32}|lensx\.plugin_runtime\.(?:bootstrap|ready))/u;
@@ -38,6 +43,7 @@ for (const fixture of fixtures) {
     value.evidence_version !== '0.1.0' ||
     value.session_contract_version !== '0.1.0' ||
     value.transport_contract_version !== '0.1.0' ||
+    value.host_api_dispatcher_version !== '0.1.0' ||
     value.os !== 'macos' ||
     value.engine !== 'wkwebview' ||
     value.fixture !== fixture ||

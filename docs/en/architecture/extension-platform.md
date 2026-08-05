@@ -11,7 +11,7 @@ process-local Runtime Session, public SDK iframe transport, Host-private Port
 adapter, and public Host API semantic contract from the
 intended runtime extension boundary. Public packaging CLI,
 distribution, complete plugin execution lifecycle, complete permission
-decisions, signing, Host API dispatch and execution, complete plugin-management UI, remote
+decisions, signing, storage and permission-backed Host API execution, complete plugin-management UI, remote
 updates, and user-initiated rollback history are not currently implemented.
 Stable specs and source code define the shipped subset.
 
@@ -955,15 +955,49 @@ The Host consumes each ready lease at most once. Its private adapter injects
 the immutable Session identity and a Host-owned cancellation signal into a
 narrow handler, validates every result/error/event, supports concurrent
 out-of-order settlement, and converges Session/Page replacement and disposal
-on idempotent cleanup. Production installs only the stable `unavailable`
-handler. Test fixtures can prove complete round-trips, but no production
-`runtime.get_context`, `ui.close`, Action, storage, clipboard, permission,
-application service, Rust command, or other side effect is implemented here.
+on idempotent cleanup. Production creates one Host-private Dispatcher binding
+for every current ready Session. That binding implements
+`runtime.get_context`, `ui.close`, and `actions.open`; storage and clipboard
+methods remain stable `unavailable` results and are omitted from Context
+capabilities. A private post-response outcome lets the adapter validate and
+post a successful `ui.close` result before running the target-matched close
+effect. It never crosses the wire or changes the public SDK transport.
 
 Run `pnpm run check:plugin-sdk-transport` for codec drift, SDK/Testkit,
 iframe/Host adapter, real tarball no-DOM and browser consumers, real
 MessageChannel integration, Runtime lifecycle, and bounded macOS WKWebView
 evidence. This delivery does not claim Windows/Linux Runtime transport support.
+
+## Shipped Host-Private Plugin Host API Dispatcher
+
+The production App composes a Session-scoped Dispatcher from current locale and
+theme state, the App Navigation Service, the Launcher Action Registry and
+Dispatcher, and Runtime currentness. The authenticated lease is the only source
+of plugin and Page identity. Requests cannot choose an owner, Page, provider,
+executor, route, Tauri command, grant, or other Host object.
+
+`runtime.get_context` returns Host API `0.1.0`, the current `en-US | zh-CN`
+locale, current `light | dark` theme, and the sorted frozen capability snapshot
+`actions.open`, `runtime.get_context`, and `ui.close`. Complete
+`runtime.context_changed` replacements are emitted only when the current
+locale, theme, or capability snapshot actually changes. Identity, Registration
+revision, Runtime attempt, source, Manifest requests, raw grants, paths, and
+Host lifecycle state remain private.
+
+`ui.close` accepts only `{}` and derives the target from the Session. The Host
+posts and terminals `{ accepted: true }` before invoking an exactly-once
+match-and-close effect, so a stale Session cannot close a replacement Page.
+`actions.open` accepts only a plugin-local Action ID, derives
+`<plugin_id>.<local_action_id>`, and performs a fresh lookup through the unified
+Launcher Dispatcher. Core, cross-plugin, missing, disabled, incompatible, or
+removed Actions fail closed without exposing the Registry or executor.
+
+Run `pnpm run check:plugin-host-api-dispatcher` for the focused Dispatcher,
+Navigation, Action, Runtime, MessageChannel, public-tarball, export, dependency,
+and workspace-boundary gate. This capability adds no public export, wire frame,
+SDK dependency, Rust command, storage persistence, clipboard execution,
+permission-management system, general RPC resource limits, project template,
+CLI, or development mode.
 
 ## Shipped Public Plugin Testkit
 
@@ -1144,7 +1178,8 @@ external contract does not depend on React implementation details.
 External plugin UI runs in the shipped isolated iframe. The shipped private
 Runtime Session authenticates one dedicated Port through a controlled Host
 bootstrap, and the public iframe SDK consumes it through the private closed
-wire. Production still has no executable Host API. External plugins
+wire. Production exposes only the three Host-private Dispatcher methods
+described above. External plugins
 must not directly access:
 
 - application React state or component instances;
@@ -1171,8 +1206,9 @@ iframe
   -> typed Plugin SDK over the authenticated Port
   -> private closed request/response/event/cancel wire
   -> Host Port adapter with Session-derived identity
-  -> production unavailable handler
-  -. future Dispatcher and permission decision .-> application service or Rust command
+  -> Session-scoped Host-private Dispatcher
+  -> Context / matching Page close / current plugin Action
+  -. future storage, permission, and native providers .-> narrow Rust command
 ```
 
 The bridge must validate the actual message source and a restricted origin. A
@@ -1208,9 +1244,10 @@ same-identity replacement, revision-bound enable/disable/uninstall
 infrastructure, scoped package-relative resources, Plugin surface projection,
 production Action activation, Page Registry/navigation, the macOS isolated
 iframe Runtime, Host-private process-local Runtime Session, public SDK iframe
-transport/Host Port adapter, and public Host API semantic contract are
+transport/Host Port adapter, public Host API semantic contract, and the
+Host-private three-method Dispatcher are
 delivered. Each remaining capability—complete plugin-management UI, complete
-permissions, Host API dispatch/execution, public packaging, remote/automatic updates,
+permissions, storage/clipboard providers, general RPC limits, public packaging, remote/automatic updates,
 user-initiated rollback history, or sidecars—requires
 its own accepted specification and implementation evidence. This architectural
 document defines direction and boundaries, not a release checklist.

@@ -4,6 +4,7 @@ import { describe, expect, rs, test } from '@rstest/core';
 import type { PluginRuntimeSessionMessageEvent, PluginRuntimeSessionMessagePort } from '../src/app/plugins/runtime';
 import {
   attachPluginRuntimeTransport,
+  createPluginRuntimeTransportPostResponseOutcome,
   type PluginRuntimeTransportHandler,
   type PluginRuntimeTransportHandlerResult,
   unavailablePluginRuntimeTransportHandler,
@@ -118,6 +119,62 @@ describe('Host-private Plugin Runtime transport adapter', () => {
     complete?.({ method: 'ui.close', result: { accepted: true } });
     await Promise.resolve();
     expect(port.postMessage).not.toHaveBeenCalled();
+  });
+
+  test('delivers and terminals a valid response before running one private post-response effect', async () => {
+    const order: string[] = [];
+    const port = new FakePort();
+    port.postMessage.mockImplementation(() => order.push('response'));
+    const effect = rs.fn(() => order.push('effect'));
+    const adapter = attachPluginRuntimeTransport({
+      handler: () =>
+        createPluginRuntimeTransportPostResponseOutcome({ method: 'ui.close', result: { accepted: true } }, effect),
+      isCurrent: () => true,
+      lease: { identity, port },
+    });
+
+    port.emit(request('request_0000000000000001'));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(order).toEqual(['response', 'effect']);
+    expect(effect).toHaveBeenCalledTimes(1);
+    port.emit({
+      contract_version: '0.1.0',
+      type: 'lensx.plugin_transport.cancel',
+      request_id: 'request_0000000000000001',
+    });
+    adapter.dispose();
+    adapter.dispose();
+    expect(effect).toHaveBeenCalledTimes(1);
+  });
+
+  test('suppresses a post-response effect when cancellation or currentness wins before settlement', async () => {
+    for (const makeStale of [false, true]) {
+      const port = new FakePort();
+      const effect = rs.fn();
+      let current = true;
+      let complete: ((value: PluginRuntimeTransportHandlerResult) => void) | undefined;
+      attachPluginRuntimeTransport({
+        handler: () => new Promise((resolve) => (complete = resolve)),
+        isCurrent: () => current,
+        lease: { identity, port },
+      });
+      port.emit(request('request_0000000000000001'));
+      if (makeStale) current = false;
+      else
+        port.emit({
+          contract_version: '0.1.0',
+          type: 'lensx.plugin_transport.cancel',
+          request_id: 'request_0000000000000001',
+        });
+      complete?.(
+        createPluginRuntimeTransportPostResponseOutcome({ method: 'ui.close', result: { accepted: true } }, effect),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(port.postMessage).not.toHaveBeenCalled();
+      expect(effect).not.toHaveBeenCalled();
+    }
   });
 
   test('emits only valid events and converges handler, codec, messageerror, and cleanup failures safely', async () => {

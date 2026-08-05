@@ -33,6 +33,8 @@
   grant snapshot 预检、统一页面导航、scoped Resource Service、per-generation isolated origin、
   frame-aware exact navigation lease、仅在 active Page 存在的 Host-owned iframe Runtime、Host 私有
   Runtime Session，以及 Runtime CSP/deadline/统一清理/进程内熔断；
+- 公共 SDK iframe transport、认证 Port 上的 Host adapter，以及 Host 私有的 session-scoped Host API
+  Dispatcher；当前真实 provider 为 `runtime.get_context`、`ui.close` 与 `actions.open`；
 - Host 内建的隐藏 Launcher 和打开设置 Action；
 - Host 设置页面中的插件空占位。
 
@@ -40,8 +42,7 @@
 
 - Plugin CLI package；
 - 远程下载、自动更新和用户主动 rollback history；
-- 公共 iframe SDK transport 与 Host API message protocol；
-- 真实 Host API、SDK transport、权限授权和插件私有存储；
+- 插件私有存储、clipboard 原生执行、完整权限授权与通用 RPC 资源限制；
 - 插件管理 UI、开发模式、签名、更新、Catalog 和 Marketplace。
 
 已归档的 `define-plugin-contract-v0` 只交付静态 Manifest 契约与校验，不代表插件已经可被
@@ -552,9 +553,10 @@ Runtime health rollback、数据迁移、权限 UI 或完整管理 UI。
 
 **完成标准**：示例插件只通过 SDK 完成握手和调用；transport 异常可预测、可测试。
 
-- [ ] **Task 5.3：实现 Host API Dispatcher**
+- [x] **Task 5.3：实现 Host API Dispatcher**
 
-**OpenSpec change**：`implement-plugin-host-api-v1`
+**OpenSpec change**：[implement-plugin-host-api-v1](openspec/changes/archive/2026-08-05-implement-plugin-host-api-v1/)
+（已完成并归档）
 
 **目标**：把 Host API Contract 路由到真实应用 service 或窄 Rust command。
 

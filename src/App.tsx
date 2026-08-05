@@ -56,10 +56,13 @@ import { SettingsPage } from './app/pages/SettingsPage';
 import { desktopLocalPluginInstallationClient, type LocalPluginInstallationClient } from './app/plugins/installation';
 import { desktopPluginResourceAdapter } from './app/plugins/resource';
 import {
+  createMutablePluginHostApiContextSource,
+  createPluginHostApiDispatcherFactory,
   createPluginPageRuntimeResolver,
   createPluginRuntimeLifecycleService,
   createPluginRuntimeSessionService,
   desktopPluginRuntimeNavigationAdapter,
+  type PluginHostApiDispatcherFactory,
   type PluginPageRuntimeResolver,
   PluginRuntimeFrame,
   type PluginRuntimeLifecycleService,
@@ -68,6 +71,7 @@ import {
 } from './app/plugins/runtime';
 import type { PluginSurfaceProjectionService } from './app/plugins/surfaces';
 import { type AppPreferencesClient, desktopAppPreferencesClient } from './app/preferences';
+import { useAppTheme } from './app/theme';
 
 export interface AppProps {
   activationSource?: LauncherActivationSource;
@@ -80,6 +84,7 @@ export interface AppProps {
   pluginRuntimeLifecycleService?: PluginRuntimeLifecycleService;
   pluginRuntimeResolver?: PluginPageRuntimeResolver;
   pluginRuntimeSessionService?: PluginRuntimeSessionService;
+  pluginHostApiDispatcherFactory?: PluginHostApiDispatcherFactory;
   renderPage?: (activePage: ActivePage) => ReactNode;
   surfaceProjectionService?: PluginSurfaceProjectionService;
   startupPreferencesErrorCode?: string;
@@ -113,6 +118,7 @@ const App = ({
   pluginRuntimeLifecycleService,
   pluginRuntimeResolver,
   pluginRuntimeSessionService,
+  pluginHostApiDispatcherFactory,
   renderPage,
   startupPreferencesErrorCode,
   surfaceController = inertLauncherSurfaceController,
@@ -121,6 +127,7 @@ const App = ({
 }: AppProps) => {
   const { t } = useTranslation();
   const { locale } = useAppLocale();
+  const { themeMode } = useAppTheme();
   const [activePage, setActivePage] = useState<ActivePage>();
   const [query, setQuery] = useState('');
   const [selectedActionId, setSelectedActionId] = useState<string>();
@@ -167,6 +174,24 @@ const App = ({
     () => pluginRuntimeLifecycleService ?? createPluginRuntimeLifecycleService(),
     [pluginRuntimeLifecycleService],
   );
+  const [pluginHostApiContextSource] = useState(() =>
+    createMutablePluginHostApiContextSource({ locale, theme: themeMode }),
+  );
+  const productionPluginHostApiDispatcherFactory = useMemo(
+    () =>
+      createPluginHostApiDispatcherFactory({
+        actions: actionService,
+        context: pluginHostApiContextSource,
+        navigation: navigationService,
+      }),
+    [actionService, navigationService, pluginHostApiContextSource],
+  );
+  const effectivePluginHostApiDispatcherFactory =
+    pluginHostApiDispatcherFactory ?? productionPluginHostApiDispatcherFactory;
+
+  useEffect(() => {
+    pluginHostApiContextSource.update({ locale, theme: themeMode });
+  }, [locale, pluginHostApiContextSource, themeMode]);
 
   useEffect(() => {
     const terminateForReload = () => {
@@ -607,6 +632,7 @@ const App = ({
                 ) : pageResolution?.provider.kind === 'plugin' && pageContext && effectivePluginRuntimeResolver ? (
                   <PluginRuntimeFrame
                     activePage={activePage}
+                    hostApiDispatcherFactory={effectivePluginHostApiDispatcherFactory}
                     lifecycleService={effectivePluginRuntimeLifecycleService}
                     navigationAdapter={pluginRuntimeNavigationAdapter}
                     pageResolution={pageResolution}

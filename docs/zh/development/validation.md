@@ -198,15 +198,36 @@ pnpm run check:plugin-sdk-transport
 
 该门禁检查 plugin/Host codec 的确定性 drift、strict `unknown` parsing、request/result 配对、安全 error、
 并发乱序 response、取消、timeout、event、disconnect/dispose、stale Page/Port 隔离与 production
-`unavailable`。它打包真实 Contract/SDK tarball，保留 no-DOM ES2022 root consumer，在隔离 browser
+Session-binding boundary。它打包真实 Contract/SDK tarball，保留 no-DOM ES2022 root consumer，在隔离 browser
 consumer 中构建并运行声明的 iframe entry，拒绝私有 deep import，并运行真实 MessageChannel
 SDK/Host-adapter fixture。
 
 有界 macOS WKWebView evidence 还覆盖 exact parent/origin/Port、single-use nonce、transport
 result/error/event round-trip、乱序 response、取消、replacement/close cleanup、pending termination 与
 privileged handler zero-hit。evidence 不含 URL、nonce、Port 内容、payload、token、identity、path、grant
-或 private error。该门禁只证明 transport 交付；production 仍不执行 Host API dispatch、permission
-decision、应用/native 副作用，也不交付 Windows/Linux Runtime transport。
+或 private error。该门禁证明公共 transport 与 Host adapter；独立 Dispatcher 门禁证明三个 production
+provider。它不证明 storage、clipboard permission/native execution、通用 RPC limit 或 Windows/Linux
+Runtime transport。
+
+## Plugin Host API Dispatcher 验证
+
+修改 Host 私有 provider table、Runtime Context source、私有 post-response outcome、匹配 Page 关闭、
+plugin-local Action dispatch、App 组合或 Dispatcher 文档时，必须运行：
+
+```bash
+pnpm run check:plugin-host-api-dispatcher
+```
+
+该门禁运行 Dispatcher、transport、MessageChannel、React Runtime、Navigation、Action projection 与
+workspace boundary 聚焦测试。它还打包真实公共 Contract/SDK tarball，并验证 Dispatcher binding、
+Session identity、private wire value、Host service 与 post-response effect 不进入公共 export 或 declaration。
+Context capability snapshot 必须只包含 `actions.open`、`runtime.get_context` 与 `ui.close`；`storage.*` 和
+`clipboard.*` 继续不可用。
+
+现有目标 macOS WKWebView transport evidence 仍用于验证认证 Port、取消、replacement 与 terminal cleanup。
+production-style MessageChannel fixture 增加 Dispatcher Context、Action 与 response-before-close 证据，但不把
+fixture application provider 描述成 storage、clipboard、permission 或通用 RPC 交付。该聚焦门禁只补充
+完整 frontend/Rust validation 集合，不能替代它们。
 
 ## Rust 验证
 

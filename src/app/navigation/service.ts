@@ -60,6 +60,16 @@ export class AppNavigationService {
     this.#handler?.(undefined);
   }
 
+  isActivePage(target: HostPageTarget): boolean {
+    return this.#activePage?.owner_id === target.owner_id && this.#activePage.page_id === target.page_id;
+  }
+
+  closePageIfMatches(target: HostPageTarget): boolean {
+    if (!this.isActivePage(target)) return false;
+    this.closePage();
+    return true;
+  }
+
   resolvePage(target: HostPageTarget): PageResolution | undefined {
     return this.#registry.lookup(target);
   }

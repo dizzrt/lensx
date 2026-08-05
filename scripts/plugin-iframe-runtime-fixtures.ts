@@ -130,14 +130,28 @@ const privateSessionConsumer = `
           const port = event.ports[0];
           const responses = new Set();
           let contextEvent = false;
+          let contextResult = false;
+          let actionResult = false;
+          let closeResult = false;
           let proofSent = false;
           port.onmessage = ({ data }) => {
             if (!exactKeys(data, ['contract_version', 'type', ...(data?.type === 'lensx.plugin_transport.event' ? ['event'] : data?.type === 'lensx.plugin_transport.disconnect' ? [] : data?.error ? ['request_id', 'error'] : ['request_id', 'result'])]) ||
                 data.contract_version !== '0.1.0') return;
             if (data.type === 'lensx.plugin_transport.event' &&
-                data.event?.event === 'runtime.context_changed') contextEvent = true;
-            if (data.type === 'lensx.plugin_transport.response') responses.add(data.request_id);
-            if (!proofSent && contextEvent &&
+                data.event?.event === 'runtime.context_changed' &&
+                data.event.payload?.locale === 'zh-CN' && data.event.payload?.theme === 'dark') contextEvent = true;
+            if (data.type === 'lensx.plugin_transport.response') {
+              responses.add(data.request_id);
+              if (data.request_id === 'request_0000000000000001' &&
+                  data.result?.method === 'runtime.get_context' &&
+                  JSON.stringify(data.result.result?.capabilities) ===
+                    JSON.stringify(['actions.open', 'runtime.get_context', 'ui.close'])) contextResult = true;
+              if (data.request_id === 'request_0000000000000002' &&
+                  data.result?.method === 'actions.open' && data.result.result?.opened === true) actionResult = true;
+              if (data.request_id === 'request_0000000000000003' &&
+                  data.result?.method === 'ui.close' && data.result.result?.accepted === true) closeResult = true;
+            }
+            if (!proofSent && contextEvent && contextResult && actionResult && closeResult &&
                 ['request_0000000000000001', 'request_0000000000000002', 'request_0000000000000003']
                   .every((id) => responses.has(id))) {
               proofSent = true;
@@ -156,7 +170,7 @@ const privateSessionConsumer = `
           }));
           for (const [request_id, request] of [
             ['request_0000000000000001', { method: 'runtime.get_context', params: {} }],
-            ['request_0000000000000002', { method: 'storage.get', params: { key: 'example' } }],
+            ['request_0000000000000002', { method: 'actions.open', params: { actionId: 'open' } }],
             ['request_0000000000000003', { method: 'ui.close', params: {} }],
             ['request_0000000000000004', { method: 'storage.get', params: { key: 'cancel' } }],
           ]) port.postMessage(Object.freeze({

@@ -26,7 +26,27 @@ export interface PluginRuntimeTransportHandlerInput {
   readonly signal: AbortSignal;
 }
 
-export type PluginRuntimeTransportHandlerResult = HostApiResult | HostApiError;
+const postResponseEffectBrand = Symbol('PluginRuntimeTransportPostResponseEffect');
+
+export interface PluginRuntimeTransportPostResponseOutcome {
+  readonly [postResponseEffectBrand]: true;
+  readonly response: HostApiResult | HostApiError;
+  readonly effect: () => void;
+}
+
+export const createPluginRuntimeTransportPostResponseOutcome = (
+  response: HostApiResult | HostApiError,
+  effect: () => void,
+): PluginRuntimeTransportPostResponseOutcome =>
+  Object.freeze({ [postResponseEffectBrand]: true as const, response, effect });
+
+const isPostResponseOutcome = (value: unknown): value is PluginRuntimeTransportPostResponseOutcome =>
+  typeof value === 'object' && value !== null && postResponseEffectBrand in value;
+
+export type PluginRuntimeTransportHandlerResult =
+  | HostApiResult
+  | HostApiError
+  | PluginRuntimeTransportPostResponseOutcome;
 export type PluginRuntimeTransportHandler = (
   input: PluginRuntimeTransportHandlerInput,
 ) => PluginRuntimeTransportHandlerResult | PromiseLike<PluginRuntimeTransportHandlerResult>;
@@ -105,9 +125,11 @@ export const attachPluginRuntimeTransport = ({
       const output = await handler(Object.freeze({ identity: lease.identity, request, signal: controller.signal }));
       if (state !== 'active' || !isCurrent() || controller.signal.aborted || pending.get(requestId) !== controller)
         return;
-      const error = validateHostApiError(output);
+      const response = isPostResponseOutcome(output) ? output.response : output;
+      const error = validateHostApiError(response);
+      let sent = false;
       if (error.status === 'valid') {
-        send(
+        sent = send(
           Object.freeze({
             contract_version: PLUGIN_TRANSPORT_CONTRACT_VERSION,
             type: PLUGIN_TRANSPORT_RESPONSE_TYPE,
@@ -116,9 +138,9 @@ export const attachPluginRuntimeTransport = ({
           }),
         );
       } else {
-        const result = validateHostApiResult(output);
+        const result = validateHostApiResult(response);
         if (result.status === 'invalid' || result.value.method !== request.method) return fail();
-        send(
+        sent = send(
           Object.freeze({
             contract_version: PLUGIN_TRANSPORT_CONTRACT_VERSION,
             type: PLUGIN_TRANSPORT_RESPONSE_TYPE,
@@ -127,8 +149,12 @@ export const attachPluginRuntimeTransport = ({
           }),
         );
       }
+      if (!sent) return;
       pending.delete(requestId);
       terminal.add(requestId);
+      if (isPostResponseOutcome(output) && state === 'active' && isCurrent() && !controller.signal.aborted) {
+        output.effect();
+      }
     } catch {
       fail();
     }

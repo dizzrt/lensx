@@ -7,7 +7,7 @@ foundation、Plugin Testkit、可选 Plugin UI package、Host 私有 Plugin surf
 Host 私有生命周期控制、本地 package replacement、Host 私有 scoped resource service、隔离 iframe
 Runtime、进程内 Runtime Session、公共 SDK iframe transport、Host 私有 Port adapter、公共 Host API
 语义契约与预期的运行时扩展边界。公共 packaging CLI、分发、完整插件执行 lifecycle、完整权限决策、
-签名、Host API dispatch/执行、完整插件管理 UI、远程更新和用户
+签名、storage 与 permission-backed Host API 执行、完整插件管理 UI、远程更新和用户
 主动 rollback history 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
 
 ## 目标
@@ -701,13 +701,37 @@ policy 或 deep-import path。
 
 Host 最多消费 ready lease 一次。私有 adapter 向窄 handler 注入不可变 Session identity 与 Host-owned
 cancellation signal，校验所有 result/error/event，支持并发乱序 settle，并让 Session/Page replacement
-与 dispose 收敛到幂等 cleanup。Production 只安装稳定 `unavailable` handler；fixture 虽可证明完整
-round-trip，但这里不实现 production `runtime.get_context`、`ui.close`、Action、storage、clipboard、
-permission、application service、Rust command 或其他副作用。
+与 dispose 收敛到幂等 cleanup。Production 会为每个 current ready Session 创建一个 Host 私有 Dispatcher
+binding。该 binding 实现 `runtime.get_context`、`ui.close` 与 `actions.open`；storage 与 clipboard method
+继续稳定返回 `unavailable`，并且不会进入 Context capabilities。私有 post-response outcome 让 adapter
+先校验并发送成功的 `ui.close` result，再执行匹配目标的关闭 effect。该 outcome 永不跨 wire，也不改变
+公共 SDK transport。
 
 运行 `pnpm run check:plugin-sdk-transport` 可验证 codec drift、SDK/Testkit、iframe/Host adapter、真实
 tarball no-DOM/browser consumer、真实 MessageChannel integration、Runtime lifecycle 与有界 macOS
 WKWebView evidence。本交付不声称 Windows/Linux Runtime transport 支持。
+
+## 已交付的 Host 私有 Plugin Host API Dispatcher
+
+Production App 使用当前 locale/theme 状态、App Navigation Service、Launcher Action Registry/Dispatcher
+与 Runtime currentness 组合出 Session-scoped Dispatcher。认证 lease 是 plugin/Page identity 的唯一来源；
+request 不能选择 owner、Page、provider、executor、route、Tauri command、grant 或其他 Host object。
+
+`runtime.get_context` 返回 Host API `0.1.0`、当前 `en-US | zh-CN` locale、当前 `light | dark` theme，
+以及排序并冻结的 `actions.open`、`runtime.get_context`、`ui.close` capability snapshot。只有当前 locale、
+theme 或 capability snapshot 实际变化时才发送完整 `runtime.context_changed` replacement。identity、
+Registration revision、Runtime attempt、source、Manifest request、raw grant、path 与 Host lifecycle state
+继续保持私有。
+
+`ui.close` 只接受 `{}` 并从 Session 推导目标。Host 先发送并终结 `{ accepted: true }`，再执行至多一次
+match-and-close effect，因此 stale Session 无法关闭 replacement Page。`actions.open` 只接受 plugin-local
+Action ID，由 Host 推导 `<plugin_id>.<local_action_id>`，并通过统一 Launcher Dispatcher 重新查询。
+core、跨插件、缺失、禁用、不兼容或已移除的 Action 都会失败关闭，不暴露 Registry 或 executor。
+
+运行 `pnpm run check:plugin-host-api-dispatcher` 可执行 Dispatcher、Navigation、Action、Runtime、
+MessageChannel、公共 tarball、export、dependency 与 workspace boundary 聚焦门禁。该能力不增加公共 export、
+wire frame、SDK dependency、Rust command、storage persistence、clipboard execution、permission management、
+通用 RPC resource limit、项目模板、CLI 或开发模式。
 
 ## 已交付的公共 Plugin Testkit
 
@@ -852,7 +876,8 @@ icon 解析、完整权限决策、生命周期写操作和外部 Runtime 执行
 ### 外部插件
 
 外部插件 UI 运行在已交付的隔离 iframe 中。已交付的私有 Runtime Session 会通过受控 Host bootstrap
-认证唯一专用 Port，公共 iframe SDK 会通过私有闭合 wire 消费它；production 仍没有可执行 Host API。
+认证唯一专用 Port，公共 iframe SDK 会通过私有闭合 wire 消费它；production 只开放上文三个 Host 私有
+Dispatcher method。
 外部插件不能直接访问：
 
 - 应用 React 状态或组件实例；
@@ -877,8 +902,9 @@ iframe
   -> 基于已认证 Port 的类型化 Plugin SDK
   -> 私有闭合 request/response/event/cancel wire
   -> 注入 Session-derived identity 的 Host Port adapter
-  -> production unavailable handler
-  -. 未来 Dispatcher 与 permission decision .-> 应用服务或 Rust command
+  -> Session-scoped Host 私有 Dispatcher
+  -> Context / 匹配当前 Page 的关闭 / 当前插件 Action
+  -. 后续 storage、permission 与 native provider .-> 窄 Rust command
 ```
 
 Bridge 必须校验真实消息来源和受限制的 origin。已声明权限不等于已授予权限。特权方法必须在
@@ -909,7 +935,7 @@ Host API 方法保持小型、类型化、版本化，并且可以独立测试�
 静态 Manifest 格式、校验器、Host 私有本地安装与同 identity replacement、绑定 revision 的
 enable/disable/uninstall 基础设施、scoped package-relative resources、Plugin surface 投影、生产
 Action 激活、Page Registry/navigation、macOS 隔离 iframe Runtime、Host 私有进程内 Runtime Session、
-公共 SDK iframe transport/Host Port adapter 与公共 Host API 语义契约已经交付。其余每项能力——
-完整插件管理 UI、完整权限、
-Host API dispatch/执行、公共打包、远程/自动更新、用户主动 rollback history 或 sidecar——
+公共 SDK iframe transport/Host Port adapter、公共 Host API 语义契约与 Host 私有三方法 Dispatcher 已经交付。
+其余每项能力——完整插件管理 UI、完整权限、storage/clipboard provider、通用 RPC limit、公共打包、
+远程/自动更新、用户主动 rollback history 或 sidecar——
 都需要独立的已接受规格和实现证据。本文定义架构方向和边界，不是发布检查清单。

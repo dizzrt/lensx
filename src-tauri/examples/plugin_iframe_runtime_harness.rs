@@ -212,6 +212,18 @@ struct RuntimeReport {
     transport_pending_terminated: Option<bool>,
     #[serde(default)]
     transport_cleanup_zero_handler_hits: Option<bool>,
+    #[serde(default)]
+    host_api_dispatcher_version: Option<String>,
+    #[serde(default)]
+    host_api_context: Option<bool>,
+    #[serde(default)]
+    host_api_actions_open: Option<bool>,
+    #[serde(default)]
+    host_api_ui_close_response_before_effect: Option<bool>,
+    #[serde(default)]
+    host_api_context_replacement: Option<bool>,
+    #[serde(default)]
+    host_api_unimplemented_unavailable: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -291,6 +303,18 @@ struct RuntimeEvidence {
     transport_pending_terminated: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     transport_cleanup_zero_handler_hits: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    host_api_dispatcher_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    host_api_context: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    host_api_actions_open: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    host_api_ui_close_response_before_effect: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    host_api_context_replacement: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    host_api_unimplemented_unavailable: Option<bool>,
 }
 
 struct HarnessState {
@@ -407,10 +431,16 @@ fn plugin_iframe_runtime_harness_record(
                 report.transport_cancel_observed,
                 report.transport_pending_terminated,
                 report.transport_cleanup_zero_handler_hits,
+                report.host_api_context,
+                report.host_api_actions_open,
+                report.host_api_ui_close_response_before_effect,
+                report.host_api_context_replacement,
+                report.host_api_unimplemented_unavailable,
             ]
             .into_iter()
             .any(|value| value != Some(true))
-            || report.transport_contract_version.as_deref() != Some("0.1.0"))
+            || report.transport_contract_version.as_deref() != Some("0.1.0")
+            || report.host_api_dispatcher_version.as_deref() != Some("0.1.0"))
     {
         return Err("runtime_harness_report_rejected");
     }
@@ -506,6 +536,12 @@ fn plugin_iframe_runtime_harness_record(
         transport_cancel_observed: report.transport_cancel_observed,
         transport_pending_terminated: report.transport_pending_terminated,
         transport_cleanup_zero_handler_hits: report.transport_cleanup_zero_handler_hits,
+        host_api_dispatcher_version: report.host_api_dispatcher_version,
+        host_api_context: report.host_api_context,
+        host_api_actions_open: report.host_api_actions_open,
+        host_api_ui_close_response_before_effect: report.host_api_ui_close_response_before_effect,
+        host_api_context_replacement: report.host_api_context_replacement,
+        host_api_unimplemented_unavailable: report.host_api_unimplemented_unavailable,
     };
     let mut bytes =
         serde_json::to_vec_pretty(&evidence).map_err(|_| "runtime_harness_write_failed")?;
@@ -775,6 +811,10 @@ fn host_document(
           const requests = new Set();
           let cancelObserved = false;
           let eventSent = false;
+          let contextProvided = false;
+          let actionOpened = false;
+          let closeResponseBeforeEffect = false;
+          let unavailableReturned = false;
           const response = (requestId, result) => channel.port1.postMessage(Object.freeze({{
             contract_version: '0.1.0', type: 'lensx.plugin_transport.response',
             request_id: requestId, result: Object.freeze(result),
@@ -801,31 +841,38 @@ fn host_document(
                 typeof data.request_id !== 'string') {{ oldPortEvents += 1; return; }}
             requests.add(data.request_id);
             if (data.request_id === 'request_0000000000000002') {{
-              response(data.request_id, {{ method: 'storage.get', result: {{ found: true, value: 'example' }} }});
+              response(data.request_id, {{ method: 'actions.open', result: {{ opened: true }} }});
+              actionOpened = true;
               if (requests.has('request_0000000000000001')) response(
                 'request_0000000000000001',
                 {{ method: 'runtime.get_context', result: {{
-                  capabilities: ['storage.get', 'ui.close'], hostApiVersion: '0.1.0',
+                  capabilities: ['actions.open', 'runtime.get_context', 'ui.close'], hostApiVersion: '0.1.0',
                   locale: 'en-US', theme: 'light',
                 }} }},
               );
+              contextProvided = requests.has('request_0000000000000001');
             }}
-            if (data.request_id === 'request_0000000000000003') channel.port1.postMessage(Object.freeze({{
-              contract_version: '0.1.0', type: 'lensx.plugin_transport.response',
-              request_id: data.request_id,
-              error: Object.freeze({{ code: 'unavailable', message: 'The Host API is unavailable.' }}),
-            }}));
+            if (data.request_id === 'request_0000000000000003') {{
+              response(data.request_id, {{ method: 'ui.close', result: {{ accepted: true }} }});
+              closeResponseBeforeEffect = true;
+            }}
             if (!eventSent && requests.has('request_0000000000000003')) {{
               eventSent = true;
               channel.port1.postMessage(Object.freeze({{
                 contract_version: '0.1.0', type: 'lensx.plugin_transport.event',
                 event: Object.freeze({{ event: 'runtime.context_changed', payload: Object.freeze({{
-                  capabilities: [], hostApiVersion: '0.1.0', locale: 'zh-CN', theme: 'dark',
+                  capabilities: ['actions.open', 'runtime.get_context', 'ui.close'],
+                  hostApiVersion: '0.1.0', locale: 'zh-CN', theme: 'dark',
                 }}) }}),
               }}));
             }}
             if (data.request_id === 'request_0000000000000005') {{
-              response(data.request_id, {{ method: 'storage.get', result: {{ found: false }} }});
+              channel.port1.postMessage(Object.freeze({{
+                contract_version: '0.1.0', type: 'lensx.plugin_transport.response',
+                request_id: data.request_id,
+                error: Object.freeze({{ code: 'unavailable', message: 'The Host API is unavailable.' }}),
+              }}));
+              unavailableReturned = true;
               resolve({{
                 port: channel.port1,
                 exactWindow: frame.contentWindow === expectedWindow,
@@ -834,6 +881,11 @@ fn host_document(
                   resultErrorEvent: eventSent,
                   outOfOrder: requests.has('request_0000000000000001') && requests.has('request_0000000000000002'),
                   cancelObserved,
+                  contextProvided,
+                  actionOpened,
+                  closeResponseBeforeEffect,
+                  contextReplacement: eventSent,
+                  unavailableReturned,
                 }},
               }});
             }}
@@ -926,6 +978,15 @@ fn host_document(
               transport_cancel_observed: prior.firstTransport.cancelObserved && second.transport.cancelObserved,
               transport_pending_terminated: true,
               transport_cleanup_zero_handler_hits: true,
+              host_api_dispatcher_version: '0.1.0',
+              host_api_context: prior.firstTransport.contextProvided && second.transport.contextProvided,
+              host_api_actions_open: prior.firstTransport.actionOpened && second.transport.actionOpened,
+              host_api_ui_close_response_before_effect:
+                prior.firstTransport.closeResponseBeforeEffect && second.transport.closeResponseBeforeEffect,
+              host_api_context_replacement:
+                prior.firstTransport.contextReplacement && second.transport.contextReplacement,
+              host_api_unimplemented_unavailable:
+                prior.firstTransport.unavailableReturned && second.transport.unavailableReturned,
             }});
           }}
         }});

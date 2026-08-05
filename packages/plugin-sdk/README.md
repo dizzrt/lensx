@@ -32,7 +32,8 @@ accept identity, origin, nonce, Port, wire codec, or Host executor
 configuration. The private request IDs and frames are not public API or
 supported deep imports.
 
-The production Host currently returns the Contract-valid `unavailable` error
-for every request. This package does not provide Host API dispatch, permission
-decisions, real application side effects, plugin execution policy, or a public
-Testkit fake.
+The production Host-private Dispatcher currently advertises and implements
+`runtime.get_context`, `ui.close`, and `actions.open`. Storage and clipboard
+methods are not advertised and remain unavailable until their dedicated Host
+providers ship. This package still does not expose the Dispatcher, permission
+decisions, Host services, plugin execution policy, or a public Testkit fake.

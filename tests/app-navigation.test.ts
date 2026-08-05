@@ -119,6 +119,23 @@ describe('App navigation service', () => {
     });
   });
 
+  test('closes only the currently matching trusted Page target', () => {
+    const registry = new HostPageCatalog([{ ...settingsTarget, enabled: true }]);
+    registry.replaceProviderBatch('com.acme.notes', pluginBatch());
+    const service = new AppNavigationService(registry);
+    const handler = rs.fn();
+    service.registerHandler(handler);
+    const pluginTarget = { owner_id: 'com.acme.notes', page_id: 'home' };
+
+    service.openPage(pluginTarget, 'com.acme.notes.open');
+    expect(service.isActivePage(pluginTarget)).toBe(true);
+    expect(service.closePageIfMatches(settingsTarget)).toBe(false);
+    expect(service.isActivePage(pluginTarget)).toBe(true);
+    expect(service.closePageIfMatches(pluginTarget)).toBe(true);
+    expect(service.closePageIfMatches(pluginTarget)).toBe(false);
+    expect(handler).toHaveBeenLastCalledWith(undefined);
+  });
+
   test('protects the single-handler lifecycle and allows registration after cleanup', () => {
     const service = new AppNavigationService(new HostPageCatalog([]));
     const unregister = service.registerHandler(() => undefined);

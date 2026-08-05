@@ -9,10 +9,12 @@ It contains the publishable `@lensx/plugin-contract`, `@lensx/plugin-sdk`,
 `@lensx/plugin-testkit`, and optional `@lensx/plugin-ui` packages, but repository
 validation does not perform a registry publish. The workspace does not yet
 provide a plugin CLI. The Host can install/register and open a supported local
-plugin, and the SDK now supplies the authenticated iframe transport, but the
-production handler remains `unavailable` and executes no Host API side effect.
-The Contract package does ship
-the Host API semantic catalog and validators independently of execution.
+plugin, the SDK supplies the authenticated iframe transport, and the production
+Host-private Dispatcher implements `runtime.get_context`, `ui.close`, and
+`actions.open`. The remaining storage and clipboard methods are omitted from
+current capabilities and return stable `unavailable` errors. The Contract
+package ships the complete ten-method semantic catalog and validators
+independently of provider availability.
 
 The shipped static Manifest contract remains validation-only. A package being
 inside this workspace does not grant it Host trust, Tauri access, permissions,
@@ -174,7 +176,11 @@ that an undeclared SDK deep import is rejected. The browser consumer typechecks,
 bundles, loads the iframe entry in a real browser, and rejects private transport
 deep imports. Tests, fixtures, scripts, schemas, Host projections, and
 Host-private source are excluded from the tarball. Run
-`pnpm run check:plugin-sdk-transport` for the complete cross-boundary gate.
+`pnpm run check:plugin-sdk-transport` for the complete cross-boundary gate. Run
+`pnpm run check:plugin-host-api-dispatcher` for the production three-method
+Dispatcher, response-before-close, Action/Navigation, Context replacement,
+MessageChannel, public tarball, and workspace-boundary gate. The Dispatcher is
+private Host source; it adds no Contract or SDK export or dependency.
 
 ## Plugin Testkit Package
 

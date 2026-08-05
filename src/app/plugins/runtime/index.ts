@@ -1,4 +1,5 @@
 export * from './helpers';
+export * from './host-api-dispatcher';
 export * from './lifecycle-controller';
 export * from './navigation';
 export * from './PluginRuntimeFrame';

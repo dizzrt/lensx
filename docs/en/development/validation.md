@@ -241,7 +241,7 @@ pnpm run check:plugin-sdk-transport
 The gate checks deterministic plugin/Host codec drift, strict unknown parsing,
 request/result pairing, safe errors, concurrent out-of-order responses,
 cancellation, timeout, events, disconnect/disposal, stale Page and Port
-isolation, and production `unavailable`. It packs real Contract and SDK
+isolation, and the production Session-binding boundary. It packs real Contract and SDK
 tarballs, retains the no-DOM ES2022 root consumer, builds and runs the declared
 iframe entry in an isolated browser consumer, rejects private deep imports,
 and runs a real MessageChannel SDK/Host-adapter fixture.
@@ -250,10 +250,37 @@ Bounded macOS WKWebView evidence additionally covers exact parent/origin/Port,
 single-use nonce, transport result/error/event round-trip, out-of-order
 responses, cancellation, replacement/close cleanup, pending termination, and
 zero privileged handler hits. Evidence contains no URL, nonce, Port content,
-payload, token, identity, path, grant, or private error. The gate proves
-transport delivery only: production still performs no Host API dispatch,
-permission decision, application/native side effect, or Windows/Linux Runtime
+payload, token, identity, path, grant, or private error. The gate proves the
+public transport and its Host adapter; the separate Dispatcher gate proves the
+three production providers. It does not prove storage, clipboard
+permission/native execution, general RPC limits, or Windows/Linux Runtime
 transport.
+
+## Plugin Host API Dispatcher Validation
+
+Changes to the Host-private provider table, Runtime Context source, private
+post-response outcome, matching Page close, plugin-local Action dispatch, App
+composition, or Dispatcher documentation must run:
+
+```bash
+pnpm run check:plugin-host-api-dispatcher
+```
+
+The gate runs focused Dispatcher, transport, MessageChannel, React Runtime,
+Navigation, Action projection, and workspace-boundary tests. It also packs the
+real public Contract and SDK tarballs and verifies that Dispatcher bindings,
+Session identity, private wire values, Host services, and post-response effects
+remain absent from public exports and declarations. The Context capability
+snapshot must contain only `actions.open`, `runtime.get_context`, and
+`ui.close`; `storage.*` and `clipboard.*` remain unavailable.
+
+The existing target macOS WKWebView transport evidence remains required for
+the authenticated Port, cancellation, replacement, and terminal cleanup. The
+production-style MessageChannel fixture adds Dispatcher Context, Action, and
+response-before-close evidence without treating its fake application providers
+as storage, clipboard, permission, or general RPC delivery. This focused gate
+supplements rather than replaces the complete frontend and Rust validation
+sets.
 
 ## Rust Validation
 

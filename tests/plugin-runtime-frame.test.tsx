@@ -8,11 +8,14 @@ import {
   PLUGIN_RUNTIME_LOAD_DEADLINE_MS,
   PLUGIN_RUNTIME_PERMISSIONS_POLICY,
   PLUGIN_RUNTIME_REFERRER_POLICY,
+  type PluginHostApiDispatcherFactory,
   type PluginPageRuntimeDescriptor,
   PluginRuntimeFrame,
   type PluginRuntimeLifecycleService,
   type PluginRuntimeScheduler,
+  type PluginRuntimeSessionMessagePort,
   type PluginRuntimeSessionService,
+  type PluginRuntimeSessionSnapshot,
   reducePluginRuntimeFrameState,
 } from '../src/app/plugins/runtime';
 
@@ -69,6 +72,7 @@ const renderFrame = (options?: {
   readonly locale?: 'en-US' | 'zh-CN';
   readonly sessionService?: PluginRuntimeSessionService;
   readonly lifecycleService?: PluginRuntimeLifecycleService;
+  readonly hostApiDispatcherFactory?: PluginHostApiDispatcherFactory;
 }) => {
   const resolver = options?.resolver ?? { resolve: rs.fn(async () => descriptor) };
   const navigationAdapter = options?.navigationAdapter ?? {
@@ -97,6 +101,7 @@ const renderFrame = (options?: {
     <AppProviders initialLocale={options?.locale}>
       <PluginRuntimeFrame
         activePage={activePage}
+        hostApiDispatcherFactory={options?.hostApiDispatcherFactory}
         navigationAdapter={navigationAdapter}
         lifecycleService={options?.lifecycleService}
         pageResolution={pageResolution}
@@ -187,6 +192,68 @@ describe('PluginRuntimeFrame', () => {
 
     view.unmount();
     await waitFor(() => expect(navigationAdapter.dispose).toHaveBeenCalledWith({ lease_id: '0000000000000001' }));
+  });
+
+  test('binds one injected Host API Dispatcher to the ready lease and disposes it with the Runtime', async () => {
+    const port: PluginRuntimeSessionMessagePort = {
+      onmessage: null,
+      onmessageerror: null,
+      close: rs.fn(),
+      postMessage: rs.fn(),
+      start: rs.fn(),
+    };
+    const detachEmitter = rs.fn();
+    const disposeBinding = rs.fn();
+    const binding = {
+      handler: rs.fn(() => ({ code: 'unavailable' as const, message: 'The Host API is unavailable.' })),
+      attachEmitter: rs.fn(() => detachEmitter),
+      dispose: disposeBinding,
+    };
+    const hostApiDispatcherFactory = { create: rs.fn(() => binding) };
+    const sessionService: PluginRuntimeSessionService = {
+      start: rs.fn((input) => {
+        const leaseCleanup = input.consumeReadyLease?.({ identity: input.identity, port });
+        let disposed = false;
+        return {
+          snapshot: () => ({
+            state: 'ready' as const,
+            identity: input.identity,
+            lease: { identity: input.identity, port },
+          }),
+          subscribe: (listener: (snapshot: PluginRuntimeSessionSnapshot) => void) => {
+            listener({ state: 'ready', identity: input.identity, lease: { identity: input.identity, port } });
+            return () => undefined;
+          },
+          disconnect: () => undefined,
+          dispose: () => {
+            if (disposed) return;
+            disposed = true;
+            leaseCleanup?.();
+          },
+        };
+      }),
+      current: () => undefined,
+      disconnect: () => undefined,
+      dispose: () => undefined,
+    };
+    const view = renderFrame({ hostApiDispatcherFactory, sessionService });
+    const iframe = (await waitFor(() => expect(document.querySelector('iframe')).not.toBeNull()).then(() =>
+      document.querySelector('iframe'),
+    )) as HTMLIFrameElement;
+    fireEvent.load(iframe);
+
+    expect(hostApiDispatcherFactory.create).toHaveBeenCalledTimes(1);
+    expect(hostApiDispatcherFactory.create).toHaveBeenCalledWith({
+      identity: expect.objectContaining({ plugin_id: descriptor.plugin_id, page_id: descriptor.page_id }),
+      isCurrent: expect.any(Function),
+    });
+    expect(binding.attachEmitter).toHaveBeenCalledTimes(1);
+    expect(port.start).toHaveBeenCalledTimes(1);
+
+    view.unmount();
+    await waitFor(() => expect(disposeBinding).toHaveBeenCalledTimes(1));
+    expect(detachEmitter).toHaveBeenCalledTimes(1);
+    expect(port.close).toHaveBeenCalledTimes(1);
   });
 
   test('renders a localized safe failure and explicit retry starts a fresh attempt', async () => {

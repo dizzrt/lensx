@@ -8,6 +8,7 @@ import {
   pluginRuntimeIframeSrc,
   pluginRuntimeOriginFromEntryUrl,
 } from './helpers';
+import { type PluginHostApiDispatcherFactory, unavailablePluginHostApiDispatcherFactory } from './host-api-dispatcher';
 import {
   createPluginRuntimeLifecycleService,
   type PluginRuntimeAttempt,
@@ -24,7 +25,7 @@ import {
   type PluginRuntimeSession,
   type PluginRuntimeSessionService,
 } from './session-service';
-import { attachPluginRuntimeTransport, unavailablePluginRuntimeTransportHandler } from './transport-adapter';
+import { attachPluginRuntimeTransport } from './transport-adapter';
 import type { PluginPageRuntimeDescriptor, PluginPageRuntimeResolver, PluginRuntimeNavigationAdapter } from './types';
 
 export type PluginRuntimeFrameState =
@@ -69,6 +70,7 @@ export interface PluginRuntimeFrameProps {
   readonly resolver: PluginPageRuntimeResolver;
   readonly lifecycleService?: PluginRuntimeLifecycleService;
   readonly sessionService?: PluginRuntimeSessionService;
+  readonly hostApiDispatcherFactory?: PluginHostApiDispatcherFactory;
 }
 
 interface ActiveRuntimeBinding {
@@ -85,6 +87,7 @@ export const PluginRuntimeFrame = ({
   resolver,
   lifecycleService,
   sessionService,
+  hostApiDispatcherFactory = unavailablePluginHostApiDispatcherFactory,
 }: PluginRuntimeFrameProps) => {
   const { t } = useTranslation();
   const [attempt, setAttempt] = useState(0);
@@ -229,13 +232,22 @@ export const PluginRuntimeFrame = ({
         targetOrigin: descriptor.expected_origin,
         owningAttempt: binding.attempt,
         consumeReadyLease: (lease) => {
+          const hostApiBinding = hostApiDispatcherFactory.create({
+            identity: lease.identity,
+            isCurrent: () => binding.attempt.isCurrent() && activeBindingRef.current === binding,
+          });
           const adapter = attachPluginRuntimeTransport({
             lease,
-            handler: unavailablePluginRuntimeTransportHandler,
+            handler: hostApiBinding.handler,
             isCurrent: () => binding.attempt.isCurrent() && activeBindingRef.current === binding,
             onDisconnect: () => session?.disconnect(),
           });
-          return adapter.dispose;
+          const detachEmitter = hostApiBinding.attachEmitter(adapter.emit);
+          return () => {
+            detachEmitter();
+            hostApiBinding.dispose();
+            adapter.dispose();
+          };
         },
       });
       binding.session = session;

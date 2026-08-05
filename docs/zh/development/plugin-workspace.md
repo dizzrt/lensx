@@ -6,9 +6,10 @@
 package。workspace 为公共 package 和插件建立开发拓扑、lifecycle 聚合及依赖检查，并包含
 可发布的 `@lensx/plugin-contract`、`@lensx/plugin-sdk`、`@lensx/plugin-testkit` 与可选
 `@lensx/plugin-ui` package，但仓库验证不会执行 registry 发布操作。workspace 尚未提供插件 CLI。
-Host 已能安装/注册并打开受支持的本地插件，SDK 现在也提供认证 iframe transport；但 production
-handler 仍为 `unavailable`，不会执行任何 Host API 副作用。Contract package 会独立交付 Host API
-语义 catalog 与 validator。
+Host 已能安装/注册并打开受支持的本地插件，SDK 也提供认证 iframe transport；production Host 私有
+Dispatcher 已实现 `runtime.get_context`、`ui.close` 与 `actions.open`。其余 storage 与 clipboard method
+不会进入当前 capabilities，并稳定返回 `unavailable`。Contract package 独立交付完整十方法 Host API
+语义 catalog 与 validator，不代表所有 provider 都可用。
 
 已经交付的静态 Manifest 契约仍然只负责验证。package 位于本 workspace 内，并不代表它
 获得 Host 信任、Tauri 访问权、权限或 Runtime 能力。
@@ -151,7 +152,10 @@ pack gate 会构建真实 Contract 与 SDK tarball，校验 SDK 文件清单、r
 `lib: ["ES2022"]` 且不包含 DOM 类型完成 typecheck，运行 ESM lifecycle smoke，并证明未声明的
 SDK deep import 会被拒绝。browser consumer 会 typecheck、bundle、在真实 browser 中加载 iframe
 entry，并拒绝私有 transport deep import。tarball 排除 tests、fixtures、scripts、schema、Host
-projection 与 Host 私有源码。完整跨边界门禁使用 `pnpm run check:plugin-sdk-transport`。
+projection 与 Host 私有源码。完整跨边界门禁使用 `pnpm run check:plugin-sdk-transport`。运行
+`pnpm run check:plugin-host-api-dispatcher` 可验证 production 三方法 Dispatcher、response-before-close、
+Action/Navigation、Context replacement、MessageChannel、公共 tarball 与 workspace boundary。Dispatcher
+保持为 Host 私有源码，不增加 Contract/SDK export 或 dependency。
 
 ## Plugin Testkit Package
 

@@ -1,9 +1,13 @@
-import { describe, expect, test } from '@rstest/core';
+import { describe, expect, rs, test } from '@rstest/core';
 
 import { createPluginSdk } from '../packages/plugin-sdk/src';
 import { createPluginIframeTransport } from '../packages/plugin-sdk/src/iframe';
+import { LauncherActionDispatcher, LauncherActionRegistry } from '../src/app/launcher/actions';
+import { AppNavigationService, PageRegistry } from '../src/app/navigation';
 import {
   attachPluginRuntimeTransport,
+  createMutablePluginHostApiContextSource,
+  createPluginHostApiDispatcherFactory,
   createPluginRuntimeSessionService,
   type PluginRuntimeHostPortLease,
   type PluginRuntimeSession,
@@ -152,6 +156,117 @@ describe('real MessageChannel Plugin SDK transport integration', () => {
       expect(child.listeners.size).toBe(0);
     } finally {
       sessionService.dispose();
+      restore();
+    }
+  });
+
+  test('runs the public SDK through a production-style Dispatcher for Context, Action, close, and cleanup', async () => {
+    const child = new ChildWindow();
+    const restore = installWindow(child);
+    const pageRegistry = new PageRegistry([]);
+    pageRegistry.replaceProviderBatch(identity.plugin_id, {
+      provider: { kind: 'plugin', owner_id: identity.plugin_id, display_name: { 'en-US': 'Workspace' } },
+      pages: [
+        {
+          owner_id: identity.plugin_id,
+          page_id: identity.page_id,
+          available: true,
+          required_permission_ids: [],
+          route: '/home',
+          title: { 'en-US': 'Home' },
+        },
+      ],
+    });
+    const navigation = new AppNavigationService(pageRegistry);
+    const navigationHandler = rs.fn();
+    navigation.registerHandler(navigationHandler);
+    navigation.openPage(
+      { owner_id: identity.plugin_id, page_id: identity.page_id },
+      `${identity.plugin_id}.open_project`,
+    );
+    const actionRegistry = new LauncherActionRegistry();
+    const actionExecutor = rs.fn(() => {
+      navigation.openPage(
+        { owner_id: identity.plugin_id, page_id: identity.page_id },
+        `${identity.plugin_id}.open_project`,
+      );
+    });
+    const registration = actionRegistry.register({
+      descriptor: {
+        action_id: `${identity.plugin_id}.open_project`,
+        owner_id: identity.plugin_id,
+        title: { 'en-US': 'Open project' },
+        default_keywords: {},
+        enabled: true,
+      },
+      executor: actionExecutor,
+    });
+    if (!registration.ok) throw new Error('Production-style Action fixture registration failed.');
+    const context = createMutablePluginHostApiContextSource({ locale: 'en-US', theme: 'light' });
+    const factory = createPluginHostApiDispatcherFactory({
+      actions: { registry: actionRegistry, dispatcher: new LauncherActionDispatcher(actionRegistry) },
+      context,
+      navigation,
+    });
+    const sessionService = createPluginRuntimeSessionService();
+    let adapter: PluginRuntimeTransportAdapter | undefined;
+    let session: PluginRuntimeSession;
+    let binding: ReturnType<typeof factory.create> | undefined;
+    const client = createPluginSdk({ transport: createPluginIframeTransport(), timeoutMs: 1_000 });
+
+    try {
+      const initialization = client.initialize();
+      await Promise.resolve();
+      session = sessionService.start({
+        identity,
+        targetOrigin: identity.expected_origin,
+        targetWindow: { postMessage: (message, _targetOrigin, ports) => child.deliver(message, ports) },
+        consumeReadyLease: (lease) => {
+          binding = factory.create({ identity: lease.identity, isCurrent: () => session.snapshot().state === 'ready' });
+          adapter = attachPluginRuntimeTransport({
+            handler: binding.handler,
+            isCurrent: () => session.snapshot().state === 'ready',
+            lease,
+            onDisconnect: () => session.disconnect(),
+          });
+          const detachEmitter = binding.attachEmitter(adapter.emit);
+          return () => {
+            detachEmitter();
+            binding?.dispose();
+            adapter?.dispose();
+          };
+        },
+      });
+      const initialized = await initialization;
+      expect(initialized).toEqual({
+        hostApiVersion: '0.1.0',
+        locale: 'en-US',
+        theme: 'light',
+        capabilities: ['actions.open', 'runtime.get_context', 'ui.close'],
+      });
+
+      const events: unknown[] = [];
+      client.subscribe('runtime.context_changed', (event) => events.push([client.context, event]));
+      context.update({ locale: 'zh-CN', theme: 'dark' });
+      await waitFor(() => events.length === 1);
+      expect(client.context).toMatchObject({ locale: 'zh-CN', theme: 'dark' });
+
+      await expect(client.request({ method: 'actions.open', params: { actionId: 'open_project' } })).resolves.toEqual({
+        opened: true,
+      });
+      expect(actionExecutor).toHaveBeenCalledTimes(1);
+      await expect(client.request({ method: 'ui.close', params: {} })).resolves.toEqual({ accepted: true });
+      expect(navigation.isActivePage({ owner_id: identity.plugin_id, page_id: identity.page_id })).toBe(false);
+      expect(navigationHandler).toHaveBeenLastCalledWith(undefined);
+
+      await client.dispose();
+      session.dispose();
+      context.update({ locale: 'en-US', theme: 'light' });
+      expect(events).toHaveLength(1);
+      expect(child.listeners.size).toBe(0);
+    } finally {
+      sessionService.dispose();
+      navigation.destroy();
       restore();
     }
   });
