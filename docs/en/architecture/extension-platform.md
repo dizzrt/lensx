@@ -957,9 +957,9 @@ narrow handler, validates every result/error/event, supports concurrent
 out-of-order settlement, and converges Session/Page replacement and disposal
 on idempotent cleanup. Production creates one Host-private Dispatcher binding
 for every current ready Session. That binding implements
-`runtime.get_context`, `ui.close`, and `actions.open`; storage and clipboard
-methods remain stable `unavailable` results and are omitted from Context
-capabilities. A private post-response outcome lets the adapter validate and
+`runtime.get_context`, `ui.close`, `actions.open`, and the five `storage.*`
+methods; clipboard methods remain stable `unavailable` results and are omitted
+from Context capabilities. A private post-response outcome lets the adapter validate and
 post a successful `ui.close` result before running the target-matched close
 effect. It never crosses the wire or changes the public SDK transport.
 
@@ -978,7 +978,8 @@ executor, route, Tauri command, grant, or other Host object.
 
 `runtime.get_context` returns Host API `0.1.0`, the current `en-US | zh-CN`
 locale, current `light | dark` theme, and the sorted frozen capability snapshot
-`actions.open`, `runtime.get_context`, and `ui.close`. Complete
+`actions.open`, `runtime.get_context`, all five `storage.*` methods, and
+`ui.close` while the scoped-storage provider is available. Complete
 `runtime.context_changed` replacements are emitted only when the current
 locale, theme, or capability snapshot actually changes. Identity, Registration
 revision, Runtime attempt, source, Manifest requests, raw grants, paths, and
@@ -992,12 +993,59 @@ match-and-close effect, so a stale Session cannot close a replacement Page.
 Launcher Dispatcher. Core, cross-plugin, missing, disabled, incompatible, or
 removed Actions fail closed without exposing the Registry or executor.
 
+Storage calls use only the identity frozen in the authenticated Session lease.
+The Dispatcher injects that identity into a Host-private desktop provider and
+never accepts a plugin-selected namespace, path, plugin key, command, or
+executor. A confirmed damaged or blocked namespace produces one complete
+Context replacement without the five storage capabilities; clipboard remains
+unavailable pending its native and permission providers.
+
 Run `pnpm run check:plugin-host-api-dispatcher` for the focused Dispatcher,
 Navigation, Action, Runtime, MessageChannel, public-tarball, export, dependency,
 and workspace-boundary gate. This capability adds no public export, wire frame,
-SDK dependency, Rust command, storage persistence, clipboard execution,
+or SDK dependency. It does not add clipboard execution,
 permission-management system, general RPC resource limits, project template,
 CLI, or development mode.
+
+## Shipped Plugin-Scoped Storage
+
+The Host-private Rust `PluginScopedStorage` service persists one canonical
+`storage-v1.json` beneath the Installer-owned
+`app_local_data_dir()/plugins/data/<plugin-key>` namespace. The plugin key and
+real path are derived and revalidated from the live Manager identity while
+holding the Installer's shared process and cross-process commit boundary. Reads
+of a missing namespace do not create it; the first successful `storage.set`
+creates the data subtree on demand.
+
+Keys contain 1–256 Unicode code points without C0 or DEL controls. JSON values
+have a maximum nesting depth of 32 and compact UTF-8 size of 256 KiB. A
+namespace contains at most 1,024 entries and 1 MiB of logical usage, calculated
+as key UTF-8 bytes plus compact value bytes. `storage.list` uses Unicode
+code-point ordering, a default page size of 100 and maximum of 1,000, with an
+integrity-protected cursor bound to the namespace revision and next position.
+Mutation after a page yields `conflict`; malformed or forged cursors yield
+`invalid_params`.
+
+Mutations serialize deterministic JSON, write a create-new owned temporary
+file, flush and sync it, atomically rename it at the commit point, then sync the
+parent directory. Pre-commit failures preserve the old store and clean only the
+owned temporary file. A result that becomes late after commit is dropped by the
+Session transport without attempting a false rollback.
+
+Compatible replacement and disable preserve data. Disable revokes access;
+`retain_data` uninstall permits a later same-identity reinstall to see the
+store, while persisted `delete_data` cleanup deletes the complete owned data
+subtree under the same coordinator. Bounded lazy validation degrades only a
+namespace with oversized, malformed, non-canonical, symlinked, or abnormal
+evidence. Diagnostics contain only stable codes, operations, and messages—no
+key, value, plugin identity, payload, path, exception, or stack.
+
+Run `pnpm run check:plugin-scoped-storage` for shared TypeScript/Rust fixtures,
+Rust persistence and lifecycle tests, desktop provider and Dispatcher tests,
+the real SDK/MessageChannel loop, public tarball consumers, private-boundary
+checks, and the existing bounded macOS WKWebView transport evidence. This
+delivery adds no management UI, product copy, theme or accessibility surface,
+permission prompt, general RPC limit, template, CLI, or development mode.
 
 ## Shipped Public Plugin Testkit
 
@@ -1245,9 +1293,9 @@ infrastructure, scoped package-relative resources, Plugin surface projection,
 production Action activation, Page Registry/navigation, the macOS isolated
 iframe Runtime, Host-private process-local Runtime Session, public SDK iframe
 transport/Host Port adapter, public Host API semantic contract, and the
-Host-private three-method Dispatcher are
-delivered. Each remaining capability—complete plugin-management UI, complete
-permissions, storage/clipboard providers, general RPC limits, public packaging, remote/automatic updates,
+Host-private Dispatcher and plugin-scoped storage provider are delivered. Each
+remaining capability—complete plugin-management UI, complete permissions,
+clipboard providers, general RPC limits, public packaging, remote/automatic updates,
 user-initiated rollback history, or sidecars—requires
 its own accepted specification and implementation evidence. This architectural
 document defines direction and boundaries, not a release checklist.

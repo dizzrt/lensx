@@ -167,8 +167,17 @@ const validatePaired = <Value>(
 };
 
 const sortedArrayDiagnostic = (values: readonly string[], path: string): HostApiValidationDiagnostic | undefined => {
+  const compareCodePoints = (left: string, right: string) => {
+    const leftPoints = Array.from(left, (point) => point.codePointAt(0) ?? 0);
+    const rightPoints = Array.from(right, (point) => point.codePointAt(0) ?? 0);
+    for (let index = 0; index < Math.min(leftPoints.length, rightPoints.length); index += 1) {
+      const difference = (leftPoints[index] ?? 0) - (rightPoints[index] ?? 0);
+      if (difference !== 0) return difference;
+    }
+    return leftPoints.length - rightPoints.length;
+  };
   for (let index = 1; index < values.length; index += 1) {
-    if ((values[index - 1] ?? '').localeCompare(values[index] ?? '') >= 0) {
+    if (compareCodePoints(values[index - 1] ?? '', values[index] ?? '') >= 0) {
       return {
         code: 'unsorted_value',
         path: `${path}/${index}`,

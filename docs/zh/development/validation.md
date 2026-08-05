@@ -205,8 +205,8 @@ SDK/Host-adapter fixture。
 有界 macOS WKWebView evidence 还覆盖 exact parent/origin/Port、single-use nonce、transport
 result/error/event round-trip、乱序 response、取消、replacement/close cleanup、pending termination 与
 privileged handler zero-hit。evidence 不含 URL、nonce、Port 内容、payload、token、identity、path、grant
-或 private error。该门禁证明公共 transport 与 Host adapter；独立 Dispatcher 门禁证明三个 production
-provider。它不证明 storage、clipboard permission/native execution、通用 RPC limit 或 Windows/Linux
+或 private error。该门禁证明公共 transport 与 Host adapter；独立 Dispatcher 与 scoped-storage 门禁证明
+当前 production provider。它不证明 clipboard permission/native execution、通用 RPC limit 或 Windows/Linux
 Runtime transport。
 
 ## Plugin Host API Dispatcher 验证
@@ -221,13 +221,33 @@ pnpm run check:plugin-host-api-dispatcher
 该门禁运行 Dispatcher、transport、MessageChannel、React Runtime、Navigation、Action projection 与
 workspace boundary 聚焦测试。它还打包真实公共 Contract/SDK tarball，并验证 Dispatcher binding、
 Session identity、private wire value、Host service 与 post-response effect 不进入公共 export 或 declaration。
-Context capability snapshot 必须只包含 `actions.open`、`runtime.get_context` 与 `ui.close`；`storage.*` 和
-`clipboard.*` 继续不可用。
+Context capability snapshot 在当前 namespace 可用时包含 `actions.open`、`runtime.get_context`、`ui.close`
+与五个 `storage.*` method；`clipboard.*` 继续不可用。
 
 现有目标 macOS WKWebView transport evidence 仍用于验证认证 Port、取消、replacement 与 terminal cleanup。
-production-style MessageChannel fixture 增加 Dispatcher Context、Action 与 response-before-close 证据，但不把
-fixture application provider 描述成 storage、clipboard、permission 或通用 RPC 交付。该聚焦门禁只补充
+production-style MessageChannel fixture 增加 Dispatcher Context、Action、storage 与 response-before-close
+证据，但不把 fake native boundary 描述成 Rust persistence、clipboard、permission 或通用 RPC 交付。该聚焦门禁只补充
 完整 frontend/Rust validation 集合，不能替代它们。
+
+## Plugin Scoped Storage 验证
+
+修改 Host 私有 storage contract、fixture、Rust store/command、Installer data coordinator、desktop provider、
+Dispatcher storage routing、Runtime capability availability、公共 consumer evidence 或 storage 文档时，必须运行：
+
+```bash
+pnpm run check:plugin-scoped-storage
+```
+
+该门禁验证 TypeScript/Rust 完全共享的 valid/invalid fixture、严格边界 result 与安全 error、确定性 quota 与
+Unicode ordering、绑定 revision 且有完整性保护的 cursor、durable atomic mutation、restart recovery、namespace
+corruption/symlink 隔离、Installer replacement/disable/retain/delete-data 行为、provider cancellation/currentness、
+全部五个 Dispatcher method、Context degradation event 与真实 SDK/MessageChannel 路径。
+
+它还打包公共 Contract、SDK 与 Testkit tarball，让隔离 no-private-import consumer 调用全部五个语义 storage
+method，检查 export/dependency/workspace boundary，并复用认证 Port 与 terminal lifecycle 的既有有界 macOS
+WKWebView evidence。门禁不得暴露 key、value、path、plugin data、raw payload、exception 或 stack evidence。
+它只补充完整 frontend/Rust validation 集合，不能替代它们。本 change 没有产品 UI、copy、theme、
+accessibility、keyboard 或 Semi Design surface，因此不适用 visual acceptance；完整 frontend suite 仍覆盖普通 UI 回归。
 
 ## Rust 验证
 

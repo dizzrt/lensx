@@ -803,7 +803,7 @@ impl PluginInstaller {
     }
 
     #[cfg(test)]
-    fn install_bytes(
+    pub(crate) fn install_bytes(
         &self,
         bytes: &[u8],
         emitter: &impl PluginRegistrationEventEmitter,
@@ -1006,6 +1006,48 @@ impl PluginInstaller {
             _process: process,
             _file: lock_file,
         })
+    }
+
+    pub(crate) fn acquire_data_boundary(
+        &self,
+        plugin_key: &str,
+    ) -> Result<(PluginCommitGuard<'_>, PathBuf), PluginCommitBoundaryError> {
+        if self.current_availability() == InstallerAvailability::Unavailable {
+            return Err(PluginCommitBoundaryError::Unavailable);
+        }
+        let process = self
+            .process_lock
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let root = self
+            .root
+            .as_ref()
+            .ok_or(PluginCommitBoundaryError::Unavailable)?;
+        fs::create_dir_all(root).map_err(|_| PluginCommitBoundaryError::Unavailable)?;
+        let lock_file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(root.join(INSTALL_LOCK_FILE))
+            .map_err(|_| PluginCommitBoundaryError::Unavailable)?;
+        FileExt::lock_exclusive(&lock_file).map_err(|_| PluginCommitBoundaryError::Unavailable)?;
+        let guard = PluginCommitGuard {
+            _process: process,
+            _file: lock_file,
+        };
+        self.ensure_recovered_locked()
+            .map_err(|_| PluginCommitBoundaryError::Unavailable)?;
+        if self.is_plugin_key_blocked(plugin_key)
+            || self.reject_cleanup_conflict(plugin_key).is_err()
+        {
+            return Err(PluginCommitBoundaryError::Unavailable);
+        }
+        let data_root = self
+            .root
+            .as_ref()
+            .ok_or(PluginCommitBoundaryError::Unavailable)?
+            .join(DATA_DIRECTORY);
+        Ok((guard, data_root))
     }
 
     fn ensure_recovered_locked(&self) -> Result<(), LocalPluginInstallationError> {

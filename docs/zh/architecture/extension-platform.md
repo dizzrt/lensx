@@ -702,8 +702,8 @@ policy 或 deep-import path。
 Host 最多消费 ready lease 一次。私有 adapter 向窄 handler 注入不可变 Session identity 与 Host-owned
 cancellation signal，校验所有 result/error/event，支持并发乱序 settle，并让 Session/Page replacement
 与 dispose 收敛到幂等 cleanup。Production 会为每个 current ready Session 创建一个 Host 私有 Dispatcher
-binding。该 binding 实现 `runtime.get_context`、`ui.close` 与 `actions.open`；storage 与 clipboard method
-继续稳定返回 `unavailable`，并且不会进入 Context capabilities。私有 post-response outcome 让 adapter
+binding。该 binding 实现 `runtime.get_context`、`ui.close`、`actions.open` 与五个 `storage.*` method；
+clipboard method 继续稳定返回 `unavailable`，并且不会进入 Context capabilities。私有 post-response outcome 让 adapter
 先校验并发送成功的 `ui.close` result，再执行匹配目标的关闭 effect。该 outcome 永不跨 wire，也不改变
 公共 SDK transport。
 
@@ -718,7 +718,8 @@ Production App 使用当前 locale/theme 状态、App Navigation Service、Launc
 request 不能选择 owner、Page、provider、executor、route、Tauri command、grant 或其他 Host object。
 
 `runtime.get_context` 返回 Host API `0.1.0`、当前 `en-US | zh-CN` locale、当前 `light | dark` theme，
-以及排序并冻结的 `actions.open`、`runtime.get_context`、`ui.close` capability snapshot。只有当前 locale、
+以及排序并冻结的 `actions.open`、`runtime.get_context`、五个 `storage.*` method 与 `ui.close` capability
+snapshot（scoped-storage provider 可用时）。只有当前 locale、
 theme 或 capability snapshot 实际变化时才发送完整 `runtime.context_changed` replacement。identity、
 Registration revision、Runtime attempt、source、Manifest request、raw grant、path 与 Host lifecycle state
 继续保持私有。
@@ -728,10 +729,44 @@ match-and-close effect，因此 stale Session 无法关闭 replacement Page。`a
 Action ID，由 Host 推导 `<plugin_id>.<local_action_id>`，并通过统一 Launcher Dispatcher 重新查询。
 core、跨插件、缺失、禁用、不兼容或已移除的 Action 都会失败关闭，不暴露 Registry 或 executor。
 
+storage 调用只使用认证 Session lease 中冻结的 identity。Dispatcher 把该 identity 注入 Host 私有 desktop
+provider，绝不接受插件选择的 namespace、path、plugin key、command 或 executor。确认 namespace 损坏或
+blocked 后，Host 只发送一次移除五个 storage capability 的完整 Context replacement；clipboard 在 native
+与 permission provider 交付前继续不可用。
+
 运行 `pnpm run check:plugin-host-api-dispatcher` 可执行 Dispatcher、Navigation、Action、Runtime、
 MessageChannel、公共 tarball、export、dependency 与 workspace boundary 聚焦门禁。该能力不增加公共 export、
-wire frame、SDK dependency、Rust command、storage persistence、clipboard execution、permission management、
+wire frame 或 SDK dependency，也不交付 clipboard execution、permission management、
 通用 RPC resource limit、项目模板、CLI 或开发模式。
+
+## 已交付的插件 Scoped Storage
+
+Host 私有 Rust `PluginScopedStorage` service 在 Installer 持有的
+`app_local_data_dir()/plugins/data/<plugin-key>` namespace 下持久化唯一 canonical
+`storage-v1.json`。Host 在持有 Installer 共享的进程内与跨进程 commit boundary 时，根据 live Manager
+identity 推导并重新校验 plugin key 与真实路径。读取缺失 namespace 不会创建目录；第一次成功
+`storage.set` 才按需创建 data subtree。
+
+key 限制为 1–256 个 Unicode code point，且不含 C0/DEL 控制字符。JSON value 最大嵌套深度为 32，
+compact UTF-8 最大为 256 KiB。每个 namespace 最多 1,024 entries、1 MiB logical usage；usage 等于 key
+UTF-8 bytes 与 compact value bytes 之和。`storage.list` 使用 Unicode code-point 顺序，默认每页 100、
+最大 1,000，并返回绑定 namespace revision 与下一位置且带完整性保护的 cursor。分页后发生 mutation
+返回 `conflict`；malformed 或伪造 cursor 返回 `invalid_params`。
+
+mutation 先序列化 deterministic JSON，再写入 create-new owned 临时文件，flush/sync 后以 atomic rename
+作为 commit point，最后同步 parent directory。commit 前失败保留旧 store，只清理自己拥有的临时文件。
+commit 后变成 late 的 result 由 Session transport 丢弃，不伪造 rollback。
+
+compatible replacement 与 disable 保留数据；disable 会撤销访问。`retain_data` 卸载后，同 identity 重装
+可以重新读取 store；持久化的 `delete_data` cleanup 则在相同 coordinator 下删除完整 owned data subtree。
+bounded lazy validation 只降级存在 oversized、malformed、non-canonical、symlink 或异常 evidence 的单个
+namespace。诊断只包含稳定 code、operation 与 message，不包含 key、value、plugin identity、payload、path、
+exception 或 stack。
+
+运行 `pnpm run check:plugin-scoped-storage` 可验证共享 TypeScript/Rust fixture、Rust persistence/lifecycle、
+desktop provider/Dispatcher、真实 SDK/MessageChannel loop、公共 tarball consumer、私有边界与既有有界 macOS
+WKWebView transport evidence。本交付不增加管理 UI、产品 copy、theme/accessibility surface、permission
+prompt、通用 RPC limit、模板、CLI 或开发模式。
 
 ## 已交付的公共 Plugin Testkit
 
@@ -935,7 +970,7 @@ Host API 方法保持小型、类型化、版本化，并且可以独立测试�
 静态 Manifest 格式、校验器、Host 私有本地安装与同 identity replacement、绑定 revision 的
 enable/disable/uninstall 基础设施、scoped package-relative resources、Plugin surface 投影、生产
 Action 激活、Page Registry/navigation、macOS 隔离 iframe Runtime、Host 私有进程内 Runtime Session、
-公共 SDK iframe transport/Host Port adapter、公共 Host API 语义契约与 Host 私有三方法 Dispatcher 已经交付。
-其余每项能力——完整插件管理 UI、完整权限、storage/clipboard provider、通用 RPC limit、公共打包、
+公共 SDK iframe transport/Host Port adapter、公共 Host API 语义契约、Host 私有 Dispatcher 与插件 scoped
+storage provider 已经交付。其余每项能力——完整插件管理 UI、完整权限、clipboard provider、通用 RPC limit、公共打包、
 远程/自动更新、用户主动 rollback history 或 sidecar——
 都需要独立的已接受规格和实现证据。本文定义架构方向和边界，不是发布检查清单。

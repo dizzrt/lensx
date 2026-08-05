@@ -566,6 +566,26 @@ impl PluginManager {
         })
     }
 
+    pub(crate) fn read_storage_plugin_key(
+        &self,
+        entry_id: &str,
+        plugin_id: &str,
+        version: &str,
+    ) -> Result<String, ()> {
+        if self.recovery_report.degraded {
+            return Err(());
+        }
+        let snapshot = self.lock_snapshot();
+        let registration = snapshot.healthy.get(plugin_id).ok_or(())?;
+        if !registration.facts.enabled
+            || registration.manifest.version != version
+            || healthy_entry_id(registration) != entry_id
+        {
+            return Err(());
+        }
+        Ok(plugin_record_key(plugin_id))
+    }
+
     pub fn read_registration_snapshot(&self) -> PluginRegistrationSnapshot {
         let snapshot = self.lock_snapshot();
         project_plugin_registration_snapshot(

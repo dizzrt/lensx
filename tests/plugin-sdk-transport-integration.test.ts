@@ -15,6 +15,7 @@ import {
   type PluginRuntimeTransportHandler,
   type PluginRuntimeTransportHandlerResult,
 } from '../src/app/plugins/runtime';
+import { createPluginScopedStorageProviderFactory } from '../src/app/plugins/storage';
 
 class ChildWindow {
   readonly parent = Object.freeze({ kind: 'host-parent' });
@@ -203,10 +204,36 @@ describe('real MessageChannel Plugin SDK transport integration', () => {
     });
     if (!registration.ok) throw new Error('Production-style Action fixture registration failed.');
     const context = createMutablePluginHostApiContextSource({ locale: 'en-US', theme: 'light' });
+    const stored = new Map<string, unknown>();
+    const storageInvoke = rs.fn(async (_command: string, args?: Record<string, unknown>) => {
+      const request = args?.request as {
+        readonly identity: { readonly plugin_id: string };
+        readonly operation: { readonly kind: string; readonly key?: string; readonly value?: unknown };
+      };
+      expect(request.identity.plugin_id).toBe(identity.plugin_id);
+      const { operation } = request;
+      let result: unknown;
+      if (operation.kind === 'set') {
+        stored.set(operation.key ?? '', operation.value);
+        result = { stored: true };
+      } else if (operation.kind === 'get') {
+        result = stored.has(operation.key ?? '')
+          ? { found: true, value: stored.get(operation.key ?? '') }
+          : { found: false };
+      } else if (operation.kind === 'delete') {
+        result = { deleted: stored.delete(operation.key ?? '') };
+      } else if (operation.kind === 'list') {
+        result = { keys: [...stored.keys()].sort() };
+      } else {
+        result = { usedBytes: 9, limitBytes: 1_048_576 };
+      }
+      return { contract_version: '0.1.0', operation: operation.kind, result };
+    });
     const factory = createPluginHostApiDispatcherFactory({
       actions: { registry: actionRegistry, dispatcher: new LauncherActionDispatcher(actionRegistry) },
       context,
       navigation,
+      storage: createPluginScopedStorageProviderFactory(storageInvoke),
     });
     const sessionService = createPluginRuntimeSessionService();
     let adapter: PluginRuntimeTransportAdapter | undefined;
@@ -242,8 +269,34 @@ describe('real MessageChannel Plugin SDK transport integration', () => {
         hostApiVersion: '0.1.0',
         locale: 'en-US',
         theme: 'light',
-        capabilities: ['actions.open', 'runtime.get_context', 'ui.close'],
+        capabilities: [
+          'actions.open',
+          'runtime.get_context',
+          'storage.delete',
+          'storage.get',
+          'storage.get_quota',
+          'storage.list',
+          'storage.set',
+          'ui.close',
+        ],
       });
+
+      await expect(
+        client.request({ method: 'storage.set', params: { key: 'settings', value: { mode: 'dark' } } }),
+      ).resolves.toEqual({ stored: true });
+      await expect(client.request({ method: 'storage.get', params: { key: 'settings' } })).resolves.toEqual({
+        found: true,
+        value: { mode: 'dark' },
+      });
+      await expect(client.request({ method: 'storage.list', params: {} })).resolves.toEqual({ keys: ['settings'] });
+      await expect(client.request({ method: 'storage.get_quota', params: {} })).resolves.toEqual({
+        usedBytes: 9,
+        limitBytes: 1_048_576,
+      });
+      await expect(client.request({ method: 'storage.delete', params: { key: 'settings' } })).resolves.toEqual({
+        deleted: true,
+      });
+      expect(storageInvoke).toHaveBeenCalledTimes(5);
 
       const events: unknown[] = [];
       client.subscribe('runtime.context_changed', (event) => events.push([client.context, event]));

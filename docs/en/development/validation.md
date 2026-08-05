@@ -251,8 +251,8 @@ single-use nonce, transport result/error/event round-trip, out-of-order
 responses, cancellation, replacement/close cleanup, pending termination, and
 zero privileged handler hits. Evidence contains no URL, nonce, Port content,
 payload, token, identity, path, grant, or private error. The gate proves the
-public transport and its Host adapter; the separate Dispatcher gate proves the
-three production providers. It does not prove storage, clipboard
+public transport and its Host adapter; the separate Dispatcher and scoped-storage
+gates prove the current production providers. It does not prove clipboard
 permission/native execution, general RPC limits, or Windows/Linux Runtime
 transport.
 
@@ -271,16 +271,46 @@ Navigation, Action projection, and workspace-boundary tests. It also packs the
 real public Contract and SDK tarballs and verifies that Dispatcher bindings,
 Session identity, private wire values, Host services, and post-response effects
 remain absent from public exports and declarations. The Context capability
-snapshot must contain only `actions.open`, `runtime.get_context`, and
-`ui.close`; `storage.*` and `clipboard.*` remain unavailable.
+snapshot contains `actions.open`, `runtime.get_context`, `ui.close`, and all
+five `storage.*` methods while the current namespace is available. `clipboard.*`
+remains unavailable.
 
 The existing target macOS WKWebView transport evidence remains required for
 the authenticated Port, cancellation, replacement, and terminal cleanup. The
-production-style MessageChannel fixture adds Dispatcher Context, Action, and
-response-before-close evidence without treating its fake application providers
-as storage, clipboard, permission, or general RPC delivery. This focused gate
+production-style MessageChannel fixture adds Dispatcher Context, Action,
+storage, and response-before-close evidence without treating its fake native
+boundary as Rust persistence, clipboard, permission, or general RPC delivery. This focused gate
 supplements rather than replaces the complete frontend and Rust validation
 sets.
+
+## Plugin Scoped Storage Validation
+
+Changes to the Host-private storage contract, fixtures, Rust store or command,
+Installer data coordinator, desktop provider, Dispatcher storage routing,
+Runtime capability availability, public consumer evidence, or storage
+documentation must run:
+
+```bash
+pnpm run check:plugin-scoped-storage
+```
+
+The gate verifies exact shared TypeScript/Rust valid and invalid fixtures,
+strict boundary results and safe errors, deterministic quota and Unicode
+ordering, revision-bound integrity-protected cursors, durable atomic mutation,
+restart recovery, namespace corruption and symlink isolation, Installer
+replacement/disable/retain/delete-data behavior, provider cancellation and
+currentness, all five Dispatcher methods, Context degradation events, and the
+real SDK/MessageChannel path.
+
+It also packs the public Contract, SDK, and Testkit tarballs, runs an isolated
+no-private-import consumer through all five semantic storage methods, checks
+exports/dependencies/workspace boundaries, and retains the existing bounded
+macOS WKWebView evidence for the authenticated Port and terminal lifecycle.
+The gate must not expose key, value, path, plugin data, raw payload, exception,
+or stack evidence. It supplements rather than replaces the complete frontend
+and Rust validation sets. This change has no product UI, copy, theme,
+accessibility, keyboard, or Semi Design surface, so visual acceptance is not
+applicable; normal UI regressions remain covered by the full frontend suite.
 
 ## Rust Validation
 

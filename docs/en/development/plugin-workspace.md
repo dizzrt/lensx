@@ -10,9 +10,10 @@ It contains the publishable `@lensx/plugin-contract`, `@lensx/plugin-sdk`,
 validation does not perform a registry publish. The workspace does not yet
 provide a plugin CLI. The Host can install/register and open a supported local
 plugin, the SDK supplies the authenticated iframe transport, and the production
-Host-private Dispatcher implements `runtime.get_context`, `ui.close`, and
-`actions.open`. The remaining storage and clipboard methods are omitted from
-current capabilities and return stable `unavailable` errors. The Contract
+Host-private Dispatcher implements `runtime.get_context`, `ui.close`,
+`actions.open`, and the five plugin-scoped `storage.*` methods. Clipboard
+methods are omitted from current capabilities and return stable `unavailable`
+errors. The Contract
 package ships the complete ten-method semantic catalog and validators
 independently of provider availability.
 
@@ -177,10 +178,13 @@ bundles, loads the iframe entry in a real browser, and rejects private transport
 deep imports. Tests, fixtures, scripts, schemas, Host projections, and
 Host-private source are excluded from the tarball. Run
 `pnpm run check:plugin-sdk-transport` for the complete cross-boundary gate. Run
-`pnpm run check:plugin-host-api-dispatcher` for the production three-method
-Dispatcher, response-before-close, Action/Navigation, Context replacement,
+`pnpm run check:plugin-host-api-dispatcher` for the production Dispatcher,
+response-before-close, Action/Navigation/storage, Context replacement,
 MessageChannel, public tarball, and workspace-boundary gate. The Dispatcher is
 private Host source; it adds no Contract or SDK export or dependency.
+Run `pnpm run check:plugin-scoped-storage` for the Rust-backed scoped storage,
+Installer lifecycle coordination, public Testkit consumer, and private storage
+boundary gate.
 
 ## Plugin Testkit Package
 

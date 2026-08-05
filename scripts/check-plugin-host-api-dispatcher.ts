@@ -38,6 +38,8 @@ if (frame.includes('unavailablePluginRuntimeTransportHandler'))
   fail('Runtime Frame still installs the old fixed handler');
 if (!app.includes('createPluginHostApiDispatcherFactory'))
   fail('App does not compose the production Dispatcher factory');
+if (!app.includes('desktopPluginScopedStorageProviderFactory'))
+  fail('App does not compose the production scoped-storage provider');
 if (!app.includes('hostApiDispatcherFactory={effectivePluginHostApiDispatcherFactory}')) {
   fail('App does not inject the production Dispatcher factory into the Runtime Frame');
 }
@@ -83,6 +85,8 @@ for (const publicSource of [
     'PluginRuntimeSessionIdentity',
     'AppNavigationService',
     'LauncherActionService',
+    'PluginScopedStorage',
+    'plugin_scoped_storage',
   ]) {
     if (publicSource.includes(privateName)) fail(`public source exposes ${privateName}`);
   }
@@ -117,11 +121,7 @@ for (const obsolete of [
 const roadmap = read('plugin-roadmap.md');
 if (!roadmap.includes('**Task 5.3：实现 Host API Dispatcher**')) fail('Roadmap Task 5.3 is missing');
 if (!roadmap.includes('`implement-plugin-host-api-v1`')) fail('Roadmap Task 5.3 change mapping drifted');
-for (const task of [
-  '5.4：提供插件私有存储',
-  '5.5：实现 Plugin Permission Management',
-  '5.6：校验 RPC 输入、输出与资源限制',
-]) {
+for (const task of ['5.5：实现 Plugin Permission Management', '5.6：校验 RPC 输入、输出与资源限制']) {
   if (!roadmap.includes(`- [ ] **Task ${task}**`)) fail(`later Roadmap Task ${task} was completed early`);
 }
 

@@ -155,11 +155,14 @@ try {
     ],
     consumerRoot,
   ).trim();
-  if (runtimeOutput !== 'compatible:en-US:disposed:1:initializing,ready,disposed') {
+  if (runtimeOutput !== 'compatible:en-US:disposed:1:5:true:initializing,ready,disposed') {
     throw new Error(`Unexpected external consumer output: ${runtimeOutput}`);
   }
 
   for (const specifier of [
+    '@lensx/plugin-contract/plugin-scoped-storage',
+    '@lensx/plugin-sdk/plugin-scoped-storage',
+    '@lensx/plugin-testkit/plugin-scoped-storage',
     '@lensx/plugin-testkit/dist/src/manifest.js',
     '@lensx/plugin-testkit/src/fake-transport.js',
     '@lensx/plugin-testkit/tests/public-api.typecheck.js',

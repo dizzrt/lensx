@@ -23,6 +23,7 @@ pub mod plugin_resource_service;
 pub(crate) mod plugin_resource_url;
 mod plugin_runtime_navigation;
 pub(crate) mod plugin_runtime_security_policy;
+pub mod plugin_scoped_storage;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -50,6 +51,7 @@ pub fn run() {
             plugin_registration::read_plugin_registration_detail,
             plugin_registration::read_plugin_registration_snapshot,
             plugin_resource_service::resolve_plugin_resource_entry,
+            plugin_scoped_storage::plugin_scoped_storage,
             plugin_runtime_navigation::activate_plugin_runtime_navigation,
             plugin_runtime_navigation::dispose_plugin_runtime_navigation
         ])
@@ -61,8 +63,13 @@ pub fn run() {
                 plugin_installer::setup_plugin_installer(app.handle(), Arc::clone(&plugin_manager));
             plugin_resource_service::setup_plugin_resource_service(
                 app.handle(),
-                plugin_manager,
+                Arc::clone(&plugin_manager),
                 Arc::clone(&plugin_installer),
+            );
+            plugin_scoped_storage::setup_plugin_scoped_storage(
+                app.handle(),
+                Arc::clone(&plugin_installer),
+                plugin_manager,
             );
             plugin_lifecycle::setup_plugin_lifecycle(app.handle(), plugin_installer);
             launcher_window::setup_launcher_window(app.handle());

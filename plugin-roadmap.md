@@ -572,9 +572,10 @@ Runtime health rollback、数据迁移、权限 UI 或完整管理 UI。
 
 **完成标准**：首版方法产生真实效果；插件无法得到 executor、Tauri 对象或 Rust 内部值。
 
-- [ ] **Task 5.4：提供插件私有存储**
+- [x] **Task 5.4：提供插件私有存储**
 
-**OpenSpec change**：`add-plugin-scoped-storage`
+**OpenSpec change**：[add-plugin-scoped-storage](openspec/changes/archive/2026-08-05-add-plugin-scoped-storage/)
+（已归档）
 
 **目标**：让插件持久化自己的数据，同时禁止访问应用偏好和其他插件数据。
 

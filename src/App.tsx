@@ -69,6 +69,7 @@ import {
   type PluginRuntimeNavigationAdapter,
   type PluginRuntimeSessionService,
 } from './app/plugins/runtime';
+import { desktopPluginScopedStorageProviderFactory } from './app/plugins/storage';
 import type { PluginSurfaceProjectionService } from './app/plugins/surfaces';
 import { type AppPreferencesClient, desktopAppPreferencesClient } from './app/preferences';
 import { useAppTheme } from './app/theme';
@@ -183,6 +184,7 @@ const App = ({
         actions: actionService,
         context: pluginHostApiContextSource,
         navigation: navigationService,
+        storage: desktopPluginScopedStorageProviderFactory,
       }),
     [actionService, navigationService, pluginHostApiContextSource],
   );

@@ -9,6 +9,7 @@ import {
   type PluginRuntimeSessionIdentity,
   type PluginRuntimeTransportHandlerResult,
 } from '../src/app/plugins/runtime';
+import { createPluginScopedStorageProviderFactory } from '../src/app/plugins/storage';
 
 const identity: PluginRuntimeSessionIdentity = Object.freeze({
   entry_id: 'entry_0123456789abcdef',
@@ -236,5 +237,68 @@ describe('Host-private Plugin Host API dispatcher', () => {
     second.dispose();
     fixture.context.update({ locale: 'zh-CN', theme: 'dark' });
     expect(secondEvents).toHaveLength(1);
+  });
+
+  test('routes storage through the trusted provider and publishes one degraded Context replacement', async () => {
+    const fixture = createFixture();
+    const invoke = rs.fn(async (_command: string, args?: Record<string, unknown>) => {
+      const request = args?.request as {
+        readonly identity: { readonly plugin_id: string };
+        readonly operation: { readonly kind: string };
+      };
+      expect(request.identity.plugin_id).toBe(identity.plugin_id);
+      expect(JSON.stringify(request)).not.toMatch(/namespace|path|plugin_key|com\.forged/u);
+      return Promise.reject({
+        contract_version: '0.1.0',
+        code: 'unavailable',
+        operation: request.operation.kind,
+        message: 'Plugin storage is unavailable.',
+      });
+    });
+    const factory = createPluginHostApiDispatcherFactory({
+      actions: { registry: fixture.registry, dispatcher: new LauncherActionDispatcher(fixture.registry) },
+      context: fixture.context,
+      navigation: { isActivePage: () => true, closePageIfMatches: () => true },
+      storage: createPluginScopedStorageProviderFactory(invoke),
+    });
+    const binding = factory.create({ identity, isCurrent: () => true });
+    const events: unknown[] = [];
+    binding.attachEmitter((event) => {
+      events.push(event);
+      return true;
+    });
+    await expect(requestInput(binding, { method: 'runtime.get_context', params: {} })).resolves.toMatchObject({
+      result: {
+        capabilities: [
+          'actions.open',
+          'runtime.get_context',
+          'storage.delete',
+          'storage.get',
+          'storage.get_quota',
+          'storage.list',
+          'storage.set',
+          'ui.close',
+        ],
+      },
+    });
+    await expect(requestInput(binding, { method: 'storage.get', params: { key: 'safe' } })).resolves.toEqual(
+      expect.objectContaining({ code: 'unavailable' }),
+    );
+    expect(events).toEqual([
+      {
+        event: 'runtime.context_changed',
+        payload: {
+          hostApiVersion: '0.1.0',
+          locale: 'en-US',
+          theme: 'light',
+          capabilities: ['actions.open', 'runtime.get_context', 'ui.close'],
+        },
+      },
+    ]);
+    await expect(requestInput(binding, { method: 'storage.get', params: { key: 'safe' } })).resolves.toEqual(
+      expect.objectContaining({ code: 'unavailable' }),
+    );
+    expect(events).toHaveLength(1);
+    expect(invoke).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,0 +1,176 @@
+{
+  "valid": [
+    {
+      "name": "get request",
+      "kind": "request",
+      "value": {
+        "contract_version": "0.1.0",
+        "identity": {
+          "entry_id": "entry_0123456789abcdef",
+          "plugin_id": "com.acme.workspace",
+          "version": "1.2.3"
+        },
+        "operation": { "kind": "get", "key": "settings.theme" }
+      }
+    },
+    {
+      "name": "set request",
+      "kind": "request",
+      "value": {
+        "contract_version": "0.1.0",
+        "identity": {
+          "entry_id": "entry_0123456789abcdef",
+          "plugin_id": "com.acme.workspace",
+          "version": "1.2.3"
+        },
+        "operation": {
+          "kind": "set",
+          "key": "settings.theme",
+          "value": { "mode": "dark", "nested": [true, null, 2] }
+        }
+      }
+    },
+    {
+      "name": "delete request",
+      "kind": "request",
+      "value": {
+        "contract_version": "0.1.0",
+        "identity": {
+          "entry_id": "entry_0123456789abcdef",
+          "plugin_id": "com.acme.workspace",
+          "version": "1.2.3"
+        },
+        "operation": { "kind": "delete", "key": "settings.theme" }
+      }
+    },
+    {
+      "name": "list request",
+      "kind": "request",
+      "value": {
+        "contract_version": "0.1.0",
+        "identity": {
+          "entry_id": "entry_0123456789abcdef",
+          "plugin_id": "com.acme.workspace",
+          "version": "1.2.3"
+        },
+        "operation": { "kind": "list", "limit": 50 }
+      }
+    },
+    {
+      "name": "quota request",
+      "kind": "request",
+      "value": {
+        "contract_version": "0.1.0",
+        "identity": {
+          "entry_id": "entry_0123456789abcdef",
+          "plugin_id": "com.acme.workspace",
+          "version": "1.2.3"
+        },
+        "operation": { "kind": "get_quota" }
+      }
+    },
+    {
+      "name": "get result",
+      "kind": "result",
+      "value": {
+        "contract_version": "0.1.0",
+        "operation": "get",
+        "result": { "found": true, "value": { "mode": "dark" } }
+      }
+    },
+    {
+      "name": "list result",
+      "kind": "result",
+      "value": {
+        "contract_version": "0.1.0",
+        "operation": "list",
+        "result": { "keys": ["alpha", "zeta"], "nextCursor": "v1.7.2.0123456789abcdef" }
+      }
+    },
+    {
+      "name": "bounded error",
+      "kind": "error",
+      "value": {
+        "contract_version": "0.1.0",
+        "code": "limit_exceeded",
+        "operation": "set",
+        "message": "Plugin storage limit was exceeded."
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "request unknown field",
+      "kind": "request",
+      "value": {
+        "contract_version": "0.1.0",
+        "identity": {
+          "entry_id": "entry_0123456789abcdef",
+          "plugin_id": "com.acme.workspace",
+          "version": "1.2.3"
+        },
+        "operation": { "kind": "get", "key": "safe", "namespace": "other" }
+      }
+    },
+    {
+      "name": "forged identity field",
+      "kind": "request",
+      "value": {
+        "contract_version": "0.1.0",
+        "identity": {
+          "entry_id": "entry_0123456789abcdef",
+          "plugin_id": "com.acme.workspace",
+          "version": "1.2.3",
+          "plugin_key": "v1-forged"
+        },
+        "operation": { "kind": "get_quota" }
+      }
+    },
+    {
+      "name": "bad entry identity",
+      "kind": "request",
+      "value": {
+        "contract_version": "0.1.0",
+        "identity": {
+          "entry_id": "../../entry",
+          "plugin_id": "com.acme.workspace",
+          "version": "1.2.3"
+        },
+        "operation": { "kind": "get_quota" }
+      }
+    },
+    {
+      "name": "malformed cursor type",
+      "kind": "request",
+      "value": {
+        "contract_version": "0.1.0",
+        "identity": {
+          "entry_id": "entry_0123456789abcdef",
+          "plugin_id": "com.acme.workspace",
+          "version": "1.2.3"
+        },
+        "operation": { "kind": "list", "cursor": 7 }
+      }
+    },
+    {
+      "name": "result unknown field",
+      "kind": "result",
+      "value": {
+        "contract_version": "0.1.0",
+        "operation": "get",
+        "result": { "found": false },
+        "path": "/private"
+      }
+    },
+    {
+      "name": "unsafe error diagnostic",
+      "kind": "error",
+      "value": {
+        "contract_version": "0.1.0",
+        "code": "unavailable",
+        "operation": "get",
+        "message": "failed at /Users/private/storage-v1.json"
+      }
+    }
+  ]
+}

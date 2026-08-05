@@ -16,25 +16,34 @@ import {
 
 import type { LauncherActionService } from '../../launcher/actions';
 import type { HostPageTarget } from '../../navigation';
+import {
+  PLUGIN_SCOPED_STORAGE_METHODS,
+  PluginScopedStorageBoundaryError,
+  type PluginScopedStorageProviderFactory,
+  type PluginScopedStorageRequest,
+} from '../storage';
 import type { PluginRuntimeSessionIdentity } from './session-contract';
 import {
   createPluginRuntimeTransportPostResponseOutcome,
   type PluginRuntimeTransportHandler,
 } from './transport-adapter';
 
-const IMPLEMENTED_METHODS = Object.freeze([
+const BASE_IMPLEMENTED_METHODS = Object.freeze([
   'actions.open',
   'runtime.get_context',
   'ui.close',
 ] as const satisfies readonly HostApiMethod[]);
-const implementedMethodSet = new Set<HostApiMethod>(IMPLEMENTED_METHODS);
+const baseImplementedMethodSet = new Set<HostApiMethod>(BASE_IMPLEMENTED_METHODS);
+const storageMethodSet = new Set<HostApiMethod>(PLUGIN_SCOPED_STORAGE_METHODS);
 const catalogMethodSet = new Set<HostApiMethod>(HOST_API_METHOD_CATALOG.map(({ method }) => method));
 
 const errors = Object.freeze({
   cancelled: Object.freeze({ code: 'cancelled', message: 'The Host API request was cancelled.' }),
   internal: Object.freeze({ code: 'internal_error', message: 'The Host API request failed.' }),
+  conflict: Object.freeze({ code: 'conflict', message: 'The Host API request conflicted with current state.' }),
   invalidParams: Object.freeze({ code: 'invalid_params', message: 'The Host API parameters are invalid.' }),
   methodNotFound: Object.freeze({ code: 'method_not_found', message: 'The Host API method was not found.' }),
+  limitExceeded: Object.freeze({ code: 'limit_exceeded', message: 'The Host API limit was exceeded.' }),
   notFound: Object.freeze({ code: 'not_found', message: 'The requested Host resource was not found.' }),
   unavailable: Object.freeze({ code: 'unavailable', message: 'The Host API is unavailable.' }),
 }) satisfies Readonly<Record<string, HostApiError>>;
@@ -62,6 +71,7 @@ export interface PluginHostApiDispatcherDependencies {
   readonly actions: LauncherActionService;
   readonly context: PluginHostApiContextSource;
   readonly navigation: PluginHostApiNavigation;
+  readonly storage?: PluginScopedStorageProviderFactory;
 }
 
 export interface CreatePluginHostApiDispatcherBindingInput {
@@ -124,10 +134,14 @@ const invalidRequestError = (request: unknown): HostApiError => {
 const validateResult = (result: HostApiResult): HostApiResult | HostApiError =>
   validateHostApiResult(result).status === 'valid' ? result : errors.internal;
 
-const availableMethods = (identity: PluginRuntimeSessionIdentity): readonly HostApiMethod[] =>
+const availableMethods = (
+  identity: PluginRuntimeSessionIdentity,
+  storageAvailable: boolean,
+): readonly HostApiMethod[] =>
   Object.freeze(
     HOST_API_METHOD_CATALOG.flatMap(({ method, permission }) =>
-      implementedMethodSet.has(method) && (permission === null || identity.granted_permission_ids.includes(permission))
+      (baseImplementedMethodSet.has(method) || (storageAvailable && storageMethodSet.has(method))) &&
+      (permission === null || identity.granted_permission_ids.includes(permission))
         ? [method]
         : [],
     ),
@@ -136,13 +150,14 @@ const availableMethods = (identity: PluginRuntimeSessionIdentity): readonly Host
 const createContextSnapshot = (
   source: PluginHostApiContextSource,
   identity: PluginRuntimeSessionIdentity,
+  storageAvailable: boolean,
 ): PluginRuntimeContext => {
   const state = source.snapshot();
   const validation = validatePluginRuntimeContext({
     hostApiVersion: PLUGIN_HOST_API_VERSION,
     locale: state.locale,
     theme: state.theme,
-    capabilities: availableMethods(identity),
+    capabilities: availableMethods(identity, storageAvailable),
   });
   if (validation.status === 'invalid') throw new TypeError('Invalid Host-owned Runtime Context snapshot.');
   return validation.value;
@@ -163,9 +178,10 @@ export const createPluginHostApiDispatcherFactory = (
       let emitter: ((event: HostApiEvent) => boolean) | undefined;
       let emitterAttached = false;
       let latestContext: PluginRuntimeContext | undefined;
+      const storage = dependencies.storage?.create({ identity, isCurrent });
 
       const readContext = (): PluginRuntimeContext => {
-        const context = createContextSnapshot(dependencies.context, identity);
+        const context = createContextSnapshot(dependencies.context, identity, storage?.available() ?? false);
         latestContext = context;
         return context;
       };
@@ -176,18 +192,20 @@ export const createPluginHostApiDispatcherFactory = (
         latestContext = undefined;
       }
 
-      const unsubscribeContext = dependencies.context.subscribe(() => {
+      const publishContext = () => {
         if (disposed || !isCurrent()) return;
         try {
           const previous = latestContext;
-          const next = createContextSnapshot(dependencies.context, identity);
+          const next = createContextSnapshot(dependencies.context, identity, storage?.available() ?? false);
           latestContext = next;
           if (previous && sameContext(previous, next)) return;
           emitter?.(Object.freeze({ event: 'runtime.context_changed', payload: next }));
         } catch {
           // Invalid Host state is contained and never emitted to a plugin.
         }
-      });
+      };
+      const unsubscribeContext = dependencies.context.subscribe(publishContext);
+      const unsubscribeStorage = storage?.subscribeAvailability(publishContext) ?? (() => undefined);
 
       const handler: PluginRuntimeTransportHandler = async ({ request: requestInput, signal }) => {
         const unavailable = isAvailable(disposed, isCurrent, signal);
@@ -232,13 +250,36 @@ export const createPluginHostApiDispatcherFactory = (
               if (result.ok) return validateResult({ method: request.method, result: { opened: true } });
               return result.error.code === 'action_execution_failed' ? errors.internal : errors.notFound;
             }
-            case 'clipboard.read':
-            case 'clipboard.write':
             case 'storage.delete':
             case 'storage.get':
             case 'storage.get_quota':
             case 'storage.list':
-            case 'storage.set':
+            case 'storage.set': {
+              if (!storage?.available()) return errors.unavailable;
+              const current = isAvailable(disposed, isCurrent, signal);
+              if (current) return current;
+              try {
+                const result = await storage.execute(request as PluginScopedStorageRequest, signal);
+                const completed = isAvailable(disposed, isCurrent, signal);
+                if (completed) return completed;
+                return validateResult(result);
+              } catch (error) {
+                if (!(error instanceof PluginScopedStorageBoundaryError)) return errors.internal;
+                return error.code === 'cancelled'
+                  ? errors.cancelled
+                  : error.code === 'conflict'
+                    ? errors.conflict
+                    : error.code === 'invalid_params'
+                      ? errors.invalidParams
+                      : error.code === 'limit_exceeded'
+                        ? errors.limitExceeded
+                        : error.code === 'unavailable'
+                          ? errors.unavailable
+                          : errors.internal;
+              }
+            }
+            case 'clipboard.read':
+            case 'clipboard.write':
               return errors.unavailable;
           }
         } catch {
@@ -264,6 +305,8 @@ export const createPluginHostApiDispatcherFactory = (
           disposed = true;
           emitter = undefined;
           unsubscribeContext();
+          unsubscribeStorage();
+          storage?.dispose();
         },
       });
       return binding;
