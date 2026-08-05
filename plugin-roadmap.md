@@ -610,7 +610,7 @@ Runtime health rollback、数据迁移、权限 UI 或完整管理 UI。
 
 **完成标准**：未声明、未支持、未授权和已撤销权限均被稳定拒绝；无法伪造 grant state。
 
-- [ ] **Task 5.6：校验 RPC 输入、输出与资源限制**
+- [x] **Task 5.6：校验 RPC 输入、输出与资源限制**
 
 **OpenSpec change**：`validate-plugin-rpc-contracts`
 

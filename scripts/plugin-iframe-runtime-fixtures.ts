@@ -133,6 +133,7 @@ const privateSessionConsumer = `
           let contextResult = false;
           let actionResult = false;
           let closeResult = false;
+          let limitResult = false;
           let proofSent = false;
           port.onmessage = ({ data }) => {
             if (!exactKeys(data, ['contract_version', 'type', ...(data?.type === 'lensx.plugin_transport.event' ? ['event'] : data?.type === 'lensx.plugin_transport.disconnect' ? [] : data?.error ? ['request_id', 'error'] : ['request_id', 'result'])]) ||
@@ -150,15 +151,28 @@ const privateSessionConsumer = `
                   data.result?.method === 'actions.open' && data.result.result?.opened === true) actionResult = true;
               if (data.request_id === 'request_0000000000000003' &&
                   data.result?.method === 'ui.close' && data.result.result?.accepted === true) closeResult = true;
+              if (data.request_id === 'request_0000000000000005' &&
+                  data.error?.code === 'limit_exceeded') {
+                limitResult = true;
+                port.postMessage(Object.freeze({
+                  contract_version: '0.1.0', type: 'lensx.plugin_transport.request',
+                  request_id: 'request_0000000000000006',
+                  request: Object.freeze({ method: 'storage.get', params: Object.freeze({ key: 'proof' }) }),
+                }));
+              }
             }
             if (!proofSent && contextEvent && contextResult && actionResult && closeResult &&
                 ['request_0000000000000001', 'request_0000000000000002', 'request_0000000000000003']
                   .every((id) => responses.has(id))) {
               proofSent = true;
+              let deep = null;
+              for (let depth = 0; depth <= 32; depth += 1) deep = [deep];
               port.postMessage(Object.freeze({
                 contract_version: '0.1.0', type: 'lensx.plugin_transport.request',
                 request_id: 'request_0000000000000005',
-                request: Object.freeze({ method: 'storage.get', params: Object.freeze({ key: 'proof' }) }),
+                request: Object.freeze({
+                  method: 'storage.set', params: Object.freeze({ key: 'limit', value: deep }),
+                }),
               }));
             }
           };
@@ -393,6 +407,8 @@ const fixtureInputs = [
       'private_session_bootstrap_consumer',
       'single_use_nonce',
       'message_port_transfer',
+      'rpc_limit_rejection',
+      'rpc_recovery_after_limit',
     ],
     files: [
       { path: 'manifest.json', bytes: manifestBytes(manifest('normal')) },
@@ -466,6 +482,8 @@ const fixtureInputs = [
       'csp_data',
       'csp_blob',
       'csp_form',
+      'rpc_limit_rejection',
+      'rpc_recovery_after_limit',
     ],
     files: [
       { path: 'manifest.json', bytes: manifestBytes(manifest('malicious')) },

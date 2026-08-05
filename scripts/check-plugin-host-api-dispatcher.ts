@@ -120,9 +120,14 @@ for (const obsolete of [
 
 const roadmap = read('plugin-roadmap.md');
 if (!roadmap.includes('**Task 5.3：实现 Host API Dispatcher**')) fail('Roadmap Task 5.3 is missing');
-if (!roadmap.includes('`implement-plugin-host-api-v1`')) fail('Roadmap Task 5.3 change mapping drifted');
-for (const task of ['5.5：实现 Plugin Permission Management', '5.6：校验 RPC 输入、输出与资源限制']) {
-  if (!roadmap.includes(`- [ ] **Task ${task}**`)) fail(`later Roadmap Task ${task} was completed early`);
+if (!roadmap.includes('[implement-plugin-host-api-v1](openspec/changes/archive/')) {
+  fail('Roadmap Task 5.3 archived change mapping drifted');
+}
+if (!roadmap.includes('- [x] **Task 5.5：实现 Plugin Permission Management**')) {
+  fail('Roadmap Task 5.5 completion drifted');
+}
+if (!roadmap.includes('- [ ] **Task 5.6：校验 RPC 输入、输出与资源限制**')) {
+  fail('Roadmap Task 5.6 was completed before its change was archived');
 }
 
 console.log('Checked Dispatcher providers, production wiring, private outcomes, public exports, and dependencies.');

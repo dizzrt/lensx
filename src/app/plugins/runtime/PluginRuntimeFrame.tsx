@@ -20,6 +20,7 @@ import {
   PLUGIN_RUNTIME_PERMISSIONS_POLICY,
   PLUGIN_RUNTIME_REFERRER_POLICY,
 } from './policy';
+import type { PluginRpcDiagnostic } from './rpc-validation';
 import {
   createPluginRuntimeSessionService,
   type PluginRuntimeSession,
@@ -27,6 +28,10 @@ import {
 } from './session-service';
 import { attachPluginRuntimeTransport } from './transport-adapter';
 import type { PluginPageRuntimeDescriptor, PluginPageRuntimeResolver, PluginRuntimeNavigationAdapter } from './types';
+
+const observePluginRpcDiagnostic = (diagnostic: PluginRpcDiagnostic): void => {
+  console.warn('[lensX] Plugin Runtime RPC diagnostic.', diagnostic);
+};
 
 export type PluginRuntimeFrameState =
   | { readonly status: 'resolving' }
@@ -240,6 +245,7 @@ export const PluginRuntimeFrame = ({
             lease,
             handler: hostApiBinding.handler,
             isCurrent: () => binding.attempt.isCurrent() && activeBindingRef.current === binding,
+            onDiagnostic: observePluginRpcDiagnostic,
             onDisconnect: () => session?.disconnect(),
           });
           const detachEmitter = hostApiBinding.attachEmitter(adapter.emit);

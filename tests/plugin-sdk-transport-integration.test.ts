@@ -11,6 +11,7 @@ import {
   createPluginHostApiDispatcherFactory,
   createPluginRuntimeSessionService,
   type PluginRuntimeHostPortLease,
+  type PluginRuntimeScheduler,
   type PluginRuntimeSession,
   type PluginRuntimeTransportAdapter,
   type PluginRuntimeTransportHandler,
@@ -62,6 +63,24 @@ const waitFor = async (predicate: () => boolean): Promise<void> => {
     await new Promise((resolve) => setTimeout(resolve, 1));
   }
 };
+
+class ControlledScheduler implements PluginRuntimeScheduler {
+  #sequence = 0;
+  readonly callbacks = new Map<number, () => void>();
+  readonly clearTimeout = (handle: unknown) => {
+    this.callbacks.delete(handle as number);
+  };
+  readonly now = () => 0;
+  readonly setTimeout = (callback: () => void, _delayMs: number): unknown => {
+    this.#sequence += 1;
+    this.callbacks.set(this.#sequence, callback);
+    return this.#sequence;
+  };
+  runLatest() {
+    const handle = Math.max(...this.callbacks.keys());
+    this.callbacks.get(handle)?.();
+  }
+}
 
 describe('real MessageChannel Plugin SDK transport integration', () => {
   test('connects real SDK and Host adapter for context, request, error, event, concurrency, cancel, and cleanup', async () => {
@@ -354,6 +373,133 @@ describe('real MessageChannel Plugin SDK transport integration', () => {
     } finally {
       sessionService.dispose();
       navigation.destroy();
+      restore();
+    }
+  });
+
+  test('contains limits and Host faults across the real SDK while preserving recovery and safe error semantics', async () => {
+    const child = new ChildWindow();
+    const restore = installWindow(child);
+    const scheduler = new ControlledScheduler();
+    const completions = new Map<string, (value: PluginRuntimeTransportHandlerResult) => void>();
+    const diagnostics: unknown[] = [];
+    const handlerHits: string[] = [];
+    const handler: PluginRuntimeTransportHandler = ({ request: value }) => {
+      if (value.method === 'runtime.get_context') {
+        return {
+          method: value.method,
+          result: {
+            capabilities: ['storage.get', 'ui.close'],
+            hostApiVersion: '0.1.0',
+            locale: 'en-US',
+            theme: 'light',
+          },
+        };
+      }
+      if (value.method === 'ui.close') {
+        return { code: 'permission_denied', message: 'The Host API permission was denied.' } as const;
+      }
+      if (value.method !== 'storage.get') throw new Error('unexpected fixture request');
+      const key = value.params.key;
+      handlerHits.push(key);
+      if (key === 'invalid-output') return { private: '/private/provider payload stack' } as never;
+      if (key === 'throw') throw new Error('/private/provider payload stack');
+      if (key === 'healthy') return { method: value.method, result: { found: true, value: 'safe' } };
+      return new Promise((resolve) => completions.set(key, resolve));
+    };
+    const sessionService = createPluginRuntimeSessionService();
+    let adapter: PluginRuntimeTransportAdapter | undefined;
+    let session: PluginRuntimeSession;
+    const client = createPluginSdk({ transport: createPluginIframeTransport(), timeoutMs: 20_000 });
+    try {
+      const initialization = client.initialize();
+      await Promise.resolve();
+      session = sessionService.start({
+        identity,
+        targetOrigin: identity.expected_origin,
+        targetWindow: { postMessage: (message, _targetOrigin, ports) => child.deliver(message, ports) },
+        consumeReadyLease: (lease) => {
+          adapter = attachPluginRuntimeTransport({
+            handler,
+            isCurrent: () => session.snapshot().state === 'ready',
+            lease,
+            onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+            onDisconnect: () => session.disconnect(),
+            scheduler,
+          });
+          return adapter.dispose;
+        },
+      });
+      await initialization;
+
+      await expect(client.request({ method: 'ui.close', params: {} })).rejects.toEqual({
+        code: 'permission_denied',
+        message: 'The Host API permission was denied.',
+      });
+      await expect(client.request({ method: 'storage.get', params: { key: 'invalid-output' } })).rejects.toEqual({
+        code: 'internal_error',
+        message: 'The Host API request failed.',
+      });
+      await expect(client.request({ method: 'storage.get', params: { key: 'throw' } })).rejects.toEqual({
+        code: 'internal_error',
+        message: 'The Host API request failed.',
+      });
+      await expect(client.request({ method: 'storage.get', params: { key: 'healthy' } })).resolves.toEqual({
+        found: true,
+        value: 'safe',
+      });
+
+      const concurrent = Array.from({ length: 33 }, (_, index) =>
+        client.request({ method: 'storage.get', params: { key: `pending-${index}` } }),
+      );
+      const overLimit = concurrent.at(-1);
+      if (overLimit === undefined) throw new Error('concurrency fixture is empty');
+      const overLimitAssertion = expect(overLimit).rejects.toEqual({
+        code: 'limit_exceeded',
+        message: 'The Host API limit was exceeded.',
+      });
+      await waitFor(() => handlerHits.filter((key) => key.startsWith('pending-')).length === 32);
+      await overLimitAssertion;
+      for (let index = 0; index < 32; index += 1) {
+        completions.get(`pending-${index}`)?.({ method: 'storage.get', result: { found: false } });
+      }
+      await expect(Promise.all(concurrent.slice(0, 32))).resolves.toEqual(
+        Array.from({ length: 32 }, () => ({ found: false })),
+      );
+
+      const hostTimeout = client.request({ method: 'storage.get', params: { key: 'host-timeout' } });
+      await waitFor(() => completions.has('host-timeout'));
+      scheduler.runLatest();
+      await expect(hostTimeout).rejects.toEqual({
+        code: 'timeout',
+        message: 'The Host API request timed out.',
+      });
+      completions.get('host-timeout')?.({ method: 'storage.get', result: { found: true, value: 'private-late' } });
+
+      const events: unknown[] = [];
+      client.subscribe('runtime.context_changed', (event) => events.push(event));
+      expect(adapter?.emit({ event: 'private.event', payload: { grant: 'secret' } } as never)).toBe(false);
+      expect(events).toEqual([]);
+      await expect(client.request({ method: 'storage.get', params: { key: 'healthy' } })).resolves.toEqual({
+        found: true,
+        value: 'safe',
+      });
+      expect(JSON.stringify(diagnostics)).not.toMatch(
+        /private\/provider|private-late|payload|request_[0-9a-f]|origin|grant|stack|MessagePort/u,
+      );
+      expect(diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: 'invalid_handler_output', stage: 'egress' }),
+          expect.objectContaining({ code: 'handler_failed', stage: 'execution' }),
+          expect.objectContaining({ code: 'concurrency_limit_exceeded', stage: 'ingress' }),
+          expect.objectContaining({ code: 'execution_timeout', stage: 'execution' }),
+          expect.objectContaining({ code: 'invalid_event', stage: 'egress' }),
+        ]),
+      );
+      await client.dispose();
+      session.dispose();
+    } finally {
+      sessionService.dispose();
       restore();
     }
   });

@@ -967,10 +967,72 @@ post-response outcome lets the adapter validate and
 post a successful `ui.close` result before running the target-matched close
 effect. It never crosses the wire or changes the public SDK transport.
 
+### Shipped Host-Private RPC v1 Validation
+
+The Host adapter now enforces one immutable RPC v1 policy before recursive
+Contract validation and before every outbound delivery:
+
+| Budget | Fixed v1 limit |
+| --- | ---: |
+| Canonical JSON-compatible cost per private frame | 5,242,880 bytes |
+| Semantic payload nesting depth | 32 |
+| Total private-frame nesting depth | 36 |
+| Visited values and object keys | 16,384 |
+| Requests per frame | 1 |
+| In-flight Handlers per Runtime Session | 32 |
+| Host execution deadline | 10,000 ms |
+
+The analyzer walks JSON-compatible input iteratively, accounts for UTF-8 and
+JSON escaping without first serializing the complete value, stops at the first
+proven limit, rejects cycles, non-plain objects, non-finite numbers and other
+non-JSON values, and does not mutate input. A Manifest, grant, plugin source,
+SDK option or payload cannot increase these limits.
+
+Ingress is ordered as shallow exact envelope and request-ID classification,
+bounded frame and semantic-payload analysis, public Contract validation, then
+admission to the permission-aware Dispatcher. A safely correlated malformed
+request returns `invalid_request`; invalid params return `invalid_params`; an
+undeclared method returns `method_not_found`; and a byte, depth, node or
+concurrency rejection returns `limit_exceeded`. These failures consume no
+Handler slot and leave a healthy Session available. Unsupported versions,
+unknown frame types, private envelope fields, non-JSON frames and replayed or
+decreasing request IDs remain terminal protocol violations. A strictly
+increasing request-sequence high-water mark rejects replay without an
+ever-growing terminal-ID collection.
+
+Every admitted request owns one AbortController and 10,000 millisecond Host
+deadline. Completion, SDK cancellation, deadline, currentness loss and cleanup
+compete through one settlement. A winning Host deadline releases the slot,
+aborts the Handler and returns Contract-valid `timeout`; a winning SDK
+lifecycle timeout remains the SDK's distinct lifecycle `timeout` and sends at
+most one cancel.
+
+Results, errors and events pass the same frame budget plus their paired public
+Contract validator before `postMessage`. A Handler throw, invalid/oversized
+value or method/result mismatch becomes one fixed safe `internal_error` and
+does not disconnect an otherwise current Session. Invalid events are suppressed
+without notifying subscribers. A post-response effect runs only after its
+valid response is posted while the request and Session remain current.
+
+Production observes failures through frozen Host-private diagnostic records
+containing only trusted plugin ID, an already validated method when available,
+`ingress | execution | egress`, a closed code and a fixed English message. The
+record never contains request ID, payload, URL, path, origin, grant, exception,
+stack, Port, provider or Host object, and a throwing sink cannot affect
+settlement. Diagnostics are not persisted or exposed to plugins.
+
+This delivery does not add batch or streaming RPC, sustained call-rate limits,
+iframe/CPU/memory monitoring, plugin suspension, isolation escalation,
+automatic recovery, public policy configuration or diagnostic history. Those
+Runtime resource controls remain Task 7.5 or later explicit changes.
+
 Run `pnpm run check:plugin-sdk-transport` for codec drift, SDK/Testkit,
 iframe/Host adapter, real tarball no-DOM and browser consumers, real
 MessageChannel integration, Runtime lifecycle, and bounded macOS WKWebView
 evidence. This delivery does not claim Windows/Linux Runtime transport support.
+Run `pnpm run check:plugin-rpc-validation` for the RPC policy, malicious
+fixtures, admission/egress races, Dispatcher/provider integration, private
+boundaries, and real resource-rejection evidence.
 
 ## Shipped Host-Private Plugin Host API Dispatcher
 
@@ -1009,8 +1071,8 @@ independently authorized clipboard capabilities.
 Run `pnpm run check:plugin-host-api-dispatcher` for the focused Dispatcher,
 Navigation, Action, Runtime, MessageChannel, public-tarball, export, dependency,
 and workspace-boundary gate. This capability adds no public export, wire frame,
-or SDK dependency. General RPC resource limits, project template, CLI, and
-development mode remain separate capabilities.
+or SDK dependency. Sustained Runtime resource isolation, project template,
+CLI, and development mode remain separate capabilities.
 
 ## Shipped Host-Private Plugin Permission Core And Text Clipboard
 
@@ -1337,10 +1399,11 @@ infrastructure, scoped package-relative resources, Plugin surface projection,
 production Action activation, Page Registry/navigation, the macOS isolated
 iframe Runtime, Host-private process-local Runtime Session, public SDK iframe
 transport/Host Port adapter, public Host API semantic contract, and the
-Host-private Dispatcher, plugin-scoped storage provider, permission core, and
-macOS text-clipboard provider are delivered. Each remaining
-capability—complete plugin-management UI, permission prompts/settings/history,
-general RPC limits, public packaging, remote/automatic updates,
-user-initiated rollback history, or sidecars—requires
+Host-private RPC v1 validation boundary, Dispatcher, plugin-scoped storage
+provider, permission core, and macOS text-clipboard provider are delivered.
+Each remaining capability—complete plugin-management UI, permission
+prompts/settings/history, sustained frequency/CPU/memory/isolation/recovery
+controls, public packaging, remote/automatic updates, user-initiated rollback
+history, or sidecars—requires
 its own accepted specification and implementation evidence. This architectural
 document defines direction and boundaries, not a release checklist.

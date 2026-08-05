@@ -207,7 +207,30 @@ result/error/event round-trip、乱序 response、取消、replacement/close cle
 privileged handler zero-hit。evidence 不含 URL、nonce、Port 内容、payload、token、identity、path、grant
 或 private error。该门禁证明公共 transport 与 Host adapter；独立 Dispatcher 与 scoped-storage 门禁证明
 当前 production provider。permission-management 门禁补充 clipboard authorization、provider 与真实 native
-smoke evidence。两者都不证明通用 RPC limit 或 Windows/Linux Runtime transport。
+smoke evidence。两者都不独立证明完整 RPC v1 policy 或 Windows/Linux Runtime transport。
+
+## Plugin RPC 验证
+
+修改 Host 私有 RPC policy/analyzer、Port admission、request sequence state、concurrency/deadline settlement、
+result/event containment、安全 diagnostic、post-response effect、恶意 fixture 或 resource-limit evidence 时，必须运行：
+
+```bash
+pnpm run check:plugin-rpc-validation
+```
+
+该门禁检查不可变的 5 MiB/32 层语义深度/36 层 frame 深度/16,384 节点/单 request/32 并发/10,000 ms policy；
+低于、恰好等于和超过限制的 fixture；UTF-8 与 JSON escaping cost；循环与非 JSON value；严格递增 request ID；
+controlled-clock deadline/cancel race；安全 error、event、diagnostic 与 effect；以及被拒输入的零 Handler hit。
+它通过真实 Contract 与 SDK MessageChannel、Dispatcher、permission/storage regression、Runtime Session cleanup、
+公共 Contract/SDK tarball、workspace/private-import boundary 和目标 macOS 有界 WKWebView evidence 进行组合验证。
+
+提交的 WKWebView evidence 必须证明一个超深 request 以零 Handler hit 被拒绝，且同一健康 Session 上后续合法
+request 仍能完成。evidence 只保存有界布尔事实，不得包含 payload、URL、origin、identity、grant、request ID、
+diagnostic 或 private error。该 macOS evidence 不代表 Windows/Linux transport。
+
+该门禁证明 per-frame byte/depth/node/单 request 限制，以及 per-Session concurrency、replay 与 Host execution
+deadline。它不证明持续频率控制、iframe/CPU/memory 监控、插件暂停、隔离升级、自动恢复、公共 policy 配置或
+持久化 diagnostic history；这些 control 仍属于 Task 7.5 或后续 change。
 
 ## Plugin Host API Dispatcher 验证
 

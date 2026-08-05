@@ -254,7 +254,41 @@ payload, token, identity, path, grant, or private error. The gate proves the
 public transport and its Host adapter; the separate Dispatcher and scoped-storage
 gates prove the current production providers. The permission-management gate
 adds clipboard authorization, provider, and real native-smoke evidence. Neither
-gate proves general RPC limits or Windows/Linux Runtime transport.
+gate independently proves the complete RPC v1 policy or Windows/Linux Runtime
+transport.
+
+## Plugin RPC Validation
+
+Changes to the Host-private RPC policy/analyzer, Port admission, request
+sequence state, concurrency/deadline settlement, result/event containment,
+safe diagnostics, post-response effects, malicious fixtures, or resource-limit
+evidence must run:
+
+```bash
+pnpm run check:plugin-rpc-validation
+```
+
+The gate checks the immutable 5 MiB/32-depth/36-frame-depth/16,384-node/
+single-request/32-concurrency/10,000-ms policy; below, exact and over-limit
+fixtures; UTF-8 and JSON escaping cost; cycles and non-JSON values; strictly
+increasing request IDs; controlled-clock deadline/cancel races; safe errors,
+events, diagnostics and effects; and zero Handler hits for rejected input. It
+uses the real Contract and SDK through MessageChannel, the Dispatcher,
+permission and storage regressions, Runtime Session cleanup, public Contract
+and SDK tarballs, workspace/private-import boundaries, and bounded target
+macOS WKWebView evidence.
+
+The committed WKWebView evidence must prove one over-depth request is rejected
+with zero Handler hits and that a later legal request on the same healthy
+Session still completes. Evidence stores only bounded boolean facts and must
+not contain a payload, URL, origin, identity, grant, request ID, diagnostic or
+private error. This macOS evidence does not establish Windows/Linux transport.
+
+The gate proves per-frame bytes/depth/nodes/single-request limits and
+per-Session concurrency, replay and Host execution deadline. It does not prove
+sustained frequency control, iframe/CPU/memory monitoring, plugin suspension,
+isolation escalation, automatic recovery, public policy configuration or
+persistent diagnostic history; those controls remain Task 7.5 or later changes.
 
 ## Plugin Host API Dispatcher Validation
 

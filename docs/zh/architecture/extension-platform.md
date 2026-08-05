@@ -709,9 +709,54 @@ binding。该 binding 实现 `runtime.get_context`、`ui.close`、`actions.open`
 先校验并发送成功的 `ui.close` result，再执行匹配目标的关闭 effect。该 outcome 永不跨 wire，也不改变
 公共 SDK transport。
 
+### 已交付的 Host 私有 RPC v1 校验
+
+Host adapter 现在会在递归 Contract 校验之前以及每次出站交付之前，强制执行一套不可变的 RPC v1 policy：
+
+| Budget | 固定 v1 上限 |
+| --- | ---: |
+| 每个私有 frame 的 canonical JSON-compatible cost | 5,242,880 bytes |
+| 语义 payload 嵌套深度 | 32 |
+| 私有 frame 总嵌套深度 | 36 |
+| 已访问 value 与 object key | 16,384 |
+| 每个 frame 的 request 数 | 1 |
+| 每个 Runtime Session 的 in-flight Handler 数 | 32 |
+| Host execution deadline | 10,000 ms |
+
+analyzer 以迭代方式遍历 JSON-compatible 输入，在不先序列化完整 value 的前提下计算 UTF-8 与 JSON escaping
+成本，在首次确认超限时停止；它拒绝循环、非 plain object、非有限数字及其他非 JSON value，且不会修改输入。
+Manifest、grant、插件来源、SDK option 或 payload 都不能提高这些上限。
+
+入站顺序固定为：浅层 exact envelope/request ID 分类、有界 frame 与语义 payload 分析、公共 Contract 校验，
+最后才准入 permission-aware Dispatcher。可安全关联的 malformed request 返回 `invalid_request`，无效 params
+返回 `invalid_params`，未声明 method 返回 `method_not_found`，byte/depth/node/concurrency 拒绝返回
+`limit_exceeded`。这些失败不占用 Handler slot，并保持健康 Session 可用。未知版本、未知 frame type、私有
+envelope 字段、非 JSON frame，以及重复或倒退 request ID 仍属于 terminal protocol violation。严格递增的
+request sequence high-water mark 在不保存无限增长 terminal-ID 集合的情况下拒绝 replay。
+
+每个获准 request 都拥有一个 AbortController 与 10,000 ms Host deadline。Handler completion、SDK cancel、
+deadline、currentness 丢失和 cleanup 通过同一个 exactly-once settlement 竞争。Host deadline 先胜出时释放
+slot、abort Handler 并返回 Contract-valid `timeout`；SDK lifecycle timeout 先胜出时仍保持 SDK 自己可区分的
+lifecycle `timeout`，并且最多发送一次 cancel。
+
+result、error 和 event 在 `postMessage` 前都要经过同一 frame budget 与配对的公共 Contract validator。
+Handler throw、无效/超限 value 或 method/result mismatch 会转换为一个固定安全的 `internal_error`，而不会
+断开其他方面健康的 Session。无效 event 会被抑制且不通知 subscriber。post-response effect 仅在有效 response
+已经发送、request 与 Session 仍 current 时执行。
+
+production 通过冻结的 Host 私有 diagnostic record 观察失败；record 只包含 trusted plugin ID、存在时已验证的
+method、`ingress | execution | egress`、闭集 code 和固定英文消息。它绝不包含 request ID、payload、URL、path、
+origin、grant、exception、stack、Port、provider 或 Host object，sink throw 也不能影响 settlement。diagnostic
+不会持久化，也不会向插件公开。
+
+本次交付不新增 batch/streaming RPC、持续调用频率限制、iframe/CPU/memory 监控、插件暂停、隔离升级、自动
+恢复、公共 policy 配置或 diagnostic history。这些 Runtime resource control 仍属于 Task 7.5 或后续独立 change。
+
 运行 `pnpm run check:plugin-sdk-transport` 可验证 codec drift、SDK/Testkit、iframe/Host adapter、真实
 tarball no-DOM/browser consumer、真实 MessageChannel integration、Runtime lifecycle 与有界 macOS
 WKWebView evidence。本交付不声称 Windows/Linux Runtime transport 支持。
+运行 `pnpm run check:plugin-rpc-validation` 可验证 RPC policy、恶意 fixture、admission/egress race、
+Dispatcher/provider integration、私有边界和真实资源拒绝 evidence。
 
 ## 已交付的 Host 私有 Plugin Host API Dispatcher
 
@@ -739,7 +784,7 @@ clipboard capability。
 
 运行 `pnpm run check:plugin-host-api-dispatcher` 可执行 Dispatcher、Navigation、Action、Runtime、
 MessageChannel、公共 tarball、export、dependency 与 workspace boundary 聚焦门禁。该能力不增加公共 export、
-wire frame 或 SDK dependency。通用 RPC resource limit、项目模板、CLI 与开发模式仍是独立能力。
+wire frame 或 SDK dependency。持续 Runtime resource isolation、项目模板、CLI 与开发模式仍是独立能力。
 
 ## 已交付的 Host 私有 Plugin Permission Core 与文本剪贴板
 
@@ -1000,8 +1045,8 @@ Host API 方法保持小型、类型化、版本化，并且可以独立测试�
 静态 Manifest 格式、校验器、Host 私有本地安装与同 identity replacement、绑定 revision 的
 enable/disable/uninstall 基础设施、scoped package-relative resources、Plugin surface 投影、生产
 Action 激活、Page Registry/navigation、macOS 隔离 iframe Runtime、Host 私有进程内 Runtime Session、
-公共 SDK iframe transport/Host Port adapter、公共 Host API 语义契约、Host 私有 Dispatcher 与插件 scoped
-storage provider、permission core 与 macOS 文本剪贴板 provider 已经交付。其余每项能力——完整插件管理 UI、
-permission prompt/settings/history、通用 RPC limit、公共打包、
-远程/自动更新、用户主动 rollback history 或 sidecar——
+公共 SDK iframe transport/Host Port adapter、公共 Host API 语义契约、Host 私有 RPC v1 validation boundary、
+Dispatcher、插件 scoped storage provider、permission core 与 macOS 文本剪贴板 provider 已经交付。其余每项
+能力——完整插件管理 UI、permission prompt/settings/history、持续 frequency/CPU/memory/isolation/recovery
+control、公共打包、远程/自动更新、用户主动 rollback history 或 sidecar——
 都需要独立的已接受规格和实现证据。本文定义架构方向和边界，不是发布检查清单。

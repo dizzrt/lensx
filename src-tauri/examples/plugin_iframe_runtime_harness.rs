@@ -213,6 +213,12 @@ struct RuntimeReport {
     #[serde(default)]
     transport_cleanup_zero_handler_hits: Option<bool>,
     #[serde(default)]
+    transport_limit_rejected: Option<bool>,
+    #[serde(default)]
+    transport_limit_zero_handler_hits: Option<bool>,
+    #[serde(default)]
+    transport_recovery_after_limit: Option<bool>,
+    #[serde(default)]
     host_api_dispatcher_version: Option<String>,
     #[serde(default)]
     host_api_context: Option<bool>,
@@ -303,6 +309,12 @@ struct RuntimeEvidence {
     transport_pending_terminated: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     transport_cleanup_zero_handler_hits: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transport_limit_rejected: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transport_limit_zero_handler_hits: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transport_recovery_after_limit: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     host_api_dispatcher_version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -431,6 +443,9 @@ fn plugin_iframe_runtime_harness_record(
                 report.transport_cancel_observed,
                 report.transport_pending_terminated,
                 report.transport_cleanup_zero_handler_hits,
+                report.transport_limit_rejected,
+                report.transport_limit_zero_handler_hits,
+                report.transport_recovery_after_limit,
                 report.host_api_context,
                 report.host_api_actions_open,
                 report.host_api_ui_close_response_before_effect,
@@ -536,6 +551,9 @@ fn plugin_iframe_runtime_harness_record(
         transport_cancel_observed: report.transport_cancel_observed,
         transport_pending_terminated: report.transport_pending_terminated,
         transport_cleanup_zero_handler_hits: report.transport_cleanup_zero_handler_hits,
+        transport_limit_rejected: report.transport_limit_rejected,
+        transport_limit_zero_handler_hits: report.transport_limit_zero_handler_hits,
+        transport_recovery_after_limit: report.transport_recovery_after_limit,
         host_api_dispatcher_version: report.host_api_dispatcher_version,
         host_api_context: report.host_api_context,
         host_api_actions_open: report.host_api_actions_open,
@@ -815,6 +833,21 @@ fn host_document(
           let actionOpened = false;
           let closeResponseBeforeEffect = false;
           let unavailableReturned = false;
+          let limitRejected = false;
+          let limitZeroHandlerHits = false;
+          let recoveryAfterLimit = false;
+          let handlerHits = 0;
+          const withinSemanticDepth = (value) => {{
+            const work = [{{ value, depth: 0 }}];
+            while (work.length > 0) {{
+              const item = work.pop();
+              if (item.depth > 32) return false;
+              if (typeof item.value !== 'object' || item.value === null) continue;
+              const values = Array.isArray(item.value) ? item.value : Object.values(item.value);
+              for (const child of values) work.push({{ value: child, depth: item.depth + 1 }});
+            }}
+            return true;
+          }};
           const response = (requestId, result) => channel.port1.postMessage(Object.freeze({{
             contract_version: '0.1.0', type: 'lensx.plugin_transport.response',
             request_id: requestId, result: Object.freeze(result),
@@ -841,6 +874,7 @@ fn host_document(
                 typeof data.request_id !== 'string') {{ oldPortEvents += 1; return; }}
             requests.add(data.request_id);
             if (data.request_id === 'request_0000000000000002') {{
+              handlerHits += 1;
               response(data.request_id, {{ method: 'actions.open', result: {{ opened: true }} }});
               actionOpened = true;
               if (requests.has('request_0000000000000001')) response(
@@ -853,6 +887,7 @@ fn host_document(
               contextProvided = requests.has('request_0000000000000001');
             }}
             if (data.request_id === 'request_0000000000000003') {{
+              handlerHits += 1;
               response(data.request_id, {{ method: 'ui.close', result: {{ accepted: true }} }});
               closeResponseBeforeEffect = true;
             }}
@@ -866,13 +901,28 @@ fn host_document(
                 }}) }}),
               }}));
             }}
-            if (data.request_id === 'request_0000000000000005') {{
+            if (data.request_id === 'request_0000000000000005' &&
+                data.request?.method === 'storage.set' &&
+                !withinSemanticDepth(data.request.params?.value)) {{
+              const hitsBeforeRejection = handlerHits;
+              channel.port1.postMessage(Object.freeze({{
+                contract_version: '0.1.0', type: 'lensx.plugin_transport.response',
+                request_id: data.request_id,
+                error: Object.freeze({{ code: 'limit_exceeded', message: 'The Host API limit was exceeded.' }}),
+              }}));
+              limitRejected = true;
+              limitZeroHandlerHits = handlerHits === hitsBeforeRejection;
+              return;
+            }}
+            if (data.request_id === 'request_0000000000000006') {{
+              handlerHits += 1;
               channel.port1.postMessage(Object.freeze({{
                 contract_version: '0.1.0', type: 'lensx.plugin_transport.response',
                 request_id: data.request_id,
                 error: Object.freeze({{ code: 'unavailable', message: 'The Host API is unavailable.' }}),
               }}));
               unavailableReturned = true;
+              recoveryAfterLimit = limitRejected;
               resolve({{
                 port: channel.port1,
                 exactWindow: frame.contentWindow === expectedWindow,
@@ -886,6 +936,9 @@ fn host_document(
                   closeResponseBeforeEffect,
                   contextReplacement: eventSent,
                   unavailableReturned,
+                  limitRejected,
+                  limitZeroHandlerHits,
+                  recoveryAfterLimit,
                 }},
               }});
             }}
@@ -978,6 +1031,12 @@ fn host_document(
               transport_cancel_observed: prior.firstTransport.cancelObserved && second.transport.cancelObserved,
               transport_pending_terminated: true,
               transport_cleanup_zero_handler_hits: true,
+              transport_limit_rejected:
+                prior.firstTransport.limitRejected && second.transport.limitRejected,
+              transport_limit_zero_handler_hits:
+                prior.firstTransport.limitZeroHandlerHits && second.transport.limitZeroHandlerHits,
+              transport_recovery_after_limit:
+                prior.firstTransport.recoveryAfterLimit && second.transport.recoveryAfterLimit,
               host_api_dispatcher_version: '0.1.0',
               host_api_context: prior.firstTransport.contextProvided && second.transport.contextProvided,
               host_api_actions_open: prior.firstTransport.actionOpened && second.transport.actionOpened,

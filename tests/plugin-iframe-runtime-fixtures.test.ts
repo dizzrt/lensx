@@ -82,6 +82,8 @@ describe('plugin iframe Runtime package fixtures', () => {
       'private_session_bootstrap_consumer',
       'single_use_nonce',
       'message_port_transfer',
+      'rpc_limit_rejection',
+      'rpc_recovery_after_limit',
     ]);
     expect(fixture?.expected.facts.files.map(({ path }) => path)).toEqual(
       expect.arrayContaining([

@@ -5,6 +5,7 @@ export * from './navigation';
 export * from './PluginRuntimeFrame';
 export * from './policy';
 export * from './resolver';
+export * from './rpc-validation';
 export * from './scheduler';
 export * from './session-adapters';
 export * from './session-contract';
