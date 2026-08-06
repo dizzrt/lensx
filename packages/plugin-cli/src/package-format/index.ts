@@ -1,23 +1,23 @@
 import type { PluginHostVersions } from '@lensx/plugin-contract';
 
-import { buildCanonicalChecksums, parseCanonicalChecksums, sha256Hex, validateChecksumCoverage } from './checksums.ts';
+import { buildCanonicalChecksums, parseCanonicalChecksums, sha256Hex, validateChecksumCoverage } from './checksums.js';
 import {
   PLUGIN_PACKAGE_CHECKSUMS_PATH,
   PLUGIN_PACKAGE_FORMAT_VERSION,
   PLUGIN_PACKAGE_LIMITS,
   PLUGIN_PACKAGE_MANIFEST_PATH,
-} from './constants.ts';
-import { PluginPackageFormatError, packageDiagnostic, sortPackageDiagnostics } from './diagnostics.ts';
-import { DEFAULT_PLUGIN_HOST_VERSIONS, validatePackageManifest } from './manifest.ts';
-import { comparePathBytes, validatePathCollection } from './path.ts';
-import { createCanonicalTar, createCanonicalTarHeader } from './tar.ts';
-import type { PackedPluginPackage, PluginPackageInputFile, PluginPackageInspectionResult } from './types.ts';
-import { compressCanonicalTar, inspectZstandardTar } from './zstd.ts';
+} from './constants.js';
+import { PluginPackageFormatError, packageDiagnostic, sortPackageDiagnostics } from './diagnostics.js';
+import { DEFAULT_PLUGIN_HOST_VERSIONS, validatePackageManifest } from './manifest.js';
+import { comparePathBytes, validatePathCollection } from './path.js';
+import { createCanonicalTar, createCanonicalTarHeader } from './tar.js';
+import type { PackedPluginPackage, PluginPackageInputFile, PluginPackageInspectionResult } from './types.js';
+import { compressCanonicalTar, inspectZstandardTar } from './zstd.js';
 
-export * from './constants.ts';
-export { PluginPackageFormatError, sortPackageDiagnostics } from './diagnostics.ts';
-export type * from './types.ts';
-export { compressCanonicalTar } from './zstd.ts';
+export * from './constants.js';
+export { PluginPackageFormatError, sortPackageDiagnostics } from './diagnostics.js';
+export type * from './types.js';
+export { compressCanonicalTar } from './zstd.js';
 export { buildCanonicalChecksums, createCanonicalTar, createCanonicalTarHeader, sha256Hex };
 
 export const inspectPluginPackage = async (

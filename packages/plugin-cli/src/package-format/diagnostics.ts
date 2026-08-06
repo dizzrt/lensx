@@ -1,4 +1,4 @@
-import type { PluginPackageDiagnostic, PluginPackageDiagnosticCode } from './types.ts';
+import type { PluginPackageDiagnostic, PluginPackageDiagnosticCode } from './types.js';
 
 const DIAGNOSTIC_MESSAGES: Readonly<Record<PluginPackageDiagnosticCode, string>> = Object.freeze({
   archive_header_invalid: 'The package TAR header is invalid.',

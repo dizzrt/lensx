@@ -23,6 +23,7 @@ describe('workspace lifecycle aggregation', () => {
       expect(invocations).toEqual([
         `root application:app:${lifecycle}`,
         `@lensx/plugin-contract (packages/plugin-contract):${lifecycle}`,
+        `@lensx/plugin-cli (packages/plugin-cli):${lifecycle}`,
         `@lensx/plugin-sdk (packages/plugin-sdk):${lifecycle}`,
         `@lensx/plugin-testkit (packages/plugin-testkit):${lifecycle}`,
         `@lensx/example-plugin-framework-neutral (examples/plugins/framework-neutral):${lifecycle}`,

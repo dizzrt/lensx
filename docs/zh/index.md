@@ -18,6 +18,8 @@
   lifecycle scripts、依赖边界和 pack 检查。
 - [插件项目模板](development/plugin-project-template.md) — 选择、运行、调整、隔离、打包与验证
   仓库维护的插件起步项目。
+- [插件开发者 CLI](development/plugin-developer-cli.md) — 通过公共 CLI 创建、构建、校验、
+  打包和检查插件。
 - [前端指南](development/frontend-guidelines.md) — React、Semi Design、样式、主题、
   国际化和无障碍规则。
 - [项目工作流](development/project-workflow.md) — 事实来源、文档治理、OpenSpec 和

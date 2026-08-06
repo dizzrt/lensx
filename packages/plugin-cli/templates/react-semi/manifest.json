@@ -1,0 +1,72 @@
+{
+  "manifest_version": "0.1.0",
+  "plugin_id": "dev.lensx.template.react-semi",
+  "version": "0.1.0",
+  "display": {
+    "name": {
+      "en-US": "React and Semi starter",
+      "zh-CN": "React 与 Semi 起步模板"
+    },
+    "description": {
+      "en-US": "A minimal lensX plugin with React, Semi Design, and Plugin UI.",
+      "zh-CN": "使用 React、Semi Design 与 Plugin UI 的最小 lensX 插件。"
+    }
+  },
+  "publisher": {
+    "author": "lensX contributors",
+    "homepage": "https://github.com/dizzrt/lensx",
+    "repository": "https://github.com/dizzrt/lensx"
+  },
+  "compatibility": {
+    "lensx": {
+      "min_version": "0.1.0",
+      "max_version_exclusive": "0.2.0"
+    },
+    "host_api": {
+      "min_version": "0.1.0",
+      "max_version_exclusive": "0.2.0"
+    }
+  },
+  "runtime": {
+    "kind": "iframe",
+    "entry": "index.html"
+  },
+  "requested_permissions": [],
+  "contributes": {
+    "pages": [
+      {
+        "id": "main",
+        "title": {
+          "en-US": "React and Semi starter",
+          "zh-CN": "React 与 Semi 起步模板"
+        },
+        "route": "/",
+        "required_permissions": []
+      }
+    ],
+    "actions": [
+      {
+        "id": "open",
+        "title": {
+          "en-US": "Open React and Semi starter",
+          "zh-CN": "打开 React 与 Semi 起步模板"
+        },
+        "description": {
+          "en-US": "Open the starter page.",
+          "zh-CN": "打开起步页面。"
+        },
+        "default_keywords": {
+          "en-US": ["starter", "react", "semi"],
+          "zh-CN": ["起步", "React", "Semi"]
+        },
+        "target": {
+          "kind": "page",
+          "page_id": "main"
+        }
+      }
+    ],
+    "launcher": {
+      "default_action_id": "open"
+    }
+  }
+}

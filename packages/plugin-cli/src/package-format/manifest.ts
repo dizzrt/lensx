@@ -7,9 +7,9 @@ import {
   validatePluginManifest,
 } from '@lensx/plugin-contract';
 
-import { PLUGIN_PACKAGE_CHECKSUMS_PATH, PLUGIN_PACKAGE_MANIFEST_PATH } from './constants.ts';
-import { packageDiagnostic } from './diagnostics.ts';
-import type { PluginPackageDiagnostic, PluginPackageFileFact } from './types.ts';
+import { PLUGIN_PACKAGE_CHECKSUMS_PATH, PLUGIN_PACKAGE_MANIFEST_PATH } from './constants.js';
+import { packageDiagnostic } from './diagnostics.js';
+import type { PluginPackageDiagnostic, PluginPackageFileFact } from './types.js';
 
 export const DEFAULT_PLUGIN_HOST_VERSIONS: PluginHostVersions = Object.freeze({
   lensx: '0.1.0',

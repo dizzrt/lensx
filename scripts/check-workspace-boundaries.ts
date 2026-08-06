@@ -20,6 +20,8 @@ export const WORKSPACE_BOUNDARY_RULES = {
   hostPrivateDependency: 'workspace/host-private-dependency',
   hostPrivateImport: 'workspace/host-private-import',
   hostTauriAdapter: 'workspace/host-tauri-adapter',
+  authoringToolNodeBuiltin: 'workspace/authoring-tool-node-builtin',
+  pluginAuthoringToolRuntimeImport: 'workspace/plugin-authoring-tool-runtime-import',
   pluginTauriDependency: 'workspace/plugin-tauri-dependency',
   pluginTauriImport: 'workspace/plugin-tauri-import',
   privateRoot: 'workspace/private-root',
@@ -49,6 +51,18 @@ const SOURCE_EXTENSIONS = new Set(['.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts'
 const MODULE_CANDIDATE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', '.css', '.less'];
 const DEPENDENCY_SECTIONS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'] as const;
 const TEMPLATE_PACKAGE_NAMES = new Set(['@lensx/example-plugin-framework-neutral', '@lensx/example-plugin-react-semi']);
+const PUBLIC_AUTHORING_TOOL_NAMES = new Set(['@lensx/plugin-cli']);
+const AUTHORING_TOOL_NODE_BUILTINS = new Set([
+  'node:buffer',
+  'node:child_process',
+  'node:crypto',
+  'node:fs',
+  'node:fs/promises',
+  'node:os',
+  'node:path',
+  'node:process',
+  'node:url',
+]);
 const PORTABLE_LENSX_SEMVER = /^(?:\^|~)?0\.1\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 
 const toPosixPath = (value: string): string => value.split(sep).join('/');
@@ -147,6 +161,14 @@ const collectSourceFiles = (directory: string): string[] => {
     }
   }
   return files;
+};
+
+const collectMemberSourceFiles = (member: WorkspaceMember): string[] => {
+  const files = collectSourceFiles(member.rootDir);
+  if (!PUBLIC_AUTHORING_TOOL_NAMES.has(member.name)) return files;
+
+  const packagedTemplateRoot = join(member.rootDir, 'templates');
+  return files.filter((file) => !isWithin(packagedTemplateRoot, file));
 };
 
 const collectModuleSpecifiers = (file: string): string[] => {
@@ -347,6 +369,33 @@ const validateSourceSpecifier = (
   const isPlugin = member.kind === 'official-plugin' || member.kind === 'example-plugin';
   const packageName =
     !specifier.startsWith('.') && !specifier.startsWith('/') ? packageNameFromSpecifier(specifier) : undefined;
+
+  if (
+    PUBLIC_AUTHORING_TOOL_NAMES.has(member.name) &&
+    specifier.startsWith('node:') &&
+    !AUTHORING_TOOL_NODE_BUILTINS.has(specifier)
+  ) {
+    diagnostics.push(
+      diagnostic(
+        rootDir,
+        WORKSPACE_BOUNDARY_RULES.authoringToolNodeBuiltin,
+        sourceFile,
+        specifier,
+        'Public authoring tools may import only their reviewed Node built-ins.',
+      ),
+    );
+  }
+  if (isPlugin && packageName !== undefined && PUBLIC_AUTHORING_TOOL_NAMES.has(packageName)) {
+    diagnostics.push(
+      diagnostic(
+        rootDir,
+        WORKSPACE_BOUNDARY_RULES.pluginAuthoringToolRuntimeImport,
+        sourceFile,
+        specifier,
+        'Plugin Runtime source must invoke the authoring CLI through package scripts rather than import it.',
+      ),
+    );
+  }
 
   if (isPlugin && specifier.startsWith('@tauri-apps/')) {
     diagnostics.push(
@@ -570,7 +619,7 @@ export const checkWorkspaceBoundaries = (rootDir: string): WorkspaceBoundaryDiag
   diagnostics.push(...validatePackageDependencies(resolvedRoot, rootManifest, members));
   const aliases = loadAliases(resolvedRoot);
   for (const member of members) {
-    for (const sourceFile of collectSourceFiles(member.rootDir)) {
+    for (const sourceFile of collectMemberSourceFiles(member)) {
       for (const specifier of collectModuleSpecifiers(sourceFile)) {
         diagnostics.push(
           ...validateSourceSpecifier(resolvedRoot, rootManifest, members, member, sourceFile, specifier, aliases),

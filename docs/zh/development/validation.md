@@ -73,6 +73,25 @@ incompatible 和 reproducible cases。只有在审查 dependency、parameter、f
 该专项门禁是对 `check:plugin-contract`、workspace boundary/lifecycle checks，以及完整 frontend/shared 与
 Rust 验证集合的补充，不会替代它们。
 
+## Plugin Developer CLI 验证
+
+修改 `@lensx/plugin-cli`、其打包模板、命令/输出 contract、项目 validator、canonical package core 或 CLI
+文档时，必须运行：
+
+```bash
+pnpm run check:plugin-developer-cli
+```
+
+该门禁检查 executable tarball、受限 exports 与 dependency closure、workspace 和文档边界、template drift、
+package-format corpus 与 CLI package tests。随后它会使用机器配置的全局 pnpm store，在系统临时 consumer
+中安装真实 Contract、SDK、UI、Testkit 与 CLI tarball。两种模板都必须完成 create、install、test、
+typecheck、build、只读 validate、可复现 pack、只读 inspect，以及 Rust inspector/installer preparation，
+且不得回链 checkout 或根 `node_modules`。
+
+CLI `build` 与默认 `pack` 会执行项目代码；`validate`、`inspect` 和 `pack --no-build` 不会。CLI compatibility
+绝不替代 Host 对不可信 package bytes 的复验。该门禁不代表 Development Mode/watch/reload 或
+signing/provenance 已交付；它们仍属于 roadmap Task 6.5 与 8.1。
+
 ## Plugin Resource Service 验证
 
 修改 Host 私有 Resource Contract、desktop adapter、Manager generation、Installer ownership proof、

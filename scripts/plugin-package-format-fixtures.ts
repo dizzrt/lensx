@@ -9,7 +9,7 @@ import {
   inspectPluginPackage,
   PLUGIN_PACKAGE_CHECKSUMS_PATH,
   packPluginPackage,
-} from '../tools/plugin-package-format/index.ts';
+} from '../packages/plugin-cli/dist/src/package-format/index.js';
 
 const rootDir = join(import.meta.dirname, '..');
 const fixtureRoot = join(rootDir, 'fixtures/plugin-package-format');

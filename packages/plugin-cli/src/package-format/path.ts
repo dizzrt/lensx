@@ -1,6 +1,6 @@
-import { PLUGIN_PACKAGE_CHECKSUMS_PATH, PLUGIN_PACKAGE_LIMITS, PLUGIN_PACKAGE_MANIFEST_PATH } from './constants.ts';
-import { packageDiagnostic } from './diagnostics.ts';
-import type { PluginPackageDiagnostic } from './types.ts';
+import { PLUGIN_PACKAGE_CHECKSUMS_PATH, PLUGIN_PACKAGE_LIMITS, PLUGIN_PACKAGE_MANIFEST_PATH } from './constants.js';
+import { packageDiagnostic } from './diagnostics.js';
+import type { PluginPackageDiagnostic } from './types.js';
 
 const SEGMENT_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/u;
 const WINDOWS_RESERVED_BASENAMES = new Set([

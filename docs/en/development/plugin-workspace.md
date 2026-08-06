@@ -6,9 +6,9 @@ The repository is a pnpm workspace that keeps the `lensx` React/Tauri Host as
 the private root package. The workspace establishes development topology,
 lifecycle aggregation, and dependency checks for public packages and plugins.
 It contains the publishable `@lensx/plugin-contract`, `@lensx/plugin-sdk`,
-`@lensx/plugin-testkit`, and optional `@lensx/plugin-ui` packages, but repository
-validation does not perform a registry publish. The workspace does not yet
-provide a plugin CLI. The Host can install/register and open a supported local
+`@lensx/plugin-testkit`, optional `@lensx/plugin-ui`, and the Node authoring
+package `@lensx/plugin-cli`, but repository validation does not perform a
+registry publish. The Host can install/register and open a supported local
 plugin, the SDK supplies the authenticated iframe transport, and the production
 Host-private Dispatcher implements `runtime.get_context`, `ui.close`,
 `actions.open`, and the five plugin-scoped `storage.*` methods. Clipboard
@@ -91,13 +91,20 @@ packs real Contract/SDK/Testkit tarballs, verifies file lists and exports, and
 installs them into isolated no-DOM consumers for typecheck and Runtime smoke
 testing. It proves semantic validity without claiming dispatch or side effects.
 
-## Host-Private Package-Format Tool
+## Plugin Developer CLI And Package Core
 
-`tools/plugin-package-format` is part of the private root Host workspace, not a
-`packages/*` member and not a plugin dependency. It owns protocol constants,
-the canonical TAR/checksum implementation, the fixed Zstandard reference
-packer, the TypeScript inspector, and fixture generation/check logic. The Rust
-counterpart lives in `src-tauri` and remains outside Tauri commands.
+`packages/plugin-cli` provides the public `@lensx/plugin-cli` package and
+`lensx-plugin` executable for `create`, `build`, `validate`, `pack`, and
+`inspect`. It is a Node authoring tool, not an iframe Runtime dependency.
+Plugin package scripts may invoke its bin, while plugin `src/**` must not import
+the CLI or an undeclared deep path.
+
+The package owns the single TypeScript implementation of the package protocol:
+protocol constants, portable paths, canonical TAR/checksums, fixed Zstandard
+packing, bounded inspection, and safe diagnostics. Those modules are internal;
+the package export map exposes only the supported CLI root, not a codec API.
+The independent Host-private Rust inspector remains in `src-tauri` and consumes
+the same committed corpus.
 
 Use the dedicated drift gate:
 
@@ -105,20 +112,26 @@ Use the dedicated drift gate:
 pnpm run check:plugin-package-format
 ```
 
-The command checks exact codec/crate inputs and constants, verifies committed
-fixtures without rewriting them, runs focused TypeScript/reproducibility tests,
-and runs Rust against the same expectations. Baseline regeneration is an
-explicit review action:
+The command builds the CLI package, checks exact codec/crate inputs and
+constants, verifies committed fixtures without rewriting them, runs the
+package-owned TypeScript/reproducibility tests, and runs Rust against the same
+expectations. Baseline regeneration is an explicit review action:
 
 ```bash
 pnpm run generate:plugin-package-format-fixtures
 ```
 
-Workspace boundaries reject imports from `tools/**` by public packages,
-official plugins, and example plugins. Public plugin tarballs contain none of
-the Host-private tool, Rust source, fixture generator, or codec dependency.
-Future `@lensx/plugin-cli` work may wrap or relocate the core through its own
-approved change; no public CLI or package-format import exists today.
+Validate the complete authoring boundary with:
+
+```bash
+pnpm run check:plugin-developer-cli
+```
+
+That gate packs all five public packages, installs them in system temporary
+consumers with the machine-configured global pnpm store, generates both
+maintained templates, runs their lifecycle and CLI flow, audits lockfile and
+module realpaths, repeats packaging byte-for-byte, and passes the resulting
+`.lxp` files to the Rust inspector and installer preparation boundary.
 
 ## Plugin SDK Package
 
@@ -314,6 +327,7 @@ pnpm --dir packages/plugin-ui run check
 pnpm --dir packages/plugin-ui run test:pack
 pnpm --dir packages/plugin-ui run test:visual
 pnpm run check:plugin-ui
+pnpm run check:plugin-developer-cli
 ```
 
 The pack gate installs real Contract, SDK, and UI tarballs into an isolated
@@ -374,7 +388,8 @@ manifests must not depend on or import `@tauri-apps/*`. Official plugins receive
 no exception to these rules.
 
 The package-level directions are Contract -> SDK -> Testkit and Contract -> SDK
--> optional UI. Testkit consumes only Contract and SDK public roots; Contract
+-> optional UI. The CLI consumes Contract plus its reviewed Node/WASM codec.
+Testkit consumes only Contract and SDK public roots; Contract
 and SDK must not depend on or import Testkit. The UI package may consume the SDK
 public context type, while the framework-neutral SDK must never depend on or
 import UI, React, or Semi Design.

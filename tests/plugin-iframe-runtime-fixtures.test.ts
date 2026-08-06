@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from '@rstest/core';
 
-import { inspectPluginPackage } from '../tools/plugin-package-format';
+import { inspectPluginPackage } from '../packages/plugin-cli/dist/src/package-format/index.js';
 
 interface FixtureExpectation {
   readonly kind:

@@ -1,9 +1,9 @@
 import { ContentChecksum, compress, createDecompressStream } from '@structured-world/structured-zstd';
 
-import { PLUGIN_PACKAGE_LIMITS, PLUGIN_PACKAGE_ZSTD_LEVEL } from './constants.ts';
-import { packageDiagnostic } from './diagnostics.ts';
-import { type CanonicalTarInspection, CanonicalTarStreamInspector } from './tar.ts';
-import type { PluginPackageDiagnostic } from './types.ts';
+import { PLUGIN_PACKAGE_LIMITS, PLUGIN_PACKAGE_ZSTD_LEVEL } from './constants.js';
+import { packageDiagnostic } from './diagnostics.js';
+import { type CanonicalTarInspection, CanonicalTarStreamInspector } from './tar.js';
+import type { PluginPackageDiagnostic } from './types.js';
 
 const ZSTD_MAGIC = 0xfd2fb528;
 const ZSTD_SKIPPABLE_MAGIC_MIN = 0x184d2a50;

@@ -195,6 +195,25 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/plugin-cli:
+    dependencies:
+      '@lensx/plugin-contract':
+        specifier: workspace:*
+        version: link:../plugin-contract
+      '@structured-world/structured-zstd':
+        specifier: 0.0.49
+        version: 0.0.49
+    devDependencies:
+      '@rstest/core':
+        specifier: ^0.11.2
+        version: 0.11.4(happy-dom@20.11.1)
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/plugin-contract:
     dependencies:
       ajv:

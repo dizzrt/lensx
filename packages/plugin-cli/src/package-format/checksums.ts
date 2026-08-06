@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 
-import { PLUGIN_PACKAGE_CHECKSUMS_PATH, PLUGIN_PACKAGE_FORMAT_VERSION } from './constants.ts';
-import { packageDiagnostic } from './diagnostics.ts';
-import { comparePathBytes } from './path.ts';
-import type { PluginPackageDiagnostic, PluginPackageFileFact } from './types.ts';
+import { PLUGIN_PACKAGE_CHECKSUMS_PATH, PLUGIN_PACKAGE_FORMAT_VERSION } from './constants.js';
+import { packageDiagnostic } from './diagnostics.js';
+import { comparePathBytes } from './path.js';
+import type { PluginPackageDiagnostic, PluginPackageFileFact } from './types.js';
 
 export interface PluginPackageChecksumRecord {
   readonly path: string;

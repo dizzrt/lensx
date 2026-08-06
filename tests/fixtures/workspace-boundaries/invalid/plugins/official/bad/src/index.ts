@@ -15,6 +15,7 @@ import '@/app/plugins/runtime/session-service';
 import type { PluginPageRuntimeDescriptor } from '@/app/plugins/runtime/types';
 import '@/styles/internal.less';
 import '@tauri-apps/api/core';
+import '@lensx/plugin-cli';
 import '../../../../src/app/desktop.ts';
 import '../../../../tools/plugin-package-format/index.ts';
 import '../../../../src-tauri/src/plugin_resource_service.rs';

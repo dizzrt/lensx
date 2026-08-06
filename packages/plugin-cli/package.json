@@ -1,0 +1,65 @@
+{
+  "name": "@lensx/plugin-cli",
+  "version": "0.1.0",
+  "description": "Portable authoring CLI for creating, building, validating, packing, and inspecting lensX plugins.",
+  "keywords": [
+    "lensx",
+    "plugin",
+    "cli",
+    "authoring"
+  ],
+  "homepage": "https://github.com/dizzrt/lensx#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dizzrt/lensx.git",
+    "directory": "packages/plugin-cli"
+  },
+  "bugs": {
+    "url": "https://github.com/dizzrt/lensx/issues"
+  },
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md",
+    "DEPENDENCIES.md"
+  ],
+  "bin": {
+    "lensx-plugin": "./dist/src/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "rstest run",
+    "check": "pnpm run typecheck && pnpm run test",
+    "test:pack": "node scripts/verify-package.mjs",
+    "sync:templates": "node scripts/verify-templates.mjs --write"
+  },
+  "dependencies": {
+    "@lensx/plugin-contract": "workspace:*",
+    "@structured-world/structured-zstd": "0.0.49"
+  },
+  "devDependencies": {
+    "@rstest/core": "^0.11.2",
+    "@types/node": "^24.13.3",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=11 <12"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

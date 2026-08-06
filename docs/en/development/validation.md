@@ -85,6 +85,30 @@ This dedicated gate supplements rather than replaces `check:plugin-contract`,
 workspace boundary/lifecycle checks, and the complete frontend/shared and Rust
 validation sets.
 
+## Plugin Developer CLI Validation
+
+Changes to `@lensx/plugin-cli`, its packaged templates, command/output contract,
+project validator, canonical package core, or CLI documentation must run:
+
+```bash
+pnpm run check:plugin-developer-cli
+```
+
+The gate checks the executable tarball, bounded exports and dependency closure,
+workspace and documentation boundaries, template drift, package-format corpus,
+and the CLI package tests. It then installs real Contract, SDK, UI, Testkit, and
+CLI tarballs in system temporary consumers using the machine-configured global
+pnpm store. Both templates must complete create, install, test, typecheck,
+build, read-only validate, reproducible pack, read-only inspect, and Rust
+inspector/installer preparation without linking back to the checkout or root
+`node_modules`.
+
+The CLI `build` command and default `pack` execute project code; `validate`,
+`inspect`, and `pack --no-build` do not. CLI compatibility never replaces Host
+revalidation of untrusted package bytes. This gate does not establish
+Development Mode/watch/reload or signing/provenance delivery, which remain
+roadmap Tasks 6.5 and 8.1.
+
 ## Plugin Resource Service Validation
 
 Changes to the Host-private Resource Contract, desktop adapter, Manager

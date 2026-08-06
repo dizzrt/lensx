@@ -11,7 +11,7 @@ import {
   PLUGIN_PACKAGE_CHECKSUMS_PATH,
   type PluginPackageInputFile,
   packPluginPackage,
-} from '../tools/plugin-package-format/index.ts';
+} from '../packages/plugin-cli/dist/src/package-format/index.js';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
 const temporaryRoot = await mkdtemp(resolve(tmpdir(), 'lensx-plugin-template-package-'));

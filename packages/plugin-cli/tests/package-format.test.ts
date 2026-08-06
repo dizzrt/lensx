@@ -15,9 +15,9 @@ import {
   PluginPackageFormatError,
   packPluginPackage,
   sha256Hex,
-} from '../tools/plugin-package-format/index.ts';
+} from '../src/package-format/index.ts';
 
-const rootDir = join(import.meta.dirname, '..');
+const rootDir = join(import.meta.dirname, '../../..');
 const baseManifest = JSON.parse(
   readFileSync(join(rootDir, 'packages/plugin-contract/tests/fixtures/base.json'), 'utf8'),
 ) as Record<string, unknown>;
@@ -43,7 +43,7 @@ const packageWithChecksums = async (
     ]),
   );
 
-describe('workspace-private plugin package format', () => {
+describe('plugin CLI internal package format', () => {
   it('packs and inspects a compatible package with stable facts', async () => {
     const packed = await packPluginPackage(canonicalInput());
     const result = await inspectPluginPackage(packed.bytes);

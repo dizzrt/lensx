@@ -3,8 +3,8 @@
 ## Purpose And Template Choice
 
 The repository maintains two runnable plugin starters as direct pnpm workspace
-members. They are project-owned examples, not generated output and not a
-published scaffolding command:
+members. They are the canonical project-owned sources for the matching
+`lensx-plugin create` templates packaged with `@lensx/plugin-cli`:
 
 - `examples/plugins/framework-neutral` uses TypeScript and browser DOM APIs. It
   is the smallest choice when a plugin does not need React or Semi Design.
@@ -56,9 +56,10 @@ Supported plugin imports are limited to the declared public exports:
 ```
 
 Plugins must not import `src/app/**`, `src-tauri/**`, `tools/**`, Tauri APIs,
-package source directories, or undeclared deep paths. In particular,
-`tools/plugin-package-format` is a Host-private validation tool and is not a
-template dependency or public packaging API.
+package source directories, or undeclared deep paths. The CLI's package-format
+modules are also internal and are not a plugin Runtime API. A project may call
+the `lensx-plugin` bin from authoring workflows but must not import
+`@lensx/plugin-cli` from `src/**`.
 
 ## Manifest, Page, And Action
 
@@ -91,6 +92,21 @@ directly to its document.
 
 ## Commands
 
+Create a standalone project without network access, dependency installation,
+Git initialization, or project-code execution:
+
+```bash
+lensx-plugin create ./my-plugin \
+  --template framework-neutral \
+  --plugin-id com.example.my-plugin \
+  --name "My Plugin"
+```
+
+Select `react-semi` for the React/Semi starter. The generated project declares
+`pnpm@11`, ordinary public dependency ranges, and the same lifecycle scripts
+as its canonical example. See [Plugin Developer CLI](plugin-developer-cli.md)
+for build, validation, packing, and inspection.
+
 Run one template locally with its package scripts:
 
 ```bash
@@ -120,8 +136,8 @@ uses consumer-owned overrides, installs offline from the machine-configured
 global pnpm store without lifecycle scripts, and audits resolved links, source
 imports, bundle module graphs, and output files.
 
-The root-only package gate packs each `dist/` twice with the Host-private
-reference packer. It verifies byte reproducibility, checksum coverage, and
+The package gate packs each `dist/` twice with the CLI-internal canonical
+packer. It verifies byte reproducibility, checksum coverage, and
 matching TypeScript/Rust inspection facts, then passes the same temporary
 `.lxp` bytes through the controlled Rust installer preparation boundary.
 Negative cases stop missing resources, invalid targets, non-canonical bytes,
@@ -136,9 +152,9 @@ computed public tokens, and fixed-viewport screenshots.
 
 ## Current Limits
 
-There is currently no public plugin CLI, `create` command, or Development Mode.
-Copying a maintained template is a repository workflow, not an installed lensX
-feature. The templates do not publish packages, commit `.lxp` output, automate
-installation, grant permissions, or replace native desktop acceptance. Future
-CLI or Development Mode work must preserve the same public-package and Host
-security boundaries.
+The public CLI and `create` command are available from workspace builds and real
+package tarballs, but this repository does not yet publish them to npm.
+Development Mode, watch/reload, plugin installation, permission grants,
+signing/provenance, and remote publishing remain separate capabilities.
+Generated templates and CLI validation do not replace the Host's independent
+native package and source checks.

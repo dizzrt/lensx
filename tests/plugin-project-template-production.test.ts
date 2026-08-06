@@ -3,7 +3,11 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
 import { describe, expect, test } from '@rstest/core';
-
+import {
+  inspectPluginPackage,
+  type PluginPackageInputFile,
+  packPluginPackage,
+} from '../packages/plugin-cli/dist/src/package-format/index.js';
 import { createPluginSdk } from '../packages/plugin-sdk/src';
 import { createPluginIframeTransport } from '../packages/plugin-sdk/src/iframe';
 import { LauncherActionDispatcher, LauncherActionRegistry } from '../src/app/launcher/actions';
@@ -29,7 +33,6 @@ import {
   type PluginRuntimeTransportAdapter,
 } from '../src/app/plugins/runtime';
 import { createPluginSurfaceProjectionService } from '../src/app/plugins/surfaces';
-import { inspectPluginPackage, type PluginPackageInputFile, packPluginPackage } from '../tools/plugin-package-format';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
 const templateDirectories = ['framework-neutral', 'react-semi'] as const;

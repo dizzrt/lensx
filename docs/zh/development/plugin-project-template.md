@@ -2,8 +2,8 @@
 
 ## 用途与模板选择
 
-仓库将两个可运行的插件起步项目作为 pnpm 直接 workspace member 维护。它们是项目自有示例，
-不是生成产物，也不是已发布的脚手架命令：
+仓库将两个可运行的插件起步项目作为 pnpm 直接 workspace member 维护。它们是项目自有的 canonical
+source，并用于 `@lensx/plugin-cli` 中对应的 `lensx-plugin create` 模板：
 
 - `examples/plugins/framework-neutral` 使用 TypeScript 和浏览器 DOM API。插件不需要 React 或
   Semi Design 时，应选择这个最小模板。
@@ -48,8 +48,8 @@ framework-neutral bundle 不包含 React、React DOM、Semi Design 或 Plugin UI
 ```
 
 插件不得 import `src/app/**`、`src-tauri/**`、`tools/**`、Tauri API、package source directory 或
-未声明的 deep path。尤其是 `tools/plugin-package-format` 属于 Host-private validation tool，
-不是模板依赖或公共 packaging API。
+未声明的 deep path。CLI 的 package-format modules 同样属于 internal，不是插件 Runtime API。项目可在
+authoring workflow 中调用 `lensx-plugin` bin，但不得从 `src/**` import `@lensx/plugin-cli`。
 
 ## Manifest、Page 与 Action
 
@@ -73,6 +73,19 @@ event 会替换完整 locale/theme/capability snapshot。
 应用到自己的 document。
 
 ## 命令
+
+使用以下命令创建独立项目；该过程不访问网络、不安装依赖、不初始化 Git，也不执行项目代码：
+
+```bash
+lensx-plugin create ./my-plugin \
+  --template framework-neutral \
+  --plugin-id com.example.my-plugin \
+  --name "My Plugin"
+```
+
+React/Semi 起步项目使用 `react-semi`。生成项目声明 `pnpm@11`、普通公共 dependency range，以及与
+canonical example 相同的 lifecycle scripts。构建、验证、打包与 inspection 详见
+[Plugin Developer CLI](plugin-developer-cli.md)。
 
 使用模板自己的 package scripts 运行局部验证：
 
@@ -101,7 +114,7 @@ pnpm run check:plugin-project-template
 Testkit 与 UI package，使用 consumer 自有 overrides，从机器配置的全局 pnpm store 离线且不运行
 lifecycle scripts 地安装依赖，并审计 resolved links、源码 imports、bundle module graph 和输出文件。
 
-仅根级可用的 package gate 会用 Host-private reference packer 对每个 `dist/` 打包两次，验证 byte
+package gate 会用 CLI-internal canonical packer 对每个 `dist/` 打包两次，验证 byte
 reproducibility、checksum coverage 和一致的 TypeScript/Rust inspection facts，再让受控 Rust installer
 preparation boundary 消费相同的临时 `.lxp` bytes。缺失 resource、非法 target、non-canonical bytes、
 权限与 Host-owned facts 等负例都会在 Runtime 启动前停止。
@@ -113,6 +126,6 @@ resource resolution、Runtime resolver、Session、公共 iframe transport、RPC
 
 ## 当前限制
 
-当前没有公共插件 CLI、`create` 命令或 Development Mode。复制仓库维护的模板属于仓库工作流，不是已安装
-lensX 功能。模板不会发布 package、提交 `.lxp` 输出、自动安装、授予权限或替代 native desktop acceptance。
-未来 CLI 或 Development Mode 工作仍必须保留相同的公共 package 与 Host 安全边界。
+公共 CLI 与 `create` 命令已可从 workspace build 和真实 package tarball 使用，但本仓库尚未将其发布到 npm。
+Development Mode、watch/reload、插件安装、权限授予、签名/provenance 与远程发布仍是独立能力。生成模板与
+CLI validation 不会替代 Host 独立的 native package 和 source 检查。

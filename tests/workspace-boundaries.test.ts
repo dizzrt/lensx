@@ -235,6 +235,19 @@ describe('workspace boundary checker', () => {
     expect(tauriImports.every((item) => item.specifier === '@tauri-apps/api/core')).toBe(true);
   });
 
+  test('treats the CLI as a Node authoring tool rather than a plugin Runtime dependency', () => {
+    const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
+    const runtimeImports = diagnostics.filter(
+      (item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.pluginAuthoringToolRuntimeImport,
+    );
+
+    expect(runtimeImports.map((item) => item.file)).toEqual([
+      'examples/plugins/bad/src/index.ts',
+      'plugins/official/bad/src/index.ts',
+    ]);
+    expect(runtimeImports.every((item) => item.specifier === '@lensx/plugin-cli')).toBe(true);
+  });
+
   test('rejects Host adapters, internal styles, and cross-member source paths', () => {
     const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
 

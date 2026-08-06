@@ -693,9 +693,10 @@ React 模板额外依赖 Task 1.4。
 
 **完成标准**：从模板生成的新项目无需访问 lensX 源码即可完成构建和契约验证。
 
-- [ ] **Task 6.4：提供 Plugin Developer CLI**
+- [x] **Task 6.4：提供 Plugin Developer CLI**
 
-**OpenSpec change**：`add-plugin-developer-cli`
+**OpenSpec change**：[add-plugin-developer-cli](openspec/changes/archive/2026-08-07-add-plugin-developer-cli/)
+（已完成并归档）
 
 **目标**：提供 create、validate、inspect、build 和 pack 的可重复开发工作流。
 

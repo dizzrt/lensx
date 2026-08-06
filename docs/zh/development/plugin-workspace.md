@@ -4,8 +4,8 @@
 
 本仓库是一个 pnpm workspace，并将 `lensx` React/Tauri Host 保留为 private 根
 package。workspace 为公共 package 和插件建立开发拓扑、lifecycle 聚合及依赖检查，并包含
-可发布的 `@lensx/plugin-contract`、`@lensx/plugin-sdk`、`@lensx/plugin-testkit` 与可选
-`@lensx/plugin-ui` package，但仓库验证不会执行 registry 发布操作。workspace 尚未提供插件 CLI。
+可发布的 `@lensx/plugin-contract`、`@lensx/plugin-sdk`、`@lensx/plugin-testkit`、可选
+`@lensx/plugin-ui` 与 Node 作者工具 package `@lensx/plugin-cli`，但仓库验证不会执行 registry 发布操作。
 Host 已能安装/注册并打开受支持的本地插件，SDK 也提供认证 iframe transport；production Host 私有
 Dispatcher 已实现 `runtime.get_context`、`ui.close`、`actions.open` 与五个 plugin-scoped `storage.*` method。
 只有 current Session 获得对应 grant 且 native provider 可用时，每个 clipboard method 才会独立进入 capabilities。
@@ -79,12 +79,16 @@ TypeScript/Rust 共享 fixtures，打出真实 Contract/SDK/Testkit tarball 并�
 最后将其安装到隔离 no-DOM consumer 中执行 typecheck 与 Runtime smoke。它证明语义有效，
 但不声称已经 dispatch 或执行副作用。
 
-## Host-Private Package-Format Tool
+## Plugin Developer CLI 与 Package Core
 
-`tools/plugin-package-format` 属于 private 根 Host workspace，不是 `packages/*` 成员，也不是插件依赖。
-它持有 protocol constants、canonical TAR/checksum implementation、固定 Zstandard reference packer、
-TypeScript inspector，以及 fixture generation/check 逻辑。Rust counterpart 位于 `src-tauri`，并保持在
-Tauri commands 之外。
+`packages/plugin-cli` 提供公共 `@lensx/plugin-cli` package 和 `lensx-plugin` executable，支持
+`create`、`build`、`validate`、`pack` 与 `inspect`。它是 Node 作者工具，不是 iframe Runtime
+dependency。插件 package script 可以调用其 bin，但插件 `src/**` 不得 import CLI 或未声明 deep path。
+
+该 package 持有 package protocol 的唯一 TypeScript 实现：protocol constants、portable path、
+canonical TAR/checksums、固定 Zstandard packing、有界 inspection 与安全 diagnostics。这些模块属于
+internal；package export map 只暴露受支持的 CLI root，不提供 codec API。独立的 Host-private Rust
+inspector 仍位于 `src-tauri` 并消费相同 committed corpus。
 
 使用专项 drift gate：
 
@@ -92,17 +96,23 @@ Tauri commands 之外。
 pnpm run check:plugin-package-format
 ```
 
-该命令检查精确 codec/crate inputs 与 constants，验证 committed fixtures 且不重写，运行 focused
-TypeScript/reproducibility tests，并让 Rust 消费同一 expectations。Baseline regeneration 是显式 review
-操作：
+该命令先构建 CLI package，再检查精确 codec/crate inputs 与 constants，验证 committed fixtures 且不重写，
+运行 package-owned TypeScript/reproducibility tests，并让 Rust 消费同一 expectations。Baseline
+regeneration 是显式 review 操作：
 
 ```bash
 pnpm run generate:plugin-package-format-fixtures
 ```
 
-Workspace boundary 会拒绝公共 package、官方插件和示例插件从 `tools/**` import。公共 plugin tarball 不包含
-Host-private tool、Rust source、fixture generator 或 codec dependency。未来 `@lensx/plugin-cli` 工作可以在
-自己的 approved change 中包装或迁移 core；当前没有公共 CLI 或 package-format import。
+使用以下命令验证完整作者工具边界：
+
+```bash
+pnpm run check:plugin-developer-cli
+```
+
+该门禁会打包五个公共 package，在系统临时 consumer 中使用机器配置的全局 pnpm store 安装它们，生成两类
+维护模板，运行 lifecycle 与 CLI flow，审计 lockfile 和 module realpath，逐字节重复打包，并把 `.lxp`
+交给 Rust inspector 与 installer preparation boundary。
 
 ## Plugin SDK Package
 
@@ -273,6 +283,7 @@ pnpm --dir packages/plugin-ui run check
 pnpm --dir packages/plugin-ui run test:pack
 pnpm --dir packages/plugin-ui run test:visual
 pnpm run check:plugin-ui
+pnpm run check:plugin-developer-cli
 ```
 
 pack gate 会把真实 Contract、SDK 与 UI tarball 安装到隔离的 Rsbuild browser consumer，
@@ -324,7 +335,8 @@ examples/plugins/*     -> packages/* 公共 exports
 `src/app/**` 或 `tools/**` 等 Host 私有路径、Host Tauri adapter 或 Host 内部样式。插件源码和
 manifest 不得依赖或导入 `@tauri-apps/*`。官方插件不享有规则例外。
 
-package 层级的依赖方向是 Contract -> SDK -> Testkit，以及 Contract -> SDK -> 可选 UI。Testkit
+package 层级的依赖方向是 Contract -> SDK -> Testkit，以及 Contract -> SDK -> 可选 UI。CLI 消费 Contract
+与经过审查的 Node/WASM codec。Testkit
 只能消费 Contract 与 SDK 公共根入口；Contract 和 SDK 不得依赖或导入 Testkit。UI package 可以
 消费 SDK 公共 context 类型；框架无关 SDK 不得依赖或导入 UI、React 或 Semi Design。
 

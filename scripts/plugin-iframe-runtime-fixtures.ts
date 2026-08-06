@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-import { inspectPluginPackage, packPluginPackage } from '../tools/plugin-package-format/index.ts';
+import { inspectPluginPackage, packPluginPackage } from '../packages/plugin-cli/dist/src/package-format/index.js';
 
 const rootDir = join(import.meta.dirname, '..');
 const fixtureRoot = join(rootDir, 'fixtures/plugin-iframe-runtime');

@@ -1,9 +1,9 @@
 import { createHash, type Hash } from 'node:crypto';
 
-import { PLUGIN_PACKAGE_CHECKSUMS_PATH, PLUGIN_PACKAGE_LIMITS, PLUGIN_PACKAGE_MANIFEST_PATH } from './constants.ts';
-import { packageDiagnostic, sortPackageDiagnostics } from './diagnostics.ts';
-import { comparePathBytes, validatePathCollection, validatePortablePackagePath } from './path.ts';
-import type { PluginPackageDiagnostic, PluginPackageFileFact } from './types.ts';
+import { PLUGIN_PACKAGE_CHECKSUMS_PATH, PLUGIN_PACKAGE_LIMITS, PLUGIN_PACKAGE_MANIFEST_PATH } from './constants.js';
+import { packageDiagnostic, sortPackageDiagnostics } from './diagnostics.js';
+import { comparePathBytes, validatePathCollection, validatePortablePackagePath } from './path.js';
+import type { PluginPackageDiagnostic, PluginPackageFileFact } from './types.js';
 
 const TAR_BLOCK_BYTES = 512;
 

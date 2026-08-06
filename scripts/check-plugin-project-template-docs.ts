@@ -13,7 +13,8 @@ const commandIdentifiers = [
   'examples/plugins/framework-neutral',
   'examples/plugins/react-semi',
   '@lensx/plugin-sdk/iframe',
-  'tools/plugin-package-format',
+  'lensx-plugin create',
+  '@lensx/plugin-cli',
 ];
 
 for (const [index, source] of sources.entries()) {
@@ -21,8 +22,8 @@ for (const [index, source] of sources.entries()) {
   for (const identifier of commandIdentifiers) {
     if (!source.includes(identifier)) diagnostics.push(`template/docs-identifier-missing: ${path}: ${identifier}.`);
   }
-  if (!/no public plugin CLI|没有公共插件 CLI/u.test(source)) {
-    diagnostics.push(`template/docs-cli-overclaim: ${path}.`);
+  if (/no public plugin CLI|没有公共插件 CLI/u.test(source)) {
+    diagnostics.push(`template/docs-cli-stale-claim: ${path}.`);
   }
   if (!/not a\s+complete desktop GUI E2E|不是完整桌面 GUI E2E/u.test(source)) {
     diagnostics.push(`template/docs-e2e-overclaim: ${path}.`);

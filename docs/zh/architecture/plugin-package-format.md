@@ -3,12 +3,13 @@
 ## 已交付范围
 
 lensX 已定义并实现用于单文件插件交付的 package protocol `0.1.0`。可见扩展名为 `.lxp`；其字节必须
-恰好是一个受限 Zstandard frame，内部包含 canonical、ustar-compatible TAR 流。workspace-private
+恰好是一个受限 Zstandard frame，内部包含 canonical、ustar-compatible TAR 流。CLI-internal
 TypeScript reference implementation 与 Host-private Rust inspector 消费同一份已提交 corpus，并返回一致的
 `invalid | compatible | incompatible` 结果、inspection facts、安全 diagnostics 和整包 digest。
 
-Package protocol 本身只描述并检查字节；它不拥有 source path、installation layout、Plugin Manager
-mutation、lifecycle、公共 CLI 或 development-directory input。Host 私有本地安装器和 lifecycle
+Package protocol 本身只描述并检查字节。公共 `lensx-plugin` CLI 会在 author-side validation 与 packing
+中消费它，但协议不拥有 project discovery、build lifecycle、source path、installation layout、Plugin Manager
+mutation 或 lifecycle。Host 私有本地安装器和
 lifecycle/replacement coordinator 是该协议的独立消费方：installation 可以把一个选中的兼容包复制到
 Host-owned application data 并创建首条 external registration，replacement 可以分类并原子激活同 identity
 的兼容包，uninstall 只能删除已证明受管理的 payload。三者都不会改变有效 `.lxp` 的定义。
@@ -110,8 +111,8 @@ replacement 已交付；应用卸载清理、远程/自动更新策略、签名�
 
 | 层 | 依赖 | License 与平台/维护依据 | 所需能力 |
 | --- | --- | --- | --- |
-| TypeScript | `@structured-world/structured-zstd@0.0.49` | Apache-2.0；纯 Rust/WASM ESM；Node >=18；SIMD 与 scalar payload 可在 macOS、Windows、Linux 的 Node 24 上运行；实现 protocol `0.1.0` 时已审查当前 package source 与 release metadata。 | 带 content size/checksum 的 level 19 one-shot encoding，以及验证 checksum 的 streaming decode；不使用 Node experimental API、native addon、system executable 或 dictionary。 |
-| TypeScript | Node `crypto` 与仓库 canonical TAR implementation | Node 24 built-ins 和项目自有受限 writer/parser。 | 增量 SHA-256、精确 ustar bytes 和 fail-closed profile checks，不接受通用 archive extensions。 |
+| TypeScript CLI | `@structured-world/structured-zstd@0.0.49` | Apache-2.0；纯 Rust/WASM ESM；Node >=18；SIMD 与 scalar payload 可在 macOS、Windows、Linux 的 Node 24 上运行；实现 protocol `0.1.0` 时已审查当前 package source 与 release metadata。 | 带 content size/checksum 的 level 19 one-shot encoding，以及验证 checksum 的 streaming decode；不使用 Node experimental API、native addon、system executable 或 dictionary。 |
+| TypeScript CLI | Node `crypto` 与 CLI-internal canonical TAR implementation | Node 24 built-ins 和项目自有受限 writer/parser。 | 增量 SHA-256、精确 ustar bytes 和 fail-closed profile checks，不接受通用 archive extensions。 |
 | Rust | `zstd = 0.13.3` | MIT；维护中的 zstd `1.5.7` Rust bindings，在受支持桌面 target 上提供 streaming decoder 和显式 maximum window 参数。 | 验证 checksum 的单 frame streaming decode。 |
 | Rust | `tar = 0.4.45` | MIT/Apache-2.0；维护中的跨平台 Rust crate。 | 只解析 header；项目代码仍逐字节比较受限 canonical header 并拒绝 extensions。 |
 | Rust | `sha2 = 0.10.9` | MIT/Apache-2.0；用于受支持桌面 target 的 RustCrypto implementation。 | 文件与 package identity 的增量 SHA-256。 |
@@ -128,6 +129,9 @@ pnpm run check:plugin-package-format
 
 它检查固定依赖和跨语言重复 constants，验证 committed fixture bytes 且不重写，运行 focused TypeScript 与
 reproducibility tests，并运行 Rust shared-fixture 和 boundary tests。只有有意更新 baseline 时才使用：
+
+TypeScript tests 由 `@lensx/plugin-cli` 持有；其 internal codec path 不是公共 export。真实 tarball、生成项目、
+CLI 命令与 Rust preparation workflow 使用 `pnpm run check:plugin-developer-cli` 验证。
 
 ```bash
 pnpm run generate:plugin-package-format-fixtures

@@ -4,12 +4,13 @@
 
 lensX defines and implements package protocol `0.1.0` for one-file plugin delivery. The visible extension is
 `.lxp`; the bytes are exactly one restricted Zstandard frame containing a canonical ustar-compatible TAR stream.
-The workspace-private TypeScript reference implementation and the Host-private Rust inspector consume the same
+The CLI-internal TypeScript reference implementation and the Host-private Rust inspector consume the same
 committed corpus and return the same `invalid | compatible | incompatible` result, inspection facts, safe
 diagnostics, and whole-package digest.
 
-The package protocol itself describes and inspects bytes only. It does not own a source path, installation layout,
-Plugin Manager mutation, lifecycle, public CLI, or development-directory input. The Host-private local installer and
+The package protocol itself describes and inspects bytes only. The public `lensx-plugin` CLI consumes it for
+author-side validation and packing, but the protocol does not own project discovery, build lifecycles, a source path,
+installation layout, Plugin Manager mutation, or lifecycle. The Host-private local installer and
 lifecycle/replacement coordinators are separate consumers of this protocol: installation can copy one selected
 compatible package into Host-owned application data and create the first external registration, replacement can
 classify and atomically activate a same-identity compatible package, and uninstall can delete only a proven managed
@@ -117,8 +118,8 @@ The dependency versions are exact repository inputs, not wire-format facts:
 
 | Layer | Dependency | License and platform/maintenance basis | Required capability |
 | --- | --- | --- | --- |
-| TypeScript | `@structured-world/structured-zstd@0.0.49` | Apache-2.0; pure Rust/WASM ESM; Node >=18; SIMD and scalar payloads run on Node 24 across macOS, Windows, and Linux; current package source and release metadata were reviewed when protocol `0.1.0` was implemented. | Level 19 one-shot encoding with content size/checksum plus checksum-verifying streaming decode; no Node experimental API, native addon, system executable, or dictionary. |
-| TypeScript | Node `crypto` plus the repository canonical TAR implementation | Node 24 built-ins and project-owned restricted writer/parser. | Incremental SHA-256, exact ustar bytes, and fail-closed profile checks without accepting general archive extensions. |
+| TypeScript CLI | `@structured-world/structured-zstd@0.0.49` | Apache-2.0; pure Rust/WASM ESM; Node >=18; SIMD and scalar payloads run on Node 24 across macOS, Windows, and Linux; current package source and release metadata were reviewed when protocol `0.1.0` was implemented. | Level 19 one-shot encoding with content size/checksum plus checksum-verifying streaming decode; no Node experimental API, native addon, system executable, or dictionary. |
+| TypeScript CLI | Node `crypto` plus the CLI-internal canonical TAR implementation | Node 24 built-ins and project-owned restricted writer/parser. | Incremental SHA-256, exact ustar bytes, and fail-closed profile checks without accepting general archive extensions. |
 | Rust | `zstd = 0.13.3` | MIT; maintained Rust bindings to zstd `1.5.7`, with streaming decoder and explicit maximum window parameter on supported desktop targets. | Single-frame checksum-verifying streaming decode. |
 | Rust | `tar = 0.4.45` | MIT/Apache-2.0; maintained cross-platform Rust crate. | Header parsing only; project code still compares every byte with the restricted canonical header and rejects extensions. |
 | Rust | `sha2 = 0.10.9` | MIT/Apache-2.0; RustCrypto implementation used across supported desktop targets. | Incremental SHA-256 for files and package identity. |
@@ -136,6 +137,8 @@ pnpm run check:plugin-package-format
 
 It checks pinned dependencies and duplicated cross-language constants, verifies committed fixture bytes without
 rewriting them, runs focused TypeScript and reproducibility tests, and runs the Rust shared-fixture and boundary tests.
+The TypeScript tests are owned by `@lensx/plugin-cli`; its internal codec path is not a public export. Run
+`pnpm run check:plugin-developer-cli` for the tarball, generated-project, CLI command, and Rust preparation workflow.
 Only an intentional baseline update uses:
 
 ```bash
