@@ -226,6 +226,30 @@ Shell layout and spacing in UnoCSS utilities.
 - Do not use color alone to communicate state.
 - Announce asynchronous errors and important state changes appropriately.
 
+### Plugin Management Surface
+
+- Keep Plugins as one continuous list/detail surface. Use Semi Design for
+  buttons, banners, tags, empty/loading states, radio choices, and modals; use
+  semantic Less only for the shared split-pane, selection, scrolling, and
+  focus treatment.
+- Drive every rendered fact and operation from `PluginManagementService`.
+  Components must not invoke Tauri, cache Registration state, or duplicate
+  Manager ownership and lifecycle decisions.
+- Keep shared plugin-service creation, initialization, and terminal disposal in
+  the root composition owner. Pair one composition generation with one effect
+  cleanup; leaf components and `App` must not dispose injected services. Cover
+  the production owner with a root `StrictMode` setup-cleanup-setup test.
+- Make list selection and every action keyboard reachable. Arrow up/down moves
+  between adjacent entries. Closing replacement, uninstall, or clear-data
+  confirmation restores the trigger; successful removal focuses the adjacent
+  entry or the install button.
+- Disable all conflicting operations while a mutation is pending. Require an
+  explicit modal for replacement permission differences, uninstall data
+  policy, and permanent clear-data. Uninstall defaults to retaining data and
+  clear-data is disabled unless the selected registered plugin is disabled.
+- Announce safe status and error summaries through live regions. Never render
+  raw native errors, paths, payloads, stack traces, or diagnostic messages.
+
 ## Testing
 
 - Test user-observable behavior instead of component implementation details.
@@ -254,3 +278,7 @@ Shell layout and spacing in UnoCSS utilities.
   overlap.
 - Add focused tests for extracted domain functions.
 - Avoid snapshots that obscure meaningful behavioral assertions.
+- For Plugin management changes, capture every maintained state at `650×600`
+  in English and Simplified Chinese, light and dark. Inspect the split surface,
+  selected fill, borders, overflow, long names/diagnostics, modal contrast, and
+  disabled/focus states through computed styles as well as screenshots.

@@ -1,0 +1,93 @@
+{
+  "valid": [
+    {
+      "name": "clear request",
+      "kind": "request",
+      "value": {
+        "contract_version": "0.1.0",
+        "entry_id": "entry_0123456789abcdef",
+        "expected_revision": "7"
+      }
+    },
+    {
+      "name": "changed result",
+      "kind": "result",
+      "value": {
+        "contract_version": "0.1.0",
+        "current_revision": "7",
+        "changed": true
+      }
+    },
+    {
+      "name": "enabled error",
+      "kind": "error",
+      "value": {
+        "contract_version": "0.1.0",
+        "code": "plugin_enabled",
+        "operation": "clear_plugin_data",
+        "message": "Plugin data can be cleared only while the plugin is disabled."
+      }
+    },
+    {
+      "name": "unsafe storage error",
+      "kind": "error",
+      "value": {
+        "contract_version": "0.1.0",
+        "code": "unsafe_storage",
+        "operation": "clear_plugin_data",
+        "message": "Plugin data storage cannot be cleared safely."
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "request has plugin id",
+      "kind": "request",
+      "value": {
+        "contract_version": "0.1.0",
+        "entry_id": "entry_0123456789abcdef",
+        "expected_revision": "7",
+        "plugin_id": "com.acme.plugin"
+      }
+    },
+    {
+      "name": "request has leading zero revision",
+      "kind": "request",
+      "value": {
+        "contract_version": "0.1.0",
+        "entry_id": "entry_0123456789abcdef",
+        "expected_revision": "07"
+      }
+    },
+    {
+      "name": "result leaks a path",
+      "kind": "result",
+      "value": {
+        "contract_version": "0.1.0",
+        "current_revision": "7",
+        "changed": true,
+        "path": "/private/plugin/data"
+      }
+    },
+    {
+      "name": "error has a raw message",
+      "kind": "error",
+      "value": {
+        "contract_version": "0.1.0",
+        "code": "internal",
+        "operation": "clear_plugin_data",
+        "message": "failed at /private/plugin/data/storage-v1.json"
+      }
+    },
+    {
+      "name": "unknown error code",
+      "kind": "error",
+      "value": {
+        "contract_version": "0.1.0",
+        "code": "permission_denied",
+        "operation": "clear_plugin_data",
+        "message": "Permission denied."
+      }
+    }
+  ]
+}

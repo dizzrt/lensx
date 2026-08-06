@@ -1,5 +1,6 @@
 import { describe, expect, rs, test } from '@rstest/core';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import validRegistrationCases from '../fixtures/plugin-registration-contract/valid/cases.json';
 import App from '../src/App';
 import { AppProviders } from '../src/app/AppProviders';
 import {
@@ -9,28 +10,114 @@ import {
 } from '../src/app/launcher/actions';
 import { EMPTY_LAUNCHER_ACTION_COLLECTIONS } from '../src/app/launcher/collections';
 import { AppNavigationService, HostPageCatalog } from '../src/app/navigation';
-import {
-  createLocalPluginInstallationClient,
-  type LocalPluginInstallationClient,
-  LocalPluginInstallationError,
-} from '../src/app/plugins/installation';
+import type { PluginManagementService, PluginManagementViewModel } from '../src/app/plugins/management';
+import { inertPluginManagementService } from '../src/app/plugins/management';
+import { parsePluginRegistrationDetailResponse } from '../src/app/plugins/registration';
 import { type AppPreferences, type AppPreferencesClient, AppPreferencesError } from '../src/app/preferences';
 
 const inertActivationSource = {
   subscribe: async () => () => undefined,
 };
 
-const cancelledInstallationClient: LocalPluginInstallationClient = {
-  install: async () => ({ status: 'cancelled', contract_version: '0.1.0' }),
-};
+const parsedRegistrationDetail = parsePluginRegistrationDetailResponse(
+  structuredClone(validRegistrationCases.find(({ name }) => name === 'healthy_detail')?.value),
+);
+if (parsedRegistrationDetail.detail.kind !== 'registered') throw new Error('healthy detail fixture is required');
+const healthyManifest = parsedRegistrationDetail.detail.manifest;
 
-const deferred = <T,>() => {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((next) => {
-    resolve = next;
-  });
-  return { promise, resolve };
-};
+const availableOperations = Object.freeze({
+  install: true,
+  enable: false,
+  disable: true,
+  replace: true,
+  uninstall: true,
+  clear_data: false,
+  retry: true,
+});
+
+class ControlledManagementService implements PluginManagementService {
+  private readonly listeners = new Set<(view: PluginManagementViewModel) => void>();
+  view: PluginManagementViewModel;
+
+  constructor(view: PluginManagementViewModel) {
+    this.view = view;
+  }
+
+  current = () => this.view;
+  subscribe = (listener: (view: PluginManagementViewModel) => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+  publish(view: PluginManagementViewModel) {
+    this.view = view;
+    for (const listener of this.listeners) listener(view);
+  }
+  initialize = rs.fn(async () => undefined);
+  refresh = rs.fn(async () => undefined);
+  select = rs.fn(async () => undefined);
+  install = rs.fn(async () => undefined);
+  setEnabled = rs.fn(async () => undefined);
+  prepareReplacement = rs.fn(async () => undefined);
+  commitReplacement = rs.fn(async () => undefined);
+  cancelReplacement = rs.fn(async () => undefined);
+  uninstall = rs.fn(async () => undefined);
+  clearData = rs.fn(async () => undefined);
+  destroy = rs.fn(async () => undefined);
+}
+
+const emptyManagementView: PluginManagementViewModel = Object.freeze({
+  state: 'empty',
+  revision: '1',
+  entries: Object.freeze([]),
+  detail: Object.freeze({ kind: 'none' }),
+  operations: Object.freeze({
+    ...availableOperations,
+    enable: false,
+    disable: false,
+    replace: false,
+    uninstall: false,
+  }),
+});
+
+const healthyEntry = Object.freeze({
+  kind: 'registered' as const,
+  entry_id: 'entry_0000000000000101',
+  plugin_id: healthyManifest.plugin_id,
+  version: healthyManifest.version,
+  display: healthyManifest.display,
+  source: 'external' as const,
+  enabled: true,
+  compatibility: Object.freeze({ lensx: true, host_api: true }),
+  runtime: Object.freeze({ kind: 'inactive' as const }),
+});
+
+const healthyManagementView: PluginManagementViewModel = Object.freeze({
+  state: 'ready',
+  revision: '2',
+  entries: Object.freeze([healthyEntry]),
+  selected_entry_id: healthyEntry.entry_id,
+  detail: Object.freeze({
+    kind: 'registered',
+    entry_id: healthyEntry.entry_id,
+    manifest: healthyManifest,
+    source: 'external',
+    enabled: true,
+    compatibility: Object.freeze({ lensx: true, host_api: true }),
+    runtime: Object.freeze({ kind: 'inactive' }),
+    permissions: Object.freeze([
+      Object.freeze({
+        permission_id: 'clipboard.read',
+        requested: true,
+        supported: true,
+        granted: true,
+        effective: 'granted',
+        methods: Object.freeze(['clipboard.read']),
+      }),
+    ]),
+    diagnostics: Object.freeze([]),
+  }),
+  operations: availableOperations,
+});
 
 const createNavigationService = () =>
   new AppNavigationService(
@@ -44,12 +131,12 @@ const createNavigationService = () =>
   );
 
 const renderSettingsApp = ({
-  installationClient = cancelledInstallationClient,
+  managementService = inertPluginManagementService,
   preferencesClient,
   initialLocale = 'en-US',
   initialThemeMode = 'light',
 }: {
-  installationClient?: LocalPluginInstallationClient;
+  managementService?: PluginManagementService;
   preferencesClient: AppPreferencesClient;
   initialLocale?: 'en-US' | 'zh-CN';
   initialThemeMode?: 'light' | 'dark';
@@ -66,9 +153,9 @@ const renderSettingsApp = ({
           recordUse: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
           setPinned: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
         }}
-        installationClient={installationClient}
         navigationService={navigationService}
         preferencesClient={preferencesClient}
+        pluginManagementService={managementService}
       />
     </AppProviders>,
   );
@@ -193,8 +280,10 @@ describe('Host settings surface', () => {
     expect(document.body).not.toHaveAttribute('theme-mode');
   });
 
-  test('provides accessible first-level navigation and the scoped local installation entry', async () => {
+  test('renders the empty management surface and routes installation through the shared facade', async () => {
+    const managementService = new ControlledManagementService(emptyManagementView);
     renderSettingsApp({
+      managementService,
       preferencesClient: {
         read: async () => ({ theme_mode: 'light', locale: 'en-US' }),
         write: async (preferences) => preferences,
@@ -202,89 +291,144 @@ describe('Host settings surface', () => {
     });
     await openPluginsTab();
     expect(screen.getByRole('heading', { level: 3, name: 'Plugins' })).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'Choose a compatible .lxp package on this Mac to install. Plugin management actions are not available yet.',
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Install from file' })).toBeEnabled();
-    expect(screen.queryByText('Local plugins')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /enable|disable|uninstall/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('list')).not.toBeInTheDocument();
+    expect(screen.getByText('No plugins are installed.')).toBeInTheDocument();
+    const install = screen.getByRole('button', { name: 'Install from file' });
+    install.focus();
+    fireEvent.keyDown(install, { key: 'Enter' });
+    fireEvent.click(install);
+    expect(managementService.install).toHaveBeenCalledTimes(1);
   });
 
-  test('prevents re-entry while pending, announces cancellation, and restores keyboard focus', async () => {
-    const request = deferred<Awaited<ReturnType<LocalPluginInstallationClient['install']>>>();
-    const install = rs.fn(async () => request.promise);
+  test('shows healthy facts and read-only permissions and routes lifecycle actions', async () => {
+    const secondEntry = Object.freeze({
+      ...healthyEntry,
+      entry_id: 'entry_0000000000000103',
+      plugin_id: 'com.acme.second',
+      display: Object.freeze({
+        ...healthyEntry.display,
+        name: Object.freeze({ 'en-US': 'Second Plugin', 'zh-CN': '第二个插件' }),
+      }),
+    });
+    const listView = Object.freeze({ ...healthyManagementView, entries: Object.freeze([healthyEntry, secondEntry]) });
+    const managementService = new ControlledManagementService(listView);
     renderSettingsApp({
-      installationClient: { install },
+      managementService,
       preferencesClient: {
         read: async () => ({ theme_mode: 'light', locale: 'en-US' }),
         write: async (preferences) => preferences,
       },
     });
     await openPluginsTab();
-    const button = screen.getByRole('button', { name: 'Install from file' });
-    button.focus();
-    fireEvent.keyDown(button, { key: 'Enter' });
-    fireEvent.click(button);
-    fireEvent.click(button);
-
-    expect(install).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('button', { name: 'Installing…' })).toBeDisabled();
-    expect(screen.getByText('Installing…', { selector: '.settings-installation-status' })).toBeInTheDocument();
-
-    request.resolve({ status: 'cancelled', contract_version: '0.1.0' });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Install from file' })).toHaveFocus());
-    expect(screen.getByText('No plugin was selected.')).toBeInTheDocument();
-  });
-
-  test('announces safe success and failure states, permits retry, and exposes no management facts', async () => {
-    const install = rs
-      .fn<LocalPluginInstallationClient['install']>()
-      .mockRejectedValueOnce(
-        new LocalPluginInstallationError({
-          contract_version: '0.1.0',
-          code: 'busy',
-          operation: 'commit',
-          message: 'Another plugin installation is in progress.',
+    expect(screen.getByText(healthyManifest.plugin_id)).toBeInTheDocument();
+    expect(screen.getByText('Permission state is read-only here.')).toBeInTheDocument();
+    expect(screen.getByText('clipboard.read', { selector: 'code' })).toBeInTheDocument();
+    expect(screen.getByText('Granted')).toBeInTheDocument();
+    const firstEntry = document.getElementById(`plugin-management-entry-${healthyEntry.entry_id}`) as HTMLElement;
+    const secondEntryButton = document.getElementById(`plugin-management-entry-${secondEntry.entry_id}`) as HTMLElement;
+    firstEntry.focus();
+    fireEvent.keyDown(firstEntry, { key: 'ArrowDown' });
+    await waitFor(() => expect(managementService.select).toHaveBeenCalledWith(secondEntry.entry_id));
+    await waitFor(() => expect(secondEntryButton).toHaveFocus());
+    fireEvent.click(screen.getByRole('button', { name: 'Disable' }));
+    expect(managementService.setEnabled).toHaveBeenCalledWith(false);
+    const replace = screen.getByRole('button', { name: 'Replace from file' });
+    replace.focus();
+    fireEvent.keyDown(replace, { key: 'Enter' });
+    fireEvent.click(replace);
+    expect(managementService.prepareReplacement).toHaveBeenCalledTimes(1);
+    managementService.cancelReplacement.mockImplementation(async () => {
+      managementService.publish(listView);
+    });
+    managementService.publish(
+      Object.freeze({
+        ...listView,
+        confirmation: Object.freeze({
+          kind: 'replacement',
+          entry_id: healthyEntry.entry_id,
+          expected_revision: '2',
+          current_version: '1.0.0',
+          candidate_version: '2.0.0',
+          classification: 'upgrade',
+          added_permission_ids: Object.freeze(['clipboard.write']),
+          removed_permission_ids: Object.freeze([]),
         }),
-      )
-      .mockResolvedValue({
-        status: 'installed',
-        contract_version: '0.1.0',
-        plugin_id: 'com.acme.workspace',
-        version: '1.2.3',
-        revision: '7',
-      });
+      }),
+    );
+    const replacementDialog = await screen.findByRole('dialog', { name: 'Confirm replacement' });
+    const cancel = within(replacementDialog).getByRole('button', { name: 'cancel' });
+    cancel.focus();
+    fireEvent.keyDown(cancel, { key: 'Enter' });
+    fireEvent.click(cancel);
+    await waitFor(() => expect(replace).toHaveFocus());
+  });
+
+  test('requires explicit dangerous confirmations, defaults uninstall to retain data, and restores focus', async () => {
+    const disabledView: PluginManagementViewModel = Object.freeze({
+      ...healthyManagementView,
+      detail: Object.freeze({ ...healthyManagementView.detail, enabled: false }),
+      entries: Object.freeze([Object.freeze({ ...healthyEntry, enabled: false })]),
+      operations: Object.freeze({ ...availableOperations, disable: false, enable: true, clear_data: true }),
+    });
+    const managementService = new ControlledManagementService(disabledView);
+    managementService.uninstall.mockImplementation(async () => {
+      managementService.publish(emptyManagementView);
+    });
     renderSettingsApp({
-      installationClient: { install },
+      managementService,
       preferencesClient: {
         read: async () => ({ theme_mode: 'light', locale: 'en-US' }),
         write: async (preferences) => preferences,
       },
     });
     await openPluginsTab();
-    const button = screen.getByRole('button', { name: 'Install from file' });
-    fireEvent.click(button);
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Another plugin installation is in progress. Try again shortly.',
-    );
+    const clear = screen.getByRole('button', { name: 'Clear data' });
+    clear.focus();
+    fireEvent.click(clear);
+    expect(await screen.findByRole('dialog', { name: 'Clear plugin data' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'cancel' }));
+    await waitFor(() => expect(clear).toHaveFocus());
 
-    fireEvent.click(button);
-    expect(await screen.findByText('Installed com.acme.workspace version 1.2.3.')).toBeInTheDocument();
-    expect(install).toHaveBeenCalledTimes(2);
-    expect(screen.queryByText(/sha256|\/Users\/|installation path/iu)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /enable|disable|uninstall/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Uninstall' }));
+    const uninstallDialog = await waitFor(() => {
+      const activeDialog = document.querySelector<HTMLElement>('.semi-modal-content-animate-show');
+      expect(activeDialog).toHaveTextContent('Uninstall plugin');
+      return activeDialog as HTMLElement;
+    });
+    expect(within(uninstallDialog).getByRole('radio', { name: 'Retain data' })).toBeChecked();
+    const confirm = within(uninstallDialog).getByRole('button', { name: 'confirm' });
+    confirm.focus();
+    fireEvent.keyDown(confirm, { key: 'Enter' });
+    fireEvent.click(confirm);
+    expect(managementService.uninstall).toHaveBeenCalledWith('retain_data');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Install from file' })).toHaveFocus());
   });
 
-  test('localizes malformed-boundary feedback and remains readable in Simplified Chinese dark mode', async () => {
+  test('renders quarantine, degraded retry, safe feedback, and Chinese dark mode without raw diagnostics', async () => {
+    const quarantineEntry = Object.freeze({
+      kind: 'quarantined' as const,
+      entry_id: 'entry_0000000000000102',
+      plugin_id: 'com.acme.quarantine',
+      diagnostic: Object.freeze({ code: 'corrupt_record', phase: 'recover', message: '/private/raw/record.json' }),
+    });
+    const managementService = new ControlledManagementService(
+      Object.freeze({
+        state: 'ready',
+        revision: '3',
+        entries: Object.freeze([quarantineEntry]),
+        selected_entry_id: quarantineEntry.entry_id,
+        detail: Object.freeze({ ...quarantineEntry }),
+        operations: Object.freeze({
+          ...availableOperations,
+          enable: false,
+          disable: false,
+          replace: false,
+          clear_data: false,
+        }),
+        feedback: Object.freeze({ kind: 'error', code: 'cleanup_pending' }),
+      }),
+    );
     renderSettingsApp({
-      installationClient: createLocalPluginInstallationClient(async () => ({
-        status: 'installed',
-        path: '/Users/private/plugin.lxp',
-        package_digest: 'secret',
-      })),
+      managementService,
       initialLocale: 'zh-CN',
       initialThemeMode: 'dark',
       preferencesClient: {
@@ -295,11 +439,25 @@ describe('Host settings surface', () => {
     await openPluginsTab();
     expect(document.body).toHaveAttribute('theme-mode', 'dark');
     expect(screen.getByRole('heading', { level: 3, name: '插件' })).toBeInTheDocument();
-    const button = screen.getByRole('button', { name: '从本地安装' });
-    expect(screen.queryByText('本地插件')).not.toBeInTheDocument();
-    fireEvent.click(button);
-    expect(await screen.findByRole('alert')).toHaveTextContent('lensX 收到了无效的安装响应。');
-    expect(document.body).not.toHaveTextContent('/Users/private/plugin.lxp');
-    expect(document.body).not.toHaveTextContent('secret');
+    expect(screen.getByText('插件记录已损坏。')).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent('/private/raw/record.json');
+
+    managementService.publish(
+      Object.freeze({
+        state: 'degraded',
+        revision: '4',
+        entries: Object.freeze([]),
+        detail: Object.freeze({ kind: 'none' }),
+        operations: Object.freeze({ ...availableOperations, install: false, retry: true }),
+        diagnostic: Object.freeze({ code: 'unavailable', phase: 'initialize', message: 'raw native stack' }),
+      }),
+    );
+    expect(await screen.findByText('插件管理不可用')).toBeInTheDocument();
+    const retry = screen.getByRole('button', { name: '重试' });
+    retry.focus();
+    fireEvent.keyDown(retry, { key: 'Enter' });
+    fireEvent.click(retry);
+    expect(managementService.refresh).toHaveBeenCalledTimes(1);
+    expect(document.body).not.toHaveTextContent('raw native stack');
   });
 });

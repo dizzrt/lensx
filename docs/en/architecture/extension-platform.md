@@ -1153,6 +1153,43 @@ checks, and the existing bounded macOS WKWebView transport evidence. This
 delivery adds no management UI, product copy, theme or accessibility surface,
 permission prompt, general RPC limit, template, CLI, or development mode.
 
+## Shipped Host-Private Plugin Management Settings
+
+The trusted Settings page now consumes one root-private
+`PluginManagementService`. The facade observes complete immutable Registration
+snapshots, loads detail only against the same revision, projects bounded
+diagnostics and read-only requested/supported/granted/effective permission
+facts, and serializes installation, enable/disable, replacement, uninstall,
+and data-clear mutations. React receives typed operation availability and safe
+outcomes; it does not invoke Tauri or reproduce Manager transition rules.
+
+The root plugin composition is the sole lifecycle owner for the shared
+management, lifecycle, replacement, and Registration-projection services. Each
+React effect setup creates and initializes one composition generation, and its
+paired cleanup destroys only that generation. `App` and the Settings component
+consume injected services without reinitializing or destroying them. This
+keeps development `StrictMode` setup-cleanup-setup cycles from reusing a
+terminally destroyed facade or leaving the management view in `loading`.
+
+Replacement remains a prepare/confirm/commit flow. Its confirmation exposes
+the version classification and permission additions/removals, and becomes
+invalid when the Registration revision changes. Uninstall defaults to
+`retain_data`; `delete_data` is explicit. Clearing data is available only for a
+current disabled registered entry and uses the Host-private Plugin Data
+Management Contract `0.1.0`. Rust revalidates the opaque entry identity,
+expected revision, disabled state, canonical ownership, and safe filesystem
+evidence while holding the Installer data boundary, then atomically commits an
+empty canonical `storage-v1.json`. Missing or already-empty storage is
+idempotent, while ambiguous, linked, escaped, stale, enabled, quarantined, or
+degraded evidence fails closed.
+
+The management surface does not expose permission mutation, raw paths or
+errors, Publisher trust, Registry patch/history protocols, a public management
+API, or any management export through Contract, SDK, Testkit, or Plugin UI.
+Run `pnpm run check:plugin-management-settings` for the private boundary,
+facade/UI regressions, public-package checks, and fixed `650×600` bilingual
+light/dark screenshots and computed styles.
+
 ## Shipped Public Plugin Testkit
 
 lensX ships `@lensx/plugin-testkit@0.1.0` with one public root entry. Its Runtime

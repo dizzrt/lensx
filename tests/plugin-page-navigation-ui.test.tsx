@@ -147,6 +147,7 @@ const renderPluginComposition = () => {
     disconnect: () => undefined,
     dispose: () => undefined,
   } as unknown as PluginRuntimeSessionService;
+  void projection.initialize();
   render(
     <AppProviders>
       <TestProviderControls />

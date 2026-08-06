@@ -6,6 +6,7 @@ use std::sync::Arc;
 pub(crate) mod frame_aware_navigation_policy;
 #[cfg(target_os = "macos")]
 pub(crate) mod frame_aware_navigation_setup;
+pub mod plugin_data_management;
 #[cfg(test)]
 mod plugin_host_api_contract;
 pub(crate) mod plugin_identity;
@@ -48,6 +49,7 @@ pub fn run() {
             plugin_installer::commit_local_plugin_replacement,
             plugin_installer::install_local_plugin,
             plugin_installer::prepare_local_plugin_replacement,
+            plugin_data_management::clear_plugin_data,
             plugin_lifecycle::set_plugin_enabled,
             plugin_lifecycle::uninstall_plugin,
             plugin_permission::plugin_clipboard,

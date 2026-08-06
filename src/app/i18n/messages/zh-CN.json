@@ -94,24 +94,106 @@
     },
     "plugins": {
       "title": "插件",
-      "description": "从这台 Mac 选择一个兼容的 .lxp 包进行安装。暂不提供插件管理操作。",
+      "description": "安装和管理由当前 lensX Host 持有的插件。",
       "install": "从本地安装",
       "pending": "正在安装…",
-      "cancelled": "未选择插件。",
-      "success": "已安装 {{pluginId}}，版本 {{version}}。",
-      "failure": {
-        "invalidPackage": "所选文件不是有效的 lensX 插件包。",
-        "incompatible": "所选插件与当前 lensX 版本不兼容。",
-        "alreadyInstalled": "已安装具有相同标识的插件。",
-        "identityQuarantined": "该插件标识已被隔离，无法通过安装进行替换。",
+      "loading": "正在加载插件…",
+      "loadingDetail": "正在加载插件详情…",
+      "empty": "尚未安装插件。",
+      "listLabel": "已安装插件",
+      "detailLabel": "插件详情",
+      "selectPrompt": "选择插件以查看详情。",
+      "retry": "重试",
+      "enabled": "已启用",
+      "disabled": "已禁用",
+      "quarantined": "已隔离",
+      "quarantineDescription": "无法安全加载此条目，目前仅可移除。",
+      "degradedTitle": "插件管理不可用",
+      "degraded": "lensX 无法建立可信的插件快照。请解决诊断问题后重试。",
+      "compatible": "兼容",
+      "incompatible": "不兼容",
+      "none": "无",
+      "source": { "builtin": "内置", "external": "外部" },
+      "runtime": { "inactive": "未运行", "active": "运行中", "failed": "失败", "starting": "启动中" },
+      "replacement": { "upgrade": "升级", "downgrade": "降级", "reinstall": "重新安装" },
+      "fields": {
+        "version": "版本",
+        "source": "来源",
+        "compatibility": "兼容性",
+        "runtime": "运行时",
+        "permissions": "权限",
+        "diagnostics": "诊断"
+      },
+      "permissions": {
+        "readOnly": "此处仅展示权限状态，不能修改。",
+        "state": {
+          "granted": "已授予",
+          "not_granted": "未授予",
+          "not_requested": "未请求",
+          "unsupported": "不支持"
+        }
+      },
+      "diagnostics": {
+        "corrupt_record": "插件记录已损坏。",
+        "incompatible_contract": "插件记录使用了不兼容的契约。",
+        "invalid_manifest": "插件 Manifest 无效。",
+        "missing_record": "插件记录缺失。",
+        "recovery_failed": "插件恢复失败。",
+        "unavailable": "插件管理不可用。",
+        "unknown": "无法安全加载此插件。"
+      },
+      "actions": {
+        "enable": "启用",
+        "disable": "禁用",
+        "replace": "从本地替换",
+        "uninstall": "卸载",
+        "clearData": "清除数据"
+      },
+      "feedback": {
         "busy": "另一个插件正在安装，请稍后重试。",
+        "cancelled": "未选择插件。",
+        "cleanupPending": "变更已保存，但仍有部分文件等待清理。",
+        "clearChanged": "插件数据已清除。",
+        "clearUnchanged": "插件数据已为空。",
+        "conflict": "插件状态已变化，现已加载最新状态。",
+        "convergenceFailed": "变更已保存，但无法刷新可见的插件状态。",
+        "detailFailed": "无法安全加载插件详情。",
+        "duplicate": "该操作正在进行中。",
+        "installSucceeded": "已安装 {{pluginId}}，版本 {{version}}。",
+        "loadFailed": "无法安全加载插件。",
+        "mutationFailed": "无法完成插件变更。",
+        "notFound": "该插件已不存在。",
+        "pluginEnabled": "清除数据前请先禁用插件。",
+        "replacementSucceeded": "已将 {{pluginId}} 替换为版本 {{version}}。",
+        "setEnabledSucceeded": "插件可用状态已更新。",
         "unavailable": "当前无法从本地安装插件。",
-        "sourceReadFailed": "无法读取所选插件包。",
-        "extractionFailed": "无法安全提取插件包。",
-        "commitFailed": "无法提交插件包。",
-        "registrationFailed": "无法保存插件注册信息。",
-        "internal": "从本地安装插件失败。",
-        "invalidBoundaryPayload": "lensX 收到了无效的安装响应。"
+        "uninstallSucceeded": "插件已卸载。",
+        "unsafeStorage": "无法证明存储所有权，因此未更改插件数据。"
+      },
+      "confirm": {
+        "cancel": "取消",
+        "replacement": {
+          "title": "确认替换",
+          "description": "请检查 {{name}} 的版本与权限变化。",
+          "addedPermissions": "新增权限",
+          "removedPermissions": "移除权限",
+          "confirm": "替换"
+        },
+        "uninstall": {
+          "title": "卸载插件",
+          "description": "要卸载 {{name}} 吗？",
+          "dataPolicy": "插件数据处理方式",
+          "retainData": "保留数据",
+          "deleteData": "删除数据",
+          "retainDescription": "默认保留插件数据，以便将来重新安装。",
+          "deleteDescription": "仅在可安全证明身份归属时删除插件持有的数据。",
+          "confirm": "卸载"
+        },
+        "clear": {
+          "title": "清除插件数据",
+          "description": "要永久清除已禁用插件 {{name}} 持有的数据吗？",
+          "confirm": "清除数据"
+        }
       }
     },
     "save": {

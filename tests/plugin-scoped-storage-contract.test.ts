@@ -47,7 +47,9 @@ describe('Host-private plugin scoped storage contract', () => {
       'packages/plugin-testkit/src/index.ts',
     ]) {
       const source = readFileSync(join(import.meta.dirname, '..', file), 'utf8');
-      expect(source).not.toMatch(/PluginScopedStorage|storage-v1|plugin_scoped_storage|@tauri-apps/u);
+      expect(source).not.toMatch(
+        /PluginScopedStorage|PluginDataManagement|ClearPluginData|storage-v1|plugin_scoped_storage|clear_plugin_data|@tauri-apps/u,
+      );
     }
   });
 });

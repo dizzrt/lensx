@@ -53,7 +53,7 @@ import {
 } from './app/navigation';
 import { PageErrorBoundary } from './app/pages/PageErrorBoundary';
 import { SettingsPage } from './app/pages/SettingsPage';
-import { desktopLocalPluginInstallationClient, type LocalPluginInstallationClient } from './app/plugins/installation';
+import { inertPluginManagementService, type PluginManagementService } from './app/plugins/management';
 import { desktopPluginClipboardProviderFactory } from './app/plugins/permission';
 import { desktopPluginResourceAdapter } from './app/plugins/resource';
 import {
@@ -79,7 +79,6 @@ export interface AppProps {
   activationSource?: LauncherActivationSource;
   actionService?: LauncherActionService;
   collectionsClient?: LauncherActionCollectionsClient;
-  installationClient?: LocalPluginInstallationClient;
   navigationService?: AppNavigationService;
   preferencesClient?: AppPreferencesClient;
   pluginRuntimeNavigationAdapter?: PluginRuntimeNavigationAdapter;
@@ -87,6 +86,7 @@ export interface AppProps {
   pluginRuntimeResolver?: PluginPageRuntimeResolver;
   pluginRuntimeSessionService?: PluginRuntimeSessionService;
   pluginHostApiDispatcherFactory?: PluginHostApiDispatcherFactory;
+  pluginManagementService?: PluginManagementService;
   renderPage?: (activePage: ActivePage) => ReactNode;
   surfaceProjectionService?: PluginSurfaceProjectionService;
   startupPreferencesErrorCode?: string;
@@ -113,7 +113,6 @@ const App = ({
   activationSource = desktopLauncherActivationSource,
   actionService = productionLauncherActionService,
   collectionsClient = desktopLauncherActionCollectionsClient,
-  installationClient = desktopLocalPluginInstallationClient,
   navigationService = productionAppNavigationService,
   preferencesClient = desktopAppPreferencesClient,
   pluginRuntimeNavigationAdapter = desktopPluginRuntimeNavigationAdapter,
@@ -121,6 +120,7 @@ const App = ({
   pluginRuntimeResolver,
   pluginRuntimeSessionService,
   pluginHostApiDispatcherFactory,
+  pluginManagementService = inertPluginManagementService,
   renderPage,
   startupPreferencesErrorCode,
   surfaceController = inertLauncherSurfaceController,
@@ -324,16 +324,6 @@ const App = ({
     () => actionService.registry.subscribe?.(() => setSnapshotRevision((revision) => revision + 1)),
     [actionService],
   );
-
-  useEffect(() => {
-    if (!surfaceProjectionService) {
-      return;
-    }
-    void surfaceProjectionService.initialize().catch(() => undefined);
-    return () => {
-      void surfaceProjectionService.destroy();
-    };
-  }, [surfaceProjectionService]);
 
   useEffect(() => {
     if (!activePage && shouldRestoreInputFocusRef.current) {
@@ -632,7 +622,7 @@ const App = ({
                 ) : pageResolution?.provider.kind === 'host' &&
                   activePage.owner_id === 'lensx.core' &&
                   activePage.page_id === 'settings' ? (
-                  <SettingsPage installationClient={installationClient} preferencesClient={preferencesClient} />
+                  <SettingsPage managementService={pluginManagementService} preferencesClient={preferencesClient} />
                 ) : pageResolution?.provider.kind === 'plugin' && pageContext && effectivePluginRuntimeResolver ? (
                   <PluginRuntimeFrame
                     activePage={activePage}

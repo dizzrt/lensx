@@ -298,6 +298,27 @@ WKWebView evidence。门禁不得暴露 key、value、path、plugin data、raw p
 它只补充完整 frontend/Rust validation 集合，不能替代它们。本 change 没有产品 UI、copy、theme、
 accessibility、keyboard 或 Semi Design surface，因此不适用 visual acceptance；完整 frontend suite 仍覆盖普通 UI 回归。
 
+## Plugin Management Settings 验证
+
+修改根级私有 management facade、data-clear contract/Rust coordinator、Settings Plugins 表面、management
+message/style 或 App composition 时，必须运行：
+
+```bash
+pnpm run check:plugin-management-settings
+```
+
+该门禁检查严格共享的 data-management fixture、desktop/private boundary、Registration revision 与 selection
+行为、mutation serialization、replacement confirmation、lifecycle/permission/storage 回归、Host component
+行为、message-schema 对齐、workspace/public tarball boundary、root `StrictMode` composition 重建，以及
+Rust atomic clear 行为。它还会构建隔离
+fixture，并在 `650×600` 下对 `en-US`/`zh-CN` 的 light/dark 组合捕获 empty、healthy、quarantined、
+degraded、replacement、uninstall 与 clear-data 全部维护状态。每张截图都配套检查连续 split surface、border、
+locale、theme 与 modal 的 computed style。
+
+该聚焦门禁只补充完整 frontend/Rust suite，以及上游 installation、Registration、lifecycle、replacement、
+permission 与 scoped-storage 门禁，不能替代它们。若平台在受限 sandbox 内阻止 GUI process，应在正常本机
+环境中重跑 headless Chrome；仅 sandbox launch failure 不能判定为产品失败。
+
 ## Rust 验证
 
 检查 Rust 格式：

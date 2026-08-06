@@ -8,6 +8,7 @@ const fail = (message: string): never => {
 };
 
 const rust = read('src-tauri/src/plugin_scoped_storage.rs');
+const dataManagementRust = read('src-tauri/src/plugin_data_management.rs');
 const installer = read('src-tauri/src/plugin_installer.rs');
 const desktop = read('src/app/plugins/storage/desktop.ts');
 const parser = read('src/app/plugins/storage/parse.ts');
@@ -15,6 +16,8 @@ const dispatcher = read('src/app/plugins/runtime/host-api-dispatcher.ts');
 const app = read('src/App.tsx');
 const lib = read('src-tauri/src/lib.rs');
 const consumer = read('examples/plugin-testkit-consumer/consumer.ts');
+const dataManagementDesktop = read('src/app/plugins/data-management/desktop.ts');
+const dataManagementParser = read('src/app/plugins/data-management/parse.ts');
 
 for (const marker of [
   'storage-v1.json',
@@ -34,11 +37,25 @@ if (!installer.includes('pub(crate) fn acquire_data_boundary')) {
   fail('Installer does not expose the shared data commit boundary');
 }
 if (!lib.includes('plugin_scoped_storage::plugin_scoped_storage')) fail('Tauri command is not registered');
+if (!lib.includes('plugin_data_management::clear_plugin_data')) fail('private data-clear command is not registered');
 if (!lib.includes('setup_plugin_scoped_storage')) fail('managed storage state is not installed');
 if (!desktop.includes("from '@tauri-apps/api/core'")) fail('desktop provider does not own the Tauri invoke');
 if (!parser.includes('validateHostApiResult')) fail('desktop boundary does not revalidate public results');
 if (!dispatcher.includes('storage.execute')) fail('Dispatcher does not route to the scoped provider');
 if (!app.includes('desktopPluginScopedStorageProviderFactory')) fail('production App does not install storage');
+for (const marker of [
+  'PLUGIN_DATA_MANAGEMENT_CONTRACT_VERSION',
+  'clear_plugin_data_inner',
+  'PluginDataManagementErrorCode',
+]) {
+  if (!dataManagementRust.includes(marker)) fail(`Rust data-management boundary is missing ${marker}`);
+}
+if (!dataManagementDesktop.includes("from '@tauri-apps/api/core'")) {
+  fail('data-management desktop adapter does not own the Tauri invoke');
+}
+if (!dataManagementParser.includes('parseClearPluginDataResult')) {
+  fail('data-management boundary does not strictly parse results');
+}
 
 for (const method of ['storage.delete', 'storage.get', 'storage.get_quota', 'storage.list', 'storage.set']) {
   if (!consumer.includes(`method: '${method}'`)) fail(`public consumer does not call ${method}`);
@@ -51,7 +68,15 @@ for (const publicFile of [
   'packages/plugin-testkit/src/index.ts',
 ]) {
   const source = read(publicFile);
-  for (const forbidden of ['PluginScopedStorage', 'storage-v1.json', 'plugin_scoped_storage', '@tauri-apps/']) {
+  for (const forbidden of [
+    'PluginScopedStorage',
+    'PluginDataManagement',
+    'ClearPluginData',
+    'storage-v1.json',
+    'plugin_scoped_storage',
+    'clear_plugin_data',
+    '@tauri-apps/',
+  ]) {
     if (source.includes(forbidden)) fail(`${publicFile} exposes ${forbidden}`);
   }
 }
@@ -73,8 +98,8 @@ if (!roadmap.includes('add-plugin-scoped-storage')) fail('Roadmap change mapping
 if (!roadmap.includes('- [x] **Task 5.5：实现 Plugin Permission Management**')) {
   fail('Roadmap Task 5.5 completion drifted');
 }
-if (!roadmap.includes('- [ ] **Task 5.6：校验 RPC 输入、输出与资源限制**')) {
-  fail('Roadmap Task 5.6 was completed before its change was archived');
+if (!roadmap.includes('- [x] **Task 5.6：校验 RPC 输入、输出与资源限制**')) {
+  fail('Roadmap Task 5.6 completion drifted');
 }
 
 for (const unsafe of ['eprintln!', 'println!', 'dbg!']) {

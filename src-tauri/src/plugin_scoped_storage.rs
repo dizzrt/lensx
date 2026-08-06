@@ -1,6 +1,6 @@
 use crate::{
     plugin_installer::{PluginCommitBoundaryError, PluginInstaller},
-    plugin_manager::PluginManager,
+    plugin_manager::{PluginManager, PluginManagerDiagnosticCode, PluginManagerLifecycleEntry},
     plugin_registration::is_valid_plugin_registration_entry_id,
 };
 use serde::{Deserialize, Serialize};
@@ -240,6 +240,23 @@ enum StorageFailure {
     Unavailable,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum PluginDataClearFailure {
+    Conflict,
+    NotFound,
+    PluginEnabled,
+    OperationNotSupported,
+    UnsafeStorage,
+    Unavailable,
+    Internal,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ClearDecision {
+    Noop,
+    Reset,
+}
+
 #[cfg(test)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum StorageWriteFault {
@@ -344,6 +361,65 @@ impl PluginScopedStorage {
                 ))
             }
             Err(failure) => Err(PluginStorageError::new(map_failure(failure), operation)),
+        }
+    }
+
+    pub(crate) fn clear_disabled_namespace(
+        &self,
+        entry_id: &str,
+        expected_revision: &str,
+    ) -> Result<bool, PluginDataClearFailure> {
+        let provisional = self
+            .manager
+            .resolve_lifecycle_entry(entry_id, expected_revision)
+            .map_err(map_clear_manager_failure)?;
+        let PluginManagerLifecycleEntry::Healthy {
+            record_key,
+            registration,
+            ..
+        } = provisional
+        else {
+            return Err(PluginDataClearFailure::OperationNotSupported);
+        };
+        if registration.facts.enabled {
+            return Err(PluginDataClearFailure::PluginEnabled);
+        }
+
+        let (_guard, data_root) = self
+            .installer
+            .acquire_data_boundary(&record_key)
+            .map_err(|_| PluginDataClearFailure::Unavailable)?;
+        let current = self
+            .manager
+            .resolve_lifecycle_entry(entry_id, expected_revision)
+            .map_err(map_clear_manager_failure)?;
+        let PluginManagerLifecycleEntry::Healthy {
+            record_key: current_key,
+            registration: current_registration,
+            ..
+        } = current
+        else {
+            return Err(PluginDataClearFailure::OperationNotSupported);
+        };
+        if current_key != record_key {
+            return Err(PluginDataClearFailure::Conflict);
+        }
+        if current_registration.facts.enabled {
+            return Err(PluginDataClearFailure::PluginEnabled);
+        }
+
+        let namespace = data_root.join(&current_key);
+        match inspect_clear_target(&data_root, &namespace)? {
+            ClearDecision::Noop => Ok(false),
+            ClearDecision::Reset => {
+                self.write_store(&data_root, &namespace, &StorageEnvelope::empty())
+                    .map_err(map_clear_storage_failure)?;
+                self.degraded
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .remove(&current_key);
+                Ok(true)
+            }
         }
     }
 
@@ -606,6 +682,83 @@ fn map_boundary_failure(
 ) -> PluginStorageError {
     let _ = failure;
     PluginStorageError::new(PluginStorageErrorCode::Unavailable, operation)
+}
+
+fn map_clear_manager_failure(
+    failure: crate::plugin_manager::PluginManagerDiagnostic,
+) -> PluginDataClearFailure {
+    match failure.code() {
+        PluginManagerDiagnosticCode::StaleRevision => PluginDataClearFailure::Conflict,
+        PluginManagerDiagnosticCode::NotFound => PluginDataClearFailure::NotFound,
+        PluginManagerDiagnosticCode::StoreUnavailable => PluginDataClearFailure::Unavailable,
+        PluginManagerDiagnosticCode::InvalidState => PluginDataClearFailure::OperationNotSupported,
+        _ => PluginDataClearFailure::Internal,
+    }
+}
+
+fn map_clear_storage_failure(failure: StorageFailure) -> PluginDataClearFailure {
+    match failure {
+        StorageFailure::Conflict => PluginDataClearFailure::Conflict,
+        StorageFailure::Unavailable => PluginDataClearFailure::Unavailable,
+        StorageFailure::Corrupt => PluginDataClearFailure::UnsafeStorage,
+        StorageFailure::Internal
+        | StorageFailure::InvalidParams
+        | StorageFailure::LimitExceeded => PluginDataClearFailure::Internal,
+    }
+}
+
+fn inspect_clear_target(
+    data_root: &Path,
+    namespace: &Path,
+) -> Result<ClearDecision, PluginDataClearFailure> {
+    match safe_metadata(data_root).map_err(|_| PluginDataClearFailure::UnsafeStorage)? {
+        None => return Ok(ClearDecision::Noop),
+        Some(metadata) if metadata.is_dir() => {}
+        Some(_) => return Err(PluginDataClearFailure::UnsafeStorage),
+    }
+    match safe_metadata(namespace).map_err(|_| PluginDataClearFailure::UnsafeStorage)? {
+        None => return Ok(ClearDecision::Noop),
+        Some(metadata) if metadata.is_dir() => {}
+        Some(_) => return Err(PluginDataClearFailure::UnsafeStorage),
+    }
+
+    let mut store_metadata = None;
+    for entry in fs::read_dir(namespace).map_err(|_| PluginDataClearFailure::UnsafeStorage)? {
+        let entry = entry.map_err(|_| PluginDataClearFailure::UnsafeStorage)?;
+        if entry.file_name().to_str() != Some(STORE_FILE) {
+            return Err(PluginDataClearFailure::UnsafeStorage);
+        }
+        let metadata = fs::symlink_metadata(entry.path())
+            .map_err(|_| PluginDataClearFailure::UnsafeStorage)?;
+        if metadata.file_type().is_symlink()
+            || !metadata.is_file()
+            || metadata.len() > MAX_FILE_BYTES
+        {
+            return Err(PluginDataClearFailure::UnsafeStorage);
+        }
+        store_metadata = Some(metadata);
+    }
+    let Some(metadata) = store_metadata else {
+        return Ok(ClearDecision::Noop);
+    };
+
+    let file = File::open(namespace.join(STORE_FILE))
+        .map_err(|_| PluginDataClearFailure::UnsafeStorage)?;
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    file.take(MAX_FILE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| PluginDataClearFailure::UnsafeStorage)?;
+    if bytes.len() as u64 > MAX_FILE_BYTES {
+        return Err(PluginDataClearFailure::UnsafeStorage);
+    }
+    let parsed = serde_json::from_slice::<StorageEnvelope>(&bytes)
+        .ok()
+        .filter(|store| validate_store(store).is_ok())
+        .filter(|store| canonical_store_bytes(store).is_ok_and(|canonical| canonical == bytes));
+    Ok(match parsed {
+        Some(store) if store.entries.is_empty() => ClearDecision::Noop,
+        Some(_) | None => ClearDecision::Reset,
+    })
 }
 
 fn map_failure(failure: StorageFailure) -> PluginStorageErrorCode {
@@ -961,6 +1114,185 @@ mod tests {
                 .expect("operation should succeed"),
         )
         .expect("response should serialize")
+    }
+
+    fn disable_plugin(
+        manager: &PluginManager,
+        installer: &PluginInstaller,
+        identity: &PluginStorageIdentity,
+    ) -> String {
+        let revision = manager.registration_revision();
+        installer
+            .set_enabled(&identity.entry_id, &revision, false)
+            .expect("plugin should disable");
+        manager.registration_revision()
+    }
+
+    fn namespace_path(directory: &TestDirectory, identity: &PluginStorageIdentity) -> PathBuf {
+        directory
+            .0
+            .join("local-data/plugins/data")
+            .join(crate::plugin_identity::plugin_record_key(
+                &identity.plugin_id,
+            ))
+    }
+
+    #[test]
+    fn management_clear_resets_only_current_disabled_storage_and_is_idempotent() {
+        let (directory, manager, installer, storage, identity) = setup("management-clear");
+        execute_value(
+            &storage,
+            &identity,
+            PluginStorageOperation::Set {
+                key: "secret".into(),
+                value: json!({"private": true}),
+            },
+        );
+        let revision = disable_plugin(&manager, &installer, &identity);
+        let snapshot_before = manager.read_registration_snapshot();
+        let detail_before = manager
+            .read_registration_detail(&identity.entry_id)
+            .expect("detail should exist");
+
+        assert_eq!(
+            storage.clear_disabled_namespace(&identity.entry_id, &revision),
+            Ok(true)
+        );
+        assert_eq!(manager.read_registration_snapshot(), snapshot_before);
+        assert_eq!(
+            manager
+                .read_registration_detail(&identity.entry_id)
+                .expect("detail should remain"),
+            detail_before
+        );
+        assert_eq!(manager.registration_revision(), revision);
+        assert_eq!(
+            fs::read(namespace_path(&directory, &identity).join(STORE_FILE))
+                .expect("empty store should remain"),
+            canonical_store_bytes(&StorageEnvelope::empty()).expect("empty store should serialize")
+        );
+        assert_eq!(
+            storage.clear_disabled_namespace(&identity.entry_id, &revision),
+            Ok(false)
+        );
+    }
+
+    #[test]
+    fn management_clear_fails_closed_for_enabled_stale_and_unknown_entries() {
+        let (_directory, manager, installer, storage, identity) = setup("management-state");
+        assert_eq!(
+            storage.clear_disabled_namespace(&identity.entry_id, "1"),
+            Err(PluginDataClearFailure::PluginEnabled)
+        );
+        let disabled_revision = disable_plugin(&manager, &installer, &identity);
+        installer
+            .set_enabled(&identity.entry_id, &disabled_revision, true)
+            .expect("plugin should re-enable");
+        assert_eq!(
+            storage.clear_disabled_namespace(&identity.entry_id, &disabled_revision),
+            Err(PluginDataClearFailure::Conflict)
+        );
+        assert_eq!(
+            storage.clear_disabled_namespace(
+                "entry_ffffffffffffffff",
+                &manager.registration_revision()
+            ),
+            Err(PluginDataClearFailure::NotFound)
+        );
+    }
+
+    #[test]
+    fn management_clear_recovers_provable_corruption_but_preserves_unknown_evidence() {
+        let (directory, manager, installer, storage, identity) = setup("management-corruption");
+        execute_value(
+            &storage,
+            &identity,
+            PluginStorageOperation::Set {
+                key: "secret".into(),
+                value: json!(true),
+            },
+        );
+        let revision = disable_plugin(&manager, &installer, &identity);
+        let namespace = namespace_path(&directory, &identity);
+        fs::write(namespace.join(STORE_FILE), b"{").expect("corrupt store should be written");
+        assert_eq!(
+            storage.clear_disabled_namespace(&identity.entry_id, &revision),
+            Ok(true)
+        );
+
+        fs::write(namespace.join("unknown-evidence"), b"preserve")
+            .expect("unknown evidence should exist");
+        let before = fs::read(namespace.join(STORE_FILE)).expect("store should remain readable");
+        assert_eq!(
+            storage.clear_disabled_namespace(&identity.entry_id, &revision),
+            Err(PluginDataClearFailure::UnsafeStorage)
+        );
+        assert_eq!(
+            fs::read(namespace.join(STORE_FILE)).expect("store should be preserved"),
+            before
+        );
+        assert_eq!(
+            fs::read(namespace.join("unknown-evidence")).expect("evidence should be preserved"),
+            b"preserve"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn management_clear_rejects_symlinked_namespace_without_following_root_escape() {
+        use std::os::unix::fs::symlink;
+
+        let (directory, manager, installer, storage, identity) = setup("management-symlink");
+        let revision = disable_plugin(&manager, &installer, &identity);
+        let data_root = directory.0.join("local-data/plugins/data");
+        fs::create_dir_all(&data_root).expect("data root should exist");
+        let external = directory.0.join("external-clear-target");
+        fs::create_dir(&external).expect("external target should exist");
+        fs::write(external.join(STORE_FILE), b"outside").expect("external evidence should exist");
+        symlink(&external, namespace_path(&directory, &identity))
+            .expect("namespace symlink should exist");
+        assert_eq!(
+            storage.clear_disabled_namespace(&identity.entry_id, &revision),
+            Err(PluginDataClearFailure::UnsafeStorage)
+        );
+        assert_eq!(
+            fs::read(external.join(STORE_FILE)).expect("external evidence should remain"),
+            b"outside"
+        );
+    }
+
+    #[test]
+    fn management_clear_obeys_atomic_commit_fault_semantics() {
+        let (directory, manager, installer, storage, identity) = setup("management-faults");
+        execute_value(
+            &storage,
+            &identity,
+            PluginStorageOperation::Set {
+                key: "secret".into(),
+                value: json!("old"),
+            },
+        );
+        let revision = disable_plugin(&manager, &installer, &identity);
+        let store = namespace_path(&directory, &identity).join(STORE_FILE);
+        let original = fs::read(&store).expect("original store should exist");
+
+        storage.set_write_fault(Some(StorageWriteFault::BeforeRename));
+        assert_eq!(
+            storage.clear_disabled_namespace(&identity.entry_id, &revision),
+            Err(PluginDataClearFailure::Internal)
+        );
+        assert_eq!(fs::read(&store).expect("old store should remain"), original);
+
+        storage.set_write_fault(Some(StorageWriteFault::AfterRename));
+        assert_eq!(
+            storage.clear_disabled_namespace(&identity.entry_id, &revision),
+            Err(PluginDataClearFailure::Internal)
+        );
+        assert_eq!(
+            fs::read(&store).expect("committed empty store should remain"),
+            canonical_store_bytes(&StorageEnvelope::empty()).expect("empty store should serialize")
+        );
+        storage.set_write_fault(None);
     }
 
     #[test]

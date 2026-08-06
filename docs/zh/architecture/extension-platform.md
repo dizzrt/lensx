@@ -843,6 +843,32 @@ desktop provider/Dispatcher、真实 SDK/MessageChannel loop、公共 tarball co
 WKWebView transport evidence。本交付不增加管理 UI、产品 copy、theme/accessibility surface、permission
 prompt、通用 RPC limit、模板、CLI 或开发模式。
 
+## 已交付的 Host 私有插件管理设置
+
+可信 Settings 页面现在只消费一个根级私有 `PluginManagementService`。该 facade 观察完整且不可变的
+Registration snapshot，只针对同一 revision 加载详情，投影有界 diagnostic 与只读的
+requested/supported/granted/effective permission facts，并串行编排安装、启用/禁用、替换、卸载和数据清除。
+React 只接收 typed operation availability 与安全 outcome；它不直接 invoke Tauri，也不复制 Manager transition
+规则。
+
+根级 plugin composition 是共享 management、lifecycle、replacement 与 Registration projection service 的唯一
+生命周期 owner。每次 React effect setup 都创建并初始化一代 composition，其配对 cleanup 只销毁这一代实例；
+`App` 与 Settings 组件只消费注入的 service，不重复初始化或销毁。这样开发模式 `StrictMode` 的
+setup-cleanup-setup 不会复用已经进入 terminal destroyed 状态的 facade，也不会让管理视图永久停留在
+`loading`。
+
+替换仍采用 prepare/confirm/commit 流程。确认界面展示版本分类与 permission 增减；Registration revision
+变化后确认立即失效。卸载默认 `retain_data`，`delete_data` 必须显式选择。只有 current、disabled、registered
+entry 可以清除数据；该操作使用 Host 私有 Plugin Data Management Contract `0.1.0`。Rust 在持有 Installer
+data boundary 时重新校验 opaque entry identity、expected revision、disabled state、canonical ownership 与安全
+filesystem evidence，再以原子方式提交空的 canonical `storage-v1.json`。缺失或已经为空的 storage 保持幂等；
+ambiguous、linked、escaped、stale、enabled、quarantined 或 degraded evidence 一律 fail closed。
+
+管理表面不提供 permission mutation、raw path/error、Publisher trust、Registry patch/history protocol、公共管理
+API，也不会通过 Contract、SDK、Testkit 或 Plugin UI 导出任何管理能力。运行
+`pnpm run check:plugin-management-settings` 可验证私有边界、facade/UI 回归、公共 package 检查，以及固定
+`650×600` 的双语 light/dark screenshot 与 computed style。
+
 ## 已交付的公共 Plugin Testkit
 
 lensX 已交付只有一个公共根入口的 `@lensx/plugin-testkit@0.1.0`。它的 Runtime dependency 是

@@ -42,6 +42,9 @@ export interface PluginReplacementServiceInput {
 }
 
 export interface PluginReplacementService {
+  readonly prepare: (input: PluginReplacementServiceInput) => Promise<PluginReplacementResult>;
+  readonly commitPrepared: () => Promise<PluginReplacementResult>;
+  readonly cancelPrepared: () => Promise<void>;
   readonly replace: (input: PluginReplacementServiceInput) => Promise<PluginReplacementResult>;
   readonly destroy: () => Promise<void>;
 }
@@ -62,6 +65,12 @@ export const createPluginReplacementService = ({
 }: PluginReplacementServiceDependencies): PluginReplacementService => {
   let destroyed = false;
   let activeToken: string | undefined;
+  let activePreparation:
+    | {
+        readonly input: PluginReplacementServiceInput;
+        readonly prepared: PreparedReplacement;
+      }
+    | undefined;
 
   const assertAlive = () => {
     if (destroyed) throw new PluginReplacementServiceError('destroyed');
@@ -75,7 +84,10 @@ export const createPluginReplacementService = ({
     } catch {
       // Cancellation is best effort; the native preparation remains bounded and process-local.
     } finally {
-      if (activeToken === token) activeToken = undefined;
+      if (activeToken === token) {
+        activeToken = undefined;
+        activePreparation = undefined;
+      }
     }
   };
 
@@ -105,70 +117,108 @@ export const createPluginReplacementService = ({
     return entry;
   };
 
-  return Object.freeze({
-    async replace(input: PluginReplacementServiceInput) {
-      const entry = await currentEntry(input);
-      const prepared = await replacementAdapter.prepare(
-        Object.freeze({
-          contract_version: PLUGIN_REPLACEMENT_CONTRACT_VERSION,
-          entry_id: input.entry_id,
-          expected_revision: input.expected_revision,
-        }),
-      );
-      assertAlive();
-      if (prepared.status === 'cancelled' || prepared.status === 'duplicate') return prepared;
-      if (prepared.status !== 'prepared' || prepared.entry_id !== input.entry_id) {
-        throw new PluginReplacementServiceError('invalid_boundary_result');
-      }
-      activeToken = prepared.preparation_token;
-      try {
-        onPrepared?.(prepared);
-      } catch {
-        await cancel(prepared.preparation_token);
+  const prepare = async (input: PluginReplacementServiceInput) => {
+    if (activePreparation !== undefined) {
+      throw new PluginReplacementServiceError('invalid_current_state');
+    }
+    await currentEntry(input);
+    const prepared = await replacementAdapter.prepare(
+      Object.freeze({
+        contract_version: PLUGIN_REPLACEMENT_CONTRACT_VERSION,
+        entry_id: input.entry_id,
+        expected_revision: input.expected_revision,
+      }),
+    );
+    assertAlive();
+    if (prepared.status === 'cancelled' || prepared.status === 'duplicate') return prepared;
+    if (prepared.status !== 'prepared' || prepared.entry_id !== input.entry_id) {
+      throw new PluginReplacementServiceError('invalid_boundary_result');
+    }
+    activeToken = prepared.preparation_token;
+    activePreparation = Object.freeze({ input: Object.freeze({ ...input }), prepared });
+    try {
+      onPrepared?.(prepared);
+    } catch {
+      await cancel(prepared.preparation_token);
+      throw new PluginReplacementServiceError('invalid_current_state');
+    }
+    return prepared;
+  };
+
+  const commitPrepared = async () => {
+    assertAlive();
+    const active = activePreparation;
+    if (active === undefined) {
+      throw new PluginReplacementServiceError('invalid_current_state');
+    }
+    let entry: Extract<PluginRegistrationSummary, { readonly kind: 'registered' }>;
+    try {
+      const current = await currentEntry(active.input);
+      if (current.kind !== 'registered') {
         throw new PluginReplacementServiceError('invalid_current_state');
       }
-      try {
-        await surfaceProjection.quiesceProvider(entry.plugin_id);
-      } catch {
-        await cancel(prepared.preparation_token);
-        await restore(input.expected_revision, entry.plugin_id);
-        throw new PluginReplacementServiceError('surface_quiesce_failed');
-      }
-      if (destroyed) {
-        await cancel(prepared.preparation_token);
-        await restore(input.expected_revision, entry.plugin_id);
-        throw new PluginReplacementServiceError('destroyed');
-      }
-      let committed: PluginReplacementResult;
-      try {
-        committed = await replacementAdapter.commit(
-          Object.freeze({
-            contract_version: PLUGIN_REPLACEMENT_CONTRACT_VERSION,
-            preparation_token: prepared.preparation_token,
-            entry_id: input.entry_id,
-            expected_revision: input.expected_revision,
-          }),
-        );
-        activeToken = undefined;
-      } catch (error) {
-        await cancel(prepared.preparation_token);
-        await restore(input.expected_revision, entry.plugin_id);
-        throw error;
-      }
-      if (committed.status !== 'committed') {
-        await restore(input.expected_revision, entry.plugin_id);
-        throw new PluginReplacementServiceError('invalid_boundary_result');
-      }
-      try {
-        await surfaceProjection.reconcileRevision(committed.revision, entry.plugin_id);
-        await surfaceProjection.whenIdle();
-      } catch {
-        throw new PluginReplacementServiceError('surface_convergence_failed', committed.revision);
-      }
-      if (destroyed) {
-        throw new PluginReplacementServiceError('surface_convergence_failed', committed.revision);
-      }
-      return committed as CommittedReplacement;
+      entry = current;
+    } catch (error) {
+      await cancel(active.prepared.preparation_token);
+      throw error;
+    }
+    try {
+      await surfaceProjection.quiesceProvider(entry.plugin_id);
+    } catch {
+      await cancel(active.prepared.preparation_token);
+      await restore(active.input.expected_revision, entry.plugin_id);
+      throw new PluginReplacementServiceError('surface_quiesce_failed');
+    }
+    if (destroyed) {
+      await cancel(active.prepared.preparation_token);
+      await restore(active.input.expected_revision, entry.plugin_id);
+      throw new PluginReplacementServiceError('destroyed');
+    }
+    let committed: PluginReplacementResult;
+    try {
+      committed = await replacementAdapter.commit(
+        Object.freeze({
+          contract_version: PLUGIN_REPLACEMENT_CONTRACT_VERSION,
+          preparation_token: active.prepared.preparation_token,
+          entry_id: active.input.entry_id,
+          expected_revision: active.input.expected_revision,
+        }),
+      );
+      activeToken = undefined;
+      activePreparation = undefined;
+    } catch (error) {
+      await cancel(active.prepared.preparation_token);
+      await restore(active.input.expected_revision, entry.plugin_id);
+      throw error;
+    }
+    if (committed.status !== 'committed') {
+      await restore(active.input.expected_revision, entry.plugin_id);
+      throw new PluginReplacementServiceError('invalid_boundary_result');
+    }
+    try {
+      await surfaceProjection.reconcileRevision(committed.revision, entry.plugin_id);
+      await surfaceProjection.whenIdle();
+    } catch {
+      throw new PluginReplacementServiceError('surface_convergence_failed', committed.revision);
+    }
+    if (destroyed) {
+      throw new PluginReplacementServiceError('surface_convergence_failed', committed.revision);
+    }
+    return committed as CommittedReplacement;
+  };
+
+  return Object.freeze({
+    prepare,
+    commitPrepared,
+    cancelPrepared: async () => {
+      assertAlive();
+      const token = activePreparation?.prepared.preparation_token;
+      if (token !== undefined) await cancel(token);
+    },
+    async replace(input: PluginReplacementServiceInput) {
+      const prepared = await prepare(input);
+      if (prepared.status !== 'prepared') return prepared;
+      return commitPrepared();
     },
     async destroy() {
       if (destroyed) return;

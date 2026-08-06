@@ -333,7 +333,11 @@ the UI MUST prevent reentry; cancellation MUST restore idle state without
 showing an error; and success and failure MUST use live-status or alert
 semantics that do not rely only on color. All product text MUST have canonical
 English and a semantically aligned Simplified Chinese translation and MUST
-remain readable and focusable in light and dark themes.
+remain readable and focusable in light and dark themes. When this entry point
+is composed into the `plugin-management-settings` capability, successful
+installation MUST converge through a current Registration snapshot and select
+the newly installed plugin without changing the local installation command's
+narrow authority.
 
 #### Scenario: User installs with a keyboard
 
@@ -343,13 +347,15 @@ remain readable and focusable in light and dark themes.
 - **THEN** focus and status feedback remain operable and perceivable after the
   dialog returns
 
-#### Scenario: Installation succeeds
+#### Scenario: Installation succeeds in plugin management settings
 
 - **WHEN** the adapter returns a valid `installed` result
 - **THEN** settings announces success with the plugin ID and version in the
   current locale
-- **THEN** the page does not consequently display a plugin list, details, or
-  enable, disable, or uninstall controls outside this change's scope
+- **THEN** the management service refreshes through the shared Registration
+  adapter and selects the matching current plugin only after snapshot convergence
+- **THEN** the installation capability itself does not fabricate details or
+  perform enable, disable, replacement, uninstall, permission or data operations
 
 #### Scenario: Installation fails
 
@@ -371,29 +377,33 @@ remain readable and focusable in light and dark themes.
 ### Requirement: Local installation must not deliver later plugin capabilities early
 
 This capability MUST deliver only first installation of a local compatible
-`.lxp`, its minimal entry point, registration notification, and recovery
-cleanup. It MUST NOT download a remote package, accept a development directory,
-upgrade, downgrade, reinstall, enable, disable, uninstall, delete plugin data,
-grant permissions, verify signatures or official provenance, serve plugin
-resources, create an iframe or Runtime session, invoke the Host API, or execute
-plugin code.
+`.lxp`, its installation entry point, registration notification, and recovery
+cleanup. It MUST NOT itself download a remote package, accept a development
+directory, upgrade, downgrade, reinstall, enable, disable, uninstall, delete or
+clear plugin data, grant permissions, verify signatures or official
+provenance, serve plugin resources, create an iframe or Runtime session, invoke
+the Host API, or execute plugin code. A trusted Host management page MAY compose
+this installation entry point with independently specified lifecycle,
+replacement, permission-view and data-management services, but MUST NOT broaden
+the installation command or infer those authorities from installation success.
 
 #### Scenario: A plugin finishes installation
 
 - **WHEN** a local `.lxp` has been written and registered successfully
-- **THEN** the existing Host metadata projection can refresh Action and Page
-  descriptors from the current registration
-- **THEN** this change does not read the Runtime entry, load resources, create
-  an iframe, execute code, or grant requested permissions
+- **THEN** the existing Host metadata projection and management service can
+  refresh from the current Registration
+- **THEN** this capability does not read the Runtime entry, load resources,
+  create an iframe, execute code, grant requested permissions, or perform a
+  later lifecycle operation
 
 #### Scenario: User wants to replace or remove an installed plugin
 
-- **WHEN** the user attempts to install another version through this capability
-  or looks for disable or uninstall actions
-- **THEN** installation of another version is rejected deterministically and
-  settings provides no later lifecycle controls
-- **THEN** Task 3.4 owns upgrade and rollback, Task 3.3 owns enable, disable, and
-  uninstall, and Task 6.1 owns the complete management UI
+- **WHEN** the user selects replacement or lifecycle controls from the composed
+  plugin management page
+- **THEN** Task 3.4's replacement service or Task 3.3's lifecycle service owns
+  the operation through its independent typed and revision-bound contract
+- **THEN** the local installation command neither accepts the request nor gains
+  update, uninstall, permission or data-management authority
 
 ### Requirement: Installer-owned program, data, and cleanup roots must remain separated
 

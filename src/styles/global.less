@@ -414,3 +414,147 @@ body {
 .settings-installation-status {
   min-height: 20px;
 }
+
+.plugin-management {
+  min-height: 0;
+  height: 100%;
+}
+
+.plugin-management-heading {
+  flex: none;
+}
+
+.plugin-management-surface {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.85fr) minmax(280px, 1.35fr);
+  overflow: hidden;
+  border-block: 1px solid var(--semi-color-border);
+}
+
+.plugin-management-list,
+.plugin-management-detail {
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.plugin-management-list {
+  border-right: 1px solid var(--semi-color-border);
+}
+
+.plugin-management-entry-list,
+.plugin-management-permissions,
+.plugin-management-diagnostics {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.plugin-management-entry {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 0;
+  color: var(--semi-color-text-0);
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--semi-color-fill-0);
+  }
+
+  &[aria-current='true'] {
+    background: var(--semi-color-primary-light-default);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--semi-color-focus-border);
+    outline-offset: -2px;
+  }
+}
+
+.plugin-management-entry-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.plugin-management-entry-name,
+.plugin-management-entry-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plugin-management-entry-meta {
+  color: var(--semi-color-text-2);
+  font-size: 12px;
+}
+
+.plugin-management-detail,
+.plugin-management-centered {
+  padding: 16px;
+}
+
+.plugin-management-centered {
+  display: flex;
+  min-height: 144px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.plugin-management-detail-content,
+.plugin-management-confirmation {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.plugin-management-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+
+  dt {
+    color: var(--semi-color-text-2);
+    font-size: 12px;
+  }
+
+  dd {
+    margin: 2px 0 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.plugin-management-permissions li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-block: 5px;
+  border-bottom: 1px solid var(--semi-color-border);
+}
+
+.plugin-management-diagnostics li {
+  padding-block: 4px;
+  color: var(--semi-color-danger);
+}
+
+@media (max-width: 560px) {
+  .plugin-management-surface {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .plugin-management-list {
+    max-height: 180px;
+    border-right: 0;
+    border-bottom: 1px solid var(--semi-color-border);
+  }
+}

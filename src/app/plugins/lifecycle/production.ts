@@ -1,6 +1,11 @@
 import type { DefaultLauncherActionService } from '../../launcher/actions';
 import type { AppNavigationService } from '../../navigation';
+import { createPluginDataManagementDesktopAdapter, createPluginDataManagementService } from '../data-management';
+import type { LocalPluginInstallationClient } from '../installation';
+import { createPluginManagementService, type PluginManagementService } from '../management';
+import { createPluginPermissionMutationAdapter, createPluginPermissionService } from '../permission';
 import { createPluginRegistrationDesktopAdapter } from '../registration';
+import { createPluginReplacementDesktopAdapter, createPluginReplacementService } from '../replacement';
 import {
   createPluginSurfaceProjectionForLauncher,
   type PluginSurfacePageRegistry,
@@ -11,13 +16,17 @@ import { createPluginLifecycleService, type PluginLifecycleService } from './ser
 
 export interface ProductionPluginLifecycleComposition {
   readonly lifecycleService: PluginLifecycleService;
+  readonly managementService: PluginManagementService;
   readonly surfaceProjectionService: PluginSurfaceProjectionService;
+  readonly initialize: () => Promise<void>;
+  readonly destroy: () => Promise<void>;
 }
 
 export const createProductionPluginLifecycleComposition = (
   actionService: DefaultLauncherActionService,
   pageRegistry: PluginSurfacePageRegistry,
   navigationService: AppNavigationService,
+  installationClient: LocalPluginInstallationClient,
 ): ProductionPluginLifecycleComposition => {
   const registrationAdapter = createPluginRegistrationDesktopAdapter();
   const surfaceProjectionService = createPluginSurfaceProjectionForLauncher(
@@ -26,11 +35,41 @@ export const createProductionPluginLifecycleComposition = (
     navigationService,
     registrationAdapter,
   );
+  const lifecycleService = createPluginLifecycleService({
+    lifecycleAdapter: createPluginLifecycleDesktopAdapter(),
+    surfaceProjection: surfaceProjectionService,
+  });
+  const replacementService = createPluginReplacementService({
+    replacementAdapter: createPluginReplacementDesktopAdapter(),
+    surfaceProjection: surfaceProjectionService,
+  });
+  const permissionService = createPluginPermissionService(createPluginPermissionMutationAdapter());
+  const dataManagementService = createPluginDataManagementService(createPluginDataManagementDesktopAdapter());
+  const managementService = createPluginManagementService({
+    surfaceProjection: surfaceProjectionService,
+    installationClient,
+    lifecycleService,
+    replacementService,
+    permissionService,
+    dataManagementService,
+  });
+  let initializePromise: Promise<void> | undefined;
+  let destroyPromise: Promise<void> | undefined;
   return Object.freeze({
     surfaceProjectionService,
-    lifecycleService: createPluginLifecycleService({
-      lifecycleAdapter: createPluginLifecycleDesktopAdapter(),
-      surfaceProjection: surfaceProjectionService,
-    }),
+    lifecycleService,
+    managementService,
+    initialize() {
+      if (destroyPromise) return destroyPromise.then(() => undefined);
+      initializePromise ??= managementService.initialize();
+      return initializePromise;
+    },
+    destroy() {
+      destroyPromise ??= (async () => {
+        await managementService.destroy();
+        await surfaceProjectionService.destroy();
+      })();
+      return destroyPromise;
+    },
   });
 };

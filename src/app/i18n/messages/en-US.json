@@ -94,24 +94,106 @@
     },
     "plugins": {
       "title": "Plugins",
-      "description": "Choose a compatible .lxp package on this Mac to install. Plugin management actions are not available yet.",
+      "description": "Install and manage plugins owned by this lensX host.",
       "install": "Install from file",
       "pending": "Installing…",
-      "cancelled": "No plugin was selected.",
-      "success": "Installed {{pluginId}} version {{version}}.",
-      "failure": {
-        "invalidPackage": "The selected file is not a valid lensX plugin package.",
-        "incompatible": "The selected plugin is not compatible with this version of lensX.",
-        "alreadyInstalled": "A plugin with this identity is already installed.",
-        "identityQuarantined": "This plugin identity is quarantined and cannot be replaced by installation.",
+      "loading": "Loading plugins…",
+      "loadingDetail": "Loading plugin details…",
+      "empty": "No plugins are installed.",
+      "listLabel": "Installed plugins",
+      "detailLabel": "Plugin details",
+      "selectPrompt": "Select a plugin to view its details.",
+      "retry": "Retry",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "quarantined": "Quarantined",
+      "quarantineDescription": "This entry could not be loaded safely. Only removal is available.",
+      "degradedTitle": "Plugin management is unavailable",
+      "degraded": "lensX could not establish a trustworthy plugin snapshot. Retry after resolving the diagnostic.",
+      "compatible": "Compatible",
+      "incompatible": "Incompatible",
+      "none": "None",
+      "source": { "builtin": "Built in", "external": "External" },
+      "runtime": { "inactive": "Inactive", "active": "Active", "failed": "Failed", "starting": "Starting" },
+      "replacement": { "upgrade": "Upgrade", "downgrade": "Downgrade", "reinstall": "Reinstall" },
+      "fields": {
+        "version": "Version",
+        "source": "Source",
+        "compatibility": "Compatibility",
+        "runtime": "Runtime",
+        "permissions": "Permissions",
+        "diagnostics": "Diagnostics"
+      },
+      "permissions": {
+        "readOnly": "Permission state is read-only here.",
+        "state": {
+          "granted": "Granted",
+          "not_granted": "Not granted",
+          "not_requested": "Not requested",
+          "unsupported": "Unsupported"
+        }
+      },
+      "diagnostics": {
+        "corrupt_record": "The plugin record is corrupt.",
+        "incompatible_contract": "The plugin record uses an incompatible contract.",
+        "invalid_manifest": "The plugin manifest is invalid.",
+        "missing_record": "The plugin record is missing.",
+        "recovery_failed": "Plugin recovery failed.",
+        "unavailable": "Plugin management is unavailable.",
+        "unknown": "The plugin could not be loaded safely."
+      },
+      "actions": {
+        "enable": "Enable",
+        "disable": "Disable",
+        "replace": "Replace from file",
+        "uninstall": "Uninstall",
+        "clearData": "Clear data"
+      },
+      "feedback": {
         "busy": "Another plugin installation is in progress. Try again shortly.",
+        "cancelled": "No plugin was selected.",
+        "cleanupPending": "The change was saved, but some files still require cleanup.",
+        "clearChanged": "Plugin data was cleared.",
+        "clearUnchanged": "Plugin data was already empty.",
+        "conflict": "Plugin state changed. The latest state has been loaded.",
+        "convergenceFailed": "The change was saved, but the visible plugin state could not be refreshed.",
+        "detailFailed": "Plugin details could not be loaded safely.",
+        "duplicate": "This action is already in progress.",
+        "installSucceeded": "Installed {{pluginId}} version {{version}}.",
+        "loadFailed": "Plugins could not be loaded safely.",
+        "mutationFailed": "The plugin change could not be completed.",
+        "notFound": "The plugin no longer exists.",
+        "pluginEnabled": "Disable the plugin before clearing its data.",
+        "replacementSucceeded": "Replaced {{pluginId}} with version {{version}}.",
+        "setEnabledSucceeded": "Plugin availability was updated.",
         "unavailable": "Installation from a local file is unavailable right now.",
-        "sourceReadFailed": "The selected plugin package could not be read.",
-        "extractionFailed": "The plugin package could not be extracted safely.",
-        "commitFailed": "The plugin package could not be committed.",
-        "registrationFailed": "The plugin registration could not be saved.",
-        "internal": "Installation from a local file failed.",
-        "invalidBoundaryPayload": "lensX received an invalid installation response."
+        "uninstallSucceeded": "The plugin was uninstalled.",
+        "unsafeStorage": "Plugin data could not be changed because storage ownership could not be proven."
+      },
+      "confirm": {
+        "cancel": "Cancel",
+        "replacement": {
+          "title": "Confirm replacement",
+          "description": "Review the version and permission changes for {{name}}.",
+          "addedPermissions": "Added permissions",
+          "removedPermissions": "Removed permissions",
+          "confirm": "Replace"
+        },
+        "uninstall": {
+          "title": "Uninstall plugin",
+          "description": "Uninstall {{name}}?",
+          "dataPolicy": "Plugin data handling",
+          "retainData": "Retain data",
+          "deleteData": "Delete data",
+          "retainDescription": "Plugin data is retained by default for a future reinstall.",
+          "deleteDescription": "Owned plugin data will be deleted when its identity can be proven safely.",
+          "confirm": "Uninstall"
+        },
+        "clear": {
+          "title": "Clear plugin data",
+          "description": "Permanently clear the data owned by disabled plugin {{name}}?",
+          "confirm": "Clear data"
+        }
       }
     },
     "save": {

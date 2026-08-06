@@ -637,7 +637,7 @@ Runtime health rollback、数据迁移、权限 UI 或完整管理 UI。
 
 ## Milestone 6：完善用户与开发者体验
 
-- [ ] **Task 6.1：新增插件管理设置页面**
+- [x] **Task 6.1：新增插件管理设置页面**
 
 **OpenSpec change**：`add-plugin-management-settings`
 

@@ -168,6 +168,22 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
 - 不要只通过颜色表达状态。
 - 以合适方式通知异步错误和重要状态变化。
 
+### 插件管理表面
+
+- Plugins 保持为单一连续的列表/详情表面。button、banner、tag、empty/loading state、radio choice 与 modal
+  使用 Semi Design；共享 split-pane、selection、scrolling 与 focus treatment 才使用语义 Less。
+- 所有展示 fact 与 operation 都由 `PluginManagementService` 驱动。组件不得直接 invoke Tauri、缓存
+  Registration state，或复制 Manager ownership/lifecycle 决策。
+- 共享 plugin service 的创建、初始化与 terminal disposal 必须集中在 root composition owner。每一代
+  composition 只配对一个 effect cleanup；leaf component 与 `App` 不得销毁注入的 service。使用 root
+  `StrictMode` setup-cleanup-setup 测试覆盖生产 owner。
+- 列表选择和每个 action 都必须可用键盘完成。上下方向键在相邻 entry 间移动。关闭 replacement、uninstall
+  或 clear-data confirmation 后恢复触发控件焦点；移除成功后聚焦相邻 entry 或安装按钮。
+- mutation pending 时禁用所有冲突操作。replacement permission diff、uninstall data policy 与永久 clear-data
+  都需要显式 modal。卸载默认保留数据；仅当选中的 registered plugin 已禁用时才允许清除数据。
+- 通过 live region 通知安全的 status/error 摘要。不得渲染 raw native error、path、payload、stack trace 或
+  diagnostic message。
+
 ## 测试
 
 - 测试用户可观察行为，而不是组件实现细节。
@@ -187,3 +203,6 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
   紧邻关系与键盘焦点、avatar 几何保持，以及长文本省略且不发生重叠。
 - 为提取出的领域函数增加聚焦测试。
 - 避免使用会掩盖有效行为断言的 snapshot。
+- Plugin management 变更必须在 `650×600` 下为英文/简体中文与 light/dark 捕获全部维护状态。除截图外，
+  还要通过 computed style 检查 split surface、selected fill、border、overflow、长名称/诊断、modal contrast
+  与 disabled/focus state。

@@ -378,6 +378,33 @@ and Rust validation sets. This change has no product UI, copy, theme,
 accessibility, keyboard, or Semi Design surface, so visual acceptance is not
 applicable; normal UI regressions remain covered by the full frontend suite.
 
+## Plugin Management Settings Validation
+
+Changes to the root-private management facade, data-clear contract or Rust
+coordinator, Settings Plugins surface, management messages/styles, or App
+composition must run:
+
+```bash
+pnpm run check:plugin-management-settings
+```
+
+The gate checks strict shared data-management fixtures, desktop and private
+boundaries, Registration-revision and selection behavior, mutation
+serialization, replacement confirmation, lifecycle/permission/storage
+regressions, Host component behavior, message-schema parity, workspace/public
+tarball boundaries, root `StrictMode` composition recreation, and Rust atomic
+clear behavior. It also builds an isolated
+fixture and captures all maintained empty, healthy, quarantined, degraded,
+replacement, uninstall, and clear-data states at `650×600` for `en-US` and
+`zh-CN` in light and dark mode. Each screenshot is paired with computed-style
+checks for the continuous split surface, border, locale, theme, and modal.
+
+This focused gate supplements the complete frontend/Rust suites and the
+upstream installation, Registration, lifecycle, replacement, permission, and
+scoped-storage gates. Headless Chrome must run outside a restricted sandbox
+when the platform blocks GUI processes; a sandbox-only launch failure is not a
+product failure until the same script is rerun in the normal local context.
+
 ## Rust Validation
 
 Check Rust formatting:

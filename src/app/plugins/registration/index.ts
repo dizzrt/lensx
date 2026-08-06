@@ -22,6 +22,7 @@ export type {
   PluginRegistrationQueryErrorCode,
   PluginRegistrationQueryErrorPayload,
   PluginRegistrationQueryOperation,
+  PluginRegistrationRuntimeStatus,
   PluginRegistrationSnapshot,
   PluginRegistrationSummary,
   RegisteredPluginRegistrationDetail,
