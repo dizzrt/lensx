@@ -1,3 +1,5 @@
+import { readFileSync, realpathSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from '@rstest/core';
@@ -47,6 +49,32 @@ describe('workspace boundary checker', () => {
 
   test('accepts public package exports for official and example plugins', () => {
     expect(checkWorkspaceBoundaries(fixtureRoot('valid'))).toEqual([]);
+  });
+
+  test('keeps both project templates on ordinary SemVer and resolves them to current workspace packages', () => {
+    const templates = [
+      ['framework-neutral', ['@lensx/plugin-contract', '@lensx/plugin-sdk', '@lensx/plugin-testkit']],
+      ['react-semi', ['@lensx/plugin-contract', '@lensx/plugin-sdk', '@lensx/plugin-testkit', '@lensx/plugin-ui']],
+    ] as const;
+
+    for (const [template, packageNames] of templates) {
+      const templateRoot = resolve(repositoryRoot, 'examples/plugins', template);
+      const metadata = JSON.parse(readFileSync(resolve(templateRoot, 'package.json'), 'utf8')) as {
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+        scripts?: Record<string, string>;
+      };
+      expect(Object.keys(metadata.scripts ?? {})).toEqual(
+        expect.arrayContaining(['build', 'typecheck', 'test', 'check']),
+      );
+      for (const packageName of packageNames) {
+        const version = metadata.dependencies?.[packageName] ?? metadata.devDependencies?.[packageName];
+        expect(version).toMatch(/^\^0\.1\.0$/u);
+        expect(realpathSync(resolve(templateRoot, 'node_modules', packageName))).toBe(
+          resolve(repositoryRoot, 'packages', packageName.replace('@lensx/plugin-', 'plugin-')),
+        );
+      }
+    }
   });
 
   test('rejects private Host imports for official and example plugins', () => {

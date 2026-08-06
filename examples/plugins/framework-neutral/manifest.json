@@ -1,0 +1,72 @@
+{
+  "manifest_version": "0.1.0",
+  "plugin_id": "dev.lensx.template.framework-neutral",
+  "version": "0.1.0",
+  "display": {
+    "name": {
+      "en-US": "Framework-neutral starter",
+      "zh-CN": "无框架起步模板"
+    },
+    "description": {
+      "en-US": "A minimal lensX plugin built with TypeScript and the browser DOM.",
+      "zh-CN": "使用 TypeScript 与浏览器 DOM 构建的最小 lensX 插件。"
+    }
+  },
+  "publisher": {
+    "author": "lensX contributors",
+    "homepage": "https://github.com/dizzrt/lensx",
+    "repository": "https://github.com/dizzrt/lensx"
+  },
+  "compatibility": {
+    "lensx": {
+      "min_version": "0.1.0",
+      "max_version_exclusive": "0.2.0"
+    },
+    "host_api": {
+      "min_version": "0.1.0",
+      "max_version_exclusive": "0.2.0"
+    }
+  },
+  "runtime": {
+    "kind": "iframe",
+    "entry": "index.html"
+  },
+  "requested_permissions": [],
+  "contributes": {
+    "pages": [
+      {
+        "id": "main",
+        "title": {
+          "en-US": "Framework-neutral starter",
+          "zh-CN": "无框架起步模板"
+        },
+        "route": "/",
+        "required_permissions": []
+      }
+    ],
+    "actions": [
+      {
+        "id": "open",
+        "title": {
+          "en-US": "Open framework-neutral starter",
+          "zh-CN": "打开无框架起步模板"
+        },
+        "description": {
+          "en-US": "Open the starter page.",
+          "zh-CN": "打开起步页面。"
+        },
+        "default_keywords": {
+          "en-US": ["starter", "typescript"],
+          "zh-CN": ["起步", "TypeScript"]
+        },
+        "target": {
+          "kind": "page",
+          "page_id": "main"
+        }
+      }
+    ],
+    "launcher": {
+      "default_action_id": "open"
+    }
+  }
+}

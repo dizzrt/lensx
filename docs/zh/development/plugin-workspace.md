@@ -15,6 +15,9 @@ Contract package 独立交付完整十方法 Host API
 已经交付的静态 Manifest 契约仍然只负责验证。package 位于本 workspace 内，并不代表它
 获得 Host 信任、Tauri 访问权、权限或 Runtime 能力。
 
+仓库维护的可运行起步模板及其隔离、package、Runtime 与 visual 门禁详见
+[插件项目模板](plugin-project-template.md)。
+
 ## 受支持的成员位置
 
 `pnpm-workspace.yaml` 只识别下列位置直接子目录中的 package manifest：

@@ -1,0 +1,8 @@
+{
+  "input": {
+    "kind": "react-semi",
+    "metadata": { "scripts": { "build": "x", "typecheck": "x", "test": "x", "check": "x" } },
+    "sources": { "src/main.ts": "import x from '@lensx/plugin-sdk/dist/private.js';" }
+  },
+  "expected": ["template/non-public-import: src/main.ts imports unexported @lensx/plugin-sdk/dist/private.js."]
+}

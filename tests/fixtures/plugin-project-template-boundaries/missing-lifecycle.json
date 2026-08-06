@@ -1,0 +1,8 @@
+{
+  "input": {
+    "kind": "react-semi",
+    "metadata": { "scripts": { "build": "x", "typecheck": "x", "test": "x" } },
+    "sources": {}
+  },
+  "expected": ["template/lifecycle-missing: missing check script."]
+}

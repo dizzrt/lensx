@@ -1,0 +1,11 @@
+{
+  "input": {
+    "kind": "framework-neutral",
+    "metadata": {
+      "dependencies": { "@lensx/plugin-sdk": "^0.1.0" },
+      "scripts": { "build": "rsbuild build", "typecheck": "tsc", "test": "rstest", "check": "pnpm test" }
+    },
+    "sources": { "src/main.ts": "import { createPluginSdk } from '@lensx/plugin-sdk';" }
+  },
+  "expected": []
+}

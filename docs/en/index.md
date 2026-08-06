@@ -19,6 +19,8 @@ structure.
   development commands, and repository map.
 - [Plugin Workspace](development/plugin-workspace.md) — Contract package,
   member locations, lifecycle scripts, dependency boundaries, and pack checks.
+- [Plugin Project Templates](development/plugin-project-template.md) — choose,
+  run, adapt, isolate, package, and validate the maintained plugin starters.
 - [Frontend Guidelines](development/frontend-guidelines.md) — React, Semi
   Design, styling, theme, localization, and accessibility rules.
 - [Project Workflow](development/project-workflow.md) — sources of truth,

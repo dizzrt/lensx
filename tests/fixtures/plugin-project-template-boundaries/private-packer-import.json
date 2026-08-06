@@ -1,0 +1,8 @@
+{
+  "input": {
+    "kind": "react-semi",
+    "metadata": { "scripts": { "build": "x", "typecheck": "x", "test": "x", "check": "x" } },
+    "sources": { "src/main.ts": "import { packPluginPackage } from '../../../tools/plugin-package-format/index.ts';" }
+  },
+  "expected": ["template/private-packer-import: src/main.ts imports ../../../tools/plugin-package-format/index.ts."]
+}

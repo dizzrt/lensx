@@ -674,7 +674,7 @@ Runtime health rollback、数据迁移、权限 UI 或完整管理 UI。
 
 **完成标准**：用户选择与 Host grant state 一致；拒绝不会被静默转为授权；撤销立即生效。
 
-- [ ] **Task 6.3：提供 Plugin Project Template**
+- [x] **Task 6.3：提供 Plugin Project Template**
 
 **OpenSpec change**：`create-plugin-project-template`
 

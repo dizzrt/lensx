@@ -23,12 +23,14 @@ export const WORKSPACE_BOUNDARY_RULES = {
   pluginTauriDependency: 'workspace/plugin-tauri-dependency',
   pluginTauriImport: 'workspace/plugin-tauri-import',
   privateRoot: 'workspace/private-root',
+  pluginPortableDependency: 'workspace/plugin-portable-dependency',
   requiredLifecycleScript: 'workspace/required-lifecycle-script',
   sdkUiReverseDependency: 'workspace/sdk-ui-reverse-dependency',
   testkitReverseDependency: 'workspace/testkit-reverse-dependency',
   undeclaredWorkspaceDependency: 'workspace/undeclared-workspace-dependency',
   undeclaredPackageExport: 'workspace/undeclared-package-export',
   workspacePatterns: 'workspace/supported-patterns',
+  workspaceSemverLinking: 'workspace/semver-linking',
 } as const;
 
 export interface WorkspaceBoundaryDiagnostic {
@@ -46,6 +48,8 @@ interface AliasMapping {
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx']);
 const MODULE_CANDIDATE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', '.css', '.less'];
 const DEPENDENCY_SECTIONS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'] as const;
+const TEMPLATE_PACKAGE_NAMES = new Set(['@lensx/example-plugin-framework-neutral', '@lensx/example-plugin-react-semi']);
+const PORTABLE_LENSX_SEMVER = /^(?:\^|~)?0\.1\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 
 const toPosixPath = (value: string): string => value.split(sep).join('/');
 
@@ -257,6 +261,21 @@ const validatePackageDependencies = (
       }
 
       const targetMember = membersByName.get(dependencyName);
+      if (
+        TEMPLATE_PACKAGE_NAMES.has(member.name) &&
+        dependencyName.startsWith('@lensx/plugin-') &&
+        !PORTABLE_LENSX_SEMVER.test(dependencyVersion)
+      ) {
+        diagnostics.push(
+          diagnostic(
+            rootDir,
+            WORKSPACE_BOUNDARY_RULES.pluginPortableDependency,
+            member.manifestPath,
+            `${dependencyName}@${dependencyVersion}`,
+            'Plugin project templates must use ordinary SemVer for public lensX packages.',
+          ),
+        );
+      }
       if (member.name === '@lensx/plugin-sdk' && dependencyName === '@lensx/plugin-ui') {
         diagnostics.push(
           diagnostic(
@@ -513,6 +532,20 @@ export const checkWorkspaceBoundaries = (rootDir: string): WorkspaceBoundaryDiag
         join(resolvedRoot, 'pnpm-workspace.yaml'),
         actualPatterns.join(', '),
         `Workspace patterns must be exactly: ${SUPPORTED_WORKSPACE_PATTERNS.join(', ')}.`,
+      ),
+    );
+  }
+  const workspaceSource = existsSync(join(resolvedRoot, 'pnpm-workspace.yaml'))
+    ? readFileSync(join(resolvedRoot, 'pnpm-workspace.yaml'), 'utf8')
+    : '';
+  if (!/^linkWorkspacePackages:\s*true\s*$/mu.test(workspaceSource)) {
+    diagnostics.push(
+      diagnostic(
+        resolvedRoot,
+        WORKSPACE_BOUNDARY_RULES.workspaceSemverLinking,
+        join(resolvedRoot, 'pnpm-workspace.yaml'),
+        'linkWorkspacePackages',
+        'The workspace must link matching ordinary SemVer dependencies to current public packages.',
       ),
     );
   }

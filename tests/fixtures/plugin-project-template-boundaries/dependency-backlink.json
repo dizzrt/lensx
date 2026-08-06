@@ -1,0 +1,11 @@
+{
+  "input": {
+    "kind": "react-semi",
+    "metadata": {
+      "dependencies": { "@lensx/plugin-sdk": "workspace:*" },
+      "scripts": { "build": "x", "typecheck": "x", "test": "x", "check": "x" }
+    },
+    "sources": {}
+  },
+  "expected": ["template/dependency-protocol: @lensx/plugin-sdk must use an ordinary SemVer range."]
+}

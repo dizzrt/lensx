@@ -97,6 +97,104 @@ importers:
         specifier: ^66.7.5
         version: 66.7.5(@unocss/postcss@66.7.5(postcss@8.5.24))(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0)(less@4.8.1)(yaml@2.9.0))
 
+  examples/plugins/framework-neutral:
+    dependencies:
+      '@lensx/plugin-sdk':
+        specifier: ^0.1.0
+        version: link:../../../packages/plugin-sdk
+    devDependencies:
+      '@lensx/plugin-contract':
+        specifier: ^0.1.0
+        version: link:../../../packages/plugin-contract
+      '@lensx/plugin-testkit':
+        specifier: ^0.1.0
+        version: link:../../../packages/plugin-testkit
+      '@rsbuild/core':
+        specifier: ^2.1.8
+        version: 2.1.9
+      '@rstest/adapter-rsbuild':
+        specifier: ^0.11.2
+        version: 0.11.4(@rsbuild/core@2.1.9)(@rstest/core@0.11.4(happy-dom@20.11.1))
+      '@rstest/core':
+        specifier: ^0.11.2
+        version: 0.11.4(happy-dom@20.11.1)
+      '@testing-library/dom':
+        specifier: ^10.4.1
+        version: 10.4.1
+      '@testing-library/jest-dom':
+        specifier: ^6.9.1
+        version: 6.10.0(@testing-library/dom@10.4.1)
+      happy-dom:
+        specifier: ^20.11.0
+        version: 20.11.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  examples/plugins/react-semi:
+    dependencies:
+      '@douyinfe/semi-ui':
+        specifier: ^2.101.1
+        version: 2.101.1(@floating-ui/dom@1.8.0)(@tiptap/suggestion@3.29.2(@floating-ui/dom@1.8.0)(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))(@tiptap/pm@3.29.2))(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@lensx/plugin-sdk':
+        specifier: ^0.1.0
+        version: link:../../../packages/plugin-sdk
+      '@lensx/plugin-ui':
+        specifier: ^0.1.0
+        version: link:../../../packages/plugin-ui
+      react:
+        specifier: ^19.2.7
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.7
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@lensx/plugin-contract':
+        specifier: ^0.1.0
+        version: link:../../../packages/plugin-contract
+      '@lensx/plugin-testkit':
+        specifier: ^0.1.0
+        version: link:../../../packages/plugin-testkit
+      '@rsbuild/core':
+        specifier: ^2.1.8
+        version: 2.1.9
+      '@rsbuild/plugin-less':
+        specifier: ^2.0.1
+        version: 2.0.1(@rsbuild/core@2.1.9)(@rspack/core@2.1.7(@swc/helpers@0.5.23))
+      '@rsbuild/plugin-react':
+        specifier: ^2.1.0
+        version: 2.1.0(@rsbuild/core@2.1.9)(@rspack/core@2.1.7(@swc/helpers@0.5.23))
+      '@rstest/adapter-rsbuild':
+        specifier: ^0.11.2
+        version: 0.11.4(@rsbuild/core@2.1.9)(@rstest/core@0.11.4(happy-dom@20.11.1))
+      '@rstest/core':
+        specifier: ^0.11.2
+        version: 0.11.4(happy-dom@20.11.1)
+      '@testing-library/dom':
+        specifier: ^10.4.1
+        version: 10.4.1
+      '@testing-library/jest-dom':
+        specifier: ^6.9.1
+        version: 6.10.0(@testing-library/dom@10.4.1)
+      '@testing-library/react':
+        specifier: ^16.3.2
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      happy-dom:
+        specifier: ^20.11.0
+        version: 20.11.1
+      less:
+        specifier: ^4.8.1
+        version: 4.8.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/plugin-contract:
     dependencies:
       ajv:

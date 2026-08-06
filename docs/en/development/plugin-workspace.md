@@ -21,6 +21,9 @@ The shipped static Manifest contract remains validation-only. A package being
 inside this workspace does not grant it Host trust, Tauri access, permissions,
 or Runtime capabilities.
 
+The maintained runnable starters and their isolation, package, Runtime, and
+visual gates are documented in [Plugin Project Templates](plugin-project-template.md).
+
 ## Supported Member Locations
 
 `pnpm-workspace.yaml` recognizes only package manifests in direct children of:

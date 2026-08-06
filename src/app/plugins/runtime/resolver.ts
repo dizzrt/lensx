@@ -164,7 +164,7 @@ export const createPluginPageRuntimeResolver = ({
       throw new PluginPageRuntimeError('runtime_invalid');
     }
     const grantedPermissionIds = Object.freeze([...detail.granted_permission_ids]);
-    const runtimeAttemptKey = [entry.entry_id, resourceGeneration, request.attempt].join('\u0001');
+    const runtimeAttemptKey = [entry.entry_id, resourceGeneration, request.attempt].join(':');
 
     const descriptor: PluginPageRuntimeDescriptor = {
       runtime_key: [
