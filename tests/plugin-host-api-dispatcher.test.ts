@@ -172,6 +172,26 @@ describe('Host-private Plugin Host API dispatcher', () => {
     );
   });
 
+  test('rejects every plugin-controlled attempt to request Host permission authority', async () => {
+    const { actionExecutor, binding, closePageIfMatches } = createFixture();
+    for (const request of [
+      { method: 'permissions.request', params: { permission_id: 'clipboard.read', user_activation: true } },
+      { method: 'permission_denied', params: { reason: 'Open a prompt', publisher: 'official' } },
+      { method: 'runtime.get_context', params: { requested_permission: 'clipboard.read' } },
+    ]) {
+      await expect(requestInput(binding, request)).resolves.toEqual({
+        code: request.method === 'runtime.get_context' ? 'invalid_params' : 'method_not_found',
+        message:
+          request.method === 'runtime.get_context'
+            ? 'The Host API parameters are invalid.'
+            : 'The Host API method was not found.',
+      });
+    }
+    expect(actionExecutor).not.toHaveBeenCalled();
+    expect(closePageIfMatches).not.toHaveBeenCalled();
+    binding.dispose();
+  });
+
   test('derives ui.close only from the bound Session and rechecks the target in its post-response effect', async () => {
     const fixture = createFixture();
     const injectedIdentity = Object.freeze({ ...identity, plugin_id: 'com.forged', page_id: 'other' });

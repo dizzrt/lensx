@@ -319,6 +319,27 @@ locale、theme 与 modal 的 computed style。
 permission 与 scoped-storage 门禁，不能替代它们。若平台在受限 sandbox 内阻止 GUI process，应在正常本机
 环境中重跑 headless Chrome；仅 sandbox launch failure 不能判定为产品失败。
 
+## Plugin Permission Prompts 验证
+
+installation preparation、Host 私有 permission prompt、post-commit grant、Settings grant/revoke control、
+prompt copy/style 或 Runtime invalidation 发生变化时必须运行：
+
+```bash
+pnpm run check:plugin-permission-prompts
+```
+
+该门禁串行执行 installation `0.2.0` TypeScript/Rust contract、installer prepare/commit/cancel 与 fault test、
+prompt derivation/management-service test、组件 keyboard/focus、message-schema parity、Runtime invalidation、
+public/workspace boundary，以及必需的 installation、replacement、management、permission、Runtime Session 与
+Host API Dispatcher 回归。
+
+视觉矩阵在固定 `650×600` viewport 下覆盖英文/简体中文与 light/dark，包括 prepared install、zero grant、
+all-sensitive、partial grant、replacement diff、Settings granted/not-granted/unsupported、revoke、conflict 与
+long-reason；每项同时保存 screenshot 并检查 computed style/interaction。安全负向证据必须证明插件来源的
+message、reason、SDK payload、Publisher/source 与伪造 user activation 都不能打开 Host prompt 或修改 grant。
+partial-grant test 必须区分 durable installation success 与零个/部分 grant 已应用，并证明失败后停止且不回滚、
+不自动重放。
+
 ## Rust 验证
 
 检查 Rust 格式：

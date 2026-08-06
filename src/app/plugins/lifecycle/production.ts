@@ -1,7 +1,7 @@
 import type { DefaultLauncherActionService } from '../../launcher/actions';
 import type { AppNavigationService } from '../../navigation';
 import { createPluginDataManagementDesktopAdapter, createPluginDataManagementService } from '../data-management';
-import type { LocalPluginInstallationClient } from '../installation';
+import { createLocalPluginInstallationService, type LocalPluginInstallationClient } from '../installation';
 import { createPluginManagementService, type PluginManagementService } from '../management';
 import { createPluginPermissionMutationAdapter, createPluginPermissionService } from '../permission';
 import { createPluginRegistrationDesktopAdapter } from '../registration';
@@ -45,9 +45,10 @@ export const createProductionPluginLifecycleComposition = (
   });
   const permissionService = createPluginPermissionService(createPluginPermissionMutationAdapter());
   const dataManagementService = createPluginDataManagementService(createPluginDataManagementDesktopAdapter());
+  const installationService = createLocalPluginInstallationService(installationClient);
   const managementService = createPluginManagementService({
     surfaceProjection: surfaceProjectionService,
-    installationClient,
+    installationService,
     lifecycleService,
     replacementService,
     permissionService,

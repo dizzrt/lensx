@@ -9,7 +9,34 @@ const previewUrl = `http://127.0.0.1:${previewPort}`;
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const locales = ['en-US', 'zh-CN'];
 const themes = ['light', 'dark'];
-const states = ['empty', 'healthy', 'quarantined', 'degraded', 'replacement', 'uninstall', 'clear'];
+const states = [
+  'empty',
+  'healthy',
+  'quarantined',
+  'degraded',
+  'prepared-install',
+  'zero-grant',
+  'all-sensitive',
+  'partial-grant',
+  'replacement',
+  'settings-not-granted',
+  'settings-unsupported',
+  'revoke',
+  'conflict',
+  'long-reason',
+  'uninstall',
+  'clear',
+];
+const dialogStates = new Set([
+  'prepared-install',
+  'zero-grant',
+  'all-sensitive',
+  'replacement',
+  'revoke',
+  'long-reason',
+  'uninstall',
+  'clear',
+]);
 const wait = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
 
 const run = (command, arguments_, options = {}) => {
@@ -125,16 +152,34 @@ try {
           let facts;
           for (let attempt = 0; attempt < 60; attempt += 1) {
             const result = await call('Runtime.evaluate', {
-              expression: `(() => ({
-                ready: document.body.dataset.visualCheck,
-                state: document.body.dataset.state,
-                display: document.body.dataset.surfaceDisplay,
-                border: document.body.dataset.surfaceBorder,
-                lang: document.documentElement.lang,
-                colorScheme: document.documentElement.style.colorScheme,
-                dark: document.body.getAttribute('theme-mode') === 'dark',
-                dialog: Boolean(document.querySelector('[role="dialog"].semi-modal-content-animate-show'))
-              }))()`,
+              expression: `(() => {
+                const dialogs = [...document.querySelectorAll('[role="dialog"]')];
+                const dialog = dialogs.find((element) => {
+                  const style = getComputedStyle(element);
+                  const bounds = element.getBoundingClientRect();
+                  return style.display !== 'none' && style.visibility !== 'hidden' && bounds.width > 0 && bounds.height > 0;
+                });
+                const promptList = dialog?.querySelector('.plugin-management-permission-prompt-list');
+                const promptStyle = promptList ? getComputedStyle(promptList) : undefined;
+                const detail = document.querySelector('.plugin-management-detail');
+                return {
+                  ready: document.body.dataset.visualCheck,
+                  state: document.body.dataset.state,
+                  display: document.body.dataset.surfaceDisplay,
+                  border: document.body.dataset.surfaceBorder,
+                  lang: document.documentElement.lang,
+                  colorScheme: document.documentElement.style.colorScheme,
+                  dark: document.body.getAttribute('theme-mode') === 'dark',
+                  dialog: Boolean(dialog),
+                  dialogFocus: Boolean(dialog?.contains(document.activeElement)),
+                  promptOverflow: !promptList || ['auto', 'scroll'].includes(promptStyle?.overflowY),
+                  promptWithinViewport: !dialog || dialog.getBoundingClientRect().bottom <= 600,
+                  detailOverflow: detail ? ['auto', 'scroll'].includes(getComputedStyle(detail).overflowY) : false,
+                  unsupportedWritable: document.body.dataset.state === 'settings-unsupported'
+                    ? Boolean(document.querySelector('#plugin-permission-grant-future\\.permission, #plugin-permission-revoke-future\\.permission'))
+                    : false
+                };
+              })()`,
               returnByValue: true,
             });
             facts = result.result.value;
@@ -150,8 +195,18 @@ try {
           if (facts.lang !== locale || facts.colorScheme !== theme || facts.dark !== (theme === 'dark')) {
             throw new Error(`Locale/theme document state failed for ${locale}/${theme}/${state}.`);
           }
-          if ((state === 'replacement' || state === 'uninstall' || state === 'clear') && !facts.dialog) {
+          if (dialogStates.has(state) && !facts.dialog) {
             throw new Error(`Confirmation dialog is missing for ${locale}/${theme}/${state}.`);
+          }
+          if (dialogStates.has(state) && (!facts.dialogFocus || !facts.promptOverflow || !facts.promptWithinViewport)) {
+            throw new Error(
+              `Dialog focus/overflow styles failed for ${locale}/${theme}/${state}: ${JSON.stringify(facts)}.`,
+            );
+          }
+          if (!facts.detailOverflow || facts.unsupportedWritable) {
+            throw new Error(
+              `Detail overflow or unsupported permission controls failed for ${locale}/${theme}/${state}.`,
+            );
           }
           const capture = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
           await writeFile(screenshotPath, Buffer.from(capture.data, 'base64'));

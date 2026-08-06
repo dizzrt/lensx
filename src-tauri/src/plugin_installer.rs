@@ -1,8 +1,10 @@
 use crate::{
     plugin_identity::plugin_record_key,
     plugin_installation_contract::{
-        LocalPluginInstallationError, LocalPluginInstallationErrorCode,
-        LocalPluginInstallationOperation, LocalPluginInstallationResult,
+        is_preparation_token as is_installation_preparation_token,
+        LocalPluginInstallationCandidate, LocalPluginInstallationError,
+        LocalPluginInstallationErrorCode, LocalPluginInstallationOperation,
+        LocalPluginInstallationRequest, LocalPluginInstallationResult,
     },
     plugin_manager::{
         PackageDigest, PluginManager, PluginManagerDiagnosticCode, PluginRegistrationFacts,
@@ -71,7 +73,7 @@ pub struct PluginInstaller {
     recovered: Mutex<bool>,
     diagnostics: Mutex<Vec<PluginInstallerDiagnostic>>,
     blocked_plugin_keys: Mutex<HashSet<String>>,
-    preparation: Mutex<Option<PluginReplacementPreparation>>,
+    preparation: Mutex<Option<PluginPreparation>>,
     pending_replacement_cleanup: Mutex<HashSet<PathBuf>>,
     #[cfg(test)]
     cleanup_fault: Mutex<bool>,
@@ -87,6 +89,30 @@ struct PluginReplacementPreparation {
     manifest: crate::plugin_manifest::NormalizedPluginManifest,
     facts: crate::plugin_package_format::PackageFacts,
     classification: PluginReplacementClassification,
+}
+
+#[derive(Debug)]
+struct PluginInstallationPreparation {
+    token: String,
+    staging_path: PathBuf,
+    bytes: Vec<u8>,
+    manifest: crate::plugin_manifest::NormalizedPluginManifest,
+    facts: crate::plugin_package_format::PackageFacts,
+}
+
+#[derive(Debug)]
+enum PluginPreparation {
+    Installation(PluginInstallationPreparation),
+    Replacement(PluginReplacementPreparation),
+}
+
+impl PluginPreparation {
+    fn staging_path(&self) -> &Path {
+        match self {
+            Self::Installation(prepared) => &prepared.staging_path,
+            Self::Replacement(prepared) => &prepared.staging_path,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -376,16 +402,18 @@ impl PluginInstaller {
         }
         let token = preparation_token(&staging_path, &facts.package_digest.value);
         debug_assert!(is_preparation_token(&token));
-        *preparation = Some(PluginReplacementPreparation {
-            token: token.clone(),
-            entry_id: request.entry_id.clone(),
-            expected_revision: request.expected_revision.clone(),
-            staging_path,
-            bytes: bytes.to_vec(),
-            manifest: manifest.clone(),
-            facts,
-            classification,
-        });
+        *preparation = Some(PluginPreparation::Replacement(
+            PluginReplacementPreparation {
+                token: token.clone(),
+                entry_id: request.entry_id.clone(),
+                expected_revision: request.expected_revision.clone(),
+                staging_path,
+                bytes: bytes.to_vec(),
+                manifest: manifest.clone(),
+                facts,
+                classification,
+            },
+        ));
         Ok(PluginReplacementResult::Prepared {
             contract_version: PLUGIN_REPLACEMENT_CONTRACT_VERSION.to_owned(),
             preparation_token: token,
@@ -412,16 +440,16 @@ impl PluginInstaller {
             .preparation
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if slot
-            .as_ref()
-            .is_none_or(|prepared| prepared.token != request.preparation_token)
+        if !matches!(slot.as_ref(), Some(PluginPreparation::Replacement(prepared)) if prepared.token == request.preparation_token)
         {
             return Err(replacement_error(
                 PluginReplacementErrorCode::InvalidPreparation,
                 PluginReplacementOperation::Cancel,
             ));
         }
-        let prepared = slot.take().expect("matching preparation should exist");
+        let Some(PluginPreparation::Replacement(prepared)) = slot.take() else {
+            unreachable!("matching replacement preparation should exist")
+        };
         remove_tree_no_follow(&prepared.staging_path).map_err(|_| {
             replacement_error(
                 PluginReplacementErrorCode::UnsafeState,
@@ -447,17 +475,17 @@ impl PluginInstaller {
                 .preparation
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            if slot.as_ref().is_none_or(|prepared| {
-                prepared.token != request.preparation_token
-                    || prepared.entry_id != request.entry_id
-                    || prepared.expected_revision != request.expected_revision
-            }) {
+            if !matches!(slot.as_ref(), Some(PluginPreparation::Replacement(prepared)) if prepared.token == request.preparation_token && prepared.entry_id == request.entry_id && prepared.expected_revision == request.expected_revision)
+            {
                 return Err(replacement_error(
                     PluginReplacementErrorCode::InvalidPreparation,
                     PluginReplacementOperation::Commit,
                 ));
             }
-            slot.take().expect("matching preparation should exist")
+            let Some(PluginPreparation::Replacement(prepared)) = slot.take() else {
+                unreachable!("matching replacement preparation should exist")
+            };
+            prepared
         };
         let result = self.commit_prepared_replacement(prepared, request, emitter);
         result
@@ -789,17 +817,253 @@ impl PluginInstaller {
         false
     }
 
-    pub fn install_source(
+    pub fn prepare_installation_source(
         &self,
         source: &Path,
-        emitter: &impl PluginRegistrationEventEmitter,
     ) -> Result<LocalPluginInstallationResult, LocalPluginInstallationError> {
+        let bytes = read_source_capped(source)?;
+        self.prepare_installation_bytes_inner(&bytes)
+    }
+
+    fn prepare_installation_bytes_inner(
+        &self,
+        bytes: &[u8],
+    ) -> Result<LocalPluginInstallationResult, LocalPluginInstallationError> {
+        let mut slot = self.preparation.try_lock().map_err(|_| {
+            installation_error(
+                LocalPluginInstallationErrorCode::Busy,
+                LocalPluginInstallationOperation::Prepare,
+            )
+        })?;
+        if let Some(previous) = slot.take() {
+            if self.replacement_cleanup_fault()
+                || remove_tree_no_follow(previous.staging_path()).is_err()
+            {
+                return Err(installation_error(
+                    LocalPluginInstallationErrorCode::CleanupFailed,
+                    LocalPluginInstallationOperation::Prepare,
+                ));
+            }
+        }
         let _guard = self
             .acquire_commit_boundary()
-            .map_err(commit_boundary_installation_error)?;
-        self.ensure_recovered_locked()?;
-        let bytes = read_source_capped(source)?;
-        self.install_bytes_locked(&bytes, emitter)
+            .map_err(|error| match error {
+                PluginCommitBoundaryError::Busy => installation_error(
+                    LocalPluginInstallationErrorCode::Busy,
+                    LocalPluginInstallationOperation::Prepare,
+                ),
+                PluginCommitBoundaryError::Unavailable => installation_error(
+                    LocalPluginInstallationErrorCode::Unavailable,
+                    LocalPluginInstallationOperation::Prepare,
+                ),
+            })?;
+        self.ensure_recovered_locked().map_err(|_| {
+            installation_error(
+                LocalPluginInstallationErrorCode::Unavailable,
+                LocalPluginInstallationOperation::Prepare,
+            )
+        })?;
+        if self.current_availability() != InstallerAvailability::Available
+            || self.manager.recovery_report().degraded
+        {
+            return Err(installation_error(
+                LocalPluginInstallationErrorCode::Unavailable,
+                LocalPluginInstallationOperation::Prepare,
+            ));
+        }
+        let (manifest, facts) = match inspect_plugin_package(bytes, &self.manager.host_versions()) {
+            PackageInspectionResult::Invalid { diagnostics } => {
+                return Err(installation_error(
+                    LocalPluginInstallationErrorCode::InvalidPackage,
+                    LocalPluginInstallationOperation::Prepare,
+                )
+                .with_package_diagnostics(&diagnostics));
+            }
+            PackageInspectionResult::Incompatible { .. } => {
+                return Err(installation_error(
+                    LocalPluginInstallationErrorCode::Incompatible,
+                    LocalPluginInstallationOperation::Prepare,
+                ));
+            }
+            PackageInspectionResult::Compatible {
+                manifest, facts, ..
+            } => (manifest, facts),
+        };
+        let plugin_key = plugin_record_key(&manifest.plugin_id);
+        self.reject_cleanup_conflict(&plugin_key).map_err(|error| {
+            installation_error(error.code, LocalPluginInstallationOperation::Prepare)
+        })?;
+        self.reject_existing_identity(&manifest.plugin_id)
+            .map_err(|error| {
+                installation_error(error.code, LocalPluginInstallationOperation::Prepare)
+            })?;
+        let candidate =
+            LocalPluginInstallationCandidate::from_manifest(&manifest).map_err(|_| {
+                installation_error(
+                    LocalPluginInstallationErrorCode::InvalidPackage,
+                    LocalPluginInstallationOperation::Prepare,
+                )
+            })?;
+        let root = self.root.as_ref().ok_or_else(|| {
+            installation_error(
+                LocalPluginInstallationErrorCode::Unavailable,
+                LocalPluginInstallationOperation::Prepare,
+            )
+        })?;
+        let staging_path = root.join(STAGING_DIRECTORY).join(staging_identity());
+        fs::create_dir(&staging_path).map_err(|_| {
+            installation_error(
+                LocalPluginInstallationErrorCode::ExtractionFailed,
+                LocalPluginInstallationOperation::Prepare,
+            )
+        })?;
+        if extract_package(bytes, &facts.files, facts.decompressed_size, &staging_path).is_err() {
+            let _ = remove_tree_no_follow(&staging_path);
+            return Err(installation_error(
+                LocalPluginInstallationErrorCode::ExtractionFailed,
+                LocalPluginInstallationOperation::Prepare,
+            ));
+        }
+        let token = preparation_token(&staging_path, &facts.package_digest.value);
+        debug_assert!(is_installation_preparation_token(&token));
+        *slot = Some(PluginPreparation::Installation(
+            PluginInstallationPreparation {
+                token: token.clone(),
+                staging_path,
+                bytes: bytes.to_vec(),
+                manifest,
+                facts,
+            },
+        ));
+        Ok(LocalPluginInstallationResult::prepared(token, candidate))
+    }
+
+    pub fn cancel_installation(
+        &self,
+        request: &LocalPluginInstallationRequest,
+    ) -> Result<LocalPluginInstallationResult, LocalPluginInstallationError> {
+        if request.contract_version
+            != crate::plugin_installation_contract::LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION
+            || !is_installation_preparation_token(&request.preparation_token)
+        {
+            return Err(installation_error(
+                LocalPluginInstallationErrorCode::InvalidRequest,
+                LocalPluginInstallationOperation::Cancel,
+            ));
+        }
+        let mut slot = self
+            .preparation
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if !matches!(slot.as_ref(), Some(PluginPreparation::Installation(prepared)) if prepared.token == request.preparation_token)
+        {
+            return Err(installation_error(
+                LocalPluginInstallationErrorCode::InvalidPreparation,
+                LocalPluginInstallationOperation::Cancel,
+            ));
+        }
+        let Some(PluginPreparation::Installation(prepared)) = slot.take() else {
+            unreachable!("matching installation preparation should exist")
+        };
+        remove_tree_no_follow(&prepared.staging_path).map_err(|_| {
+            installation_error(
+                LocalPluginInstallationErrorCode::CleanupFailed,
+                LocalPluginInstallationOperation::Cancel,
+            )
+        })?;
+        Ok(LocalPluginInstallationResult::cancelled(
+            LocalPluginInstallationOperation::Cancel,
+        ))
+    }
+
+    pub fn commit_installation(
+        &self,
+        request: &LocalPluginInstallationRequest,
+        emitter: &impl PluginRegistrationEventEmitter,
+    ) -> Result<LocalPluginInstallationResult, LocalPluginInstallationError> {
+        if request.contract_version
+            != crate::plugin_installation_contract::LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION
+            || !is_installation_preparation_token(&request.preparation_token)
+        {
+            return Err(installation_error(
+                LocalPluginInstallationErrorCode::InvalidRequest,
+                LocalPluginInstallationOperation::Commit,
+            ));
+        }
+        let prepared = {
+            let mut slot = self
+                .preparation
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if !matches!(slot.as_ref(), Some(PluginPreparation::Installation(prepared)) if prepared.token == request.preparation_token)
+            {
+                return Err(installation_error(
+                    LocalPluginInstallationErrorCode::InvalidPreparation,
+                    LocalPluginInstallationOperation::Commit,
+                ));
+            }
+            let Some(PluginPreparation::Installation(prepared)) = slot.take() else {
+                unreachable!("matching installation preparation should exist")
+            };
+            prepared
+        };
+        self.commit_prepared_installation(prepared, emitter)
+    }
+
+    fn commit_prepared_installation(
+        &self,
+        prepared: PluginInstallationPreparation,
+        emitter: &impl PluginRegistrationEventEmitter,
+    ) -> Result<LocalPluginInstallationResult, LocalPluginInstallationError> {
+        let cleanup_staging = || {
+            let _ = remove_tree_no_follow(&prepared.staging_path);
+        };
+        let _guard = match self.acquire_commit_boundary() {
+            Ok(guard) => guard,
+            Err(error) => {
+                cleanup_staging();
+                return Err(commit_boundary_installation_error(error));
+            }
+        };
+        if self.ensure_recovered_locked().is_err() {
+            cleanup_staging();
+            return Err(installation_error(
+                LocalPluginInstallationErrorCode::Unavailable,
+                LocalPluginInstallationOperation::Commit,
+            ));
+        }
+        let PackageInspectionResult::Compatible {
+            manifest, facts, ..
+        } = inspect_plugin_package(&prepared.bytes, &self.manager.host_versions())
+        else {
+            cleanup_staging();
+            return Err(installation_error(
+                LocalPluginInstallationErrorCode::UnsafeState,
+                LocalPluginInstallationOperation::Commit,
+            ));
+        };
+        if manifest != prepared.manifest
+            || facts != prepared.facts
+            || validate_extracted_payload(&prepared.staging_path, &facts.files).is_err()
+        {
+            cleanup_staging();
+            return Err(installation_error(
+                LocalPluginInstallationErrorCode::UnsafeState,
+                LocalPluginInstallationOperation::Commit,
+            ));
+        }
+        let plugin_key = plugin_record_key(&manifest.plugin_id);
+        if let Err(error) = self
+            .reject_cleanup_conflict(&plugin_key)
+            .and_then(|_| self.reject_existing_identity(&manifest.plugin_id))
+        {
+            cleanup_staging();
+            return Err(installation_error(
+                error.code,
+                LocalPluginInstallationOperation::Commit,
+            ));
+        }
+        self.commit_installation_payload(prepared.staging_path, manifest, facts, emitter)
     }
 
     #[cfg(test)]
@@ -808,78 +1072,41 @@ impl PluginInstaller {
         bytes: &[u8],
         emitter: &impl PluginRegistrationEventEmitter,
     ) -> Result<LocalPluginInstallationResult, LocalPluginInstallationError> {
-        let _guard = self
-            .acquire_commit_boundary()
-            .map_err(commit_boundary_installation_error)?;
-        self.ensure_recovered_locked()?;
-        self.install_bytes_locked(bytes, emitter)
+        let prepared = self.prepare_installation_bytes_inner(bytes)?;
+        let LocalPluginInstallationResult::Prepared {
+            preparation_token, ..
+        } = prepared
+        else {
+            return Err(installation_error(
+                LocalPluginInstallationErrorCode::Internal,
+                LocalPluginInstallationOperation::Prepare,
+            ));
+        };
+        self.commit_installation(
+            &LocalPluginInstallationRequest {
+                contract_version:
+                    crate::plugin_installation_contract::LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION
+                        .to_owned(),
+                preparation_token,
+            },
+            emitter,
+        )
     }
 
-    fn install_bytes_locked(
+    fn commit_installation_payload(
         &self,
-        bytes: &[u8],
+        staging_path: PathBuf,
+        manifest: crate::plugin_manifest::NormalizedPluginManifest,
+        facts: crate::plugin_package_format::PackageFacts,
         emitter: &impl PluginRegistrationEventEmitter,
     ) -> Result<LocalPluginInstallationResult, LocalPluginInstallationError> {
-        if self.current_availability() != InstallerAvailability::Available
-            || self.manager.recovery_report().degraded
-        {
-            return Err(installation_error(
-                LocalPluginInstallationErrorCode::Unavailable,
-                LocalPluginInstallationOperation::Recover,
-            ));
-        }
-        let inspection = inspect_plugin_package(bytes, &self.manager.host_versions());
-        let (manifest, facts) = match inspection {
-            PackageInspectionResult::Invalid { diagnostics } => {
-                return Err(installation_error(
-                    LocalPluginInstallationErrorCode::InvalidPackage,
-                    LocalPluginInstallationOperation::Inspect,
-                )
-                .with_package_diagnostics(&diagnostics));
-            }
-            PackageInspectionResult::Incompatible { .. } => {
-                return Err(installation_error(
-                    LocalPluginInstallationErrorCode::Incompatible,
-                    LocalPluginInstallationOperation::Inspect,
-                ));
-            }
-            PackageInspectionResult::Compatible {
-                manifest, facts, ..
-            } => (manifest, facts),
-        };
-
         let plugin_key = plugin_record_key(&manifest.plugin_id);
-        self.reject_cleanup_conflict(&plugin_key)?;
-        self.reject_existing_identity(&manifest.plugin_id)?;
         let root = self.root.as_ref().ok_or_else(|| {
             installation_error(
                 LocalPluginInstallationErrorCode::Unavailable,
                 LocalPluginInstallationOperation::Commit,
             )
         })?;
-        let staging_path = root.join(STAGING_DIRECTORY).join(staging_identity());
-        fs::create_dir(&staging_path).map_err(|_| {
-            installation_error(
-                LocalPluginInstallationErrorCode::ExtractionFailed,
-                LocalPluginInstallationOperation::Extract,
-            )
-        })?;
-        let extraction =
-            extract_package(bytes, &facts.files, facts.decompressed_size, &staging_path);
-        if extraction.is_err() {
-            let _ = remove_tree_no_follow(&staging_path);
-            return Err(installation_error(
-                LocalPluginInstallationErrorCode::ExtractionFailed,
-                LocalPluginInstallationOperation::Extract,
-            ));
-        }
-
-        self.reject_existing_identity(&manifest.plugin_id)
-            .map_err(|error| {
-                let _ = remove_tree_no_follow(&staging_path);
-                error
-            })?;
-
         let plugin_directory = root.join(PACKAGES_DIRECTORY).join(&plugin_key);
         ensure_real_directory(&plugin_directory).map_err(|_| {
             let _ = remove_tree_no_follow(&staging_path);
@@ -917,7 +1144,7 @@ impl PluginInstaller {
             let _ = remove_tree_no_follow(&final_path);
             installation_error(
                 LocalPluginInstallationErrorCode::RegistrationFailed,
-                LocalPluginInstallationOperation::Register,
+                LocalPluginInstallationOperation::Commit,
             )
         })?;
         let plugin_id = manifest.plugin_id.clone();
@@ -932,13 +1159,13 @@ impl PluginInstaller {
                 } else {
                     LocalPluginInstallationErrorCode::RegistrationFailed
                 };
-                installation_error(code, LocalPluginInstallationOperation::Register)
+                installation_error(code, LocalPluginInstallationOperation::Commit)
             })?;
         let change = change.ok_or_else(|| {
             let _ = remove_tree_no_follow(&final_path);
             installation_error(
                 LocalPluginInstallationErrorCode::Internal,
-                LocalPluginInstallationOperation::Register,
+                LocalPluginInstallationOperation::Commit,
             )
         })?;
         let revision = change.revision.clone();
@@ -958,7 +1185,7 @@ impl PluginInstaller {
         if self.manager.registration(plugin_id).is_some() {
             return Err(installation_error(
                 LocalPluginInstallationErrorCode::AlreadyInstalled,
-                LocalPluginInstallationOperation::Register,
+                LocalPluginInstallationOperation::Commit,
             ));
         }
         if self
@@ -968,7 +1195,7 @@ impl PluginInstaller {
         {
             return Err(installation_error(
                 LocalPluginInstallationErrorCode::IdentityQuarantined,
-                LocalPluginInstallationOperation::Register,
+                LocalPluginInstallationOperation::Commit,
             ));
         }
         Ok(())
@@ -1062,7 +1289,7 @@ impl PluginInstaller {
         self.recover_locked().map_err(|()| {
             installation_error(
                 LocalPluginInstallationErrorCode::Unavailable,
-                LocalPluginInstallationOperation::Recover,
+                LocalPluginInstallationOperation::Prepare,
             )
         })
     }
@@ -1539,13 +1766,13 @@ impl PluginInstaller {
         {
             return Err(installation_error(
                 LocalPluginInstallationErrorCode::Busy,
-                LocalPluginInstallationOperation::Recover,
+                LocalPluginInstallationOperation::Commit,
             ));
         }
         let Some(record) = self.read_cleanup_record(plugin_key).map_err(|_| {
             installation_error(
                 LocalPluginInstallationErrorCode::Unavailable,
-                LocalPluginInstallationOperation::Recover,
+                LocalPluginInstallationOperation::Commit,
             )
         })?
         else {
@@ -1556,7 +1783,7 @@ impl PluginInstaller {
         } else {
             Err(installation_error(
                 LocalPluginInstallationErrorCode::Busy,
-                LocalPluginInstallationOperation::Recover,
+                LocalPluginInstallationOperation::Commit,
             ))
         }
     }
@@ -1570,7 +1797,7 @@ impl Drop for PluginInstaller {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .take()
         {
-            let _ = remove_tree_no_follow(&prepared.staging_path);
+            let _ = remove_tree_no_follow(prepared.staging_path());
         }
     }
 }
@@ -1856,13 +2083,13 @@ fn read_source_capped_with_hook(
     let mut file = File::open(source).map_err(|_| {
         installation_error(
             LocalPluginInstallationErrorCode::SourceReadFailed,
-            LocalPluginInstallationOperation::Read,
+            LocalPluginInstallationOperation::Prepare,
         )
     })?;
     let before = file.metadata().map_err(|_| {
         installation_error(
             LocalPluginInstallationErrorCode::SourceReadFailed,
-            LocalPluginInstallationOperation::Read,
+            LocalPluginInstallationOperation::Prepare,
         )
     })?;
     if !before.is_file() || before.len() > MAX_COMPRESSED_BYTES {
@@ -1872,7 +2099,7 @@ fn read_source_capped_with_hook(
             } else {
                 LocalPluginInstallationErrorCode::SourceReadFailed
             },
-            LocalPluginInstallationOperation::Read,
+            LocalPluginInstallationOperation::Prepare,
         ));
     }
     after_metadata();
@@ -1883,25 +2110,25 @@ fn read_source_capped_with_hook(
         .map_err(|_| {
             installation_error(
                 LocalPluginInstallationErrorCode::SourceReadFailed,
-                LocalPluginInstallationOperation::Read,
+                LocalPluginInstallationOperation::Prepare,
             )
         })?;
     let after = file.metadata().map_err(|_| {
         installation_error(
             LocalPluginInstallationErrorCode::SourceReadFailed,
-            LocalPluginInstallationOperation::Read,
+            LocalPluginInstallationOperation::Prepare,
         )
     })?;
     if bytes.len() as u64 > MAX_COMPRESSED_BYTES {
         return Err(installation_error(
             LocalPluginInstallationErrorCode::InvalidPackage,
-            LocalPluginInstallationOperation::Read,
+            LocalPluginInstallationOperation::Prepare,
         ));
     }
     if before.len() != after.len() || before.len() != bytes.len() as u64 {
         return Err(installation_error(
             LocalPluginInstallationErrorCode::SourceReadFailed,
-            LocalPluginInstallationOperation::Read,
+            LocalPluginInstallationOperation::Prepare,
         ));
     }
     Ok(bytes)
@@ -2113,7 +2340,7 @@ pub(crate) fn prove_managed_payload_root(
 }
 
 #[tauri::command]
-pub async fn install_local_plugin<R: Runtime>(
+pub async fn prepare_local_plugin_installation<R: Runtime>(
     app: AppHandle<R>,
     installer: State<'_, Arc<PluginInstaller>>,
 ) -> Result<LocalPluginInstallationResult, LocalPluginInstallationError> {
@@ -2123,15 +2350,44 @@ pub async fn install_local_plugin<R: Runtime>(
         .add_filter("lensX plugin", &["lxp"])
         .blocking_pick_file();
     let Some(selected) = selected else {
-        return Ok(LocalPluginInstallationResult::cancelled());
+        return prepare_local_plugin_installation_selection(&installer, None);
     };
     let source = selected.into_path().map_err(|_| {
         installation_error(
             LocalPluginInstallationErrorCode::SourceReadFailed,
-            LocalPluginInstallationOperation::Select,
+            LocalPluginInstallationOperation::Prepare,
         )
     })?;
-    installer.install_source(&source, &app)
+    prepare_local_plugin_installation_selection(&installer, Some(&source))
+}
+
+fn prepare_local_plugin_installation_selection(
+    installer: &PluginInstaller,
+    source: Option<&Path>,
+) -> Result<LocalPluginInstallationResult, LocalPluginInstallationError> {
+    let Some(source) = source else {
+        return Ok(LocalPluginInstallationResult::cancelled(
+            LocalPluginInstallationOperation::Prepare,
+        ));
+    };
+    installer.prepare_installation_source(source)
+}
+
+#[tauri::command]
+pub fn commit_local_plugin_installation<R: Runtime>(
+    app: AppHandle<R>,
+    installer: State<'_, Arc<PluginInstaller>>,
+    request: LocalPluginInstallationRequest,
+) -> Result<LocalPluginInstallationResult, LocalPluginInstallationError> {
+    installer.commit_installation(&request, &app)
+}
+
+#[tauri::command]
+pub fn cancel_local_plugin_installation(
+    installer: State<'_, Arc<PluginInstaller>>,
+    request: LocalPluginInstallationRequest,
+) -> Result<LocalPluginInstallationResult, LocalPluginInstallationError> {
+    installer.cancel_installation(&request)
 }
 
 #[tauri::command]
@@ -3377,14 +3633,300 @@ mod tests {
     }
 
     #[test]
+    fn first_install_preparation_is_pathless_single_use_and_commits_empty_grants() {
+        let (_directory, manager, installer) = setup("first-install-preparation");
+        let prepared = installer
+            .prepare_installation_bytes_inner(&valid_package())
+            .expect("candidate should prepare");
+        let LocalPluginInstallationResult::Prepared {
+            preparation_token,
+            candidate,
+            ..
+        } = prepared
+        else {
+            panic!("expected prepared installation")
+        };
+        assert_eq!(candidate.plugin_id, "com.acme.workspace");
+        assert_eq!(manager.registration_revision(), "0");
+        assert!(manager.read_registration_snapshot().entries.is_empty());
+
+        let request = LocalPluginInstallationRequest {
+            contract_version:
+                crate::plugin_installation_contract::LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION
+                    .to_owned(),
+            preparation_token,
+        };
+        let emitter = FakeEmitter::default();
+        let installed = installer
+            .commit_installation(&request, &emitter)
+            .expect("prepared candidate should commit");
+        assert!(
+            matches!(installed, LocalPluginInstallationResult::Installed { ref revision, .. } if revision == "1")
+        );
+        let registration = manager
+            .registration("com.acme.workspace")
+            .expect("registration should exist");
+        assert!(registration.facts.enabled);
+        assert_eq!(
+            registration.runtime,
+            crate::plugin_manager::PluginRuntimeState::Inactive
+        );
+        assert!(registration.facts.granted_permission_ids.is_empty());
+        assert_eq!(
+            emitter
+                .events
+                .lock()
+                .expect("events should be readable")
+                .len(),
+            1
+        );
+        assert_eq!(
+            installer
+                .commit_installation(&request, &emitter)
+                .expect_err("token is single-use")
+                .code,
+            LocalPluginInstallationErrorCode::InvalidPreparation,
+        );
+    }
+
+    #[test]
+    fn first_install_cancel_new_prepare_and_drop_make_tokens_terminal() {
+        let (directory, manager, installer) = setup("first-install-terminal");
+        let LocalPluginInstallationResult::Prepared {
+            preparation_token: first,
+            ..
+        } = installer
+            .prepare_installation_bytes_inner(&valid_package())
+            .expect("first candidate should prepare")
+        else {
+            panic!("expected preparation")
+        };
+        let first_staging = {
+            let slot = installer
+                .preparation
+                .lock()
+                .expect("preparation should be readable");
+            slot.as_ref()
+                .expect("preparation should exist")
+                .staging_path()
+                .to_owned()
+        };
+        let LocalPluginInstallationResult::Prepared {
+            preparation_token: second,
+            ..
+        } = installer
+            .prepare_installation_bytes_inner(&valid_package())
+            .expect("new prepare should replace old preparation")
+        else {
+            panic!("expected preparation")
+        };
+        assert_ne!(first, second);
+        assert!(!first_staging.exists());
+        let old = LocalPluginInstallationRequest {
+            contract_version:
+                crate::plugin_installation_contract::LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION
+                    .to_owned(),
+            preparation_token: first,
+        };
+        assert_eq!(
+            installer
+                .commit_installation(&old, &FakeEmitter::default())
+                .expect_err("old token should be terminal")
+                .code,
+            LocalPluginInstallationErrorCode::InvalidPreparation
+        );
+        installer
+            .cancel_installation(&LocalPluginInstallationRequest {
+                contract_version:
+                    crate::plugin_installation_contract::LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION
+                        .to_owned(),
+                preparation_token: second.clone(),
+            })
+            .expect("current token should cancel");
+        assert_eq!(installer.cancel_installation(&LocalPluginInstallationRequest { contract_version: crate::plugin_installation_contract::LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION.to_owned(), preparation_token: second }).expect_err("cancelled token should be terminal").code, LocalPluginInstallationErrorCode::InvalidPreparation);
+        assert_eq!(manager.registration_revision(), "0");
+
+        let LocalPluginInstallationResult::Prepared { .. } = installer
+            .prepare_installation_bytes_inner(&valid_package())
+            .expect("candidate should prepare before drop")
+        else {
+            panic!("expected preparation")
+        };
+        let staging = installer
+            .preparation
+            .lock()
+            .expect("preparation should be readable")
+            .as_ref()
+            .expect("preparation should exist")
+            .staging_path()
+            .to_owned();
+        drop(installer);
+        assert!(!staging.exists());
+        let recovered =
+            PluginInstaller::initialize(Ok(directory.0.join("local-data/plugins")), manager);
+        assert!(recovered.diagnostics().is_empty());
+    }
+
+    #[test]
+    fn first_install_commit_revalidates_identity_and_staging_but_ignores_unrelated_revision() {
+        let (_directory, manager, installer) = setup("first-install-revalidation");
+        seed_replacement_target(
+            &manager,
+            &installer,
+            "com.other.plugin",
+            "1.0.0",
+            &"7".repeat(64),
+            Vec::new(),
+        );
+        let LocalPluginInstallationResult::Prepared {
+            preparation_token, ..
+        } = installer
+            .prepare_installation_bytes_inner(&valid_package())
+            .expect("candidate should prepare")
+        else {
+            panic!("expected preparation")
+        };
+        manager
+            .set_enabled("com.other.plugin", false)
+            .expect("unrelated change should commit");
+        installer.commit_installation(&LocalPluginInstallationRequest { contract_version: crate::plugin_installation_contract::LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION.to_owned(), preparation_token }, &FakeEmitter::default()).expect("unrelated revision should not stale first install");
+        assert!(manager.registration("com.acme.workspace").is_some());
+
+        let (_directory, manager, installer) = setup("first-install-tamper");
+        let LocalPluginInstallationResult::Prepared {
+            preparation_token, ..
+        } = installer
+            .prepare_installation_bytes_inner(&valid_package())
+            .expect("candidate should prepare")
+        else {
+            panic!("expected preparation")
+        };
+        let staging = installer
+            .preparation
+            .lock()
+            .expect("preparation should be readable")
+            .as_ref()
+            .expect("preparation should exist")
+            .staging_path()
+            .to_owned();
+        fs::write(staging.join("manifest.json"), b"tampered").expect("staging should be writable");
+        assert_eq!(installer.commit_installation(&LocalPluginInstallationRequest { contract_version: crate::plugin_installation_contract::LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION.to_owned(), preparation_token }, &FakeEmitter::default()).expect_err("tampered staging should fail").code, LocalPluginInstallationErrorCode::UnsafeState);
+        assert_eq!(manager.registration_revision(), "0");
+        assert!(!staging.exists());
+
+        let (_directory, manager, installer) = setup("first-install-identity-race");
+        let LocalPluginInstallationResult::Prepared {
+            preparation_token, ..
+        } = installer
+            .prepare_installation_bytes_inner(&valid_package())
+            .expect("candidate should prepare")
+        else {
+            panic!("expected preparation")
+        };
+        let staging = installer
+            .preparation
+            .lock()
+            .expect("preparation should be readable")
+            .as_ref()
+            .expect("preparation should exist")
+            .staging_path()
+            .to_owned();
+        seed_replacement_target(
+            &manager,
+            &installer,
+            "com.acme.workspace",
+            "0.9.0",
+            &"8".repeat(64),
+            Vec::new(),
+        );
+        assert_eq!(installer.commit_installation(&LocalPluginInstallationRequest { contract_version: crate::plugin_installation_contract::LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION.to_owned(), preparation_token }, &FakeEmitter::default()).expect_err("same identity appearing before commit must fail").code, LocalPluginInstallationErrorCode::AlreadyInstalled);
+        assert_eq!(
+            manager
+                .registration("com.acme.workspace")
+                .expect("racing registration should survive")
+                .manifest
+                .version,
+            "0.9.0"
+        );
+        assert!(!staging.exists());
+
+        let (_directory, manager, installer) = setup("first-install-compatibility-change");
+        let LocalPluginInstallationResult::Prepared {
+            preparation_token, ..
+        } = installer
+            .prepare_installation_bytes_inner(&valid_package())
+            .expect("candidate should prepare")
+        else {
+            panic!("expected preparation")
+        };
+        let incompatible = fs::read(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../fixtures/plugin-package-format/incompatible/manifest-incompatible.lxp"),
+        )
+        .expect("incompatible fixture should exist");
+        {
+            let mut slot = installer
+                .preparation
+                .lock()
+                .expect("preparation should be writable");
+            let Some(PluginPreparation::Installation(prepared)) = slot.as_mut() else {
+                panic!("installation preparation should exist")
+            };
+            prepared.bytes = incompatible;
+        }
+        assert_eq!(installer.commit_installation(&LocalPluginInstallationRequest { contract_version: crate::plugin_installation_contract::LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION.to_owned(), preparation_token }, &FakeEmitter::default()).expect_err("changed compatibility evidence must fail").code, LocalPluginInstallationErrorCode::UnsafeState);
+        assert_eq!(manager.registration_revision(), "0");
+    }
+
+    #[test]
+    fn first_install_cleanup_failure_is_safe_and_restart_recovery_removes_residue() {
+        let (directory, manager, installer) = setup("first-install-cleanup-failure");
+        let LocalPluginInstallationResult::Prepared {
+            preparation_token, ..
+        } = installer
+            .prepare_installation_bytes_inner(&valid_package())
+            .expect("candidate should prepare")
+        else {
+            panic!("expected preparation")
+        };
+        let staging = installer
+            .preparation
+            .lock()
+            .expect("preparation should be readable")
+            .as_ref()
+            .expect("preparation should exist")
+            .staging_path()
+            .to_owned();
+        installer.set_cleanup_fault(true);
+        assert_eq!(
+            installer
+                .prepare_installation_bytes_inner(&valid_package())
+                .expect_err("replacement cleanup failure should be safe")
+                .code,
+            LocalPluginInstallationErrorCode::CleanupFailed
+        );
+        installer.set_cleanup_fault(false);
+        assert!(staging.exists());
+        assert_eq!(installer.commit_installation(&LocalPluginInstallationRequest { contract_version: crate::plugin_installation_contract::LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION.to_owned(), preparation_token }, &FakeEmitter::default()).expect_err("failed cleanup makes the old token terminal").code, LocalPluginInstallationErrorCode::InvalidPreparation);
+        assert_eq!(manager.registration_revision(), "0");
+        drop(installer);
+        let recovered =
+            PluginInstaller::initialize(Ok(directory.0.join("local-data/plugins")), manager);
+        assert!(!staging.exists());
+        assert!(recovered.diagnostics().is_empty());
+    }
+
+    #[test]
     fn cancel_contract_is_side_effect_free_and_serialized_without_sensitive_fields() {
         let (_directory, manager, installer) = setup("cancel");
-        let cancelled = LocalPluginInstallationResult::cancelled();
+        let cancelled = prepare_local_plugin_installation_selection(&installer, None)
+            .expect("picker cancellation should be a successful prepare outcome");
         assert_eq!(
             serde_json::to_value(&cancelled).expect("cancel should serialize"),
             serde_json::json!({
                 "status": "cancelled",
-                "contract_version": "0.1.0"
+                "contract_version": "0.2.0",
+                "operation": "prepare"
             })
         );
         assert_eq!(manager.registration_revision(), "0");
@@ -3397,7 +3939,7 @@ mod tests {
         );
         let serialized = serde_json::to_string(&installation_error(
             LocalPluginInstallationErrorCode::Internal,
-            LocalPluginInstallationOperation::Register,
+            LocalPluginInstallationOperation::Commit,
         ))
         .expect("error should serialize");
         for forbidden in ["/Users/", "package_digest", "installation_path", "stack"] {

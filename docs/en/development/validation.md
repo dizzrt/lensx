@@ -405,6 +405,34 @@ scoped-storage gates. Headless Chrome must run outside a restricted sandbox
 when the platform blocks GUI processes; a sandbox-only launch failure is not a
 product failure until the same script is rerun in the normal local context.
 
+## Plugin Permission Prompts Validation
+
+Changes to installation preparation, Host-private permission prompts,
+post-commit grants, settings grant/revoke controls, prompt copy/styles, or
+Runtime invalidation must run:
+
+```bash
+pnpm run check:plugin-permission-prompts
+```
+
+The gate runs installation `0.2.0` TypeScript/Rust contracts, installer
+prepare/commit/cancel and fault tests, prompt derivation and management-service
+tests, component keyboard/focus coverage, message-schema parity, Runtime
+invalidation, and public/workspace boundary checks. It also runs the required
+installation, replacement, management, permission, Runtime Session, and Host
+API Dispatcher regressions serially.
+
+The visual matrix uses the fixed `650×600` viewport for English and Simplified
+Chinese in light and dark mode. It covers prepared install, zero grant, all
+sensitive, partial grant, replacement diff, settings granted/not-granted/
+unsupported, revoke, conflict, and long-reason states with screenshots plus
+computed-style and interaction checks. Security-negative evidence must show
+that plugin-originated messages, reasons, SDK payloads, Publisher/source, and
+claimed user activation cannot open a Host prompt or mutate grants. Partial
+grant tests must distinguish durable installation success from zero or some
+grants applied and prove that failures stop without rollback or automatic
+replay.
+
 ## Rust Validation
 
 Check Rust formatting:

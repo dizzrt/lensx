@@ -55,11 +55,17 @@ class ControlledManagementService implements PluginManagementService {
   initialize = rs.fn(async () => undefined);
   refresh = rs.fn(async () => undefined);
   select = rs.fn(async () => undefined);
-  install = rs.fn(async () => undefined);
+  prepareInstallation = rs.fn(async () => undefined);
+  commitInstallation = rs.fn(async () => undefined);
+  cancelInstallation = rs.fn(async () => undefined);
   setEnabled = rs.fn(async () => undefined);
   prepareReplacement = rs.fn(async () => undefined);
   commitReplacement = rs.fn(async () => undefined);
   cancelReplacement = rs.fn(async () => undefined);
+  openPermissionConfirmation = rs.fn();
+  confirmPermissionDecision = rs.fn(async () => undefined);
+  cancelPermissionDecision = rs.fn();
+  deferPreparedPermissions = rs.fn();
   uninstall = rs.fn(async () => undefined);
   clearData = rs.fn(async () => undefined);
   destroy = rs.fn(async () => undefined);
@@ -112,6 +118,22 @@ const healthyManagementView: PluginManagementViewModel = Object.freeze({
         granted: true,
         effective: 'granted',
         methods: Object.freeze(['clipboard.read']),
+        prompt: Object.freeze({
+          permission_id: 'clipboard.read',
+          host_name: Object.freeze({ 'en-US': 'Read clipboard text', 'zh-CN': '读取剪贴板文本' }),
+          host_risk_description: Object.freeze({
+            'en-US': 'Can read clipboard text.',
+            'zh-CN': '可以读取剪贴板文本。',
+          }),
+          risk: 'sensitive',
+          supported: true,
+          requested: true,
+          persisted_grant: true,
+          effective: 'granted',
+          publisher_unverified: true,
+          grant_available: false,
+          revoke_available: true,
+        }),
       }),
     ]),
     diagnostics: Object.freeze([]),
@@ -296,7 +318,82 @@ describe('Host settings surface', () => {
     install.focus();
     fireEvent.keyDown(install, { key: 'Enter' });
     fireEvent.click(install);
-    expect(managementService.install).toHaveBeenCalledTimes(1);
+    expect(managementService.prepareInstallation).toHaveBeenCalledTimes(1);
+  });
+
+  test('keeps prepared sensitive permissions off, confirms one choice, and permits zero-grant install', async () => {
+    const permission =
+      healthyManagementView.detail.kind === 'registered'
+        ? healthyManagementView.detail.permissions[0]?.prompt
+        : undefined;
+    if (!permission) throw new Error('healthy permission prompt is required');
+    const preparedView: PluginManagementViewModel = Object.freeze({
+      ...emptyManagementView,
+      confirmation: Object.freeze({
+        kind: 'installation',
+        candidate: Object.freeze({
+          plugin_id: healthyEntry.plugin_id,
+          version: healthyEntry.version,
+          display_name: healthyEntry.display.name,
+          publisher: healthyManifest.publisher,
+          permissions: Object.freeze([
+            Object.freeze({
+              ...permission,
+              persisted_grant: false,
+              effective: 'not_granted',
+              grant_available: true,
+              revoke_available: false,
+            }),
+            Object.freeze({
+              ...permission,
+              permission_id: 'host.future',
+              supported: false,
+              effective: 'unsupported',
+              grant_available: false,
+              revoke_available: false,
+            }),
+          ]),
+          publisher_unverified: true,
+        }),
+        selected_permission_ids: Object.freeze([]),
+      }),
+    });
+    const managementService = new ControlledManagementService(preparedView);
+    managementService.cancelPermissionDecision.mockImplementation(() => managementService.publish(preparedView));
+    renderSettingsApp({
+      managementService,
+      preferencesClient: {
+        read: async () => ({ theme_mode: 'light', locale: 'en-US' }),
+        write: async (preferences) => preferences,
+      },
+    });
+    await openPluginsTab();
+    const installDialog = await screen.findByRole('dialog', { name: 'Review plugin permissions' });
+    expect(within(installDialog).getByText('Publisher unverified')).toBeInTheDocument();
+    const [supported, unsupported] = within(installDialog).getAllByRole('checkbox');
+    expect(supported).not.toBeChecked();
+    expect(unsupported).toBeDisabled();
+    const supportedControl = document.getElementById('plugin-installation-permission-clipboard.read');
+    if (!supportedControl) throw new Error('supported installation permission control is required');
+    fireEvent.click(supportedControl);
+    expect(managementService.openPermissionConfirmation).toHaveBeenCalledWith('clipboard.read', true);
+    managementService.publish(
+      Object.freeze({
+        ...preparedView,
+        permission_confirmation: Object.freeze({ context: 'installation', action: 'grant', permission }),
+      }),
+    );
+    const permissionDialog = await screen.findByRole('dialog', { name: 'Allow sensitive permission?' });
+    expect(within(permissionDialog).getByText('Can read clipboard text.')).toBeInTheDocument();
+    fireEvent.click(within(permissionDialog).getByRole('button', { name: 'cancel' }));
+    const restoredInstallDialog = await screen.findByRole('dialog', { name: 'Review plugin permissions' });
+    const restoredSupported = within(restoredInstallDialog).getAllByRole('checkbox')[0];
+    await waitFor(() => expect(restoredSupported).toHaveFocus());
+    fireEvent.click(
+      within(restoredInstallDialog).getByRole('button', { name: 'Decide later and install without grants' }),
+    );
+    expect(managementService.deferPreparedPermissions).toHaveBeenCalledTimes(1);
+    expect(managementService.commitInstallation).toHaveBeenCalledTimes(1);
   });
 
   test('shows healthy facts and read-only permissions and routes lifecycle actions', async () => {
@@ -320,8 +417,8 @@ describe('Host settings surface', () => {
     });
     await openPluginsTab();
     expect(screen.getByText(healthyManifest.plugin_id)).toBeInTheDocument();
-    expect(screen.getByText('Permission state is read-only here.')).toBeInTheDocument();
-    expect(screen.getByText('clipboard.read', { selector: 'code' })).toBeInTheDocument();
+    expect(screen.getByText('Review Host risk and grant or revoke one permission at a time.')).toBeInTheDocument();
+    expect(screen.getByText('Read clipboard text')).toBeInTheDocument();
     expect(screen.getByText('Granted')).toBeInTheDocument();
     const firstEntry = document.getElementById(`plugin-management-entry-${healthyEntry.entry_id}`) as HTMLElement;
     const secondEntryButton = document.getElementById(`plugin-management-entry-${secondEntry.entry_id}`) as HTMLElement;
@@ -351,6 +448,11 @@ describe('Host settings surface', () => {
           classification: 'upgrade',
           added_permission_ids: Object.freeze(['clipboard.write']),
           removed_permission_ids: Object.freeze([]),
+          retained_permissions: Object.freeze([]),
+          added_permissions: Object.freeze([]),
+          removed_permissions: Object.freeze([]),
+          selected_permission_ids: Object.freeze([]),
+          publisher_unverified: true,
         }),
       }),
     );
@@ -360,6 +462,41 @@ describe('Host settings surface', () => {
     fireEvent.keyDown(cancel, { key: 'Enter' });
     fireEvent.click(cancel);
     await waitFor(() => expect(replace).toHaveFocus());
+  });
+
+  test('confirms a settings revoke, explains immediate Runtime impact, and restores its trigger', async () => {
+    const managementService = new ControlledManagementService(healthyManagementView);
+    managementService.openPermissionConfirmation.mockImplementation((permissionId, granted) => {
+      const prompt =
+        healthyManagementView.detail.kind === 'registered'
+          ? healthyManagementView.detail.permissions.find((item) => item.permission_id === permissionId)?.prompt
+          : undefined;
+      if (!prompt || granted) return;
+      managementService.publish(
+        Object.freeze({
+          ...healthyManagementView,
+          permission_confirmation: Object.freeze({ context: 'settings', action: 'revoke', permission: prompt }),
+        }),
+      );
+    });
+    managementService.cancelPermissionDecision.mockImplementation(() =>
+      managementService.publish(healthyManagementView),
+    );
+    renderSettingsApp({
+      managementService,
+      preferencesClient: {
+        read: async () => ({ theme_mode: 'light', locale: 'en-US' }),
+        write: async (preferences) => preferences,
+      },
+    });
+    await openPluginsTab();
+    const revoke = screen.getByRole('button', { name: 'Revoke' });
+    revoke.focus();
+    fireEvent.click(revoke);
+    const revokeDialog = await screen.findByRole('dialog', { name: 'Revoke permission?' });
+    expect(within(revokeDialog).getByText(/takes effect immediately/iu)).toBeInTheDocument();
+    fireEvent.click(within(revokeDialog).getByRole('button', { name: 'cancel' }));
+    await waitFor(() => expect(revoke).toHaveFocus());
   });
 
   test('requires explicit dangerous confirmations, defaults uninstall to retain data, and restores focus', async () => {

@@ -1,8 +1,13 @@
 import {
   LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION,
+  type LocalPluginInstallationCandidate,
   type LocalPluginInstallationDiagnostic,
   type LocalPluginInstallationErrorPayload,
+  type LocalPluginInstallationLocalizedText,
   type LocalPluginInstallationOperation,
+  type LocalPluginInstallationPermissionRequest,
+  type LocalPluginInstallationPublisher,
+  type LocalPluginInstallationRequest,
   type LocalPluginInstallationResult,
 } from './types';
 
@@ -10,19 +15,27 @@ const PLUGIN_ID_PATTERN = /^(?:[a-z][a-z0-9_-]{0,63}\.)+[a-z][a-z0-9_-]{0,63}$/u
 const SEMVER_PATTERN =
   /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 const REVISION_PATTERN = /^(?:0|[1-9][0-9]*)$/u;
+const TOKEN_PATTERN = /^[A-Za-z0-9_-]{32,128}$/u;
+const MAX_TEXT_BYTES = 4_096;
+const MAX_URL_BYTES = 2_048;
+const MAX_PERMISSIONS = 64;
 
 const ERROR_MESSAGES = {
   already_installed: 'A plugin with this identity is already installed.',
   busy: 'Another plugin installation is in progress.',
+  cleanup_failed: 'The plugin installation preparation could not be cleaned safely.',
   commit_failed: 'The plugin package could not be committed.',
   extraction_failed: 'The plugin package could not be extracted safely.',
   identity_quarantined: 'This plugin identity is quarantined and cannot be replaced by installation.',
   incompatible: 'The selected plugin is not compatible with this version of lensX.',
   internal: 'Local plugin installation failed.',
   invalid_package: 'The selected file is not a valid lensX plugin package.',
+  invalid_preparation: 'The local plugin installation preparation is no longer valid.',
+  invalid_request: 'The local plugin installation request is invalid.',
   registration_failed: 'The plugin registration could not be saved.',
   source_read_failed: 'The selected plugin package could not be read.',
   unavailable: 'Local plugin installation is unavailable.',
+  unsafe_state: 'The prepared plugin package is no longer safe to install.',
 } as const;
 
 const PACKAGE_DIAGNOSTIC_MESSAGES = {
@@ -58,47 +71,95 @@ const PACKAGE_DIAGNOSTIC_MESSAGES = {
   tar_size_exceeded: 'The decompressed TAR stream exceeds the size limit.',
 } as const;
 
-const OPERATIONS = new Set<LocalPluginInstallationOperation>([
-  'select',
-  'read',
-  'inspect',
-  'extract',
-  'commit',
-  'register',
-  'recover',
-]);
-
+const OPERATIONS = new Set<LocalPluginInstallationOperation>(['prepare', 'commit', 'cancel']);
+const utf8Length = (value: string) => new TextEncoder().encode(value).length;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
-
 const assertRecord = (value: unknown, required: readonly string[], optional: readonly string[] = []) => {
-  if (!isRecord(value)) {
-    throw new TypeError('Local plugin installation payload is not an object.');
-  }
+  if (!isRecord(value)) throw new TypeError('Local plugin installation payload is not an object.');
   const allowed = new Set([...required, ...optional]);
-  if (!required.every((key) => Object.hasOwn(value, key)) || Object.keys(value).some((key) => !allowed.has(key))) {
+  if (!required.every((key) => Object.hasOwn(value, key)) || Object.keys(value).some((key) => !allowed.has(key)))
     throw new TypeError('Local plugin installation payload has an invalid field set.');
-  }
   return value;
 };
-
 const deepFreeze = <T>(value: T): T => {
-  if (typeof value !== 'object' || value === null || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value as Record<string, unknown>)) {
-    deepFreeze(child);
-  }
+  if (typeof value !== 'object' || value === null || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
   return Object.freeze(value);
 };
-
 const parseContractVersion = (value: unknown) => {
-  if (value !== LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION) {
+  if (value !== LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION)
     throw new TypeError('Local plugin installation contract version is unsupported.');
-  }
   return value;
 };
-
+const containsAsciiControl = (value: string) =>
+  Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f);
+  });
+const isBoundedText = (value: unknown, max = MAX_TEXT_BYTES): value is string =>
+  typeof value === 'string' && value.length > 0 && utf8Length(value) <= max && !containsAsciiControl(value);
+const parseLocalizedText = (value: unknown): LocalPluginInstallationLocalizedText => {
+  const record = assertRecord(value, ['en-US'], ['zh-CN']);
+  if (!isBoundedText(record['en-US']) || (record['zh-CN'] !== undefined && !isBoundedText(record['zh-CN'])))
+    throw new TypeError('Local plugin installation localized text is invalid.');
+  return { 'en-US': record['en-US'], ...(typeof record['zh-CN'] === 'string' ? { 'zh-CN': record['zh-CN'] } : {}) };
+};
+const parsePublisher = (value: unknown): LocalPluginInstallationPublisher => {
+  const record = assertRecord(value, ['author', 'homepage', 'repository']);
+  if (
+    !isBoundedText(record.author) ||
+    !isBoundedText(record.homepage, MAX_URL_BYTES) ||
+    !isBoundedText(record.repository, MAX_URL_BYTES)
+  )
+    throw new TypeError('Local plugin installation publisher is invalid.');
+  for (const urlValue of [record.homepage, record.repository]) {
+    try {
+      if (new URL(urlValue).protocol !== 'https:') throw new Error();
+    } catch {
+      throw new TypeError('Local plugin installation publisher URL is invalid.');
+    }
+  }
+  return { author: record.author, homepage: record.homepage, repository: record.repository };
+};
+const parsePermission = (value: unknown): LocalPluginInstallationPermissionRequest => {
+  const record = assertRecord(value, ['permission_id', 'reason']);
+  if (
+    typeof record.permission_id !== 'string' ||
+    !PLUGIN_ID_PATTERN.test(record.permission_id) ||
+    record.permission_id.length > 255
+  )
+    throw new TypeError('Local plugin installation permission is invalid.');
+  return { permission_id: record.permission_id, reason: parseLocalizedText(record.reason) };
+};
+const parseCandidate = (value: unknown): LocalPluginInstallationCandidate => {
+  const record = assertRecord(value, ['plugin_id', 'version', 'display_name', 'publisher', 'requested_permissions']);
+  if (
+    typeof record.plugin_id !== 'string' ||
+    !PLUGIN_ID_PATTERN.test(record.plugin_id) ||
+    record.plugin_id.length > 255 ||
+    typeof record.version !== 'string' ||
+    !SEMVER_PATTERN.test(record.version) ||
+    !Array.isArray(record.requested_permissions) ||
+    record.requested_permissions.length > MAX_PERMISSIONS
+  )
+    throw new TypeError('Local plugin installation candidate is invalid.');
+  const requestedPermissions = record.requested_permissions.map(parsePermission);
+  if (
+    requestedPermissions.some((item, index) => {
+      const previous = requestedPermissions[index - 1];
+      return previous !== undefined && previous.permission_id >= item.permission_id;
+    })
+  )
+    throw new TypeError('Local plugin installation permissions are not sorted and unique.');
+  return {
+    plugin_id: record.plugin_id,
+    version: record.version,
+    display_name: parseLocalizedText(record.display_name),
+    publisher: parsePublisher(record.publisher),
+    requested_permissions: requestedPermissions,
+  };
+};
 const parseDiagnostic = (value: unknown): LocalPluginInstallationDiagnostic => {
   const record = assertRecord(value, ['code', 'path', 'message']);
   if (
@@ -107,23 +168,52 @@ const parseDiagnostic = (value: unknown): LocalPluginInstallationDiagnostic => {
     typeof record.path !== 'string' ||
     record.path.length === 0 ||
     record.message !== PACKAGE_DIAGNOSTIC_MESSAGES[record.code as keyof typeof PACKAGE_DIAGNOSTIC_MESSAGES]
-  ) {
+  )
     throw new TypeError('Local plugin installation package diagnostic is invalid.');
-  }
-  return { code: record.code, path: record.path, message: record.message } as LocalPluginInstallationDiagnostic;
+  return { code: record.code, path: record.path, message: record.message as string };
+};
+
+export const createLocalPluginInstallationRequest = (preparationToken: string): LocalPluginInstallationRequest => {
+  if (!TOKEN_PATTERN.test(preparationToken))
+    throw new TypeError('Local plugin installation preparation token is invalid.');
+  return Object.freeze({
+    contract_version: LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION,
+    preparation_token: preparationToken,
+  });
 };
 
 export const parseLocalPluginInstallationResult = (value: unknown): LocalPluginInstallationResult => {
-  if (!isRecord(value)) {
-    throw new TypeError('Local plugin installation result is invalid.');
-  }
+  if (!isRecord(value)) throw new TypeError('Local plugin installation result is invalid.');
   if (value.status === 'cancelled') {
-    const record = assertRecord(value, ['status', 'contract_version']);
-    return deepFreeze({ status: 'cancelled', contract_version: parseContractVersion(record.contract_version) });
+    const record = assertRecord(value, ['status', 'contract_version', 'operation']);
+    if (record.operation !== 'prepare' && record.operation !== 'cancel')
+      throw new TypeError('Cancelled local plugin installation operation is invalid.');
+    return deepFreeze({
+      status: 'cancelled',
+      contract_version: parseContractVersion(record.contract_version),
+      operation: record.operation,
+    });
+  }
+  if (value.status === 'prepared') {
+    const record = assertRecord(value, ['status', 'contract_version', 'operation', 'preparation_token', 'candidate']);
+    if (
+      record.operation !== 'prepare' ||
+      typeof record.preparation_token !== 'string' ||
+      !TOKEN_PATTERN.test(record.preparation_token)
+    )
+      throw new TypeError('Prepared local plugin installation result is invalid.');
+    return deepFreeze({
+      status: 'prepared',
+      contract_version: parseContractVersion(record.contract_version),
+      operation: 'prepare',
+      preparation_token: record.preparation_token,
+      candidate: parseCandidate(record.candidate),
+    });
   }
   if (value.status === 'installed') {
-    const record = assertRecord(value, ['status', 'contract_version', 'plugin_id', 'version', 'revision']);
+    const record = assertRecord(value, ['status', 'contract_version', 'operation', 'plugin_id', 'version', 'revision']);
     if (
+      record.operation !== 'commit' ||
       typeof record.plugin_id !== 'string' ||
       !PLUGIN_ID_PATTERN.test(record.plugin_id) ||
       record.plugin_id.length > 255 ||
@@ -131,12 +221,12 @@ export const parseLocalPluginInstallationResult = (value: unknown): LocalPluginI
       !SEMVER_PATTERN.test(record.version) ||
       typeof record.revision !== 'string' ||
       !REVISION_PATTERN.test(record.revision)
-    ) {
+    )
       throw new TypeError('Installed local plugin result is invalid.');
-    }
     return deepFreeze({
       status: 'installed',
       contract_version: parseContractVersion(record.contract_version),
+      operation: 'commit',
       plugin_id: record.plugin_id,
       version: record.version,
       revision: record.revision,
@@ -152,18 +242,16 @@ export const parseLocalPluginInstallationError = (value: unknown): LocalPluginIn
     !(record.code in ERROR_MESSAGES) ||
     typeof record.operation !== 'string' ||
     !OPERATIONS.has(record.operation as LocalPluginInstallationOperation) ||
-    typeof record.message !== 'string' ||
     record.message !== ERROR_MESSAGES[record.code as keyof typeof ERROR_MESSAGES] ||
     (record.diagnostics !== undefined && !Array.isArray(record.diagnostics)) ||
     (record.code !== 'invalid_package' && record.diagnostics !== undefined)
-  ) {
+  )
     throw new TypeError('Local plugin installation error is invalid.');
-  }
   return deepFreeze({
     contract_version: parseContractVersion(record.contract_version),
     code: record.code as LocalPluginInstallationErrorPayload['code'],
     operation: record.operation as LocalPluginInstallationOperation,
-    message: record.message,
+    message: record.message as string,
     ...(Array.isArray(record.diagnostics) ? { diagnostics: record.diagnostics.map(parseDiagnostic) } : {}),
   });
 };

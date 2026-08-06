@@ -126,8 +126,9 @@ if (!roadmap.includes('[implement-plugin-host-api-v1](openspec/changes/archive/'
 if (!roadmap.includes('- [x] **Task 5.5：实现 Plugin Permission Management**')) {
   fail('Roadmap Task 5.5 completion drifted');
 }
-if (!roadmap.includes('- [ ] **Task 5.6：校验 RPC 输入、输出与资源限制**')) {
-  fail('Roadmap Task 5.6 was completed before its change was archived');
+if (!roadmap.includes('- [x] **Task 5.6：校验 RPC 输入、输出与资源限制**')) {
+  fail('Roadmap Task 5.6 completion drifted');
 }
+read('openspec/changes/archive/2026-08-05-validate-plugin-rpc-contracts/proposal.md');
 
 console.log('Checked Dispatcher providers, production wiring, private outcomes, public exports, and dependencies.');

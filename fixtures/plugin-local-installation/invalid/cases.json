@@ -1,62 +1,123 @@
 [
   {
-    "name": "unknown_result_version",
+    "name": "contract_version_drift",
     "type": "result",
+    "value": { "status": "cancelled", "contract_version": "0.1.0", "operation": "prepare" }
+  },
+  { "name": "short_token", "type": "request", "value": { "contract_version": "0.2.0", "preparation_token": "short" } },
+  {
+    "name": "request_unknown_field",
+    "type": "request",
     "value": {
-      "status": "cancelled",
-      "contract_version": "0.2.0"
+      "contract_version": "0.2.0",
+      "preparation_token": "abcdefghijklmnopqrstuvwxyzABCDEF",
+      "path": "/private/plugin.lxp"
     }
   },
   {
-    "name": "unknown_result_field",
+    "name": "cancelled_commit_mismatch",
+    "type": "result",
+    "value": { "status": "cancelled", "contract_version": "0.2.0", "operation": "commit" }
+  },
+  {
+    "name": "prepared_cancel_mismatch",
     "type": "result",
     "value": {
-      "status": "cancelled",
-      "contract_version": "0.1.0",
-      "path": "/Users/private/plugin.lxp"
+      "status": "prepared",
+      "contract_version": "0.2.0",
+      "operation": "cancel",
+      "preparation_token": "abcdefghijklmnopqrstuvwxyzABCDEF",
+      "candidate": {
+        "plugin_id": "com.acme.workspace",
+        "version": "1.2.3",
+        "display_name": { "en-US": "Workspace" },
+        "publisher": {
+          "author": "Acme",
+          "homepage": "https://example.com",
+          "repository": "https://example.com/repository"
+        },
+        "requested_permissions": []
+      }
     }
   },
   {
-    "name": "unknown_result_variant",
+    "name": "candidate_contains_private_path",
     "type": "result",
     "value": {
-      "status": "reinstalled",
-      "contract_version": "0.1.0",
-      "plugin_id": "com.acme.workspace",
-      "version": "1.2.3",
-      "revision": "8"
+      "status": "prepared",
+      "contract_version": "0.2.0",
+      "operation": "prepare",
+      "preparation_token": "abcdefghijklmnopqrstuvwxyzABCDEF",
+      "candidate": {
+        "plugin_id": "com.acme.workspace",
+        "version": "1.2.3",
+        "display_name": { "en-US": "Workspace" },
+        "publisher": {
+          "author": "Acme",
+          "homepage": "https://example.com",
+          "repository": "https://example.com/repository"
+        },
+        "requested_permissions": [],
+        "staging_path": "/private/staging"
+      }
     }
   },
   {
-    "name": "installed_result_contains_digest",
+    "name": "candidate_unsorted_permissions",
+    "type": "result",
+    "value": {
+      "status": "prepared",
+      "contract_version": "0.2.0",
+      "operation": "prepare",
+      "preparation_token": "abcdefghijklmnopqrstuvwxyzABCDEF",
+      "candidate": {
+        "plugin_id": "com.acme.workspace",
+        "version": "1.2.3",
+        "display_name": { "en-US": "Workspace" },
+        "publisher": {
+          "author": "Acme",
+          "homepage": "https://example.com",
+          "repository": "https://example.com/repository"
+        },
+        "requested_permissions": [
+          { "permission_id": "z.permission", "reason": { "en-US": "Z" } },
+          { "permission_id": "a.permission", "reason": { "en-US": "A" } }
+        ]
+      }
+    }
+  },
+  {
+    "name": "installed_prepare_mismatch",
     "type": "result",
     "value": {
       "status": "installed",
-      "contract_version": "0.1.0",
+      "contract_version": "0.2.0",
+      "operation": "prepare",
+      "plugin_id": "com.acme.workspace",
+      "version": "1.2.3",
+      "revision": "7"
+    }
+  },
+  {
+    "name": "installed_contains_digest",
+    "type": "result",
+    "value": {
+      "status": "installed",
+      "contract_version": "0.2.0",
+      "operation": "commit",
       "plugin_id": "com.acme.workspace",
       "version": "1.2.3",
       "revision": "7",
-      "package_digest": "sha256:secret"
-    }
-  },
-  {
-    "name": "malformed_installed_result",
-    "type": "result",
-    "value": {
-      "status": "installed",
-      "contract_version": "0.1.0",
-      "plugin_id": "Not Valid",
-      "version": "latest",
-      "revision": "01"
+      "package_digest": "secret"
     }
   },
   {
     "name": "unknown_error_field",
     "type": "error",
     "value": {
-      "contract_version": "0.1.0",
+      "contract_version": "0.2.0",
       "code": "busy",
-      "operation": "commit",
+      "operation": "prepare",
       "message": "Another plugin installation is in progress.",
       "stack": "private stack"
     }
@@ -65,9 +126,9 @@
     "name": "raw_error_message",
     "type": "error",
     "value": {
-      "contract_version": "0.1.0",
+      "contract_version": "0.2.0",
       "code": "source_read_failed",
-      "operation": "read",
+      "operation": "prepare",
       "message": "/Users/private/plugin.lxp: permission denied"
     }
   },
@@ -75,16 +136,12 @@
     "name": "diagnostics_on_non_package_error",
     "type": "error",
     "value": {
-      "contract_version": "0.1.0",
+      "contract_version": "0.2.0",
       "code": "busy",
       "operation": "commit",
       "message": "Another plugin installation is in progress.",
       "diagnostics": [
-        {
-          "code": "frame_invalid",
-          "path": "/frame",
-          "message": "The package is not a supported Zstandard frame."
-        }
+        { "code": "frame_invalid", "path": "/frame", "message": "The package is not a supported Zstandard frame." }
       ]
     }
   }

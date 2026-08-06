@@ -1113,6 +1113,43 @@ real pasteboard smoke. This delivery adds no prompt, settings or history UI,
 product copy, generic permission framework, general RPC limit, template, CLI,
 signing, marketplace, or browser clipboard fallback.
 
+## Shipped Host-Private Plugin Permission Prompts
+
+Local installation contract `0.2.0` separates `prepare`, `commit`, and
+`cancel`. Prepare validates bounded package bytes into Installer-owned staging
+and returns only an opaque token plus a bounded candidate projection. It does
+not publish Registration state or grants. Commit accepts only the token,
+revalidates the staged package and current Host facts under the installer lock,
+and always creates the durable installation with an empty grant snapshot.
+
+The trusted management surface derives permission prompts from current Host
+facts. Host-owned risk and support labels remain separate from the bounded
+author-provided reason, and the Publisher is explicitly unverified. Sensitive
+choices default off. The user may cancel, defer, or install with zero grants;
+these interaction outcomes create no decision history. Official and external
+plugins use the same path.
+
+After Registration convergence, the Host may apply explicitly selected grants
+one permission at a time in stable permission-ID order, carrying the returned
+Manager revision forward. A failure stops the sequence and reports that the
+package installation succeeded while no or only some grants were applied; it
+does not roll back or replay the installation. Replacement presents retained,
+removed, and added requests separately and offers choices only for supported
+added permissions.
+
+Settings grant and revoke operations bind one current entry and revision and
+wait for snapshot/detail convergence before the UI changes. Revocation uses the
+existing permission core, so current Runtime Session authority and pending
+privileged calls fail closed immediately; no Page is reopened automatically.
+Plugin iframe messages, Manifest reasons, SDK payloads, Publisher/source facts,
+and claimed user activation cannot open a prompt or call grant mutation. This
+capability adds no public permission-request API, permission directory,
+decision history, signature trust, marketplace, or generic Runtime prompt.
+
+Run `pnpm run check:plugin-permission-prompts` for the focused installation,
+management, prompt, Runtime invalidation, public-boundary, localization,
+keyboard/focus, and fixed `650×600` visual evidence.
+
 ## Shipped Plugin-Scoped Storage
 
 The Host-private Rust `PluginScopedStorage` service persists one canonical
@@ -1158,10 +1195,11 @@ permission prompt, general RPC limit, template, CLI, or development mode.
 The trusted Settings page now consumes one root-private
 `PluginManagementService`. The facade observes complete immutable Registration
 snapshots, loads detail only against the same revision, projects bounded
-diagnostics and read-only requested/supported/granted/effective permission
-facts, and serializes installation, enable/disable, replacement, uninstall,
-and data-clear mutations. React receives typed operation availability and safe
-outcomes; it does not invoke Tauri or reproduce Manager transition rules.
+diagnostics and requested/supported/persisted-grant/effective permission facts,
+and serializes prepared installation, enable/disable, replacement,
+single-permission grant/revoke, uninstall, and data-clear mutations. React
+receives typed operation availability and safe outcomes; it does not invoke
+Tauri or reproduce Manager transition rules.
 
 The root plugin composition is the sole lifecycle owner for the shared
 management, lifecycle, replacement, and Registration-projection services. Each
@@ -1183,12 +1221,13 @@ empty canonical `storage-v1.json`. Missing or already-empty storage is
 idempotent, while ambiguous, linked, escaped, stale, enabled, quarantined, or
 degraded evidence fails closed.
 
-The management surface does not expose permission mutation, raw paths or
-errors, Publisher trust, Registry patch/history protocols, a public management
-API, or any management export through Contract, SDK, Testkit, or Plugin UI.
-Run `pnpm run check:plugin-management-settings` for the private boundary,
-facade/UI regressions, public-package checks, and fixed `650×600` bilingual
-light/dark screenshots and computed styles.
+Permission mutations remain root-private and revision-bound. The management
+surface does not expose raw paths or errors, Publisher trust, Registry
+patch/history protocols, a public management API, or any management export
+through Contract, SDK, Testkit, or Plugin UI. Run
+`pnpm run check:plugin-management-settings` for the private boundary, facade/UI
+regressions, public-package checks, and fixed `650×600` bilingual light/dark
+screenshots and computed styles.
 
 ## Shipped Public Plugin Testkit
 

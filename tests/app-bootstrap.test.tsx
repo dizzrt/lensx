@@ -50,7 +50,11 @@ describe('application preferences bootstrap', () => {
       return composition;
     };
     const installationClient: LocalPluginInstallationClient = {
-      install: async () => ({ status: 'cancelled', contract_version: '0.1.0' }),
+      prepare: async () => ({ status: 'cancelled', contract_version: '0.2.0', operation: 'prepare' }),
+      commit: async () => {
+        throw new Error('not prepared');
+      },
+      cancel: async () => ({ status: 'cancelled', contract_version: '0.2.0', operation: 'cancel' }),
     };
     const Probe = () => {
       const composition = useProductionPluginLifecycleComposition(installationClient, createComposition);

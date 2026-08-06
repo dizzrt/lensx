@@ -1,4 +1,4 @@
-import { Banner, Button, Empty, Modal, Radio, RadioGroup, Spin, Tag, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Checkbox, Empty, Modal, Radio, RadioGroup, Spin, Tag, Typography } from '@douyinfe/semi-ui';
 import { type KeyboardEvent, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppLocale } from '../i18n';
@@ -24,11 +24,18 @@ const feedbackKeys: Record<PluginManagementFeedbackCode, string> = {
   detail_failed: 'settings.plugins.feedback.detailFailed',
   duplicate: 'settings.plugins.feedback.duplicate',
   install_succeeded: 'settings.plugins.feedback.installSucceeded',
+  install_permissions_partial: 'settings.plugins.feedback.installPermissionsPartial',
+  install_permissions_failed: 'settings.plugins.feedback.installPermissionsFailed',
   load_failed: 'settings.plugins.feedback.loadFailed',
   mutation_failed: 'settings.plugins.feedback.mutationFailed',
   not_found: 'settings.plugins.feedback.notFound',
   plugin_enabled: 'settings.plugins.feedback.pluginEnabled',
   replacement_succeeded: 'settings.plugins.feedback.replacementSucceeded',
+  replacement_permissions_partial: 'settings.plugins.feedback.replacementPermissionsPartial',
+  permission_granted: 'settings.plugins.feedback.permissionGranted',
+  permission_revoked: 'settings.plugins.feedback.permissionRevoked',
+  permission_unchanged: 'settings.plugins.feedback.permissionUnchanged',
+  permissions_deferred: 'settings.plugins.feedback.permissionsDeferred',
   set_enabled_succeeded: 'settings.plugins.feedback.setEnabledSucceeded',
   unavailable: 'settings.plugins.feedback.unavailable',
   uninstall_succeeded: 'settings.plugins.feedback.uninstallSucceeded',
@@ -47,13 +54,28 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
   const [dialog, setDialog] = useState<'clear' | 'uninstall'>();
   const [dataPolicy, setDataPolicy] = useState<PluginLifecycleDataPolicy>('retain_data');
   const restoreFocusRef = useRef<HTMLElement | undefined>(undefined);
+  const restoreFocusIdRef = useRef<string | undefined>(undefined);
   const replacementOpenRef = useRef(false);
+  const permissionOpenRef = useRef(false);
 
   const restoreFocus = useCallback(() => {
     const target = restoreFocusRef.current;
+    const targetId = restoreFocusIdRef.current;
     restoreFocusRef.current = undefined;
-    requestAnimationFrame(() => target?.focus({ preventScroll: true }));
+    restoreFocusIdRef.current = undefined;
+    requestAnimationFrame(() => {
+      const remounted = targetId ? document.getElementById(targetId) : undefined;
+      const resolved = target?.isConnected
+        ? target
+        : (remounted?.querySelector<HTMLElement>('input, button, [tabindex]') ?? remounted ?? undefined);
+      resolved?.focus({ preventScroll: true });
+    });
   }, []);
+
+  const rememberFocus = (target: HTMLElement, targetId?: string) => {
+    restoreFocusRef.current = target;
+    restoreFocusIdRef.current = targetId;
+  };
 
   useEffect(() => {
     if (view.confirmation) replacementOpenRef.current = true;
@@ -63,12 +85,20 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
     }
   }, [restoreFocus, view.confirmation]);
 
+  useEffect(() => {
+    if (view.permission_confirmation) permissionOpenRef.current = true;
+    else if (permissionOpenRef.current) {
+      permissionOpenRef.current = false;
+      restoreFocus();
+    }
+  }, [restoreFocus, view.permission_confirmation]);
+
   const selected = view.entries.find((entry) => entry.entry_id === view.selected_entry_id);
   const selectedName = selected ? entryName(selected, locale) : '';
   const pending = view.mutation !== undefined;
 
   const openDialog = (kind: 'clear' | 'uninstall', trigger: HTMLElement) => {
-    restoreFocusRef.current = trigger;
+    rememberFocus(trigger);
     if (kind === 'uninstall') setDataPolicy('retain_data');
     setDialog(kind);
   };
@@ -92,6 +122,7 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
     setDialog(undefined);
     await service.uninstall(dataPolicy);
     restoreFocusRef.current = undefined;
+    restoreFocusIdRef.current = undefined;
     focusCurrentSelection();
   };
 
@@ -132,12 +163,15 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
           aria-describedby="settings-plugins-description"
           disabled={!view.operations.install}
           id="settings-install-local-plugin"
-          loading={view.mutation === 'install'}
-          onClick={() => void service.install()}
+          loading={view.mutation === 'prepare_installation'}
+          onClick={(event) => {
+            rememberFocus(event.currentTarget);
+            void service.prepareInstallation();
+          }}
           theme="solid"
           type="primary"
         >
-          {view.mutation === 'install' ? t('settings.plugins.pending') : t('settings.plugins.install')}
+          {view.mutation === 'prepare_installation' ? t('settings.plugins.preparing') : t('settings.plugins.install')}
         </Button>
       </div>
 
@@ -270,13 +304,63 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
               <div>
                 <Typography.Text strong>{t('settings.plugins.fields.permissions')}</Typography.Text>
                 <Typography.Paragraph type="tertiary">
-                  {t('settings.plugins.permissions.readOnly')}
+                  {t('settings.plugins.permissions.description')}
                 </Typography.Paragraph>
                 <ul className="plugin-management-permissions">
                   {detail.permissions.map((permission) => (
                     <li key={permission.permission_id}>
-                      <code>{permission.permission_id}</code>
-                      <span>{t(`settings.plugins.permissions.state.${permission.effective}`)}</span>
+                      <div className="plugin-management-permission-main">
+                        <div className="flex items-center gap-2">
+                          <Typography.Text strong>
+                            {permission.prompt.host_name[locale] ?? permission.prompt.host_name['en-US']}
+                          </Typography.Text>
+                          <Tag color={permission.prompt.risk === 'sensitive' ? 'orange' : 'grey'} size="small">
+                            {t(`settings.plugins.permissions.risk.${permission.prompt.risk}`)}
+                          </Tag>
+                          {!permission.supported ? (
+                            <Tag size="small">{t('settings.plugins.permissions.state.unsupported')}</Tag>
+                          ) : null}
+                        </div>
+                        <Typography.Paragraph type="tertiary">
+                          {permission.prompt.host_risk_description[locale] ??
+                            permission.prompt.host_risk_description['en-US']}
+                        </Typography.Paragraph>
+                        {permission.prompt.author_reason ? (
+                          <Typography.Paragraph>
+                            <strong>{t('settings.plugins.permissions.authorReason')}:</strong>{' '}
+                            {permission.prompt.author_reason[locale] ?? permission.prompt.author_reason['en-US']}
+                          </Typography.Paragraph>
+                        ) : null}
+                        <Typography.Text type="tertiary">
+                          {t(`settings.plugins.permissions.state.${permission.effective}`)}
+                        </Typography.Text>
+                      </div>
+                      {permission.prompt.grant_available ? (
+                        <Button
+                          disabled={pending}
+                          id={`plugin-permission-grant-${permission.permission_id}`}
+                          onClick={(event) => {
+                            rememberFocus(event.currentTarget);
+                            service.openPermissionConfirmation(permission.permission_id, true);
+                          }}
+                          size="small"
+                        >
+                          {t('settings.plugins.permissions.grant')}
+                        </Button>
+                      ) : permission.prompt.revoke_available ? (
+                        <Button
+                          disabled={pending}
+                          id={`plugin-permission-revoke-${permission.permission_id}`}
+                          onClick={(event) => {
+                            rememberFocus(event.currentTarget);
+                            service.openPermissionConfirmation(permission.permission_id, false);
+                          }}
+                          size="small"
+                          type="danger"
+                        >
+                          {t('settings.plugins.permissions.revoke')}
+                        </Button>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
@@ -316,7 +400,7 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
                   disabled={!view.operations.replace}
                   loading={view.mutation === 'prepare_replacement'}
                   onClick={(event) => {
-                    restoreFocusRef.current = event.currentTarget;
+                    rememberFocus(event.currentTarget);
                     void service.prepareReplacement();
                   }}
                 >
@@ -355,17 +439,98 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
       </Typography.Text>
 
       <Modal
+        cancelButtonProps={{ autoFocus: true, disabled: pending }}
         cancelText={t('settings.plugins.confirm.cancel')}
+        className="plugin-management-permission-modal"
+        closeOnEsc={!pending}
+        closable={!pending}
+        confirmLoading={view.mutation === 'commit_installation'}
+        maskClosable={false}
+        motion={false}
+        okText={t('settings.plugins.confirm.installation.confirm')}
+        onCancel={() => void service.cancelInstallation()}
+        onOk={() => void service.commitInstallation()}
+        title={t('settings.plugins.confirm.installation.title')}
+        visible={view.confirmation?.kind === 'installation' && !view.permission_confirmation}
+      >
+        {view.confirmation?.kind === 'installation' ? (
+          <div className="plugin-management-confirmation">
+            <Typography.Paragraph id="plugin-installation-confirmation-description">
+              {t('settings.plugins.confirm.installation.description', {
+                name:
+                  view.confirmation.candidate.display_name[locale] ?? view.confirmation.candidate.display_name['en-US'],
+                version: view.confirmation.candidate.version,
+              })}
+            </Typography.Paragraph>
+            <Banner
+              closeIcon={null}
+              description={t('settings.plugins.permissions.publisherUnverifiedDescription')}
+              fullMode={false}
+              title={t('settings.plugins.permissions.publisherUnverified')}
+              type="warning"
+            />
+            <Typography.Text>{view.confirmation.candidate.publisher.author}</Typography.Text>
+            <ul className="plugin-management-permission-prompt-list">
+              {view.confirmation.candidate.permissions.map((permission) => (
+                <li key={permission.permission_id}>
+                  <Checkbox
+                    checked={
+                      view.confirmation?.kind === 'installation' &&
+                      view.confirmation.selected_permission_ids.includes(permission.permission_id)
+                    }
+                    disabled={pending || !permission.grant_available}
+                    id={`plugin-installation-permission-${permission.permission_id}`}
+                    onChange={(event) => {
+                      rememberFocus(event.currentTarget, `plugin-installation-permission-${permission.permission_id}`);
+                      service.openPermissionConfirmation(permission.permission_id, Boolean(event.target.checked));
+                    }}
+                  >
+                    {permission.host_name[locale] ?? permission.host_name['en-US']}
+                  </Checkbox>
+                  <Tag color={permission.risk === 'sensitive' ? 'orange' : 'grey'} size="small">
+                    {t(`settings.plugins.permissions.risk.${permission.risk}`)}
+                  </Tag>
+                  <Typography.Paragraph type="tertiary">
+                    {permission.host_risk_description[locale] ?? permission.host_risk_description['en-US']}
+                  </Typography.Paragraph>
+                  {permission.author_reason ? (
+                    <Typography.Paragraph>
+                      <strong>{t('settings.plugins.permissions.authorReason')}:</strong>{' '}
+                      {permission.author_reason[locale] ?? permission.author_reason['en-US']}
+                    </Typography.Paragraph>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+            <Button
+              disabled={pending}
+              onClick={() => {
+                service.deferPreparedPermissions();
+                void service.commitInstallation();
+              }}
+            >
+              {t('settings.plugins.permissions.laterAndInstall')}
+            </Button>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        cancelButtonProps={{ autoFocus: true, disabled: pending }}
+        cancelText={t('settings.plugins.confirm.cancel')}
+        className="plugin-management-permission-modal"
+        closeOnEsc={!pending}
         closable={!pending}
         confirmLoading={view.mutation === 'commit_replacement'}
         maskClosable={false}
+        motion={false}
         okText={t('settings.plugins.confirm.replacement.confirm')}
         onCancel={() => void service.cancelReplacement()}
         onOk={() => void service.commitReplacement()}
         title={t('settings.plugins.confirm.replacement.title')}
-        visible={Boolean(view.confirmation)}
+        visible={view.confirmation?.kind === 'replacement' && !view.permission_confirmation}
       >
-        {view.confirmation ? (
+        {view.confirmation?.kind === 'replacement' ? (
           <div className="plugin-management-confirmation">
             <Typography.Paragraph>
               {t('settings.plugins.confirm.replacement.description', { name: selectedName })}
@@ -376,20 +541,113 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
             <Typography.Paragraph>
               {t(`settings.plugins.replacement.${view.confirmation.classification}`)}
             </Typography.Paragraph>
-            <Typography.Text strong>{t('settings.plugins.confirm.replacement.addedPermissions')}</Typography.Text>
+            <Banner
+              closeIcon={null}
+              description={t('settings.plugins.permissions.publisherUnverifiedDescription')}
+              fullMode={false}
+              title={t('settings.plugins.permissions.publisherUnverified')}
+              type="warning"
+            />
+            <Typography.Text strong>{t('settings.plugins.confirm.replacement.retainedPermissions')}</Typography.Text>
             <Typography.Paragraph>
-              {view.confirmation.added_permission_ids.join(', ') || t('settings.plugins.none')}
+              {view.confirmation.retained_permissions
+                .map((item) => item.host_name[locale] ?? item.host_name['en-US'])
+                .join(', ') || t('settings.plugins.none')}
             </Typography.Paragraph>
             <Typography.Text strong>{t('settings.plugins.confirm.replacement.removedPermissions')}</Typography.Text>
             <Typography.Paragraph>
-              {view.confirmation.removed_permission_ids.join(', ') || t('settings.plugins.none')}
+              {view.confirmation.removed_permissions
+                .map((item) => item.host_name[locale] ?? item.host_name['en-US'])
+                .join(', ') || t('settings.plugins.none')}
+            </Typography.Paragraph>
+            <Typography.Text strong>{t('settings.plugins.confirm.replacement.addedPermissions')}</Typography.Text>
+            <ul className="plugin-management-permission-prompt-list">
+              {view.confirmation.added_permissions.map((permission) => (
+                <li key={permission.permission_id}>
+                  <Checkbox
+                    checked={
+                      view.confirmation?.kind === 'replacement' &&
+                      view.confirmation.selected_permission_ids.includes(permission.permission_id)
+                    }
+                    disabled={pending || !permission.grant_available}
+                    id={`plugin-replacement-permission-${permission.permission_id}`}
+                    onChange={(event) => {
+                      rememberFocus(event.currentTarget, `plugin-replacement-permission-${permission.permission_id}`);
+                      service.openPermissionConfirmation(permission.permission_id, Boolean(event.target.checked));
+                    }}
+                  >
+                    {permission.host_name[locale] ?? permission.host_name['en-US']}
+                  </Checkbox>
+                  <Tag color={permission.risk === 'sensitive' ? 'orange' : 'grey'} size="small">
+                    {t(`settings.plugins.permissions.risk.${permission.risk}`)}
+                  </Tag>
+                  <Typography.Paragraph type="tertiary">
+                    {permission.host_risk_description[locale] ?? permission.host_risk_description['en-US']}
+                  </Typography.Paragraph>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        cancelButtonProps={{ autoFocus: true, disabled: pending }}
+        cancelText={t(
+          view.permission_confirmation?.action === 'revoke'
+            ? 'settings.plugins.confirm.cancel'
+            : 'settings.plugins.permissions.deny',
+        )}
+        className="plugin-management-permission-modal"
+        closeOnEsc={!pending}
+        closable={!pending}
+        confirmLoading={view.mutation === 'set_permission'}
+        maskClosable={false}
+        motion={false}
+        okText={t(
+          view.permission_confirmation?.action === 'revoke'
+            ? 'settings.plugins.permissions.confirmRevoke'
+            : 'settings.plugins.permissions.allow',
+        )}
+        okType={view.permission_confirmation?.action === 'revoke' ? 'danger' : 'primary'}
+        onCancel={() => service.cancelPermissionDecision()}
+        onOk={() => void service.confirmPermissionDecision()}
+        title={t(
+          view.permission_confirmation?.action === 'revoke'
+            ? 'settings.plugins.permissions.revokeTitle'
+            : 'settings.plugins.permissions.grantTitle',
+        )}
+        visible={Boolean(view.permission_confirmation)}
+      >
+        {view.permission_confirmation ? (
+          <div className="plugin-management-confirmation" id="plugin-permission-confirmation-description">
+            <Typography.Title heading={5}>
+              {view.permission_confirmation.permission.host_name[locale] ??
+                view.permission_confirmation.permission.host_name['en-US']}
+            </Typography.Title>
+            <Typography.Paragraph>
+              {view.permission_confirmation.permission.host_risk_description[locale] ??
+                view.permission_confirmation.permission.host_risk_description['en-US']}
+            </Typography.Paragraph>
+            {view.permission_confirmation.action === 'revoke' ? (
+              <Banner
+                closeIcon={null}
+                description={t('settings.plugins.permissions.revokeImpact')}
+                fullMode={false}
+                type="warning"
+              />
+            ) : null}
+            <Typography.Paragraph type="tertiary">
+              {t('settings.plugins.permissions.singlePermissionOnly')}
             </Typography.Paragraph>
           </div>
         ) : null}
       </Modal>
 
       <Modal
+        cancelButtonProps={{ autoFocus: true, disabled: pending }}
         cancelText={t('settings.plugins.confirm.cancel')}
+        closeOnEsc={!pending}
         closable={!pending}
         confirmLoading={view.mutation === 'uninstall'}
         maskClosable={false}
@@ -425,7 +683,9 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
       </Modal>
 
       <Modal
+        cancelButtonProps={{ autoFocus: true, disabled: pending }}
         cancelText={t('settings.plugins.confirm.cancel')}
+        closeOnEsc={!pending}
         closable={!pending}
         confirmLoading={view.mutation === 'clear_data'}
         maskClosable={false}

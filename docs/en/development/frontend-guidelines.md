@@ -250,6 +250,25 @@ Shell layout and spacing in UnoCSS utilities.
 - Announce safe status and error summaries through live regions. Never render
   raw native errors, paths, payloads, stack traces, or diagnostic messages.
 
+### Host Permission Prompts
+
+- Keep installation and replacement permission decisions inside the existing
+  continuous Plugins surface. Use Semi Design `Modal`, `Button`, `Checkbox`,
+  `Tag`, `Banner`, and `Typography`; use semantic Less for prompt hierarchy,
+  bounded scrolling, focus, hover, pending, and disabled states.
+- Display Host-owned risk/support text separately from the author-provided
+  reason and the Publisher-unverified notice. Do not present source or
+  Publisher facts as authority. Sensitive choices start unchecked, and a
+  zero-grant/defer action remains explicit.
+- Confirm settings grant or revoke one permission at a time. Keep pending
+  operations non-dismissible and non-repeatable, announce safe partial/conflict
+  feedback through live regions, and restore focus to the exact trigger or a
+  deterministic surviving entry after every terminal outcome.
+- Keep all copy in the application i18n resources and test English and
+  Simplified Chinese in light and dark themes. At fixed `650×600`, verify long
+  reasons scroll without breaking the continuous surface and that focus,
+  disabled, modal, and alert states remain visible without relying on color.
+
 ## Testing
 
 - Test user-observable behavior instead of component implementation details.

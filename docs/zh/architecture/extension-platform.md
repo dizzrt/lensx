@@ -814,6 +814,31 @@ transport evidence。在 macOS 串行运行 `pnpm run check:plugin-permission-ma
 smoke。本交付不增加 prompt/settings/history UI、产品 copy、通用 permission framework、通用 RPC limit、模板、
 CLI、签名、marketplace 或 browser clipboard fallback。
 
+## 已交付的 Host 私有插件权限提示
+
+本地安装 Contract `0.2.0` 将 `prepare`、`commit` 与 `cancel` 分离。prepare 把有界 package bytes
+验证到 Installer 持有的 staging，只返回 opaque token 与有界 candidate projection，不发布 Registration
+状态或 grant。commit 只接受 token，在 installer lock 内重新校验 staged package 与当前 Host facts，并始终
+以 empty grant snapshot 创建持久安装。
+
+可信管理表面只从当前 Host facts 推导 permission prompt。Host 持有的风险/支持标签与有界的 author-provided
+reason 分开显示，并明确提示 Publisher 未验证。敏感选项默认关闭；用户可以取消、稍后决定或零授权安装，
+这些交互结果不产生 decision history。官方与外部插件使用同一路径。
+
+Registration 收敛后，Host 才会按稳定 permission ID 顺序逐项应用用户明确选择的 grant，并把每次返回的
+Manager revision 传给下一项。失败会立即停止，并说明 package 已安装但 grant 一个也未应用或只应用了一部分；
+不会回滚或自动重放安装。replacement 分开展示 retained、removed 与 added request，且只允许选择 Host 当前
+支持的 added permission。
+
+Settings grant/revoke 会绑定一个 current entry/revision，并在 snapshot/detail 收敛后才更新 UI。revoke 复用
+既有 permission core，因此当前 Runtime Session authority 与 pending privileged call 会立即 fail closed；Host
+不会自动重开 Page。插件 iframe message、Manifest reason、SDK payload、Publisher/source fact 与伪造的 user
+activation 都不能打开提示或调用 grant mutation。本能力不新增公共 permission-request API、permission
+directory、decision history、签名信任、marketplace 或通用 Runtime prompt。
+
+运行 `pnpm run check:plugin-permission-prompts` 可验证安装、管理、prompt、Runtime invalidation、公共边界、
+本地化、键盘/focus 与固定 `650×600` 视觉证据。
+
 ## 已交付的插件 Scoped Storage
 
 Host 私有 Rust `PluginScopedStorage` service 在 Installer 持有的
@@ -846,10 +871,10 @@ prompt、通用 RPC limit、模板、CLI 或开发模式。
 ## 已交付的 Host 私有插件管理设置
 
 可信 Settings 页面现在只消费一个根级私有 `PluginManagementService`。该 facade 观察完整且不可变的
-Registration snapshot，只针对同一 revision 加载详情，投影有界 diagnostic 与只读的
-requested/supported/granted/effective permission facts，并串行编排安装、启用/禁用、替换、卸载和数据清除。
-React 只接收 typed operation availability 与安全 outcome；它不直接 invoke Tauri，也不复制 Manager transition
-规则。
+Registration snapshot，只针对同一 revision 加载详情，投影有界 diagnostic 与
+requested/supported/persisted-grant/effective permission facts，并串行编排 prepared installation、启用/禁用、
+替换、单项 permission grant/revoke、卸载和数据清除。React 只接收 typed operation availability 与安全
+outcome；它不直接 invoke Tauri，也不复制 Manager transition 规则。
 
 根级 plugin composition 是共享 management、lifecycle、replacement 与 Registration projection service 的唯一
 生命周期 owner。每次 React effect setup 都创建并初始化一代 composition，其配对 cleanup 只销毁这一代实例；
@@ -864,10 +889,10 @@ data boundary 时重新校验 opaque entry identity、expected revision、disabl
 filesystem evidence，再以原子方式提交空的 canonical `storage-v1.json`。缺失或已经为空的 storage 保持幂等；
 ambiguous、linked、escaped、stale、enabled、quarantined 或 degraded evidence 一律 fail closed。
 
-管理表面不提供 permission mutation、raw path/error、Publisher trust、Registry patch/history protocol、公共管理
-API，也不会通过 Contract、SDK、Testkit 或 Plugin UI 导出任何管理能力。运行
-`pnpm run check:plugin-management-settings` 可验证私有边界、facade/UI 回归、公共 package 检查，以及固定
-`650×600` 的双语 light/dark screenshot 与 computed style。
+permission mutation 始终保持 root-private 且绑定 revision。管理表面不暴露 raw path/error、Publisher trust、
+Registry patch/history protocol 或公共管理 API，也不会通过 Contract、SDK、Testkit 或 Plugin UI 导出任何
+管理能力。运行 `pnpm run check:plugin-management-settings` 可验证私有边界、facade/UI 回归、公共 package
+检查，以及固定 `650×600` 的双语 light/dark screenshot 与 computed style。
 
 ## 已交付的公共 Plugin Testkit
 

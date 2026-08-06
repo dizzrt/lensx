@@ -184,6 +184,18 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
 - 通过 live region 通知安全的 status/error 摘要。不得渲染 raw native error、path、payload、stack trace 或
   diagnostic message。
 
+### Host 权限提示
+
+- installation/replacement permission 决策保持在现有连续 Plugins 表面内。使用 Semi Design `Modal`、
+  `Button`、`Checkbox`、`Tag`、`Banner` 与 `Typography`；prompt 层级、有界滚动、focus、hover、pending
+  与 disabled state 使用语义 Less。
+- Host 持有的风险/支持文本、author-provided reason 与 Publisher-unverified 提示必须分开显示；source 或
+  Publisher fact 不能呈现为 authority。敏感选项初始不勾选，并保留明确的零授权/稍后决定操作。
+- Settings grant/revoke 每次只确认一个 permission。pending operation 不可关闭或重复提交；通过 live region
+  通知安全的 partial/conflict feedback，并在每个 terminal outcome 后把焦点恢复到原触发控件或确定仍存在的入口。
+- 所有 copy 都进入应用 i18n resource，并在 light/dark 下测试英文与简体中文。固定 `650×600` 时，验证长
+  reason 可滚动且不破坏连续表面，同时 focus、disabled、modal 与 alert 状态不依赖颜色也清晰可见。
+
 ## 测试
 
 - 测试用户可观察行为，而不是组件实现细节。

@@ -655,9 +655,10 @@ Runtime health rollback、数据迁移、权限 UI 或完整管理 UI。
 
 **完成标准**：用户无需开发命令即可完成生命周期操作；失败状态具有可操作诊断。
 
-- [ ] **Task 6.2：新增权限授权与撤销交互**
+- [x] **Task 6.2：新增权限授权与撤销交互**
 
-**OpenSpec change**：`add-plugin-permission-prompts`
+**OpenSpec change**：[add-plugin-permission-prompts](openspec/changes/archive/2026-08-06-add-plugin-permission-prompts/)
+（已完成并归档）
 
 **目标**：让用户在安装、升级和运行时清楚理解并控制权限。
 

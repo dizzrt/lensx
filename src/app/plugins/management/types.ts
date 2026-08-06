@@ -1,8 +1,13 @@
 import type { NormalizedPluginManifest } from '@lensx/plugin-contract';
 import type { PluginDataManagementService } from '../data-management';
-import type { LocalPluginInstallationClient } from '../installation';
+import type { LocalPluginInstallationService } from '../installation';
 import type { PluginLifecycleDataPolicy, PluginLifecycleService } from '../lifecycle';
-import type { EffectivePluginPermission, PluginPermissionService } from '../permission';
+import type {
+  EffectivePluginPermission,
+  PluginPermissionPromptCandidate,
+  PluginPermissionPromptItem,
+  PluginPermissionService,
+} from '../permission';
 import type {
   PluginRegistrationDiagnostic,
   PluginRegistrationRuntimeStatus,
@@ -13,10 +18,12 @@ import type { PluginSurfaceProjectionService } from '../surfaces';
 
 export type PluginManagementState = 'loading' | 'empty' | 'ready' | 'degraded' | 'error';
 export type PluginManagementMutation =
-  | 'install'
+  | 'prepare_installation'
+  | 'commit_installation'
   | 'set_enabled'
   | 'prepare_replacement'
   | 'commit_replacement'
+  | 'set_permission'
   | 'uninstall'
   | 'clear_data';
 
@@ -31,11 +38,18 @@ export type PluginManagementFeedbackCode =
   | 'detail_failed'
   | 'duplicate'
   | 'install_succeeded'
+  | 'install_permissions_partial'
+  | 'install_permissions_failed'
   | 'load_failed'
   | 'mutation_failed'
   | 'not_found'
   | 'plugin_enabled'
   | 'replacement_succeeded'
+  | 'replacement_permissions_partial'
+  | 'permission_granted'
+  | 'permission_revoked'
+  | 'permission_unchanged'
+  | 'permissions_deferred'
   | 'set_enabled_succeeded'
   | 'unavailable'
   | 'uninstall_succeeded'
@@ -79,6 +93,7 @@ export interface PluginManagementPermissionView {
   readonly effective: EffectivePluginPermission['state'];
   readonly methods: readonly string[];
   readonly reason?: NormalizedPluginManifest['requested_permissions'][number]['reason'];
+  readonly prompt: PluginPermissionPromptItem;
 }
 
 export interface PluginManagementOperationAvailability {
@@ -122,6 +137,23 @@ export interface PluginReplacementConfirmationView {
   readonly classification: 'upgrade' | 'downgrade' | 'reinstall';
   readonly added_permission_ids: readonly string[];
   readonly removed_permission_ids: readonly string[];
+  readonly retained_permissions: readonly PluginPermissionPromptItem[];
+  readonly added_permissions: readonly PluginPermissionPromptItem[];
+  readonly removed_permissions: readonly PluginPermissionPromptItem[];
+  readonly selected_permission_ids: readonly string[];
+  readonly publisher_unverified: true;
+}
+
+export interface PluginInstallationConfirmationView {
+  readonly kind: 'installation';
+  readonly candidate: PluginPermissionPromptCandidate;
+  readonly selected_permission_ids: readonly string[];
+}
+
+export interface PluginPermissionConfirmationView {
+  readonly context: 'installation' | 'replacement' | 'settings';
+  readonly action: 'grant' | 'revoke';
+  readonly permission: PluginPermissionPromptItem;
 }
 
 export interface PluginManagementViewModel {
@@ -132,7 +164,8 @@ export interface PluginManagementViewModel {
   readonly detail: PluginManagementDetailView;
   readonly operations: PluginManagementOperationAvailability;
   readonly mutation?: PluginManagementMutation;
-  readonly confirmation?: PluginReplacementConfirmationView;
+  readonly confirmation?: PluginReplacementConfirmationView | PluginInstallationConfirmationView;
+  readonly permission_confirmation?: PluginPermissionConfirmationView;
   readonly feedback?: PluginManagementFeedback;
   readonly diagnostic?: PluginRegistrationDiagnostic;
 }
@@ -143,11 +176,17 @@ export interface PluginManagementService {
   readonly initialize: () => Promise<void>;
   readonly refresh: () => Promise<void>;
   readonly select: (entryId: string) => Promise<void>;
-  readonly install: () => Promise<void>;
+  readonly prepareInstallation: () => Promise<void>;
+  readonly commitInstallation: () => Promise<void>;
+  readonly cancelInstallation: () => Promise<void>;
   readonly setEnabled: (enabled: boolean) => Promise<void>;
   readonly prepareReplacement: () => Promise<void>;
   readonly commitReplacement: () => Promise<void>;
   readonly cancelReplacement: () => Promise<void>;
+  readonly openPermissionConfirmation: (permissionId: string, granted: boolean) => void;
+  readonly confirmPermissionDecision: () => Promise<void>;
+  readonly cancelPermissionDecision: () => void;
+  readonly deferPreparedPermissions: () => void;
   readonly uninstall: (dataPolicy: PluginLifecycleDataPolicy) => Promise<void>;
   readonly clearData: () => Promise<void>;
   readonly destroy: () => Promise<void>;
@@ -155,9 +194,9 @@ export interface PluginManagementService {
 
 export interface PluginManagementServiceDependencies {
   readonly surfaceProjection: PluginSurfaceProjectionService;
-  readonly installationClient: LocalPluginInstallationClient;
+  readonly installationService: LocalPluginInstallationService;
   readonly lifecycleService: PluginLifecycleService;
   readonly replacementService: PluginReplacementService;
-  readonly permissionService: Pick<PluginPermissionService, 'view'>;
+  readonly permissionService: Pick<PluginPermissionService, 'catalog' | 'view' | 'setGrant'>;
   readonly dataManagementService: PluginDataManagementService;
 }
