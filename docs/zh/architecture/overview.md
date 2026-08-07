@@ -206,8 +206,9 @@ snapshot 解析已存 ID，保持顺序，隐藏缺失或禁用 Action，但不�
 取消固定使用 optimistic 视图，但失败后恢复最后确认 snapshot；第九个固定请求会被拒绝，且不会删除
 现有项。
 
-完整插件管理、安全插件 icon 解析与 permission prompt/settings/history 仍属于未来能力。scoped resource、生命周期写操作、
-隔离 iframe Runtime 及其私有 Session 已分别交付，但不会改变 Action collection 语义。
+插件管理与显式 permission decision 已通过可信 Settings surface 交付；安全插件 icon 解析仍是独立能力。
+scoped resource、生命周期写操作、隔离 iframe Runtime 及其私有 Session 已分别交付，但不会改变
+Action collection 语义。
 生产 Plugin Action 现在只会在其投影目标 Page available 时出现。持久化 Plugin Action ID 可以自然
 隐藏和恢复，而不会从最近使用或已固定存储中删除。
 
@@ -238,12 +239,13 @@ retry、invalidation、replacement 与 App teardown 都会移除它。load event
 Session `ready`。load 后，Host 私有 Session 会把 current entry、plugin、version、Page、resource
 generation、Runtime attempt 与实际 grants 绑定到真实 `contentWindow`；只有新 transfer Port 上的 exact
 acknowledgement 才产生 Session `ready`。SDK `ready`、Host API transport、Host 私有 Dispatcher、scoped
-storage 与 Task 5.5 permission-backed 文本剪贴板已经交付；完整 CSP 与 permission prompt/settings/history
-仍未实现。
+storage、完整 CSP 与 permission-backed 文本剪贴板已经交付；Host 私有 permission prompt 与 settings
+也已经交付，decision history 仍未实现。
 
 设置在现有 `main` Tauri 窗口中渲染，包含“偏好”和“插件”两个一级部分。“偏好”控制受支持的
-`light`/`dark` 主题与 `en-US`/`zh-CN` locale；“插件”只是不可操作的空占位，不代表插件管理
-已经实现。
+`light`/`dark` 主题与 `en-US`/`zh-CN` locale；“插件”通过一个 typed Host 私有 service 提供已交付的
+list-detail 管理 surface，覆盖安装、replacement、lifecycle、permission、卸载和仅 disabled 时的数据清除。
+外部作者应使用[插件开发入口](../plugin-development/index.md)，而不是本维护者 overview 中的细节。
 
 Rust 持有完整 `AppPreferences` payload，并在应用配置目录中保存 `preferences.json`。文件缺失时
 返回 `light` 和 `en-US`；无效内容与 I/O 失败返回稳定、可序列化且安全的错误。写入先生成临时文件

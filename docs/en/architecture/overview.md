@@ -291,10 +291,11 @@ successful Action result. Pin and unpin use an optimistic view but restore the
 last confirmed snapshot after failure, and a ninth pin is rejected without
 dropping an existing one.
 
-Complete plugin management, safe plugin icon resolution, and complete
-permission decisions remain future capabilities. Scoped resources, lifecycle
-writes, the isolated iframe Runtime, and its private Session are delivered
-separately and do not change Action collection semantics.
+Plugin management and explicit permission decisions are delivered through the
+trusted Settings surface. Safe plugin icon resolution remains a separate
+capability. Scoped resources, lifecycle writes, the isolated iframe Runtime,
+and its private Session are delivered separately and do not change Action
+collection semantics.
 Production Plugin Actions now appear only while their projected target Page is
 available. Persisted plugin Action IDs can disappear and reappear naturally
 without being removed from recent or pinned storage.
@@ -336,14 +337,18 @@ and App teardown remove it. Its load event means only `loaded`, not SDK/Session
 version, Page, resource generation, Runtime attempt, and actual grants to the
 real `contentWindow`; only an exact acknowledgement on the newly transferred
 Port produces Session `ready`. SDK `ready`, Host API transport, complete CSP,
-the Host-private Dispatcher, scoped storage, and the Task 5.5 permission-backed
-text clipboard are delivered. Complete CSP and permission prompts/settings/history
-remain unimplemented.
+the Host-private Dispatcher, scoped storage, and permission-backed text
+clipboard are delivered. Host-private permission prompts and settings are also
+delivered; decision history remains unimplemented.
 
 Settings is rendered in the existing `main` Tauri window. It has first-level
 Preferences and Plugins sections. Preferences controls the supported
-`light`/`dark` theme and `en-US`/`zh-CN` locale. Plugins is an empty,
-non-operational placeholder and does not imply plugin management.
+`light`/`dark` theme and `en-US`/`zh-CN` locale. Plugins provides the shipped
+list-detail management surface for installation, replacement, lifecycle,
+permission, uninstall, and disabled-only data clearing through one typed
+Host-private service. External authors should use the
+[Plugin Development hub](../plugin-development/index.md), not this maintainer
+overview, for tutorials and public references.
 
 Rust owns the complete `AppPreferences` payload and stores
 `preferences.json` in the application config directory. Missing files return

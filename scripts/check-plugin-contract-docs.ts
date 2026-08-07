@@ -60,11 +60,28 @@ for (const path of englishPaths) {
 }
 
 for (const locale of ['en', 'zh'] as const) {
-  const index = readFileSync(resolve(repositoryRoot, `docs/${locale}/index.md`), 'utf8');
-  const linked = new Set(markdownLinks(index).map((link) => link.split('#')[0]));
+  const root = resolve(repositoryRoot, `docs/${locale}`);
+  const allPaths = markdownPaths(locale);
+  const reachable = new Set(['index.md']);
+  const pending = ['index.md'];
+  while (pending.length > 0) {
+    const current = pending.shift();
+    if (current === undefined) break;
+    const currentFile = resolve(root, current);
+    const source = readFileSync(currentFile, 'utf8');
+    for (const link of markdownLinks(source)) {
+      const target = decodeURIComponent(link.split('#')[0]);
+      if (target.length === 0 || /^(?:[a-z]+:|\/)/iu.test(target)) continue;
+      const relativeTarget = toPosix(relative(root, resolve(dirname(currentFile), target)));
+      if (allPaths.includes(relativeTarget) && !reachable.has(relativeTarget)) {
+        reachable.add(relativeTarget);
+        pending.push(relativeTarget);
+      }
+    }
+  }
   for (const path of markdownPaths(locale).filter((path) => path !== 'index.md')) {
-    if (!linked.has(path)) {
-      throw new Error(`docs/${locale}/index.md does not link ${path}.`);
+    if (!reachable.has(path)) {
+      throw new Error(`docs/${locale}/index.md cannot reach ${path}.`);
     }
   }
 }

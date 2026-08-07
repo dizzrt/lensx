@@ -7,8 +7,10 @@ foundation、Plugin Testkit、可选 Plugin UI package、Host 私有 Plugin surf
 Host 私有生命周期控制、本地 package replacement、Host 私有 scoped resource service、隔离 iframe
 Runtime、进程内 Runtime Session、公共 SDK iframe transport、Host 私有 Port adapter、公共 Host API
 语义契约、Host 私有 permission core 与 macOS 文本剪贴板 provider 和预期的运行时扩展边界。公共
-packaging CLI、分发、完整插件执行 lifecycle、permission prompt/settings/history、签名、完整插件管理 UI、远程更新和用户
-主动 rollback history 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集。
+Plugin Developer CLI 与项目模板、完整前台插件执行 lifecycle、Host 私有管理与权限 surface，以及
+feature-gated Plugin Development Mode 也已交付。npm 发布、签名、Marketplace 分发、远程更新、
+decision history 和用户主动 rollback history 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集；
+外部作者应从[插件开发入口](../plugin-development/index.md)开始。
 
 ## 目标
 
@@ -318,7 +320,8 @@ stack、函数或 Tauri 对象。publisher、source、enabled intent、requested
 grant snapshot 都是相互独立的事实；任何一项都不能建立信任或自动授权。该 contract 不会安装、
 更新、卸载、enable、disable、执行或渲染插件。Registration Contract 本身仍然只读；下文的 Host
 私有 lifecycle 与 Action 投影核心消费它，但不改变 wire contract。管理 UI、真实 Runtime session、
-Host API method 与 permission core 已在本文其他章节交付；permission prompt/settings/history 与签名仍未实现。
+Host API method 与 permission core 已在本文其他章节交付；permission prompt 与 settings 也由独立
+Host 私有能力交付，decision history 与签名仍未实现。
 
 ## 已交付的 Host 私有 Plugin Lifecycle Controls
 
@@ -1131,6 +1134,8 @@ enable/disable/uninstall 基础设施、scoped package-relative resources、Plug
 Action 激活、Page Registry/navigation、macOS 隔离 iframe Runtime、Host 私有进程内 Runtime Session、
 公共 SDK iframe transport/Host Port adapter、公共 Host API 语义契约、Host 私有 RPC v1 validation boundary、
 Dispatcher、插件 scoped storage provider、permission core 与 macOS 文本剪贴板 provider 已经交付。其余每项
-能力——完整插件管理 UI、permission prompt/settings/history、持续 frequency/CPU/memory/isolation/recovery
-control、公共打包、远程/自动更新、用户主动 rollback history 或 sidecar——
-都需要独立的已接受规格和实现证据。本文定义架构方向和边界，不是发布检查清单。
+能力还包括 Plugin Management Settings、permission prompt、公共项目模板与 CLI、feature-gated Plugin
+Development Mode，以及双语外部开发者文档。其余每项能力——npm 发布、签名、Marketplace 分发、
+远程/自动更新、decision 或用户主动 rollback history、后台 Runtime 或 sidecar——都需要独立的已接受
+规格和实现证据。本文定义架构方向和边界，不是发布检查清单。外部 package、API、教程和排障细节位于
+[canonical 插件开发参考](../plugin-development/index.md)。

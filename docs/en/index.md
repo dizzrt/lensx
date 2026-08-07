@@ -15,6 +15,9 @@ structure.
 
 ## Development
 
+- [Plugin Development](plugin-development/index.md) — external-developer hub,
+  complete framework-neutral and React/Semi tutorials, public references, and
+  troubleshooting boundaries.
 - [Getting Started](development/getting-started.md) — environment setup,
   development commands, and repository map.
 - [Plugin Workspace](development/plugin-workspace.md) — Contract package,

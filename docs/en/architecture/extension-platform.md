@@ -10,10 +10,13 @@ the Host-private scoped resource service, isolated iframe Runtime,
 process-local Runtime Session, public SDK iframe transport, Host-private Port
 adapter, public Host API semantic contract, Host-private permission core, and
 the macOS text-clipboard provider from the intended runtime extension boundary.
-Public packaging CLI, distribution, complete plugin execution lifecycle,
-permission prompts/settings/history, signing, complete plugin-management UI, remote
-updates, and user-initiated rollback history are not currently implemented.
-Stable specs and source code define the shipped subset.
+The public Plugin Developer CLI and project templates, complete foreground
+plugin execution lifecycle, Host-private management and permission surfaces,
+and feature-gated Plugin Development Mode are also shipped. npm publication,
+signing, Marketplace distribution, remote updates, decision history, and
+user-initiated rollback history are not currently implemented. Stable specs
+and source code define the shipped subset; external authors should start from
+the [Plugin Development hub](../plugin-development/index.md).
 
 ## Goals
 
@@ -421,7 +424,8 @@ it does not install, update, uninstall, enable, disable, execute, or render
 plugins. The downstream Host-private lifecycle and Action projection cores
 consume it without changing that wire contract. Management UI, real Runtime
 sessions, Host API methods, and the permission core are delivered elsewhere in
-this document. Permission prompts/settings/history and signatures remain
+this document. Permission prompts and settings are also delivered by separate
+Host-private capabilities; decision history and signatures remain
 unimplemented.
 
 ## Shipped Host-Private Plugin Lifecycle Controls
@@ -914,8 +918,9 @@ cleanup. An available Plugin Page passes its current resolution to the shipped
 Host-private iframe Runtime resolver. Surface projection still does not expose
 routes, entry IDs, revisions, origin facts, resource URLs, or native objects to
 plugins. The Host-private Task 5.5 permission core and text clipboard path are
-now implemented; permission prompts, settings, and decision history remain
-outside this delivery.
+now implemented. The later Host-private management and permission-prompt
+capabilities consume these facts without changing surface projection; decision
+history remains outside the platform.
 
 ## Shipped Public Plugin SDK And iframe Transport
 
@@ -1522,10 +1527,13 @@ production Action activation, Page Registry/navigation, the macOS isolated
 iframe Runtime, Host-private process-local Runtime Session, public SDK iframe
 transport/Host Port adapter, public Host API semantic contract, and the
 Host-private RPC v1 validation boundary, Dispatcher, plugin-scoped storage
-provider, permission core, and macOS text-clipboard provider are delivered.
-Each remaining capability—complete plugin-management UI, permission
-prompts/settings/history, sustained frequency/CPU/memory/isolation/recovery
-controls, public packaging, remote/automatic updates, user-initiated rollback
-history, or sidecars—requires
-its own accepted specification and implementation evidence. This architectural
-document defines direction and boundaries, not a release checklist.
+provider, permission core, macOS text-clipboard provider, Plugin Management
+Settings, permission prompts, public project templates and CLI, feature-gated
+Plugin Development Mode, and the bilingual external-developer documentation
+are delivered. Each remaining capability—npm publication, signing,
+Marketplace distribution, remote/automatic updates, decision or
+user-initiated rollback history, background Runtime, or sidecars—requires its
+own accepted specification and implementation evidence. This architectural
+document defines direction and boundaries, not a release checklist. External
+package, API, tutorial, and troubleshooting details live in the
+[canonical Plugin Development reference](../plugin-development/index.md).

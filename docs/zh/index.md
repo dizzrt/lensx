@@ -13,6 +13,8 @@
 
 ## 开发
 
+- [插件开发](plugin-development/index.md) — 面向外部开发者的入口、完整 framework-neutral
+  与 React/Semi 教程、公共参考和排障边界。
 - [开发入门](development/getting-started.md) — 环境配置、开发命令和仓库目录说明。
 - [插件 Workspace](development/plugin-workspace.md) — Contract package、workspace 成员位置、
   lifecycle scripts、依赖边界和 pack 检查。

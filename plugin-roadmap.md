@@ -20,6 +20,8 @@
 - `@lensx/plugin-contract@0.1.0` 公共 workspace package，以及三个受限公共入口；
 - `@lensx/plugin-sdk@0.1.0` 框架无关公共 package 与受限根入口；
 - 可选的 `@lensx/plugin-ui@0.1.0` React/Semi Design 公共 package、样式入口与十个语义 token；
+- `@lensx/plugin-testkit@0.1.0` 的 Manifest、Runtime context、SDK lifecycle 和 Host API 测试工具；
+- `@lensx/plugin-cli@0.1.0` 的 create、build、validate、pack 与 inspect authoring workflow；
 - `manifest_version: "0.1.0"` 的严格外部插件 Manifest Schema；
 - Schema 驱动的 `PluginManifestInput`、两阶段 TypeScript API 与独立 Rust 校验；
 - valid、invalid、normalized、incompatible 共享 fixtures、真实 tarball 消费验证和契约 drift gate；
@@ -34,16 +36,21 @@
   frame-aware exact navigation lease、仅在 active Page 存在的 Host-owned iframe Runtime、Host 私有
   Runtime Session，以及 Runtime CSP/deadline/统一清理/进程内熔断；
 - 公共 SDK iframe transport、认证 Port 上的 Host adapter，以及 Host 私有的 session-scoped Host API
-  Dispatcher；当前真实 provider 为 `runtime.get_context`、`ui.close` 与 `actions.open`；
+  Dispatcher；当前 provider 覆盖 base、scoped storage 与 macOS text clipboard，实际 authority 由最新
+  session capabilities、Manifest request 和 Host grant 共同决定；
+- Host 设置页面中的插件安装、列表、详情、enable/disable、replacement、卸载、清除数据、权限披露、
+  grant 与 revoke 交互，并保持 typed service、双语、主题、键盘与焦点边界；
+- framework-neutral 与 React/Semi 两种正式项目模板，以及仓库外真实 tarball consumer 验证；
+- 显式开启、process-local、manual-reload 的 Plugin Development Mode；正式构建不包含该入口；
+- English canonical 与简体中文同路径镜像的插件开发 hub、两条完整教程、公共 package、工具/安装、
+  Host API、Runtime/权限/安全和兼容/错误参考，并由 runnable-block、coverage 与外部 consumer gate 验证；
 - Host 内建的隐藏 Launcher 和打开设置 Action；
-- Host 设置页面中的插件空占位。
 
 当前尚未实现：
 
-- Plugin CLI package；
-- 远程下载、自动更新和用户主动 rollback history；
-- 插件私有存储、clipboard 原生执行、完整权限授权与通用 RPC 资源限制；
-- 插件管理 UI、开发模式、签名、更新、Catalog 和 Marketplace。
+- npm registry 发布、签名、Catalog、Marketplace、远程下载与自动更新；
+- watch/HMR、自动 Development Mode reload 和用户主动 rollback history；
+- 后台任务、sidecar、worker 与超出当前公共 Host API catalog 的系统能力。
 
 已归档的 `define-plugin-contract-v0` 只交付静态 Manifest 契约与校验，不代表插件已经可被
 发现、安装、注册、运行或授权。当前根 `lensx` package 保持 private，并通过 public export 消费
@@ -637,6 +644,8 @@ Runtime health rollback、数据迁移、权限 UI 或完整管理 UI。
 
 ## Milestone 6：完善用户与开发者体验
 
+当前状态：Task 6.1–6.6 均已由源码、测试、稳定规格或 active change 证据验证，Milestone 6 已完成。
+
 - [x] **Task 6.1：新增插件管理设置页面**
 
 **OpenSpec change**：`add-plugin-management-settings`
@@ -731,9 +740,9 @@ React 模板额外依赖 Task 1.4。
 
 **完成标准**：开发插件可快速 reload；正式与开发状态清晰区分；安全边界保持一致。
 
-- [ ] **Task 6.6：发布插件开发文档**
+- [x] **Task 6.6：发布插件开发文档**
 
-**OpenSpec change**：`publish-plugin-development-documentation`
+**OpenSpec change**：[publish-plugin-development-documentation](openspec/changes/archive/2026-08-07-publish-plugin-development-documentation/)
 
 **目标**：让仓库外开发者能够独立完成创建、开发、测试、打包和本地安装。
 
@@ -984,8 +993,9 @@ React 模板额外依赖 Task 1.4。
 
 包含 Milestone 1–6。
 
-当前进度：Contract、SDK、可选 UI 与 Testkit core 已完成；注册、包生命周期、隔离 Runtime、
-Host API、正式项目模板和开发者工具仍待完成，因此尚未达到本 checkpoint。
+当前进度：Milestone 1–6 已通过完整自动化证据，已达到 **Plugin Developer Preview**。
+已验证范围包括 Contract、SDK、UI、Testkit、CLI、包生命周期、隔离 Runtime、Host API/权限、
+用户管理、正式项目模板、Development Mode 与双语开发文档。
 
 - 内外部开发者可以消费 Contract、SDK、可选 UI、Testkit 和正式项目模板。
 - 本地插件可以通过公共 SDK、真实 iframe transport 和 Host API 完成受控执行。
