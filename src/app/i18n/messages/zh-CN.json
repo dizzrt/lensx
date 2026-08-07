@@ -114,7 +114,47 @@
       "compatible": "兼容",
       "incompatible": "不兼容",
       "none": "无",
-      "source": { "builtin": "内置", "external": "外部" },
+      "source": { "builtin": "内置", "external": "外部", "development": "开发" },
+      "development": {
+        "title": "插件开发模式",
+        "description": "仅在当前进程加载未打包、未签名的 dist 目录；不会安装、信任、授予权限或自动运行插件。",
+        "toggle": "为当前进程启用插件开发模式",
+        "processLocal": "lensX 重启后会再次关闭。",
+        "register": "注册开发目录",
+        "reload": "从目录重新加载",
+        "remove": "移除开发条目",
+        "unsignedDescription": "此插件来自 Host 持有的未打包目录快照。Publisher 文本未经验证，权限仍需单独授权。",
+        "labels": { "development": "开发", "unpacked": "未打包", "unsigned": "未签名" },
+        "feedback": {
+          "enabled": "当前进程已启用插件开发模式。",
+          "disabled": "插件开发模式已关闭，开发条目已移除；插件数据与 Launcher 集合已保留。",
+          "cancelled": "未选择开发目录。",
+          "registered": "开发目录已注册，默认未授予任何权限。",
+          "reloaded": "已从全新快照重新加载开发条目。",
+          "removed": "开发条目已移除；插件数据与 Launcher 集合已保留。",
+          "cleanup_pending": "Authority 已更新，但旧快照仍等待清理。",
+          "invalid": "所选 dist 目录无效或内容不完整。",
+          "incompatible": "所选插件与当前 lensX 版本不兼容。",
+          "source_changed": "lensX 读取时目录发生变化，请重新构建后再试。",
+          "conflict": "插件状态已变化，现已加载最新状态。",
+          "unsafe_state": "无法安全证明快照所有权。",
+          "unavailable": "插件开发模式不可用。",
+          "convergence_failed": "native 变更已完成，但无法刷新可见插件状态。",
+          "failed": "插件开发操作已安全失败。"
+        },
+        "confirm": {
+          "reload": {
+            "title": "重新加载开发插件？",
+            "description": "要从所选 dist 目录重新加载 {{name}} 吗？当前 Runtime authority 会结束，权限变化也会重新协调。",
+            "confirm": "重新加载"
+          },
+          "remove": {
+            "title": "移除开发条目？",
+            "description": "要从当前进程移除 {{name}} 吗？插件数据与 Launcher 集合会保留。",
+            "confirm": "移除"
+          }
+        }
+      },
       "runtime": { "inactive": "未运行", "active": "运行中", "failed": "失败", "starting": "启动中" },
       "replacement": { "upgrade": "升级", "downgrade": "降级", "reinstall": "重新安装" },
       "fields": {

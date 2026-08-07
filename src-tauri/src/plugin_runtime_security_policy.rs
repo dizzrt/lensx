@@ -8,6 +8,19 @@ pub(crate) const HOST_DOCUMENT_CSP: &str = "default-src 'self'; script-src 'self
 
 pub(crate) const PLUGIN_RUNTIME_DOCUMENT_CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; media-src 'none'; worker-src 'none'; child-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors tauri://localhost";
 
+// `tauri dev` uses the exact configured development URL as the application
+// document origin. Keep the Runtime profile otherwise byte-for-byte identical
+// and never derive this ancestor from a plugin-controlled fact.
+pub(crate) const PLUGIN_RUNTIME_TAURI_DEV_DOCUMENT_CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; media-src 'none'; worker-src 'none'; child-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors http://localhost:40755";
+
+pub(crate) const fn current_plugin_runtime_document_csp() -> &'static str {
+    if cfg!(dev) {
+        PLUGIN_RUNTIME_TAURI_DEV_DOCUMENT_CSP
+    } else {
+        PLUGIN_RUNTIME_DOCUMENT_CSP
+    }
+}
+
 // The real macOS harness uses a dedicated Host scheme so it cannot accidentally
 // inherit production Tauri privileges. It receives an otherwise identical
 // profile with only the exact ancestor substituted.
@@ -51,6 +64,22 @@ mod tests {
             ),
             PLUGIN_RUNTIME_HARNESS_DOCUMENT_CSP
         );
+    }
+
+    #[test]
+    fn development_profile_changes_only_the_exact_configured_host_ancestor() {
+        assert_bounded(PLUGIN_RUNTIME_TAURI_DEV_DOCUMENT_CSP);
+        assert_eq!(
+            PLUGIN_RUNTIME_DOCUMENT_CSP.replace(
+                "frame-ancestors tauri://localhost",
+                "frame-ancestors http://localhost:40755"
+            ),
+            PLUGIN_RUNTIME_TAURI_DEV_DOCUMENT_CSP
+        );
+
+        let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("Tauri config should be valid JSON");
+        assert_eq!(config["build"]["devUrl"], "http://localhost:40755");
     }
 
     #[test]

@@ -6,6 +6,7 @@ import { pluginLess } from '@rsbuild/plugin-less';
 import { pluginReact } from '@rsbuild/plugin-react';
 
 const projectRoot = fileURLToPath(new URL('.', import.meta.url));
+const pluginDevelopmentModeEnabled = process.env.LENSX_PLUGIN_DEVELOPMENT_MODE === '1';
 
 // Docs: https://rsbuild.rs/config/
 export default defineConfig({
@@ -16,13 +17,25 @@ export default defineConfig({
     }),
   ],
   resolve: {
+    aliasStrategy: 'prefer-alias',
     alias: {
+      '@/app/plugins/development/composition': resolve(
+        projectRoot,
+        pluginDevelopmentModeEnabled
+          ? 'src/app/plugins/development/composition-enabled.ts'
+          : 'src/app/plugins/development/composition-disabled.ts',
+      ),
       '@': resolve(projectRoot, 'src'),
       // Semi ships the global bundle outside its package exports.
       '@douyinfe/semi-ui/dist/css/semi.min.css': resolve(
         projectRoot,
         'node_modules/@douyinfe/semi-ui/dist/css/semi.min.css',
       ),
+    },
+  },
+  source: {
+    define: {
+      __LENSX_PLUGIN_DEVELOPMENT_MODE__: JSON.stringify(pluginDevelopmentModeEnabled),
     },
   },
   html: {

@@ -1,4 +1,5 @@
 import '@/app/plugins/resource';
+import '@/app/plugins/development';
 import '@/app/plugins/resource/desktop';
 import type { PluginResourceEntry } from '@/app/plugins/resource/types';
 import '@/app/plugins/runtime';
@@ -8,6 +9,7 @@ import '@/app/plugins/runtime/session-contract';
 import '@/app/plugins/runtime/session-service';
 import type { PluginPageRuntimeDescriptor } from '@/app/plugins/runtime/types';
 import '../../../src-tauri/src/plugin_resource_contract.rs';
+import '../../../src-tauri/src/plugin_development.rs';
 import '../../../src-tauri/src/plugin_resource_url.rs';
 import '../../../src-tauri/examples/plugin_iframe_runtime_harness.rs';
 import '../../../src-tauri/examples/plugin_runtime_session_harness.rs';

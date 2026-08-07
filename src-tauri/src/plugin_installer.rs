@@ -1,4 +1,5 @@
 use crate::{
+    launcher_window::begin_launcher_native_dialog,
     plugin_identity::plugin_record_key,
     plugin_installation_contract::{
         is_preparation_token as is_installation_preparation_token,
@@ -311,19 +312,23 @@ impl PluginInstaller {
             )
         })?;
         let packages_root = root.join(PACKAGES_DIRECTORY);
-        let current_path = canonical_payload_path(
-            &packages_root,
-            &record_key,
-            Path::new(&current.facts.installation_path),
-        )
-        .ok_or_else(|| {
-            replacement_error(
-                PluginReplacementErrorCode::UnsafeState,
-                PluginReplacementOperation::Prepare,
-            )
-        })?;
-        if current.facts.package_digest.algorithm != "sha256"
-            || current.facts.package_digest.value
+        let (current_installation_path, current_package_digest) =
+            current.facts.installed_payload().ok_or_else(|| {
+                replacement_error(
+                    PluginReplacementErrorCode::UnsafeState,
+                    PluginReplacementOperation::Prepare,
+                )
+            })?;
+        let current_path =
+            canonical_payload_path(&packages_root, &record_key, current_installation_path)
+                .ok_or_else(|| {
+                    replacement_error(
+                        PluginReplacementErrorCode::UnsafeState,
+                        PluginReplacementOperation::Prepare,
+                    )
+                })?;
+        if current_package_digest.algorithm != "sha256"
+            || current_package_digest.value
                 != current_path
                     .file_name()
                     .and_then(|value| value.to_str())
@@ -358,7 +363,7 @@ impl PluginInstaller {
                 PluginReplacementOperation::Inspect,
             ));
         }
-        if facts.package_digest.value == current.facts.package_digest.value {
+        if facts.package_digest.value == current_package_digest.value {
             return Ok(PluginReplacementResult::Duplicate {
                 contract_version: PLUGIN_REPLACEMENT_CONTRACT_VERSION.to_owned(),
                 entry_id: request.entry_id.clone(),
@@ -571,19 +576,23 @@ impl PluginInstaller {
             )
         })?;
         let packages_root = root.join(PACKAGES_DIRECTORY);
-        let old_path = canonical_payload_path(
-            &packages_root,
-            &record_key,
-            Path::new(&current.facts.installation_path),
-        )
-        .ok_or_else(|| {
-            replacement_error(
-                PluginReplacementErrorCode::UnsafeState,
-                PluginReplacementOperation::Commit,
-            )
-        })?;
-        if current.facts.package_digest.algorithm != "sha256"
-            || current.facts.package_digest.value
+        let (current_installation_path, current_package_digest) =
+            current.facts.installed_payload().ok_or_else(|| {
+                replacement_error(
+                    PluginReplacementErrorCode::UnsafeState,
+                    PluginReplacementOperation::Commit,
+                )
+            })?;
+        let old_path =
+            canonical_payload_path(&packages_root, &record_key, current_installation_path)
+                .ok_or_else(|| {
+                    replacement_error(
+                        PluginReplacementErrorCode::UnsafeState,
+                        PluginReplacementOperation::Commit,
+                    )
+                })?;
+        if current_package_digest.algorithm != "sha256"
+            || current_package_digest.value
                 != old_path
                     .file_name()
                     .and_then(|value| value.to_str())
@@ -625,8 +634,11 @@ impl PluginInstaller {
             .cloned()
             .collect();
         let mut next_facts = current.facts.clone();
-        next_facts.installation_path = final_path.to_string_lossy().into_owned();
-        next_facts.package_digest = PackageDigest {
+        let (next_installation_path, next_package_digest) = next_facts
+            .installed_payload_mut()
+            .expect("local replacement must target an installed payload");
+        *next_installation_path = final_path.to_string_lossy().into_owned();
+        *next_package_digest = PackageDigest {
             algorithm: "sha256".to_owned(),
             value: facts.package_digest.value,
         };
@@ -1667,13 +1679,17 @@ impl PluginInstaller {
                 registration,
                 ..
             } => {
+                let (_, package_digest) = registration
+                    .facts
+                    .installed_payload()
+                    .ok_or(PluginLifecycleStorageError::OperationNotSupported)?;
                 prove_managed_payload_root(
                     packages_root,
                     plugin_key,
                     plugin_id,
                     &registration.facts,
                 )?;
-                Ok(Some(registration.facts.package_digest.value.clone()))
+                Ok(Some(package_digest.value.clone()))
             }
             crate::plugin_manager::PluginManagerLifecycleEntry::Quarantined { .. } => {
                 let subtree = packages_root.join(plugin_key);
@@ -2315,14 +2331,16 @@ pub(crate) fn prove_managed_payload_root(
     plugin_id: &str,
     facts: &PluginRegistrationFacts,
 ) -> Result<PathBuf, PluginLifecycleStorageError> {
+    let (path, package_digest) = facts
+        .installed_payload()
+        .ok_or(PluginLifecycleStorageError::OperationNotSupported)?;
     if record_key != plugin_record_key(plugin_id)
-        || facts.package_digest.algorithm != "sha256"
-        || !is_digest(&facts.package_digest.value)
+        || package_digest.algorithm != "sha256"
+        || !is_digest(&package_digest.value)
     {
         return Err(PluginLifecycleStorageError::OperationNotSupported);
     }
-    let path = PathBuf::from(&facts.installation_path);
-    let lexical = canonical_payload_path(packages_root, record_key, &path)
+    let lexical = canonical_payload_path(packages_root, record_key, path)
         .ok_or(PluginLifecycleStorageError::OperationNotSupported)?;
     validate_real_tree(&lexical)?;
     let canonical_packages = fs::canonicalize(packages_root)
@@ -2332,7 +2350,7 @@ pub(crate) fn prove_managed_payload_root(
     if canonical_payload
         != canonical_packages
             .join(record_key)
-            .join(&facts.package_digest.value)
+            .join(&package_digest.value)
     {
         return Err(PluginLifecycleStorageError::OperationNotSupported);
     }
@@ -2344,9 +2362,16 @@ pub async fn prepare_local_plugin_installation<R: Runtime>(
     app: AppHandle<R>,
     installer: State<'_, Arc<PluginInstaller>>,
 ) -> Result<LocalPluginInstallationResult, LocalPluginInstallationError> {
+    let Some((_dialog_guard, parent)) = begin_launcher_native_dialog(&app) else {
+        return Err(installation_error(
+            LocalPluginInstallationErrorCode::SourceReadFailed,
+            LocalPluginInstallationOperation::Prepare,
+        ));
+    };
     let selected = app
         .dialog()
         .file()
+        .set_parent(&parent)
         .add_filter("lensX plugin", &["lxp"])
         .blocking_pick_file();
     let Some(selected) = selected else {
@@ -2402,9 +2427,16 @@ pub async fn prepare_local_plugin_replacement<R: Runtime>(
             PluginReplacementOperation::Prepare,
         ));
     }
+    let Some((_dialog_guard, parent)) = begin_launcher_native_dialog(&app) else {
+        return Err(replacement_error(
+            PluginReplacementErrorCode::SourceReadFailed,
+            PluginReplacementOperation::Select,
+        ));
+    };
     let selected = app
         .dialog()
         .file()
+        .set_parent(&parent)
         .add_filter("lensX plugin", &["lxp"])
         .blocking_pick_file();
     let Some(selected) = selected else {
@@ -2624,7 +2656,10 @@ mod tests {
         assert_eq!(registration.facts.source, PluginSource::External);
         assert!(registration.facts.enabled);
         assert!(registration.facts.granted_permission_ids.is_empty());
-        assert!(Path::new(&registration.facts.installation_path).is_dir());
+        assert!(registration
+            .facts
+            .installed_payload()
+            .is_some_and(|(path, _)| path.is_dir()));
         assert_eq!(
             emitter
                 .events
@@ -3478,13 +3513,15 @@ mod tests {
         installer
             .install_bytes(&valid_package(), &FakeEmitter::default())
             .expect("installation should succeed");
-        let healthy_path = PathBuf::from(
-            manager
-                .registration("com.acme.workspace")
-                .expect("registration should exist")
-                .facts
-                .installation_path,
-        );
+        let registration = manager
+            .registration("com.acme.workspace")
+            .expect("registration should exist");
+        let healthy_path = registration
+            .facts
+            .installed_payload()
+            .expect("installed registration should have a package payload")
+            .0
+            .to_path_buf();
         drop(installer);
         let recovered = PluginInstaller::initialize(
             Ok(directory.0.join("local-data/plugins")),

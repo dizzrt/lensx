@@ -401,9 +401,112 @@
               "additionalProperties": false,
               "properties": {
                 "builtin": { "type": "string", "minLength": 1 },
-                "external": { "type": "string", "minLength": 1 }
+                "external": { "type": "string", "minLength": 1 },
+                "development": { "type": "string", "minLength": 1 }
               },
-              "required": ["builtin", "external"]
+              "required": ["builtin", "external", "development"]
+            },
+            "development": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "title": { "type": "string", "minLength": 1 },
+                "description": { "type": "string", "minLength": 1 },
+                "toggle": { "type": "string", "minLength": 1 },
+                "processLocal": { "type": "string", "minLength": 1 },
+                "register": { "type": "string", "minLength": 1 },
+                "reload": { "type": "string", "minLength": 1 },
+                "remove": { "type": "string", "minLength": 1 },
+                "unsignedDescription": { "type": "string", "minLength": 1 },
+                "labels": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "development": { "type": "string", "minLength": 1 },
+                    "unpacked": { "type": "string", "minLength": 1 },
+                    "unsigned": { "type": "string", "minLength": 1 }
+                  },
+                  "required": ["development", "unpacked", "unsigned"]
+                },
+                "feedback": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "enabled": { "type": "string", "minLength": 1 },
+                    "disabled": { "type": "string", "minLength": 1 },
+                    "cancelled": { "type": "string", "minLength": 1 },
+                    "registered": { "type": "string", "minLength": 1 },
+                    "reloaded": { "type": "string", "minLength": 1 },
+                    "removed": { "type": "string", "minLength": 1 },
+                    "cleanup_pending": { "type": "string", "minLength": 1 },
+                    "invalid": { "type": "string", "minLength": 1 },
+                    "incompatible": { "type": "string", "minLength": 1 },
+                    "source_changed": { "type": "string", "minLength": 1 },
+                    "conflict": { "type": "string", "minLength": 1 },
+                    "unsafe_state": { "type": "string", "minLength": 1 },
+                    "unavailable": { "type": "string", "minLength": 1 },
+                    "convergence_failed": { "type": "string", "minLength": 1 },
+                    "failed": { "type": "string", "minLength": 1 }
+                  },
+                  "required": [
+                    "enabled",
+                    "disabled",
+                    "cancelled",
+                    "registered",
+                    "reloaded",
+                    "removed",
+                    "cleanup_pending",
+                    "invalid",
+                    "incompatible",
+                    "source_changed",
+                    "conflict",
+                    "unsafe_state",
+                    "unavailable",
+                    "convergence_failed",
+                    "failed"
+                  ]
+                },
+                "confirm": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "reload": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "title": { "type": "string", "minLength": 1 },
+                        "description": { "type": "string", "minLength": 1 },
+                        "confirm": { "type": "string", "minLength": 1 }
+                      },
+                      "required": ["title", "description", "confirm"]
+                    },
+                    "remove": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "title": { "type": "string", "minLength": 1 },
+                        "description": { "type": "string", "minLength": 1 },
+                        "confirm": { "type": "string", "minLength": 1 }
+                      },
+                      "required": ["title", "description", "confirm"]
+                    }
+                  },
+                  "required": ["reload", "remove"]
+                }
+              },
+              "required": [
+                "title",
+                "description",
+                "toggle",
+                "processLocal",
+                "register",
+                "reload",
+                "remove",
+                "unsignedDescription",
+                "labels",
+                "feedback",
+                "confirm"
+              ]
             },
             "runtime": {
               "type": "object",
@@ -690,6 +793,7 @@
             "incompatible",
             "none",
             "source",
+            "development",
             "runtime",
             "replacement",
             "fields",

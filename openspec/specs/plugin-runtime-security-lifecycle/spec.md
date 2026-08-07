@@ -54,17 +54,29 @@ The Host MUST attach the exact plugin CSP as a response header to every successf
 
 ### Requirement: Every Runtime attempt MUST have one idempotent generation-aware terminal cleanup
 
-The Host MUST assign each explicit open or retry a fresh process-local Runtime attempt and MUST route manual close, navigation away, retry, provider quiescence, disable, uninstall, replacement, relevant current-fact or grant change, resolution/load/handshake failure, unexpected Session disconnect, Host reload, App unmount, and graceful application exit through one terminal operation. The operation MUST reject new Runtime-owned work, cancel cancellable resolve/currentness/load/handshake work, make non-cancellable stale completions inert, clear timers, unsubscribe listeners, dispose the Session and Ports, remove the iframe, compare-current release the navigation lease, and discard window/descriptor references. Cleanup MUST be idempotent, and every late callback MUST compare the attempt before changing current state.
+The Host MUST assign each explicit open, retry, or successful development
+reload a fresh process-local Runtime attempt and MUST route manual close,
+navigation away, retry, provider quiescence, disable, uninstall, replacement,
+development reload, remove, or mode shutdown, relevant current-fact or grant
+change, resolution, load, or handshake failure, unexpected Session disconnect,
+Host reload, App unmount, and graceful application exit through one terminal
+operation. The operation MUST reject new Runtime-owned work, cancel cancellable
+resolve, currentness, load, and handshake work, make non-cancellable stale
+completions inert, clear timers, unsubscribe listeners, dispose the Session and
+Ports, remove the iframe, compare-current release the navigation lease, and
+discard window and descriptor references. Cleanup MUST be idempotent, and every
+late callback MUST compare the attempt before changing current state.
 
 #### Scenario: User closes a ready plugin Page
 
-- **WHEN** the user closes the current ready external Plugin Page
+- **WHEN** the user closes the current ready external or development Plugin Page
 - **THEN** the Host terminates the attempt exactly once, removes its iframe, Session, Ports, listeners, timers and navigation lease, and returns through the existing Home/focus behavior
 - **THEN** no hidden Runtime, pending Runtime-owned work, window reference or reusable attempt remains
 
 #### Scenario: Lifecycle events race with a new attempt
 
-- **WHEN** close, retry, invalidation, replacement and old async completions race while a later attempt becomes current
+- **WHEN** close, retry, invalidation, replacement, development reload or remove,
+  and old async completions race while a later attempt becomes current
 - **THEN** old cleanup and late events can affect only their own attempt and cannot release, fail, load, authenticate or revive the current attempt
 - **THEN** repeated cleanup succeeds safely without double-closing or retaining resources
 
@@ -72,7 +84,27 @@ The Host MUST assign each explicit open or retry a fresh process-local Runtime a
 
 - **WHEN** the process exits or crashes before JavaScript can finish best-effort cleanup and later restarts
 - **THEN** operating-system process teardown removes process resources, and the new process restores no scope, Runtime attempt, breaker record, Session, nonce, Port, iframe, listener, timer or pending work
-- **THEN** persistent Registration continues to recover with Runtime `inactive`
+- **THEN** persistent installed Registration continues to recover with Runtime
+  `inactive`, while development Registration does not recover
+
+#### Scenario: Development reload commits a new generation
+
+- **WHEN** a manual reload of the current development Plugin Page successfully
+  commits a new resource generation
+- **THEN** the Host makes the old attempt terminal and clears all of its
+  authority before creating a fresh attempt, iframe, nonce, MessageChannel, and
+  Session for the still-current page
+- **THEN** development source relaxes none of CSP, sandbox, Permissions Policy,
+  deadlines, breaker, single-iframe, Host API, or permission boundaries
+
+#### Scenario: Development reload fails before commit
+
+- **WHEN** a new development snapshot becomes invalid, incompatible, unsafe, or
+  unreadable, or loses a revision race before Manager commit
+- **THEN** the current Runtime attempt is neither terminated nor switched to a
+  new generation because of uncommitted input
+- **THEN** failed staging, late callbacks, and diagnostics gain no Resource,
+  Session, or handler authority
 
 ### Requirement: Iframe load and Runtime Session handshake MUST have bounded deadlines
 

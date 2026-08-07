@@ -107,9 +107,14 @@ contracts. The Host independently re-reads and revalidates untrusted bytes and
 may still reject source identity races, storage failures, conflicts, Manager
 state, or lifecycle conditions without changing content classification.
 
-Development Mode, watch/reload, installation, enable/disable, permissions,
-signing, provenance, remote publishing, registry release automation, and
-automatic updates are outside this CLI version.
+The Host's separate Plugin Development Mode can consume an already-built
+`dist/`, but it is not a CLI command or public CLI API. The CLI still does not
+enable the Host mode, register, install, reload, remove, grant permissions, or
+create Runtime authority. Host directory inspection aligns with `validate`
+only for shared self-contained `dist/` payload semantics; CLI project metadata
+and import checks remain CLI-only conclusions. Watch mode, signing, provenance,
+remote publishing, registry release automation, and automatic updates remain
+outside this CLI version.
 
 ## Validation
 

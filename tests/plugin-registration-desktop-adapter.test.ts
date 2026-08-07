@@ -24,7 +24,7 @@ const detail = (revision: string) => {
   return value;
 };
 
-const event = (revision: string) => ({ contract_version: '0.1.0', revision });
+const event = (revision: string) => ({ contract_version: '0.2.0', revision });
 
 const deferred = <T>() => {
   let resolve!: (value: T) => void;

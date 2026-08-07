@@ -1,4 +1,16 @@
-import { Banner, Button, Checkbox, Empty, Modal, Radio, RadioGroup, Spin, Tag, Typography } from '@douyinfe/semi-ui';
+import {
+  Banner,
+  Button,
+  Checkbox,
+  Empty,
+  Modal,
+  Radio,
+  RadioGroup,
+  Spin,
+  Switch,
+  Tag,
+  Typography,
+} from '@douyinfe/semi-ui';
 import { type KeyboardEvent, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppLocale } from '../i18n';
@@ -51,7 +63,7 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
   const { t } = useTranslation();
   const { locale } = useAppLocale();
   const view = useSyncExternalStore(service.subscribe, service.current, service.current);
-  const [dialog, setDialog] = useState<'clear' | 'uninstall'>();
+  const [dialog, setDialog] = useState<'clear' | 'uninstall' | 'development-reload' | 'development-remove'>();
   const [dataPolicy, setDataPolicy] = useState<PluginLifecycleDataPolicy>('retain_data');
   const restoreFocusRef = useRef<HTMLElement | undefined>(undefined);
   const restoreFocusIdRef = useRef<string | undefined>(undefined);
@@ -95,9 +107,13 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
 
   const selected = view.entries.find((entry) => entry.entry_id === view.selected_entry_id);
   const selectedName = selected ? entryName(selected, locale) : '';
-  const pending = view.mutation !== undefined;
+  const pending = view.mutation !== undefined || view.development?.pending !== undefined;
+  const developmentEntry = selected?.kind === 'registered' && selected.source === 'development';
 
-  const openDialog = (kind: 'clear' | 'uninstall', trigger: HTMLElement) => {
+  const openDialog = (
+    kind: 'clear' | 'uninstall' | 'development-reload' | 'development-remove',
+    trigger: HTMLElement,
+  ) => {
     rememberFocus(trigger);
     if (kind === 'uninstall') setDataPolicy('retain_data');
     setDialog(kind);
@@ -121,6 +137,15 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
   const confirmUninstall = async () => {
     setDialog(undefined);
     await service.uninstall(dataPolicy);
+    restoreFocusRef.current = undefined;
+    restoreFocusIdRef.current = undefined;
+    focusCurrentSelection();
+  };
+
+  const confirmDevelopment = async (kind: 'development-reload' | 'development-remove') => {
+    setDialog(undefined);
+    if (kind === 'development-reload') await service.reloadDevelopmentEntry();
+    else await service.removeDevelopmentEntry();
     restoreFocusRef.current = undefined;
     restoreFocusIdRef.current = undefined;
     focusCurrentSelection();
@@ -175,6 +200,38 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
         </Button>
       </div>
 
+      {view.development ? (
+        <Banner
+          closeIcon={null}
+          description={t('settings.plugins.development.description')}
+          fullMode={false}
+          title={t('settings.plugins.development.title')}
+          type="warning"
+        >
+          <div className="plugin-development-controls flex flex-wrap items-center gap-3">
+            <Switch
+              aria-label={t('settings.plugins.development.toggle')}
+              checked={view.development.enabled}
+              disabled={pending}
+              loading={view.development.pending === 'set_mode'}
+              onChange={(enabled) => void service.setDevelopmentMode(enabled)}
+            />
+            <Button
+              disabled={!view.development.enabled || pending}
+              loading={view.development.pending === 'register'}
+              onClick={(event) => {
+                rememberFocus(event.currentTarget);
+                void service.registerDevelopmentDirectory();
+              }}
+              size="small"
+            >
+              {t('settings.plugins.development.register')}
+            </Button>
+            <Typography.Text type="tertiary">{t('settings.plugins.development.processLocal')}</Typography.Text>
+          </div>
+        </Banner>
+      ) : null}
+
       {view.state === 'degraded' ? (
         <Banner
           closeIcon={null}
@@ -223,7 +280,9 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
                       <span className="plugin-management-entry-name">{entryName(entry, locale)}</span>
                       <span className="plugin-management-entry-meta">
                         {entry.kind === 'registered'
-                          ? `${entry.version} · ${t(`settings.plugins.source.${entry.source}`)}`
+                          ? entry.source === 'development'
+                            ? `${entry.version} · ${t('settings.plugins.development.labels.development')} · ${t('settings.plugins.development.labels.unpacked')} · ${t('settings.plugins.development.labels.unsigned')}`
+                            : `${entry.version} · ${t(`settings.plugins.source.${entry.source}`)}`
                           : t('settings.plugins.quarantined')}
                       </span>
                     </span>
@@ -301,6 +360,21 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
                   <dd>{t(`settings.plugins.runtime.${detail.runtime.kind}`)}</dd>
                 </div>
               </dl>
+              {detail.source === 'development' ? (
+                <Banner
+                  closeIcon={null}
+                  description={t('settings.plugins.development.unsignedDescription')}
+                  fullMode={false}
+                  title={t('settings.plugins.development.labels.development')}
+                  type="warning"
+                >
+                  <div className="flex flex-wrap gap-2">
+                    <Tag color="orange">{t('settings.plugins.development.labels.development')}</Tag>
+                    <Tag>{t('settings.plugins.development.labels.unpacked')}</Tag>
+                    <Tag>{t('settings.plugins.development.labels.unsigned')}</Tag>
+                  </div>
+                </Banner>
+              ) : null}
               <div>
                 <Typography.Text strong>{t('settings.plugins.fields.permissions')}</Typography.Text>
                 <Typography.Paragraph type="tertiary">
@@ -395,17 +469,39 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
                     {t('settings.plugins.actions.enable')}
                   </Button>
                 )}
-                <Button
-                  data-plugin-management-action="replace"
-                  disabled={!view.operations.replace}
-                  loading={view.mutation === 'prepare_replacement'}
-                  onClick={(event) => {
-                    rememberFocus(event.currentTarget);
-                    void service.prepareReplacement();
-                  }}
-                >
-                  {t('settings.plugins.actions.replace')}
-                </Button>
+                {detail.source === 'development' ? (
+                  <>
+                    <Button
+                      disabled={pending}
+                      id="plugin-development-reload"
+                      loading={view.development?.pending === 'reload'}
+                      onClick={(event) => openDialog('development-reload', event.currentTarget)}
+                    >
+                      {t('settings.plugins.development.reload')}
+                    </Button>
+                    <Button
+                      disabled={pending}
+                      id="plugin-development-remove"
+                      loading={view.development?.pending === 'remove'}
+                      onClick={(event) => openDialog('development-remove', event.currentTarget)}
+                      type="danger"
+                    >
+                      {t('settings.plugins.development.remove')}
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    data-plugin-management-action="replace"
+                    disabled={!view.operations.replace}
+                    loading={view.mutation === 'prepare_replacement'}
+                    onClick={(event) => {
+                      rememberFocus(event.currentTarget);
+                      void service.prepareReplacement();
+                    }}
+                  >
+                    {t('settings.plugins.actions.replace')}
+                  </Button>
+                )}
                 <Button
                   data-plugin-management-action="clear-data"
                   disabled={!view.operations.clear_data}
@@ -414,14 +510,16 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
                 >
                   {t('settings.plugins.actions.clearData')}
                 </Button>
-                <Button
-                  data-plugin-management-action="uninstall"
-                  disabled={!view.operations.uninstall}
-                  onClick={(event) => openDialog('uninstall', event.currentTarget)}
-                  type="danger"
-                >
-                  {t('settings.plugins.actions.uninstall')}
-                </Button>
+                {!developmentEntry ? (
+                  <Button
+                    data-plugin-management-action="uninstall"
+                    disabled={!view.operations.uninstall}
+                    onClick={(event) => openDialog('uninstall', event.currentTarget)}
+                    type="danger"
+                  >
+                    {t('settings.plugins.actions.uninstall')}
+                  </Button>
+                ) : null}
               </div>
             </div>
           )}
@@ -437,6 +535,44 @@ export const PluginManagementSettings = ({ service }: PluginManagementSettingsPr
       >
         {feedbackMessage}
       </Typography.Text>
+
+      {view.development?.feedback ? (
+        <Typography.Text
+          aria-atomic="true"
+          aria-live={view.development.feedback.kind === 'error' ? 'assertive' : 'polite'}
+          role={view.development.feedback.kind === 'error' ? 'alert' : 'status'}
+          type={view.development.feedback.kind === 'error' ? 'danger' : 'tertiary'}
+        >
+          {t(`settings.plugins.development.feedback.${view.development.feedback.code}`)}
+        </Typography.Text>
+      ) : null}
+
+      <Modal
+        cancelButtonProps={{ autoFocus: true, disabled: pending }}
+        cancelText={t('settings.plugins.confirm.cancel')}
+        closeOnEsc={!pending}
+        closable={!pending}
+        confirmLoading={view.development?.pending === (dialog === 'development-reload' ? 'reload' : 'remove')}
+        maskClosable={false}
+        motion={false}
+        okButtonProps={{ type: dialog === 'development-remove' ? 'danger' : 'primary' }}
+        okText={t(
+          `settings.plugins.development.confirm.${dialog === 'development-remove' ? 'remove' : 'reload'}.confirm`,
+        )}
+        onCancel={closeDialog}
+        onOk={() => dialog && void confirmDevelopment(dialog as 'development-reload' | 'development-remove')}
+        title={t(`settings.plugins.development.confirm.${dialog === 'development-remove' ? 'remove' : 'reload'}.title`)}
+        visible={dialog === 'development-reload' || dialog === 'development-remove'}
+      >
+        <Typography.Paragraph id="plugin-development-confirmation-description">
+          {t(
+            `settings.plugins.development.confirm.${dialog === 'development-remove' ? 'remove' : 'reload'}.description`,
+            {
+              name: selectedName,
+            },
+          )}
+        </Typography.Paragraph>
+      </Modal>
 
       <Modal
         cancelButtonProps={{ autoFocus: true, disabled: pending }}

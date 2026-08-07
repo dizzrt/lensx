@@ -40,20 +40,23 @@ granted permission, lifecycle, signature, or provenance facts.
 ### Requirement: Registration wire payloads MUST use an independent explicit version
 
 Every registration snapshot, detail response, and changed-event payload MUST
-carry Registration Contract version `0.1.0`. This version MUST be independent
+carry Registration Contract version `0.2.0`. This version MUST be independent
 of the Manifest protocol, Host API, lensX application version, and Plugin
-Manager Store format. Rust and TypeScript boundaries MUST reject a missing or
-unsupported Registration Contract version and MUST NOT silently interpret the
-payload as another version.
+Manager Store format. Rust and TypeScript boundaries MUST reject a missing, old
+`0.1.0`, unknown, or incorrectly typed version and MUST NOT silently interpret
+the payload as another version or apply a fallback for `development` source.
 
 #### Scenario: Both boundaries read a current-version payload
 
-- **WHEN** the Rust serializer and TypeScript parser read a valid shared fixture with Registration Contract version `0.1.0`
-- **THEN** both boundaries accept the payload and produce the same observable fields and values
+- **WHEN** the Rust serializer and TypeScript parser read a valid shared fixture
+  with Registration Contract version `0.2.0`
+- **THEN** both boundaries accept the payload and produce the same observable
+  fields and values, including the closed source enum
 
 #### Scenario: Frontend receives an unknown version
 
-- **WHEN** a Tauri command or event returns an unknown, missing, or incorrectly typed Registration Contract version
+- **WHEN** a Tauri command or event returns an old, unknown, missing, or
+  incorrectly typed Registration Contract version
 - **THEN** the TypeScript adapter rejects the payload and maps it to a stable boundary error
 - **THEN** the adapter does not publish a partially parsed snapshot, detail, or revision
 
@@ -70,21 +73,26 @@ error or placeholder plugin.
 
 A healthy summary MUST include at least the opaque entry identity, plugin ID,
 plugin version, normalized localized display data, Host-controlled
-`builtin | external` source, enabled intent, per-dimension compatibility, and
-the current `inactive` Runtime status. A quarantine summary MUST include at
-least the opaque entry identity, an optional plugin ID, and a safe quarantine
-diagnostic, and MUST NOT guess missing Manifest display data.
+`builtin | external | development` source, enabled intent, per-dimension
+compatibility, and the current `inactive` Runtime status. A quarantine summary
+MUST include at least the opaque entry identity, an optional plugin ID, and a
+safe quarantine diagnostic, and MUST NOT guess missing Manifest display data.
+The `development` source MUST mean only a Host-owned development registration
+in the current process; it MUST NOT mean installed, official, verified, signed,
+trusted, or additionally authorized.
 
 #### Scenario: Read an empty Plugin Manager
 
-- **WHEN** the Plugin Manager has no healthy records or quarantine stubs
+- **WHEN** the Plugin Manager has no healthy records, process-local development
+  entries, or quarantine stubs
 - **THEN** the snapshot returns empty entries, the current contract version, a valid revision, and truthful Manager availability
 - **THEN** the Host does not create an example, placeholder, or default plugin
 
 #### Scenario: Healthy and quarantine records coexist
 
-- **WHEN** the Manager snapshot contains one healthy registration and one quarantine stub for a damaged record
-- **THEN** the command returns two distinct variants in the same snapshot
+- **WHEN** the Manager snapshot contains installed and development healthy
+  registrations plus a quarantine stub for a damaged record
+- **THEN** the command returns strict distinct variants in the same snapshot
 - **THEN** entries are sorted deterministically by opaque entry identity and healthy and quarantine fields are not mixed
 
 #### Scenario: Store recovery is degraded
@@ -92,6 +100,15 @@ diagnostic, and MUST NOT guess missing Manifest display data.
 - **WHEN** the Plugin Manager starts with a degraded recovery report because the Store directory is unreadable as a whole
 - **THEN** the snapshot explicitly returns degraded availability and a safe Manager recovery diagnostic
 - **THEN** the degraded empty collection is not reported as an ordinary healthy empty collection and does not expose an underlying path or error object
+
+#### Scenario: A development registration is projected
+
+- **WHEN** the current process contains a valid development registration
+- **THEN** summary and detail use `source=development` while continuing to hide
+  source directory, snapshot root or identity, operation token, package digest,
+  and raw errors
+- **THEN** the frontend cannot derive signature, official provenance, grants,
+  or a Runtime exception from publisher, source, or other display facts
 
 ### Requirement: Host MUST expose safe revision-bound registration details
 

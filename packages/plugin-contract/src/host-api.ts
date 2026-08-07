@@ -1,6 +1,7 @@
-import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020.js';
+import type { ErrorObject, ValidateFunction } from 'ajv';
 
 import hostApiSchema from '../schema/host-api.schema.json' with { type: 'json' };
+import { validators as generatedHostApiValidators } from './generated/plugin-host-api-validators.js';
 import type {
   HostApiError,
   HostApiEvent,
@@ -57,10 +58,8 @@ export const HOST_API_PERMISSION_CATALOG: readonly HostApiPermissionCatalogEntry
 
 const methodSet = new Set<HostApiMethod>(HOST_API_METHOD_CATALOG.map(({ method }) => method));
 const permissionSet = new Set<HostApiPermission>(HOST_API_PERMISSION_CATALOG.map(({ permission }) => permission));
-const ajv = new Ajv2020({ allErrors: true, strict: true });
-ajv.addSchema(hostApiSchema);
 const schemaValidator = (definition: string): ValidateFunction =>
-  ajv.compile({ $ref: `${hostApiSchema.$id}#/$defs/${definition}` });
+  generatedHostApiValidators[definition as keyof typeof generatedHostApiValidators] as unknown as ValidateFunction;
 const requestValidators = new Map<HostApiMethod, ValidateFunction>(
   methodFacts.map(([method, , request]) => [method, schemaValidator(request)]),
 );

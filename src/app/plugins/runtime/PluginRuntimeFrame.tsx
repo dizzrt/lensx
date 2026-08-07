@@ -132,6 +132,7 @@ export const PluginRuntimeFrame = ({
         runtimeAttempt.bindCancellable(() => {
           cancelled = true;
         });
+        runtimeAttempt.startResolutionDeadline();
         if (cancelled || !runtimeAttempt.isCurrent()) {
           await runtimeAttempt.terminate('navigation');
           return;
@@ -164,6 +165,7 @@ export const PluginRuntimeFrame = ({
         runtimeAttempt.bindNavigationLease(async () => {
           await navigationAdapter.dispose(lease);
         });
+        runtimeAttempt.completeResolution();
         const binding: ActiveRuntimeBinding = { descriptor, attempt: runtimeAttempt };
         activeBindingRef.current = binding;
         runtimeAttempt.bindIframe(() => {

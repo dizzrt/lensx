@@ -25,6 +25,7 @@ describe('workspace lifecycle aggregation', () => {
         `@lensx/plugin-contract (packages/plugin-contract):${lifecycle}`,
         `@lensx/plugin-cli (packages/plugin-cli):${lifecycle}`,
         `@lensx/plugin-sdk (packages/plugin-sdk):${lifecycle}`,
+        `@lensx/example-plugin-development-mode-smoke (examples/plugins/development-mode-smoke):${lifecycle}`,
         `@lensx/plugin-testkit (packages/plugin-testkit):${lifecycle}`,
         `@lensx/example-plugin-framework-neutral (examples/plugins/framework-neutral):${lifecycle}`,
         `@lensx/plugin-ui (packages/plugin-ui):${lifecycle}`,

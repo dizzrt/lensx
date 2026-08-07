@@ -41,7 +41,7 @@ const snapshot = (
   entries: PluginRegistrationSnapshot['entries'] = [],
   availability: PluginRegistrationSnapshot['availability'] = { kind: 'available' },
 ): PluginRegistrationSnapshot => ({
-  contract_version: '0.1.0',
+  contract_version: '0.2.0',
   revision,
   availability,
   entries,
@@ -53,7 +53,7 @@ const detail = (
   pluginId: string,
   enabled = true,
 ): PluginRegistrationDetailResponse => ({
-  contract_version: '0.1.0',
+  contract_version: '0.2.0',
   revision,
   detail: {
     ...structuredClone(baseDetail),
@@ -78,7 +78,7 @@ class ControlledSurface implements PluginSurfaceProjectionService {
     const entry = this.current.entries.find((item) => item.entry_id === entryId);
     if (entry?.kind !== 'registered') {
       return {
-        contract_version: '0.1.0',
+        contract_version: '0.2.0',
         revision: this.current.revision,
         detail: {
           kind: 'quarantined',

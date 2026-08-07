@@ -14,6 +14,7 @@ const params = new URLSearchParams(window.location.search);
 const locale = params.get('locale') === 'zh-CN' ? 'zh-CN' : 'en-US';
 const theme = params.get('theme') === 'dark' ? 'dark' : 'light';
 const state = params.get('state') ?? 'healthy';
+const developmentState = state.startsWith('development-');
 const parsedDetail = parsePluginRegistrationDetailResponse(
   structuredClone(validRegistrationCases.find(({ name }) => name === 'healthy_detail')?.value),
 );
@@ -34,7 +35,7 @@ const entry = Object.freeze({
   plugin_id: manifest.plugin_id,
   version: manifest.version,
   display: manifest.display,
-  source: 'external' as const,
+  source: developmentState ? ('development' as const) : ('external' as const),
   enabled: state !== 'clear' && state !== 'uninstall',
   compatibility: Object.freeze({ lensx: true, host_api: true }),
   runtime: Object.freeze({ kind: 'inactive' as const }),
@@ -148,7 +149,7 @@ const healthyView = (): PluginManagementViewModel => {
       kind: 'registered',
       entry_id: entry.entry_id,
       manifest,
-      source: 'external',
+      source: entry.source,
       enabled: entry.enabled,
       compatibility: Object.freeze({ lensx: true, host_api: true }),
       runtime: Object.freeze({ kind: 'inactive' }),
@@ -156,6 +157,18 @@ const healthyView = (): PluginManagementViewModel => {
       diagnostics: Object.freeze([]),
     }),
     operations,
+    ...(developmentState
+      ? {
+          development: Object.freeze({
+            visible: true,
+            enabled: true,
+            ...(state === 'development-pending' ? { pending: 'reload' as const } : {}),
+            ...(state === 'development-error'
+              ? { feedback: Object.freeze({ kind: 'error' as const, code: 'source_changed' as const }) }
+              : {}),
+          }),
+        }
+      : {}),
     ...(state === 'prepared-install' ? { confirmation: installationConfirmation([notGranted]) } : {}),
     ...(state === 'zero-grant' ? { confirmation: installationConfirmation([]) } : {}),
     ...(state === 'all-sensitive'
@@ -288,15 +301,21 @@ const service: PluginManagementService = Object.freeze({
   deferPreparedPermissions: () => undefined,
   uninstall: async () => undefined,
   clearData: async () => undefined,
+  setDevelopmentMode: async () => undefined,
+  registerDevelopmentDirectory: async () => undefined,
+  reloadDevelopmentEntry: async () => undefined,
+  removeDevelopmentEntry: async () => undefined,
   destroy: async () => undefined,
 });
 
 const VisualFixture = () => {
   useEffect(() => {
-    if (state === 'uninstall' || state === 'clear')
+    if (state === 'uninstall' || state === 'clear' || state === 'development-reload' || state === 'development-remove')
       document
         .querySelector<HTMLButtonElement>(
-          `[data-plugin-management-action="${state === 'clear' ? 'clear-data' : 'uninstall'}"]`,
+          state.startsWith('development-')
+            ? `#plugin-${state}`
+            : `[data-plugin-management-action="${state === 'clear' ? 'clear-data' : 'uninstall'}"]`,
         )
         ?.click();
     requestAnimationFrame(() => {

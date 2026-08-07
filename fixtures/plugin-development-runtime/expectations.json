@@ -1,0 +1,28 @@
+{
+  "fixture_version": "0.1.0",
+  "source_packages": {
+    "normal": {
+      "file": "fixtures/plugin-iframe-runtime/normal/runtime-compatible.lxp",
+      "sha256": "81adbb774a6e96de5ee74a3f2e1990b11f2fcb2858f0efa6700a15d6338f307b"
+    },
+    "malicious": {
+      "file": "fixtures/plugin-iframe-runtime/malicious/runtime-adversarial.lxp",
+      "sha256": "a5010c0462ba1fae45c05da03617d88f314609125da64c038d97d8e658bb5297"
+    }
+  },
+  "development_transitions": {
+    "normal": ["register", "open", "reload", "permission_delta", "remove"],
+    "malicious": ["register", "open", "reload", "malicious_policy_matrix", "remove"]
+  },
+  "permission_delta": {
+    "plugin_id_unchanged": true,
+    "version": "1.1.0",
+    "requested_permission": "clipboard.read",
+    "expected_grant": false
+  },
+  "shared_runtime_profile": {
+    "sandbox": "allow-scripts allow-same-origin",
+    "permissions_policy": "camera 'none'; microphone 'none'; geolocation 'none'; fullscreen 'none'; clipboard-read 'none'; clipboard-write 'none'; display-capture 'none'; payment 'none'; usb 'none'; serial 'none'; hid 'none'; bluetooth 'none'; screen-wake-lock 'none'",
+    "referrer_policy": "no-referrer"
+  }
+}

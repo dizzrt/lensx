@@ -280,6 +280,38 @@ through a revision-bound opaque identity. Manager records alone still do not
 prove discovery provenance. Updates, permission decisions, Runtime sessions,
 and a public plugin-facing registration API remain separate capabilities.
 
+## Shipped Host-Private Plugin Development Mode
+
+The feature-gated Plugin Development Mode extends the same process-local Plugin
+Manager snapshot with `source=development` entries while leaving the version-1
+Store format unchanged. A dedicated build capability and native process switch
+both default off. Production frontend and native artifacts do not register its
+state, commands, picker, coordinator, or UI.
+
+The native folder picker supplies a Host-private directory capability. A
+bounded inspector accepts only a self-contained regular-file `dist/` payload,
+then copies it through a flushed staging tree into a random immutable current
+generation under `app_cache_dir()/plugin-development/<process-session>/`.
+Manager facts retain the source capability privately for manual reload, while
+Resource and Runtime use only the Host-owned current snapshot. The internal
+domain-separated `sha256-development-tree-v1` identity is not a `.lxp` package
+digest.
+
+Register, reload, remove, and mode shutdown are serialized revision-bound
+transactions. Manager commit advances Resource generation, old Resource URLs
+fail immediately, and the macOS navigation policy revokes a matching current
+plugin lease before old snapshot cleanup. Frontend surfaces quiesce before the
+native transition and fully reread Registration state afterward, so lost events
+do not become authority. Reload always publishes a new generation, retains only
+grants still requested by the next Manifest, and does not add watch or retry.
+
+Development entries, grants, diagnostics, source capabilities, snapshots, and
+Runtime activity are process-local. Remove and mode shutdown retain plugin data
+and Launcher collections, and do not alter installed packages, quarantine
+records, or unrelated plugins. Bounded cleanup failure never restores revoked
+authority. See [Plugin Development Mode](../development/plugin-development-mode.md)
+for the operator workflow and limits.
+
 ## Shipped Host-Private Plugin Installation From a Local File
 
 The Plugins settings tab exposes one Host-owned **Install from file** action.
@@ -344,7 +376,7 @@ user-initiated rollback history require later accepted changes.
 ## Shipped Host-Private Registration Contract
 
 The Host now projects the managed Plugin Manager through Registration Contract
-version `0.1.0`. This contract is private to Rust, Tauri, and the root
+version `0.2.0`. This contract is private to Rust, Tauri, and the root
 application TypeScript. It is not exported by `@lensx/plugin-contract`,
 `@lensx/plugin-sdk`, or another plugin package, and workspace boundaries reject
 official and example plugins that import its types, desktop adapter, or event
@@ -356,7 +388,7 @@ Host-owned registration summary/detail, and process-local Runtime status.
 `registered | quarantined` summaries plus `available | degraded` Manager
 availability. `read_plugin_registration_detail` accepts only an opaque entry
 identity and returns a revision-bound registered or quarantine detail. Healthy
-details contain the normalized Manifest, `builtin | external` source, enabled
+details contain the normalized Manifest, `builtin | external | development` source, enabled
 intent, per-dimension compatibility, sorted unique grants, bounded safe
 diagnostics, and only the current `inactive` Runtime variant. Quarantine details
 contain only the opaque identity, an optional verified plugin ID, and one safe
@@ -762,9 +794,11 @@ relaxations remain denied. Every successful current plugin HTML `GET` and
 `HEAD` receives the same Plugin Runtime profile from the Resource Service. That
 profile defaults to deny, permits only same-origin script, style, image, and
 font resources, disables connect, worker, child frame, media, object, base, and
-form destinations, and admits exactly the production Host ancestor. Manifest,
-publisher, source, grant, query, request-header, and plugin-authored meta values
-cannot change either profile.
+form destinations. A production application document admits exactly
+`tauri://localhost` as its ancestor; `tauri dev` substitutes only its configured
+`http://localhost:40755` application origin while retaining every other
+directive byte-for-byte. Manifest, publisher, source, grant, query,
+request-header, and plugin-authored meta values cannot change either profile.
 
 CSP, isolated origin, iframe sandbox, Permissions Policy, native navigation,
 and Runtime Session are complementary boundaries. CSP controls resource and
@@ -775,9 +809,12 @@ one current window and dedicated Port. None of these boundaries creates a Host
 API grant.
 
 A Host-private controller owns one Runtime attempt and one external-plugin
-iframe globally. It starts the 10,000 ms load deadline only after the navigation
-lease is active and `src` is committed. The Session starts its 5,000 ms
-handshake deadline only after bootstrap transfer succeeds. Close, navigation,
+iframe globally. A separate 10,000 ms resolution boundary covers convergence
+of the previous terminal operation plus current Resource resolution and native
+navigation activation; expiry fails closed without constructing another
+iframe. It starts the 10,000 ms load deadline only after the navigation lease
+is active and `src` is committed. The Session starts its 5,000 ms handshake
+deadline only after bootstrap transfer succeeds. Close, navigation,
 quiescence, disable, uninstall, replacement, relevant fact or grant changes,
 retry, timeout, Session failure, Host reload, and App teardown all converge on
 one idempotent terminal operation: make work stale, cancel timers and
@@ -912,6 +949,10 @@ the shared `PluginRuntimeContext` containing a compatible `hostApiVersion`,
 snapshot of declared Host API method IDs. An empty capability list is valid and
 does not imply any method. Plugin identity, Page identity, granted permissions, installation
 source, and Host lifecycle facts are not supported context inputs.
+The Host API validators consumed by the SDK are generated as committed AJV
+standalone functions at build time. They do not compile Schemas or use dynamic
+evaluation inside the plugin document, so the SDK remains compatible with the
+Runtime `script-src 'self'` policy without adding `unsafe-eval`.
 
 SDK-managed operations use a 10,000 millisecond default timeout with positive
 finite integer overrides. Cancellation accepts a minimal structural signal
@@ -948,7 +989,10 @@ argument, and transport failures.
 `createPluginIframeTransport()` has no trust configuration. It accepts one
 exact current-parent bootstrap from the SDK-owned Host origin policy, returns
 the existing nonce acknowledgement once, and then uses only the transferred
-Port. Its package-private `0.1.0` wire has exact request, response, event,
+Port. The policy includes the production Tauri origins, the exact configured
+`http://localhost:40755` development origin, and private real-WebView harness
+origin; neighboring localhost ports remain rejected. Its package-private
+`0.1.0` wire has exact request, response, event,
 cancel, and disconnect frames with transport-owned bounded request IDs. It
 contains no plugin/Page identity, origin, grant, path, executor, Tauri object,
 Host object, stack, or raw exception. The package does not export the frame,
@@ -1202,12 +1246,14 @@ receives typed operation availability and safe outcomes; it does not invoke
 Tauri or reproduce Manager transition rules.
 
 The root plugin composition is the sole lifecycle owner for the shared
-management, lifecycle, replacement, and Registration-projection services. Each
-React effect setup creates and initializes one composition generation, and its
-paired cleanup destroys only that generation. `App` and the Settings component
-consume injected services without reinitializing or destroying them. This
-keeps development `StrictMode` setup-cleanup-setup cycles from reusing a
-terminally destroyed facade or leaving the management view in `loading`.
+management, plugin lifecycle, Runtime lifecycle, replacement, and
+Registration-projection services. Each React effect setup creates and
+initializes one composition generation, and its paired cleanup destroys only
+that generation. `App`, `PluginRuntimeFrame`, and the Settings component consume
+injected services without terminally disposing them. This keeps development
+`StrictMode` setup-cleanup-setup cycles from reusing a destroyed service and
+leaving either management in `loading` or Runtime resolution permanently in
+`resolving` before an iframe exists.
 
 Replacement remains a prepare/confirm/commit flow. Its confirmation exposes
 the version classification and permission additions/removals, and becomes

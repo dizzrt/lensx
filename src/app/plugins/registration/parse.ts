@@ -166,8 +166,8 @@ const parseDisplay = (value: unknown): NormalizedPluginDisplay => {
   };
 };
 
-const parseSource = (value: unknown): 'builtin' | 'external' => {
-  if (value !== 'builtin' && value !== 'external') {
+const parseSource = (value: unknown): 'builtin' | 'external' | 'development' => {
+  if (value !== 'builtin' && value !== 'external' && value !== 'development') {
     throw new TypeError('Plugin registration source is invalid.');
   }
   return value;

@@ -142,6 +142,7 @@ export const createPluginManagementService = ({
   replacementService,
   permissionService,
   dataManagementService,
+  developmentService,
 }: PluginManagementServiceDependencies): PluginManagementService => {
   const listeners = new Set<(view: PluginManagementViewModel) => void>();
   let snapshot: PluginRegistrationSnapshot | undefined;
@@ -156,6 +157,7 @@ export const createPluginManagementService = ({
   let detailRequest = 0;
   let destroyed = false;
   let selectionTarget: { readonly plugin_id: string; readonly version: string } | undefined;
+  let development = developmentService?.current();
 
   const selectedSummary = () => snapshot?.entries.find((entry) => entry.entry_id === selectedEntryId);
 
@@ -172,7 +174,8 @@ export const createPluginManagementService = ({
       enable: idle && selected?.kind === 'registered' && !selected.enabled,
       disable: idle && selected?.kind === 'registered' && selected.enabled,
       replace: idle && selected?.kind === 'registered' && selected.source === 'external',
-      uninstall: idle && selected !== undefined,
+      uninstall:
+        idle && selected !== undefined && (selected.kind === 'quarantined' || selected.source !== 'development'),
       clear_data: idle && selected?.kind === 'registered' && !selected.enabled,
       retry: mutation === undefined,
     });
@@ -202,6 +205,7 @@ export const createPluginManagementService = ({
       ...(permissionConfirmation ? { permission_confirmation: permissionConfirmation } : {}),
       ...(currentFeedback ? { feedback: currentFeedback } : {}),
       ...(snapshot?.availability.kind === 'degraded' ? { diagnostic: snapshot.availability.diagnostic } : {}),
+      ...(development?.visible ? { development } : {}),
     });
   };
 
@@ -210,6 +214,10 @@ export const createPluginManagementService = ({
     currentView = buildView();
     for (const listener of listeners) listener(currentView);
   };
+  const unsubscribeDevelopment = developmentService?.subscribe((next) => {
+    development = next;
+    publish();
+  });
 
   const loadDetail = async (source: PluginRegistrationSnapshot, entryId: string) => {
     const request = ++detailRequest;
@@ -391,7 +399,7 @@ export const createPluginManagementService = ({
       loadFailed = false;
       publish();
       try {
-        await surfaceProjection.initialize();
+        await Promise.all([surfaceProjection.initialize(), developmentService?.initialize()]);
         const current = surfaceProjection.currentSnapshot();
         if (current && current !== snapshot) observe(current);
       } catch {
@@ -682,11 +690,29 @@ export const createPluginManagementService = ({
         currentFeedback = feedback('status', result.changed ? 'clear_changed' : 'clear_unchanged');
       });
     },
+    async setDevelopmentMode(enabled: boolean) {
+      await developmentService?.setEnabled(enabled);
+    },
+    async registerDevelopmentDirectory() {
+      await developmentService?.register();
+    },
+    async reloadDevelopmentEntry() {
+      const input = currentInput();
+      if (input?.entry.kind !== 'registered' || input.entry.source !== 'development') return;
+      await developmentService?.reload(input.entry_id, input.expected_revision);
+    },
+    async removeDevelopmentEntry() {
+      const input = currentInput();
+      if (input?.entry.kind !== 'registered' || input.entry.source !== 'development') return;
+      await developmentService?.remove(input.entry_id, input.expected_revision);
+    },
     async destroy() {
       if (destroyed) return;
       destroyed = true;
       detailRequest += 1;
       unsubscribe();
+      unsubscribeDevelopment?.();
+      developmentService?.destroy();
       listeners.clear();
       lifecycleService.destroy();
       await installationService.destroy();
@@ -726,5 +752,9 @@ export const inertPluginManagementService: PluginManagementService = Object.free
   deferPreparedPermissions: () => undefined,
   uninstall: async () => undefined,
   clearData: async () => undefined,
+  setDevelopmentMode: async () => undefined,
+  registerDevelopmentDirectory: async () => undefined,
+  reloadDevelopmentEntry: async () => undefined,
+  removeDevelopmentEntry: async () => undefined,
   destroy: async () => undefined,
 });

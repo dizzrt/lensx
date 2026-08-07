@@ -1,5 +1,6 @@
 import type { NormalizedPluginManifest } from '@lensx/plugin-contract';
 import type { PluginDataManagementService } from '../data-management';
+import type { PluginDevelopmentService, PluginDevelopmentView } from '../development';
 import type { LocalPluginInstallationService } from '../installation';
 import type { PluginLifecycleDataPolicy, PluginLifecycleService } from '../lifecycle';
 import type {
@@ -73,7 +74,7 @@ export type PluginManagementEntry =
           ? Display
           : never
         : never;
-      readonly source: 'builtin' | 'external';
+      readonly source: 'builtin' | 'external' | 'development';
       readonly enabled: boolean;
       readonly compatibility: { readonly lensx: boolean; readonly host_api: boolean };
       readonly runtime: PluginRegistrationRuntimeStatus;
@@ -120,7 +121,7 @@ export type PluginManagementDetailView =
       readonly kind: 'registered';
       readonly entry_id: string;
       readonly manifest: NormalizedPluginManifest;
-      readonly source: 'builtin' | 'external';
+      readonly source: 'builtin' | 'external' | 'development';
       readonly enabled: boolean;
       readonly compatibility: { readonly lensx: boolean; readonly host_api: boolean };
       readonly runtime: PluginRegistrationRuntimeStatus;
@@ -168,6 +169,7 @@ export interface PluginManagementViewModel {
   readonly permission_confirmation?: PluginPermissionConfirmationView;
   readonly feedback?: PluginManagementFeedback;
   readonly diagnostic?: PluginRegistrationDiagnostic;
+  readonly development?: PluginDevelopmentView;
 }
 
 export interface PluginManagementService {
@@ -189,6 +191,10 @@ export interface PluginManagementService {
   readonly deferPreparedPermissions: () => void;
   readonly uninstall: (dataPolicy: PluginLifecycleDataPolicy) => Promise<void>;
   readonly clearData: () => Promise<void>;
+  readonly setDevelopmentMode: (enabled: boolean) => Promise<void>;
+  readonly registerDevelopmentDirectory: () => Promise<void>;
+  readonly reloadDevelopmentEntry: () => Promise<void>;
+  readonly removeDevelopmentEntry: () => Promise<void>;
   readonly destroy: () => Promise<void>;
 }
 
@@ -199,4 +205,5 @@ export interface PluginManagementServiceDependencies {
   readonly replacementService: PluginReplacementService;
   readonly permissionService: Pick<PluginPermissionService, 'catalog' | 'view' | 'setGrant'>;
   readonly dataManagementService: PluginDataManagementService;
+  readonly developmentService?: PluginDevelopmentService;
 }

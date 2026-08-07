@@ -13,10 +13,10 @@ const MANIFEST_PATH: &str = "manifest.json";
 const CHECKSUMS_PATH: &str = "checksums.json";
 const MAX_COMPRESSED_BYTES: usize = 64 * 1024 * 1024;
 const MAX_WINDOW_BYTES: u64 = 64 * 1024 * 1024;
-const MAX_TAR_BYTES: u64 = 256 * 1024 * 1024;
-const MAX_FILE_COUNT: usize = 4096;
-const MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
-const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
+pub(crate) const MAX_TAR_BYTES: u64 = 256 * 1024 * 1024;
+pub(crate) const MAX_FILE_COUNT: usize = 4096;
+pub(crate) const MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
+pub(crate) const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
 const MAX_CHECKSUMS_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_PATH_BYTES: usize = 100;
 const MAX_PATH_SEGMENTS: usize = 16;
@@ -125,7 +125,7 @@ pub(crate) fn package_diagnostic_message(code: &str) -> Option<&'static str> {
     })
 }
 
-fn sort_diagnostics(diagnostics: &mut Vec<PackageDiagnostic>) {
+pub(crate) fn sort_diagnostics(diagnostics: &mut Vec<PackageDiagnostic>) {
     diagnostics.sort_by(|left, right| {
         left.path
             .cmp(&right.path)
@@ -139,7 +139,7 @@ fn invalid(mut diagnostics: Vec<PackageDiagnostic>) -> PackageInspectionResult {
     PackageInspectionResult::Invalid { diagnostics }
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
@@ -296,11 +296,11 @@ fn parse_tar_path(field: &[u8]) -> Option<String> {
     String::from_utf8(field[..end].to_vec()).ok()
 }
 
-fn ascii_fold(path: &str) -> String {
+pub(crate) fn ascii_fold(path: &str) -> String {
     path.to_ascii_lowercase()
 }
 
-fn validate_portable_path(path: &str) -> Vec<PackageDiagnostic> {
+pub(crate) fn validate_portable_path(path: &str) -> Vec<PackageDiagnostic> {
     let mut diagnostics = Vec::new();
     let segments: Vec<_> = path.split('/').collect();
     let valid_segment = |segment: &str| {
@@ -697,6 +697,36 @@ fn validate_manifest(
         Ok((validation.status, manifest, compatibility))
     } else {
         Err(diagnostics)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(not(feature = "plugin-development-mode"), allow(dead_code))]
+pub(crate) enum UnpackedPayloadValidation {
+    Invalid(Vec<PackageDiagnostic>),
+    Valid {
+        status: PluginManifestValidationStatus,
+        manifest: NormalizedPluginManifest,
+        compatibility: PluginManifestCompatibility,
+    },
+}
+
+#[cfg_attr(not(feature = "plugin-development-mode"), allow(dead_code))]
+pub(crate) fn validate_unpacked_payload(
+    manifest_bytes: &[u8],
+    files: &[PackageFileFact],
+    current_versions: &PluginHostVersions,
+) -> UnpackedPayloadValidation {
+    match validate_manifest(manifest_bytes, files, current_versions) {
+        Ok((status, manifest, compatibility)) => UnpackedPayloadValidation::Valid {
+            status,
+            manifest,
+            compatibility,
+        },
+        Err(mut diagnostics) => {
+            sort_diagnostics(&mut diagnostics);
+            UnpackedPayloadValidation::Invalid(diagnostics)
+        }
     }
 }
 

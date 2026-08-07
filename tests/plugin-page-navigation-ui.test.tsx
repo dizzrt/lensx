@@ -1,5 +1,6 @@
 import { describe, expect, rs, test } from '@rstest/core';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import validCases from '../fixtures/plugin-registration-contract/valid/cases.json';
 import App from '../src/App';
 import { AppProviders } from '../src/app/AppProviders';
@@ -16,7 +17,11 @@ import {
   type PluginRegistrationSnapshot,
   parsePluginRegistrationDetailResponse,
 } from '../src/app/plugins/registration';
-import type { PluginPageRuntimeDescriptor, PluginRuntimeSessionService } from '../src/app/plugins/runtime';
+import {
+  createPluginRuntimeLifecycleService,
+  type PluginPageRuntimeDescriptor,
+  type PluginRuntimeSessionService,
+} from '../src/app/plugins/runtime';
 import { createPluginSurfaceProjectionService } from '../src/app/plugins/surfaces';
 import { useAppTheme } from '../src/app/theme';
 
@@ -42,7 +47,7 @@ const detail = {
 };
 const pluginId = detail.manifest.plugin_id;
 const snapshot: PluginRegistrationSnapshot = {
-  contract_version: '0.1.0',
+  contract_version: '0.2.0',
   revision: '1',
   availability: { kind: 'available' },
   entries: [
@@ -65,7 +70,7 @@ const createAdapter = (): PluginRegistrationDesktopAdapter => {
   return {
     initialize: async () => snapshot,
     refresh: async () => snapshot,
-    readDetail: async () => ({ contract_version: '0.1.0', revision: '1', detail }),
+    readDetail: async () => ({ contract_version: '0.2.0', revision: '1', detail }),
     handleLauncherActivation: async () => snapshot,
     recoverListener: async () => snapshot,
     subscribe: (listener) => {
@@ -119,7 +124,7 @@ const TestProviderControls = () => {
   );
 };
 
-const renderPluginComposition = () => {
+const renderPluginComposition = (options: { readonly strictMode?: boolean } = {}) => {
   const pageRegistry = new PageRegistry([
     { owner_id: 'lensx.core', page_id: 'settings', enabled: true, title: { 'en-US': 'Settings' } },
   ]);
@@ -147,8 +152,9 @@ const renderPluginComposition = () => {
     disconnect: () => undefined,
     dispose: () => undefined,
   } as unknown as PluginRuntimeSessionService;
+  const pluginRuntimeLifecycleService = createPluginRuntimeLifecycleService();
   void projection.initialize();
-  render(
+  const view = (
     <AppProviders>
       <TestProviderControls />
       <App
@@ -156,17 +162,31 @@ const renderPluginComposition = () => {
         activationSource={{ subscribe: async () => () => undefined }}
         collectionsClient={collectionsClient}
         navigationService={navigationService}
+        pluginRuntimeLifecycleService={pluginRuntimeLifecycleService}
         pluginRuntimeNavigationAdapter={pluginRuntimeNavigationAdapter}
         pluginRuntimeResolver={pluginRuntimeResolver}
         pluginRuntimeSessionService={pluginRuntimeSessionService}
         surfaceProjectionService={projection}
       />
-    </AppProviders>,
+    </AppProviders>
   );
+  render(options.strictMode ? <StrictMode>{view}</StrictMode> : view);
   return { actionService, navigationService, pageRegistry, pluginRuntimeNavigationAdapter, pluginRuntimeResolver };
 };
 
 describe('Plugin Page navigation UI', () => {
+  test('opens the isolated Runtime after the StrictMode setup-cleanup-setup replay', async () => {
+    const { actionService, navigationService, pluginRuntimeNavigationAdapter } = renderPluginComposition({
+      strictMode: true,
+    });
+    await waitFor(() => expect(actionService.registry.get(`${pluginId}.open_project`)).toBeDefined());
+
+    act(() => navigationService.openPage({ owner_id: pluginId, page_id: 'open_project' }, `${pluginId}.open_project`));
+
+    await waitFor(() => expect(document.querySelectorAll('iframe')).toHaveLength(1));
+    expect(pluginRuntimeNavigationAdapter.activate).toHaveBeenCalledTimes(1);
+  });
+
   test('navigates a projected Action to one isolated Runtime iframe and resolves current metadata', async () => {
     const { actionService, pageRegistry, pluginRuntimeNavigationAdapter, pluginRuntimeResolver } =
       renderPluginComposition();

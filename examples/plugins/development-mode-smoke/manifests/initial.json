@@ -1,0 +1,72 @@
+{
+  "manifest_version": "0.1.0",
+  "plugin_id": "dev.lensx.smoke.development-mode",
+  "version": "0.1.0",
+  "display": {
+    "name": {
+      "en-US": "Development Mode Smoke A",
+      "zh-CN": "开发模式 Smoke A"
+    },
+    "description": {
+      "en-US": "Generation A of the real development registration smoke fixture.",
+      "zh-CN": "真实开发注册 smoke fixture 的 A 代版本。"
+    }
+  },
+  "publisher": {
+    "author": "lensX smoke fixture (unverified)",
+    "homepage": "https://github.com/dizzrt/lensx",
+    "repository": "https://github.com/dizzrt/lensx"
+  },
+  "compatibility": {
+    "lensx": {
+      "min_version": "0.1.0",
+      "max_version_exclusive": "0.2.0"
+    },
+    "host_api": {
+      "min_version": "0.1.0",
+      "max_version_exclusive": "0.2.0"
+    }
+  },
+  "runtime": {
+    "kind": "iframe",
+    "entry": "index.html"
+  },
+  "requested_permissions": [],
+  "contributes": {
+    "pages": [
+      {
+        "id": "main",
+        "title": {
+          "en-US": "Development Mode Smoke A",
+          "zh-CN": "开发模式 Smoke A"
+        },
+        "route": "/",
+        "required_permissions": []
+      }
+    ],
+    "actions": [
+      {
+        "id": "open",
+        "title": {
+          "en-US": "Open development-mode smoke A",
+          "zh-CN": "打开开发模式 Smoke A"
+        },
+        "description": {
+          "en-US": "Open generation A without requested clipboard permission.",
+          "zh-CN": "打开尚未请求剪贴板权限的 A 代版本。"
+        },
+        "default_keywords": {
+          "en-US": ["development", "plugin", "smoke"],
+          "zh-CN": ["开发", "插件", "smoke"]
+        },
+        "target": {
+          "kind": "page",
+          "page_id": "main"
+        }
+      }
+    ],
+    "launcher": {
+      "default_action_id": "open"
+    }
+  }
+}

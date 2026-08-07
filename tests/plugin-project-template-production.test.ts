@@ -115,7 +115,7 @@ describe('plugin project templates through production components', () => {
         diagnostics: [] as const,
       };
       const snapshot: PluginRegistrationSnapshot = {
-        contract_version: '0.1.0',
+        contract_version: '0.2.0',
         revision,
         availability: { kind: 'available' },
         entries: [
@@ -137,7 +137,7 @@ describe('plugin project templates through production components', () => {
         initialize: async () => snapshot,
         refresh: async () => snapshot,
         readDetail: async (): Promise<PluginRegistrationDetailResponse> => ({
-          contract_version: '0.1.0',
+          contract_version: '0.2.0',
           revision,
           detail,
         }),

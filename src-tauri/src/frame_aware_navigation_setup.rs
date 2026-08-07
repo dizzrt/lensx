@@ -146,8 +146,12 @@ mod tests {
         );
         assert!(config.contains(r#""create": false"#));
         assert!(lib.contains("pub(crate) mod frame_aware_navigation_policy"));
-        assert_eq!(lib.matches("activate_plugin_runtime_navigation").count(), 1);
-        assert_eq!(lib.matches("dispose_plugin_runtime_navigation").count(), 1);
+        // The feature-on and feature-off command lists each register the same
+        // Host-owned Runtime navigation boundary. This remains one compiled
+        // command pair in either build, while the private policy itself is
+        // still installed exactly once above.
+        assert_eq!(lib.matches("activate_plugin_runtime_navigation").count(), 2);
+        assert_eq!(lib.matches("dispose_plugin_runtime_navigation").count(), 2);
         let policy = FrameAwareNavigationPolicy::new("tauri://localhost/")
             .expect("App target should be valid");
         let plugin = "lensx-plugin://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.runtime.localhost/v1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/v1-a1/1.0.0/index.html";

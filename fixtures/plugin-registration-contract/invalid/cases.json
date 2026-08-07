@@ -55,7 +55,7 @@
     "base": "quarantine_detail",
     "set": { "/detail/diagnostic/message": "/private/path native error" }
   },
-  { "name": "wrong_event_version", "type": "event", "base": "changed_event", "set": { "/contract_version": "0.2.0" } },
+  { "name": "old_event_version", "type": "event", "base": "changed_event", "set": { "/contract_version": "0.1.0" } },
   {
     "name": "event_unknown_field",
     "type": "event",

@@ -89,6 +89,7 @@ const ProductionApp = ({
   return (
     <App
       pluginManagementService={composition.managementService}
+      pluginRuntimeLifecycleService={composition.runtimeLifecycleService}
       preferencesClient={preferencesClient}
       startupPreferencesErrorCode={startupState.preferencesErrorCode}
       surfaceController={surfaceController}

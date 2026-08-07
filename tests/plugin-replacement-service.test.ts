@@ -12,7 +12,7 @@ const entryId = 'entry_0123456789abcdef';
 const pluginId = 'com.acme.workspace';
 const token = 'prep_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const snapshot: PluginRegistrationSnapshot = {
-  contract_version: '0.1.0',
+  contract_version: '0.2.0',
   revision: '7',
   availability: { kind: 'available' },
   entries: [

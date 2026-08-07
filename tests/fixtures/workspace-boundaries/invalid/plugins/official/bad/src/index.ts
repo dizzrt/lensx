@@ -1,4 +1,5 @@
 import '@/app/private';
+import '@/app/plugins/development';
 import '@/app/plugins/registration';
 import '@/app/plugins/registration/desktop';
 import '@/app/plugins/installation';
@@ -19,6 +20,7 @@ import '@lensx/plugin-cli';
 import '../../../../src/app/desktop.ts';
 import '../../../../tools/plugin-package-format/index.ts';
 import '../../../../src-tauri/src/plugin_resource_service.rs';
+import '../../../../src-tauri/src/plugin_development.rs';
 import '../../../../src-tauri/src/plugin_resource_url.rs';
 import '../../../../src-tauri/examples/plugin_iframe_runtime_harness.rs';
 import '../../../../src-tauri/examples/plugin_runtime_session_harness.rs';

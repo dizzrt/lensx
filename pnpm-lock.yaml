@@ -97,6 +97,31 @@ importers:
         specifier: ^66.7.5
         version: 66.7.5(@unocss/postcss@66.7.5(postcss@8.5.24))(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0)(less@4.8.1)(yaml@2.9.0))
 
+  examples/plugins/development-mode-smoke:
+    dependencies:
+      '@lensx/plugin-sdk':
+        specifier: ^0.1.0
+        version: link:../../../packages/plugin-sdk
+    devDependencies:
+      '@lensx/plugin-contract':
+        specifier: ^0.1.0
+        version: link:../../../packages/plugin-contract
+      '@rsbuild/core':
+        specifier: ^2.1.8
+        version: 2.1.9
+      '@rstest/adapter-rsbuild':
+        specifier: ^0.11.2
+        version: 0.11.4(@rsbuild/core@2.1.9)(@rstest/core@0.11.4(happy-dom@20.11.1))
+      '@rstest/core':
+        specifier: ^0.11.2
+        version: 0.11.4(happy-dom@20.11.1)
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   examples/plugins/framework-neutral:
     dependencies:
       '@lensx/plugin-sdk':

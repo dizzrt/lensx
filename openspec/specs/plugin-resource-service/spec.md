@@ -60,19 +60,28 @@ Runtime, or other plugins can import or invoke.
 The Host MUST validate the expected revision and resolve, in one atomic Plugin
 Manager read projection, a healthy registration, process-local resource
 generation, enabled intent, both compatibility dimensions, normalized Manifest,
-installation path, and package digest. The Host MUST issue a URL only when the
-Manager is not degraded, the registration is healthy, enabled, and compatible,
-and the installation path is provably the sole currently active payload owned
-by the installer at `packages/<plugin-key>/<package-sha256>`. Host source,
-Publisher text, requested permissions, and Runtime `inactive` MUST NOT by
-themselves grant or deny resource access; the Host MUST fail closed when managed
-payload ownership cannot be proven.
+and strict payload variant. For an installed payload, the Host MUST prove that
+the installation path is the sole currently active installer-owned payload at
+`packages/<plugin-key>/<package-sha256>` and that its package digest matches
+exactly. For a development payload, the Host MUST prove that the snapshot root
+is the sole current generation atomically published by the Development
+coordinator under the current process cache and session, that its snapshot
+identity matches exactly, and that the Resource service never falls back to
+the author's source directory.
+
+The Host MUST issue a URL only when the Manager is not degraded, the
+registration is healthy, enabled, and compatible, and ownership of the
+corresponding payload can be proven. Host source, Publisher text, requested
+permissions, and Runtime `inactive` MUST NOT by themselves grant or deny
+resource access; the Host MUST fail closed when managed payload ownership
+cannot be proven.
 
 #### Scenario: A current managed registration can receive a scope
 
-- **WHEN** the record key, plugin identity, digest, and canonical
-  installer-owned payload of a healthy, enabled, lensX-compatible and Host API
-  compatible registration match exactly
+- **WHEN** the record or entry identity, plugin identity, payload-variant
+  identity, and canonical installer-owned package or current Host-owned
+  development snapshot match exactly for a healthy, enabled, lensX-compatible,
+  and Host API-compatible registration
 - **THEN** the Host issues or reuses a scoped entry URL for its current resource
   generation
 - **THEN** the URL's plugin key, version, and entry all derive from that atomic
@@ -92,18 +101,55 @@ payload ownership cannot be proven.
 - **WHEN** the entry is missing, quarantined, disabled, incompatible in either
   dimension, or Manager recovery is degraded
 - **THEN** the query fails with a stable `not_found` or `unavailable` outcome
-- **THEN** the system does not issue a resource capability merely because the
-  payload directory still exists
+- **THEN** the system does not issue a resource capability merely because a
+  package or snapshot directory still exists
 
 #### Scenario: The registration points to a payload whose safety cannot be proven
 
-- **WHEN** the installation path is outside the canonical installer packages
-  root, the plugin key or digest does not match, the root or entry is missing,
-  the root or entry is a symlink, or the resolved tree is unsafe
+- **WHEN** an installed path is outside the canonical installer packages root,
+  its plugin key or digest does not match, a development snapshot does not
+  belong to the current process, session, or generation, or any root or entry
+  is missing, linked, or otherwise unsafe
 - **THEN** the query fails with the stable `unsafe_state` code and returns no
   path evidence
-- **THEN** a builtin or external source designation or Publisher declaration
-  cannot override the failure
+- **THEN** a builtin, external, or development source designation or Publisher
+  declaration cannot override the failure
+
+#### Scenario: Development source directory changes after snapshot publication
+
+- **WHEN** the author modifies, deletes, or replaces the original `dist/` after
+  successful registration or reload
+- **THEN** the current scope remains bound only to the validated immutable
+  Host-owned snapshot and does not read the changed source bytes
+- **THEN** only a later successful explicit reload can publish a new generation;
+  a failed reload preserves the current scope
+
+### Requirement: Development snapshot retirement MUST revoke resource authority before cleanup
+
+A successful development reload, remove, disable, or Development Mode shutdown
+MUST revoke the old scope through the Manager currentness, revision, and
+resource-generation transition before it MAY clean up the old snapshot.
+Successful, failed, or delayed cleanup MUST NOT make the old snapshot current
+again. The Resource cache MUST distinguish installed and development bytes by
+entry identity, payload variant, and generation, and MUST NOT reuse a revoked
+scope because the plugin ID, version, or snapshot identity is unchanged.
+
+#### Scenario: Successful manual reload retires the old snapshot
+
+- **WHEN** development reload atomically commits a new generation
+- **THEN** the old scope and origin immediately stop serving old or new bytes
+  and the new generation receives a different scope and origin
+- **THEN** delayed deletion of the old snapshot does not extend its browser or
+  Runtime authority
+
+#### Scenario: Identical bytes are manually reloaded
+
+- **WHEN** development reload publishes bytes with the same snapshot identity
+  while forcing the resource generation to advance
+- **THEN** the old scope and origin remain permanently revoked and the new
+  generation uses a new scope and origin
+- **THEN** digest equality cannot bypass the explicit reload's terminal
+  lifecycle
 
 ### Requirement: Resource scopes MUST be unguessable, process-local, and bound to exactly one payload generation
 

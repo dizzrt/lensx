@@ -47,17 +47,25 @@ quarantine state, Runtime state, or granted permissions through author input.
 
 The Plugin Manager MUST persist the normalized Manifest, installation location,
 algorithm-tagged package digest, Host-controlled source, enabled intent,
-granted-permission ID snapshot, and recent diagnostics. The existence of a
-record MUST represent an installed registration; it MUST NOT prove that a real
-package installation workflow has been delivered. Compatibility MUST be
-derived from the recorded Manifest ranges and the current lensX and Host API
-versions. Runtime state MUST remain process-local and MUST start as `inactive`
-after recovery.
+granted-permission ID snapshot, and recent diagnostics for an installed
+registration. The Manager MAY also maintain process-local development
+registrations in the same current snapshot. A development entry MUST use a
+distinct development-snapshot payload variant, `source=development`, and
+process-local grants and diagnostics, and MUST NOT write, delete, or masquerade
+as a Plugin Manager Store record. A record's existence MUST represent an
+installed registration; a process-local development entry's existence means
+only that a development snapshot was committed in the current process.
+
+Compatibility for both lifetimes MUST derive from the respective current
+Manifest ranges and current lensX and Host API versions. Runtime state MUST
+remain process-local. Installed record recovery MUST start as `inactive`, while
+a development entry, source-directory capability, snapshot, grants,
+diagnostics, and Runtime state MUST NOT recover in a new process.
 
 #### Scenario: A healthy record is recovered after restart
 
-- **WHEN** a healthy record was persisted successfully and the application
-  restarts with the same Host versions
+- **WHEN** an installed healthy record was persisted successfully and the
+  application restarts with the same Host versions
 - **THEN** the Plugin Manager recovers the same normalized Manifest,
   installation facts, enabled intent, grant snapshot, and bounded diagnostics
 - **THEN** the Runtime state is `inactive`
@@ -72,18 +80,69 @@ after recovery.
 
 #### Scenario: A Manifest requests permissions without a Host grant
 
-- **WHEN** the normalized Manifest declares one or more requested permissions
-  and the Host provides no grant snapshot
-- **THEN** the Plugin Manager persists an empty granted-permission ID snapshot
+- **WHEN** an installed or development normalized Manifest declares one or more
+  requested permissions and the Host provides no grant snapshot
+- **THEN** the Plugin Manager uses an empty granted-permission ID snapshot for
+  that entry
 - **THEN** requested permissions do not become grants automatically
 
 #### Scenario: The previous process had Runtime activity
 
-- **WHEN** a plugin had process-local Runtime activity before the application
-  exited or crashed
+- **WHEN** an installed plugin had process-local Runtime activity before the
+  application exited or crashed
 - **THEN** the next recovery does not deserialize that activity as a live
   session
 - **THEN** the plugin starts as `inactive`
+
+#### Scenario: A development registration existed in the previous process
+
+- **WHEN** the previous process contained a development registration,
+  source-directory capability, snapshot, or grants and then exited or crashed
+- **THEN** the new Plugin Manager process recovers none of those development
+  facts
+- **THEN** installed records, quarantine evidence, and Store revision preserve
+  their existing recovery semantics
+
+### Requirement: Development entries MUST share Manager identity and revision authority without becoming Store records
+
+The Plugin Manager MUST combine installed and process-local development entries
+in one atomic read projection and MUST enforce the same plugin ID uniqueness
+across builtin, external, development, and quarantine identities. Successful
+development register, reload, enabled or grant mutation, and remove operations
+MUST use the same compare-current revision, affected-plugin resource generation,
+and changed-event semantics, but MUST NOT call Store write or delete. Development
+payload facts MUST be a strict Host-owned variant and MUST NOT allow a Manifest
+author to submit source, snapshot path or identity, enabled intent, grants, or
+Runtime state.
+
+#### Scenario: Development entry joins the current snapshot
+
+- **WHEN** the trusted Development coordinator submits a complete valid
+  development Manifest, snapshot payload facts, enabled intent, and empty
+  grants
+- **THEN** the Manager publishes a process-local healthy entry under the unique
+  `plugin_id`, advances the revision and resource generation, and emits the
+  ordinary changed event
+- **THEN** the same transition creates no Plugin Store file or installed package
+  record
+
+#### Scenario: Development mutation loses a race
+
+- **WHEN** a development reload, grant, enabled, or remove mutation uses a stale
+  expected revision or entry identity
+- **THEN** the Manager returns a stable conflict without changing installed or
+  development entries, the Store, revision, or resource generation
+- **THEN** the stale mutation cannot restore an old snapshot, grant, or Runtime
+  authority
+
+#### Scenario: Development entry is removed
+
+- **WHEN** the trusted coordinator successfully removes the current development
+  entry
+- **THEN** the Manager deletes it from the process-local healthy set and
+  advances the affected plugin's revision and resource generation
+- **THEN** the Manager deletes no plugin data, installed payload, Launcher
+  collection, or Store record
 
 ### Requirement: Plugin records MUST persist independently and atomically
 

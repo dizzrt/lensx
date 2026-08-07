@@ -5,6 +5,7 @@ import {
   PLUGIN_RUNTIME_FAILURE_WINDOW_MS,
   PLUGIN_RUNTIME_HEALTHY_RESET_MS,
   PLUGIN_RUNTIME_LOAD_DEADLINE_MS,
+  PLUGIN_RUNTIME_START_DEADLINE_MS,
   PluginRuntimeCircuitBreaker,
   type PluginRuntimeFailureCode,
   type PluginRuntimeScheduler,
@@ -48,6 +49,14 @@ class VirtualScheduler implements PluginRuntimeScheduler {
 
 const targetKey = 'trusted-page-projection';
 const identity = ['entry_0123456789abcdef', '0123456789abcdef0123456789abcdef'] as const;
+
+const deferred = <T>() => {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+};
 
 describe('Plugin Runtime lifecycle controller', () => {
   test('uses one idempotent ordered terminal operation and makes stale callbacks inert', async () => {
@@ -104,6 +113,26 @@ describe('Plugin Runtime lifecycle controller', () => {
     loaded.completeLoad();
     scheduler.advance(PLUGIN_RUNTIME_LOAD_DEADLINE_MS);
     expect(failures).toEqual(['runtime_load_timeout']);
+  });
+
+  test('bounds a stalled prior terminal queue without constructing a second attempt', async () => {
+    const scheduler = new VirtualScheduler();
+    const failures: PluginRuntimeFailureCode[] = [];
+    const lifecycle = createPluginRuntimeLifecycleService({ scheduler });
+    const release = deferred<void>();
+    const first = await lifecycle.start({ targetKey, onFailure: (code) => failures.push(code) });
+    if (!first) throw new Error('first attempt should start');
+    first.bindNavigationLease(() => release.promise);
+
+    const secondPromise = lifecycle.start({ targetKey, onFailure: (code) => failures.push(code) });
+    scheduler.advance(PLUGIN_RUNTIME_START_DEADLINE_MS);
+    expect(await secondPromise).toBeUndefined();
+    expect(failures).toEqual(['runtime_unavailable']);
+
+    release.resolve();
+    await Promise.resolve();
+    const third = await lifecycle.start({ targetKey, onFailure: (code) => failures.push(code) });
+    expect(third).toBeDefined();
   });
 
   test('opens on the third qualifying failure, blocks construction during cooldown, and requires explicit retry', async () => {

@@ -27,6 +27,7 @@ struct HarnessChecks {
     terminal_cleanup_removed_iframe: bool,
     terminal_cleanup_released_lease: bool,
     session_ports_disposed: bool,
+    source_independent_deadline_breaker_profile: bool,
     fixed_policy_constants_observed: bool,
     host_csp_header_verified: bool,
 }
@@ -61,12 +62,17 @@ fn plugin_runtime_security_lifecycle_harness_record(
             evidence.checks.terminal_cleanup_removed_iframe,
             evidence.checks.terminal_cleanup_released_lease,
             evidence.checks.session_ports_disposed,
+            evidence.checks.source_independent_deadline_breaker_profile,
             evidence.checks.fixed_policy_constants_observed,
             evidence.checks.host_csp_header_verified,
         ]
         .into_iter()
         .any(|passed| !passed)
     {
+        eprintln!(
+            "Runtime security lifecycle bounded checks rejected: {:?}",
+            evidence.checks
+        );
         return Err("runtime_security_lifecycle_evidence_rejected");
     }
     let mut bytes = serde_json::to_vec_pretty(&evidence).map_err(|_| "evidence_encode_failed")?;

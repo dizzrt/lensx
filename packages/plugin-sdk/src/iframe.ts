@@ -60,6 +60,7 @@ const supportedHostOrigins = new Set([
   'tauri://localhost',
   'http://tauri.localhost',
   'https://tauri.localhost',
+  'http://localhost:40755',
   'lensx-runtime-harness://localhost',
 ]);
 

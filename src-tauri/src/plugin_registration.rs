@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Runtime, State};
 
-pub const PLUGIN_REGISTRATION_CONTRACT_VERSION: &str = "0.1.0";
+pub const PLUGIN_REGISTRATION_CONTRACT_VERSION: &str = "0.2.0";
 pub const PLUGIN_REGISTRATION_CHANGED_EVENT: &str = "plugin-registration://snapshot-changed";
 const ENTRY_ID_PREFIX: &str = "entry_";
 const ENTRY_ID_HEX_LENGTH: usize = 16;
@@ -43,6 +43,7 @@ impl From<&PluginManagerDiagnostic> for PluginRegistrationDiagnostic {
 pub enum PluginRegistrationSource {
     Builtin,
     External,
+    Development,
 }
 
 impl From<PluginSource> for PluginRegistrationSource {
@@ -50,6 +51,7 @@ impl From<PluginSource> for PluginRegistrationSource {
         match value {
             PluginSource::Builtin => Self::Builtin,
             PluginSource::External => Self::External,
+            PluginSource::Development => Self::Development,
         }
     }
 }
@@ -1009,7 +1011,7 @@ mod tests {
                 .expect("events should be readable")
                 .as_slice(),
             &[PluginRegistrationChangedEvent {
-                contract_version: "0.1.0".to_owned(),
+                contract_version: "0.2.0".to_owned(),
                 revision: "1".to_owned(),
             }]
         );

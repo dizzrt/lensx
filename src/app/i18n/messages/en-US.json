@@ -114,7 +114,47 @@
       "compatible": "Compatible",
       "incompatible": "Incompatible",
       "none": "None",
-      "source": { "builtin": "Built in", "external": "External" },
+      "source": { "builtin": "Built in", "external": "External", "development": "Development" },
+      "development": {
+        "title": "Plugin Development Mode",
+        "description": "Loads an unpacked, unsigned dist directory for this process only. It does not install, trust, grant permissions to, or automatically run the plugin.",
+        "toggle": "Enable Plugin Development Mode for this process",
+        "processLocal": "Disabled again when lensX restarts.",
+        "register": "Register development directory",
+        "reload": "Reload from directory",
+        "remove": "Remove development entry",
+        "unsignedDescription": "This plugin is loaded from a Host-owned snapshot of an unpacked directory. Publisher text is unverified and permissions remain separate grants.",
+        "labels": { "development": "Development", "unpacked": "Unpacked", "unsigned": "Unsigned" },
+        "feedback": {
+          "enabled": "Plugin Development Mode is enabled for this process.",
+          "disabled": "Plugin Development Mode is disabled and development entries were removed. Plugin data and Launcher collections were retained.",
+          "cancelled": "No development directory was selected.",
+          "registered": "The development directory was registered with no permission grants.",
+          "reloaded": "The development entry was reloaded from a fresh snapshot.",
+          "removed": "The development entry was removed. Plugin data and Launcher collections were retained.",
+          "cleanup_pending": "Authority was updated, but old snapshot cleanup is still pending.",
+          "invalid": "The selected dist directory is invalid or incomplete.",
+          "incompatible": "The selected plugin is not compatible with this lensX version.",
+          "source_changed": "The directory changed while lensX was reading it. Build again and retry.",
+          "conflict": "Plugin state changed. The latest state has been loaded.",
+          "unsafe_state": "Snapshot ownership could not be proven safely.",
+          "unavailable": "Plugin Development Mode is unavailable.",
+          "convergence_failed": "The native change completed, but the visible plugin state could not be refreshed.",
+          "failed": "The plugin development operation failed safely."
+        },
+        "confirm": {
+          "reload": {
+            "title": "Reload development plugin?",
+            "description": "Reload {{name}} from its selected dist directory? Current Runtime authority will end and permission changes will be reconciled.",
+            "confirm": "Reload"
+          },
+          "remove": {
+            "title": "Remove development entry?",
+            "description": "Remove {{name}} from this process? Plugin data and Launcher collections will be retained.",
+            "confirm": "Remove"
+          }
+        }
+      },
       "runtime": { "inactive": "Inactive", "active": "Active", "failed": "Failed", "starting": "Starting" },
       "replacement": { "upgrade": "Upgrade", "downgrade": "Downgrade", "reinstall": "Reinstall" },
       "fields": {

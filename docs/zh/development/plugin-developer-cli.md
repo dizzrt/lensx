@@ -80,8 +80,11 @@ stack、环境 secret、nonce 和 grant。退出码是：成功/compatible 为 `
 CLI 接受只表示 package 内容兼容当前公共 contract。Host 会独立重新读取并复验不可信 bytes，仍可因 source identity
 race、存储 failure、冲突、Manager state 或 lifecycle condition 拒绝，且不改变内容 classification。
 
-Development Mode、watch/reload、安装、启停、权限、签名、provenance、远程发布、registry release automation 和
-自动更新不属于当前 CLI 版本。
+Host 的独立 Development Mode（插件开发模式）可以使用已构建的 `dist/`，但它不是 CLI command 或公共 CLI API。
+CLI 仍不会启用 Host 模式、注册、安装、reload、移除、授予权限或创建 Runtime authority。
+Host directory inspection 只在双方共有的自包含 `dist/` payload 语义上与 `validate` 对齐；
+CLI 的项目 metadata 与 import 检查仍是 CLI-only 结论。watch mode、签名、provenance、远程发布、
+registry release automation 与自动更新仍不属于当前 CLI 版本。
 
 ## 验证
 

@@ -355,3 +355,144 @@ acceptance at the fixed native viewport.
   computed styles pass
 - **THEN** the focused gate does not replace complete frontend and Rust final
   validation
+
+### Requirement: Plugin settings MUST gate and explain Development Mode explicitly
+
+Plugins settings MUST display the Development Mode section only when both the
+frontend compile-time capability and native capability are available. While the
+current-process switch is disabled, the page MUST explain that development
+directory content is Unpacked and Unsigned, gains no official, trust, or
+permission exception, and does not survive restart. Only an explicit enable
+control may activate it. Disabling MUST update the UI only after the Host
+confirms that development entries were quiesced and removed; it MUST NOT merely
+hide controls or claim success early.
+
+#### Scenario: Development capability is absent
+
+- **WHEN** the current frontend or native build does not include the Development
+  Mode capability
+- **THEN** Plugins settings displays no development enable, register, reload, or
+  remove control
+- **THEN** ordinary installation, replacement, lifecycle, permission, and
+  diagnostic UI retains its existing behavior
+
+#### Scenario: User enables Development Mode
+
+- **WHEN** the user reads the risk notice and explicitly enables the
+  current-process switch in a capable build
+- **THEN** the page displays Register development directory and a clear active
+  mode state
+- **THEN** the page does not claim that any plugin was installed, verified,
+  signed, authorized, or started
+
+#### Scenario: User disables Development Mode
+
+- **WHEN** the user confirms disabling the mode while development entries exist
+- **THEN** the UI retains pending and duplicate-submission protection until the
+  Host returns complete quiescence or a bounded partial or convergence failure
+- **THEN** development controls and entries disappear after success and focus
+  returns to a stable settings control; after failure, the remaining actual
+  state stays visible
+
+### Requirement: Development registrations MUST be visually and semantically distinct
+
+Every healthy `source=development` entry MUST display localized Development,
+Unpacked, and Unsigned text in both list and detail views. The page MUST present
+publisher author text, Host source, requested permissions, grants, and effective
+capabilities separately and MUST NOT describe a development entry as Official,
+Verified, Installed, or equivalent trusted status. Status MUST use text and
+semantics, not color or an icon alone.
+
+#### Scenario: View a development entry
+
+- **WHEN** a Registration Contract `0.2.0` snapshot or detail contains
+  `source=development`
+- **THEN** list and detail show the real Manifest name, version, and
+  compatibility plus Development, Unpacked, and Unsigned labels
+- **THEN** source directory, snapshot path or identity, raw diagnostic,
+  operation token, and internal feature facts remain hidden
+
+#### Scenario: Development publisher claims official identity
+
+- **WHEN** publisher text in a development Manifest claims lensX or another
+  trusted organization
+- **THEN** the page continues to show it as unverified author text with a
+  Development and Unsigned source
+- **THEN** permission, grant, and effective capability remain independent from
+  source and trust labels
+
+### Requirement: Development register, reload, and remove MUST use typed current operations
+
+The management UI MUST execute register, reload, and remove only through the
+typed Host-private Development service. Register MUST use a pathless native
+folder picker; reload and remove MUST use the opaque current entry identity and
+expected revision. Only a current `source=development` entry may display reload
+or remove; builtin, external, and quarantine entries MUST NOT gain those
+operations. A pending request MUST prevent duplicate submission and MUST reread
+the complete current snapshot and detail after cancellation, success, invalid,
+incompatible, source-changed, conflict, cleanup-pending, or convergence-failure
+results.
+
+#### Scenario: Register a compatible development directory
+
+- **WHEN** the user invokes register, selects a valid compatible `dist/`, and
+  the Host atomically commits the development entry
+- **THEN** the page refreshes to the current Registration revision containing
+  that entry, selects it, and announces a safe success status
+- **THEN** the page neither receives nor caches the selected absolute path and
+  does not call the operation a production-package installation
+
+#### Scenario: Reload fails validation
+
+- **WHEN** reload of the selected development entry returns an invalid,
+  incompatible, source-changed, or unsafe diagnostic
+- **THEN** the page displays a bounded localized failure while continuing to
+  show registration facts for the old current version and generation
+- **THEN** the UI does not clear the old entry, claim reload success, or display
+  a raw path or error
+
+#### Scenario: Reload or remove becomes stale
+
+- **WHEN** the operation conflicts because revision, entry identity, enabled or
+  grant state, or another mutation changed
+- **THEN** the page discards stale transient state, rereads the current snapshot
+  and detail, and prompts the user to retry
+- **THEN** the stale result does not overwrite the new selection, permission
+  state, or current operation availability
+
+#### Scenario: Remove a development entry
+
+- **WHEN** the user confirms removal of the current development entry and the
+  Host commits successfully
+- **THEN** the page removes it from the current list and moves focus to a valid
+  adjacent entry or Register development directory
+- **THEN** copy states that plugin data and Launcher collections were retained
+  and does not claim a production uninstall
+
+### Requirement: Development controls MUST preserve localization, themes, keyboard access, and focus
+
+All visible Development Mode copy MUST use canonical English i18n with a
+semantically aligned Simplified Chinese locale. Controls, labels, diagnostics,
+confirmations, and live feedback MUST use Semi Design's supported light and dark
+themes, and the fixed `650×600` viewport MUST remain scrollable without critical
+truncation. Enable, disable, register, reload, remove, confirm, and cancel MUST
+work with the keyboard alone and provide accessible names, visible focus,
+deterministic initial focus, and post-operation focus recovery. A Modal MUST
+provide an accessible title and description and prevent closing while pending.
+
+#### Scenario: Keyboard user reloads a development entry
+
+- **WHEN** a keyboard user focuses a development entry and invokes Reload
+- **THEN** pending and status feedback use accessible live semantics, duplicate
+  controls are disabled, and focus returns to the still-current Reload control
+  after success or failure
+- **THEN** selection, scroll context, locale, and theme remain stable
+
+#### Scenario: Switch locale and theme with development state visible
+
+- **WHEN** the page switches between `en-US` and `zh-CN` and between light and
+  dark while Development Mode, development labels, or diagnostics are visible
+- **THEN** all development copy, accessible names, tags, warnings, dialogs, and
+  feedback use the current locale and supported theme tokens
+- **THEN** the fixed viewport has no critical truncation, overlap, lost
+  contrast, or status conveyed by color alone

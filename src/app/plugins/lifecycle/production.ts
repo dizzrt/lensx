@@ -1,3 +1,4 @@
+import { createProductionPluginDevelopmentService } from '@/app/plugins/development/composition';
 import type { DefaultLauncherActionService } from '../../launcher/actions';
 import type { AppNavigationService } from '../../navigation';
 import { createPluginDataManagementDesktopAdapter, createPluginDataManagementService } from '../data-management';
@@ -6,6 +7,7 @@ import { createPluginManagementService, type PluginManagementService } from '../
 import { createPluginPermissionMutationAdapter, createPluginPermissionService } from '../permission';
 import { createPluginRegistrationDesktopAdapter } from '../registration';
 import { createPluginReplacementDesktopAdapter, createPluginReplacementService } from '../replacement';
+import { createPluginRuntimeLifecycleService, type PluginRuntimeLifecycleService } from '../runtime';
 import {
   createPluginSurfaceProjectionForLauncher,
   type PluginSurfacePageRegistry,
@@ -17,6 +19,7 @@ import { createPluginLifecycleService, type PluginLifecycleService } from './ser
 export interface ProductionPluginLifecycleComposition {
   readonly lifecycleService: PluginLifecycleService;
   readonly managementService: PluginManagementService;
+  readonly runtimeLifecycleService: PluginRuntimeLifecycleService;
   readonly surfaceProjectionService: PluginSurfaceProjectionService;
   readonly initialize: () => Promise<void>;
   readonly destroy: () => Promise<void>;
@@ -46,6 +49,8 @@ export const createProductionPluginLifecycleComposition = (
   const permissionService = createPluginPermissionService(createPluginPermissionMutationAdapter());
   const dataManagementService = createPluginDataManagementService(createPluginDataManagementDesktopAdapter());
   const installationService = createLocalPluginInstallationService(installationClient);
+  const developmentService = createProductionPluginDevelopmentService(surfaceProjectionService);
+  const runtimeLifecycleService = createPluginRuntimeLifecycleService();
   const managementService = createPluginManagementService({
     surfaceProjection: surfaceProjectionService,
     installationService,
@@ -53,6 +58,7 @@ export const createProductionPluginLifecycleComposition = (
     replacementService,
     permissionService,
     dataManagementService,
+    developmentService,
   });
   let initializePromise: Promise<void> | undefined;
   let destroyPromise: Promise<void> | undefined;
@@ -60,6 +66,7 @@ export const createProductionPluginLifecycleComposition = (
     surfaceProjectionService,
     lifecycleService,
     managementService,
+    runtimeLifecycleService,
     initialize() {
       if (destroyPromise) return destroyPromise.then(() => undefined);
       initializePromise ??= managementService.initialize();
@@ -67,6 +74,7 @@ export const createProductionPluginLifecycleComposition = (
     },
     destroy() {
       destroyPromise ??= (async () => {
+        await runtimeLifecycleService.dispose();
         await managementService.destroy();
         await surfaceProjectionService.destroy();
       })();

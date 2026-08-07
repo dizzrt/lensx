@@ -219,6 +219,30 @@ package digest、payload 和首条 external registration。生命周期协调器
 identity 原子更新 enabled intent，或移除健康、quarantine 条目。Manager record 本身仍不能证明发现
 来源。更新、权限决策、Runtime session 和面向插件的公共 registration API 仍是独立能力。
 
+## 已交付的 Host 私有插件开发模式
+
+feature-gated 插件开发模式在同一个 process-local Plugin Manager snapshot 中加入
+`source=development` 条目，同时保持 version-1 Store format 不变。专用 build capability 与 native
+process switch 都默认关闭；正式 frontend/native artifacts 不会注册其 state、commands、picker、
+coordinator 或 UI。
+
+native 文件夹选择器提供 Host-private directory capability。bounded inspector 只接受由普通文件组成的
+自包含 `dist/` payload，然后通过已 flush 的 staging tree，把它复制到
+`app_cache_dir()/plugin-development/<process-session>/` 下随机、不可变的 current generation。
+Manager facts 私有保留 source capability 供手动 reload；Resource 与 Runtime 只使用 Host-owned current
+snapshot。内部 domain-separated `sha256-development-tree-v1` identity 不是 `.lxp` package digest。
+
+register、reload、remove 与 mode shutdown 都是串行的 revision-bound transactions。Manager commit
+会推进 Resource generation，旧 Resource URL 立即失败；macOS navigation policy 会在清理旧 snapshot
+前撤销匹配插件的 current lease。frontend surfaces 在 native transition 前 quiesce，并在之后完整重读
+Registration state，因此 event 丢失不会成为 authority。reload 总会发布新 generation，只保留新 Manifest
+仍声明的 grants，也不会增加 watch 或 retry。
+
+development entries、grants、diagnostics、source capabilities、snapshots 与 Runtime activity 都只存在于
+当前进程。remove 与 mode shutdown 会保留插件数据与 Launcher collections，并且不改变正式安装包、
+quarantine records 或其他插件。bounded cleanup failure 永远不会恢复已撤销的 authority。操作流程与限制见
+[插件开发模式](../development/plugin-development-mode.md)。
+
 ## 已交付的 Host 私有从本地文件安装插件
 
 设置页的 Plugins tab 提供一个 Host-owned **从本地安装** 操作。“本地”只描述本次安装来源，
@@ -265,7 +289,7 @@ history 仍需要后续已接受 change。
 
 ## 已交付的 Host 私有 Registration Contract
 
-Host 现已通过 Registration Contract version `0.1.0` 投影 managed Plugin Manager。该 contract
+Host 现已通过 Registration Contract version `0.2.0` 投影 managed Plugin Manager。该 contract
 只在 Rust、Tauri 与根应用 TypeScript 之间私有共享。`@lensx/plugin-contract`、
 `@lensx/plugin-sdk` 和其他插件 package 都不会导出它；workspace boundary 会拒绝官方插件与
 示例插件导入其类型、desktop adapter 或 event 入口。
@@ -274,7 +298,7 @@ Host 现已通过 Registration Contract version `0.1.0` 投影 managed Plugin Ma
 以及当前进程的 Runtime status。`read_plugin_registration_snapshot` 返回按 opaque entry identity
 确定性排序的严格 `registered | quarantined` summary，以及 `available | degraded` Manager
 availability。`read_plugin_registration_detail` 只接受合法 opaque entry identity，并返回绑定 revision
-的 registered 或 quarantine detail。健康详情包含 normalized Manifest、`builtin | external` source、
+的 registered 或 quarantine detail。健康详情包含 normalized Manifest、`builtin | external | development` source、
 enabled intent、逐维 compatibility、排序去重 grant、有界安全诊断，以及当前唯一的 `inactive`
 Runtime variant。quarantine 详情只包含 opaque identity、可选的已验证 plugin ID 和一条安全诊断。
 
@@ -565,8 +589,10 @@ Semi Design Runtime 唯一需要的 style 例外是 `style-src 'unsafe-inline'`�
 remote script、object、base、form 与 ancestor 放宽仍被拒绝。Resource Service 会给每个成功且 current
 的 plugin HTML `GET`/`HEAD` 添加同一套 Plugin Runtime profile。该 profile 默认拒绝，只允许同 origin
 script、style、image 与 font，禁用 connect、worker、child frame、media、object、base 与 form
-destination，并且只接纳准确的 production Host ancestor。Manifest、publisher、source、grant、query、
-request header 与 plugin-authored meta 都不能修改这两套 profile。
+destination。production application document 只接纳准确的 `tauri://localhost` ancestor；`tauri dev`
+只把 ancestor 替换为配置中准确的 `http://localhost:40755` application origin，其余 directive 保持逐字节
+一致。Manifest、publisher、source、grant、query、request header 与 plugin-authored meta 都不能修改这两套
+profile。
 
 CSP、隔离 origin、iframe sandbox、Permissions Policy、native navigation 与 Runtime Session 是互补
 边界。CSP 控制 resource/document destination；per-generation origin 分离 DOM 与 storage；sandbox 和
@@ -574,8 +600,10 @@ Permissions Policy 约束 frame capability；native lease 控制顶层与 descen
 认证一个 current window 与专用 Port。这些边界都不会创建 Host API grant。
 
 Host 私有 controller 会拥有一个 Runtime attempt，并在全局最多创建一个 external-plugin iframe。
-navigation lease 激活且 `src` 提交后才启动 10,000 ms load deadline；bootstrap transfer 成功后，Session
-才启动 5,000 ms handshake deadline。close、navigation、quiescence、disable、uninstall、replacement、
+独立的 10,000 ms resolution boundary 覆盖上一 terminal operation 的收敛、当前 Resource resolution 与
+native navigation activation；超时会 fail closed，且不会构造另一个 iframe。navigation lease 激活且
+`src` 提交后才启动 10,000 ms load deadline；bootstrap transfer 成功后，Session 才启动 5,000 ms
+handshake deadline。close、navigation、quiescence、disable、uninstall、replacement、
 相关 fact/grant 变化、retry、timeout、Session failure、Host reload 与 App teardown 全部收敛到同一幂等
 terminal operation：先让工作 stale，再取消 timer/subscription，dispose Session/Port，unbind/remove
 iframe，compare-current 释放 navigation lease，最后丢弃引用。因此迟到 promise、load、acknowledgement、
@@ -671,6 +699,9 @@ transport。
 `hostApiVersion`、`en-US | zh-CN` locale、`light | dark` theme，以及唯一且只读的 capability
 已声明 Host API method ID 的排序去重只读 snapshot。空 capability 列表有效，并不代表存在任何 method。plugin identity、Page
 identity、已授予权限、安装来源和 Host lifecycle 事实都不是受支持的 context 输入。
+SDK 消费的 Host API validator 会在构建时生成并提交为 AJV standalone function。它们不会在插件
+document 内编译 Schema 或执行动态求值，因此 SDK 无需增加 `unsafe-eval`，仍与 Runtime 的
+`script-src 'self'` policy 兼容。
 
 SDK 管理的 operation 默认超时为 10000 毫秒，并允许正有限整数覆盖。取消输入使用与原生
 `AbortSignal` 结构兼容的最小 signal，但公共声明不引用 DOM 类型。超时、取消、断开或销毁会把
@@ -695,7 +726,9 @@ cancellation、timeout、disconnect、dispose、invalid argument、transport fai
 
 `createPluginIframeTransport()` 不接受 trust 配置。它只接受 SDK 自有 Host origin policy 下 current
 parent 发出的首个 exact bootstrap，只返回一次现有 nonce acknowledgement，之后只使用 transferred
-Port。package 私有 `0.1.0` wire 由 exact request/response/event/cancel/disconnect frame 与 transport
+Port。该 policy 包含 production Tauri origins、配置中准确的 `http://localhost:40755` development origin
+与私有 real-WebView harness origin；相邻 localhost port 仍被拒绝。package 私有 `0.1.0` wire 由 exact
+request/response/event/cancel/disconnect frame 与 transport
 自有 bounded request ID 组成；不含 plugin/Page identity、origin、grant、path、executor、Tauri/Host
 object、stack 或 raw exception。package 不 export frame、codec、fixture、Host projection、nonce/origin
 policy 或 deep-import path。
@@ -876,11 +909,11 @@ requested/supported/persisted-grant/effective permission facts，并串行编排
 替换、单项 permission grant/revoke、卸载和数据清除。React 只接收 typed operation availability 与安全
 outcome；它不直接 invoke Tauri，也不复制 Manager transition 规则。
 
-根级 plugin composition 是共享 management、lifecycle、replacement 与 Registration projection service 的唯一
-生命周期 owner。每次 React effect setup 都创建并初始化一代 composition，其配对 cleanup 只销毁这一代实例；
-`App` 与 Settings 组件只消费注入的 service，不重复初始化或销毁。这样开发模式 `StrictMode` 的
-setup-cleanup-setup 不会复用已经进入 terminal destroyed 状态的 facade，也不会让管理视图永久停留在
-`loading`。
+根级 plugin composition 是共享 management、plugin lifecycle、Runtime lifecycle、replacement 与 Registration
+projection service 的唯一生命周期 owner。每次 React effect setup 都创建并初始化一代 composition，其配对
+cleanup 只销毁这一代实例；`App`、`PluginRuntimeFrame` 与 Settings 组件只消费注入的 service，不执行 terminal
+dispose。这样开发模式 `StrictMode` 的 setup-cleanup-setup 不会复用已经销毁的 service，也不会让管理视图永久
+停留在 `loading`，或让 Runtime 在 iframe 尚未创建时永久停留在 `resolving`。
 
 替换仍采用 prepare/confirm/commit 流程。确认界面展示版本分类与 permission 增减；Registration revision
 变化后确认立即失效。卸载默认 `retain_data`，`delete_data` 必须显式选择。只有 current、disabled、registered

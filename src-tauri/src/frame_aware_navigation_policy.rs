@@ -218,6 +218,24 @@ impl FrameAwareNavigationPolicy {
         }
     }
 
+    #[allow(dead_code)] // Included by standalone harness crates that do not wire development cleanup.
+    pub(crate) fn revoke_plugin_target(&self, plugin_key: &str) -> bool {
+        let mut active = self
+            .active
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if active
+            .target
+            .as_ref()
+            .is_some_and(|target| target.plugin_key == plugin_key)
+        {
+            active.target = None;
+            true
+        } else {
+            false
+        }
+    }
+
     #[cfg(test)]
     fn is_idle(&self) -> bool {
         self.active
@@ -439,6 +457,19 @@ mod tests {
         assert!(!policy.is_idle());
         assert!(policy.dispose_plugin_target(lease));
         assert!(policy.is_idle());
+    }
+
+    #[test]
+    fn lifecycle_revocation_is_plugin_key_scoped_and_invalidates_the_current_lease() {
+        let policy = policy();
+        let lease = policy
+            .activate_plugin_target(ENTRY_A, None)
+            .expect("target should activate");
+        assert!(!policy.revoke_plugin_target("v1-b2"));
+        assert!(!policy.is_idle());
+        assert!(policy.revoke_plugin_target("v1-a1"));
+        assert!(policy.is_idle());
+        assert!(!policy.dispose_plugin_target(lease));
     }
 
     #[test]

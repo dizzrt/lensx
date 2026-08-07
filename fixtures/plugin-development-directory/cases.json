@@ -1,0 +1,59 @@
+[
+  {
+    "name": "compatible_payload",
+    "manifest": "compatible",
+    "paths": ["manifest.json", "dist/plugin.html", "assets/plugin-icon.svg", "assets/home.svg"],
+    "expected": "compatible"
+  },
+  {
+    "name": "incompatible_payload",
+    "manifest": "incompatible",
+    "paths": ["manifest.json", "dist/plugin.html", "assets/plugin-icon.svg", "assets/home.svg"],
+    "expected": "incompatible"
+  },
+  {
+    "name": "invalid_manifest",
+    "manifest": "invalid",
+    "paths": ["manifest.json", "dist/plugin.html", "assets/plugin-icon.svg", "assets/home.svg"],
+    "expected": "invalid"
+  },
+  {
+    "name": "missing_manifest_resource",
+    "manifest": "compatible",
+    "paths": ["manifest.json", "dist/plugin.html", "assets/plugin-icon.svg"],
+    "expected": "invalid"
+  },
+  {
+    "name": "non_portable_path",
+    "manifest": "compatible",
+    "paths": ["manifest.json", "dist/plugin.html", "assets/plugin-icon.svg", "assets/home.svg", "../escape.js"],
+    "expected": "invalid"
+  },
+  {
+    "name": "case_collision",
+    "manifest": "compatible",
+    "paths": ["manifest.json", "dist/plugin.html", "assets/plugin-icon.svg", "assets/home.svg", "README", "readme"],
+    "expected": "invalid"
+  },
+  {
+    "name": "file_count_limit",
+    "manifest": "compatible",
+    "paths": ["manifest.json", "dist/plugin.html", "assets/plugin-icon.svg", "assets/home.svg"],
+    "virtual_file_count": 4097,
+    "expected": "invalid"
+  },
+  {
+    "name": "single_file_limit",
+    "manifest": "compatible",
+    "paths": ["manifest.json", "dist/plugin.html", "assets/plugin-icon.svg", "assets/home.svg"],
+    "virtual_file_size": 67108865,
+    "expected": "invalid"
+  },
+  {
+    "name": "total_size_limit",
+    "manifest": "compatible",
+    "paths": ["manifest.json", "dist/plugin.html", "assets/plugin-icon.svg", "assets/home.svg"],
+    "virtual_total_size": 268435457,
+    "expected": "invalid"
+  }
+]

@@ -81,7 +81,7 @@ const registrationDetail: Extract<PluginRegistrationDetailResponse['detail'], { 
 };
 
 const snapshot = (overrides: Partial<PluginRegistrationSnapshot> = {}): PluginRegistrationSnapshot => ({
-  contract_version: '0.1.0',
+  contract_version: '0.2.0',
   revision: entry.revision,
   availability: { kind: 'available' },
   entries: [registeredEntry],
@@ -100,7 +100,7 @@ const harness = (
   const resolveEntry = rs.fn(async () => ({ ...result, revision: current?.revision ?? result.revision }));
   const readRegistrationDetail = rs.fn(
     async (): Promise<PluginRegistrationDetailResponse> => ({
-      contract_version: '0.1.0' as const,
+      contract_version: '0.2.0' as const,
       revision: detailRevision ?? current?.revision ?? entry.revision,
       detail: currentDetail,
     }),

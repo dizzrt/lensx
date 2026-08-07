@@ -3,7 +3,7 @@
     "name": "empty_snapshot",
     "type": "snapshot",
     "value": {
-      "contract_version": "0.1.0",
+      "contract_version": "0.2.0",
       "revision": "0",
       "availability": { "kind": "available" },
       "entries": []
@@ -13,7 +13,7 @@
     "name": "healthy_disabled_incompatible_snapshot",
     "type": "snapshot",
     "value": {
-      "contract_version": "0.1.0",
+      "contract_version": "0.2.0",
       "revision": "3",
       "availability": { "kind": "available" },
       "entries": [
@@ -49,7 +49,7 @@
     "name": "degraded_snapshot",
     "type": "snapshot",
     "value": {
-      "contract_version": "0.1.0",
+      "contract_version": "0.2.0",
       "revision": "0",
       "availability": {
         "kind": "degraded",
@@ -66,7 +66,7 @@
     "name": "healthy_detail",
     "type": "detail",
     "value": {
-      "contract_version": "0.1.0",
+      "contract_version": "0.2.0",
       "revision": "3",
       "detail": {
         "kind": "registered",
@@ -128,7 +128,7 @@
             "launcher": { "default_action_id": "open_project" }
           }
         },
-        "source": "external",
+        "source": "development",
         "enabled": true,
         "compatibility": { "lensx": true, "host_api": true },
         "granted_permission_ids": ["clipboard.read", "files.read"],
@@ -147,7 +147,7 @@
     "name": "quarantine_detail",
     "type": "detail",
     "value": {
-      "contract_version": "0.1.0",
+      "contract_version": "0.2.0",
       "revision": "3",
       "detail": {
         "kind": "quarantined",
@@ -199,6 +199,6 @@
   {
     "name": "changed_event",
     "type": "event",
-    "value": { "contract_version": "0.1.0", "revision": "4" }
+    "value": { "contract_version": "0.2.0", "revision": "4" }
   }
 ]

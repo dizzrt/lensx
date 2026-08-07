@@ -26,6 +26,11 @@ const states = [
   'long-reason',
   'uninstall',
   'clear',
+  'development-healthy',
+  'development-pending',
+  'development-error',
+  'development-reload',
+  'development-remove',
 ];
 const dialogStates = new Set([
   'prepared-install',
@@ -36,6 +41,8 @@ const dialogStates = new Set([
   'long-reason',
   'uninstall',
   'clear',
+  'development-reload',
+  'development-remove',
 ]);
 const wait = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
 

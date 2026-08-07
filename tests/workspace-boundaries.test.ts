@@ -122,6 +122,23 @@ describe('workspace boundary checker', () => {
     ).toBe(true);
   });
 
+  test('rejects Host-private Plugin Development Mode frontend and native entry points', () => {
+    const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
+    const developmentImports = diagnostics.filter(
+      (item) => item.specifier.includes('/plugins/development') || item.specifier.includes('plugin_development.rs'),
+    );
+
+    expect(developmentImports.map((item) => item.file)).toEqual([
+      'examples/plugins/bad/src/index.ts',
+      'examples/plugins/bad/src/index.ts',
+      'packages/public/src/index.ts',
+      'packages/public/src/index.ts',
+      'plugins/official/bad/src/index.ts',
+      'plugins/official/bad/src/index.ts',
+    ]);
+    expect(developmentImports.every((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport)).toBe(true);
+  });
+
   test('rejects Host-private local installation contracts and adapters', () => {
     const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
     const installationImports = diagnostics.filter((item) => item.specifier.includes('/plugins/installation'));

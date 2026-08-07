@@ -10,8 +10,14 @@ mod plugin_manifest;
 mod plugin_package_format;
 #[path = "../src/plugin_resource_url.rs"]
 mod plugin_resource_url;
+#[cfg(feature = "plugin-development-runtime-harness")]
+use frame_aware_navigation_policy::ActivePluginTargetLease;
 use frame_aware_navigation_policy::{
     FrameAwareNavigationPolicy, NavigationDecision, NavigationFrame,
+};
+#[cfg(feature = "plugin-development-runtime-harness")]
+use lensx_lib::plugin_development_runtime_harness::{
+    DevelopmentHarnessRegistration, PluginDevelopmentRuntimeHarness,
 };
 use lensx_lib::{
     plugin_manager::{PackageDigest, PluginManager, PluginRegistrationFacts, PluginSource},
@@ -230,6 +236,22 @@ struct RuntimeReport {
     host_api_context_replacement: Option<bool>,
     #[serde(default)]
     host_api_unimplemented_unavailable: Option<bool>,
+    #[cfg(feature = "plugin-development-runtime-harness")]
+    #[serde(default)]
+    development: Option<DevelopmentBrowserReport>,
+}
+
+#[cfg(feature = "plugin-development-runtime-harness")]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DevelopmentBrowserReport {
+    old_scope_revoked: bool,
+    permission_delta_not_granted: bool,
+    permission_delta_requested: bool,
+    registration_removed: bool,
+    reload_revision_advanced: bool,
+    reload_scope_changed: bool,
+    remove_scope_revoked: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -327,13 +349,16 @@ struct RuntimeEvidence {
     host_api_context_replacement: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     host_api_unimplemented_unavailable: Option<bool>,
+    #[cfg(feature = "plugin-development-runtime-harness")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    development_checks: Option<BTreeMap<String, bool>>,
 }
 
 struct HarnessState {
     fixture: FixtureKind,
     os_version: String,
     output: PathBuf,
-    _runtime_root: HarnessDirectory,
+    _runtime_root: Option<HarnessDirectory>,
     resource_paths: Arc<Mutex<Vec<String>>>,
     privileged_handler_hits: AtomicUsize,
     navigation_callback_hits: Arc<AtomicUsize>,
@@ -343,6 +368,16 @@ struct HarnessState {
     session_mode: bool,
     plugin_csp_native_get_head_verified: bool,
     plugin_csp_translated_get_head_verified: bool,
+    #[cfg(feature = "plugin-development-runtime-harness")]
+    navigation_policy: Arc<FrameAwareNavigationPolicy>,
+    #[cfg(feature = "plugin-development-runtime-harness")]
+    navigation_lease: Mutex<Option<ActivePluginTargetLease>>,
+    #[cfg(feature = "plugin-development-runtime-harness")]
+    runtime_fragment: String,
+    #[cfg(feature = "plugin-development-runtime-harness")]
+    development: Option<Arc<PluginDevelopmentRuntimeHarness>>,
+    #[cfg(feature = "plugin-development-runtime-harness")]
+    development_registration: Option<DevelopmentHarnessRegistration>,
 }
 
 fn expected_csp_checks(fixture: FixtureKind) -> &'static [&'static str] {
@@ -482,6 +517,103 @@ fn plugin_iframe_runtime_harness_record(
     let dependency_requested = resources
         .iter()
         .any(|path| path == "dist/module-dependency.js");
+    #[cfg(feature = "plugin-development-runtime-harness")]
+    let development_checks = if state.development.is_some() {
+        let registration = state
+            .development_registration
+            .as_ref()
+            .ok_or("runtime_harness_report_rejected")?;
+        let development = report
+            .development
+            .as_ref()
+            .ok_or("runtime_harness_report_rejected")?;
+        let mut checks = BTreeMap::from([
+            (
+                "fresh_runtime_handshake".to_owned(),
+                report.ready_observed == Some(true),
+            ),
+            (
+                "host_api_boundary_shared".to_owned(),
+                report.host_api_context == Some(true),
+            ),
+            (
+                "old_port_inert".to_owned(),
+                report.replacement_old_port_invalid == Some(true),
+            ),
+            (
+                "policy_profile_shared".to_owned(),
+                state.plugin_csp_native_get_head_verified
+                    && state.plugin_csp_translated_get_head_verified,
+            ),
+            (
+                "register_grants_empty".to_owned(),
+                registration.grants_empty,
+            ),
+            (
+                "register_source_development".to_owned(),
+                registration.source_development,
+            ),
+            (
+                "registration_removed".to_owned(),
+                development.registration_removed,
+            ),
+            (
+                "reload_revision_advanced".to_owned(),
+                development.reload_revision_advanced,
+            ),
+            (
+                "reload_scope_changed".to_owned(),
+                development.reload_scope_changed,
+            ),
+            (
+                "reload_old_scope_revoked".to_owned(),
+                development.old_scope_revoked,
+            ),
+            (
+                "remove_scope_revoked".to_owned(),
+                development.remove_scope_revoked,
+            ),
+        ]);
+        if matches!(
+            state.fixture,
+            FixtureKind::Normal | FixtureKind::Replacement
+        ) {
+            checks.insert(
+                "permission_delta_not_granted".to_owned(),
+                development.permission_delta_not_granted,
+            );
+            checks.insert(
+                "permission_delta_requested".to_owned(),
+                development.permission_delta_requested,
+            );
+        } else {
+            checks.insert(
+                "malicious_browser_attempts_rejected".to_owned(),
+                attempts_rejected,
+            );
+            checks.insert(
+                "malicious_privileged_handler_zero_hits".to_owned(),
+                state.privileged_handler_hits.load(Ordering::SeqCst) == 0,
+            );
+        }
+        if checks.values().any(|passed| !passed) {
+            return Err("runtime_harness_report_rejected");
+        }
+        Some(checks)
+    } else {
+        if report.development.is_some() {
+            return Err("runtime_harness_report_rejected");
+        }
+        None
+    };
+    #[cfg(feature = "plugin-development-runtime-harness")]
+    let bundle_shape = if state.development.is_some() {
+        "canonical_development_snapshot_plugin_resource_service"
+    } else {
+        "canonical_lxp_plugin_resource_service"
+    };
+    #[cfg(not(feature = "plugin-development-runtime-harness"))]
+    let bundle_shape = "canonical_lxp_plugin_resource_service";
     let evidence = RuntimeEvidence {
         evidence_version: EVIDENCE_VERSION,
         os: "macos",
@@ -491,7 +623,7 @@ fn plugin_iframe_runtime_harness_record(
         tauri_revision: TAURI_REVISION,
         wry_revision: WRY_REVISION,
         fixture: state.fixture,
-        bundle_shape: "canonical_lxp_plugin_resource_service",
+        bundle_shape,
         resource_service_path_verified: true,
         plugin_csp_native_get_head_verified: state.plugin_csp_native_get_head_verified,
         plugin_csp_translated_get_head_verified: state.plugin_csp_translated_get_head_verified,
@@ -560,6 +692,8 @@ fn plugin_iframe_runtime_harness_record(
         host_api_ui_close_response_before_effect: report.host_api_ui_close_response_before_effect,
         host_api_context_replacement: report.host_api_context_replacement,
         host_api_unimplemented_unavailable: report.host_api_unimplemented_unavailable,
+        #[cfg(feature = "plugin-development-runtime-harness")]
+        development_checks,
     };
     let mut bytes =
         serde_json::to_vec_pretty(&evidence).map_err(|_| "runtime_harness_write_failed")?;
@@ -577,6 +711,95 @@ fn plugin_iframe_runtime_harness_record(
 fn plugin_iframe_runtime_harness_probe(state: State<'_, HarnessState>) -> Result<(), &'static str> {
     state.privileged_handler_hits.fetch_add(1, Ordering::SeqCst);
     Err("runtime_harness_probe_reached")
+}
+
+#[cfg(feature = "plugin-development-runtime-harness")]
+#[derive(Serialize)]
+#[serde(deny_unknown_fields)]
+struct DevelopmentReloadBrowserResult {
+    target: String,
+    origin: String,
+    old_scope_revoked: bool,
+    permission_delta_not_granted: bool,
+    permission_delta_requested: bool,
+    reload_revision_advanced: bool,
+    reload_scope_changed: bool,
+}
+
+#[cfg(feature = "plugin-development-runtime-harness")]
+#[tauri::command]
+fn plugin_development_runtime_harness_reload(
+    state: State<'_, HarnessState>,
+) -> Result<DevelopmentReloadBrowserResult, &'static str> {
+    let development = state
+        .development
+        .as_ref()
+        .ok_or("development_harness_unavailable")?;
+    let result = development
+        .reload()
+        .map_err(|_| "development_harness_reload_failed")?;
+    let parsed = parse_plugin_resource_url(&result.entry_url, false)
+        .ok_or("development_harness_reload_failed")?;
+    let origin = format!(
+        "{PLUGIN_SCHEME}://{}.runtime.localhost",
+        parsed.origin_scope
+    );
+    let target = format!("{}#{}", result.entry_url, state.runtime_fragment);
+    let mut lease = state
+        .navigation_lease
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(current) = lease.take() {
+        let _ = state.navigation_policy.dispose_plugin_target(current);
+    }
+    *lease = Some(
+        state
+            .navigation_policy
+            .activate_plugin_target(&result.entry_url, Some(&state.runtime_fragment))
+            .map_err(|_| "development_harness_reload_failed")?,
+    );
+    Ok(DevelopmentReloadBrowserResult {
+        target,
+        origin,
+        old_scope_revoked: result.old_scope_revoked,
+        permission_delta_not_granted: result.permission_delta_not_granted,
+        permission_delta_requested: result.permission_delta_requested,
+        reload_revision_advanced: result.revision_advanced,
+        reload_scope_changed: result.scope_changed,
+    })
+}
+
+#[cfg(feature = "plugin-development-runtime-harness")]
+#[derive(Serialize)]
+#[serde(deny_unknown_fields)]
+struct DevelopmentRemoveBrowserResult {
+    registration_removed: bool,
+    remove_scope_revoked: bool,
+}
+
+#[cfg(feature = "plugin-development-runtime-harness")]
+#[tauri::command]
+fn plugin_development_runtime_harness_remove(
+    state: State<'_, HarnessState>,
+) -> Result<DevelopmentRemoveBrowserResult, &'static str> {
+    let development = state
+        .development
+        .as_ref()
+        .ok_or("development_harness_unavailable")?;
+    let result = development
+        .remove()
+        .map_err(|_| "development_harness_remove_failed")?;
+    let mut lease = state
+        .navigation_lease
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(current) = lease.take() {
+        let _ = state.navigation_policy.dispose_plugin_target(current);
+    }
+    Ok(DevelopmentRemoveBrowserResult {
+        registration_removed: result.registration_removed,
+        remove_scope_revoked: result.current_scope_revoked,
+    })
 }
 
 fn parse_arguments() -> Result<(FixtureKind, PathBuf, String), ()> {
@@ -792,9 +1015,20 @@ fn host_document(
     fixture: FixtureKind,
     storage_key: &str,
     session_mode: bool,
+    development_mode: bool,
 ) -> Vec<u8> {
     let html_target = plugin_target.replace('&', "&amp;");
     if session_mode {
+        let development_reload = if development_mode {
+            "const developmentReload = await window.__TAURI_INTERNALS__.invoke('plugin_development_runtime_harness_reload');\n            pluginTarget = developmentReload.target;\n            pluginOrigin = developmentReload.origin;"
+        } else {
+            "const developmentReload = null;"
+        };
+        let development_remove = if development_mode {
+            "const developmentRemoval = await window.__TAURI_INTERNALS__.invoke('plugin_development_runtime_harness_remove');"
+        } else {
+            "const developmentRemoval = null;"
+        };
         return format!(
             r#"<!doctype html>
 <html lang="en">
@@ -803,8 +1037,9 @@ fn host_document(
     <iframe id="runtime" title="Runtime fixture" sandbox="{SANDBOX}" allow="{PERMISSIONS_POLICY}" referrerpolicy="{REFERRER_POLICY}" src="{html_target}"></iframe>
     <script>
       (() => {{
-        const pluginTarget = '{plugin_target}';
-        const pluginOrigin = '{plugin_origin}';
+        let pluginTarget = '{plugin_target}';
+        let pluginOrigin = '{plugin_origin}';
+        const initialPluginOrigin = pluginOrigin;
         const storageKey = '{storage_key}';
         const hostStorageValue = 'host';
         let stage = 0;
@@ -967,7 +1202,7 @@ fn host_document(
           window.__TAURI_INTERNALS__.invoke('plugin_iframe_runtime_harness_record', {{ report: {{
             ...report,
             origin_serialization_verified:
-              report.document_origin === pluginOrigin,
+              report.document_origin === initialPluginOrigin,
             host_storage_unchanged: localStorage.getItem(storageKey) === hostStorageValue,
             session_contract_version: '0.1.0',
             ...facts,
@@ -990,6 +1225,7 @@ fn host_document(
             const unrelatedStable = frame.contentWindow === firstWindow && oldHostPort !== undefined;
             oldHostPort.close();
             frame.remove();
+            {development_reload}
             const replacement = document.createElement('iframe');
             replacement.id = 'runtime';
             replacement.title = 'Runtime fixture';
@@ -1000,6 +1236,7 @@ fn host_document(
             document.body.prepend(replacement);
             window.__LENSX_SESSION_FACTS__ = {{
               wrongRejected, unrelatedStable, firstExact: first.exactWindow, firstTransport: first.transport,
+              developmentReload,
             }};
             return;
           }}
@@ -1011,6 +1248,7 @@ fn host_document(
             const prior = window.__LENSX_SESSION_FACTS__;
             second.port.close();
             frame.remove();
+            {development_remove}
             submit(firstReport, {{
               exact_target_window: prior.firstExact && second.exactWindow && firstWindow !== secondWindow,
               exact_target_origin: prior.wrongRejected,
@@ -1046,6 +1284,15 @@ fn host_document(
                 prior.firstTransport.contextReplacement && second.transport.contextReplacement,
               host_api_unimplemented_unavailable:
                 prior.firstTransport.unavailableReturned && second.transport.unavailableReturned,
+              development: prior.developmentReload === null ? undefined : {{
+                old_scope_revoked: prior.developmentReload.old_scope_revoked,
+                permission_delta_not_granted: prior.developmentReload.permission_delta_not_granted,
+                permission_delta_requested: prior.developmentReload.permission_delta_requested,
+                registration_removed: developmentRemoval.registration_removed,
+                reload_revision_advanced: prior.developmentReload.reload_revision_advanced,
+                reload_scope_changed: prior.developmentReload.reload_scope_changed,
+                remove_scope_revoked: developmentRemoval.remove_scope_revoked,
+              }},
             }});
           }}
         }});
@@ -1094,7 +1341,7 @@ fn host_document(
     .into_bytes()
 }
 
-pub fn run(session_mode: bool) {
+pub fn run(session_mode: bool, development_mode: bool) {
     #[cfg(not(target_os = "macos"))]
     compile_error!("the plugin iframe Runtime harness is intentionally macOS-only");
 
@@ -1104,7 +1351,45 @@ pub fn run(session_mode: bool) {
         );
         process::exit(2);
     });
+    #[cfg(feature = "plugin-development-runtime-harness")]
+    let (runtime_root, resource_service, entry, development, development_registration) =
+        if development_mode {
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |duration| duration.as_nanos());
+            let root = std::env::temp_dir().join(format!(
+                "lensx-development-runtime-harness-{}-{nonce}",
+                process::id()
+            ));
+            let (development, registration) = PluginDevelopmentRuntimeHarness::register(
+                root,
+                fixture.package(),
+                matches!(fixture, FixtureKind::Normal | FixtureKind::Replacement),
+            )
+            .unwrap_or_else(|_| {
+                eprintln!("plugin development Runtime fixture is invalid");
+                process::exit(2);
+            });
+            (
+                None,
+                development.resource_service(),
+                registration.entry_url.clone(),
+                Some(development),
+                Some(registration),
+            )
+        } else {
+            let (runtime_root, resource_service, entry) = initialize_resource_service(fixture)
+                .unwrap_or_else(|_| {
+                    eprintln!("plugin iframe Runtime Resource Service fixture is invalid");
+                    process::exit(2);
+                });
+            (Some(runtime_root), resource_service, entry, None, None)
+        };
+    #[cfg(not(feature = "plugin-development-runtime-harness"))]
     let (runtime_root, resource_service, entry) = initialize_resource_service(fixture)
+        .map(|(runtime_root, resource_service, entry)| {
+            (Some(runtime_root), resource_service, entry)
+        })
         .unwrap_or_else(|_| {
             eprintln!("plugin iframe Runtime Resource Service fixture is invalid");
             process::exit(2);
@@ -1152,9 +1437,16 @@ pub fn run(session_mode: bool) {
     let popup_hits = Arc::clone(&popup_callback_hits);
     let download_hits = Arc::clone(&download_callback_hits);
     let reported_timeout = Arc::clone(&reported);
-    let host_bytes = host_document(&target, &plugin_origin, fixture, &storage_key, session_mode);
+    let host_bytes = host_document(
+        &target,
+        &plugin_origin,
+        fixture,
+        &storage_key,
+        session_mode,
+        development_mode,
+    );
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .register_uri_scheme_protocol(HOST_SCHEME, move |_context, request| {
             if request.uri().path() == "/index.html" {
                 response(
@@ -1193,11 +1485,30 @@ pub fn run(session_mode: bool) {
             session_mode,
             plugin_csp_native_get_head_verified,
             plugin_csp_translated_get_head_verified,
-        })
-        .invoke_handler(tauri::generate_handler![
-            plugin_iframe_runtime_harness_record,
-            plugin_iframe_runtime_harness_probe
-        ])
+            #[cfg(feature = "plugin-development-runtime-harness")]
+            navigation_policy: Arc::clone(&policy),
+            #[cfg(feature = "plugin-development-runtime-harness")]
+            navigation_lease: Mutex::new(Some(_lease)),
+            #[cfg(feature = "plugin-development-runtime-harness")]
+            runtime_fragment: fragment,
+            #[cfg(feature = "plugin-development-runtime-harness")]
+            development,
+            #[cfg(feature = "plugin-development-runtime-harness")]
+            development_registration,
+        });
+    #[cfg(feature = "plugin-development-runtime-harness")]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        plugin_iframe_runtime_harness_record,
+        plugin_iframe_runtime_harness_probe,
+        plugin_development_runtime_harness_reload,
+        plugin_development_runtime_harness_remove
+    ]);
+    #[cfg(not(feature = "plugin-development-runtime-harness"))]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        plugin_iframe_runtime_harness_record,
+        plugin_iframe_runtime_harness_probe
+    ]);
+    builder
         .setup(move |app| {
             let url = host_target
                 .parse()
@@ -1248,8 +1559,8 @@ pub fn run(session_mode: bool) {
 }
 
 pub fn main() {
-    let session_mode = env::args()
-        .next()
-        .is_some_and(|value| value.contains("plugin_runtime_session_harness"));
-    run(session_mode);
+    let executable = env::args().next().unwrap_or_default();
+    let development_mode = executable.contains("plugin_development_runtime_harness");
+    let session_mode = development_mode || executable.contains("plugin_runtime_session_harness");
+    run(session_mode, development_mode);
 }

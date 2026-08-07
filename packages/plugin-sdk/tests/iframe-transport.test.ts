@@ -98,6 +98,7 @@ describe('official Plugin SDK iframe transport', () => {
       const wrongPort = new FakePort();
       window.emit({ data: bootstrap, origin: 'tauri://localhost', ports: [wrongPort], source: {} });
       window.emit({ data: bootstrap, origin: 'https://wrong.invalid', ports: [wrongPort], source: window.parent });
+      window.emit({ data: bootstrap, origin: 'http://localhost:40756', ports: [wrongPort], source: window.parent });
       expect(wrongPort.sent).toEqual([]);
       expect(window.listeners.size).toBe(1);
 
@@ -117,6 +118,28 @@ describe('official Plugin SDK iframe transport', () => {
       await connected;
       window.emit({ data: bootstrap, origin: 'tauri://localhost', ports: [wrongPort], source: window.parent });
       expect(wrongPort.sent).toEqual([]);
+      await transport.dispose();
+    });
+  });
+
+  test('accepts the exact configured tauri development Host origin', async () => {
+    await withWindow(async (window) => {
+      const transport = createPluginIframeTransport();
+      const connected = transport.connect({ signal: new FakeCancellationSignal() });
+      const port = new FakePort();
+      window.emit({ data: bootstrap, origin: 'http://localhost:40755', ports: [port], source: window.parent });
+
+      expect(port.sent[0]).toEqual({ ...bootstrap, type: 'lensx.plugin_runtime.ready' });
+      await Promise.resolve();
+      const request = port.sent[1] as { readonly request_id: string };
+      port.emit({
+        contract_version: '0.1.0',
+        type: 'lensx.plugin_transport.response',
+        request_id: request.request_id,
+        result: { method: 'runtime.get_context', result: context },
+      });
+
+      await expect(connected).resolves.toEqual(context);
       await transport.dispose();
     });
   });

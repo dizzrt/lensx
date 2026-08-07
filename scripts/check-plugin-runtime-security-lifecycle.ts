@@ -6,6 +6,10 @@ const hostCsp =
   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self' ipc: http://ipc.localhost; frame-src lensx-plugin:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 const pluginCsp =
   "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; media-src 'none'; worker-src 'none'; child-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors tauri://localhost";
+const pluginTauriDevCsp = pluginCsp.replace(
+  'frame-ancestors tauri://localhost',
+  'frame-ancestors http://localhost:40755',
+);
 
 const fail = (message: string): never => {
   throw new Error(`Plugin Runtime security lifecycle gate failed: ${message}`);
@@ -25,6 +29,17 @@ for (const configName of ['tauri.conf.json', 'plugin-runtime-host-csp-harness.co
 }
 if (/script-src[^;]*(?:unsafe-inline|unsafe-eval|\*)/.test(hostCsp)) fail('Host script policy was widened');
 if (/script-src[^;]*(?:unsafe-inline|unsafe-eval|\*)/.test(pluginCsp)) fail('Plugin script policy was widened');
+if (/script-src[^;]*(?:unsafe-inline|unsafe-eval|\*)/.test(pluginTauriDevCsp)) {
+  fail('Plugin tauri-dev script policy was widened');
+}
+
+const tauriConfig = asRecord(readJson(join(root, 'src-tauri', 'tauri.conf.json')), 'tauri.conf.json');
+const tauriBuild = asRecord(tauriConfig.build, 'tauri.conf.json.build');
+if (tauriBuild.devUrl !== 'http://localhost:40755') fail('Tauri development Host origin drifted');
+const runtimePolicySource = readFileSync(join(root, 'src-tauri', 'src', 'plugin_runtime_security_policy.rs'), 'utf8');
+if (!runtimePolicySource.includes(pluginTauriDevCsp)) fail('Plugin tauri-dev CSP drifted');
+const iframeTransportSource = readFileSync(join(root, 'packages', 'plugin-sdk', 'src', 'iframe.ts'), 'utf8');
+if (!iframeTransportSource.includes("'http://localhost:40755'")) fail('Plugin SDK development Host origin drifted');
 
 const fixtureExpectations = asRecord(
   readJson(join(root, 'fixtures/plugin-iframe-runtime/expectations.json')),
@@ -51,7 +66,7 @@ if (lifecycleEvidence.evidence_version !== '0.1.0' || lifecycleEvidence.platform
   fail('Runtime security lifecycle evidence identity drifted');
 }
 const lifecycleChecks = asRecord(lifecycleEvidence.checks, 'Runtime security lifecycle evidence checks');
-if (Object.keys(lifecycleChecks).length !== 11 || Object.values(lifecycleChecks).some((value) => value !== true)) {
+if (Object.keys(lifecycleChecks).length !== 12 || Object.values(lifecycleChecks).some((value) => value !== true)) {
   fail('Runtime security lifecycle real-WebView evidence contains a failed or unknown check');
 }
 

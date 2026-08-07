@@ -33,6 +33,7 @@ static TEMP_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 pub enum PluginSource {
     Builtin,
     External,
+    Development,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -135,14 +136,25 @@ impl PluginManagerDiagnostic {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+pub enum PluginRegistrationPayload {
+    InstalledPackage {
+        installation_path: String,
+        package_digest: PackageDigest,
+    },
+    #[cfg(feature = "plugin-development-mode")]
+    DevelopmentSnapshot {
+        snapshot_root: PathBuf,
+        snapshot_identity: String,
+        source_directory: PathBuf,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PluginRegistrationFacts {
-    pub installation_path: String,
-    pub package_digest: PackageDigest,
+    pub payload: PluginRegistrationPayload,
     pub source: PluginSource,
     pub enabled: bool,
-    #[serde(default)]
     pub granted_permission_ids: Vec<String>,
-    #[serde(default)]
     pub diagnostics: Vec<PluginManagerDiagnostic>,
 }
 
@@ -173,8 +185,10 @@ impl PluginRegistrationFacts {
         granted_permission_ids.sort();
         granted_permission_ids.dedup();
         let facts = Self {
-            installation_path: installation_path.into(),
-            package_digest,
+            payload: PluginRegistrationPayload::InstalledPackage {
+                installation_path: installation_path.into(),
+                package_digest,
+            },
             source,
             enabled,
             granted_permission_ids,
@@ -184,15 +198,97 @@ impl PluginRegistrationFacts {
         Ok(facts)
     }
 
+    #[cfg(feature = "plugin-development-mode")]
+    pub(crate) fn development(
+        snapshot_root: PathBuf,
+        snapshot_identity: String,
+        source_directory: PathBuf,
+        enabled: bool,
+        granted_permission_ids: Vec<String>,
+    ) -> Result<Self, PluginManagerDiagnostic> {
+        let mut granted_permission_ids = granted_permission_ids;
+        granted_permission_ids.sort();
+        granted_permission_ids.dedup();
+        let facts = Self {
+            payload: PluginRegistrationPayload::DevelopmentSnapshot {
+                snapshot_root,
+                snapshot_identity,
+                source_directory,
+            },
+            source: PluginSource::Development,
+            enabled,
+            granted_permission_ids,
+            diagnostics: Vec::new(),
+        };
+        facts.validate()?;
+        Ok(facts)
+    }
+
+    pub(crate) fn installed_payload(&self) -> Option<(&Path, &PackageDigest)> {
+        match &self.payload {
+            PluginRegistrationPayload::InstalledPackage {
+                installation_path,
+                package_digest,
+            } => Some((Path::new(installation_path), package_digest)),
+            #[cfg(feature = "plugin-development-mode")]
+            PluginRegistrationPayload::DevelopmentSnapshot { .. } => None,
+        }
+    }
+
+    pub(crate) fn installed_payload_mut(&mut self) -> Option<(&mut String, &mut PackageDigest)> {
+        match &mut self.payload {
+            PluginRegistrationPayload::InstalledPackage {
+                installation_path,
+                package_digest,
+            } => Some((installation_path, package_digest)),
+            #[cfg(feature = "plugin-development-mode")]
+            PluginRegistrationPayload::DevelopmentSnapshot { .. } => None,
+        }
+    }
+
+    #[cfg(feature = "plugin-development-mode")]
+    pub(crate) fn development_payload(&self) -> Option<(&Path, &str, &Path)> {
+        match &self.payload {
+            PluginRegistrationPayload::DevelopmentSnapshot {
+                snapshot_root,
+                snapshot_identity,
+                source_directory,
+            } => Some((snapshot_root, snapshot_identity, source_directory)),
+            PluginRegistrationPayload::InstalledPackage { .. } => None,
+        }
+    }
+
     fn validate(&self) -> Result<(), PluginManagerDiagnostic> {
-        if !Path::new(&self.installation_path).is_absolute()
-            || !is_safe_token(&self.package_digest.algorithm)
-            || self.package_digest.value.is_empty()
-            || !self
-                .package_digest
-                .value
-                .bytes()
-                .all(|byte| byte.is_ascii_hexdigit())
+        let payload_valid = match &self.payload {
+            PluginRegistrationPayload::InstalledPackage {
+                installation_path,
+                package_digest,
+            } => {
+                self.source != PluginSource::Development
+                    && Path::new(installation_path).is_absolute()
+                    && is_safe_token(&package_digest.algorithm)
+                    && !package_digest.value.is_empty()
+                    && package_digest
+                        .value
+                        .bytes()
+                        .all(|byte| byte.is_ascii_hexdigit())
+            }
+            #[cfg(feature = "plugin-development-mode")]
+            PluginRegistrationPayload::DevelopmentSnapshot {
+                snapshot_root,
+                snapshot_identity,
+                source_directory,
+            } => {
+                self.source == PluginSource::Development
+                    && snapshot_root.is_absolute()
+                    && source_directory.is_absolute()
+                    && snapshot_identity.len() == 64
+                    && snapshot_identity
+                        .bytes()
+                        .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            }
+        };
+        if !payload_valid
             || !is_sorted_unique(&self.granted_permission_ids)
             || self
                 .granted_permission_ids
@@ -348,17 +444,60 @@ struct PluginRecordV1 {
     format_version: u32,
     record_key: String,
     manifest: NormalizedPluginManifest,
-    registration: PluginRegistrationFacts,
+    registration: InstalledPluginRegistrationRecordFacts,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct InstalledPluginRegistrationRecordFacts {
+    installation_path: String,
+    package_digest: PackageDigest,
+    source: PluginSource,
+    enabled: bool,
+    #[serde(default)]
+    granted_permission_ids: Vec<String>,
+    #[serde(default)]
+    diagnostics: Vec<PluginManagerDiagnostic>,
 }
 
 impl PluginRecordV1 {
-    fn from_registration(registration: &PluginRegistration) -> Self {
-        Self {
+    fn from_registration(
+        registration: &PluginRegistration,
+    ) -> Result<Self, PluginManagerDiagnostic> {
+        let (installation_path, package_digest) = registration
+            .facts
+            .installed_payload()
+            .ok_or_else(PluginManagerDiagnostic::invalid_registration)?;
+        Ok(Self {
             format_version: RECORD_FORMAT_VERSION,
             record_key: plugin_record_key(&registration.manifest.plugin_id),
             manifest: registration.manifest.clone(),
-            registration: registration.facts.clone(),
-        }
+            registration: InstalledPluginRegistrationRecordFacts {
+                installation_path: installation_path.to_string_lossy().into_owned(),
+                package_digest: package_digest.clone(),
+                source: registration.facts.source,
+                enabled: registration.facts.enabled,
+                granted_permission_ids: registration.facts.granted_permission_ids.clone(),
+                diagnostics: registration.facts.diagnostics.clone(),
+            },
+        })
+    }
+}
+
+impl InstalledPluginRegistrationRecordFacts {
+    fn into_registration_facts(self) -> Result<PluginRegistrationFacts, PluginManagerDiagnostic> {
+        let facts = PluginRegistrationFacts {
+            payload: PluginRegistrationPayload::InstalledPackage {
+                installation_path: self.installation_path,
+                package_digest: self.package_digest,
+            },
+            source: self.source,
+            enabled: self.enabled,
+            granted_permission_ids: self.granted_permission_ids,
+            diagnostics: self.diagnostics,
+        };
+        facts.validate()?;
+        Ok(facts)
     }
 }
 
@@ -538,11 +677,13 @@ impl PluginManager {
             healthy_installation_paths: snapshot
                 .healthy
                 .values()
-                .map(|registration| {
-                    (
-                        plugin_record_key(&registration.manifest.plugin_id),
-                        PathBuf::from(&registration.facts.installation_path),
-                    )
+                .filter_map(|registration| {
+                    registration.facts.installed_payload().map(|(path, _)| {
+                        (
+                            plugin_record_key(&registration.manifest.plugin_id),
+                            path.to_path_buf(),
+                        )
+                    })
                 })
                 .collect(),
             quarantined_record_keys: snapshot.quarantined.keys().cloned().collect(),
@@ -631,6 +772,9 @@ impl PluginManager {
     ) -> Result<Option<PluginRegistrationChangedEvent>, PluginManagerDiagnostic> {
         self.reject_degraded_write()?;
         facts.validate()?;
+        if facts.installed_payload().is_none() {
+            return Err(PluginManagerDiagnostic::invalid_registration());
+        }
         let compatibility = validate_normalized_manifest(&manifest, &self.versions)?;
         let plugin_id = manifest.plugin_id.clone();
         let key = plugin_record_key(&plugin_id);
@@ -647,12 +791,153 @@ impl PluginManager {
             compatibility,
             runtime: PluginRuntimeState::Inactive,
         };
-        self.store
-            .write_record(&PluginRecordV1::from_registration(&registration))?;
+        self.persist_registration(&registration)?;
         snapshot.quarantined.remove(&key);
         snapshot.healthy.insert(plugin_id.clone(), registration);
         snapshot.advance_resource_generation(&plugin_id);
         Ok(Some(snapshot.commit_relevant_change(&plugin_id)))
+    }
+
+    #[cfg(feature = "plugin-development-mode")]
+    pub(crate) fn register_development(
+        &self,
+        manifest: NormalizedPluginManifest,
+        facts: PluginRegistrationFacts,
+    ) -> Result<PluginRegistrationChangedEvent, PluginManagerDiagnostic> {
+        self.reject_degraded_write()?;
+        facts.validate()?;
+        if facts.source != PluginSource::Development || facts.development_payload().is_none() {
+            return Err(PluginManagerDiagnostic::invalid_registration());
+        }
+        let compatibility = validate_normalized_manifest(&manifest, &self.versions)?;
+        let plugin_id = manifest.plugin_id.clone();
+        let key = plugin_record_key(&plugin_id);
+        let mut snapshot = self.lock_snapshot();
+        if snapshot.healthy.contains_key(&plugin_id) || snapshot.quarantined.contains_key(&key) {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::DuplicateIdentity,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        }
+        let registration = PluginRegistration {
+            manifest,
+            facts,
+            compatibility,
+            runtime: PluginRuntimeState::Inactive,
+        };
+        snapshot.healthy.insert(plugin_id.clone(), registration);
+        snapshot.advance_resource_generation(&plugin_id);
+        Ok(snapshot.commit_relevant_change(&plugin_id))
+    }
+
+    #[cfg(feature = "plugin-development-mode")]
+    pub(crate) fn reload_development_entry(
+        &self,
+        entry_id: &str,
+        expected_revision: &str,
+        manifest: NormalizedPluginManifest,
+        mut facts: PluginRegistrationFacts,
+    ) -> Result<PluginManagerReplacement, PluginManagerDiagnostic> {
+        self.reject_degraded_write()?;
+        facts.validate()?;
+        if facts.source != PluginSource::Development || facts.development_payload().is_none() {
+            return Err(PluginManagerDiagnostic::invalid_registration());
+        }
+        let compatibility = validate_normalized_manifest(&manifest, &self.versions)?;
+        let mut snapshot = self.lock_snapshot();
+        if snapshot.revision.to_string() != expected_revision {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::StaleRevision,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        }
+        let entry = Self::resolve_lifecycle_entry_locked(&snapshot, entry_id)?;
+        let PluginManagerLifecycleEntry::Healthy {
+            plugin_id,
+            registration: current,
+            ..
+        } = entry
+        else {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::InvalidState,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        };
+        if current.facts.source != PluginSource::Development
+            || manifest.plugin_id != plugin_id
+            || facts.enabled != current.facts.enabled
+        {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::IdentityMismatch,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        }
+        let requested = manifest
+            .requested_permissions
+            .iter()
+            .map(|request| request.permission_id.as_str())
+            .collect::<std::collections::BTreeSet<_>>();
+        facts.granted_permission_ids = current
+            .facts
+            .granted_permission_ids
+            .iter()
+            .filter(|permission| requested.contains(permission.as_str()))
+            .cloned()
+            .collect();
+        facts.validate()?;
+        let registration = PluginRegistration {
+            manifest,
+            facts,
+            compatibility,
+            runtime: PluginRuntimeState::Inactive,
+        };
+        snapshot.healthy.insert(plugin_id.clone(), registration);
+        snapshot.advance_resource_generation(&plugin_id);
+        Ok(PluginManagerReplacement {
+            change: snapshot.commit_relevant_change(&plugin_id),
+        })
+    }
+
+    #[cfg(feature = "plugin-development-mode")]
+    pub(crate) fn remove_development_entry(
+        &self,
+        entry_id: &str,
+        expected_revision: &str,
+    ) -> Result<PluginManagerRemoval, PluginManagerDiagnostic> {
+        self.reject_degraded_write()?;
+        let mut snapshot = self.lock_snapshot();
+        if snapshot.revision.to_string() != expected_revision {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::StaleRevision,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        }
+        let entry = Self::resolve_lifecycle_entry_locked(&snapshot, entry_id)?;
+        let PluginManagerLifecycleEntry::Healthy {
+            plugin_id,
+            registration,
+            ..
+        } = &entry
+        else {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::InvalidState,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        };
+        if registration.facts.source != PluginSource::Development {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::InvalidState,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        }
+        let plugin_id = plugin_id.clone();
+        snapshot.healthy.remove(&plugin_id);
+        snapshot.resource_generations.remove(&plugin_id);
+        snapshot.relevant_revisions.remove(&plugin_id);
+        Ok(PluginManagerRemoval {
+            entry,
+            change: snapshot.commit_change(),
+        })
     }
 
     pub fn set_enabled(
@@ -672,8 +957,7 @@ impl PluginManager {
         }
         next.facts.enabled = enabled;
         next.facts.validate()?;
-        self.store
-            .write_record(&PluginRecordV1::from_registration(&next))?;
+        self.persist_registration(&next)?;
         snapshot.healthy.insert(plugin_id.to_owned(), next);
         snapshot.advance_resource_generation(plugin_id);
         Ok(Some(snapshot.commit_relevant_change(plugin_id)))
@@ -723,8 +1007,7 @@ impl PluginManager {
             compatibility,
             runtime: PluginRuntimeState::Inactive,
         };
-        self.store
-            .write_record(&PluginRecordV1::from_registration(&registration))?;
+        self.persist_registration(&registration)?;
         snapshot.healthy.insert(plugin_id.clone(), registration);
         snapshot.advance_resource_generation(&plugin_id);
         Ok(PluginManagerReplacement {
@@ -764,8 +1047,7 @@ impl PluginManager {
         }
         registration.facts.enabled = enabled;
         registration.facts.validate()?;
-        self.store
-            .write_record(&PluginRecordV1::from_registration(&registration))?;
+        self.persist_registration(&registration)?;
         snapshot
             .healthy
             .insert(plugin_id.clone(), registration.clone());
@@ -845,8 +1127,7 @@ impl PluginManager {
                 .retain(|candidate| candidate != permission_id);
         }
         registration.facts.validate()?;
-        self.store
-            .write_record(&PluginRecordV1::from_registration(&registration))?;
+        self.persist_registration(&registration)?;
         snapshot
             .healthy
             .insert(plugin_id.clone(), registration.clone());
@@ -923,6 +1204,16 @@ impl PluginManager {
             ));
         }
         let entry = Self::resolve_lifecycle_entry_locked(&snapshot, entry_id)?;
+        if matches!(
+            &entry,
+            PluginManagerLifecycleEntry::Healthy { registration, .. }
+                if registration.facts.installed_payload().is_none()
+        ) {
+            return Err(PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::InvalidState,
+                PluginManagerDiagnosticPhase::Validate,
+            ));
+        }
         self.store.remove_record(entry.record_key())?;
         match &entry {
             PluginManagerLifecycleEntry::Healthy { plugin_id, .. } => {
@@ -953,8 +1244,7 @@ impl PluginManager {
             .cloned()
             .ok_or_else(PluginManagerDiagnostic::invalid_registration)?;
         next.facts.push_diagnostic(diagnostic);
-        self.store
-            .write_record(&PluginRecordV1::from_registration(&next))?;
+        self.persist_registration(&next)?;
         snapshot.healthy.insert(plugin_id.to_owned(), next);
         Ok(Some(snapshot.commit_change()))
     }
@@ -963,6 +1253,17 @@ impl PluginManager {
         self.snapshot
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn persist_registration(
+        &self,
+        registration: &PluginRegistration,
+    ) -> Result<(), PluginManagerDiagnostic> {
+        if registration.facts.installed_payload().is_none() {
+            return Ok(());
+        }
+        let record = PluginRecordV1::from_registration(registration)?;
+        self.store.write_record(&record)
     }
 
     #[cfg(test)]
@@ -1078,14 +1379,18 @@ fn recover_candidate(
             ),
         });
     }
-    record.registration.validate().map_err(|_| QuarantineStub {
-        record_key: candidate_key.clone(),
-        plugin_id: Some(plugin_id.clone()),
-        diagnostic: PluginManagerDiagnostic::new(
-            PluginManagerDiagnosticCode::RecordInvalid,
-            PluginManagerDiagnosticPhase::Recover,
-        ),
-    })?;
+    let registration_facts = record
+        .registration
+        .clone()
+        .into_registration_facts()
+        .map_err(|_| QuarantineStub {
+            record_key: candidate_key.clone(),
+            plugin_id: Some(plugin_id.clone()),
+            diagnostic: PluginManagerDiagnostic::new(
+                PluginManagerDiagnosticCode::RecordInvalid,
+                PluginManagerDiagnosticPhase::Recover,
+            ),
+        })?;
     let compatibility =
         validate_normalized_manifest(&record.manifest, versions).map_err(|_| QuarantineStub {
             record_key: candidate_key,
@@ -1097,7 +1402,7 @@ fn recover_candidate(
         })?;
     Ok(PluginRegistration {
         manifest: record.manifest,
-        facts: record.registration,
+        facts: registration_facts,
         compatibility,
         runtime: PluginRuntimeState::Inactive,
     })
@@ -1176,7 +1481,7 @@ impl PluginManagerStore {
     }
 
     fn write_record(&self, record: &PluginRecordV1) -> Result<(), PluginManagerDiagnostic> {
-        record.registration.validate()?;
+        record.registration.clone().into_registration_facts()?;
         if record.format_version != RECORD_FORMAT_VERSION
             || record.record_key != plugin_record_key(&record.manifest.plugin_id)
         {
@@ -1413,6 +1718,34 @@ mod tests {
         .expect("facts should be valid")
     }
 
+    fn record_facts(enabled: bool) -> InstalledPluginRegistrationRecordFacts {
+        let facts = facts(enabled);
+        let (installation_path, package_digest) = facts.installed_payload().unwrap();
+        InstalledPluginRegistrationRecordFacts {
+            installation_path: installation_path.to_string_lossy().into_owned(),
+            package_digest: package_digest.clone(),
+            source: facts.source,
+            enabled: facts.enabled,
+            granted_permission_ids: facts.granted_permission_ids,
+            diagnostics: facts.diagnostics,
+        }
+    }
+
+    #[cfg(feature = "plugin-development-mode")]
+    fn development_facts(
+        directory: &TestDirectory,
+        generation: &str,
+        enabled: bool,
+        grants: Vec<String>,
+    ) -> PluginRegistrationFacts {
+        let source = directory.path.join("author-dist");
+        let snapshot = directory.path.join("cache").join(generation);
+        fs::create_dir_all(&source).expect("source directory should exist");
+        fs::create_dir_all(&snapshot).expect("snapshot directory should exist");
+        PluginRegistrationFacts::development(snapshot, "ab".repeat(32), source, enabled, grants)
+            .expect("development facts should be valid")
+    }
+
     fn persist_diagnostic(index: usize) -> PluginManagerDiagnostic {
         if index % 2 == 0 {
             PluginManagerDiagnostic::new(
@@ -1500,6 +1833,266 @@ mod tests {
             facts.granted_permission_ids,
             vec!["clipboard.read".to_owned(), "files.read".to_owned()]
         );
+    }
+
+    #[cfg(feature = "plugin-development-mode")]
+    #[test]
+    fn development_entries_share_projection_without_writing_store_records() {
+        let directory = TestDirectory::new("development-register");
+        let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
+        let change = manager
+            .register_development(
+                manifest("com.acme.development", "0.2.0"),
+                development_facts(&directory, "generation-a", true, Vec::new()),
+            )
+            .expect("development registration should commit");
+        assert_eq!(change.revision, "1");
+        let registration = manager.registration("com.acme.development").unwrap();
+        assert_eq!(registration.facts.source, PluginSource::Development);
+        assert!(registration.facts.granted_permission_ids.is_empty());
+        assert!(registration.facts.development_payload().is_some());
+        assert!(!directory.path.join(PLUGIN_MANAGER_DIRECTORY).exists());
+        let snapshot = manager.read_registration_snapshot();
+        assert!(matches!(
+            snapshot.entries.as_slice(),
+            [
+                crate::plugin_registration::PluginRegistrationSummary::Registered {
+                    source: crate::plugin_registration::PluginRegistrationSource::Development,
+                    ..
+                }
+            ]
+        ));
+    }
+
+    #[cfg(feature = "plugin-development-mode")]
+    #[test]
+    fn development_reload_is_revision_bound_forces_generation_and_reconciles_grants() {
+        let directory = TestDirectory::new("development-reload");
+        let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
+        let manifest = manifest("com.acme.development", "0.2.0");
+        manager
+            .register_development(
+                manifest.clone(),
+                development_facts(&directory, "generation-a", true, Vec::new()),
+            )
+            .unwrap();
+        let entry = entry_id(&manager, "com.acme.development");
+        let permission = manifest.requested_permissions[0].permission_id.clone();
+        manager
+            .set_permission_grant(&entry, "1", &permission, true, true)
+            .expect("declared grant should commit");
+        let before = manager
+            .read_resource_projection(&entry, None)
+            .unwrap()
+            .resource_generation;
+        let stale = manager
+            .reload_development_entry(
+                &entry,
+                "1",
+                manifest.clone(),
+                development_facts(&directory, "generation-b", true, Vec::new()),
+            )
+            .expect_err("stale reload should fail");
+        assert_eq!(stale.code(), PluginManagerDiagnosticCode::StaleRevision);
+        let replacement = manager
+            .reload_development_entry(
+                &entry,
+                "2",
+                manifest,
+                development_facts(&directory, "generation-b", true, Vec::new()),
+            )
+            .expect("same-byte explicit reload should commit");
+        assert_eq!(replacement.change.revision, "3");
+        let current = manager.registration("com.acme.development").unwrap();
+        assert_eq!(current.facts.granted_permission_ids, vec![permission]);
+        let after = manager
+            .read_resource_projection(&entry, None)
+            .unwrap()
+            .resource_generation;
+        assert!(after > before);
+        assert!(!directory.path.join(PLUGIN_MANAGER_DIRECTORY).exists());
+    }
+
+    #[cfg(feature = "plugin-development-mode")]
+    #[test]
+    fn development_reload_drops_removed_grants_and_never_restores_them_implicitly() {
+        let directory = TestDirectory::new("development-permission-delta");
+        let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
+        let initial = manifest("com.acme.development", "0.2.0");
+        let permission = initial.requested_permissions[0].permission_id.clone();
+        manager
+            .register_development(
+                initial.clone(),
+                development_facts(&directory, "generation-a", true, Vec::new()),
+            )
+            .unwrap();
+        let entry = entry_id(&manager, "com.acme.development");
+        manager
+            .set_permission_grant(&entry, "1", &permission, true, true)
+            .unwrap();
+
+        let mut without_permission = initial.clone();
+        without_permission.requested_permissions.clear();
+        for page in &mut without_permission.contributes.pages {
+            page.required_permissions.clear();
+        }
+        manager
+            .reload_development_entry(
+                &entry,
+                "2",
+                without_permission,
+                development_facts(&directory, "generation-b", true, vec![permission.clone()]),
+            )
+            .unwrap();
+        assert!(manager
+            .registration("com.acme.development")
+            .unwrap()
+            .facts
+            .granted_permission_ids
+            .is_empty());
+
+        manager
+            .reload_development_entry(
+                &entry,
+                "3",
+                initial,
+                development_facts(&directory, "generation-c", true, vec![permission]),
+            )
+            .unwrap();
+        assert!(manager
+            .registration("com.acme.development")
+            .unwrap()
+            .facts
+            .granted_permission_ids
+            .is_empty());
+    }
+
+    #[cfg(feature = "plugin-development-mode")]
+    #[test]
+    fn development_mutations_lose_stale_disable_grant_reload_and_remove_races() {
+        let directory = TestDirectory::new("development-races");
+        let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
+        let manifest = manifest("com.acme.development", "0.2.0");
+        let permission = manifest.requested_permissions[0].permission_id.clone();
+        manager
+            .register_development(
+                manifest.clone(),
+                development_facts(&directory, "generation-a", true, Vec::new()),
+            )
+            .unwrap();
+        let entry = entry_id(&manager, "com.acme.development");
+        manager.set_enabled_entry(&entry, "1", false).unwrap();
+
+        let stale_grant = manager
+            .set_permission_grant(&entry, "1", &permission, true, true)
+            .expect_err("grant must compare current revision");
+        let stale_reload = manager
+            .reload_development_entry(
+                &entry,
+                "1",
+                manifest,
+                development_facts(&directory, "generation-b", false, Vec::new()),
+            )
+            .expect_err("reload must compare current revision");
+        let stale_remove = manager
+            .remove_development_entry(&entry, "1")
+            .expect_err("remove must compare current revision");
+        for error in [stale_grant, stale_reload, stale_remove] {
+            assert_eq!(error.code(), PluginManagerDiagnosticCode::StaleRevision);
+        }
+        assert!(
+            !manager
+                .registration("com.acme.development")
+                .unwrap()
+                .facts
+                .enabled
+        );
+    }
+
+    #[cfg(feature = "plugin-development-mode")]
+    #[test]
+    fn development_reload_rejects_identity_changes_and_remove_is_process_only() {
+        let directory = TestDirectory::new("development-remove");
+        let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
+        manager
+            .register_development(
+                manifest("com.acme.development", "0.2.0"),
+                development_facts(&directory, "generation-a", true, Vec::new()),
+            )
+            .unwrap();
+        let entry = entry_id(&manager, "com.acme.development");
+        let changed_identity = manager
+            .reload_development_entry(
+                &entry,
+                "1",
+                manifest("com.acme.other", "0.2.0"),
+                development_facts(&directory, "generation-b", true, Vec::new()),
+            )
+            .expect_err("reload must preserve plugin ID");
+        assert_eq!(
+            changed_identity.code(),
+            PluginManagerDiagnosticCode::IdentityMismatch
+        );
+        let removed = manager
+            .remove_development_entry(&entry, "1")
+            .expect("development remove should commit without Store access");
+        assert_eq!(removed.change.revision, "2");
+        assert!(manager.registration("com.acme.development").is_none());
+        assert!(!directory.path.join(PLUGIN_MANAGER_DIRECTORY).exists());
+    }
+
+    #[cfg(feature = "plugin-development-mode")]
+    #[test]
+    fn development_identity_collides_with_installed_and_quarantine_entries() {
+        let installed_directory = TestDirectory::new("development-installed-collision");
+        let installed = PluginManager::recover(&installed_directory.path, versions("0.1.0"));
+        installed
+            .register(manifest("com.acme.collision", "0.2.0"), facts(true))
+            .unwrap();
+        let error = installed
+            .register_development(
+                manifest("com.acme.collision", "0.2.0"),
+                development_facts(&installed_directory, "generation-a", true, Vec::new()),
+            )
+            .expect_err("installed identity must not be shadowed");
+        assert_eq!(error.code(), PluginManagerDiagnosticCode::DuplicateIdentity);
+
+        let quarantine_directory = TestDirectory::new("development-quarantine-collision");
+        let key = plugin_record_key("com.acme.collision");
+        let store = quarantine_directory.path.join(PLUGIN_MANAGER_DIRECTORY);
+        fs::create_dir_all(&store).unwrap();
+        fs::write(store.join(format!("{key}.json")), b"invalid").unwrap();
+        let quarantined = PluginManager::recover(&quarantine_directory.path, versions("0.1.0"));
+        let error = quarantined
+            .register_development(
+                manifest("com.acme.collision", "0.2.0"),
+                development_facts(&quarantine_directory, "generation-a", true, Vec::new()),
+            )
+            .expect_err("quarantine identity must not be repaired by development register");
+        assert_eq!(error.code(), PluginManagerDiagnosticCode::DuplicateIdentity);
+    }
+
+    #[cfg(feature = "plugin-development-mode")]
+    #[test]
+    fn restart_recovers_installed_records_but_not_development_facts() {
+        let directory = TestDirectory::new("development-restart");
+        let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
+        manager
+            .register(manifest("com.acme.installed", "0.2.0"), facts(true))
+            .unwrap();
+        manager
+            .register_development(
+                manifest("com.acme.development", "0.2.0"),
+                development_facts(&directory, "generation-a", true, Vec::new()),
+            )
+            .unwrap();
+        drop(manager);
+
+        let recovered = PluginManager::recover(&directory.path, versions("0.1.0"));
+        assert!(recovered.registration("com.acme.installed").is_some());
+        assert!(recovered.registration("com.acme.development").is_none());
+        assert_eq!(recovered.recovery_report().healthy_records, 1);
+        assert_eq!(recovered.registration_revision(), "0");
     }
 
     #[test]
@@ -1936,7 +2529,7 @@ mod tests {
             format_version: RECORD_FORMAT_VERSION,
             record_key: "v1-cafe".to_owned(),
             manifest: wrong_manifest,
-            registration: facts(false),
+            registration: record_facts(false),
         };
         fs::write(
             store_dir.join("v1-cafe.json"),
@@ -1945,7 +2538,7 @@ mod tests {
         .expect("mismatch record should be written");
         let inconsistent_manifest = manifest("com.acme.inconsistent", "0.2.0");
         let inconsistent_key = plugin_record_key(&inconsistent_manifest.plugin_id);
-        let mut inconsistent_facts = facts(false);
+        let mut inconsistent_facts = record_facts(false);
         inconsistent_facts.granted_permission_ids =
             vec!["files.read".to_owned(), "clipboard.read".to_owned()];
         let inconsistent_record = PluginRecordV1 {

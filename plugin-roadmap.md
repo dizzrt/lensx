@@ -712,9 +712,10 @@ React 模板额外依赖 Task 1.4。
 
 **完成标准**：新项目可以一条命令验证并打包；CI 可以只依赖公开 CLI 验证插件。
 
-- [ ] **Task 6.5：支持 Plugin Development Mode**
+- [x] **Task 6.5：支持 Plugin Development Mode**
 
-**OpenSpec change**：`add-plugin-development-mode`
+**OpenSpec change**：[add-plugin-development-mode](openspec/changes/archive/2026-08-07-add-plugin-development-mode/)
+（已完成并归档）
 
 **目标**：缩短本地开发反馈周期，同时保持正式 Runtime 和权限边界。
 

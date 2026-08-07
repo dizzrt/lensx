@@ -8,6 +8,7 @@ import {
   PLUGIN_RUNTIME_LOAD_DEADLINE_MS,
   PLUGIN_RUNTIME_PERMISSIONS_POLICY,
   PLUGIN_RUNTIME_REFERRER_POLICY,
+  PLUGIN_RUNTIME_RESOLUTION_DEADLINE_MS,
   type PluginHostApiDispatcherFactory,
   type PluginPageRuntimeDescriptor,
   PluginRuntimeFrame,
@@ -376,6 +377,44 @@ describe('PluginRuntimeFrame', () => {
     expect(document.querySelector('iframe')).toBeNull();
     expect(sessionDispose).toHaveBeenCalledTimes(1);
     expect(view.navigationAdapter.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  test('bounds a stalled resource resolution and makes its late completion inert', async () => {
+    const scheduler = new ManualScheduler();
+    const lifecycleService = createPluginRuntimeLifecycleService({ scheduler });
+    const resolution = deferred<PluginPageRuntimeDescriptor>();
+    const resolver = { resolve: rs.fn(() => resolution.promise) };
+    const view = renderFrame({ lifecycleService, resolver });
+    await waitFor(() => expect(resolver.resolve).toHaveBeenCalledTimes(1));
+
+    await act(async () => scheduler.advance(PLUGIN_RUNTIME_RESOLUTION_DEADLINE_MS));
+    expect(await screen.findByRole('alert')).toHaveAttribute('data-runtime-failure-code', 'runtime_unavailable');
+    expect(document.querySelector('iframe')).toBeNull();
+    expect(view.navigationAdapter.activate).not.toHaveBeenCalled();
+
+    await act(async () => resolution.resolve(descriptor));
+    expect(view.navigationAdapter.activate).not.toHaveBeenCalled();
+    expect(document.querySelector('iframe')).toBeNull();
+  });
+
+  test('bounds stalled native navigation activation and disposes a late lease', async () => {
+    const scheduler = new ManualScheduler();
+    const lifecycleService = createPluginRuntimeLifecycleService({ scheduler });
+    const activation = deferred<{ lease_id: string }>();
+    const navigationAdapter = {
+      activate: rs.fn(() => activation.promise),
+      dispose: rs.fn(async () => true),
+    };
+    renderFrame({ lifecycleService, navigationAdapter });
+    await waitFor(() => expect(navigationAdapter.activate).toHaveBeenCalledTimes(1));
+
+    await act(async () => scheduler.advance(PLUGIN_RUNTIME_RESOLUTION_DEADLINE_MS));
+    expect(await screen.findByRole('alert')).toHaveAttribute('data-runtime-failure-code', 'runtime_unavailable');
+    expect(document.querySelector('iframe')).toBeNull();
+
+    await act(async () => activation.resolve({ lease_id: '0000000000000001' }));
+    await waitFor(() => expect(navigationAdapter.dispose).toHaveBeenCalledWith({ lease_id: '0000000000000001' }));
+    expect(document.querySelector('iframe')).toBeNull();
   });
 
   test('enforces the load deadline, removes the iframe and lease, and ignores a late load', async () => {

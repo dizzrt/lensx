@@ -1,6 +1,10 @@
 use serde::Serialize;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
 #[cfg(target_os = "macos")]
 use tauri::menu::{
     AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu, HELP_SUBMENU_ID, WINDOW_SUBMENU_ID,
@@ -159,23 +163,42 @@ trait LauncherWindowResolver {
     fn resolve(&self) -> Result<Self::Window, String>;
 }
 
+#[cfg(test)]
 fn execute_with_resolver<R: LauncherWindowResolver>(
     resolver: &R,
     action: LauncherWindowAction,
+) -> Result<(), LauncherWindowActionError> {
+    execute_with_resolver_policy(resolver, action, false)
+}
+
+fn execute_with_resolver_policy<R: LauncherWindowResolver>(
+    resolver: &R,
+    action: LauncherWindowAction,
+    suppress_hide: bool,
 ) -> Result<(), LauncherWindowActionError> {
     let mut window = resolver.resolve().map_err(|details| {
         LauncherWindowActionError::new(action, LauncherWindowOperation::ResolveWindow, details)
     })?;
 
-    execute_with_adapter(&mut window, action)
+    execute_with_adapter_policy(&mut window, action, suppress_hide)
 }
 
+#[cfg(test)]
 fn execute_with_adapter<A: LauncherWindowAdapter>(
     window: &mut A,
     action: LauncherWindowAction,
 ) -> Result<(), LauncherWindowActionError> {
+    execute_with_adapter_policy(window, action, false)
+}
+
+fn execute_with_adapter_policy<A: LauncherWindowAdapter>(
+    window: &mut A,
+    action: LauncherWindowAction,
+    suppress_hide: bool,
+) -> Result<(), LauncherWindowActionError> {
     match action {
         LauncherWindowAction::Show(reason) => show(window, action, reason),
+        LauncherWindowAction::Hide if suppress_hide => Ok(()),
         LauncherWindowAction::Hide => hide(window, action),
         LauncherWindowAction::Toggle(reason) => {
             let is_visible = window.is_visible().map_err(|details| {
@@ -187,7 +210,11 @@ fn execute_with_adapter<A: LauncherWindowAdapter>(
             })?;
 
             if is_visible {
-                hide(window, action)
+                if suppress_hide {
+                    Ok(())
+                } else {
+                    hide(window, action)
+                }
             } else {
                 show(window, action, reason)
             }
@@ -275,17 +302,60 @@ impl<R: Runtime> LauncherWindowResolver for TauriLauncherWindowResolver<'_, R> {
     }
 }
 
+pub(crate) struct LauncherNativeDialogGuard {
+    depth: Arc<AtomicUsize>,
+}
+
+impl Drop for LauncherNativeDialogGuard {
+    fn drop(&mut self) {
+        self.depth
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |depth| {
+                depth.checked_sub(1)
+            })
+            .expect("native dialog depth must not underflow");
+    }
+}
+
 #[derive(Default)]
-pub struct LauncherWindowActions;
+pub struct LauncherWindowActions {
+    native_dialog_depth: Arc<AtomicUsize>,
+}
 
 impl LauncherWindowActions {
+    pub(crate) fn begin_native_dialog(&self) -> LauncherNativeDialogGuard {
+        self.native_dialog_depth
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |depth| {
+                depth.checked_add(1)
+            })
+            .expect("native dialog depth must not overflow");
+        LauncherNativeDialogGuard {
+            depth: Arc::clone(&self.native_dialog_depth),
+        }
+    }
+
+    fn native_dialog_active(&self) -> bool {
+        self.native_dialog_depth.load(Ordering::Acquire) > 0
+    }
+
     pub fn dispatch<R: Runtime>(
         &self,
         app: &AppHandle<R>,
         action: LauncherWindowAction,
     ) -> Result<(), LauncherWindowActionError> {
-        execute_with_resolver(&TauriLauncherWindowResolver { app }, action)
+        execute_with_resolver_policy(
+            &TauriLauncherWindowResolver { app },
+            action,
+            self.native_dialog_active(),
+        )
     }
+}
+
+pub(crate) fn begin_launcher_native_dialog<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Option<(LauncherNativeDialogGuard, WebviewWindow<R>)> {
+    let parent = app.get_webview_window(MAIN_WINDOW_LABEL)?;
+    let actions = app.try_state::<LauncherWindowActions>()?;
+    Some((actions.begin_native_dialog(), parent))
 }
 
 fn dispatch_hide_command<F>(dispatch: F) -> Result<(), LauncherCommandError>
@@ -668,7 +738,7 @@ fn install_macos_close_window_menu<R: Runtime>(
 }
 
 pub fn setup_launcher_window<R: Runtime>(app: &AppHandle<R>) {
-    app.manage(LauncherWindowActions);
+    app.manage(LauncherWindowActions::default());
 
     let plugin_installer = TauriShortcutPluginInstaller { app };
     let registrar = TauriShortcutRegistrar { app };
@@ -886,6 +956,76 @@ mod tests {
                 LauncherWindowOperation::EmitActivation,
             ]
         );
+    }
+
+    #[test]
+    fn native_dialog_guard_suppresses_hide_and_visible_toggle_until_drop() {
+        let actions = LauncherWindowActions::default();
+        assert!(!actions.native_dialog_active());
+
+        {
+            let _first = actions.begin_native_dialog();
+            let _second = actions.begin_native_dialog();
+            assert!(actions.native_dialog_active());
+
+            let mut hidden_by_focus_loss = FakeWindow {
+                visible: true,
+                ..FakeWindow::default()
+            };
+            execute_with_adapter_policy(
+                &mut hidden_by_focus_loss,
+                LauncherWindowAction::Hide,
+                actions.native_dialog_active(),
+            )
+            .expect("focus-loss hide should become a no-op while a native dialog is active");
+            assert!(hidden_by_focus_loss.calls.is_empty());
+
+            let mut toggled_by_shortcut = FakeWindow {
+                visible: true,
+                ..FakeWindow::default()
+            };
+            execute_with_adapter_policy(
+                &mut toggled_by_shortcut,
+                LauncherWindowAction::Toggle(LauncherActivationReason::GlobalShortcut),
+                actions.native_dialog_active(),
+            )
+            .expect("visible shortcut toggle should not hide a native dialog parent");
+            assert_eq!(
+                toggled_by_shortcut.calls,
+                vec![LauncherWindowOperation::ReadVisibility]
+            );
+
+            let mut unexpectedly_hidden = FakeWindow::default();
+            execute_with_adapter_policy(
+                &mut unexpectedly_hidden,
+                LauncherWindowAction::Toggle(LauncherActivationReason::GlobalShortcut),
+                actions.native_dialog_active(),
+            )
+            .expect("shortcut toggle should recover a hidden native dialog parent");
+            assert_eq!(
+                unexpectedly_hidden.calls,
+                vec![
+                    LauncherWindowOperation::ReadVisibility,
+                    LauncherWindowOperation::Restore,
+                    LauncherWindowOperation::Show,
+                    LauncherWindowOperation::Focus,
+                    LauncherWindowOperation::EmitActivation,
+                ]
+            );
+        }
+
+        assert!(!actions.native_dialog_active());
+        let mut window = FakeWindow {
+            visible: true,
+            ..FakeWindow::default()
+        };
+        execute_with_adapter_policy(
+            &mut window,
+            LauncherWindowAction::Hide,
+            actions.native_dialog_active(),
+        )
+        .expect("normal hide behavior should resume after the dialog closes");
+        assert_eq!(window.calls, vec![LauncherWindowOperation::Hide]);
     }
 
     #[test]

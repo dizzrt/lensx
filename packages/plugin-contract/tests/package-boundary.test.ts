@@ -43,6 +43,7 @@ describe('public package boundary', () => {
       'src/host-api-schema.ts',
       'src/host-api-types.ts',
       'src/host-api.ts',
+      'src/generated/plugin-host-api-validators.ts',
       'src/index.ts',
       'src/schema.ts',
       'src/types.ts',
@@ -63,7 +64,16 @@ describe('public package boundary', () => {
       expect(source).not.toContain(forbidden);
     }
     const externalImports = [...source.matchAll(/from\s+['"]([^.'"][^'"]*)['"]/gu)].map((match) => match[1]);
-    expect(externalImports).toEqual(['ajv/dist/2020.js', 'ajv/dist/2020.js']);
+    expect(externalImports).toEqual([
+      'ajv',
+      'ajv/dist/runtime/ucs2length.js',
+      'ajv/dist/runtime/equal.js',
+      'ajv/dist/2020.js',
+    ]);
+    const standaloneValidators = runtimeSources[4] ?? '';
+    expect(standaloneValidators).not.toContain('require(');
+    expect(standaloneValidators).not.toContain('new Function');
+    expect(standaloneValidators).not.toContain('Ajv2020');
   });
 
   test('generated type drift check fails for missing and stale output', () => {

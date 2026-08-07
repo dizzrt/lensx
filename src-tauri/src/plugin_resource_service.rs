@@ -1,3 +1,5 @@
+#[cfg(feature = "plugin-development-mode")]
+use crate::plugin_development_snapshot::DevelopmentSnapshotStore;
 #[cfg(test)]
 use crate::plugin_resource_url::{translated_resource_url, MAX_PATH_BYTES, MAX_PATH_SEGMENTS};
 use crate::{
@@ -14,7 +16,7 @@ use crate::{
         build_native_resource_url, is_portable_resource_path, parse_plugin_resource_url,
         PluginResourceUrl,
     },
-    plugin_runtime_security_policy::PLUGIN_RUNTIME_DOCUMENT_CSP,
+    plugin_runtime_security_policy::current_plugin_runtime_document_csp,
 };
 use std::{
     collections::HashMap,
@@ -49,13 +51,19 @@ pub struct PluginResourceService {
     packages_root: Option<PathBuf>,
     html_csp: &'static str,
     scopes: Mutex<ScopeState>,
+    #[cfg(feature = "plugin-development-mode")]
+    development_snapshots: Mutex<Option<Arc<DevelopmentSnapshotStore>>>,
     #[cfg(test)]
     read_hook: Mutex<Option<Arc<dyn Fn(ResourceReadHookPoint, &Path) + Send + Sync>>>,
 }
 
 impl PluginResourceService {
     pub fn initialize(manager: Arc<PluginManager>, packages_root: Option<PathBuf>) -> Arc<Self> {
-        Self::initialize_with_html_csp(manager, packages_root, PLUGIN_RUNTIME_DOCUMENT_CSP)
+        Self::initialize_with_html_csp(
+            manager,
+            packages_root,
+            current_plugin_runtime_document_csp(),
+        )
     }
 
     #[doc(hidden)]
@@ -80,6 +88,8 @@ impl PluginResourceService {
             packages_root,
             html_csp,
             scopes: Mutex::new(ScopeState::default()),
+            #[cfg(feature = "plugin-development-mode")]
+            development_snapshots: Mutex::new(None),
             #[cfg(test)]
             read_hook: Mutex::new(None),
         })
@@ -213,6 +223,26 @@ impl PluginResourceService {
                 PluginResourceErrorCode::Unavailable,
             ));
         }
+        #[cfg(feature = "plugin-development-mode")]
+        if let Some((snapshot_root, snapshot_identity, _)) =
+            projection.registration.facts.development_payload()
+        {
+            let snapshots = self
+                .development_snapshots
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            return snapshots
+                .as_ref()
+                .filter(|store| {
+                    store.owns_current_snapshot(
+                        snapshot_root,
+                        snapshot_identity,
+                        &self.manager.host_versions(),
+                    )
+                })
+                .map(|_| snapshot_root.to_path_buf())
+                .ok_or_else(|| PluginResourceError::new(PluginResourceErrorCode::UnsafeState));
+        }
         let packages_root = self
             .packages_root
             .as_ref()
@@ -224,6 +254,17 @@ impl PluginResourceService {
             &projection.registration.facts,
         )
         .map_err(|_| PluginResourceError::new(PluginResourceErrorCode::UnsafeState))
+    }
+
+    #[cfg(feature = "plugin-development-mode")]
+    pub(crate) fn attach_development_snapshots(
+        &self,
+        snapshots: Option<Arc<DevelopmentSnapshotStore>>,
+    ) {
+        *self
+            .development_snapshots
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = snapshots;
     }
 
     fn revoke_binding(&self, binding: &ScopeBinding) {
@@ -530,6 +571,11 @@ pub fn setup_plugin_resource_service<R: Runtime>(
     installer: Arc<PluginInstaller>,
 ) -> Arc<PluginResourceService> {
     let service = PluginResourceService::initialize(manager, installer.managed_packages_root());
+    #[cfg(feature = "plugin-development-mode")]
+    service.attach_development_snapshots(
+        app.try_state::<Arc<crate::plugin_development::PluginDevelopmentModeState>>()
+            .and_then(|state| state.snapshot_store()),
+    );
     let managed = app.manage(Arc::clone(&service));
     debug_assert!(
         managed,
@@ -561,6 +607,8 @@ pub fn handle_plugin_resource_protocol<R: Runtime>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "plugin-development-mode")]
+    use crate::plugin_development_snapshot::DevelopmentSnapshotStore;
     use crate::{
         plugin_identity::plugin_record_key,
         plugin_manager::{
@@ -740,7 +788,7 @@ mod tests {
     fn assert_plugin_document_csp(response: &http::Response<Vec<u8>>) {
         assert_eq!(
             response.headers()[http::header::CONTENT_SECURITY_POLICY],
-            PLUGIN_RUNTIME_DOCUMENT_CSP
+            current_plugin_runtime_document_csp()
         );
     }
 
@@ -1349,5 +1397,107 @@ mod tests {
             let uri: http::Uri = invalid.parse().expect("fixture URI should parse");
             assert!(parse_resource_uri(&uri).is_none());
         }
+    }
+
+    #[cfg(feature = "plugin-development-mode")]
+    #[test]
+    fn development_snapshots_require_current_store_ownership_and_fresh_scopes() {
+        let directory = TestDirectory::new("development-scope");
+        let source = directory.0.join("dist");
+        write_file(
+            &source,
+            "manifest.json",
+            include_bytes!("../../packages/plugin-contract/tests/fixtures/base.json"),
+        );
+        write_file(&source, "dist/plugin.html", b"development-one");
+        write_file(&source, "assets/plugin-icon.svg", b"<svg/>");
+        write_file(&source, "assets/home.svg", b"<svg/>");
+        let manager = PluginManager::recover(directory.0.join("config"), versions());
+        let snapshots =
+            Arc::new(DevelopmentSnapshotStore::initialize(directory.0.join("cache")).unwrap());
+        let first_snapshot = snapshots.publish_from_source(&source, &versions()).unwrap();
+        let first_manifest = first_snapshot.manifest.clone();
+        manager
+            .register_development(
+                first_manifest.clone(),
+                PluginRegistrationFacts::development(
+                    first_snapshot.root.clone(),
+                    first_snapshot.identity.clone(),
+                    source.clone(),
+                    true,
+                    Vec::new(),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let entry_id = healthy_entry_id(
+            &manager
+                .registration(&first_manifest.plugin_id)
+                .expect("development entry should exist"),
+        );
+        let service = PluginResourceService::initialize(Arc::clone(&manager), None);
+        service.attach_development_snapshots(Some(Arc::clone(&snapshots)));
+        let first = service
+            .resolve_entry(&ResolvePluginResourceEntryRequest {
+                contract_version: PLUGIN_RESOURCE_CONTRACT_VERSION.to_owned(),
+                entry_id: entry_id.clone(),
+                expected_revision: manager.registration_revision(),
+            })
+            .unwrap();
+        assert_eq!(
+            service
+                .handle_request(request(http::Method::GET, &first.entry_url))
+                .body(),
+            b"development-one"
+        );
+
+        write_file(&source, "dist/plugin.html", b"development-two");
+        let second_snapshot = snapshots.publish_from_source(&source, &versions()).unwrap();
+        manager
+            .reload_development_entry(
+                &entry_id,
+                &manager.registration_revision(),
+                second_snapshot.manifest.clone(),
+                PluginRegistrationFacts::development(
+                    second_snapshot.root.clone(),
+                    second_snapshot.identity.clone(),
+                    source,
+                    true,
+                    Vec::new(),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        assert_eq!(
+            service
+                .handle_request(request(http::Method::GET, &first.entry_url))
+                .status(),
+            http::StatusCode::NOT_FOUND
+        );
+        assert!(snapshots.retire(&first_snapshot.root));
+        let second = service
+            .resolve_entry(&ResolvePluginResourceEntryRequest {
+                contract_version: PLUGIN_RESOURCE_CONTRACT_VERSION.to_owned(),
+                entry_id: entry_id.clone(),
+                expected_revision: manager.registration_revision(),
+            })
+            .unwrap();
+        assert_ne!(first.entry_url, second.entry_url);
+        assert_eq!(
+            service
+                .handle_request(request(http::Method::GET, &second.entry_url))
+                .body(),
+            b"development-two"
+        );
+
+        manager
+            .remove_development_entry(&entry_id, &manager.registration_revision())
+            .unwrap();
+        assert_eq!(
+            service
+                .handle_request(request(http::Method::GET, &second.entry_url))
+                .status(),
+            http::StatusCode::NOT_FOUND
+        );
     }
 }

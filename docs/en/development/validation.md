@@ -109,6 +109,44 @@ revalidation of untrusted package bytes. This gate does not establish
 Development Mode/watch/reload or signing/provenance delivery, which remain
 roadmap Tasks 6.5 and 8.1.
 
+## Plugin Development Mode Validation
+
+Changes to the feature/capability handshake, directory inspector, snapshot
+store, process-local Manager state, Resource/Runtime invalidation, development
+adapter/service/UI, messages, docs, or visual evidence must run:
+
+```bash
+pnpm run check:plugin-development-mode
+```
+
+The gate combines strict boundary parsing, the shared CLI/Host payload corpus,
+feature-enabled Rust transaction tests, production artifact exclusion, frontend
+convergence and accessibility, bilingual schema/docs drift, and the 650×600
+visual matrix. Run it sequentially with the existing management, Runtime,
+Resource, Registration, CLI, and complete frontend/Rust gates. A real final
+smoke uses `pnpm run dev:plugin-development-mode`; ordinary builds must remain
+free of development commands and UI.
+
+The focused gate also consumes bounded canonical macOS WKWebView evidence for
+normal and malicious development registrations. The harness extracts the same
+maintained Runtime payloads used by the external Session evidence, registers a
+process-local development snapshot, opens it, forces a fresh reload, verifies
+the ungranted `clipboard.read` permission delta, and removes the registration.
+It compares CSP, sandbox, Permissions Policy, Session, transport, Host API,
+deadline, and breaker facts with the external Runtime profile. Refresh this
+evidence only on macOS after reviewing the harness or Runtime boundary change:
+
+```bash
+pnpm run build:plugin-runtime-security-lifecycle-harness
+pnpm run refresh:plugin-development-runtime-evidence:normal
+pnpm run refresh:plugin-development-runtime-evidence:malicious
+pnpm run check:plugin-development-runtime-evidence
+```
+
+Evidence files contain only bounded platform labels, relative resource names,
+booleans, and counters. They must never record source directories, scoped URLs,
+origins, nonces, Ports, tokens, payload values, or raw errors.
+
 ## Plugin Resource Service Validation
 
 Changes to the Host-private Resource Contract, desktop adapter, Manager

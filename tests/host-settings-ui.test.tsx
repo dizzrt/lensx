@@ -68,6 +68,10 @@ class ControlledManagementService implements PluginManagementService {
   deferPreparedPermissions = rs.fn();
   uninstall = rs.fn(async () => undefined);
   clearData = rs.fn(async () => undefined);
+  setDevelopmentMode = rs.fn(async () => undefined);
+  registerDevelopmentDirectory = rs.fn(async () => undefined);
+  reloadDevelopmentEntry = rs.fn(async () => undefined);
+  removeDevelopmentEntry = rs.fn(async () => undefined);
   destroy = rs.fn(async () => undefined);
 }
 
@@ -596,5 +600,53 @@ describe('Host settings surface', () => {
     fireEvent.click(retry);
     expect(managementService.refresh).toHaveBeenCalledTimes(1);
     expect(document.body).not.toHaveTextContent('raw native stack');
+  });
+
+  test('gates development controls, exposes text safety labels, and confirms reload and retain-data removal', async () => {
+    const developmentEntry = Object.freeze({ ...healthyEntry, source: 'development' as const });
+    const managementService = new ControlledManagementService(
+      Object.freeze({
+        state: 'ready',
+        revision: '7',
+        entries: Object.freeze([developmentEntry]),
+        selected_entry_id: developmentEntry.entry_id,
+        detail: Object.freeze({ ...healthyManagementView.detail, source: 'development' as const }),
+        operations: Object.freeze({ ...availableOperations, replace: false, uninstall: false }),
+        development: Object.freeze({ visible: true, enabled: true }),
+      }),
+    );
+    renderSettingsApp({
+      managementService,
+      preferencesClient: {
+        read: async () => ({ theme_mode: 'light', locale: 'en-US' }),
+        write: async (preferences) => preferences,
+      },
+    });
+    await openPluginsTab();
+
+    expect(screen.getByText('Plugin Development Mode')).toBeInTheDocument();
+    expect(screen.getAllByText('Unpacked').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Unsigned').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Uninstall' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Enable Plugin Development Mode for this process' }));
+    expect(managementService.setDevelopmentMode).toHaveBeenCalledWith(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Register development directory' }));
+    expect(managementService.registerDevelopmentDirectory).toHaveBeenCalledTimes(1);
+
+    const reload = screen.getByRole('button', { name: 'Reload from directory' });
+    reload.focus();
+    fireEvent.click(reload);
+    const reloadDialog = screen.getByRole('dialog', { name: 'Reload development plugin?' });
+    fireEvent.click(within(reloadDialog).getByRole('button', { name: 'confirm' }));
+    await waitFor(() => expect(managementService.reloadDevelopmentEntry).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove development entry' }));
+    const removeDialog = screen.getByRole('dialog', { name: 'Remove development entry?' });
+    expect(
+      within(removeDialog).getByText(/Plugin data and Launcher collections will be retained/u),
+    ).toBeInTheDocument();
+    fireEvent.click(within(removeDialog).getByRole('button', { name: 'confirm' }));
+    await waitFor(() => expect(managementService.removeDevelopmentEntry).toHaveBeenCalledTimes(1));
   });
 });

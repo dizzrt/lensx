@@ -52,7 +52,7 @@ const snapshotFor = (
   entries: readonly PluginRegistrationSummary[] = [],
   availability: PluginRegistrationSnapshot['availability'] = { kind: 'available' },
 ): PluginRegistrationSnapshot => ({
-  contract_version: '0.1.0',
+  contract_version: '0.2.0',
   revision,
   availability,
   entries,
@@ -64,7 +64,7 @@ const detailFor = (
   pluginId: string,
   actionTitle = 'Open Project',
 ): PluginRegistrationDetailResponse => ({
-  contract_version: '0.1.0',
+  contract_version: '0.2.0',
   revision,
   detail: {
     ...structuredClone(baseDetail),

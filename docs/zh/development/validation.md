@@ -92,6 +92,37 @@ CLI `build` 与默认 `pack` 会执行项目代码；`validate`、`inspect` 和 
 绝不替代 Host 对不可信 package bytes 的复验。该门禁不代表 Development Mode/watch/reload 或
 signing/provenance 已交付；它们仍属于 roadmap Task 6.5 与 8.1。
 
+## 插件开发模式验证
+
+修改 feature/capability handshake、directory inspector、snapshot store、process-local Manager
+state、Resource/Runtime invalidation、development adapter/service/UI、消息、文档或视觉证据时必须运行：
+
+```bash
+pnpm run check:plugin-development-mode
+```
+
+该 gate 组合 strict boundary parsing、共享 CLI/Host payload corpus、feature-enabled Rust transaction
+tests、正式构建产物排除、前端 convergence 与可访问性、双语 schema/docs drift，以及 650×600 视觉矩阵。
+它应与现有 management、Runtime、Resource、Registration、CLI 及完整 frontend/Rust gates 顺序运行。
+最终真实 smoke 使用 `pnpm run dev:plugin-development-mode`；普通构建必须继续排除 development commands 与 UI。
+
+focused gate 还会读取 normal 与 malicious development registration 的有界 canonical macOS
+WKWebView 证据。harness 解出与 external Session 证据相同的维护中 Runtime payload，注册
+process-local development snapshot，打开页面，强制 fresh reload，验证未授权的
+`clipboard.read` 权限差量，然后移除注册。它会将 CSP、sandbox、Permissions Policy、Session、
+transport、Host API、deadline 与 breaker 事实同 external Runtime profile 比较。仅在 macOS 上审阅
+harness 或 Runtime 边界变更后刷新这些证据：
+
+```bash
+pnpm run build:plugin-runtime-security-lifecycle-harness
+pnpm run refresh:plugin-development-runtime-evidence:normal
+pnpm run refresh:plugin-development-runtime-evidence:malicious
+pnpm run check:plugin-development-runtime-evidence
+```
+
+证据文件只能包含有界平台标签、相对资源名、布尔值和计数器；不得记录 source directory、scoped URL、
+origin、nonce、Port、token、payload value 或 raw error。
+
 ## Plugin Resource Service 验证
 
 修改 Host 私有 Resource Contract、desktop adapter、Manager generation、Installer ownership proof、

@@ -14,6 +14,16 @@ edition = "2021"
 name = "lensx_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+default = []
+plugin-development-mode = []
+plugin-development-runtime-harness = ["plugin-development-mode"]
+
+[[example]]
+name = "plugin_development_runtime_harness"
+path = "examples/plugin_development_runtime_harness.rs"
+required-features = ["plugin-development-runtime-harness"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

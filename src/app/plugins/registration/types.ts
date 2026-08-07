@@ -2,7 +2,7 @@ import type { NormalizedPluginManifest } from '@lensx/plugin-contract';
 
 type NormalizedPluginDisplay = NormalizedPluginManifest['display'];
 
-export const PLUGIN_REGISTRATION_CONTRACT_VERSION = '0.1.0' as const;
+export const PLUGIN_REGISTRATION_CONTRACT_VERSION = '0.2.0' as const;
 export const PLUGIN_REGISTRATION_CHANGED_EVENT = 'plugin-registration://snapshot-changed' as const;
 export const READ_PLUGIN_REGISTRATION_SNAPSHOT_COMMAND = 'read_plugin_registration_snapshot' as const;
 export const READ_PLUGIN_REGISTRATION_DETAIL_COMMAND = 'read_plugin_registration_detail' as const;
@@ -32,7 +32,7 @@ export interface RegisteredPluginRegistrationSummary {
   readonly plugin_id: string;
   readonly version: string;
   readonly display: NormalizedPluginDisplay;
-  readonly source: 'builtin' | 'external';
+  readonly source: 'builtin' | 'external' | 'development';
   readonly enabled: boolean;
   readonly compatibility: PluginRegistrationCompatibility;
   readonly runtime: PluginRegistrationRuntimeStatus;
@@ -58,7 +58,7 @@ export interface RegisteredPluginRegistrationDetail {
   readonly kind: 'registered';
   readonly entry_id: string;
   readonly manifest: NormalizedPluginManifest;
-  readonly source: 'builtin' | 'external';
+  readonly source: 'builtin' | 'external' | 'development';
   readonly enabled: boolean;
   readonly compatibility: PluginRegistrationCompatibility;
   readonly granted_permission_ids: readonly string[];

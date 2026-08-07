@@ -206,7 +206,7 @@ const App = ({
     return () => {
       window.removeEventListener('beforeunload', terminateForReload);
       window.removeEventListener('pagehide', terminateForReload);
-      void effectivePluginRuntimeLifecycleService.dispose();
+      void effectivePluginRuntimeLifecycleService.terminateCurrent('app_teardown');
     };
   }, [effectivePluginRuntimeLifecycleService]);
   const results = useMemo(

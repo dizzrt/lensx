@@ -24,6 +24,7 @@ interface RuntimeSecurityLifecycleEvidence {
     readonly terminal_cleanup_removed_iframe: boolean;
     readonly terminal_cleanup_released_lease: boolean;
     readonly session_ports_disposed: boolean;
+    readonly source_independent_deadline_breaker_profile: boolean;
     readonly fixed_policy_constants_observed: boolean;
     readonly host_csp_header_verified: boolean;
   };
@@ -119,6 +120,19 @@ const run = async () => {
   if (blockedAttempt) hiddenConstructions += 1;
   await breakerLifecycle.dispose();
 
+  const sourceProfiles: boolean[] = [];
+  const parityLifecycle = createPluginRuntimeLifecycleService();
+  for (const source of ['external', 'development'] as const) {
+    const attempt = await parityLifecycle.start({
+      targetKey: `canonical-source-profile-${source}`,
+      onFailure: () => sourceProfiles.push(false),
+    });
+    const bound = attempt?.bindTrustedIdentity(`opaque-${source}-entry`, 'generation-1') ?? false;
+    sourceProfiles.push(bound);
+    await attempt?.terminate('manual_close');
+  }
+  await parityLifecycle.dispose();
+
   const tolerance = 1_500;
   const evidence: RuntimeSecurityLifecycleEvidence = {
     evidence_version: '0.1.0',
@@ -142,6 +156,8 @@ const run = async () => {
       terminal_cleanup_removed_iframe: !iframe.isConnected,
       terminal_cleanup_released_lease: releasedLeases === 1,
       session_ports_disposed: sessionResult.code === 'handshake_timeout',
+      source_independent_deadline_breaker_profile:
+        sourceProfiles.length === 2 && sourceProfiles.every((passed) => passed),
       fixed_policy_constants_observed:
         PLUGIN_RUNTIME_LOAD_DEADLINE_MS === 10_000 &&
         PLUGIN_RUNTIME_SESSION_HANDSHAKE_DEADLINE_MS === 5_000 &&

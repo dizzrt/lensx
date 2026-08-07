@@ -1,6 +1,8 @@
 import { browserPluginRuntimeScheduler, type PluginRuntimeScheduler } from './scheduler';
 
 export const PLUGIN_RUNTIME_LOAD_DEADLINE_MS = 10_000;
+export const PLUGIN_RUNTIME_RESOLUTION_DEADLINE_MS = 10_000;
+export const PLUGIN_RUNTIME_START_DEADLINE_MS = 10_000;
 export const PLUGIN_RUNTIME_FAILURE_WINDOW_MS = 60_000;
 export const PLUGIN_RUNTIME_BREAKER_COOLDOWN_MS = 30_000;
 export const PLUGIN_RUNTIME_HEALTHY_RESET_MS = 30_000;
@@ -128,6 +130,8 @@ export interface PluginRuntimeAttempt {
   readonly bindIframe: (unbind: () => void) => void;
   readonly bindNavigationLease: (release: () => void | Promise<void>) => void;
   readonly bindTrustedIdentity: (entryId: string, generation: string) => boolean;
+  readonly startResolutionDeadline: () => void;
+  readonly completeResolution: () => void;
   readonly startLoadDeadline: () => void;
   readonly completeLoad: () => void;
   readonly markReady: () => void;
@@ -157,6 +161,22 @@ export const createPluginRuntimeLifecycleService = (
   let terminalQueue: Promise<void> = Promise.resolve();
   let disposed = false;
 
+  const waitForTerminal = (terminal: Promise<void>) =>
+    new Promise<boolean>((resolve) => {
+      let settled = false;
+      const finish = (completed: boolean) => {
+        if (settled) return;
+        settled = true;
+        scheduler.clearTimeout(timer);
+        resolve(completed);
+      };
+      const timer = scheduler.setTimeout(() => finish(false), PLUGIN_RUNTIME_START_DEADLINE_MS);
+      void terminal.then(
+        () => finish(true),
+        () => finish(true),
+      );
+    });
+
   const terminateCurrent = (reason: PluginRuntimeTerminalReason) => {
     const attempt = current;
     return attempt ? attempt.terminate(reason) : terminalQueue;
@@ -164,7 +184,10 @@ export const createPluginRuntimeLifecycleService = (
 
   const service: PluginRuntimeLifecycleService = Object.freeze({
     async start(input: StartPluginRuntimeAttemptInput) {
-      await terminateCurrent('retry');
+      if (!(await waitForTerminal(terminateCurrent('retry')))) {
+        if (!disposed) input.onFailure('runtime_unavailable');
+        return undefined;
+      }
       if (disposed) return undefined;
       const rememberedBreakerKey = trustedTargets.get(input.targetKey);
       if (rememberedBreakerKey && breaker.isCoolingDown(rememberedBreakerKey)) {
@@ -175,6 +198,7 @@ export const createPluginRuntimeLifecycleService = (
       const key = ++sequence;
       let phase: 'active' | 'terminating' | 'disposed' = 'active';
       let breakerIdentity: string | undefined;
+      let resolutionTimer: unknown;
       let loadTimer: unknown;
       let cancelHealthy: (() => void) | undefined;
       const cancellables: Array<() => void> = [];
@@ -188,12 +212,17 @@ export const createPluginRuntimeLifecycleService = (
         if (loadTimer !== undefined) scheduler.clearTimeout(loadTimer);
         loadTimer = undefined;
       };
+      const clearResolutionTimer = () => {
+        if (resolutionTimer !== undefined) scheduler.clearTimeout(resolutionTimer);
+        resolutionTimer = undefined;
+      };
       const terminate = (reason: PluginRuntimeTerminalReason): Promise<void> => {
         if (phase === 'disposed') return terminalQueue;
         if (phase === 'terminating') return terminalQueue;
         phase = 'terminating';
         if (current === attempt) current = undefined;
         terminalQueue = terminalQueue.then(async () => {
+          clearResolutionTimer();
           clearLoadTimer();
           cancelHealthy?.();
           cancelHealthy = undefined;
@@ -205,7 +234,14 @@ export const createPluginRuntimeLifecycleService = (
           unbindIframe = undefined;
           const release = releaseLease;
           releaseLease = undefined;
-          if (release) await release();
+          if (release) {
+            try {
+              await release();
+            } catch {
+              // Native lease release is compare-current and best effort. A
+              // rejected adapter must not poison every later terminal queue.
+            }
+          }
           breakerIdentity = undefined;
           phase = 'disposed';
           void reason;
@@ -242,6 +278,13 @@ export const createPluginRuntimeLifecycleService = (
           trustedTargets.set(input.targetKey, breakerIdentity);
           return !breaker.isCoolingDown(breakerIdentity);
         },
+        startResolutionDeadline() {
+          if (!isCurrent() || resolutionTimer !== undefined) return;
+          resolutionTimer = scheduler.setTimeout(() => {
+            if (isCurrent()) void attempt.fail('runtime_unavailable');
+          }, PLUGIN_RUNTIME_RESOLUTION_DEADLINE_MS);
+        },
+        completeResolution: clearResolutionTimer,
         startLoadDeadline() {
           if (!isCurrent() || loadTimer !== undefined) return;
           loadTimer = scheduler.setTimeout(() => {
