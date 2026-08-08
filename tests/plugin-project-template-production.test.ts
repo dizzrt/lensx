@@ -110,12 +110,11 @@ describe('plugin project templates through production components', () => {
         source: 'external' as const,
         enabled: true,
         compatibility: { lensx: true, host_api: true },
-        granted_permission_ids: [] as const,
         runtime: { kind: 'inactive' as const },
         diagnostics: [] as const,
       };
       const snapshot: PluginRegistrationSnapshot = {
-        contract_version: '0.2.0',
+        contract_version: '0.3.0',
         revision,
         availability: { kind: 'available' },
         entries: [
@@ -137,7 +136,7 @@ describe('plugin project templates through production components', () => {
         initialize: async () => snapshot,
         refresh: async () => snapshot,
         readDetail: async (): Promise<PluginRegistrationDetailResponse> => ({
-          contract_version: '0.2.0',
+          contract_version: '0.3.0',
           revision,
           detail,
         }),
@@ -282,7 +281,7 @@ describe('plugin project templates through production components', () => {
         attempt.bindSession(session.dispose);
         const initialized = await initialization;
         attempt.markReady();
-        expect(initialized).toMatchObject({ hostApiVersion: '0.1.0', locale: 'zh-CN', theme: 'dark' });
+        expect(initialized).toMatchObject({ hostApiVersion: '0.2.0', locale: 'zh-CN', theme: 'dark' });
         expect(session.snapshot().state).toBe('ready');
         return { attempt, client, session };
       };

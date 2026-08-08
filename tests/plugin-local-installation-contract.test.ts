@@ -28,7 +28,7 @@ const parse = (fixture: Fixture) => {
   if (
     typeof value.preparation_token !== 'string' ||
     Object.keys(value).some((key) => !['contract_version', 'preparation_token'].includes(key)) ||
-    (value as { contract_version?: unknown }).contract_version !== '0.2.0'
+    (value as { contract_version?: unknown }).contract_version !== '0.3.0'
   )
     throw new TypeError();
   return createLocalPluginInstallationRequest(value.preparation_token);
@@ -65,7 +65,7 @@ describe('local plugin installation contract', () => {
     expect(result.status).toBe('prepared');
     if (result.status === 'prepared') {
       expect(result.candidate.display_name['en-US']).toBe('Workspace');
-      expect(Object.isFrozen(result.candidate.requested_permissions)).toBe(true);
+      expect(result.candidate).not.toHaveProperty('requested_permissions');
       expect(JSON.stringify(result)).not.toMatch(
         /path|digest|package_bytes|staging|manifest|grant|raw_error|stack|host_object/u,
       );

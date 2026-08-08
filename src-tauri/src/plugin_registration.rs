@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Runtime, State};
 
-pub const PLUGIN_REGISTRATION_CONTRACT_VERSION: &str = "0.2.0";
+pub const PLUGIN_REGISTRATION_CONTRACT_VERSION: &str = "0.3.0";
 pub const PLUGIN_REGISTRATION_CHANGED_EVENT: &str = "plugin-registration://snapshot-changed";
 const ENTRY_ID_PREFIX: &str = "entry_";
 const ENTRY_ID_HEX_LENGTH: usize = 16;
@@ -133,7 +133,6 @@ pub enum PluginRegistrationDetail {
         source: PluginRegistrationSource,
         enabled: bool,
         compatibility: PluginRegistrationCompatibility,
-        granted_permission_ids: Vec<String>,
         runtime: PluginRegistrationRuntimeStatus,
         diagnostics: Vec<PluginRegistrationDiagnostic>,
     },
@@ -251,15 +250,10 @@ pub fn deserialize_plugin_registration_detail(
     match &response.detail {
         PluginRegistrationDetail::Registered {
             entry_id,
-            granted_permission_ids,
             diagnostics,
             ..
         } => {
             if !is_valid_plugin_registration_entry_id(entry_id)
-                || !is_sorted_unique(granted_permission_ids)
-                || granted_permission_ids
-                    .iter()
-                    .any(|permission| !is_registration_permission_id(permission))
                 || diagnostics.len() > 32
                 || diagnostics
                     .iter()
@@ -411,18 +405,6 @@ pub fn is_valid_plugin_registration_entry_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
-fn is_registration_permission_id(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 255
-        && value.bytes().all(|byte| {
-            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'-' | b'_')
-        })
-}
-
-fn is_sorted_unique(values: &[String]) -> bool {
-    values.windows(2).all(|pair| pair[0] < pair[1])
-}
-
 pub(crate) fn healthy_entry_id(registration: &PluginRegistration) -> String {
     entry_identity("registered", &registration.manifest.plugin_id)
 }
@@ -509,7 +491,6 @@ pub(crate) fn project_plugin_registration_detail<'a>(
                 lensx: registration.compatibility.lensx,
                 host_api: registration.compatibility.host_api,
             },
-            granted_permission_ids: registration.facts.granted_permission_ids.clone(),
             runtime: registration.runtime.into(),
             diagnostics: registration
                 .facts
@@ -652,6 +633,8 @@ mod tests {
         if maximum == "0.1.0" {
             input["compatibility"]["lensx"]["min_version"] = json!("0.0.1");
             input["compatibility"]["host_api"]["min_version"] = json!("0.0.1");
+        } else if maximum == "0.2.0" {
+            input["compatibility"]["host_api"]["min_version"] = json!("0.1.0");
         }
         input["compatibility"]["lensx"]["max_version_exclusive"] = json!(maximum);
         input["compatibility"]["host_api"]["max_version_exclusive"] = json!(maximum);
@@ -661,7 +644,7 @@ mod tests {
     }
 
     fn facts(enabled: bool) -> PluginRegistrationFacts {
-        PluginRegistrationFacts::with_grants(
+        PluginRegistrationFacts::new(
             "/private/secret/plugins/example",
             PackageDigest {
                 algorithm: "sha256".to_owned(),
@@ -669,11 +652,6 @@ mod tests {
             },
             PluginSource::External,
             enabled,
-            vec![
-                "files.read".to_owned(),
-                "clipboard.read".to_owned(),
-                "files.read".to_owned(),
-            ],
         )
         .expect("facts should normalize")
     }
@@ -772,25 +750,21 @@ mod tests {
             "record_key",
             "/private/secret",
             "aabbccdd",
+            "granted_permission_ids",
         ] {
             assert!(!serialized_text.contains(sensitive));
         }
         match detail.detail {
             PluginRegistrationDetail::Registered {
                 manifest,
-                granted_permission_ids,
                 runtime,
                 diagnostics,
                 ..
             } => {
                 assert_eq!(manifest.publisher.author, "lensX Official");
-                assert_eq!(
-                    granted_permission_ids,
-                    vec!["clipboard.read".to_owned(), "files.read".to_owned()]
-                );
                 assert_eq!(runtime, PluginRegistrationRuntimeStatus::Inactive);
                 assert_eq!(diagnostics.len(), 1);
-                assert_eq!(manifest.requested_permissions.len(), 1);
+                assert_eq!(manifest.manifest_version, "0.2.0");
             }
             PluginRegistrationDetail::Quarantined { .. } => {
                 panic!("expected registered detail")
@@ -1011,7 +985,7 @@ mod tests {
                 .expect("events should be readable")
                 .as_slice(),
             &[PluginRegistrationChangedEvent {
-                contract_version: "0.2.0".to_owned(),
+                contract_version: "0.3.0".to_owned(),
                 revision: "1".to_owned(),
             }]
         );

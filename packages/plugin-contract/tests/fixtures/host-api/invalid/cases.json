@@ -9,7 +9,7 @@
     "name": "context-unknown-capability",
     "kind": "context",
     "value": {
-      "hostApiVersion": "0.1.0",
+      "hostApiVersion": "0.2.0",
       "locale": "en-US",
       "theme": "light",
       "capabilities": ["system.open_external"]
@@ -20,7 +20,7 @@
     "name": "context-duplicate-capability",
     "kind": "context",
     "value": {
-      "hostApiVersion": "0.1.0",
+      "hostApiVersion": "0.2.0",
       "locale": "en-US",
       "theme": "light",
       "capabilities": ["storage.get", "storage.get"]
@@ -31,7 +31,7 @@
     "name": "context-unsorted-capability",
     "kind": "context",
     "value": {
-      "hostApiVersion": "0.1.0",
+      "hostApiVersion": "0.2.0",
       "locale": "en-US",
       "theme": "light",
       "capabilities": ["storage.get", "actions.open"]
@@ -42,7 +42,7 @@
     "name": "context-trusted-field",
     "kind": "context",
     "value": {
-      "hostApiVersion": "0.1.0",
+      "hostApiVersion": "0.2.0",
       "locale": "en-US",
       "theme": "light",
       "capabilities": [],
@@ -109,19 +109,22 @@
     ]
   },
   {
-    "name": "clipboard-wrong-payload",
+    "name": "removed clipboard read method",
     "kind": "request",
-    "value": { "method": "clipboard.write", "params": { "key": "text" } },
-    "expected": [
-      { "code": "additional_property", "path": "/params/key" },
-      { "code": "required", "path": "/params/text" }
-    ]
+    "value": { "method": "clipboard.read", "params": {} },
+    "expected": [{ "code": "method_not_found", "path": "/method" }]
   },
   {
-    "name": "unknown-permission",
-    "kind": "permission",
-    "value": "system.open_external",
-    "expected": [{ "code": "invalid_value", "path": "" }]
+    "name": "removed clipboard write method",
+    "kind": "request",
+    "value": { "method": "clipboard.write", "params": { "text": "legacy" } },
+    "expected": [{ "code": "method_not_found", "path": "/method" }]
+  },
+  {
+    "name": "removed permission denial error",
+    "kind": "error",
+    "value": { "code": "permission_denied", "message": "Denied." },
+    "expected": [{ "code": "invalid_value", "path": "/code" }]
   },
   {
     "name": "unknown-error",

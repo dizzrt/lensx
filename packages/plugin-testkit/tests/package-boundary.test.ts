@@ -62,7 +62,7 @@ describe('Plugin Testkit public package boundary', () => {
 
   test('publish validation rejects missing exports, private files, dependency leaks, and forbidden declarations', () => {
     const metadata = {
-      dependencies: { '@lensx/plugin-contract': '0.1.0', '@lensx/plugin-sdk': '0.1.0' },
+      dependencies: { '@lensx/plugin-contract': '0.2.0', '@lensx/plugin-sdk': '0.2.0' },
       exports: { '.': { import: './dist/src/index.js', types: './dist/src/index.d.ts' } },
     };
     const files = ['LICENSE', 'README.md', 'dist/src/index.d.ts', 'dist/src/index.js', 'package.json'];

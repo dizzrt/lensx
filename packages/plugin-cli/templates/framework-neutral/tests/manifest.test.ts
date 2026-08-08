@@ -8,19 +8,18 @@ const root = resolve(import.meta.dirname, '..');
 const manifest = JSON.parse(readFileSync(resolve(root, 'manifest.json'), 'utf8'));
 
 describe('framework-neutral template Manifest', () => {
-  test('is accepted by the real Contract with one permission-free Page and matching Action', () => {
+  test('is accepted by the real Contract with one Page and matching Action', () => {
     const validation = validatePluginManifest(manifest);
     expect(validation.status).toBe('valid');
     if (validation.status !== 'valid') throw new Error(JSON.stringify(validation.diagnostics));
-    const normalized = normalizePluginManifest(validation, { lensx: '0.1.0', host_api: '0.1.0' });
+    const normalized = normalizePluginManifest(validation, { lensx: '0.1.0', host_api: '0.2.0' });
 
     expect(normalized.status).toBe('compatible');
     expect(normalized.manifest.plugin_id).toBe('dev.lensx.template.framework-neutral');
-    expect(normalized.manifest.requested_permissions).toEqual([]);
+    expect(normalized.manifest).not.toHaveProperty('requested_permissions');
     expect(normalized.manifest.runtime).toEqual({ kind: 'iframe', entry: 'index.html' });
-    expect(normalized.manifest.contributes.pages).toEqual([
-      expect.objectContaining({ id: 'main', route: '/', required_permissions: [] }),
-    ]);
+    expect(normalized.manifest.contributes.pages).toEqual([expect.objectContaining({ id: 'main', route: '/' })]);
+    expect(normalized.manifest.contributes.pages[0]).not.toHaveProperty('required_permissions');
     expect(normalized.manifest.contributes.actions[0]?.target).toEqual({ kind: 'page', page_id: 'main' });
   });
 

@@ -103,11 +103,11 @@ importers:
   examples/plugins/development-mode-smoke:
     dependencies:
       '@lensx/plugin-sdk':
-        specifier: ^0.1.0
+        specifier: ^0.2.0
         version: link:../../../packages/plugin-sdk
     devDependencies:
       '@lensx/plugin-contract':
-        specifier: ^0.1.0
+        specifier: ^0.2.0
         version: link:../../../packages/plugin-contract
       '@rsbuild/core':
         specifier: ^2.1.8
@@ -128,14 +128,14 @@ importers:
   examples/plugins/framework-neutral:
     dependencies:
       '@lensx/plugin-sdk':
-        specifier: ^0.1.0
+        specifier: ^0.2.0
         version: link:../../../packages/plugin-sdk
     devDependencies:
       '@lensx/plugin-contract':
-        specifier: ^0.1.0
+        specifier: ^0.2.0
         version: link:../../../packages/plugin-contract
       '@lensx/plugin-testkit':
-        specifier: ^0.1.0
+        specifier: ^0.2.0
         version: link:../../../packages/plugin-testkit
       '@rsbuild/core':
         specifier: ^2.1.8
@@ -165,10 +165,10 @@ importers:
         specifier: ^2.101.1
         version: 2.101.1(@floating-ui/dom@1.8.0)(@tiptap/suggestion@3.29.2(@floating-ui/dom@1.8.0)(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))(@tiptap/pm@3.29.2))(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@lensx/plugin-sdk':
-        specifier: ^0.1.0
+        specifier: ^0.2.0
         version: link:../../../packages/plugin-sdk
       '@lensx/plugin-ui':
-        specifier: ^0.1.0
+        specifier: ^0.2.0
         version: link:../../../packages/plugin-ui
       react:
         specifier: ^19.2.7
@@ -178,10 +178,10 @@ importers:
         version: 19.2.8(react@19.2.8)
     devDependencies:
       '@lensx/plugin-contract':
-        specifier: ^0.1.0
+        specifier: ^0.2.0
         version: link:../../../packages/plugin-contract
       '@lensx/plugin-testkit':
-        specifier: ^0.1.0
+        specifier: ^0.2.0
         version: link:../../../packages/plugin-testkit
       '@rsbuild/core':
         specifier: ^2.1.8

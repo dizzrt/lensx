@@ -30,7 +30,7 @@ interface FixtureCase {
 const fixtureRoot = resolve(import.meta.dirname, 'fixtures');
 const defaultVersions: PluginHostVersions = {
   lensx: '0.1.0',
-  host_api: '0.1.0',
+  host_api: '0.2.0',
 };
 
 const readJson = <T>(path: string): T => JSON.parse(readFileSync(path, 'utf8')) as T;
@@ -84,7 +84,7 @@ const loadCases = (category: string): readonly FixtureCase[] =>
 const fixtureInput = (fixture: FixtureCase): unknown =>
   fixture.input ?? applyMutations(baseManifest, fixture.mutations ?? []);
 
-describe('plugin Manifest 0.1.0 shared contract fixtures', () => {
+describe('plugin Manifest 0.2.0 shared contract fixtures', () => {
   for (const category of ['valid', 'incompatible'] as const) {
     for (const fixture of loadCases(category)) {
       test(`${category}: ${fixture.name}`, () => {

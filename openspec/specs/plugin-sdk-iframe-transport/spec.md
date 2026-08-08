@@ -108,7 +108,7 @@ The transport MUST carry only declared, within-budget Host API events. A valid `
 
 #### Scenario: Handler returns a stable Host API rejection
 
-- **WHEN** the injected Handler returns a Contract-valid `permission_denied`, `not_found`, `limit_exceeded`, `unavailable`, or another declared Host API error for a pending request
+- **WHEN** the injected Handler returns a Contract-valid `not_found`, `limit_exceeded`, `unavailable`, or another declared Host API error for a pending request
 - **THEN** the SDK caller receives that Host API error without it being collapsed into `transport_failure`
 - **THEN** no private envelope, exception, stack, path, payload, grant or Host value becomes observable
 
@@ -149,7 +149,7 @@ Session disposal MUST remain authoritative: an old adapter or late callback MUST
 
 ### Requirement: Transport delivery MUST stop before real Host API dispatch and permission decisions
 
-This capability MUST provide only the official iframe transport, private wire, Host Port adapter, typed SDK handoff, injected fixture/unavailable handler, lifecycle integration, security evidence and maintained documentation. Production integration before the Host API Dispatcher exists MUST return a stable `unavailable` Host API rejection and MUST NOT implement `runtime.get_context`, `ui.close`, `actions.open`, storage, clipboard, application service, Rust command, permission decision, grant mutation or privileged side effect.
+This capability MUST provide only the official iframe transport, private wire, Host Port adapter, typed SDK handoff, injected fixture/unavailable handler, lifecycle integration, security evidence and maintained documentation. Production integration before the Host API Dispatcher exists MUST return a stable `unavailable` Host API rejection and MUST NOT implement `runtime.get_context`, `ui.close`, `actions.open`, storage, native clipboard, application service, Rust command, authority mutation or privileged side effect.
 
 Fixture handlers MAY return Contract-valid context, results, errors and events solely to prove transport behavior, but they MUST NOT become production providers or a public Host executor. A successful fixture round-trip MUST NOT be described as an executable production Host API.
 
@@ -157,7 +157,7 @@ Fixture handlers MAY return Contract-valid context, results, errors and events s
 
 - **WHEN** the real SDK, iframe transport and Host adapter pass their delivery gates while no Task 5.3 Dispatcher is configured
 - **THEN** focused and WebView fixtures can complete SDK initialization and request round-trips through an injected fixture handler
-- **THEN** production requests receive `unavailable`, produce no application or native side effect, and cannot obtain a new permission decision
+- **THEN** production requests receive `unavailable`, produce no application or native side effect, and cannot obtain Host authority
 
 ### Requirement: Delivery MUST prove public packaging, malicious isolation and target WebView behavior
 
@@ -169,7 +169,7 @@ Canonical English architecture, workspace and validation documentation and their
 
 - **WHEN** the focused gate, tarball consumers, browser fixture, target WebView evidence, bilingual documentation checks and complete repository validation all pass
 - **THEN** an external plugin can use only declared Contract and SDK package entries to establish and test the transport without importing Host-private code or private wire modules
-- **THEN** the evidence demonstrates exact Port/session binding, semantic parity and terminal cleanup without claiming real Dispatcher, permissions or Host API side effects
+- **THEN** the evidence demonstrates exact Port/session binding, semantic parity and terminal cleanup without claiming real Dispatcher, native authority or Host API side effects
 
 #### Scenario: Packaging, drift or security evidence fails
 

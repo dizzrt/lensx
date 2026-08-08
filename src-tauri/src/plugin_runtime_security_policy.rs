@@ -6,12 +6,12 @@
 #[allow(dead_code)] // tauri.conf.json is the production consumer; the drift test keeps this profile identical.
 pub(crate) const HOST_DOCUMENT_CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self' ipc: http://ipc.localhost; frame-src lensx-plugin:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
-pub(crate) const PLUGIN_RUNTIME_DOCUMENT_CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; media-src 'none'; worker-src 'none'; child-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors tauri://localhost";
+pub(crate) const PLUGIN_RUNTIME_DOCUMENT_CSP: &str = "default-src 'self' https: data: blob:; script-src 'self' https: data: blob: 'wasm-unsafe-eval'; style-src 'self' https: data: blob: 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https: wss:; media-src 'self' https: data: blob:; worker-src 'self' https: data: blob:; child-src 'self' https: data: blob:; frame-src 'self' https: data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors tauri://localhost";
 
 // `tauri dev` uses the exact configured development URL as the application
 // document origin. Keep the Runtime profile otherwise byte-for-byte identical
 // and never derive this ancestor from a plugin-controlled fact.
-pub(crate) const PLUGIN_RUNTIME_TAURI_DEV_DOCUMENT_CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; media-src 'none'; worker-src 'none'; child-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors http://localhost:40755";
+pub(crate) const PLUGIN_RUNTIME_TAURI_DEV_DOCUMENT_CSP: &str = "default-src 'self' https: data: blob:; script-src 'self' https: data: blob: 'wasm-unsafe-eval'; style-src 'self' https: data: blob: 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https: wss:; media-src 'self' https: data: blob:; worker-src 'self' https: data: blob:; child-src 'self' https: data: blob:; frame-src 'self' https: data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors http://localhost:40755";
 
 pub(crate) const fn current_plugin_runtime_document_csp() -> &'static str {
     if cfg!(dev) {
@@ -24,7 +24,7 @@ pub(crate) const fn current_plugin_runtime_document_csp() -> &'static str {
 // The real macOS harness uses a dedicated Host scheme so it cannot accidentally
 // inherit production Tauri privileges. It receives an otherwise identical
 // profile with only the exact ancestor substituted.
-pub(crate) const PLUGIN_RUNTIME_HARNESS_DOCUMENT_CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; media-src 'none'; worker-src 'none'; child-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors lensx-runtime-harness://localhost";
+pub(crate) const PLUGIN_RUNTIME_HARNESS_DOCUMENT_CSP: &str = "default-src 'self' https: data: blob:; script-src 'self' https: data: blob: 'wasm-unsafe-eval'; style-src 'self' https: data: blob: 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https: wss:; media-src 'self' https: data: blob:; worker-src 'self' https: data: blob:; child-src 'self' https: data: blob:; frame-src 'self' https: data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors lensx-runtime-harness://localhost";
 
 #[cfg(test)]
 mod tests {
@@ -49,8 +49,10 @@ mod tests {
         assert_ne!(HOST_DOCUMENT_CSP, PLUGIN_RUNTIME_DOCUMENT_CSP);
         assert!(HOST_DOCUMENT_CSP.starts_with("default-src 'self'"));
         assert!(HOST_DOCUMENT_CSP.contains("frame-src lensx-plugin:"));
-        assert!(PLUGIN_RUNTIME_DOCUMENT_CSP.starts_with("default-src 'none'"));
-        assert!(PLUGIN_RUNTIME_DOCUMENT_CSP.contains("connect-src 'none'"));
+        assert!(PLUGIN_RUNTIME_DOCUMENT_CSP.starts_with("default-src 'self' https: data: blob:"));
+        assert!(PLUGIN_RUNTIME_DOCUMENT_CSP.contains("connect-src 'self' https: wss:"));
+        assert!(PLUGIN_RUNTIME_DOCUMENT_CSP.contains("worker-src 'self' https: data: blob:"));
+        assert!(PLUGIN_RUNTIME_DOCUMENT_CSP.contains("'wasm-unsafe-eval'"));
         assert!(PLUGIN_RUNTIME_DOCUMENT_CSP.contains("frame-ancestors tauri://localhost"));
     }
 

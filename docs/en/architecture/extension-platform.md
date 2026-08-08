@@ -8,10 +8,11 @@ Testkit, optional Plugin UI package, Host-private Plugin surface projection and
 Page navigation, Host-private lifecycle controls, local package replacement,
 the Host-private scoped resource service, isolated iframe Runtime,
 process-local Runtime Session, public SDK iframe transport, Host-private Port
-adapter, public Host API semantic contract, Host-private permission core, and
-the macOS text-clipboard provider from the intended runtime extension boundary.
+adapter and public Host API semantic contract from the intended runtime
+extension boundary. The former permission core and native clipboard provider
+have been removed.
 The public Plugin Developer CLI and project templates, complete foreground
-plugin execution lifecycle, Host-private management and permission surfaces,
+plugin execution lifecycle, Host-private management surface,
 and feature-gated Plugin Development Mode are also shipped. The repository also
 ships an independent official-plugin `.lxp` release pipeline and external audit
 sidecar that the Host ignores. npm publication,
@@ -27,7 +28,7 @@ untrusted code access to privileged application internals. It should provide:
 
 - searchable launcher actions;
 - pages opened through explicit actions;
-- declared permissions;
+- open isolated Web execution;
 - localized names and search aliases;
 - versioned compatibility boundaries;
 - predictable lifecycle and diagnostics.
@@ -39,14 +40,13 @@ Plugin
 ├── metadata and compatibility
 ├── pages
 ├── actions ───────────────▶ target pages
-├── permissions
 └── runtime
     ├── trusted Host module
     └── isolated external iframe
 ```
 
 Ownership and references must be explicit. IDs used across plugins, pages,
-actions, permissions, and other referenceable resources must be globally
+actions and other referenceable resources must be globally
 unambiguous.
 
 ## Contract Layers
@@ -59,8 +59,8 @@ The platform separates:
 4. the runtime context exposed to an active plugin.
 
 Plugin authors must not be able to declare trusted facts such as installation
-source, granted permissions, or Host-owned lifecycle policy. The Host adds those
-facts after validation.
+source or Host-owned lifecycle policy. The Host adds those facts after
+validation.
 
 Serialized contracts should have one versioned schema source and should be
 validated consistently in TypeScript and Rust. Validation errors exposed across
@@ -68,7 +68,7 @@ boundaries must have stable machine-readable codes and locations.
 
 ## Shipped Public Contract And Static Manifest
 
-lensX ships the publishable `@lensx/plugin-contract@0.1.0` workspace package.
+lensX ships the publishable `@lensx/plugin-contract@0.2.0` workspace package.
 Its root export provides Manifest and Host API versions, generated input types,
 normalized values, stable diagnostics, catalogs, and pure validators. Manifest
 Schema entries are `@lensx/plugin-contract/schema` and
@@ -76,7 +76,7 @@ Schema entries are `@lensx/plugin-contract/schema` and
 `@lensx/plugin-contract/host-api-schema` and
 `@lensx/plugin-contract/host-api.schema.json`. Undeclared deep imports are not supported.
 
-The package owns the author-controlled `manifest_version: "0.1.0"` protocol as
+The package owns the author-controlled `manifest_version: "0.2.0"` protocol as
 a strict Draft 2020-12 JSON Schema. The Schema is the structural source of
 truth for the wire format. The committed `PluginManifestInput` type is
 generated deterministically from it. The package TypeScript implementation and
@@ -91,14 +91,13 @@ The complete project-owned example is
 
 | Field | Contract |
 | --- | --- |
-| `manifest_version` | Required and exactly `0.1.0`. |
+| `manifest_version` | Required and exactly `0.2.0`. |
 | `plugin_id` and `version` | Required stable namespaced plugin ID and SemVer release version. |
 | `display` | Required localized `name`; optional localized `description` and package-local asset `icon`. |
 | `publisher` | Required author-declared `author`, HTTPS `homepage`, and HTTPS `repository`; none establish trust. |
 | `compatibility` | Required half-open SemVer ranges for both `lensx` and `host_api`. |
 | `runtime` | Required `kind: "iframe"` and package-local HTML `entry`; this is metadata and does not create an iframe. |
-| `requested_permissions` | Optional unique permission requests with localized reasons; requests are not grants. |
-| `contributes.pages` | One or more uniquely identified pages with localized titles, internal routes, optional parent/icon, and requested-permission dependencies. |
+| `contributes.pages` | One or more uniquely identified pages with localized titles, internal routes, and optional parent/icon. |
 | `contributes.actions` | Optional unique actions with localized title/description, action-owned `default_keywords`, optional icon, and a Page-only target. |
 | `contributes.launcher` | Optional `default_action_id` referencing one contributed action; it does not implement ranking or registration. |
 
@@ -112,8 +111,7 @@ derives the global Action ID as `<plugin_id>.<local_action_id>`; the public
 validator itself does not perform that projection. Page parent references must exist and form an
 acyclic graph. Every Action target must be
 `{ "kind": "page", "page_id": "<local-page-id>" }`. Action keywords remain
-owned by that Action and never become plugin-wide aliases. Page permission
-dependencies must be a subset of top-level requests.
+owned by that Action and never become plugin-wide aliases.
 
 ### Validation, Normalization, And Compatibility
 
@@ -135,12 +133,13 @@ semantically valid Manifest outside either range is `incompatible`, not
 The normalized Manifest contains only author-declared data and deterministic
 defaults. It cannot contain executors, functions, React or Tauri values, Rust
 implementation objects, or Host-owned fields such as `source`, `lifecycle`,
-`enabled`, installed paths, granted permissions, signature status, or runtime
-status. Publisher metadata is unverified author input and must never be used
-alone to grant trust or permission.
+`enabled`, installed paths, signature status, runtime status, CSP, sandbox,
+network policy, native capability, permission, or grant state. Publisher
+metadata is unverified author input and must never be used alone to establish
+trust.
 
 The Contract package version, Manifest protocol, Host API protocol, and lensX
-application version all begin at `0.1.0` but evolve independently. Package
+application version evolve independently. Package
 implementation fixes do not change a wire protocol; breaking Manifest or Host
 API changes update their own version dimension. The current contract provides
 no earlier Schema, deprecated symbol alias, compatibility adapter, or
@@ -158,17 +157,17 @@ source.
 ### Capabilities Outside Static Validation
 
 Static validation alone does not discover or install packages, create a
-production registration or iframe, grant permissions, exchange Host API
+production registration or iframe, exchange Host API
 messages, or run plugin code. The Host-private capabilities described below add
 one selected compatible `.lxp` as an external registration, project current
 Registration facts into Page and Action Registries, and create the isolated
 iframe only while an eligible Plugin Page is active. Runtime Sessions, Host API
-execution, and permission decisions are separate capabilities; the Host-private
-process-local Runtime Session and public semantic contract described below are now shipped.
+execution is a separate capability; the Host-private process-local Runtime
+Session and public semantic contract described below are now shipped.
 
 ## Shipped Public Host API Semantic Contract
 
-`@lensx/plugin-contract` now owns Host API protocol `0.1.0` as a closed Draft
+`@lensx/plugin-contract` now owns Host API protocol `0.2.0` as a closed Draft
 2020-12 Schema, generated TypeScript inputs, deeply frozen normalized values,
 immutable catalogs, and pure `unknown` validators. TypeScript and test-only Rust
 consumers read the same package-owned valid and invalid fixtures and agree on
@@ -176,21 +175,21 @@ validity plus sorted JSON Pointer diagnostic `code`/`path` values.
 
 The catalog contains exactly these methods:
 
-| Area | Methods | Explicit permission |
-| --- | --- | --- |
-| Runtime | `runtime.get_context` | None |
-| Current Page and Action | `ui.close`, `actions.open` | None |
-| Plugin-private storage | `storage.get`, `storage.set`, `storage.delete`, `storage.list`, `storage.get_quota` | None |
-| Text clipboard | `clipboard.read`, `clipboard.write` | `clipboard.read`, `clipboard.write` respectively |
+| Area | Methods |
+| --- | --- |
+| Runtime | `runtime.get_context` |
+| Current Page and Action | `ui.close`, `actions.open` |
+| Plugin-private storage | `storage.get`, `storage.set`, `storage.delete`, `storage.list`, `storage.get_quota` |
 
 `PluginRuntimeContext` is shared by Contract and SDK. It contains only
 `hostApiVersion`, locale, theme, and a sorted unique snapshot of currently
 callable method IDs. Empty capabilities are valid. `runtime.context_changed`
 carries a complete replacement Context, not a patch. Capabilities combine
-current Host support, implementation availability, and authorization; they are
-not persistent grants. Plugin identity, Page, source, Manifest requests, raw
-grants, paths, and executors are rejected as author-controlled Context or
-method fields.
+current Host support and implementation availability. Plugin identity, Page,
+source, Manifest data, paths, permission/grant facts, and executors are
+rejected as author-controlled Context or method fields. Ordinary Worker,
+network, remote-resource, Blob/Data, WASM, and browser-storage capabilities are
+not Host API methods and do not appear in Context.
 
 Host API errors have stable closed codes and a bounded safe English message.
 They remain distinguishable from SDK lifecycle errors such as `disconnected`,
@@ -202,8 +201,8 @@ shape or removal requires a major version, and deprecation must precede removal.
 This delivery is an independently usable semantic contract, not an execution
 path. It registers no Tauri command and implements no iframe transport, private
 RPC envelope, request ID, Dispatcher, Action/close side effect, storage
-persistence, clipboard native call, permission decision, or RPC resource
-limit. `system.open_external` and an external-link permission are deliberately
+persistence, native call, or RPC resource limit. Clipboard and
+`system.open_external` are deliberately
 absent rather than published as placeholders.
 
 ## Shipped Host-Private Plugin Package Inspection
@@ -246,20 +245,18 @@ Each healthy entry keeps four lifetimes separate:
   deterministic defaults;
 - persisted Host registration facts contain the installation path, an
   algorithm-labelled package digest supplied by the Host, Host-controlled
-  source, enabled intent, a sorted unique grant snapshot, and at most the 32
+  source, enabled intent, and at most the 32
   most recent canonical safe diagnostics;
 - compatibility is recomputed from the Manifest ranges and current lensX and
   Host API versions whenever a record is constructed or recovered;
 - Runtime state is process-local and always recovers as `inactive` in this
   foundation.
 
-The grant snapshot defaults to empty. Requested permissions never become
-grants automatically. Host-controlled source, author-declared publisher data,
-requested permissions, and an official provenance claim are storage or display
-facts only; none establishes trust, grants a permission, or creates a lifecycle
-exemption.
+Host-controlled source, author-declared publisher data, and an official
+provenance claim are storage or display facts only; none establishes trust or
+creates a lifecycle exemption.
 
-The dedicated Plugin Manager Store uses one version-1 JSON record per plugin.
+The dedicated Plugin Manager Store uses one version-2 JSON record per plugin.
 A deterministic hex-encoded record key forms the safe filename. A transition
 validates its complete next record, writes a unique same-directory temporary
 file, flushes it, and atomically replaces only that plugin's target record.
@@ -282,7 +279,7 @@ local installer can establish the package digest, payload, and first external
 registration for one selected compatible package. The lifecycle coordinator
 can atomically update enabled intent or remove one healthy or quarantined entry
 through a revision-bound opaque identity. Manager records alone still do not
-prove discovery provenance. Updates, permission decisions, Runtime sessions,
+prove discovery provenance. Updates, Runtime sessions,
 and a public plugin-facing registration API remain separate capabilities.
 
 ## Shipped Host-Private Plugin Development Mode
@@ -307,10 +304,10 @@ transactions. Manager commit advances Resource generation, old Resource URLs
 fail immediately, and the macOS navigation policy revokes a matching current
 plugin lease before old snapshot cleanup. Frontend surfaces quiesce before the
 native transition and fully reread Registration state afterward, so lost events
-do not become authority. Reload always publishes a new generation, retains only
-grants still requested by the next Manifest, and does not add watch or retry.
+do not become authority. Reload always publishes a new generation and does not
+add watch or retry.
 
-Development entries, grants, diagnostics, source capabilities, snapshots, and
+Development entries, diagnostics, source capabilities, snapshots, and
 Runtime activity are process-local. Remove and mode shutdown retain plugin data
 and Launcher collections, and do not alter installed packages, quarantine
 records, or unrelated plugins. Bounded cleanup failure never restores revoked
@@ -323,7 +320,7 @@ The Plugins settings tab exposes one Host-owned **Install from file** action.
 “Local” describes this installation source, not a distinct kind of plugin.
 Its pathless `install_local_plugin` command opens the native file picker for one
 `.lxp`; cancellation returns an ordinary cancelled result. The frontend sees
-only strict installation contract `0.1.0` success, cancellation, or bounded
+only strict installation contract `0.3.0` success, cancellation, or bounded
 error values. It never supplies or receives the selected source path, package
 digest, installation path, Store key, raw native error, or internal recovery
 fact.
@@ -353,7 +350,7 @@ installation command's semantics.
 After the flushed staging directory is atomically renamed on the same
 filesystem, the coordinator registers the normalized Manifest with a complete
 Host fact set: the committed absolute path, algorithm-labelled digest,
-`source=external`, `enabled=true`, empty grants, and an `inactive` Runtime.
+`source=external`, `enabled=true`, and an `inactive` Runtime.
 Existing healthy registrations and quarantined identities fail closed before
 commit. Manager persistence failure rolls the payload back or leaves a
 provable orphan for recovery; a changed-event emission failure does not undo a
@@ -381,7 +378,7 @@ user-initiated rollback history require later accepted changes.
 ## Shipped Host-Private Registration Contract
 
 The Host now projects the managed Plugin Manager through Registration Contract
-version `0.2.0`. This contract is private to Rust, Tauri, and the root
+version `0.3.0`. This contract is private to Rust, Tauri, and the root
 application TypeScript. It is not exported by `@lensx/plugin-contract`,
 `@lensx/plugin-sdk`, or another plugin package, and workspace boundaries reject
 official and example plugins that import its types, desktop adapter, or event
@@ -394,7 +391,7 @@ Host-owned registration summary/detail, and process-local Runtime status.
 availability. `read_plugin_registration_detail` accepts only an opaque entry
 identity and returns a revision-bound registered or quarantine detail. Healthy
 details contain the normalized Manifest, `builtin | external | development` source, enabled
-intent, per-dimension compatibility, sorted unique grants, bounded safe
+intent, per-dimension compatibility, bounded safe
 diagnostics, and only the current `inactive` Runtime variant. Quarantine details
 contain only the opaque identity, an optional verified plugin ID, and one safe
 diagnostic.
@@ -419,16 +416,13 @@ and a safe English message.
 
 The contract never exposes installation paths, package digests, Store keys or
 filenames, damaged record contents, raw exceptions, stacks, functions, or Tauri
-objects. Publisher, source, enabled intent, requested permissions, and an empty
-or non-empty grant snapshot remain independent facts; none establishes trust
-or automatic authorization. The Registration Contract itself remains read-only:
+objects. Publisher, source, and enabled intent remain independent facts; none
+establishes trust. The Registration Contract itself remains read-only:
 it does not install, update, uninstall, enable, disable, execute, or render
 plugins. The downstream Host-private lifecycle and Action projection cores
 consume it without changing that wire contract. Management UI, real Runtime
-sessions, Host API methods, and the permission core are delivered elsewhere in
-this document. Permission prompts and settings are also delivered by separate
-Host-private capabilities; decision history and signatures remain
-unimplemented.
+sessions and Host API methods are delivered elsewhere in this document.
+Decision history and signatures remain unimplemented.
 
 ## Shipped Host-Private Plugin Lifecycle Controls
 
@@ -442,7 +436,7 @@ unsafe cleanup targets fail closed with bounded codes and messages that expose
 no paths, record keys, damaged data, raw exceptions, or stacks.
 
 Enable and disable update Host-owned enabled intent atomically without changing
-source, grants, compatibility facts, or Runtime state. Compatible and
+source, compatibility facts, or Runtime state. Compatible and
 incompatible healthy registrations may preserve enabled intent independently
 of effective availability; quarantine entries cannot be enabled. A real change
 increments the Registration revision and emits the existing snapshot-changed
@@ -478,12 +472,12 @@ replacement behavior; replacement is the separate private capability below.
 ## Shipped Host-Private Local Plugin Replacement
 
 The root application now has an independent private Plugin Replacement
-Contract `0.1.0`. Its pathless prepare command accepts only the current healthy
+Contract `0.2.0`. Its pathless prepare command accepts only the current healthy
 entry identity and observed Registration revision, opens one native `.lxp`
 picker, and returns `cancelled`, `duplicate`, or a bounded `prepared` result.
-Prepared results contain an opaque process-local token, from/to versions, an
-`upgrade | downgrade | reinstall` classification, and sorted added/removed
-permission IDs. They never contain the source or staging path, package digest,
+Prepared results contain an opaque process-local token, from/to versions, and
+an `upgrade | downgrade | reinstall` classification. They never contain the
+source or staging path, package digest,
 Store key, package bytes, or a native error. The commit and cancel commands
 accept only that token and its original entry/revision binding. The Contract,
 desktop adapter, token, and service remain unavailable to public packages and
@@ -503,16 +497,14 @@ Commit shares the installation/lifecycle process mutex and `.install.lock`. It
 re-reads Manager and canonical filesystem facts, re-inspects the immutable
 bytes, verifies every staged file, atomically renames the candidate to a sibling
 digest directory, flushes that directory, and asks the Manager for one
-revision-bound complete record replacement. The version-1 Manager record's
+revision-bound complete record replacement. The version-2 Manager record's
 Manifest, installation path, and digest remain the only active pointer; there
 is no second pointer, `previous` record, version history, or rollback catalog.
 Manager persistence and in-memory publication are the durable commit point.
 
 The next registration preserves source, enabled intent, bounded diagnostics,
 and the independent plugin-data subtree; recomputes compatibility; and resets
-Runtime to `inactive`. Grants become exactly the intersection of the old grants
-and the candidate's requested permission IDs, so new requests are never granted
-automatically and removed requests cannot retain grants. Before the Rust commit,
+Runtime to `inactive`. Before the Rust commit,
 the trusted TypeScript service withdraws Action then Page surfaces. A pre-commit
 failure restores the original Page then Action projection. After commit it
 refreshes and waits for the committed revision in Page-then-Action order; a
@@ -604,7 +596,7 @@ Run `pnpm run check:plugin-resource-service` for the shared Rust/TypeScript
 fixtures, desktop adapter, workspace boundary, Manager generation, Installer
 ownership regressions, and protocol/path/MIME/lifecycle/race/oracle/platform URL
 tests. This service does not create an iframe, execute plugin code, establish
-Runtime Sessions or Host API transport, or grant permissions. It enforces the
+Runtime Sessions or Host API transport. It enforces the
 document policy selected by the Host-private security profile; the iframe
 container and downstream Runtime Session consume its validated `entry_url`.
 
@@ -699,8 +691,7 @@ pnpm run check:frame-aware-webview-navigation-policy
 
 This capability is macOS-only and does not claim Windows or Linux support. The
 Task 4.2 container consumes its exact target lease. The shipped Session below
-also consumes that lease without changing the native policy contract; Host API
-and permissions remain separate later capabilities.
+also consumes that lease without changing the native policy contract.
 
 ## Shipped macOS Isolated Plugin iframe Runtime
 
@@ -745,9 +736,8 @@ actual `contentWindow` and the Host-derived descriptor to the process-local
 `PluginRuntimeSessionService`. The resolver converges Registration summary and
 detail, Page route, Resource entry, and current revision, then binds an immutable
 identity containing the opaque entry, plugin/version/Page, isolated origin and
-resource generation, Runtime attempt, and sorted actual grant snapshot.
-Manifest requests, source, publisher text, enabled text, and plugin messages
-cannot create or replace identity or grants.
+resource generation, and Runtime attempt. Manifest data, source, publisher
+text, enabled text, and plugin messages cannot create or replace identity.
 
 For each attempt the Host creates a new 128-bit lowercase hexadecimal nonce and
 `MessageChannel`, sends the exact private `0.1.0` bootstrap only to the recorded
@@ -760,7 +750,7 @@ acknowledgements, `messageerror`, Host reload, or current-fact loss disconnects
 the Session without an oracle or automatic reconnect.
 
 Currentness compares the affected entry, Page, version, origin/generation,
-attempt, availability, and grants after each Registration invalidation. A
+attempt, and availability after each Registration invalidation. A
 change to those facts revokes the old Session, Port, iframe, and navigation
 lease. A global revision change caused only by another plugin retains all four;
 the revision is a race detector, not a Session generation. Close, retry,
@@ -798,12 +788,13 @@ is `style-src 'unsafe-inline'`, required by the current Semi Design runtime;
 script inline, eval, wildcard, remote script, object, base, form, and ancestor
 relaxations remain denied. Every successful current plugin HTML `GET` and
 `HEAD` receives the same Plugin Runtime profile from the Resource Service. That
-profile defaults to deny, permits only same-origin script, style, image, and
-font resources, disables connect, worker, child frame, media, object, base, and
-form destinations. A production application document admits exactly
+profile admits current-origin plus HTTPS/Data/Blob content, HTTPS/WSS
+connections, page-lifetime Dedicated Workers, and WASM while continuing to
+deny objects, base changes, forms, and untrusted ancestors. A production
+application document admits exactly
 `tauri://localhost` as its ancestor; `tauri dev` substitutes only its configured
 `http://localhost:40755` application origin while retaining every other
-directive byte-for-byte. Manifest, publisher, source, grant, query,
+directive byte-for-byte. Manifest, publisher, source, query,
 request-header, and plugin-authored meta values cannot change either profile.
 
 CSP, isolated origin, iframe sandbox, Permissions Policy, native navigation,
@@ -811,8 +802,8 @@ and Runtime Session are complementary boundaries. CSP controls resource and
 document destinations; the per-generation origin separates DOM and storage;
 the sandbox and Permissions Policy constrain frame capabilities; the native
 lease controls top-level and descendant navigation; and the Session authenticates
-one current window and dedicated Port. None of these boundaries creates a Host
-API grant.
+one current window and dedicated Port. These boundaries do not mediate ordinary
+Web behavior through Host API.
 
 A Host-private controller owns one Runtime attempt and one external-plugin
 iframe globally. A separate 10,000 ms resolution boundary covers convergence
@@ -821,7 +812,7 @@ navigation activation; expiry fails closed without constructing another
 iframe. It starts the 10,000 ms load deadline only after the navigation lease
 is active and `src` is committed. The Session starts its 5,000 ms handshake
 deadline only after bootstrap transfer succeeds. Close, navigation,
-quiescence, disable, uninstall, replacement, relevant fact or grant changes,
+quiescence, disable, uninstall, replacement, relevant fact changes,
 retry, timeout, Session failure, Host reload, and App teardown all converge on
 one idempotent terminal operation: make work stale, cancel timers and
 subscriptions, dispose Session and Ports, unbind and remove the iframe,
@@ -844,11 +835,11 @@ Visible failures use only `runtime_load_timeout`,
 `runtime_unavailable`, with canonical English and equivalent Simplified
 Chinese copy in the existing accessible feedback surface. Diagnostics and
 evidence exclude full or blocked URLs, origin/scope values, paths, nonce/Port
-content, grants, payloads, storage values, raw exceptions, and stacks; there is
+content, payloads, storage values, raw exceptions, and stacks; there is
 no remote CSP reporting channel. The committed real WKWebView matrices are
 macOS-only. The public SDK iframe transport does not inherit these Host-private
 attempts, timers, breaker records, or failure codes. Run
-`pnpm run check:plugin-runtime-security-lifecycle` for the focused
+`pnpm run check:open-isolated-plugin-runtime` for the composed
 gate and its Resource, origin, navigation, iframe, Session, workspace, and
 public-tarball prerequisites.
 
@@ -871,26 +862,24 @@ and then reuse the normal complete-snapshot mapping for convergence.
 
 Both Registries support trusted provider-scoped complete-batch replacement and
 empty-batch unregistration. The Page Registry protects `lensx.core`, validates
-Page identity, parent ownership, localized fields, private routes, sorted
-permission IDs, and availability before committing, and returns isolated
+Page identity, parent ownership, localized fields, private routes, and
+availability before committing, and returns isolated
 deterministic lookups and snapshots. Invalid, duplicate, cross-owner, or
 partially invalid input preserves the complete pre-call state and cannot remove
 another provider's Page, descriptor, or executor.
 
 The pure Page mapper keeps `(owner_id = plugin_id, page_id = local Page ID)` as
 the only Page identity, preserves same-owner parent targets and private routes,
-and derives localized provider/Page presentation. It marks a Page available
-only when every required permission ID is present in the current Host-owned
-grant snapshot. Empty requirements are available. This subset check neither
-creates a grant nor claims a permission catalog, user decision, or session
-enforcement.
+and derives localized provider/Page presentation. Every Page of an otherwise
+eligible registration is available; ordinary Web capabilities do not enter
+Page availability calculation.
 
 The pure Action mapper sets `owner_id = plugin_id`, derives
 `action_id = <plugin_id>.<local_action_id>`, preserves normalized localized
 Action metadata and keywords, and sets `enabled = true`. A Host-owned executor
 captures only the frozen plugin Page target and opening Action ID for an
 injected narrow Page opener. Only Actions targeting a currently available Page
-are published. Manifest route, permission, publisher, source, and
+are published. Manifest route, publisher, source, and
 `default_action_id` facts do not enter the descriptor or affect search ranking.
 Package-local asset icons are deliberately omitted and use the existing generic
 Action fallback until a scoped resource service exists.
@@ -919,14 +908,12 @@ activation and listener recovery, and destroys the same subscription on
 cleanup. An available Plugin Page passes its current resolution to the shipped
 Host-private iframe Runtime resolver. Surface projection still does not expose
 routes, entry IDs, revisions, origin facts, resource URLs, or native objects to
-plugins. The Host-private Task 5.5 permission core and text clipboard path are
-now implemented. The later Host-private management and permission-prompt
-capabilities consume these facts without changing surface projection; decision
-history remains outside the platform.
+plugins. The Host-private management capability consumes these facts without
+changing surface projection; decision history remains outside the platform.
 
 ## Shipped Public Plugin SDK And iframe Transport
 
-lensX ships the framework-neutral `@lensx/plugin-sdk@0.1.0` workspace package.
+lensX ships the framework-neutral `@lensx/plugin-sdk@0.2.0` workspace package.
 The package has public root and `@lensx/plugin-sdk/iframe` entries and depends only on
 `@lensx/plugin-contract` at Runtime. Undeclared deep imports are unsupported,
 and its public declarations do not require React, Semi Design, Tauri, DOM
@@ -938,8 +925,8 @@ version facts:
 
 | Export | Meaning |
 | --- | --- |
-| `PLUGIN_SDK_VERSION` | The SDK package and public API version, currently `0.1.0`. |
-| `PLUGIN_SDK_SUPPORTED_HOST_API_RANGE` | The half-open supported Host API range, currently `>=0.1.0 <0.2.0`. |
+| `PLUGIN_SDK_VERSION` | The SDK package and public API version, currently `0.2.0`. |
+| `PLUGIN_SDK_SUPPORTED_HOST_API_RANGE` | The half-open supported Host API range, currently `>=0.2.0 <0.3.0`. |
 | `PLUGIN_HOST_API_VERSION` | Not re-exported by the SDK; the current Host API version remains owned by `@lensx/plugin-contract`. |
 
 `createPluginSdk({ transport })` returns an isolated client rather than a
@@ -954,7 +941,7 @@ Before entering `ready`, the SDK uses the Contract validator to copy and freeze
 the shared `PluginRuntimeContext` containing a compatible `hostApiVersion`,
 `en-US | zh-CN` locale, `light | dark` theme, and a sorted unique readonly
 snapshot of declared Host API method IDs. An empty capability list is valid and
-does not imply any method. Plugin identity, Page identity, granted permissions, installation
+does not imply any method. Plugin identity, Page identity, installation
 source, and Host lifecycle facts are not supported context inputs.
 The Host API validators consumed by the SDK are generated as committed AJV
 standalone functions at build time. They do not compile Schemas or use dynamic
@@ -973,7 +960,7 @@ results.
 `invalid_runtime_context`, `invalid_argument`, and `transport_failure`.
 Transport exceptions are mapped to safe SDK errors without exposing the raw
 exception, private stack, Host object, or wire data. Host method, parameter,
-permission, domain, and internal error types come from Contract and remain
+domain, and internal error types come from Contract and remain
 discriminable from SDK lifecycle failures; the SDK still executes none of them.
 
 `PluginSdkTransport` is a semantic adapter injection boundary for connection,
@@ -1001,7 +988,7 @@ Port. The policy includes the production Tauri origins, the exact configured
 origin; neighboring localhost ports remain rejected. Its package-private
 `0.1.0` wire has exact request, response, event,
 cancel, and disconnect frames with transport-owned bounded request IDs. It
-contains no plugin/Page identity, origin, grant, path, executor, Tauri object,
+contains no plugin/Page identity, origin, path, executor, Tauri object,
 Host object, stack, or raw exception. The package does not export the frame,
 codec, fixture, Host projection, nonce/origin policy, or a deep-import path.
 
@@ -1012,8 +999,7 @@ out-of-order settlement, and converges Session/Page replacement and disposal
 on idempotent cleanup. Production creates one Host-private Dispatcher binding
 for every current ready Session. That binding implements
 `runtime.get_context`, `ui.close`, `actions.open`, and the five `storage.*`
-methods. It also exposes `clipboard.read` and `clipboard.write` independently
-when the matching Session grant and native provider are current. A private
+methods. Removed clipboard and unknown methods fail closed. A private
 post-response outcome lets the adapter validate and
 post a successful `ui.close` result before running the target-matched close
 effect. It never crosses the wire or changes the public SDK transport.
@@ -1036,12 +1022,12 @@ Contract validation and before every outbound delivery:
 The analyzer walks JSON-compatible input iteratively, accounts for UTF-8 and
 JSON escaping without first serializing the complete value, stops at the first
 proven limit, rejects cycles, non-plain objects, non-finite numbers and other
-non-JSON values, and does not mutate input. A Manifest, grant, plugin source,
+non-JSON values, and does not mutate input. A Manifest, plugin source,
 SDK option or payload cannot increase these limits.
 
 Ingress is ordered as shallow exact envelope and request-ID classification,
 bounded frame and semantic-payload analysis, public Contract validation, then
-admission to the permission-aware Dispatcher. A safely correlated malformed
+admission to the closed Host API Dispatcher. A safely correlated malformed
 request returns `invalid_request`; invalid params return `invalid_params`; an
 undeclared method returns `method_not_found`; and a byte, depth, node or
 concurrency rejection returns `limit_exceeded`. These failures consume no
@@ -1068,7 +1054,7 @@ valid response is posted while the request and Session remain current.
 Production observes failures through frozen Host-private diagnostic records
 containing only trusted plugin ID, an already validated method when available,
 `ingress | execution | egress`, a closed code and a fixed English message. The
-record never contains request ID, payload, URL, path, origin, grant, exception,
+record never contains request ID, payload, URL, path, origin, exception,
 stack, Port, provider or Host object, and a throwing sink cannot affect
 settlement. Diagnostics are not persisted or exposed to plugins.
 
@@ -1091,17 +1077,15 @@ The production App composes a Session-scoped Dispatcher from current locale and
 theme state, the App Navigation Service, the Launcher Action Registry and
 Dispatcher, and Runtime currentness. The authenticated lease is the only source
 of plugin and Page identity. Requests cannot choose an owner, Page, provider,
-executor, route, Tauri command, grant, or other Host object.
+executor, route, Tauri command, or other Host object.
 
-`runtime.get_context` returns Host API `0.1.0`, the current `en-US | zh-CN`
+`runtime.get_context` returns Host API `0.2.0`, the current `en-US | zh-CN`
 locale, current `light | dark` theme, and the sorted frozen capability snapshot
 `actions.open`, `runtime.get_context`, all five `storage.*` methods, and
-`ui.close` while the scoped-storage provider is available; each clipboard
-method is included independently only while its grant and provider are
-available. Complete
+`ui.close` while the scoped-storage provider is available. Complete
 `runtime.context_changed` replacements are emitted only when the current
 locale, theme, or capability snapshot actually changes. Identity, Registration
-revision, Runtime attempt, source, Manifest requests, raw grants, paths, and
+revision, Runtime attempt, source, Manifest data, paths, and
 Host lifecycle state remain private.
 
 `ui.close` accepts only `{}` and derives the target from the Session. The Host
@@ -1116,8 +1100,7 @@ Storage calls use only the identity frozen in the authenticated Session lease.
 The Dispatcher injects that identity into a Host-private desktop provider and
 never accepts a plugin-selected namespace, path, plugin key, command, or
 executor. A confirmed damaged or blocked namespace produces one complete
-Context replacement without the five storage capabilities; it does not alter
-independently authorized clipboard capabilities.
+Context replacement without the five storage capabilities.
 
 Run `pnpm run check:plugin-host-api-dispatcher` for the focused Dispatcher,
 Navigation, Action, Runtime, MessageChannel, public-tarball, export, dependency,
@@ -1125,81 +1108,22 @@ and workspace-boundary gate. This capability adds no public export, wire frame,
 or SDK dependency. Sustained Runtime resource isolation, project template,
 CLI, and development mode remain separate capabilities.
 
-## Shipped Host-Private Plugin Permission Core And Text Clipboard
+## Removed Host Permission And Native Clipboard Authority
 
-The Host derives one closed permission catalog from the public Host API method
-and permission catalogs. `clipboard.read` and `clipboard.write` are sensitive,
-independent permissions. A Manifest request and localized author reason are
-display facts only; the persisted Host grant remains separate, and the
-effective view reports `not_requested`, `unsupported`, `not_granted`, or
-`granted`. Official and external plugins follow the same rules.
+Host API `0.2.0` removes the permission catalog and native clipboard methods.
+Manifest `0.2.0`, Manager record format `2`, Registration `0.3.0`, installation
+`0.3.0`, and replacement `0.2.0` carry no request, grant, risk, or permission
+facts. The Rust permission state, grant command, AppKit clipboard provider,
+frontend service, prompts, settings mutations, and post-commit grant phase are
+absent from production composition. Old records and wire fields fail closed.
 
-Grant mutation is accepted only from the main Host window with an exact current
-Manager revision. Granting requires a healthy installed entry, a current
-Manifest request, and Host support. Revocation may remove a residual grant after
-a replacement Manifest stops requesting it. Idempotent decisions do not write
-or advance revision. Durable Manager commit is the decision point; a later
-invalidation-event delivery failure does not roll back the committed grant.
-
-Every native effect reauthorizes the immutable Runtime Session identity against
-the live Manager entry, relevant plugin revision, compatibility, enabled state,
-Manifest request, and current persisted grant. Grant mutation and clipboard
-effects share one process coordinator, so a completed revoke cannot race with a
-later privileged effect. Unrelated plugin changes do not invalidate an otherwise
-current Session.
-
-On macOS, the Host uses AppKit `NSPasteboard` directly on the main thread for
-plain-text reads and writes, with strict request/result/error boundaries and a
-1,048,576-character limit. Empty or non-text reads return an empty string.
-Other target platforms report the provider unavailable. The isolated iframe
-still has browser clipboard disabled by Permissions Policy and receives no
-Tauri command, native clipboard object, path, raw grant, or fallback channel.
-
-Run `pnpm run check:plugin-permission-management` for shared TypeScript/Rust
-fixtures, persistence/recovery, revision and race behavior, Dispatcher and real
-SDK/MessageChannel coverage, package boundaries, and the existing macOS
-WKWebView transport evidence. Run
-`pnpm run check:plugin-permission-management:native` serially on macOS for the
-real pasteboard smoke. This delivery adds no prompt, settings or history UI,
-product copy, generic permission framework, general RPC limit, template, CLI,
-signing, marketplace, or browser clipboard fallback.
-
-## Shipped Host-Private Plugin Permission Prompts
-
-Local installation contract `0.2.0` separates `prepare`, `commit`, and
-`cancel`. Prepare validates bounded package bytes into Installer-owned staging
-and returns only an opaque token plus a bounded candidate projection. It does
-not publish Registration state or grants. Commit accepts only the token,
-revalidates the staged package and current Host facts under the installer lock,
-and always creates the durable installation with an empty grant snapshot.
-
-The trusted management surface derives permission prompts from current Host
-facts. Host-owned risk and support labels remain separate from the bounded
-author-provided reason, and the Publisher is explicitly unverified. Sensitive
-choices default off. The user may cancel, defer, or install with zero grants;
-these interaction outcomes create no decision history. Official and external
-plugins use the same path.
-
-After Registration convergence, the Host may apply explicitly selected grants
-one permission at a time in stable permission-ID order, carrying the returned
-Manager revision forward. A failure stops the sequence and reports that the
-package installation succeeded while no or only some grants were applied; it
-does not roll back or replay the installation. Replacement presents retained,
-removed, and added requests separately and offers choices only for supported
-added permissions.
-
-Settings grant and revoke operations bind one current entry and revision and
-wait for snapshot/detail convergence before the UI changes. Revocation uses the
-existing permission core, so current Runtime Session authority and pending
-privileged calls fail closed immediately; no Page is reopened automatically.
-Plugin iframe messages, Manifest reasons, SDK payloads, Publisher/source facts,
-and claimed user activation cannot open a prompt or call grant mutation. This
-capability adds no public permission-request API, permission directory,
-decision history, signature trust, marketplace, or generic Runtime prompt.
-
-Run `pnpm run check:plugin-permission-prompts` for the focused installation,
-management, prompt, Runtime invalidation, public-boundary, localization,
-keyboard/focus, and fixed `650×600` visual evidence.
+The trusted installation and replacement confirmations instead explain the
+open isolated Web Runtime trust decision. lensX isolates Host and other-plugin
+authority but does not inspect or individually authorize ordinary Worker,
+network, remote-resource, Blob/Data, WASM, or browser-origin storage behavior.
+Device/native capabilities remain unavailable unless a future explicit public
+Host boundary is designed. Run `pnpm run check:open-isolated-plugin-runtime`
+for the negative authority scan and composed Runtime validation.
 
 ## Shipped Plugin-Scoped Storage
 
@@ -1239,16 +1163,15 @@ Rust persistence and lifecycle tests, desktop provider and Dispatcher tests,
 the real SDK/MessageChannel loop, public tarball consumers, private-boundary
 checks, and the existing bounded macOS WKWebView transport evidence. This
 delivery adds no management UI, product copy, theme or accessibility surface,
-permission prompt, general RPC limit, template, CLI, or development mode.
+general RPC limit, template, CLI, or development mode.
 
 ## Shipped Host-Private Plugin Management Settings
 
 The trusted Settings page now consumes one root-private
 `PluginManagementService`. The facade observes complete immutable Registration
 snapshots, loads detail only against the same revision, projects bounded
-diagnostics and requested/supported/persisted-grant/effective permission facts,
-and serializes prepared installation, enable/disable, replacement,
-single-permission grant/revoke, uninstall, and data-clear mutations. React
+diagnostics and lifecycle/source facts, and serializes prepared installation,
+enable/disable, replacement, uninstall, and data-clear mutations. React
 receives typed operation availability and safe outcomes; it does not invoke
 Tauri or reproduce Manager transition rules.
 
@@ -1263,7 +1186,7 @@ leaving either management in `loading` or Runtime resolution permanently in
 `resolving` before an iframe exists.
 
 Replacement remains a prepare/confirm/commit flow. Its confirmation exposes
-the version classification and permission additions/removals, and becomes
+the version classification and trust boundary, and becomes
 invalid when the Registration revision changes. Uninstall defaults to
 `retain_data`; `delete_data` is explicit. Clearing data is available only for a
 current disabled registered entry and uses the Host-private Plugin Data
@@ -1274,8 +1197,7 @@ empty canonical `storage-v1.json`. Missing or already-empty storage is
 idempotent, while ambiguous, linked, escaped, stale, enabled, quarantined, or
 degraded evidence fails closed.
 
-Permission mutations remain root-private and revision-bound. The management
-surface does not expose raw paths or errors, Publisher trust, Registry
+The management surface does not expose raw paths or errors, Publisher trust, Registry
 patch/history protocols, a public management API, or any management export
 through Contract, SDK, Testkit, or Plugin UI. Run
 `pnpm run check:plugin-management-settings` for the private boundary, facade/UI
@@ -1284,7 +1206,7 @@ screenshots and computed styles.
 
 ## Shipped Public Plugin Testkit
 
-lensX ships `@lensx/plugin-testkit@0.1.0` with one public root entry. Its Runtime
+lensX ships `@lensx/plugin-testkit@0.2.0` with one public root entry. Its Runtime
 dependencies are the public roots of `@lensx/plugin-contract` and
 `@lensx/plugin-sdk`; Contract and SDK do not depend on Testkit. Its Runtime and
 declarations do not require a DOM, React, Semi Design, Tauri, Node filesystem,
@@ -1323,19 +1245,19 @@ disconnect, retry, and late-result suppression remain real SDK behavior. The
 fake transport does not define an RPC envelope, request identity, nonce,
 origin, browser messaging object, or trusted Host identity. Its abstract
 request hook is not a delivered Host API method client. Capability IDs use the
-shared closed method type and are not permission requests, grants, or decisions.
+shared closed method type and are not ordinary Web capability declarations.
 
 `pnpm run check:plugin-testkit` verifies package tests and declarations,
 Contract -> SDK -> Testkit dependency direction, real tarball contents, and a
 no-DOM ES2022 consumer installed outside the workspace. That consumer is a
 release smoke fixture, not the formal plugin project template. Testkit does not
-provide permission harnesses, iframe Runtime, plugin execution, or real Host API
-execution; later transport, permission, and Runtime changes may extend
+provide iframe Runtime, plugin execution, or real Host API execution; later
+transport and Runtime changes may extend
 the package only after their contracts are accepted.
 
 ## Shipped Optional Plugin UI Package
 
-lensX ships the optional `@lensx/plugin-ui@0.1.0` package for React plugins.
+lensX ships the optional `@lensx/plugin-ui@0.2.0` package for React plugins.
 Its root export is constrained to `PluginUiProvider`, `PluginPage`,
 `PluginFeedback`, and their public types. Its only other public entry is
 `@lensx/plugin-ui/styles.css`. Undeclared deep imports, Host React context,
@@ -1438,9 +1360,8 @@ its own authorization and typed application or Rust boundary.
 Production registers Host hide-launcher and open-settings Actions and publishes
 eligible Plugin Actions through the shipped surface coordinator after their
 available Page targets commit. The static Manifest contract still does not
-register Actions by itself. Safe plugin icon resolution, complete
-permission UI/history, lifecycle writes, and external Runtime execution remain
-separate capabilities. Recent and pinned collections continue to store only
+register Actions by itself. Safe plugin icon resolution and lifecycle writes
+remain separate capabilities. Recent and pinned collections continue to store only
 Action IDs, so a projected Action hides while its provider is absent and
 resolves again if the same stable ID returns.
 
@@ -1450,7 +1371,7 @@ resolves again if the same stable ID returns.
 
 Built-in surfaces may run as trusted React modules inside the application
 providers. Their registration metadata should use the same conceptual pages,
-actions, permissions, and compatibility model as external plugins, while their
+actions, and compatibility model as external plugins, while their
 module loading remains Host-controlled.
 
 The contract name for a trusted module must stay framework-neutral so the
@@ -1469,14 +1390,14 @@ must not directly access:
 - private frontend modules;
 - Tauri commands;
 - Rust objects;
-- the local filesystem or operating-system APIs outside granted Host methods.
+- the local filesystem or operating-system APIs.
 
 External runtime resources must resolve inside the installed plugin boundary.
 
 ## Host API
 
-The shipped public semantic contract defines the ten method IDs, exact
-params/results, `runtime.context_changed`, `PluginRuntimeContext`, permissions,
+The shipped public semantic contract defines the eight method IDs, exact
+params/results, `runtime.context_changed`, `PluginRuntimeContext`,
 errors, and capability/version rules described above. Contract validation alone
 does not send or execute a request. The public SDK client now exposes one
 Contract-closed typed request operation, not a raw string method or a concrete
@@ -1491,12 +1412,11 @@ iframe
   -> Host Port adapter with Session-derived identity
   -> Session-scoped Host-private Dispatcher
   -> Context / matching Page close / current plugin Action / scoped storage
-  -> permission-authorized text clipboard -> narrow Rust command
 ```
 
-The bridge must validate the actual message source and a restricted origin. A
-declared permission is not the same as a granted permission. Privileged methods
-must check current authorization before dispatch.
+The bridge validates the actual message source and restricted origin. The
+public Host API has no native capability method; unknown or removed methods
+fail closed before dispatch.
 
 Host API methods remain small, typed, versioned, and independently testable.
 Plugins must not handcraft private transport messages when an official SDK
@@ -1513,10 +1433,10 @@ method exists.
 
 ## Security Principles
 
-- Validate structure before semantic references and permissions.
+- Validate structure before semantic references.
 - Treat plugin packages and messages as untrusted input.
 - Resolve package paths without allowing absolute paths or parent traversal.
-- Separate declared, requested, and granted permissions.
+- Keep ordinary Web capabilities out of Host-private authority models.
 - Use deny-by-default behavior for unknown methods and capabilities.
 - Never expose internal Tauri or native objects to an iframe.
 
@@ -1529,8 +1449,8 @@ production Action activation, Page Registry/navigation, the macOS isolated
 iframe Runtime, Host-private process-local Runtime Session, public SDK iframe
 transport/Host Port adapter, public Host API semantic contract, and the
 Host-private RPC v1 validation boundary, Dispatcher, plugin-scoped storage
-provider, permission core, macOS text-clipboard provider, Plugin Management
-Settings, permission prompts, public project templates and CLI, feature-gated
+provider, open isolated Web Runtime, Plugin Management Settings, public project
+templates and CLI, feature-gated
 Plugin Development Mode, and the bilingual external-developer documentation
 and the official-plugin release pipeline are delivered. Each remaining capability—npm publication, signing,
 Marketplace distribution, remote/automatic updates, decision or

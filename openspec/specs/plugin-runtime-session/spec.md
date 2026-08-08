@@ -3,10 +3,10 @@
 ## Purpose
 
 Define the Host-private, process-local Runtime Session that binds one current
-external Plugin Page iframe to trusted identity and authorization facts through
-an exact-origin, single-use MessagePort handshake, while leaving public SDK
-transport, Host APIs, permission decisions, and complete Runtime lifecycle to
-later capabilities.
+external Plugin Page iframe to trusted identity and current resource facts
+through an exact-origin, single-use MessagePort handshake, while keeping public
+SDK transport, Host APIs, native authority, and complete Runtime lifecycle in
+their own capability boundaries.
 
 ## Requirements
 
@@ -17,10 +17,10 @@ available, enabled, and compatible external Plugin Page iframe. Session identity
 MUST derive from the current Page resolution, Registration summary and detail,
 Resource and Runtime descriptor, and actual iframe browsing context. It MUST
 bind at least the opaque entry, plugin ID, version, Page ID, current resource
-generation and origin, Runtime attempt, actual granted-permission ID snapshot,
-and real `contentWindow`. A Session MUST NOT accept identity, source, version,
-Page, entry, generation, grant, or Host lifecycle facts self-reported by a
-Manifest, plugin message, or public UI payload.
+generation and origin, Runtime attempt, and real `contentWindow`. A Session
+MUST NOT accept identity, source, version, Page, entry, generation, authority,
+or Host lifecycle facts self-reported by a Manifest, plugin message, or public
+UI payload.
 
 #### Scenario: Current iframe establishes a trusted identity
 
@@ -29,27 +29,28 @@ Manifest, plugin message, or public UI payload.
   plugin
 - **THEN** the Host creates a read-only Session identity and binds the real
   window and origin to the current entry, plugin, version, Page, generation,
-  attempt, and grants
+  and attempt
 - **THEN** the identity contains no installation path, package digest, resource
   scope token, Tauri object, Host executor, or author-controlled trust fact
 
 #### Scenario: Plugin self-reports another identity
 
 - **WHEN** an iframe bootstrap acknowledgement or later message contains a
-  `plugin_id`, entry, version, Page, grant, or another self-reported identity
+  `plugin_id`, entry, version, Page, authority, or another self-reported identity
   field
 - **THEN** the Host does not use those fields to establish or replace Session
   identity and rejects fields outside the exact private contract
 - **THEN** copying another plugin's textual identity cannot obtain that
-  plugin's Session, resources, or permissions
+  plugin's Session, resources, or Host authority
 
-#### Scenario: Manifest only requests permissions
+#### Scenario: Legacy permission facts are presented
 
-- **WHEN** a Manifest declares requested permissions while the Registration
-  detail grant snapshot is empty or contains only a subset
-- **THEN** the Session binds only the sorted and deduplicated actual
-  `granted_permission_ids`
-- **THEN** requested, enabled, external, or publisher text creates no grant
+- **WHEN** a legacy Manifest, Registration payload, or plugin message contains
+  permission requests or grant fields
+- **THEN** the current Contract or Registration boundary rejects or isolates
+  those facts before Session identity is created
+- **THEN** enabled, external, official, development, or Publisher text creates
+  no native Host authority
 
 ### Requirement: Host MUST bootstrap one authenticated MessagePort with exact target and single-use nonce
 
@@ -163,11 +164,11 @@ Port event MUST compare the owning attempt before publishing state.
 The Host MUST refresh and compare facts for the current plugin after
 Registration invalidation. A missing entry, disabled, quarantined, or
 incompatible state, identity or Page mismatch, resource origin or generation
-change, Runtime attempt, retry, or replacement change, or grant snapshot change
-MUST revoke the affected Session. A global Registration revision is only a race
+change, Runtime attempt, retry, or replacement change MUST revoke the affected
+Session. A global Registration revision is only a race
 detector and invalidation hint. If a change belongs only to another plugin and
-the current Session's entry, Page, version, origin, generation, attempt, and
-grants remain the same, the Host MUST retain the current iframe and Session. If
+the current Session's entry, Page, version, origin, generation, and attempt
+remain the same, the Host MUST retain the current iframe and Session. If
 the Host cannot prove that the relevant facts remain current, it MUST fail
 closed.
 
@@ -179,19 +180,18 @@ closed.
   Runtime inherits no old nonce, Port, or Session identity
 - **THEN** matching version text cannot keep the old Session current
 
-#### Scenario: Plugin is disabled or grants change
+#### Scenario: Plugin becomes ineligible
 
 - **WHEN** the current plugin becomes disabled, incompatible, quarantined, or
-  removed, or its actual grant snapshot changes
+  removed, or its Page, resource generation, or Runtime attempt changes
 - **THEN** the Host revokes the current Session and rejects later messages from
   the old Port
-- **THEN** requested permissions or an old grant snapshot cannot override
-  current Host facts
+- **THEN** legacy permission or grant fields cannot override current Host facts
 
 #### Scenario: Unrelated plugin changes Registration
 
-- **WHEN** another plugin is installed, disabled, replaced, or has its grants
-  changed, increasing the global Registration revision while every fact
+- **WHEN** another plugin is installed, disabled, replaced, or reloaded,
+  increasing the global Registration revision while every fact
   relevant to the current Session remains unchanged
 - **THEN** the Host retains the current iframe, navigation lease, and Session
   without creating a new nonce or Port
@@ -222,8 +222,8 @@ the Plugin Manager and Registration Contract MUST continue to begin at
 
 - **WHEN** the application exits, crashes, or restarts while a ready Session
   exists
-- **THEN** the next process restores only persistent Manifest, registration,
-  and grant facts and reports the existing Registration Contract's `inactive`
+- **THEN** the next process restores only persistent Manifest and Registration
+  facts and reports the existing Registration Contract's `inactive`
   state
 - **THEN** it does not deserialize or reuse the old Session identity, nonce,
   Port, window, Page, or message state
@@ -274,8 +274,8 @@ Delivery MUST use pure TypeScript state and parser tests, React iframe
 lifecycle tests, canonical normal and malicious `.lxp` fixtures, and the target
 macOS WKWebView to verify exact source and origin, a cryptographic single-use
 nonce, MessagePort transfer, ready, disconnect, disposal, cross-plugin forgery,
-replay, retry and replacement, old-Port invalidation, grant and current-fact
-invalidation, unrelated Registration change stability, and zero privileged
+replay, retry and replacement, old-Port invalidation, current-fact invalidation,
+unrelated Registration change stability, and zero privileged
 Tauri hits. Simulated DOM, source inspection, and Rust unit tests MUST NOT
 replace real WebView evidence. This capability MUST NOT claim Windows or Linux
 support.
@@ -307,7 +307,7 @@ currentness, single-use bootstrap and ready acknowledgement, an authenticated
 Port lease, Session-owned disconnect and disposal, security tests, real WebView
 evidence, and maintained documentation. It MUST NOT define public SDK iframe
 transport, JSON-RPC or request IDs, Host API method, result, event, or error
-Schemas, permission grant decisions or UI, privileged dispatch, plugin storage,
+Schemas, native authority or UI, privileged dispatch, plugin storage,
 complete CSP, general handshake timeout, crash loop or automatic recovery,
 background Runtime, sidecar, management UI, or Windows or Linux Runtime.
 
@@ -319,7 +319,7 @@ background Runtime, sidecar, management UI, or Windows or Linux Runtime.
   Host-private Session, and the Host consistently rejects forged or stale
   sources
 - **THEN** the plugin still cannot call a real Host API through the public SDK,
-  obtain a new permission decision, run background work, or claim complete CSP
+  obtain native Host authority, run background work, or claim complete CSP
   or lifecycle delivery
 
 #### Scenario: Locale or theme changes during the Session lifecycle
@@ -329,5 +329,5 @@ background Runtime, sidecar, management UI, or Windows or Linux Runtime.
 - **THEN** the existing Host Page and iframe presentation retains its current
   localization and theme behavior, and the Session injects or duplicates no
   new user-visible copy or styles
-- **THEN** the locale or theme change itself grants no capability, changes no
+- **THEN** the locale or theme change itself creates no capability, changes no
   trusted identity, and does not rename iframe `loaded` as ready

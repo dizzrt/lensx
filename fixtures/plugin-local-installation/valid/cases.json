@@ -2,45 +2,49 @@
   {
     "name": "commit_request",
     "type": "request",
-    "value": { "contract_version": "0.2.0", "preparation_token": "abcdefghijklmnopqrstuvwxyzABCDEF" }
+    "value": {
+      "contract_version": "0.3.0",
+      "preparation_token": "abcdefghijklmnopqrstuvwxyzABCDEF"
+    }
   },
   {
     "name": "prepare_cancelled",
     "type": "result",
-    "value": { "status": "cancelled", "contract_version": "0.2.0", "operation": "prepare" }
+    "value": {
+      "status": "cancelled",
+      "contract_version": "0.3.0",
+      "operation": "prepare"
+    }
   },
   {
     "name": "cancel_cancelled",
     "type": "result",
-    "value": { "status": "cancelled", "contract_version": "0.2.0", "operation": "cancel" }
+    "value": {
+      "status": "cancelled",
+      "contract_version": "0.3.0",
+      "operation": "cancel"
+    }
   },
   {
     "name": "prepared",
     "type": "result",
     "value": {
       "status": "prepared",
-      "contract_version": "0.2.0",
+      "contract_version": "0.3.0",
       "operation": "prepare",
       "preparation_token": "abcdefghijklmnopqrstuvwxyzABCDEF",
       "candidate": {
         "plugin_id": "com.acme.workspace",
         "version": "1.2.3",
-        "display_name": { "en-US": "Workspace", "zh-CN": "工作区" },
+        "display_name": {
+          "en-US": "Workspace",
+          "zh-CN": "工作区"
+        },
         "publisher": {
           "author": "Acme",
           "homepage": "https://example.com",
           "repository": "https://example.com/repository"
-        },
-        "requested_permissions": [
-          {
-            "permission_id": "clipboard.read",
-            "reason": { "en-US": "Read text selected by the user.", "zh-CN": "读取用户选择的文本。" }
-          },
-          {
-            "permission_id": "future.unknown",
-            "reason": { "en-US": "Displayed as unsupported by this Host." }
-          }
-        ]
+        }
       }
     }
   },
@@ -49,7 +53,7 @@
     "type": "result",
     "value": {
       "status": "installed",
-      "contract_version": "0.2.0",
+      "contract_version": "0.3.0",
       "operation": "commit",
       "plugin_id": "com.acme.workspace",
       "version": "1.2.3",
@@ -60,12 +64,16 @@
     "name": "invalid_package_error",
     "type": "error",
     "value": {
-      "contract_version": "0.2.0",
+      "contract_version": "0.3.0",
       "code": "invalid_package",
       "operation": "prepare",
       "message": "The selected file is not a valid lensX plugin package.",
       "diagnostics": [
-        { "code": "frame_invalid", "path": "/frame", "message": "The package is not a supported Zstandard frame." }
+        {
+          "code": "frame_invalid",
+          "path": "/frame",
+          "message": "The package is not a supported Zstandard frame."
+        }
       ]
     }
   },
@@ -73,7 +81,7 @@
     "name": "busy_prepare_error",
     "type": "error",
     "value": {
-      "contract_version": "0.2.0",
+      "contract_version": "0.3.0",
       "code": "busy",
       "operation": "prepare",
       "message": "Another plugin installation is in progress."
@@ -83,7 +91,7 @@
     "name": "stale_commit_error",
     "type": "error",
     "value": {
-      "contract_version": "0.2.0",
+      "contract_version": "0.3.0",
       "code": "invalid_preparation",
       "operation": "commit",
       "message": "The local plugin installation preparation is no longer valid."
@@ -93,7 +101,7 @@
     "name": "cleanup_cancel_error",
     "type": "error",
     "value": {
-      "contract_version": "0.2.0",
+      "contract_version": "0.3.0",
       "code": "cleanup_failed",
       "operation": "cancel",
       "message": "The plugin installation preparation could not be cleaned safely."

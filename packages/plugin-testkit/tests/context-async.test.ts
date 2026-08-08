@@ -26,12 +26,12 @@ describe('Plugin Runtime context fixture', () => {
   });
 
   test('copies and freezes whole-field Chinese dark capability overrides', () => {
-    const capabilities: HostApiMethod[] = ['clipboard.read'];
+    const capabilities: HostApiMethod[] = ['storage.get'];
     const context = createPluginRuntimeContextFixture({ capabilities, locale: 'zh-CN', theme: 'dark' });
-    capabilities.push('clipboard.write');
+    capabilities.push('storage.set');
 
     expect(context).toEqual({
-      capabilities: ['clipboard.read'],
+      capabilities: ['storage.get'],
       hostApiVersion: PLUGIN_HOST_API_VERSION,
       locale: 'zh-CN',
       theme: 'dark',

@@ -10,7 +10,7 @@ import type {
 
 export const validRuntimeContext = (capabilities: readonly HostApiMethod[] = []) => ({
   capabilities,
-  hostApiVersion: '0.1.0',
+  hostApiVersion: '0.2.0',
   locale: 'en-US',
   theme: 'light',
 });

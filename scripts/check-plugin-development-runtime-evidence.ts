@@ -33,20 +33,16 @@ for (const kind of ['normal', 'malicious'] as const) {
 }
 const transitions = record(expectations.development_transitions, 'development transitions');
 if (
-  JSON.stringify(transitions.normal) !== JSON.stringify(['register', 'open', 'reload', 'permission_delta', 'remove']) ||
+  JSON.stringify(transitions.normal) !==
+    JSON.stringify(['register', 'open', 'reload', 'manifest_version_advance', 'remove']) ||
   JSON.stringify(transitions.malicious) !==
     JSON.stringify(['register', 'open', 'reload', 'malicious_policy_matrix', 'remove'])
 ) {
   fail('development transition matrix drifted');
 }
-const permissionDelta = record(expectations.permission_delta, 'permission delta');
-if (
-  permissionDelta.plugin_id_unchanged !== true ||
-  permissionDelta.version !== '1.1.0' ||
-  permissionDelta.requested_permission !== 'clipboard.read' ||
-  permissionDelta.expected_grant !== false
-) {
-  fail('permission delta fixture drifted');
+const manifestVersionAdvance = record(expectations.manifest_version_advance, 'manifest version advance');
+if (manifestVersionAdvance.plugin_id_unchanged !== true || manifestVersionAdvance.version !== '1.1.0') {
+  fail('manifest version advance fixture drifted');
 }
 
 const commonChecks = [
@@ -54,7 +50,6 @@ const commonChecks = [
   'host_api_boundary_shared',
   'old_port_inert',
   'policy_profile_shared',
-  'register_grants_empty',
   'register_source_development',
   'registration_removed',
   'reload_old_scope_revoked',
@@ -63,7 +58,7 @@ const commonChecks = [
   'remove_scope_revoked',
 ] as const;
 const fixtureChecks = {
-  normal: [...commonChecks, 'permission_delta_not_granted', 'permission_delta_requested'],
+  normal: [...commonChecks, 'manifest_version_advanced'],
   malicious: [...commonChecks, 'malicious_browser_attempts_rejected', 'malicious_privileged_handler_zero_hits'],
 } as const;
 const forbiddenEvidenceKey =
@@ -114,6 +109,7 @@ for (const kind of ['normal', 'malicious'] as const) {
     'session_contract_version',
     'transport_contract_version',
     'host_api_dispatcher_version',
+    'worker_teardown_observed',
   ] as const) {
     if (development[key] !== external[key]) fail(`${kind} ${key} parity drifted`);
   }

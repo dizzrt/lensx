@@ -16,7 +16,6 @@ const identity: PluginRuntimeSessionIdentity = Object.freeze({
   resource_generation: '0123456789abcdef0123456789abcdef',
   runtime_attempt_key: 'attempt-1',
   registration_revision: '7',
-  granted_permission_ids: Object.freeze([]),
 });
 
 describe('Host-private plugin scoped storage desktop provider', () => {

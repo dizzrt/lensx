@@ -233,7 +233,6 @@ export const PluginRuntimeFrame = ({
           resource_generation: descriptor.resource_generation,
           runtime_attempt_key: descriptor.runtime_attempt_key,
           registration_revision: descriptor.registration_revision,
-          granted_permission_ids: descriptor.granted_permission_ids,
         },
         targetWindow: targetWindow as unknown as Parameters<PluginRuntimeSessionService['start']>[0]['targetWindow'],
         targetOrigin: descriptor.expected_origin,

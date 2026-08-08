@@ -25,17 +25,17 @@ pnpm install
 ```
 
 The CLI writes a complete project but performs no install, Host launch, plugin
-installation, permission grant, or execution.
+installation, Host authority, or execution.
 
 ## Manifest and resources
 
-The generated `manifest.json` uses Manifest `0.1.0`, separate lensX/Host API
-compatibility ranges, unverified publisher text, no requested permissions, one
+The generated `manifest.json` uses Manifest `0.2.0`, separate lensX/Host API
+compatibility ranges, unverified publisher text, no permission fields, one
 Page, one Page-targeting Action, and `index.html` as the iframe entry. Every
 Runtime and asset path must exist under the built `dist/`.
 
-Keep Page requirements within top-level requested permissions. A request is
-never a grant, and the default tutorial remains permissionless.
+Worker/network behavior needs no Manifest declaration. Host policy fields,
+native capabilities, sandbox, and CSP overrides remain invalid Manifest input.
 
 ## Runtime and UI lifecycle
 
@@ -88,8 +88,8 @@ pnpm run dev:plugin-development-mode
 In Settings register the self-contained `dist/`. Rebuild after edits and use
 manual reload to publish a fresh immutable process-local generation. Check
 loading, both locales, both themes, error/recovery, and focus after reload.
-Development source does not persist, install an `.lxp`, auto-reload, grant a
-permission, or weaken the production Runtime/session/security boundary.
+Development source does not persist, install an `.lxp`, auto-reload, create
+Host authority, or weaken the production Runtime/session/security boundary.
 
 ## Pack and install
 
@@ -101,7 +101,7 @@ lensx-plugin inspect ./artifacts/com.example.my-plugin-0.1.0.lxp
 lensx-plugin pack --project .
 ```
 
-Use Settings **Install from file**, review publisher/permission facts, and
+Use Settings **Install from file**, review the publisher and open-Web trust notice, and
 confirm the exact prepared candidate. Open its launcher Action. Verify loading,
 ready, locale/theme replacement, keyboard controls, error/recovery, and close.
 The Host reinspects and authorizes independently of the CLI.
@@ -116,13 +116,12 @@ The Host reinspects and authorizes independently of the CLI.
 - Fail then retry: a fresh attempt owns fresh subscriptions; old callbacks are
   inert.
 - Dispose repeatedly: cleanup remains idempotent.
-- Request a sensitive permission later: neither React, Semi, Plugin UI, CLI,
-  nor a click can grant it automatically.
+- Try an unavailable native/device API: React, Semi, Plugin UI, CLI, and a
+  plugin click cannot create Host-private authority.
 - Compare sources after restart: development disappears; formal installation
   remains persisted and manageable.
 
 Use [Public packages](public-packages.md) for dependency ownership,
 [Host API](host-api.md) for methods, and
-[Runtime, permissions, and security](runtime-permissions-security.md) for
+[Runtime and security](runtime-permissions-security.md) for
 authority and teardown.
-

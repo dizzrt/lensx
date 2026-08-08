@@ -13,7 +13,7 @@ const entryId = 'entry_0123456789abcdef';
 const pluginId = 'com.acme.lifecycle';
 
 const snapshot = (revision = '1', enabled = true): PluginRegistrationSnapshot => ({
-  contract_version: '0.2.0',
+  contract_version: '0.3.0',
   revision,
   availability: { kind: 'available' },
   entries: [

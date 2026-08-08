@@ -78,7 +78,6 @@ const run = async () => {
         resource_generation: '0123456789abcdef0123456789abcdef',
         runtime_attempt_key: 'real-wkwebview-never-acknowledge',
         registration_revision: '1',
-        granted_permission_ids: [],
       },
       targetOrigin: location.origin,
       targetWindow: {

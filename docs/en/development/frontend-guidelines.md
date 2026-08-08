@@ -140,11 +140,10 @@ Shell layout and spacing in UnoCSS utilities.
   Plugin provider replacement must remain complete-batch and atomic, and an
   active Plugin Page that disappears or becomes unavailable must close through
   the Host navigation invalidation transition rather than a plugin callback.
-- Keep private Page routes, required permission IDs, registration details, and
-  provider bookkeeping out of `ActivePage` and presentation props. Before the
-  isolated Runtime ships, render available Plugin Pages only through the
-  localized Host-owned placeholder; do not load routes, entries, assets,
-  iframes, plugin code, or Tauri bridges from that surface.
+- Keep private Page routes, registration details, and provider bookkeeping out
+  of `ActivePage` and presentation props. Render Plugin Pages only through the
+  Host-owned isolated Runtime; never expose a Tauri bridge, Host DOM, another
+  plugin origin, or private Host state to plugin presentation code.
 - Derive `home`, `search`, and `page` presentation from normalized query and
   flat `ActivePage` state; do not introduce a router or parallel Shell store for
   the current single-page depth.
@@ -244,30 +243,27 @@ Shell layout and spacing in UnoCSS utilities.
   confirmation restores the trigger; successful removal focuses the adjacent
   entry or the install button.
 - Disable all conflicting operations while a mutation is pending. Require an
-  explicit modal for replacement permission differences, uninstall data
-  policy, and permanent clear-data. Uninstall defaults to retaining data and
-  clear-data is disabled unless the selected registered plugin is disabled.
+  explicit modal for replacement classification, uninstall data policy, and
+  permanent clear-data. Uninstall defaults to retaining data and clear-data is
+  disabled unless the selected registered plugin is disabled.
 - Announce safe status and error summaries through live regions. Never render
   raw native errors, paths, payloads, stack traces, or diagnostic messages.
 
-### Host Permission Prompts
+### Plugin Installation Trust
 
-- Keep installation and replacement permission decisions inside the existing
-  continuous Plugins surface. Use Semi Design `Modal`, `Button`, `Checkbox`,
-  `Tag`, `Banner`, and `Typography`; use semantic Less for prompt hierarchy,
-  bounded scrolling, focus, hover, pending, and disabled states.
-- Display Host-owned risk/support text separately from the author-provided
-  reason and the Publisher-unverified notice. Do not present source or
-  Publisher facts as authority. Sensitive choices start unchecked, and a
-  zero-grant/defer action remains explicit.
-- Confirm settings grant or revoke one permission at a time. Keep pending
-  operations non-dismissible and non-repeatable, announce safe partial/conflict
-  feedback through live regions, and restore focus to the exact trigger or a
-  deterministic surviving entry after every terminal outcome.
+- Keep installation and replacement confirmation inside the continuous Plugins
+  surface. State that installation trusts plugin code to use ordinary open-Web
+  capabilities while the Host boundary remains closed.
+- Present identity, version, source, Publisher-unverified status, and replacement
+  classification as bounded facts. Do not present package digest, source, or
+  Publisher metadata as Host authority or endorsement of remote behavior.
+- Do not render permission checklists, grant/revoke controls, author-supplied
+  permission reasons, or partial-grant states. Native capabilities are not part
+  of the current public Host API.
 - Keep all copy in the application i18n resources and test English and
-  Simplified Chinese in light and dark themes. At fixed `650×600`, verify long
-  reasons scroll without breaking the continuous surface and that focus,
-  disabled, modal, and alert states remain visible without relying on color.
+  Simplified Chinese in light and dark themes. At fixed `650×600`, verify focus,
+  disabled, modal, alert, legacy-recovery, and long-content states without
+  relying on color.
 
 ## Testing
 

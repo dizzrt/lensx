@@ -6,7 +6,6 @@ const NONCE_PATTERN = /^[0-9a-f]{32}$/u;
 const ENTRY_ID_PATTERN = /^entry_[0-9a-f]{16}$/u;
 const RESOURCE_GENERATION_PATTERN = /^[0-9a-f]{32}$/u;
 const REVISION_PATTERN = /^(?:0|[1-9][0-9]*)$/u;
-const PERMISSION_ID_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{0,253}[a-z0-9])?$/u;
 
 export interface PluginRuntimeSessionBootstrap {
   readonly contract_version: typeof PLUGIN_RUNTIME_SESSION_CONTRACT_VERSION;
@@ -58,12 +57,9 @@ export interface PluginRuntimeSessionIdentityInput {
   readonly resource_generation: string;
   readonly runtime_attempt_key: string;
   readonly registration_revision: string;
-  readonly granted_permission_ids: readonly string[];
 }
 
-export interface PluginRuntimeSessionIdentity extends PluginRuntimeSessionIdentityInput {
-  readonly granted_permission_ids: readonly string[];
-}
+export type PluginRuntimeSessionIdentity = PluginRuntimeSessionIdentityInput;
 
 const isPlainRecord = (value: unknown): value is Record<string, unknown> => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
@@ -111,8 +107,6 @@ const isBoundedText = (value: string, maximum: number) =>
 export const freezePluginRuntimeSessionIdentity = (
   input: PluginRuntimeSessionIdentityInput,
 ): PluginRuntimeSessionIdentity => {
-  const grants = [...input.granted_permission_ids];
-  const sortedGrants = [...new Set(grants)].sort();
   let parsedOrigin: URL;
   try {
     parsedOrigin = new URL(input.expected_origin);
@@ -130,14 +124,9 @@ export const freezePluginRuntimeSessionIdentity = (
     parsedOrigin.hash !== '' ||
     !RESOURCE_GENERATION_PATTERN.test(input.resource_generation) ||
     !isBoundedText(input.runtime_attempt_key, 512) ||
-    !REVISION_PATTERN.test(input.registration_revision) ||
-    grants.length !== sortedGrants.length ||
-    grants.some((grant, index) => grant !== sortedGrants[index] || !PERMISSION_ID_PATTERN.test(grant))
+    !REVISION_PATTERN.test(input.registration_revision)
   ) {
     throw new PluginRuntimeSessionError('invalid_identity');
   }
-  return Object.freeze({
-    ...input,
-    granted_permission_ids: Object.freeze(sortedGrants),
-  });
+  return Object.freeze({ ...input });
 };

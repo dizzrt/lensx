@@ -234,17 +234,17 @@ App Shell 继续在现有 main window 中使用唯一 `home` / `search` / `page`
 `lensx.core/settings` 渲染可信 Settings surface。available Plugin Page 会在现有 Page error boundary 内
 渲染唯一 Host-owned 隔离 iframe。Host 私有 resolver 会交叉检查 current Page、Registration revision、
 Resource identity、isolated `entry_url` 与 Registry route，然后在挂载前激活精确 native navigation lease。
-iframe 固定 `allow-scripts allow-same-origin`、`no-referrer` 与 deny-by-default Permissions Policy；close、
+iframe 固定 `allow-scripts allow-same-origin`、`no-referrer` 与 Host-owned Permissions Policy；close、
 retry、invalidation、replacement 与 App teardown 都会移除它。load event 只表示 `loaded`，不等于 SDK/
 Session `ready`。load 后，Host 私有 Session 会把 current entry、plugin、version、Page、resource
-generation、Runtime attempt 与实际 grants 绑定到真实 `contentWindow`；只有新 transfer Port 上的 exact
-acknowledgement 才产生 Session `ready`。SDK `ready`、Host API transport、Host 私有 Dispatcher、scoped
-storage、完整 CSP 与 permission-backed 文本剪贴板已经交付；Host 私有 permission prompt 与 settings
-也已经交付，decision history 仍未实现。
+generation 与 Runtime attempt 绑定到真实 `contentWindow`；只有新 transfer Port 上的 exact
+acknowledgement 才产生 Session `ready`。SDK `ready`、Host API transport、open-Web CSP、Host 私有
+Dispatcher 与 scoped storage 已交付。Manifest 与 Host API `0.2.0` 不暴露 native clipboard 或 permission
+authority。
 
 设置在现有 `main` Tauri 窗口中渲染，包含“偏好”和“插件”两个一级部分。“偏好”控制受支持的
 `light`/`dark` 主题与 `en-US`/`zh-CN` locale；“插件”通过一个 typed Host 私有 service 提供已交付的
-list-detail 管理 surface，覆盖安装、replacement、lifecycle、permission、卸载和仅 disabled 时的数据清除。
+list-detail 管理 surface，覆盖安装、replacement、lifecycle、卸载和仅 disabled 时的数据清除。
 外部作者应使用[插件开发入口](../plugin-development/index.md)，而不是本维护者 overview 中的细节。
 
 Rust 持有完整 `AppPreferences` payload，并在应用配置目录中保存 `preferences.json`。文件缺失时

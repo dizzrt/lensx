@@ -62,7 +62,7 @@ The system MUST create mutually isolated SDK clients through an explicit factory
 
 ### Requirement: The SDK client MUST expose only Contract-closed Host API requests and events
 
-`PluginSdkClient` MUST provide a request operation whose input is the `@lensx/plugin-contract` `HostApiRequest` discriminated union and whose resolved result is derived from the same request method's `HostApiResult`. The client MUST validate and freeze the request before calling its semantic transport, MUST accept the existing SDK cancellation and timeout options, and MUST reject communication unless the client is ready. It MUST NOT provide a call surface accepting an arbitrary string, a private method, an unpaired params object, plugin identity, grant state, origin, Port, envelope, Host executor or Tauri command.
+`PluginSdkClient` MUST provide a request operation whose input is the `@lensx/plugin-contract` `HostApiRequest` discriminated union and whose resolved result is derived from the same request method's `HostApiResult`. The client MUST validate and freeze the request before calling its semantic transport, MUST accept the existing SDK cancellation and timeout options, and MUST reject communication unless the client is ready. It MUST NOT provide a call surface accepting an arbitrary string, a private method, an unpaired params object, plugin identity, legacy permission or grant state, Host authority, origin, Port, envelope, Host executor or Tauri command.
 
 The client MUST provide typed subscription only for declared `HostApiEventName` values and MUST validate every event before notifying a consumer. A valid `runtime.context_changed` MUST replace the client's read-only Runtime context before notification. SDK request and event types and validators MUST come from the Contract public entry; the SDK MUST NOT copy the Host API catalog, Schema, current Host API version or error definitions.
 
@@ -74,7 +74,7 @@ The client MUST provide typed subscription only for declared `HostApiEventName` 
 
 #### Scenario: A plugin attempts an undeclared or mismatched request
 
-- **WHEN** plugin code supplies an arbitrary method, method/params mismatch, extra trusted field, non-JSON value, or bypasses static typing with `unknown`
+- **WHEN** plugin code supplies a removed clipboard or permission method, an arbitrary method, method/params mismatch, extra trusted field, non-JSON value, or bypasses static typing with `unknown`
 - **THEN** Contract validation rejects the request before the transport is called
 - **THEN** the failure does not expose a raw validator exception, wire value or Host object
 
@@ -158,7 +158,7 @@ locale, a `light | dark` theme, and a read-only capability snapshot whose
 values are sorted, unique Host API method IDs. An empty capability snapshot
 MUST be valid. Before a client enters `ready`, the SDK MUST validate through
 the shared Contract facts, copy, and freeze the context. The context MUST NOT
-accept plugin-provided identity, permission, source, installation, or Host
+accept plugin-provided identity, authority, source, installation, or Host
 lifecycle facts, and a capability MUST NOT be invented from Manifest requests
 or the complete method catalog.
 
@@ -188,7 +188,7 @@ or the complete method catalog.
 #### Scenario: A plugin attempts to change trusted Runtime facts
 
 - **WHEN** a consumer attempts to modify a returned context or provide plugin
-  identity, Page identity, permissions, source, or capabilities through
+  identity, Page identity, authority, source, or capabilities through
   initialization options
 - **THEN** the context snapshot remains unchanged, and those Host-owned facts
   do not become supported SDK inputs
@@ -204,7 +204,7 @@ or the complete method catalog.
 
 ### Requirement: The SDK and Host API MUST use independent, single-source version boundaries
 
-The system MUST independently version the SDK package and public API starting at `0.1.0`, and MUST expose the SDK version and the half-open Host API support range `>=0.1.0 <0.2.0`. The current Host API version MUST continue to use `PLUGIN_HOST_API_VERSION` from `@lensx/plugin-contract` as its sole source of truth, and the SDK MUST NOT define a second current Host API version constant. Before initialization completes, the SDK MUST check the Runtime context's Host API version according to SemVer precedence.
+The SDK package and public API MUST remain independently versioned after starting at `0.1.0`. The current SDK version MUST be `0.2.0` and MUST expose the half-open Host API support range `>=0.2.0 <0.3.0`. The current Host API version MUST continue to use `PLUGIN_HOST_API_VERSION` from `@lensx/plugin-contract` as its sole source of truth, and the SDK MUST NOT define a second current Host API version constant. Before initialization completes, the SDK MUST check the Runtime context's Host API version according to SemVer precedence.
 
 #### Scenario: A compatible Host API initializes
 
@@ -228,7 +228,7 @@ The system MUST independently version the SDK package and public API starting at
 
 ### Requirement: The SDK MUST expose stable, safe SDK-level errors
 
-The system MUST provide a discriminated `PluginSdkError` and stable `PluginSdkErrorCode` values that cover at least `cancelled`, `timeout`, `disconnected`, `disposed`, `incompatible_host_api`, `invalid_runtime_context`, `invalid_argument`, and `transport_failure`. Errors MUST provide safe, predictable messages but MUST NOT expose raw transport exceptions, stacks, Host objects, or private wire data to consumers. Specific Host API method, parameter, permission, domain, and internal errors MUST remain owned by `@lensx/plugin-contract`, stay discriminable from SDK lifecycle errors, and MUST NOT be duplicated or silently collapsed into `transport_failure`.
+The system MUST provide a discriminated `PluginSdkError` and stable `PluginSdkErrorCode` values that cover at least `cancelled`, `timeout`, `disconnected`, `disposed`, `incompatible_host_api`, `invalid_runtime_context`, `invalid_argument`, and `transport_failure`. Errors MUST provide safe, predictable messages but MUST NOT expose raw transport exceptions, stacks, Host objects, or private wire data to consumers. Specific Host API method, parameter, domain, and internal errors MUST remain owned by `@lensx/plugin-contract`, stay discriminable from SDK lifecycle errors, and MUST NOT be duplicated or silently collapsed into `transport_failure`.
 
 #### Scenario: An unknown transport failure is mapped
 
@@ -245,7 +245,7 @@ The system MUST provide a discriminated `PluginSdkError` and stable `PluginSdkEr
 #### Scenario: The SDK does not duplicate Host API errors
 
 - **WHEN** a consumer inspects the SDK request and error declarations
-- **THEN** permission denial, unknown method, invalid Host params, domain failures and Host internal rejection use the public Host API Contract types rather than SDK-owned copies
+- **THEN** unknown method, invalid Host params, domain failures and Host internal rejection use the public Host API Contract types rather than SDK-owned copies
 - **THEN** the SDK package does not redefine the Host API error code set or current Host API version
 
 #### Scenario: A valid Host API rejection crosses the real transport
@@ -257,7 +257,7 @@ The system MUST provide a discriminated `PluginSdkError` and stable `PluginSdkEr
 
 ### Requirement: The SDK package MUST participate in complete workspace, release, and documentation validation
 
-The SDK package MUST declare meaningful `build`, `typecheck`, `test`, and `check` scripts, and the root aggregate commands MUST cover them. The repository MUST validate the contents, exports, declarations, and Runtime consumption of a real tarball, and MUST exclude tests, fixtures, build scripts, and Host-private source code. Canonical English architecture and development documentation and their Simplified Chinese mirrors at the same relative paths MUST describe the SDK public boundary and MUST explicitly state that this capability does not deliver the iframe Runtime, Host API, permissions, plugin execution, or a public Testkit fake.
+The SDK package MUST declare meaningful `build`, `typecheck`, `test`, and `check` scripts, and the root aggregate commands MUST cover them. The repository MUST validate the contents, exports, declarations, and Runtime consumption of a real tarball, and MUST exclude tests, fixtures, build scripts, and Host-private source code. Canonical English architecture and development documentation and their Simplified Chinese mirrors at the same relative paths MUST describe the SDK public boundary and MUST explicitly state that this capability does not deliver the iframe Runtime, Host API execution, native authority, plugin execution, or a public Testkit fake.
 
 #### Scenario: Root commands cover the SDK package
 

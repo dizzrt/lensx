@@ -24,7 +24,7 @@ fn main() {
 
     let versions = PluginHostVersions {
         lensx: "0.1.0".to_owned(),
-        host_api: "0.1.0".to_owned(),
+        host_api: "0.2.0".to_owned(),
     };
     let mut evidence = Vec::new();
     for (index, path) in package_paths.iter().enumerate() {

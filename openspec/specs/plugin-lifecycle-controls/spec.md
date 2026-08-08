@@ -189,24 +189,26 @@ temporary frontend failure.
 
 `uninstall_plugin` MUST require an explicit `retain_data` or `delete_data`
 policy, and the product default MUST be `retain_data`. Uninstall MUST always
-remove the target healthy or quarantine Registration and any grants and Manager
-diagnostics in a healthy record. It MUST always eventually delete a managed
+remove the target healthy or quarantine Registration and Manager diagnostics
+in a healthy record. It MUST always eventually delete a managed
 program payload whose ownership is provable. `retain_data` MUST preserve the
 separate data subtree, while `delete_data` MUST persist that intent and
 eventually delete the subtree. Manager record removal MUST occur before any
 destructive program cleanup that could leave a healthy record pointing to a
 missing payload. A Host registration whose managed payload ownership cannot be
 proved MUST return `operation_not_supported`; that conclusion MUST NOT rely
-solely on builtin or external source or on Publisher text.
+solely on builtin or external source or on Publisher text. Uninstall MUST NOT
+read, delete, or restore current permission or grant authority; a legacy grant
+field MUST fail closed only as incompatible data.
 
 #### Scenario: A plugin is uninstalled while its data is retained
 
 - **WHEN** the caller selects `retain_data` for a managed healthy plugin
-- **THEN** the Host removes the Registration, grants, diagnostics, and program
+- **THEN** the Host removes the Registration, diagnostics, and program
   payload without creating, modifying, or deleting `data/<plugin-key>`
 - **THEN** the result reports logical uninstall explicitly; a later
-  reinstallation starts with empty grants but can observe the original retained
-  data boundary
+  reinstallation starts from current permissionless Registration facts but can
+  observe the original retained data boundary
 
 #### Scenario: A plugin is uninstalled with its data deleted
 
@@ -314,8 +316,8 @@ Action again.
 This capability MUST deliver only the Host-private lifecycle persistence and
 cleanup contract, trusted application coordination, recovery, tests, and
 maintained documentation. It MUST NOT create a complete plugin management list
-or detail UI, iframe Runtime or session, resource service, Host API, permission
-grant or revoke flow, signature or Publisher trust, upgrade, rollback or
+or detail UI, iframe Runtime or session, resource service, Host API, native
+authority, signature or Publisher trust, upgrade, rollback or
 reinstall behavior, public plugin lifecycle API, Recent or Pinned cleanup, or a
 general-purpose transaction platform.
 
@@ -326,5 +328,6 @@ general-purpose transaction platform.
 - **THEN** trusted application infrastructure can safely enable, disable, and
   uninstall managed plugins and recover from failures
 - **THEN** plugin code still does not execute, and the complete end-user
-  management UI, Runtime, permissions, and upgrade capabilities remain
+  management UI, Runtime, native Host APIs, and upgrade capabilities remain
   explicitly undelivered
+- **THEN** lifecycle convergence creates no permission or grant flow

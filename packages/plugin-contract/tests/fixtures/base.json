@@ -1,5 +1,5 @@
 {
-  "manifest_version": "0.1.0",
+  "manifest_version": "0.2.0",
   "plugin_id": "com.acme.workspace",
   "version": "1.2.0",
   "display": {
@@ -27,23 +27,14 @@
       "max_version_exclusive": "0.2.0"
     },
     "host_api": {
-      "min_version": "0.1.0",
-      "max_version_exclusive": "2.0.0"
+      "min_version": "0.2.0",
+      "max_version_exclusive": "0.3.0"
     }
   },
   "runtime": {
     "kind": "iframe",
     "entry": "dist/plugin.html"
   },
-  "requested_permissions": [
-    {
-      "permission_id": "lensx.filesystem.read_selected",
-      "reason": {
-        "en-US": "Read folders selected by the user.",
-        "zh-CN": "读取用户主动选择的目录。"
-      }
-    }
-  ],
   "contributes": {
     "pages": [
       {
@@ -56,8 +47,7 @@
         "icon": {
           "kind": "asset",
           "path": "assets/home.svg"
-        },
-        "required_permissions": []
+        }
       },
       {
         "id": "open_project",
@@ -66,8 +56,7 @@
           "zh-CN": "打开项目"
         },
         "route": "/open-project",
-        "parent_page_id": "home",
-        "required_permissions": ["lensx.filesystem.read_selected"]
+        "parent_page_id": "home"
       }
     ],
     "actions": [

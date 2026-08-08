@@ -21,6 +21,8 @@ void client.initialize({ signal: structuralSignal });
 void client.initialize({ signal: nativeSignal });
 const closeResult = client.request({ method: 'ui.close', params: {} });
 void closeResult.then((result) => result.accepted);
+// @ts-expect-error Native clipboard methods were removed from Host API 0.2.0.
+void client.request({ method: 'clipboard.read', params: {} });
 client.subscribe('runtime.context_changed', (event) => event.payload.theme);
 
 // @ts-expect-error The public client intentionally has no arbitrary raw Host method API.

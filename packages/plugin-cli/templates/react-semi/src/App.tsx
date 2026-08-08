@@ -8,7 +8,7 @@ import { createReactPluginRuntime, type ReactPluginRuntimeState } from './runtim
 
 const fallbackContext = Object.freeze({
   capabilities: Object.freeze([]),
-  hostApiVersion: '0.1.0',
+  hostApiVersion: '0.2.0',
   locale: 'en-US' as const,
   theme: 'light' as const,
 });

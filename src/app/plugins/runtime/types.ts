@@ -44,7 +44,6 @@ export interface PluginPageRuntimeDescriptor {
   readonly resource_generation: string;
   readonly runtime_attempt_key: string;
   readonly registration_revision: string;
-  readonly granted_permission_ids: readonly string[];
 }
 
 export interface PluginPageRuntimeResolver {

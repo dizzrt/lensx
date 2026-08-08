@@ -52,9 +52,6 @@ const verifyRequest = ({ activePage, pageResolution, attempt }: PluginPageRuntim
   }
 };
 
-const sameStrings = (left: readonly string[], right: readonly string[]) =>
-  left.length === right.length && left.every((value, index) => value === right[index]);
-
 const sameRelevantDescriptor = (left: PluginPageRuntimeDescriptor, right: PluginPageRuntimeDescriptor): boolean =>
   left.entry_id === right.entry_id &&
   left.plugin_id === right.plugin_id &&
@@ -64,8 +61,7 @@ const sameRelevantDescriptor = (left: PluginPageRuntimeDescriptor, right: Plugin
   left.host_fragment === right.host_fragment &&
   left.expected_origin === right.expected_origin &&
   left.resource_generation === right.resource_generation &&
-  left.runtime_attempt_key === right.runtime_attempt_key &&
-  sameStrings(left.granted_permission_ids, right.granted_permission_ids);
+  left.runtime_attempt_key === right.runtime_attempt_key;
 
 export const createPluginPageRuntimeResolver = ({
   resourceAdapter,
@@ -145,14 +141,7 @@ export const createPluginPageRuntimeResolver = ({
       throw new PluginPageRuntimeError('runtime_stale');
     }
     const manifestPage = detail.manifest.contributes.pages.find(({ id }) => id === request.activePage.page_id);
-    const requiredPermissionIds = [...request.pageResolution.page.required_permission_ids];
-    const manifestRequiredPermissionIds = manifestPage ? [...manifestPage.required_permissions] : [];
-    if (
-      !manifestPage ||
-      manifestPage.route !== request.pageResolution.page.route ||
-      !sameStrings(requiredPermissionIds, manifestRequiredPermissionIds) ||
-      !requiredPermissionIds.every((permissionId) => detail.granted_permission_ids.includes(permissionId))
-    ) {
+    if (!manifestPage || manifestPage.route !== request.pageResolution.page.route) {
       throw new PluginPageRuntimeError('runtime_stale');
     }
     if (!isValidIsolatedPluginRuntimeEntryUrl(resolved.entry_url)) {
@@ -163,7 +152,6 @@ export const createPluginPageRuntimeResolver = ({
     if (!expectedOrigin || !resourceGeneration) {
       throw new PluginPageRuntimeError('runtime_invalid');
     }
-    const grantedPermissionIds = Object.freeze([...detail.granted_permission_ids]);
     const runtimeAttemptKey = [entry.entry_id, resourceGeneration, request.attempt].join(':');
 
     const descriptor: PluginPageRuntimeDescriptor = {
@@ -173,7 +161,6 @@ export const createPluginPageRuntimeResolver = ({
         entry.entry_id,
         resourceGeneration,
         request.attempt,
-        ...grantedPermissionIds,
       ].join('\u0001'),
       iframe_src: pluginRuntimeIframeSrc(resolved.entry_url, hostFragment),
       entry_url: resolved.entry_url,
@@ -186,7 +173,6 @@ export const createPluginPageRuntimeResolver = ({
       resource_generation: resourceGeneration,
       runtime_attempt_key: runtimeAttemptKey,
       registration_revision: snapshot.revision,
-      granted_permission_ids: grantedPermissionIds,
     };
     return Object.freeze(descriptor);
   };

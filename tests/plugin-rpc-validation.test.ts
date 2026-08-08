@@ -12,7 +12,7 @@ import {
 import {
   exactFrameCostString,
   maliciousPluginRpcFixtures,
-  maximumContractClipboardText,
+  maximumContractStorageText,
   nestedValue,
   rpcRequest,
   validPluginRpcFixtures,
@@ -121,7 +121,7 @@ describe('Host-private plugin RPC v1 policy and bounded analyzer', () => {
   });
 
   test('does not mutate valid input and accepts the maintained legal corpus', () => {
-    expect(maximumContractClipboardText).toHaveLength(1_048_576);
+    expect(maximumContractStorageText).toHaveLength(1_048_576);
     for (const fixture of validPluginRpcFixtures) {
       const before = structuredClone(fixture);
       expect(analyzePluginRpcFrame(fixture).status).toBe('valid');

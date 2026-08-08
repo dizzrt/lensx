@@ -372,25 +372,6 @@ impl PluginInstaller {
             });
         }
         let classification = classify_replacement(&current.manifest.version, &manifest.version)?;
-        let current_permissions: BTreeSet<_> = current
-            .manifest
-            .requested_permissions
-            .iter()
-            .map(|permission| permission.permission_id.clone())
-            .collect();
-        let candidate_permissions: BTreeSet<_> = manifest
-            .requested_permissions
-            .iter()
-            .map(|permission| permission.permission_id.clone())
-            .collect();
-        let added_permission_ids = candidate_permissions
-            .difference(&current_permissions)
-            .cloned()
-            .collect();
-        let removed_permission_ids = current_permissions
-            .difference(&candidate_permissions)
-            .cloned()
-            .collect();
         let staging_path = root.join(STAGING_DIRECTORY).join(staging_identity());
         fs::create_dir(&staging_path).map_err(|_| {
             replacement_error(
@@ -426,8 +407,6 @@ impl PluginInstaller {
             current_version: current.manifest.version,
             candidate_version: manifest.version,
             classification,
-            added_permission_ids,
-            removed_permission_ids,
         })
     }
 
@@ -621,18 +600,6 @@ impl PluginInstaller {
                 PluginReplacementOperation::Commit,
             ));
         }
-        let requested: BTreeSet<_> = manifest
-            .requested_permissions
-            .iter()
-            .map(|permission| permission.permission_id.as_str())
-            .collect();
-        let grants = current
-            .facts
-            .granted_permission_ids
-            .iter()
-            .filter(|permission| requested.contains(permission.as_str()))
-            .cloned()
-            .collect();
         let mut next_facts = current.facts.clone();
         let (next_installation_path, next_package_digest) = next_facts
             .installed_payload_mut()
@@ -642,7 +609,6 @@ impl PluginInstaller {
             algorithm: "sha256".to_owned(),
             value: facts.package_digest.value,
         };
-        next_facts.granted_permission_ids = grants;
         let replacement = match self.manager.replace_entry(
             &request.entry_id,
             &request.expected_revision,
@@ -2538,7 +2504,7 @@ mod tests {
     fn versions() -> crate::plugin_manifest::PluginHostVersions {
         crate::plugin_manifest::PluginHostVersions {
             lensx: "0.1.0".to_owned(),
-            host_api: "0.1.0".to_owned(),
+            host_api: "0.2.0".to_owned(),
         }
     }
 
@@ -2594,7 +2560,7 @@ mod tests {
         plugin_id: &str,
         version: &str,
         digest: &str,
-        grants: Vec<String>,
+        _: Vec<String>,
     ) -> PathBuf {
         let PackageInspectionResult::Compatible { mut manifest, .. } =
             inspect_plugin_package(&valid_package(), &versions())
@@ -2616,7 +2582,7 @@ mod tests {
         manager
             .register(
                 manifest,
-                PluginRegistrationFacts::with_grants(
+                PluginRegistrationFacts::new(
                     path.to_string_lossy().into_owned(),
                     PackageDigest {
                         algorithm: "sha256".to_owned(),
@@ -2624,7 +2590,6 @@ mod tests {
                     },
                     PluginSource::External,
                     true,
-                    grants,
                 )
                 .expect("seed facts should be valid"),
             )
@@ -2655,7 +2620,6 @@ mod tests {
         assert_eq!(registration.manifest.version, version);
         assert_eq!(registration.facts.source, PluginSource::External);
         assert!(registration.facts.enabled);
-        assert!(registration.facts.granted_permission_ids.is_empty());
         assert!(registration
             .facts
             .installed_payload()
@@ -2822,21 +2786,20 @@ mod tests {
     }
 
     #[test]
-    fn replacement_commit_preserves_state_narrows_grants_and_cleans_old_payload() {
+    fn replacement_commit_preserves_state_and_cleans_old_payload() {
         let (_directory, manager, installer) = setup("replacement-commit");
         let PackageInspectionResult::Compatible { manifest, .. } =
             inspect_plugin_package(&valid_package(), &versions())
         else {
             panic!("fixture should be compatible");
         };
-        let requested = manifest.requested_permissions[0].permission_id.clone();
         let old_path = seed_replacement_target(
             &manager,
             &installer,
             &manifest.plugin_id,
             "0.0.1",
             &"2".repeat(64),
-            vec![requested.clone(), "removed.permission".to_owned()],
+            Vec::new(),
         );
         let data_path = installer
             .root
@@ -2885,7 +2848,6 @@ mod tests {
         assert_eq!(registration.manifest.version, manifest.version);
         assert!(registration.facts.enabled);
         assert_eq!(registration.facts.source, PluginSource::External);
-        assert_eq!(registration.facts.granted_permission_ids, vec![requested]);
         assert!(!old_path.exists());
         assert_eq!(
             fs::read(data_path.join("state.json")).expect("data should remain"),
@@ -3069,7 +3031,6 @@ mod tests {
             .registration(plugin_id)
             .expect("new registration should exist");
         assert!(registration.facts.enabled);
-        assert!(registration.facts.granted_permission_ids.is_empty());
         assert!(registration.facts.diagnostics.is_empty());
         assert_eq!(fs::read(data.join("preserved.json")).unwrap(), b"preserve");
         assert!(installer
@@ -3670,7 +3631,7 @@ mod tests {
     }
 
     #[test]
-    fn first_install_preparation_is_pathless_single_use_and_commits_empty_grants() {
+    fn first_install_preparation_is_pathless_single_use_and_commits_without_native_authority() {
         let (_directory, manager, installer) = setup("first-install-preparation");
         let prepared = installer
             .prepare_installation_bytes_inner(&valid_package())
@@ -3708,7 +3669,6 @@ mod tests {
             registration.runtime,
             crate::plugin_manager::PluginRuntimeState::Inactive
         );
-        assert!(registration.facts.granted_permission_ids.is_empty());
         assert_eq!(
             emitter
                 .events
@@ -3962,7 +3922,7 @@ mod tests {
             serde_json::to_value(&cancelled).expect("cancel should serialize"),
             serde_json::json!({
                 "status": "cancelled",
-                "contract_version": "0.2.0",
+                "contract_version": "0.3.0",
                 "operation": "prepare"
             })
         );

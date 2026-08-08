@@ -31,7 +31,7 @@ const expectations = JSON.parse(readFileSync(join(fixtureRoot, 'expectations.jso
 
 describe('plugin iframe Runtime package fixtures', () => {
   test('keeps compatible security and lifecycle packages', async () => {
-    expect(expectations.fixture_version).toBe('0.1.0');
+    expect(expectations.fixture_version).toBe('0.2.0');
     expect(expectations.packages.map(({ kind }) => kind)).toEqual([
       'normal',
       'malicious',
@@ -84,6 +84,21 @@ describe('plugin iframe Runtime package fixtures', () => {
       'message_port_transfer',
       'rpc_limit_rejection',
       'rpc_recovery_after_limit',
+      'package_worker',
+      'blob_worker',
+      'data_worker',
+      'worker_message',
+      'worker_message_burst',
+      'fetch',
+      'connection_churn',
+      'remote_module',
+      'websocket',
+      'blob_content',
+      'data_content',
+      'wasm',
+      'indexeddb',
+      'author_owned_stricter_csp',
+      'bounded_unsupported_evidence',
     ]);
     expect(fixture?.expected.facts.files.map(({ path }) => path)).toEqual(
       expect.arrayContaining([
@@ -93,6 +108,8 @@ describe('plugin iframe Runtime package fixtures', () => {
         'dist/classic.js',
         'dist/module.js',
         'dist/module-dependency.js',
+        'dist/worker.js',
+        'dist/strict-policy.html',
       ]),
     );
   });
@@ -126,17 +143,11 @@ describe('plugin iframe Runtime package fixtures', () => {
         'cross_plugin_session_forgery',
         'old_generation_session_replay',
         'wrong_origin_bootstrap',
-        'csp_remote_script',
         'csp_inline_script',
         'csp_eval',
-        'csp_connect',
-        'csp_worker',
-        'csp_frame',
         'csp_object',
         'csp_base',
         'csp_form',
-        'csp_data',
-        'csp_blob',
       ]),
     );
   });

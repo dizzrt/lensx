@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 
 import { defineConfig } from '@rsbuild/core';
 
-const phases = ['initial', 'permission-delta'] as const;
+const phases = ['initial', 'reload'] as const;
 type DevelopmentSmokePhase = (typeof phases)[number];
 
 const requestedPhase = process.env.LENSX_PLUGIN_DEVELOPMENT_SMOKE_PHASE ?? 'initial';

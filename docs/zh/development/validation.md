@@ -108,7 +108,7 @@ draft/幂等/冲突行为、固定 revision 的最小权限 workflow 与文档 d
 运行普通 install preparation 与 Runtime E2E harness，并证明另一个插件和根应用保持不变。它不会
 创建 public release。
 
-该 focused command 组合公共 CLI/package-format、本地安装、Runtime lifecycle、permission prompt
+该 focused command 组合公共 CLI/package-format、本地安装、open isolated Runtime
 与 workspace gate。最终完成仍必须运行下文完整 frontend/shared 与 Rust 命令。
 
 ## 插件开发模式验证
@@ -127,8 +127,8 @@ tests、正式构建产物排除、前端 convergence 与可访问性、双语 s
 
 focused gate 还会读取 normal 与 malicious development registration 的有界 canonical macOS
 WKWebView 证据。harness 解出与 external Session 证据相同的维护中 Runtime payload，注册
-process-local development snapshot，打开页面，强制 fresh reload，验证未授权的
-`clipboard.read` 权限差量，然后移除注册。它会将 CSP、sandbox、Permissions Policy、Session、
+process-local development snapshot，打开页面，强制 fresh reload 并推进 Manifest version，然后移除注册。
+它会将 CSP、sandbox、Permissions Policy、Session、
 transport、Host API、deadline 与 breaker 事实同 external Runtime profile 比较。仅在 macOS 上审阅
 harness 或 Runtime 边界变更后刷新这些证据：
 
@@ -226,7 +226,7 @@ native lease activation 与 compare-current disposal、Page/lifecycle/replacemen
 Tauri absence、zero privileged hit，以及恶意 navigation/capability rejection。
 
 该门禁只证明 iframe `loaded`，绝不证明 Runtime Session 或 SDK `ready`。它不验证 message bridge、
-Host API、permission dispatcher、完整 CSP、通用 timeout/crash recovery 或 Windows/Linux Runtime。
+Host API、完整 CSP、通用 timeout/crash recovery 或 Windows/Linux Runtime。
 应在完整 frontend/Rust validation 集合前运行，但不能替代它们。
 
 ## Plugin Runtime Session 验证
@@ -239,7 +239,7 @@ boundary 时，必须运行：
 pnpm run check:plugin-runtime-session
 ```
 
-该门禁组合 strict parser/state-machine tests、resolver/detail/grant 收敛、相关与无关 invalidation、React
+该门禁组合 strict parser/state-machine tests、resolver/detail 收敛、相关与无关 invalidation、React
 iframe lifecycle、Registration/Page/lifecycle/replacement/resource 回归、canonical 真实 `.lxp` drift
 检查、公共 tarball consumer，以及完整 iframe/origin/navigation 前置 gate。专用 macOS
 `plugin_runtime_session_harness` 会在 WKWebView 中复用 production Resource Service、隔离 origin 的真实
@@ -252,7 +252,7 @@ URL、origin/resource token、nonce、Port 内容、entry/plugin/Page identity�
 private error。
 
 这是 macOS-only delivery gate，不建立 Windows 或 Linux Runtime Session 支持。它单独只证明私有认证
-Session 与 Port lease；不会单独证明 SDK iframe transport、Host API method、permission decision、
+Session 与 Port lease；不会单独证明 SDK iframe transport、Host API method、
 完整 CSP、通用 handshake timeout/crash recovery 或 background Runtime。focused gate 只补充
 完整 frontend/Rust validation 集合，绝不能替代它们。
 
@@ -273,10 +273,9 @@ SDK/Host-adapter fixture。
 
 有界 macOS WKWebView evidence 还覆盖 exact parent/origin/Port、single-use nonce、transport
 result/error/event round-trip、乱序 response、取消、replacement/close cleanup、pending termination 与
-privileged handler zero-hit。evidence 不含 URL、nonce、Port 内容、payload、token、identity、path、grant
+privileged handler zero-hit。evidence 不含 URL、nonce、Port 内容、payload、token、identity、path
 或 private error。该门禁证明公共 transport 与 Host adapter；独立 Dispatcher 与 scoped-storage 门禁证明
-当前 production provider。permission-management 门禁补充 clipboard authorization、provider 与真实 native
-smoke evidence。两者都不独立证明完整 RPC v1 policy 或 Windows/Linux Runtime transport。
+当前 production provider。两者都不独立证明完整 RPC v1 policy 或 Windows/Linux Runtime transport。
 
 ## Plugin RPC 验证
 
@@ -290,11 +289,11 @@ pnpm run check:plugin-rpc-validation
 该门禁检查不可变的 5 MiB/32 层语义深度/36 层 frame 深度/16,384 节点/单 request/32 并发/10,000 ms policy；
 低于、恰好等于和超过限制的 fixture；UTF-8 与 JSON escaping cost；循环与非 JSON value；严格递增 request ID；
 controlled-clock deadline/cancel race；安全 error、event、diagnostic 与 effect；以及被拒输入的零 Handler hit。
-它通过真实 Contract 与 SDK MessageChannel、Dispatcher、permission/storage regression、Runtime Session cleanup、
+它通过真实 Contract 与 SDK MessageChannel、Dispatcher、closed-catalog/storage regression、Runtime Session cleanup、
 公共 Contract/SDK tarball、workspace/private-import boundary 和目标 macOS 有界 WKWebView evidence 进行组合验证。
 
 提交的 WKWebView evidence 必须证明一个超深 request 以零 Handler hit 被拒绝，且同一健康 Session 上后续合法
-request 仍能完成。evidence 只保存有界布尔事实，不得包含 payload、URL、origin、identity、grant、request ID、
+request 仍能完成。evidence 只保存有界布尔事实，不得包含 payload、URL、origin、identity、request ID、
 diagnostic 或 private error。该 macOS evidence 不代表 Windows/Linux transport。
 
 该门禁证明 per-frame byte/depth/node/单 request 限制，以及 per-Session concurrency、replay 与 Host execution
@@ -314,38 +313,27 @@ pnpm run check:plugin-host-api-dispatcher
 workspace boundary 聚焦测试。它还打包真实公共 Contract/SDK tarball，并验证 Dispatcher binding、
 Session identity、private wire value、Host service 与 post-response effect 不进入公共 export 或 declaration。
 Context capability snapshot 在当前 namespace 可用时包含 `actions.open`、`runtime.get_context`、`ui.close`
-与五个 `storage.*` method；每个 `clipboard.*` method 仅在 current matching grant 与 native provider 可用时
-独立进入 snapshot。
+与五个 `storage.*` method；已删除的 clipboard 与未知 method 会通过封闭的 `0.2.0` catalog 失败。
 
 现有目标 macOS WKWebView transport evidence 仍用于验证认证 Port、取消、replacement 与 terminal cleanup。
 production-style MessageChannel fixture 增加 Dispatcher Context、Action、storage 与 response-before-close
-证据，但不把 fake native boundary 描述成 Rust persistence、真实 native clipboard execution 或通用 RPC 交付。该聚焦门禁只补充
+证据，但不把 fake native boundary 描述成 Rust persistence 或通用 RPC 交付。该聚焦门禁只补充
 完整 frontend/Rust validation 集合，不能替代它们。
 
-## Plugin Permission Management 验证
+## Open Isolated Plugin Runtime 验证
 
-修改 Host 私有 permission catalog、effective view、Manager grant mutation、clipboard command/provider、
-Dispatcher clipboard routing、Runtime capability、共享 fixture 或 permission 文档时，必须运行：
-
-```bash
-pnpm run check:plugin-permission-management
-```
-
-该门禁验证 TypeScript/Rust 完全共享的 exact contract fixture、闭集 catalog 推导、request/reason/grant 分离、
-绑定 revision 且幂等 durable 的 grant mutation、重启 recovery、degraded/quarantined fail-closed、残留 grant
-revoke、event delivery failure、其他插件变更稳定性与 grant/native-effect linearization。它还覆盖独立 Dispatcher
-capability、不可变 trusted Session identity、cancellation/currentness、安全 error、真实 SDK/MessageChannel loop、
-公共 package boundary 与既有有界 macOS WKWebView transport evidence。
-
-在目标 macOS 上串行运行真实纯文本 pasteboard smoke：
+Manifest/Host API `0.2.0`、permission authority 删除、plugin response CSP、
+Worker/network/Blob/Data/WASM 支持、Runtime teardown 或 trust copy 变化时必须运行：
 
 ```bash
-pnpm run check:plugin-permission-management:native
+pnpm run check:open-isolated-plugin-runtime
 ```
 
-smoke 会在 read/write/empty 检查后恢复原始纯文本 clipboard。WKWebView evidence 证明隔离认证 Port，且 iframe
-没有 browser clipboard 或 Tauri fallback；native smoke 证明直接 AppKit boundary。这两组互补检查都不能被描述为
-Windows/Linux provider 支持或 prompt/settings/history UI 测试。
+该门禁组合 generated Contract drift、真实 public tarball、封闭 Dispatcher、canonical open-Web fixture、
+scoped Resource Service、iframe/origin/navigation 隔离、Runtime Session 与 security lifecycle。负向扫描会在
+native clipboard command、permission module、grant field、prompt/mutation import 或限制性 Worker/network
+policy 回流时失败。canonical WKWebView harness 提供 package/Blob/Data Worker、message、fetch、WebSocket
+构造、WASM、origin storage、author-owned stricter CSP 正向证据，以及平台基线外能力的有界 unsupported 结果。
 
 ## Plugin Scoped Storage 验证
 
@@ -377,7 +365,7 @@ pnpm run check:plugin-management-settings
 ```
 
 该门禁检查严格共享的 data-management fixture、desktop/private boundary、Registration revision 与 selection
-行为、mutation serialization、replacement confirmation、lifecycle/permission/storage 回归、Host component
+行为、mutation serialization、replacement confirmation、lifecycle/storage 回归、Host component
 行为、message-schema 对齐、workspace/public tarball boundary、root `StrictMode` composition 重建，以及
 Rust atomic clear 行为。它还会构建隔离
 fixture，并在 `650×600` 下对 `en-US`/`zh-CN` 的 light/dark 组合捕获 empty、healthy、quarantined、
@@ -385,29 +373,15 @@ degraded、replacement、uninstall 与 clear-data 全部维护状态。每张截
 locale、theme 与 modal 的 computed style。
 
 该聚焦门禁只补充完整 frontend/Rust suite，以及上游 installation、Registration、lifecycle、replacement、
-permission 与 scoped-storage 门禁，不能替代它们。若平台在受限 sandbox 内阻止 GUI process，应在正常本机
+open Runtime 与 scoped-storage 门禁，不能替代它们。若平台在受限 sandbox 内阻止 GUI process，应在正常本机
 环境中重跑 headless Chrome；仅 sandbox launch failure 不能判定为产品失败。
 
-## Plugin Permission Prompts 验证
+## Open-Web Trust Confirmation 验证
 
-installation preparation、Host 私有 permission prompt、post-commit grant、Settings grant/revoke control、
-prompt copy/style 或 Runtime invalidation 发生变化时必须运行：
-
-```bash
-pnpm run check:plugin-permission-prompts
-```
-
-该门禁串行执行 installation `0.2.0` TypeScript/Rust contract、installer prepare/commit/cancel 与 fault test、
-prompt derivation/management-service test、组件 keyboard/focus、message-schema parity、Runtime invalidation、
-public/workspace boundary，以及必需的 installation、replacement、management、permission、Runtime Session 与
-Host API Dispatcher 回归。
-
-视觉矩阵在固定 `650×600` viewport 下覆盖英文/简体中文与 light/dark，包括 prepared install、zero grant、
-all-sensitive、partial grant、replacement diff、Settings granted/not-granted/unsupported、revoke、conflict 与
-long-reason；每项同时保存 screenshot 并检查 computed style/interaction。安全负向证据必须证明插件来源的
-message、reason、SDK payload、Publisher/source 与伪造 user activation 都不能打开 Host prompt 或修改 grant。
-partial-grant test 必须区分 durable installation success 与零个/部分 grant 已应用，并证明失败后停止且不回滚、
-不自动重放。
+installation 与 replacement test 必须证明可信主窗口 UI 显示双语 open-Web trust notice，只 commit 精确的
+prepared candidate，并且没有 permission checklist 或 commit 后 grant 阶段。固定 `650×600` 视觉矩阵覆盖
+英文/简体中文与 light/dark，并保存 screenshot 与 computed style。插件来源 message、Publisher/source claim、
+SDK payload 或伪造 user activation 不能打开 Host 私有 management UI 或 native authority。
 
 ## Rust 验证
 

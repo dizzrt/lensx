@@ -11,15 +11,21 @@ user-selectable rollback history.
 
 ### Requirement: Plugin replacement MUST use a private two-stage Host contract
 
-The system MUST provide an independently versioned Host-private Plugin
-Replacement Contract and expose prepare, commit, and cancel only to the trusted
-lensX root application through strict Tauri commands. The contract MUST remain
-independent from the initial-installation, Registration read, lifecycle,
-Manifest, package, and Manager Store versions. Rust and TypeScript MUST fully
-validate requests, results, and errors from `unknown`. The contract MUST NOT
-become a Manifest, public plugin package, iframe Runtime, or SDK capability.
+Replacement MUST use an independent Host-private contract `0.2.0` with prepare and token, commit, and cancel stages for the current healthy identity. Payloads MUST be strict, versioned, and bounded and contain no permission diff, grant selection, permission reason, or post-commit authority. The version MUST be independent of Manifest, Host API, installation, Registration, Manager record, and application versions.
 
-#### Scenario: Trusted application prepares and commits a replacement
+Prepare, commit, and cancel MUST be exposed only to the trusted lensX root application through strict Tauri commands. Rust and TypeScript MUST fully validate requests, results, and errors from `unknown`. The contract MUST NOT become a Manifest, public plugin package, iframe Runtime, or SDK capability.
+
+#### Scenario: Current replacement contract succeeds
+- **WHEN** a trusted management service prepares and commits a matching compatible candidate
+- **THEN** the contract returns bounded identity, version classification, token, and current revision facts
+- **THEN** it calculates and applies no permission or grant diff
+
+#### Scenario: Legacy replacement payload appears
+- **WHEN** a payload uses `0.1.0` or contains added, removed, or retained permission IDs
+- **THEN** the strict Rust or TypeScript boundary rejects the entire payload
+- **THEN** the current registration, payload, data, revision, and Runtime remain unchanged
+
+#### Scenario: Trusted application prepares and commits replacement
 
 - **WHEN** the root application prepares a local `.lxp` for a current healthy `entry_id` and `expected_revision`, then commits with the opaque token returned by the Host
 - **THEN** the Host completes inspection, surface coordination, and a revision-bound commit through the independent replacement contract
@@ -27,38 +33,31 @@ become a Manifest, public plugin package, iframe Runtime, or SDK capability.
 
 #### Scenario: Replacement payload contains private or unknown fields
 
-- **WHEN** a request, result, or error lacks the contract version or contains unknown fields, an invalid type, a path, digest, Store key, package bytes, function, or Host object
+- **WHEN** a request, result, or error lacks the contract version or contains unknown fields, an invalid type, path, digest, Store key, package bytes, function, or Host object
 - **THEN** the corresponding boundary rejects the complete payload and returns a stable safe error
 - **THEN** the Manager, Registry, filesystem, revision, and changed event remain unchanged
 
 ### Requirement: Preparation MUST inspect one immutable local package without changing active state
 
-Prepare MUST read one local `.lxp` through a Rust-owned pathless file picker,
-and picker cancellation MUST return the ordinary `cancelled` result. The Host
-MUST reuse the existing capped source read, package inspection, Manifest,
-resource, checksum, complete package SHA-256, and current Host compatibility
-checks. Only a `compatible` candidate may enter installer-owned staging.
-Prepare MUST confirm that the candidate `plugin_id` matches the target healthy
-registration and MUST NOT modify the Manager, active payload, grants, Registry,
-revision, event, or plugin data.
+Prepare MUST read one `.lxp` through a Rust-owned pathless picker, reuse capped-read, package, Manifest, resource, checksum, digest, and compatibility checks, and verify that the candidate ID matches the current healthy registration. Only a compatible Manifest `0.2.0` candidate may enter staging. Prepare MUST NOT change the Manager, active payload, Registry, revision, event, or plugin data, and MUST return an opaque token, entry, current and candidate versions, and replacement classification without a permission diff.
+
+Picker cancellation MUST return the ordinary `cancelled` result without creating staging or mutation facts.
+
+#### Scenario: Compatible candidate is prepared
+- **WHEN** a candidate is valid, compatible, identity-matched, and current revision can be verified
+- **THEN** the Host validates it in bounded staging and returns a `0.2.0` prepared result with no permission diff
+- **THEN** the response contains no source, staging or installation path, digest, bytes, or raw error
+
+#### Scenario: Candidate is incompatible or legacy
+- **WHEN** a candidate is invalid, Host-incompatible, identity-mismatched, or uses a legacy Manifest permission contract
+- **THEN** prepare returns a stable invalid, incompatible, or identity-mismatch result
+- **THEN** the current record, payload, surfaces, data, and revision remain unchanged
 
 #### Scenario: User cancels local package selection
 
 - **WHEN** the user cancels the native single-file picker during prepare
 - **THEN** the Host returns `cancelled` rather than an error
 - **THEN** no commit token, staging, Manager mutation, revision, or event is created
-
-#### Scenario: Candidate package is invalid, incompatible, or belongs to another plugin
-
-- **WHEN** the candidate package is invalid, incompatible with the current lensX or Host API version, or its normalized `plugin_id` differs from the target registration
-- **THEN** prepare returns a stable invalid, incompatible, or identity-mismatch conclusion
-- **THEN** the current record, payload, surfaces, grants, and data remain unchanged and no token is published
-
-#### Scenario: Compatible candidate is prepared
-
-- **WHEN** the candidate is valid and compatible, its identity matches, and the current entry and revision can be verified
-- **THEN** the Host extracts and verifies the candidate in bounded staging and returns an opaque token, entry ID, current and candidate versions, replacement classification, and permission diff
-- **THEN** the response contains no source path, staging or installation path, package digest, package bytes, or raw system error
 
 ### Requirement: Version ordering MUST classify but not forbid explicit local replacement
 
@@ -87,7 +86,7 @@ storage evidence MUST NOT be represented as a reinstall.
 
 - **WHEN** the current and candidate packages have the same plugin ID and SemVer but different complete package digests
 - **THEN** prepare classifies the operation as `reinstall` and continues all checks
-- **THEN** the Host neither overwrites the current payload in place nor skips permission, identity, or compatibility checks
+- **THEN** the Host neither overwrites the current payload in place nor skips Manifest, identity, or compatibility checks
 
 #### Scenario: Package identity evidence conflicts
 
@@ -117,7 +116,7 @@ outside that lock.
 
 - **WHEN** another lifecycle or replacement operation changes the Registration revision after prepare
 - **THEN** commit rejects the stale token, cleans its staging, and requires the caller to restart from the complete latest snapshot
-- **THEN** the old preparation cannot overwrite concurrently committed enabled intent, grants, Manifest, payload, or diagnostics
+- **THEN** the old preparation cannot overwrite concurrently committed enabled intent, Manifest, payload, or diagnostics
 
 #### Scenario: Process exits before commit
 
@@ -147,7 +146,7 @@ versions simultaneously.
 
 - **WHEN** staging revalidation, rename, flush, or Manager record creation, writing, flushing, or atomic replacement fails
 - **THEN** the Host publishes no new record, revision, or event and removes the candidate or leaves it as a provable orphan
-- **THEN** the old record, active payload, grants, enabled intent, diagnostics, and plugin data remain unchanged
+- **THEN** the old record, active payload, enabled intent, diagnostics, and plugin data remain unchanged
 
 #### Scenario: Another process holds the commit boundary
 
@@ -157,27 +156,25 @@ versions simultaneously.
 
 ### Requirement: Replacement MUST preserve and safely narrow Host-owned state
 
-The next registration MUST inherit the current healthy record's Host source,
-enabled intent, and bounded diagnostics, preserve the independent
-`data/<plugin-key>` subtree unchanged, and publish Runtime as `inactive`.
-Compatibility MUST be recomputed from the candidate Manifest and current lensX
-and Host API versions. The next grants MUST equal exactly the intersection of
-the old granted permission IDs and the candidate requested permission IDs. New
-permission requests MUST NOT gain grants automatically, and removed requests
-MUST NOT retain grants. Publisher text, version direction, local source, and
-claims of official status MUST NOT alter these rules.
+A replacement commit MUST preserve only Host-owned enabled intent, plugin-data ownership, Launcher references, and current safe diagnostics that still apply to the same identity, and MUST publish a new payload, Manifest, resource generation, and revision. It MUST NOT retain, compare, create, or restore permission grants, and no grant facts from an old record may enter the new registration. Candidate Publisher, official source, and open Web behavior MUST NOT change Host source or trust.
 
-#### Scenario: Candidate adds and removes permission requests
+Compatibility MUST be recomputed from the candidate Manifest and current lensX and Host API versions, Runtime MUST publish as `inactive`, and replacement MUST preserve the independent `data/<plugin-key>` subtree unchanged.
 
-- **WHEN** the candidate Manifest adds a new permission request, retains one granted request, and removes another granted request
-- **THEN** prepare reports a deterministic added and removed permission diff, and the next registration retains only the old grant that is still requested
-- **THEN** the new request remains ungranted, the removed request loses its grant, and replacement performs no authorization interaction
+#### Scenario: Upgrade replaces a legacy permission plugin
+- **WHEN** a current legacy registration is explicitly replaced by a compatible Manifest `0.2.0` package
+- **THEN** the new record contains no grants, the old Runtime, Session, and Port terminate, and the new generation begins from inactive current facts
+- **THEN** plugin-data policy and permitted Host-owned state continue according to identity rules
 
-#### Scenario: Enabled plugin is replaced by a compatible candidate
+#### Scenario: Commit fails after staging
+- **WHEN** persistence, revision, payload move, or Registration publication fails
+- **THEN** the current registration and authority remain at the last successful state and only owned staging is cleaned
+- **THEN** no partial permission migration, grant, or new Runtime is produced
+
+#### Scenario: Enabled plugin is replaced by compatible candidate
 
 - **WHEN** the current healthy registration has enabled intent set to true and replacement succeeds
 - **THEN** the next registration preserves enabled intent, source, and the data boundary, recomputes compatibility, and publishes Runtime as `inactive`
-- **THEN** version direction and Publisher text create no additional trust, provenance, or permission
+- **THEN** version direction and Publisher text create no additional trust, provenance, or authority
 
 #### Scenario: Disabled plugin is replaced
 
@@ -187,30 +184,35 @@ claims of official status MUST NOT alter these rules.
 
 ### Requirement: Trusted application MUST quiesce and converge plugin surfaces around commit
 
-For a prepared replacement, the trusted TypeScript service MUST validate the
-target entry and revision against the current snapshot before invoking Rust
-commit. It MUST withdraw the provider through the existing Surface Projection
-in Action-then-Page order, and Page withdrawal MUST close an active plugin
-page. A quiescence failure MUST prevent commit. After a commit failure, the
-service MUST fully restore the original revision in Page-then-Action order.
-After a successful commit, it MUST actively refresh and await Page-then-Action
-projection at the committed revision.
+The trusted application MUST serialize management operations around a replacement commit, quiesce the current Page, Action, and Runtime, and converge through a complete Registration snapshot and detail after commit. Confirmation UI MUST display candidate identity, version, classification, and installation-trust guidance and MUST NOT display a permission diff, grant selection, or partial-grant result. The interaction MUST preserve both locales, themes, keyboard operation, focus, and bounded feedback.
+
+Before Rust commit, the service MUST validate the target entry and revision against the current snapshot and withdraw providers through Surface Projection in Action-then-Page order; Page withdrawal MUST close an active plugin Page. Quiescence failure MUST prevent commit. After commit failure, the service MUST restore the original revision in Page-then-Action order. After successful commit, it MUST refresh and await Page-then-Action projection at the committed revision.
+
+#### Scenario: User confirms upgrade
+- **WHEN** the user confirms a current prepared upgrade
+- **THEN** the Host terminates old Runtime authority before committing and waiting for current Registration convergence
+- **THEN** the UI reports the replacement result without post-commit grant work
+
+#### Scenario: User cancels replacement
+- **WHEN** the user cancels a prepared candidate
+- **THEN** the service cancels the token, restores focus, and keeps the old plugin available
+- **THEN** no permission selection, grant decision, or new authority remains
 
 #### Scenario: Enabled plugin replacement succeeds
 
 - **WHEN** the current plugin has projected Actions and Pages and quiescence, Rust commit, and new-revision projection all succeed
-- **THEN** the old Actions and Pages are withdrawn before durable replacement, and an active Page returns to a safe Host page
+- **THEN** old Actions and Pages are withdrawn before durable replacement, and an active Page returns to a safe Host Page
 - **THEN** the new Manifest's Page batch is published before its Action batch and old descriptors can no longer be dispatched
 
 #### Scenario: Surface quiescence fails
 
 - **WHEN** an Action or Page provider batch cannot be withdrawn completely
-- **THEN** the service cancels the preparation, restores the original revision projection, and does not invoke Rust commit
+- **THEN** the service cancels the preparation, restores the original-revision projection, and does not invoke Rust commit
 - **THEN** the Manager, active payload, revision, and event remain unchanged
 
 #### Scenario: Rust commit fails after quiescence
 
-- **WHEN** the surfaces have been withdrawn but the candidate or Manager commit fails
+- **WHEN** surfaces have been withdrawn but the candidate or Manager commit fails
 - **THEN** the old durable registration remains active and the service restores Page-then-Action projection at the original revision
 - **THEN** the failure result does not claim that the new version was installed
 
@@ -258,19 +260,19 @@ failure recovery; Host fact inheritance; surface convergence; and cleanup of
 the old payload after success. It MUST NOT download remote packages,
 automatically check for updates, provide user-initiated rollback or version
 history, execute candidate code, roll back based on Runtime health, migrate
-plugin data, grant new permissions, display complete management or
+plugin data, grant native authority, display complete management or
 authorization UI, verify real signatures, or repair quarantine. The current
 unsigned local policy MUST continue to treat source, Publisher text, package
-digest, and permission requests as independent facts.
+digest, and legacy permission claims as independent facts.
 
 #### Scenario: Local replacement completes before later milestones
 
-- **WHEN** this change completes before Runtime, Permission Management, management UI, and signing changes
+- **WHEN** this change completes before Runtime, management UI, and signing changes
 - **THEN** trusted Host infrastructure can safely replace a local compatible package with the same identity without a failure damaging the old active version
-- **THEN** plugin code still does not execute, new permissions remain ungranted, and remote updates, signature trust, and user-initiated rollback remain unavailable
+- **THEN** plugin code still does not execute, native Host authority remains unavailable, and remote updates, signature trust, and user-initiated rollback remain unavailable
 
 #### Scenario: Publisher claims a trusted or official source
 
 - **WHEN** candidate Manifest Publisher text claims an official or verified identity
-- **THEN** replacement retains the current Host-owned local external source policy and applies the same package, identity, permission, and cleanup checks
+- **THEN** replacement retains the current Host-owned local external source policy and applies the same package, identity, compatibility, and cleanup checks
 - **THEN** the claim creates no signature status, trusted provenance, grant, or lifecycle exception

@@ -12,7 +12,7 @@ const locale: PluginRuntimeLocale = parameters.get('locale') === 'zh-CN' ? 'zh-C
 const theme: PluginRuntimeTheme = parameters.get('theme') === 'dark' ? 'dark' : 'light';
 const context: PluginRuntimeContext = Object.freeze({
   capabilities: Object.freeze([]),
-  hostApiVersion: '0.1.0',
+  hostApiVersion: '0.2.0',
   locale,
   theme,
 });

@@ -20,7 +20,6 @@ const identity: PluginRuntimeSessionIdentity = Object.freeze({
   resource_generation: '0123456789abcdef0123456789abcdef',
   runtime_attempt_key: 'attempt-1',
   registration_revision: '7',
-  granted_permission_ids: Object.freeze([]),
 });
 
 const requestInput = (
@@ -88,7 +87,7 @@ describe('Host-private Plugin Host API dispatcher', () => {
     expect(output).toEqual({
       method: 'runtime.get_context',
       result: {
-        hostApiVersion: '0.1.0',
+        hostApiVersion: '0.2.0',
         locale: 'en-US',
         theme: 'light',
         capabilities: ['actions.open', 'runtime.get_context', 'ui.close'],
@@ -120,7 +119,7 @@ describe('Host-private Plugin Host API dispatcher', () => {
     expect(events[0]).toEqual({
       event: 'runtime.context_changed',
       payload: {
-        hostApiVersion: '0.1.0',
+        hostApiVersion: '0.2.0',
         locale: 'zh-CN',
         theme: 'dark',
         capabilities: ['actions.open', 'runtime.get_context', 'ui.close'],
@@ -151,9 +150,7 @@ describe('Host-private Plugin Host API dispatcher', () => {
       { method: 'storage.set', params: { key: 'x', value: 'value' } },
     ]) {
       await expect(requestInput(binding, request)).resolves.toEqual(
-        expect.objectContaining({
-          code: request.method.startsWith('clipboard.') ? 'permission_denied' : 'unavailable',
-        }),
+        expect.objectContaining({ code: request.method.startsWith('clipboard.') ? 'method_not_found' : 'unavailable' }),
       );
     }
 
@@ -312,7 +309,7 @@ describe('Host-private Plugin Host API dispatcher', () => {
       {
         event: 'runtime.context_changed',
         payload: {
-          hostApiVersion: '0.1.0',
+          hostApiVersion: '0.2.0',
           locale: 'en-US',
           theme: 'light',
           capabilities: ['actions.open', 'runtime.get_context', 'ui.close'],

@@ -57,7 +57,7 @@ export const checkOfficialPluginReleaseBoundaries = (rootDir: string): void => {
   const installer = read('src-tauri/src/plugin_installer.rs');
   for (const marker of [
     'PluginSource::External',
-    'first_install_preparation_is_pathless_single_use_and_commits_empty_grants',
+    'first_install_preparation_is_pathless_single_use_and_commits_without_native_authority',
   ]) {
     if (!installer.includes(marker)) fail('installer-authority-drift', marker);
   }
@@ -65,11 +65,7 @@ export const checkOfficialPluginReleaseBoundaries = (rootDir: string): void => {
   if (registration.includes('PluginSource::Official') || registration.includes('PluginSource::Verified')) {
     fail('host-official-authority-drift', 'src-tauri/src/plugin_registration.rs');
   }
-  for (const path of [
-    'src-tauri/src/plugin_installer.rs',
-    'src-tauri/src/plugin_permission.rs',
-    'src/app/plugins/runtime/session-contract.ts',
-  ]) {
+  for (const path of ['src-tauri/src/plugin_installer.rs', 'src/app/plugins/runtime/session-contract.ts']) {
     const source = read(path);
     if (source.includes('.release.json') || source.includes('release_tag'))
       fail('host-release-sidecar-consumption', path);

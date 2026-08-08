@@ -11,14 +11,12 @@ package `@lensx/plugin-cli`, but repository validation does not perform a
 registry publish. The Host can install/register and open a supported local
 plugin, the SDK supplies the authenticated iframe transport, and the production
 Host-private Dispatcher implements `runtime.get_context`, `ui.close`,
-`actions.open`, and the five plugin-scoped `storage.*` methods. Clipboard
-methods are exposed independently only for a current granted Session while the
-native provider is available. The Contract
-package ships the complete ten-method semantic catalog and validators
-independently of provider availability.
+`actions.open`, and the five plugin-scoped `storage.*` methods. The Contract
+package ships the complete eight-method semantic catalog and validators. It
+contains no native clipboard or permission method.
 
 The shipped static Manifest contract remains validation-only. A package being
-inside this workspace does not grant it Host trust, Tauri access, permissions,
+inside this workspace does not grant it Host trust, Tauri access, native authority,
 or Runtime capabilities.
 
 The maintained runnable starters and their isolation, package, Runtime, and

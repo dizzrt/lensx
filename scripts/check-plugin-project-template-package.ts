@@ -138,7 +138,7 @@ try {
       },
     ]);
 
-    const permissionManifest = {
+    const legacyPermissionManifest = {
       ...manifest,
       requested_permissions: [
         {
@@ -147,21 +147,16 @@ try {
         },
       ],
     };
-    const permissionInspection = await inspectPluginPackage(
+    const legacyPermissionInspection = await inspectPluginPackage(
       await rawPackage([
         ...files.filter((file) => file.path !== 'manifest.json'),
-        { path: 'manifest.json', bytes: manifestBytes(permissionManifest) },
+        { path: 'manifest.json', bytes: manifestBytes(legacyPermissionManifest) },
       ]),
     );
-    if (permissionInspection.status === 'invalid' || permissionInspection.manifest.requested_permissions.length === 0) {
-      throw new Error(`template/package-permission-negative-invalid-fixture: ${directory}`);
-    }
-    const permissionPolicyDiagnostics = permissionInspection.manifest.requested_permissions.map(
-      () => 'template/package-permissions-forbidden',
-    );
-    if (permissionPolicyDiagnostics.join(',') !== 'template/package-permissions-forbidden') {
-      throw new Error(`template/package-permission-policy-missed: ${directory}`);
-    }
+    if (legacyPermissionInspection.status !== 'invalid')
+      throw new Error(`template/package-legacy-permission-accepted: ${directory}`);
+    if (!legacyPermissionInspection.diagnostics.some((diagnostic) => diagnostic.code === 'manifest_invalid'))
+      throw new Error(`template/package-legacy-permission-diagnostic-missed: ${directory}`);
 
     const canonicalFiles = [
       ...files,

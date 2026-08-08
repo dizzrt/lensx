@@ -4,7 +4,6 @@ import type {
   HostApiEventInput,
   HostApiEventNameInput,
   HostApiMethodInput,
-  HostApiPermissionInput,
   HostApiRequestInput,
   HostApiResultInput,
   PluginRuntimeContextInput,
@@ -13,7 +12,6 @@ import type {
 export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 
 export type HostApiMethod = HostApiMethodInput;
-export type HostApiPermission = HostApiPermissionInput;
 export type HostApiEventName = HostApiEventNameInput;
 export type HostApiErrorCode = HostApiErrorCodeInput;
 export type PluginRuntimeLocale = PluginRuntimeContextInput['locale'];
@@ -62,14 +60,8 @@ export type HostApiValidationResult<Value> = InvalidHostApiValidationResult | Va
 
 export interface HostApiMethodCatalogEntry {
   readonly method: HostApiMethod;
-  readonly permission: HostApiPermission | null;
   readonly paramsSchema: string;
   readonly resultSchema: string;
-  readonly deprecated: false;
-}
-
-export interface HostApiPermissionCatalogEntry {
-  readonly permission: HostApiPermission;
   readonly deprecated: false;
 }
 

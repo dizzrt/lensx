@@ -1,4 +1,4 @@
-export const PLUGIN_REPLACEMENT_CONTRACT_VERSION = '0.1.0' as const;
+export const PLUGIN_REPLACEMENT_CONTRACT_VERSION = '0.2.0' as const;
 export const PREPARE_LOCAL_PLUGIN_REPLACEMENT_COMMAND = 'prepare_local_plugin_replacement' as const;
 export const COMMIT_LOCAL_PLUGIN_REPLACEMENT_COMMAND = 'commit_local_plugin_replacement' as const;
 export const CANCEL_PLUGIN_REPLACEMENT_COMMAND = 'cancel_plugin_replacement' as const;
@@ -38,8 +38,6 @@ export type PluginReplacementResult =
       readonly current_version: string;
       readonly candidate_version: string;
       readonly classification: PluginReplacementClassification;
-      readonly added_permission_ids: readonly string[];
-      readonly removed_permission_ids: readonly string[];
     }
   | {
       readonly status: 'committed';

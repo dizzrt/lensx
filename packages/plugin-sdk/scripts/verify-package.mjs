@@ -140,7 +140,7 @@ try {
     ],
     consumerRoot,
   ).trim();
-  if (runtimeOutput !== '0.1.0:0.1.0:ready:en-US') {
+  if (runtimeOutput !== '0.2.0:0.2.0:ready:en-US') {
     throw new Error(`Unexpected external consumer output: ${runtimeOutput}`);
   }
   const deepImport = spawnSync(

@@ -1,55 +1,43 @@
-# Runtime、权限与安全
+# Runtime 与安全
 
 ## Runtime 生命周期
 
-iframe document 可见不代表 SDK ready。Host 先为 active plugin page 创建一个 isolated iframe，
-建立 current authenticated session，再连接公共 SDK transport。SDK 随后取得
-`runtime.get_context`；只有 compatible、valid 的完整 context 才会让 attempt 进入 ready。
-
-UI 应显式建模 loading、ready、empty capability、error 和 recovery。page close、navigation、
-manual reload、permission change、package replacement、Host reload、disconnect、deadline 或
-breaker transition 都可能结束 attempt。cleanup 必须 unsubscribe listener、cancel pending work、
-dispose SDK，并保证重复执行安全。
+每个 eligible plugin Page 都在一个使用 scoped plugin origin 的隔离 iframe 中运行。Host
+创建私有 Session、传递 SDK transport、等待 ready，并拥有 deadline、retry、breaker、
+navigation lease 与最终 teardown。close、navigation、disable、uninstall、replacement、
+development reload、disconnect、Host reload 和 app unmount 会让旧 iframe、Worker、连接、
+Blob URL、timer、listener、Session 与 port 失效。
 
 ## Context replacement
 
-`runtime.context_changed` 携带完整 context。原子替换旧 snapshot，绝不能按 patch merge。
-同时更新 `en-US`/`zh-CN`、light/dark 和完整 capability set。replacement 移除的 capability
-立即不可用，即使早先的 call 或 UI render 曾经依赖它。
+每个 iframe attempt 只初始化一次 SDK。`runtime.get_context` 与后续 Context event 提供完整
+Host API 状态：版本、locale、theme 和当前非特权 method capabilities。一次状态变更中替换整个
+Context。Worker/network 支持不是 Host API method，也不会出现在 capability 列表中。
 
-Empty capabilities 合法。应呈现有意义的 empty/degraded state，不能猜测公共 catalog 可调用。
-invalid 或 incompatible context 会以受控 error 结束当前 attempt。
+## 开放 Web 能力
 
-## 权限
+当前 macOS WKWebView 基线无需 Manifest 字段或 lensX grant 即允许页面生命周期内的
+Dedicated Worker、package/HTTPS/Data/Blob 内容、HTTPS/WSS 连接、WASM 和浏览器 origin
+storage。插件可在自身 HTML 中添加更严格的 CSP；浏览器会把它与 Host response policy 取交集，
+因此只能收窄行为，不能削弱 Host 隔离。
 
-权限 facts 按以下链路逐层收窄：
-
-- **requested**：Manifest 请求已知 permission 并解释原因；
-- **granted**：Host 为 current registration revision 记录显式用户决定；
-- **effective**：request、grant、supported provider 和 current facts 同时成立；
-- **capability**：current session 当前暴露对应 method。
-
-Host API `0.1.0` 只有 `clipboard.read` 和 `clipboard.write` 需要显式 permission。安装从空 grant
-开始。CLI acceptance、publisher metadata、development source、插件内 click 或 requested reason
-均不能授予 authority。撤销与 reload permission delta 会让受影响的 current session 和 pending
-call 失效。
+SharedWorker、ServiceWorker、脱离页面的后台执行和设备/原生 API 不在承诺范围内。相机、
+麦克风、定位、全屏和浏览器剪贴板可能因 WebView、Permissions Policy 或 OS 行为不可用。
+lensX 不会把浏览器结果重新解释为 grant 决策。
 
 ## 失败与恢复
 
-将 initialization、invalid/incompatible context、transport failure、timeout、cancellation、
-disconnect、permission denial、provider unavailable 和受限 internal failure 映射为用户可理解状态。
-不得展示私有 exception 或不可信 payload。只有在有意义且由用户发起时提供 retry。
-
-每次 retry 创建 fresh attempt。释放旧资源前先推进 attempt marker，忽略旧 attempt 的 late completion，
-并保证 teardown 幂等。disconnected 或 replaced generation 绝不能被 late callback 恢复为 ready。
+通过标准 feature detection 与 rejection 处理不可用的浏览器能力。对 Host API
+`method_not_found`、`unavailable`、取消、超时、限制、disconnect 和不兼容 Context 做降级，
+不要盲目重试。replacement 或 reload 后创建新的 Worker、连接、SDK 状态和订阅。绝不把上一
+generation 的 URL、port、cursor 或浏览器状态复用为 Host authority。
 
 ## 安全边界
 
-production 与 development source 共享相同 iframe sandbox、严格内容策略、精确 source validation、
-single-iframe ownership、authenticated session、semantic SDK、provider check、permission、request
-limit、deadline、failure breaker 与 teardown。Development Mode 只改变 source provenance 和刷新体验。
+开放 Web 基线不会暴露 Host DOM、Tauri globals/IPC、Rust command、文件系统、Shell、进程、
+原生剪贴板、另一个插件 origin 或旧 generation。Host 保留精确可信 ancestor、隔离 origin 与
+generation、scoped resource path、`nosniff`、`no-store`、无 Host CORS authority、iframe
+sandbox、referrer policy、设备限制、bounded RPC、deadline、breaker 与确定性 teardown。
 
-插件代码必须使用公共 package entry 与最新 session context。不得导入 Host 实现、调用 native
-command、依赖内部 transport field、放宽内容策略、绕过 SDK，或把 Testkit 当作真实安全边界。
-method 级恢复见 [Host API](host-api.md)。
-
+因此安装是关于代码在该隔离 Web Runtime 中运行的信任决定。lensX 不审查、批准或持续监控插件
+如何使用用户交给它的数据，也不对普通 Web 行为逐项授权。

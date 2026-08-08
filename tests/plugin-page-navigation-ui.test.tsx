@@ -33,7 +33,6 @@ if (parsed.detail.kind !== 'registered') {
 }
 const detail = {
   ...parsed.detail,
-  granted_permission_ids: ['lensx.filesystem.read_selected'],
   manifest: {
     ...parsed.detail.manifest,
     contributes: {
@@ -47,7 +46,7 @@ const detail = {
 };
 const pluginId = detail.manifest.plugin_id;
 const snapshot: PluginRegistrationSnapshot = {
-  contract_version: '0.2.0',
+  contract_version: '0.3.0',
   revision: '1',
   availability: { kind: 'available' },
   entries: [
@@ -70,7 +69,7 @@ const createAdapter = (): PluginRegistrationDesktopAdapter => {
   return {
     initialize: async () => snapshot,
     refresh: async () => snapshot,
-    readDetail: async () => ({ contract_version: '0.2.0', revision: '1', detail }),
+    readDetail: async () => ({ contract_version: '0.3.0', revision: '1', detail }),
     handleLauncherActivation: async () => snapshot,
     recoverListener: async () => snapshot,
     subscribe: (listener) => {
@@ -106,7 +105,6 @@ const runtimeDescriptor: PluginPageRuntimeDescriptor = Object.freeze({
   resource_generation: '0123456789abcdef0123456789abcdef',
   runtime_attempt_key: 'attempt-1',
   registration_revision: '1',
-  granted_permission_ids: ['lensx.filesystem.read_selected'],
 });
 
 const TestProviderControls = () => {

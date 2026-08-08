@@ -40,16 +40,17 @@ canonical `.lxp`。
 
 1. [公共 package](public-packages.md)：exports、依赖角色和生命周期所有权。
 2. [工具与安装](tooling-and-installation.md)：CLI、Development Mode、打包和 Settings 安装。
-3. [Host API](host-api.md)：method、provider、permission、capability 和稳定错误。
-4. [Runtime、权限与安全](runtime-permissions-security.md)：初始化、替换、retry、teardown 与隔离。
+3. [Host API](host-api.md)：method、provider、capability 和稳定错误。
+4. [Runtime 与安全](runtime-permissions-security.md)：初始化、替换、retry、teardown 与隔离。
 5. [兼容与错误](compatibility-and-errors.md)：版本维度、校验结论和排障顺序。
 
 ## 边界
 
-Manifest 只能请求权限，不能授予权限。CLI validation 证明作者控制的字节满足公共契约，
-不会安装插件或建立 Host authority。Development Mode 使用 process-local source 和手动
-reload，不安装 `.lxp`。production 与 development source 共享同一 Runtime、session、
-capability、permission、deadline 和隔离边界。
+Manifest 声明静态插件 identity、兼容范围、Runtime entry 与 contributions；它不包含
+permission 或 Host policy 字段。CLI validation 证明作者控制的字节满足公共契约，不会安装
+插件或建立 Host authority。Development Mode 使用 process-local source 和手动 reload，不安装
+`.lxp`。production 与 development source 共享同一开放隔离 Runtime、Session、deadline 与
+teardown 边界。
 
 仓库会验证公共 package tarball，并已为未来官方 `.lxp` 插件建立 GitHub Release 流水线。
 当前尚无产品官方插件，公共 package 仍未进入 npm。不得虚构 package registry 命令、产品下载

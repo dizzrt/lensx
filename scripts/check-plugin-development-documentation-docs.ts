@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { relative, resolve, sep } from 'node:path';
 
-import { HOST_API_METHOD_CATALOG, HOST_API_PERMISSION_CATALOG, PLUGIN_HOST_API_VERSION } from '@lensx/plugin-contract';
+import { HOST_API_METHOD_CATALOG, PLUGIN_HOST_API_VERSION } from '@lensx/plugin-contract';
 
 import {
   type DocumentationDiagnostic,
@@ -76,13 +76,7 @@ const storage = read('src/app/plugins/storage/types.ts');
 const providers: Record<string, HostApiProvider> = {};
 for (const method of stringLiterals(dispatcher, 'BASE_IMPLEMENTED_METHODS')) providers[method] = 'base';
 for (const method of stringLiterals(storage, 'PLUGIN_SCOPED_STORAGE_METHODS')) providers[method] = 'storage';
-for (const method of stringLiterals(dispatcher, 'clipboardMethodSet')) providers[method] = 'clipboard';
-for (const marker of [
-  'baseImplementedMethodSet',
-  'storageMethodSet',
-  'clipboardMethodSet',
-  'PLUGIN_PERMISSION_CATALOG',
-]) {
+for (const marker of ['baseImplementedMethodSet', 'storageMethodSet']) {
   if (!dispatcher.includes(marker)) throw new Error(`Production Dispatcher evidence is missing ${marker}.`);
 }
 
@@ -107,7 +101,6 @@ if (hostApi !== undefined) {
   diagnostics.push(
     ...validateHostApiDocumentationCoverage(hostApi.source, {
       methods: HOST_API_METHOD_CATALOG,
-      permissions: HOST_API_PERMISSION_CATALOG.map(({ permission }) => permission),
       errorCodes,
       hostApiVersion: PLUGIN_HOST_API_VERSION,
       providers,

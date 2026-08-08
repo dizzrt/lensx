@@ -8,7 +8,7 @@ use url::Url;
 
 const MANIFEST_SCHEMA: &str =
     include_str!("../../packages/plugin-contract/schema/manifest.schema.json");
-pub const PLUGIN_HOST_API_VERSION: &str = "0.1.0";
+pub const PLUGIN_HOST_API_VERSION: &str = "0.2.0";
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -20,7 +20,6 @@ pub struct PluginManifestInput {
     pub publisher: PublisherInput,
     pub compatibility: CompatibilityInput,
     pub runtime: RuntimeInput,
-    pub requested_permissions: Option<Vec<PermissionRequestInput>>,
     pub contributes: ContributesInput,
 }
 
@@ -91,13 +90,6 @@ pub enum RuntimeKind {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct PermissionRequestInput {
-    pub permission_id: String,
-    pub reason: LocalizedTextInput,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ContributesInput {
     pub pages: Vec<PageInput>,
     pub actions: Option<Vec<ActionInput>>,
@@ -112,7 +104,6 @@ pub struct PageInput {
     pub route: String,
     pub parent_page_id: Option<String>,
     pub icon: Option<AssetInput>,
-    pub required_permissions: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -164,7 +155,6 @@ pub struct NormalizedPluginManifest {
     pub publisher: NormalizedPublisher,
     pub compatibility: NormalizedCompatibility,
     pub runtime: NormalizedRuntime,
-    pub requested_permissions: Vec<NormalizedPermissionRequest>,
     pub contributes: NormalizedContributes,
 }
 
@@ -225,13 +215,6 @@ pub struct NormalizedRuntime {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct NormalizedPermissionRequest {
-    pub permission_id: String,
-    pub reason: NormalizedLocalizedText,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
 pub struct NormalizedContributes {
     pub pages: Vec<NormalizedPluginPage>,
     pub actions: Vec<NormalizedPluginAction>,
@@ -249,7 +232,6 @@ pub struct NormalizedPluginPage {
     pub parent_page_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon: Option<NormalizedAsset>,
-    pub required_permissions: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
@@ -464,15 +446,6 @@ fn normalize_manifest(input: PluginManifestInput) -> NormalizedPluginManifest {
             kind: input.runtime.kind,
             entry: input.runtime.entry.trim().to_owned(),
         },
-        requested_permissions: input
-            .requested_permissions
-            .unwrap_or_default()
-            .into_iter()
-            .map(|permission| NormalizedPermissionRequest {
-                permission_id: permission.permission_id.trim().to_owned(),
-                reason: normalize_localized_text(permission.reason),
-            })
-            .collect(),
         contributes: NormalizedContributes {
             pages: input
                 .contributes
@@ -484,12 +457,6 @@ fn normalize_manifest(input: PluginManifestInput) -> NormalizedPluginManifest {
                     route: page.route.trim().to_owned(),
                     parent_page_id: page.parent_page_id.map(|value| value.trim().to_owned()),
                     icon: page.icon.map(normalize_asset),
-                    required_permissions: page
-                        .required_permissions
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|value| value.trim().to_owned())
-                        .collect(),
                 })
                 .collect(),
             actions: input
@@ -708,22 +675,6 @@ fn validate_semantics(
         &mut diagnostics,
     );
 
-    let mut permission_ids = HashSet::new();
-    for (index, permission) in manifest.requested_permissions.iter().enumerate() {
-        if !permission_ids.insert(permission.permission_id.as_str()) {
-            diagnostics.push(diagnostic(
-                "duplicate_id",
-                format!("/requested_permissions/{index}/permission_id"),
-                "Permission ID must be unique.",
-            ));
-        }
-        validate_localized_text(
-            &permission.reason,
-            &format!("/requested_permissions/{index}/reason"),
-            &mut diagnostics,
-        );
-    }
-
     let mut page_ids = HashSet::new();
     let mut page_indexes = HashMap::new();
     for (index, page) in manifest.contributes.pages.iter().enumerate() {
@@ -753,24 +704,6 @@ fn validate_semantics(
                 None,
                 &mut diagnostics,
             );
-        }
-        let mut required_permissions = HashSet::new();
-        for (permission_index, permission_id) in page.required_permissions.iter().enumerate() {
-            let path =
-                format!("/contributes/pages/{index}/required_permissions/{permission_index}");
-            if !required_permissions.insert(permission_id.as_str()) {
-                diagnostics.push(diagnostic(
-                    "duplicate_value",
-                    path,
-                    "Required permission must be unique.",
-                ));
-            } else if !permission_ids.contains(permission_id.as_str()) {
-                diagnostics.push(diagnostic(
-                    "unknown_reference",
-                    path,
-                    "Required permission was not requested.",
-                ));
-            }
         }
     }
 
@@ -1054,7 +987,7 @@ mod tests {
         case.current_versions.as_ref().map_or_else(
             || PluginHostVersions {
                 lensx: "0.1.0".to_owned(),
-                host_api: "0.1.0".to_owned(),
+                host_api: "0.2.0".to_owned(),
             },
             |versions| PluginHostVersions {
                 lensx: versions.lensx.clone(),
@@ -1136,7 +1069,7 @@ mod tests {
             &read_json(fixture_root().join("base.json")),
             &PluginHostVersions {
                 lensx: "0.1.0".to_owned(),
-                host_api: "0.1.0".to_owned(),
+                host_api: "0.2.0".to_owned(),
             },
         );
         let serialized = serde_json::to_value(result.manifest)

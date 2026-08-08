@@ -1,5 +1,5 @@
 {
-  "manifest_version": "0.1.0",
+  "manifest_version": "0.2.0",
   "plugin_id": "dev.lensx.smoke.development-mode",
   "version": "0.1.0",
   "display": {
@@ -23,15 +23,14 @@
       "max_version_exclusive": "0.2.0"
     },
     "host_api": {
-      "min_version": "0.1.0",
-      "max_version_exclusive": "0.2.0"
+      "min_version": "0.2.0",
+      "max_version_exclusive": "0.3.0"
     }
   },
   "runtime": {
     "kind": "iframe",
     "entry": "index.html"
   },
-  "requested_permissions": [],
   "contributes": {
     "pages": [
       {
@@ -40,8 +39,7 @@
           "en-US": "Development Mode Smoke A",
           "zh-CN": "开发模式 Smoke A"
         },
-        "route": "/",
-        "required_permissions": []
+        "route": "/"
       }
     ],
     "actions": [
@@ -52,8 +50,8 @@
           "zh-CN": "打开开发模式 Smoke A"
         },
         "description": {
-          "en-US": "Open generation A without requested clipboard permission.",
-          "zh-CN": "打开尚未请求剪贴板权限的 A 代版本。"
+          "en-US": "Open generation A in the shared isolated Web Runtime.",
+          "zh-CN": "在共享隔离 Web Runtime 中打开 A 代版本。"
         },
         "default_keywords": {
           "en-US": ["development", "plugin", "smoke"],

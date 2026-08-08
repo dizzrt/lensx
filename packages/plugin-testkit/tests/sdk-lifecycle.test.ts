@@ -34,7 +34,7 @@ describe('real Plugin SDK lifecycle through the public Testkit', () => {
     await expect(client.initialize()).rejects.toMatchObject({ code: 'invalid_runtime_context' });
     expect(client.state).toBe('idle');
 
-    fake.setConnectHandler(async () => createPluginRuntimeContextFixture({ hostApiVersion: '0.2.0' }));
+    fake.setConnectHandler(async () => createPluginRuntimeContextFixture({ hostApiVersion: '0.3.0' }));
     await expect(client.initialize()).rejects.toMatchObject({ code: 'incompatible_host_api' });
     expect(client.state).toBe('idle');
   });

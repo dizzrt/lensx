@@ -9,10 +9,8 @@ const VALID_FIXTURES: &str =
 const INVALID_FIXTURES: &str =
     include_str!("../../packages/plugin-contract/tests/fixtures/host-api/invalid/cases.json");
 
-const METHODS: [&str; 10] = [
+const METHODS: [&str; 8] = [
     "actions.open",
-    "clipboard.read",
-    "clipboard.write",
     "runtime.get_context",
     "storage.delete",
     "storage.get",
@@ -21,7 +19,6 @@ const METHODS: [&str; 10] = [
     "storage.set",
     "ui.close",
 ];
-const PERMISSIONS: [&str; 2] = ["clipboard.read", "clipboard.write"];
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -29,7 +26,6 @@ enum FixtureKind {
     Context,
     Error,
     Event,
-    Permission,
     Request,
     Result,
 }
@@ -62,10 +58,6 @@ fn method_definition(method: &str, result: bool) -> Option<&'static str> {
     Some(match (method, result) {
         ("actions.open", false) => "ActionsOpenRequest",
         ("actions.open", true) => "ActionsOpenResult",
-        ("clipboard.read", false) => "ClipboardReadRequest",
-        ("clipboard.read", true) => "ClipboardReadResult",
-        ("clipboard.write", false) => "ClipboardWriteRequest",
-        ("clipboard.write", true) => "ClipboardWriteResult",
         ("runtime.get_context", false) => "RuntimeGetContextRequest",
         ("runtime.get_context", true) => "RuntimeGetContextResult",
         ("storage.delete", false) => "StorageDeleteRequest",
@@ -186,20 +178,6 @@ fn validate_fixture(fixture: &FixtureCase) -> Vec<Diagnostic> {
         FixtureKind::Context => "PluginRuntimeContextInput",
         FixtureKind::Error => "HostApiErrorInput",
         FixtureKind::Event => "HostApiEventInput",
-        FixtureKind::Permission => {
-            return if fixture
-                .value
-                .as_str()
-                .is_some_and(|value| PERMISSIONS.contains(&value))
-            {
-                Vec::new()
-            } else {
-                vec![Diagnostic {
-                    code: "invalid_value".to_owned(),
-                    path: String::new(),
-                }]
-            };
-        }
         FixtureKind::Request | FixtureKind::Result => {
             let method = fixture.value.get("method").and_then(Value::as_str);
             let Some(definition) = method.and_then(|method| {
@@ -240,7 +218,7 @@ fn validate_fixture(fixture: &FixtureCase) -> Vec<Diagnostic> {
 fn rust_accepts_all_package_owned_valid_host_api_fixtures() {
     let fixtures: Vec<FixtureCase> =
         serde_json::from_str(VALID_FIXTURES).expect("valid Host API fixtures should parse");
-    assert!(fixtures.len() >= 30);
+    assert!(fixtures.len() >= 24);
     for fixture in fixtures {
         assert_eq!(
             validate_fixture(&fixture),

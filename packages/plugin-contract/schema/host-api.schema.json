@@ -1,15 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json",
+  "$id": "https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json",
   "title": "PluginHostApiInput",
-  "description": "Public semantic Host API 0.1.0 contract. This schema intentionally excludes private RPC transport and Host identity facts.",
+  "description": "Public semantic Host API 0.2.0 contract. This schema intentionally excludes private RPC transport and Host identity facts.",
   "oneOf": [
     { "$ref": "#/$defs/HostApiRequestInput" },
     { "$ref": "#/$defs/HostApiResultInput" },
     { "$ref": "#/$defs/HostApiEventInput" },
     { "$ref": "#/$defs/HostApiErrorInput" },
     { "$ref": "#/$defs/PluginRuntimeContextInput" },
-    { "$ref": "#/$defs/HostApiPermissionInput" },
     { "$ref": "#/$defs/HostApiEventNameInput" }
   ],
   "$defs": {
@@ -17,8 +16,6 @@
       "type": "string",
       "enum": [
         "actions.open",
-        "clipboard.read",
-        "clipboard.write",
         "runtime.get_context",
         "storage.delete",
         "storage.get",
@@ -27,10 +24,6 @@
         "storage.set",
         "ui.close"
       ]
-    },
-    "HostApiPermissionInput": {
-      "type": "string",
-      "enum": ["clipboard.read", "clipboard.write"]
     },
     "HostApiEventNameInput": {
       "type": "string",
@@ -47,7 +40,6 @@
         "limit_exceeded",
         "method_not_found",
         "not_found",
-        "permission_denied",
         "timeout",
         "unavailable"
       ]
@@ -92,10 +84,6 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 1024
-    },
-    "BoundedText": {
-      "type": "string",
-      "maxLength": 1048576
     },
     "JsonValue": {
       "anyOf": [
@@ -212,34 +200,9 @@
         "params": { "$ref": "#/$defs/EmptyParams" }
       }
     },
-    "ClipboardReadRequest": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["method", "params"],
-      "properties": {
-        "method": { "const": "clipboard.read" },
-        "params": { "$ref": "#/$defs/EmptyParams" }
-      }
-    },
-    "ClipboardWriteRequest": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["method", "params"],
-      "properties": {
-        "method": { "const": "clipboard.write" },
-        "params": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["text"],
-          "properties": { "text": { "$ref": "#/$defs/BoundedText" } }
-        }
-      }
-    },
     "HostApiRequestInput": {
       "oneOf": [
         { "$ref": "#/$defs/ActionsOpenRequest" },
-        { "$ref": "#/$defs/ClipboardReadRequest" },
-        { "$ref": "#/$defs/ClipboardWriteRequest" },
         { "$ref": "#/$defs/RuntimeGetContextRequest" },
         { "$ref": "#/$defs/StorageDeleteRequest" },
         { "$ref": "#/$defs/StorageGetRequest" },
@@ -380,39 +343,9 @@
         }
       }
     },
-    "ClipboardReadResult": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["method", "result"],
-      "properties": {
-        "method": { "const": "clipboard.read" },
-        "result": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["text"],
-          "properties": { "text": { "$ref": "#/$defs/BoundedText" } }
-        }
-      }
-    },
-    "ClipboardWriteResult": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["method", "result"],
-      "properties": {
-        "method": { "const": "clipboard.write" },
-        "result": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["written"],
-          "properties": { "written": { "const": true } }
-        }
-      }
-    },
     "HostApiResultInput": {
       "oneOf": [
         { "$ref": "#/$defs/ActionsOpenResult" },
-        { "$ref": "#/$defs/ClipboardReadResult" },
-        { "$ref": "#/$defs/ClipboardWriteResult" },
         { "$ref": "#/$defs/RuntimeGetContextResult" },
         { "$ref": "#/$defs/StorageDeleteResult" },
         { "$ref": "#/$defs/StorageGetResult" },

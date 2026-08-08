@@ -8,7 +8,6 @@ export type PluginId = string;
 export type Semver = string;
 export type PackagePath = string;
 export type PackageHtmlPath = string;
-export type PermissionId = string;
 export type LocalId = string;
 export type InternalRoute = string;
 
@@ -16,14 +15,13 @@ export type InternalRoute = string;
  * Author-controlled static manifest input for an external lensX plugin.
  */
 export interface PluginManifestInput {
-  manifest_version: '0.1.0';
+  manifest_version: '0.2.0';
   plugin_id: PluginId;
   version: Semver;
   display: Display;
   publisher: Publisher;
   compatibility: Compatibility;
   runtime: Runtime;
-  requested_permissions?: PermissionRequest[];
   contributes: Contributes;
 }
 export interface Display {
@@ -56,10 +54,6 @@ export interface Runtime {
   kind: 'iframe';
   entry: PackageHtmlPath;
 }
-export interface PermissionRequest {
-  permission_id: PermissionId;
-  reason: LocalizedText;
-}
 export interface Contributes {
   /**
    * @minItems 1
@@ -74,7 +68,6 @@ export interface Page {
   route: InternalRoute;
   parent_page_id?: LocalId;
   icon?: Asset;
-  required_permissions?: PermissionId[];
 }
 export interface Action {
   id: LocalId;

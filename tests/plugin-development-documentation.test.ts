@@ -140,19 +140,15 @@ describe('fenced block metadata', () => {
 
 describe('public package and Host API coverage', () => {
   const hostFacts = {
-    methods: [
-      { method: 'runtime.get_context', permission: null },
-      { method: 'clipboard.read', permission: 'clipboard.read' },
-    ],
-    permissions: ['clipboard.read'],
-    errorCodes: ['invalid_params', 'permission_denied'],
-    hostApiVersion: '0.1.0',
-    providers: { 'runtime.get_context': 'base' as const, 'clipboard.read': 'clipboard' as const },
+    methods: [{ method: 'runtime.get_context' }, { method: 'storage.get' }],
+    errorCodes: ['invalid_params', 'method_not_found'],
+    hostApiVersion: '0.2.0',
+    providers: { 'runtime.get_context': 'base' as const, 'storage.get': 'storage' as const },
   };
   const hostSource = [
-    '<!-- lensx-host-api-method {"method":"runtime.get_context","permission":null,"provider":"base","version":"0.1.0","capability":"session"} -->',
-    '<!-- lensx-host-api-method {"method":"clipboard.read","permission":"clipboard.read","provider":"clipboard","version":"0.1.0","capability":"session"} -->',
-    '<!-- lensx-host-api-errors {"version":"0.1.0","codes":["invalid_params","permission_denied"]} -->',
+    '<!-- lensx-host-api-method {"method":"runtime.get_context","provider":"base","version":"0.2.0","capability":"session"} -->',
+    '<!-- lensx-host-api-method {"method":"storage.get","provider":"storage","version":"0.2.0","capability":"session"} -->',
+    '<!-- lensx-host-api-errors {"version":"0.2.0","codes":["invalid_params","method_not_found"]} -->',
   ].join('\n');
 
   test('accepts exact package and Host API coverage', () => {
@@ -169,12 +165,11 @@ describe('public package and Host API coverage', () => {
     ['missing', hostSource.replace(/^.*runtime\.get_context.*\n/u, ''), 'host-api/missing'],
     [
       'extra',
-      `${hostSource}\n<!-- lensx-host-api-method {"method":"extra","permission":null,"provider":"base","version":"0.1.0","capability":"session"} -->`,
+      `${hostSource}\n<!-- lensx-host-api-method {"method":"extra","provider":"base","version":"0.2.0","capability":"session"} -->`,
       'host-api/extra',
     ],
-    ['permission', hostSource.replace('"permission":"clipboard.read"', '"permission":null'), 'host-api/permission'],
-    ['provider', hostSource.replace('"provider":"clipboard"', '"provider":"base"'), 'host-api/provider'],
-    ['version', hostSource.replaceAll('"version":"0.1.0"', '"version":"0.2.0"'), 'host-api/version'],
+    ['provider', hostSource.replace('"provider":"storage"', '"provider":"base"'), 'host-api/provider'],
+    ['version', hostSource.replaceAll('"version":"0.2.0"', '"version":"0.1.0"'), 'host-api/version'],
     ['errors', hostSource.replace('"invalid_params",', ''), 'host-api/errors'],
     ['private wire', `${hostSource}\nDo not expose postMessage.`, 'host-api/private-wire'],
   ])('rejects Host API %s drift', (_name, source, code) => {

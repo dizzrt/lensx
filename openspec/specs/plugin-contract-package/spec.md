@@ -67,8 +67,8 @@ environment variables, or Host-private state.
 
 #### Scenario: Valid input is outside a compatibility range
 
-- **WHEN** valid input excludes the current LensX or Host API `0.1.0` from a
-  declared half-open range
+- **WHEN** valid input excludes the current LensX `0.1.0` or Host API `0.2.0`
+  from a declared half-open range
 - **THEN** normalization returns `incompatible`, not `invalid`, while retaining
   normalized author data and per-dimension compatibility
 
@@ -99,12 +99,13 @@ normalized, and incompatible fixtures.
 
 ### Requirement: Plugin platform versions must begin at 0.1.0 and evolve independently
 
-The initial package version, `PLUGIN_MANIFEST_VERSION`,
-`PLUGIN_HOST_API_VERSION`, and private root `lensx` package version MUST each
-be `0.1.0`. Package implementation, Manifest wire format, Host API protocol,
-and application versions MUST evolve independently. The current contract MUST
-NOT expose an earlier experimental Schema, symbol alias, deprecated export,
-converter, or compatibility branch.
+The package version, `PLUGIN_MANIFEST_VERSION`, `PLUGIN_HOST_API_VERSION`, and
+private root `lensx` package version MUST each begin at `0.1.0` and MUST evolve
+independently. The current Contract package, Manifest protocol, and Host API
+protocol versions MUST be `0.2.0`, while the current private root application
+version remains `0.1.0`. The current contract MUST NOT expose an earlier
+experimental Schema, symbol alias, deprecated export, converter, or
+compatibility branch.
 
 #### Scenario: Package implementation receives a patch release
 
@@ -178,14 +179,15 @@ implementation.
 
 ### Requirement: Public Contract package MUST expose the bounded Host API semantic contract
 
-`@lensx/plugin-contract` root entry MUST expose the Host API method,
-permission, event, and error literal unions; Schema-generated params, result,
+`@lensx/plugin-contract` root entry MUST expose the Host API `0.2.0` method,
+event, and error literal unions; Schema-generated params, result,
 and payload input types; normalized read-only output types; pure unknown-input
-validators; and an immutable method and permission catalog. A declared Host API
+validators; and an immutable method catalog. A declared Host API
 Schema subpath MUST expose the raw Draft 2020-12 Schemas. These exports MUST
-reuse `PLUGIN_HOST_API_VERSION` and MUST NOT expose private RPC envelopes,
-request IDs, Runtime Session identity, `Window`, `MessagePort`, a Host executor,
-React, Tauri, or Rust implementation values.
+reuse `PLUGIN_HOST_API_VERSION` and MUST NOT expose a permission union,
+permission catalog, removed clipboard method, private RPC envelope, request ID,
+Runtime Session identity, `Window`, `MessagePort`, a Host executor, React,
+Tauri, or Rust implementation value.
 
 #### Scenario: External consumer imports the Host API contract
 
@@ -210,10 +212,11 @@ The package-owned Host API Draft 2020-12 Schemas MUST be the sole structural
 source of truth for semantic params, results, events, and errors. Committed
 TypeScript input types MUST be generated deterministically from those Schemas;
 normalized output types, validators, and the catalog MUST agree with the same
-closed method, permission, event, and error sets. Package TypeScript, SDK
+closed method, event, and error sets. Package TypeScript, SDK
 boundary tests, Host consumers, and Rust MUST consume the same package-owned
 valid and invalid fixtures and MUST agree on validity plus stable diagnostic
-code and path.
+code and path. Permission and clipboard facts MUST NOT belong to this current
+fact chain.
 
 #### Scenario: Host API generated types match their Schemas
 
@@ -221,9 +224,9 @@ code and path.
 - **THEN** repeated generation is byte-identical and the Contract drift gate
   succeeds
 
-#### Scenario: Catalog or consumer adds an unrepresented method
+#### Scenario: Catalog or consumer adds an unrepresented semantic fact
 
-- **WHEN** a method, permission, event, or error appears in a catalog,
+- **WHEN** a method, event, or error appears in a catalog,
   TypeScript or Rust branch, or fixture without the matching Schema fact
 - **THEN** generation, exhaustiveness, shared-fixture, or boundary validation
   exits non-zero

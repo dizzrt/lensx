@@ -80,7 +80,7 @@ describe('workspace boundary checker', () => {
       );
       for (const packageName of packageNames) {
         const version = metadata.dependencies?.[packageName] ?? metadata.devDependencies?.[packageName];
-        expect(version).toMatch(/^\^0\.1\.0$/u);
+        expect(version).toMatch(/^\^0\.2\.0$/u);
         expect(realpathSync(resolve(templateRoot, 'node_modules', packageName))).toBe(
           resolve(repositoryRoot, 'packages', packageName.replace('@lensx/plugin-', 'plugin-')),
         );

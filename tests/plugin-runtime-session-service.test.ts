@@ -22,7 +22,6 @@ const identity = Object.freeze({
   resource_generation: '0123456789abcdef0123456789abcdef',
   runtime_attempt_key: 'attempt-1',
   registration_revision: '7',
-  granted_permission_ids: ['lensx.filesystem.read'],
 });
 
 class FakePort implements PluginRuntimeSessionMessagePort {

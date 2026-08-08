@@ -10,13 +10,13 @@ Define bounded, fail-closed validation and resource controls for plugin Runtime 
 
 The Host MUST apply one Host-private, frozen RPC v1 policy to every value received from or sent to a plugin Runtime Session. The policy MUST allow at most 5,242,880 bytes of canonical JSON-compatible cost per private frame, a semantic payload nesting depth of 32, a total private-frame depth of 36, and 16,384 visited values and object keys. The private wire MUST remain single-request: one frame MUST contain at most one request, and a batch or array envelope MUST NOT be accepted.
 
-Inbound analysis MUST begin after only the fixed outer envelope fields needed for safe correlation have been classified and MUST finish before recursive public Contract validation or Handler invocation. It MUST use bounded, early-terminating traversal without first serializing the complete value. A Manifest, plugin source, permission, grant, SDK option, payload field, or public API MUST NOT increase or disable a production limit.
+Inbound analysis MUST begin after only the fixed outer envelope fields needed for safe correlation have been classified and MUST finish before recursive public Contract validation or Handler invocation. It MUST use bounded, early-terminating traversal without first serializing the complete value. A Manifest, plugin source, legacy permission or grant claim, SDK option, payload field, or public API MUST NOT increase or disable a production limit.
 
 #### Scenario: A valid bounded request reaches Contract validation
 
 - **WHEN** a current Session sends one exact request frame whose JSON-compatible cost, semantic depth, total depth, and node count are within the v1 policy
 - **THEN** the Host proceeds to the matching public Contract request validator
-- **THEN** the analyzer neither mutates the input nor derives identity, authority, or a permission decision from it
+- **THEN** the analyzer neither mutates the input nor derives identity or authority from it
 
 #### Scenario: An oversized or deeply nested request is rejected early
 
@@ -34,13 +34,13 @@ Inbound analysis MUST begin after only the fixed outer envelope fields needed fo
 
 The Host MUST classify a request failure as recoverable only when the private version, request frame type, and bounded request ID are trustworthy enough to correlate exactly one response. A correlatable malformed Host API request MUST return `invalid_request`; a declared method with invalid or mismatched params MUST return `invalid_params`; an undeclared method MUST retain `method_not_found`; and a budget rejection MUST return `limit_exceeded`. These request-level rejections MUST terminal only that request ID, MUST NOT consume an execution slot, and MUST NOT disconnect an otherwise current Session.
 
-An unsupported private version, unknown frame type, invalid or reused request ID, extra private envelope authority field, non-JSON frame, stale lease, or another value that cannot be correlated safely MUST fail closed through the existing Session terminal path. Errors already produced by the permission-aware Dispatcher, including `permission_denied`, MUST retain their Contract code and MUST NOT be reclassified as transport failures.
+An unsupported private version, unknown frame type, invalid or reused request ID, extra private envelope authority field, non-JSON frame, stale lease, or another value that cannot be correlated safely MUST fail closed through the existing Session terminal path. Contract-valid errors produced by the current Dispatcher MUST retain their Contract code and MUST NOT be reclassified as transport failures.
 
 #### Scenario: Known method carries invalid params
 
 - **WHEN** a correlatable request for a declared method carries params that fail the method's exact Contract Schema
 - **THEN** the Host returns one safe `invalid_params` error and records the request ID as terminal
-- **THEN** no permission check, Dispatcher branch, provider, native effect, or post-response effect runs
+- **THEN** no Dispatcher branch, provider, native effect, or post-response effect runs
 
 #### Scenario: Request object is malformed but safely correlated
 
@@ -112,7 +112,7 @@ An invalid or over-budget Host event MUST be suppressed and diagnosed without no
 
 The Host MUST offer an optional observational diagnostic sink whose immutable records contain only the trusted Session plugin ID, an already validated catalog method when available, an `ingress`, `execution`, or `egress` stage, one closed diagnostic code, and a fixed safe English message. A record MUST NOT contain a request ID, params, result, event or error payload, raw value, URL, path, origin, resource token, grant, exception, stack, MessagePort, provider, executor, Rust object, Tauri object, or Host object.
 
-Diagnostic delivery failure MUST NOT change request settlement, permission decisions, provider effects, Session currentness, or cleanup. This capability MUST NOT persist diagnostic history or expose it to plugins or public packages.
+Diagnostic delivery failure MUST NOT change request settlement, Host authority, provider effects, Session currentness, or cleanup. This capability MUST NOT persist diagnostic history or expose it to plugins or public packages.
 
 #### Scenario: Resource rejection is diagnosed safely
 
@@ -134,7 +134,7 @@ The focused gate MUST be `pnpm run check:plugin-rpc-validation`. The change MUST
 
 #### Scenario: Focused RPC validation gate passes
 
-- **WHEN** the focused gate runs with the real Contract, SDK, Host adapter, Dispatcher, permission, storage, MessageChannel, package-boundary, workspace, and macOS evidence prerequisites
+- **WHEN** the focused gate runs with the real Contract, SDK, Host adapter, Dispatcher, storage, MessageChannel, package-boundary, workspace, and macOS evidence prerequisites
 - **THEN** valid calls preserve existing behavior while every malicious or over-budget fixture reaches zero unintended Handlers and effects
 - **THEN** SDK and Host observe stable compatible errors without exposing private wire or policy modules
 

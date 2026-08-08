@@ -26,16 +26,16 @@
     "set": { "/entries/0/entry_id": "entry_0000000000000003" }
   },
   {
-    "name": "unsorted_grants",
+    "name": "legacy_grant_field",
     "type": "detail",
     "base": "healthy_detail",
-    "set": { "/detail/granted_permission_ids": ["files.read", "clipboard.read"] }
+    "set": { "/detail/granted_permission_ids": ["clipboard.read"] }
   },
   {
-    "name": "duplicate_grants",
+    "name": "legacy_contract_version",
     "type": "detail",
     "base": "healthy_detail",
-    "set": { "/detail/granted_permission_ids": ["files.read", "files.read"] }
+    "set": { "/contract_version": "0.2.0" }
   },
   {
     "name": "sensitive_installation_path",

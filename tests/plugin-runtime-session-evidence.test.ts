@@ -41,7 +41,7 @@ describe('bounded macOS Plugin Runtime Session evidence', () => {
       transport_limit_rejected: true,
       transport_limit_zero_handler_hits: true,
       transport_recovery_after_limit: true,
-      host_api_dispatcher_version: '0.1.0',
+      host_api_dispatcher_version: '0.2.0',
       host_api_context: true,
       host_api_actions_open: true,
       host_api_ui_close_response_before_effect: true,
@@ -49,6 +49,7 @@ describe('bounded macOS Plugin Runtime Session evidence', () => {
       host_api_unimplemented_unavailable: true,
       privileged_handler_hits: 0,
     });
+    if (fixture !== 'malicious') expect(value.worker_teardown_observed).toBe(true);
     expect(Object.values(value.csp_checks as Record<string, unknown>)).not.toContain(false);
   });
 });

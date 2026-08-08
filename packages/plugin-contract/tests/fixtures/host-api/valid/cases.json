@@ -2,16 +2,16 @@
   {
     "name": "context-empty-capabilities",
     "kind": "context",
-    "value": { "hostApiVersion": "0.1.0", "locale": "en-US", "theme": "light", "capabilities": [] }
+    "value": { "hostApiVersion": "0.2.0", "locale": "en-US", "theme": "light", "capabilities": [] }
   },
   {
     "name": "context-known-sorted-capabilities",
     "kind": "context",
     "value": {
-      "hostApiVersion": "0.1.0",
+      "hostApiVersion": "0.2.0",
       "locale": "zh-CN",
       "theme": "dark",
-      "capabilities": ["actions.open", "clipboard.read", "storage.get"]
+      "capabilities": ["actions.open", "runtime.get_context", "storage.get"]
     }
   },
   {
@@ -20,10 +20,10 @@
     "value": {
       "event": "runtime.context_changed",
       "payload": {
-        "hostApiVersion": "0.1.0",
+        "hostApiVersion": "0.2.0",
         "locale": "zh-CN",
         "theme": "dark",
-        "capabilities": ["clipboard.write", "storage.set"]
+        "capabilities": ["storage.get", "storage.set"]
       }
     }
   },
@@ -37,7 +37,7 @@
     "kind": "result",
     "value": {
       "method": "runtime.get_context",
-      "result": { "hostApiVersion": "0.1.0", "locale": "en-US", "theme": "light", "capabilities": [] }
+      "result": { "hostApiVersion": "0.2.0", "locale": "en-US", "theme": "light", "capabilities": [] }
     }
   },
   { "name": "ui-close-request", "kind": "request", "value": { "method": "ui.close", "params": {} } },
@@ -117,24 +117,6 @@
     "kind": "result",
     "value": { "method": "storage.get_quota", "result": { "usedBytes": 0, "limitBytes": 1048576 } }
   },
-  { "name": "clipboard-read-request", "kind": "request", "value": { "method": "clipboard.read", "params": {} } },
-  {
-    "name": "clipboard-read-empty",
-    "kind": "result",
-    "value": { "method": "clipboard.read", "result": { "text": "" } }
-  },
-  {
-    "name": "clipboard-write-empty",
-    "kind": "request",
-    "value": { "method": "clipboard.write", "params": { "text": "" } }
-  },
-  {
-    "name": "clipboard-write-result",
-    "kind": "result",
-    "value": { "method": "clipboard.write", "result": { "written": true } }
-  },
-  { "name": "permission-read", "kind": "permission", "value": "clipboard.read" },
-  { "name": "permission-write", "kind": "permission", "value": "clipboard.write" },
   {
     "name": "error-invalid-request",
     "kind": "error",
@@ -149,11 +131,6 @@
     "name": "error-method-not-found",
     "kind": "error",
     "value": { "code": "method_not_found", "message": "The method is unavailable." }
-  },
-  {
-    "name": "error-permission-denied",
-    "kind": "error",
-    "value": { "code": "permission_denied", "message": "Permission is denied." }
   },
   {
     "name": "error-not-found",

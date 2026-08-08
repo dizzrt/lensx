@@ -1,4 +1,4 @@
-export const LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION = '0.2.0' as const;
+export const LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION = '0.3.0' as const;
 export const PREPARE_LOCAL_PLUGIN_INSTALLATION_COMMAND = 'prepare_local_plugin_installation' as const;
 export const COMMIT_LOCAL_PLUGIN_INSTALLATION_COMMAND = 'commit_local_plugin_installation' as const;
 export const CANCEL_LOCAL_PLUGIN_INSTALLATION_COMMAND = 'cancel_local_plugin_installation' as const;
@@ -16,17 +16,11 @@ export interface LocalPluginInstallationPublisher {
   readonly repository: string;
 }
 
-export interface LocalPluginInstallationPermissionRequest {
-  readonly permission_id: string;
-  readonly reason: LocalPluginInstallationLocalizedText;
-}
-
 export interface LocalPluginInstallationCandidate {
   readonly plugin_id: string;
   readonly version: string;
   readonly display_name: LocalPluginInstallationLocalizedText;
   readonly publisher: LocalPluginInstallationPublisher;
-  readonly requested_permissions: readonly LocalPluginInstallationPermissionRequest[];
 }
 
 export interface LocalPluginInstallationRequest {

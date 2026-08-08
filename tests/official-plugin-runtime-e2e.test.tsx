@@ -10,7 +10,7 @@ import {
   type PluginRuntimeSessionService,
 } from '../src/app/plugins/runtime';
 
-test('official candidate opens through sandboxed Runtime Session and tears down without implicit grants', async () => {
+test('official candidate opens through the same open Runtime and closed Host boundary', async () => {
   const pluginId = process.env.LENSX_OFFICIAL_CANDIDATE_PLUGIN_ID ?? 'dev.lensx.fixture.alpha';
   const version = process.env.LENSX_OFFICIAL_CANDIDATE_VERSION ?? '1.0.0';
   const activePage: ActivePage = {
@@ -24,7 +24,6 @@ test('official candidate opens through sandboxed Runtime Session and tears down 
       owner_id: pluginId,
       page_id: 'main',
       available: true,
-      required_permission_ids: [],
       route: '/',
       title: { 'en-US': 'Official fixture' },
     },
@@ -43,7 +42,6 @@ test('official candidate opens through sandboxed Runtime Session and tears down 
     resource_generation: '0123456789abcdef0123456789abcdef',
     runtime_attempt_key: 'official-candidate-attempt',
     registration_revision: '1',
-    granted_permission_ids: [],
   };
   const disposeSession = rs.fn();
   const sessionService = {
@@ -85,7 +83,6 @@ test('official candidate opens through sandboxed Runtime Session and tears down 
   fireEvent.load(iframe);
   expect(sessionService.start).toHaveBeenCalledWith(
     expect.objectContaining({
-      identity: expect.objectContaining({ plugin_id: pluginId, version, granted_permission_ids: [] }),
       targetOrigin: origin,
     }),
   );

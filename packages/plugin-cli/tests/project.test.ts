@@ -24,8 +24,8 @@ const metadata = (build = 'node build.mjs') => ({
   type: 'module',
   packageManager: 'pnpm@11.17.0',
   scripts: { build, typecheck: 'node --check build.mjs', test: 'node --test', check: 'node --check build.mjs' },
-  dependencies: { '@lensx/plugin-sdk': '^0.1.0' },
-  devDependencies: { '@lensx/plugin-contract': '^0.1.0' },
+  dependencies: { '@lensx/plugin-sdk': '^0.2.0' },
+  devDependencies: { '@lensx/plugin-contract': '^0.2.0' },
 });
 
 const writePayload = async (root: string, manifest: unknown = baseManifest) => {

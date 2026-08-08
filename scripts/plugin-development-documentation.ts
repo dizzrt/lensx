@@ -2,7 +2,7 @@ import { posix } from 'node:path';
 
 export type DocumentationLocale = 'en' | 'zh';
 export type CapabilityStatus = 'shipped' | 'conditional' | 'not-delivered';
-export type HostApiProvider = 'base' | 'clipboard' | 'storage';
+export type HostApiProvider = 'base' | 'storage';
 
 export interface DocumentationDiagnostic {
   readonly code: string;
@@ -47,12 +47,10 @@ export interface PublicPackageFact {
 
 export interface HostApiCatalogFact {
   readonly method: string;
-  readonly permission: string | null;
 }
 
 export interface HostApiCoverageFacts {
   readonly methods: readonly HostApiCatalogFact[];
-  readonly permissions: readonly string[];
   readonly errorCodes: readonly string[];
   readonly hostApiVersion: string;
   readonly providers: Readonly<Record<string, HostApiProvider>>;
@@ -110,8 +108,14 @@ export const DEVELOPER_DOCUMENTS: readonly DeveloperDocumentDefinition[] = Objec
   {
     path: 'runtime-permissions-security.md',
     requiredHeadings: {
-      en: ['Runtime lifecycle', 'Context replacement', 'Permissions', 'Failure and recovery', 'Security boundary'],
-      zh: ['Runtime 生命周期', 'Context replacement', '权限', '失败与恢复', '安全边界'],
+      en: [
+        'Runtime lifecycle',
+        'Context replacement',
+        'Open Web capabilities',
+        'Failure and recovery',
+        'Security boundary',
+      ],
+      zh: ['Runtime 生命周期', 'Context replacement', '开放 Web 能力', '失败与恢复', '安全边界'],
     },
   },
   {
@@ -537,7 +541,6 @@ export const validatePublicPackageCoverage = (
 
 interface HostApiDocumentationEntry {
   readonly method: string;
-  readonly permission: string | null;
   readonly provider: HostApiProvider;
   readonly version: string;
   readonly capability: 'session';
@@ -567,8 +570,6 @@ export const validateHostApiDocumentationCoverage = (
       diagnostics.push(diagnostic('host-api/missing', path, `Host API method is undocumented: ${method.method}.`));
       continue;
     }
-    if (entry.permission !== method.permission)
-      diagnostics.push(diagnostic('host-api/permission', path, `Permission drifted for ${method.method}.`));
     if (entry.provider !== facts.providers[method.method])
       diagnostics.push(diagnostic('host-api/provider', path, `Provider drifted for ${method.method}.`));
     if (entry.version !== facts.hostApiVersion)
@@ -592,12 +593,6 @@ export const validateHostApiDocumentationCoverage = (
     if (JSON.stringify([...errorEntry.codes].sort()) !== JSON.stringify([...facts.errorCodes].sort())) {
       diagnostics.push(diagnostic('host-api/errors', path, 'Host API error catalog coverage drifted.'));
     }
-  }
-  const documentedPermissions = [
-    ...new Set(entries.flatMap(({ permission }) => (permission === null ? [] : [permission]))),
-  ].sort();
-  if (JSON.stringify(documentedPermissions) !== JSON.stringify([...facts.permissions].sort())) {
-    diagnostics.push(diagnostic('host-api/permission-catalog', path, 'Host API permission catalog coverage drifted.'));
   }
   return bounded(diagnostics);
 };

@@ -1,12 +1,12 @@
 {
-  "fixture_version": "0.1.0",
+  "fixture_version": "0.2.0",
   "packages": [
     {
       "kind": "normal",
       "file": "normal/runtime-compatible.lxp",
       "digest": {
         "algorithm": "sha256",
-        "value": "81adbb774a6e96de5ee74a3f2e1990b11f2fcb2858f0efa6700a15d6338f307b"
+        "value": "5b51ccd655796841c65c6769e27ded202743552c4f05c8ff50d9110de5890d8d"
       },
       "coverage": [
         "html",
@@ -23,12 +23,27 @@
         "single_use_nonce",
         "message_port_transfer",
         "rpc_limit_rejection",
-        "rpc_recovery_after_limit"
+        "rpc_recovery_after_limit",
+        "package_worker",
+        "blob_worker",
+        "data_worker",
+        "worker_message",
+        "worker_message_burst",
+        "fetch",
+        "connection_churn",
+        "remote_module",
+        "websocket",
+        "blob_content",
+        "data_content",
+        "wasm",
+        "indexeddb",
+        "author_owned_stricter_csp",
+        "bounded_unsupported_evidence"
       ],
       "expected": {
         "status": "compatible",
         "manifest": {
-          "manifest_version": "0.1.0",
+          "manifest_version": "0.2.0",
           "plugin_id": "com.lensx.fixture.runtime.normal",
           "version": "1.0.0",
           "display": {
@@ -52,15 +67,14 @@
               "max_version_exclusive": "0.2.0"
             },
             "host_api": {
-              "min_version": "0.1.0",
-              "max_version_exclusive": "0.2.0"
+              "min_version": "0.2.0",
+              "max_version_exclusive": "0.3.0"
             }
           },
           "runtime": {
             "kind": "iframe",
             "entry": "dist/index.html"
           },
-          "requested_permissions": [],
           "contributes": {
             "pages": [
               {
@@ -69,8 +83,7 @@
                   "en-US": "Runtime Fixture",
                   "zh-CN": "运行时夹具"
                 },
-                "route": "/",
-                "required_permissions": []
+                "route": "/"
               },
               {
                 "id": "route_probe",
@@ -79,8 +92,7 @@
                   "zh-CN": "路由探测"
                 },
                 "route": "/route-probe",
-                "parent_page_id": "home",
-                "required_permissions": []
+                "parent_page_id": "home"
               }
             ],
             "actions": [
@@ -115,20 +127,20 @@
         },
         "facts": {
           "packageFormatVersion": "0.1.0",
-          "compressedSize": 3991,
-          "decompressedSize": 23040,
-          "fileCount": 12,
+          "compressedSize": 5866,
+          "decompressedSize": 32768,
+          "fileCount": 14,
           "files": [
             {
               "path": "manifest.json",
-              "size": 1227,
-              "sha256": "fa6f4a339db25f152e20a7a3e71bd4fbf4fdc301881327237e568be3862b2094",
+              "size": 1148,
+              "sha256": "d1a3ff17b42f7c37026a98bd572a39d375366d8eda0e082ac6294678f104a1fb",
               "checksumCovered": true
             },
             {
               "path": "checksums.json",
-              "size": 1345,
-              "sha256": "a55f7332703d07b678b94ac233ed0cd36b03c893a5335849dea84fc7632284d7",
+              "size": 1580,
+              "sha256": "630744474f460f3b2c9ae2f9a919a8d9ff8e37a85518d1d1a2f9a1166ece538c",
               "checksumCovered": false
             },
             {
@@ -181,8 +193,14 @@
             },
             {
               "path": "dist/report.js",
-              "size": 1150,
-              "sha256": "a4cf95b68e680c74707ecce3ceb2650e35702c06d0646eb782c4fcbce0a88e17",
+              "size": 8698,
+              "sha256": "caa36cf28f996c8fbf3376526d20f9a40f414460666f74471d624bf10c199848",
+              "checksumCovered": true
+            },
+            {
+              "path": "dist/strict-policy.html",
+              "size": 146,
+              "sha256": "fa31ec2d8762087847a2a03503613612e84555f790a30ab45b1db04babc8feaf",
               "checksumCovered": true
             },
             {
@@ -190,11 +208,17 @@
               "size": 113,
               "sha256": "5d9ed8b9029ace4efabdbeb2bce30b817e2082f46b42c99e9e73d76dc9e37621",
               "checksumCovered": true
+            },
+            {
+              "path": "dist/worker.js",
+              "size": 215,
+              "sha256": "76a3a39d641ff87eb3cc449a34801d2c6425064b0dcc00a87f03d90969f8ee31",
+              "checksumCovered": true
             }
           ],
           "packageDigest": {
             "algorithm": "sha256",
-            "value": "81adbb774a6e96de5ee74a3f2e1990b11f2fcb2858f0efa6700a15d6338f307b"
+            "value": "5b51ccd655796841c65c6769e27ded202743552c4f05c8ff50d9110de5890d8d"
           }
         },
         "diagnostics": []
@@ -205,7 +229,7 @@
       "file": "malicious/runtime-adversarial.lxp",
       "digest": {
         "algorithm": "sha256",
-        "value": "a5010c0462ba1fae45c05da03617d88f314609125da64c038d97d8e658bb5297"
+        "value": "c1e586233c1ac5c512069ab4ed534451883ea89047cb1151fb345d0b41b2d48f"
       },
       "coverage": [
         "tauri_internals",
@@ -233,16 +257,10 @@
         "cross_plugin_session_forgery",
         "old_generation_session_replay",
         "wrong_origin_bootstrap",
-        "csp_remote_script",
         "csp_inline_script",
         "csp_eval",
-        "csp_connect",
-        "csp_worker",
-        "csp_frame",
         "csp_object",
         "csp_base",
-        "csp_data",
-        "csp_blob",
         "csp_form",
         "rpc_limit_rejection",
         "rpc_recovery_after_limit"
@@ -250,7 +268,7 @@
       "expected": {
         "status": "compatible",
         "manifest": {
-          "manifest_version": "0.1.0",
+          "manifest_version": "0.2.0",
           "plugin_id": "com.lensx.fixture.runtime.malicious",
           "version": "1.0.0",
           "display": {
@@ -274,15 +292,14 @@
               "max_version_exclusive": "0.2.0"
             },
             "host_api": {
-              "min_version": "0.1.0",
-              "max_version_exclusive": "0.2.0"
+              "min_version": "0.2.0",
+              "max_version_exclusive": "0.3.0"
             }
           },
           "runtime": {
             "kind": "iframe",
             "entry": "dist/index.html"
           },
-          "requested_permissions": [],
           "contributes": {
             "pages": [
               {
@@ -291,8 +308,7 @@
                   "en-US": "Runtime Fixture",
                   "zh-CN": "运行时夹具"
                 },
-                "route": "/",
-                "required_permissions": []
+                "route": "/"
               },
               {
                 "id": "route_probe",
@@ -301,8 +317,7 @@
                   "zh-CN": "路由探测"
                 },
                 "route": "/route-probe",
-                "parent_page_id": "home",
-                "required_permissions": []
+                "parent_page_id": "home"
               }
             ],
             "actions": [
@@ -337,20 +352,20 @@
         },
         "facts": {
           "packageFormatVersion": "0.1.0",
-          "compressedSize": 4394,
-          "decompressedSize": 20480,
+          "compressedSize": 4140,
+          "decompressedSize": 18944,
           "fileCount": 7,
           "files": [
             {
               "path": "manifest.json",
-              "size": 1250,
-              "sha256": "fa01bc970c0717266b7c548c953a4dc3e78bbe59abba771ab884b500ab29f2d8",
+              "size": 1171,
+              "sha256": "b5e7bc2d8d927ca287db84d0d48ffd5accab374c68d7a8c2333b3467c54245d7",
               "checksumCovered": true
             },
             {
               "path": "checksums.json",
               "size": 772,
-              "sha256": "a5f8e06832952cfb1ff0ad1ff078f45b4ccdafcd954ecc0c51499a14814c60f1",
+              "sha256": "48f54ee26d3823f1371db67d1bac9f66c7f53462bbf5690ec682482213497570",
               "checksumCovered": false
             },
             {
@@ -367,8 +382,8 @@
             },
             {
               "path": "dist/malicious.js",
-              "size": 4123,
-              "sha256": "5da95d678d63e5ba10016a4a3bdc11c2802d8223943883029995430291998351",
+              "size": 3063,
+              "sha256": "e548060df536577389b9e4e4a88e38648a7fb6f394893c154e19cdaaf6e2fb3c",
               "checksumCovered": true
             },
             {
@@ -386,7 +401,7 @@
           ],
           "packageDigest": {
             "algorithm": "sha256",
-            "value": "a5010c0462ba1fae45c05da03617d88f314609125da64c038d97d8e658bb5297"
+            "value": "c1e586233c1ac5c512069ab4ed534451883ea89047cb1151fb345d0b41b2d48f"
           }
         },
         "diagnostics": []
@@ -397,7 +412,7 @@
       "file": "slow-load/runtime-slow-load.lxp",
       "digest": {
         "algorithm": "sha256",
-        "value": "3ea34f3612b56cad673f11da4bd697d9e81e550f8868f62a5b580ea5ec200551"
+        "value": "6fead142a13685b60be84b314f0d4b0408d4400e3aa0a90510f11a2fc6ab45a7"
       },
       "coverage": [
         "slow_load",
@@ -407,7 +422,7 @@
       "expected": {
         "status": "compatible",
         "manifest": {
-          "manifest_version": "0.1.0",
+          "manifest_version": "0.2.0",
           "plugin_id": "com.lensx.fixture.runtime.slow-load",
           "version": "1.0.0",
           "display": {
@@ -431,15 +446,14 @@
               "max_version_exclusive": "0.2.0"
             },
             "host_api": {
-              "min_version": "0.1.0",
-              "max_version_exclusive": "0.2.0"
+              "min_version": "0.2.0",
+              "max_version_exclusive": "0.3.0"
             }
           },
           "runtime": {
             "kind": "iframe",
             "entry": "dist/index.html"
           },
-          "requested_permissions": [],
           "contributes": {
             "pages": [
               {
@@ -448,8 +462,7 @@
                   "en-US": "Runtime Fixture",
                   "zh-CN": "运行时夹具"
                 },
-                "route": "/",
-                "required_permissions": []
+                "route": "/"
               },
               {
                 "id": "route_probe",
@@ -458,8 +471,7 @@
                   "zh-CN": "路由探测"
                 },
                 "route": "/route-probe",
-                "parent_page_id": "home",
-                "required_permissions": []
+                "parent_page_id": "home"
               }
             ],
             "actions": [
@@ -494,20 +506,20 @@
         },
         "facts": {
           "packageFormatVersion": "0.1.0",
-          "compressedSize": 2260,
+          "compressedSize": 2242,
           "decompressedSize": 9728,
           "fileCount": 5,
           "files": [
             {
               "path": "manifest.json",
-              "size": 1250,
-              "sha256": "c7ab009f4bab117b5b33dabb2278c1134ee791a985b15fcb2ef75db971414a55",
+              "size": 1171,
+              "sha256": "b90b454d317dbb4c88695d81fd1a98e687640fbaaaae4a3cb83cba836a62fadf",
               "checksumCovered": true
             },
             {
               "path": "checksums.json",
               "size": 536,
-              "sha256": "7ffb353b7235bfa1f4371e6beefe50d6f5ab1e531d0867049b4fd3be060884de",
+              "sha256": "7490d74799ada667c5f4ccc5345e089358d668ee4b6928e586d631e1dd8ce962",
               "checksumCovered": false
             },
             {
@@ -531,7 +543,7 @@
           ],
           "packageDigest": {
             "algorithm": "sha256",
-            "value": "3ea34f3612b56cad673f11da4bd697d9e81e550f8868f62a5b580ea5ec200551"
+            "value": "6fead142a13685b60be84b314f0d4b0408d4400e3aa0a90510f11a2fc6ab45a7"
           }
         },
         "diagnostics": []
@@ -542,7 +554,7 @@
       "file": "never-acknowledge/runtime-never-acknowledge.lxp",
       "digest": {
         "algorithm": "sha256",
-        "value": "9bb8f8f05f606bc5cf921052ed7c6a6ae3323b7064682778a19f72586a0201e6"
+        "value": "352b94b4dab12ac6fb70985bf5f7b306588540fe546ad78c67ea6f1e7968b7ba"
       },
       "coverage": [
         "never_acknowledge",
@@ -552,7 +564,7 @@
       "expected": {
         "status": "compatible",
         "manifest": {
-          "manifest_version": "0.1.0",
+          "manifest_version": "0.2.0",
           "plugin_id": "com.lensx.fixture.runtime.never-acknowledge",
           "version": "1.0.0",
           "display": {
@@ -576,15 +588,14 @@
               "max_version_exclusive": "0.2.0"
             },
             "host_api": {
-              "min_version": "0.1.0",
-              "max_version_exclusive": "0.2.0"
+              "min_version": "0.2.0",
+              "max_version_exclusive": "0.3.0"
             }
           },
           "runtime": {
             "kind": "iframe",
             "entry": "dist/index.html"
           },
-          "requested_permissions": [],
           "contributes": {
             "pages": [
               {
@@ -593,8 +604,7 @@
                   "en-US": "Runtime Fixture",
                   "zh-CN": "运行时夹具"
                 },
-                "route": "/",
-                "required_permissions": []
+                "route": "/"
               },
               {
                 "id": "route_probe",
@@ -603,8 +613,7 @@
                   "zh-CN": "路由探测"
                 },
                 "route": "/route-probe",
-                "parent_page_id": "home",
-                "required_permissions": []
+                "parent_page_id": "home"
               }
             ],
             "actions": [
@@ -639,20 +648,20 @@
         },
         "facts": {
           "packageFormatVersion": "0.1.0",
-          "compressedSize": 2259,
+          "compressedSize": 2235,
           "decompressedSize": 9728,
           "fileCount": 5,
           "files": [
             {
               "path": "manifest.json",
-              "size": 1274,
-              "sha256": "03d9352be8639d58f5f516df41f05f954b6176d48e6d003abc79fbb5cb8f932e",
+              "size": 1195,
+              "sha256": "6d6691b994d2e52f0c4558374500f78c66d1a84b7baefb8ca85684675b9bc3cb",
               "checksumCovered": true
             },
             {
               "path": "checksums.json",
               "size": 536,
-              "sha256": "148b6bc37426fbbaef209b530065b9afc22eabc7f556e6a36c4c7848d0ff3157",
+              "sha256": "827f52bd732c0f6935449a817f8ee1e668ccb4939da7e981036fd92fba87bb41",
               "checksumCovered": false
             },
             {
@@ -676,7 +685,7 @@
           ],
           "packageDigest": {
             "algorithm": "sha256",
-            "value": "9bb8f8f05f606bc5cf921052ed7c6a6ae3323b7064682778a19f72586a0201e6"
+            "value": "352b94b4dab12ac6fb70985bf5f7b306588540fe546ad78c67ea6f1e7968b7ba"
           }
         },
         "diagnostics": []
@@ -687,7 +696,7 @@
       "file": "unexpected-disconnect/runtime-unexpected-disconnect.lxp",
       "digest": {
         "algorithm": "sha256",
-        "value": "5420c5377aa0274861533f08c6ca00072298c235dc69e364dda74c0e09d93248"
+        "value": "f9b4ce5b6f38a36d8a212824b84ada5cd96a0ea33c20349ce0274f972da3cfe5"
       },
       "coverage": [
         "unexpected_disconnect",
@@ -697,7 +706,7 @@
       "expected": {
         "status": "compatible",
         "manifest": {
-          "manifest_version": "0.1.0",
+          "manifest_version": "0.2.0",
           "plugin_id": "com.lensx.fixture.runtime.unexpected-disconnect",
           "version": "1.0.0",
           "display": {
@@ -721,15 +730,14 @@
               "max_version_exclusive": "0.2.0"
             },
             "host_api": {
-              "min_version": "0.1.0",
-              "max_version_exclusive": "0.2.0"
+              "min_version": "0.2.0",
+              "max_version_exclusive": "0.3.0"
             }
           },
           "runtime": {
             "kind": "iframe",
             "entry": "dist/index.html"
           },
-          "requested_permissions": [],
           "contributes": {
             "pages": [
               {
@@ -738,8 +746,7 @@
                   "en-US": "Runtime Fixture",
                   "zh-CN": "运行时夹具"
                 },
-                "route": "/",
-                "required_permissions": []
+                "route": "/"
               },
               {
                 "id": "route_probe",
@@ -748,8 +755,7 @@
                   "zh-CN": "路由探测"
                 },
                 "route": "/route-probe",
-                "parent_page_id": "home",
-                "required_permissions": []
+                "parent_page_id": "home"
               }
             ],
             "actions": [
@@ -784,20 +790,20 @@
         },
         "facts": {
           "packageFormatVersion": "0.1.0",
-          "compressedSize": 2259,
+          "compressedSize": 2242,
           "decompressedSize": 9728,
           "fileCount": 5,
           "files": [
             {
               "path": "manifest.json",
-              "size": 1286,
-              "sha256": "3a78dc47cf9db1e437301506397296ff0953413daea19b5f70a4dff90e462934",
+              "size": 1207,
+              "sha256": "12c846de9892d8765cb6b2ca3396642dfe7f0bb7207bc344c9e49d977bd6ac82",
               "checksumCovered": true
             },
             {
               "path": "checksums.json",
               "size": 536,
-              "sha256": "bd5af925e5ac7d32395060627c8e852769d764a659e1d4b3c8d1bd7e47284dbe",
+              "sha256": "acab2ad92db5e338b437adb7bb06ac045f03b5323b56e8fa71a123793208de48",
               "checksumCovered": false
             },
             {
@@ -821,7 +827,7 @@
           ],
           "packageDigest": {
             "algorithm": "sha256",
-            "value": "5420c5377aa0274861533f08c6ca00072298c235dc69e364dda74c0e09d93248"
+            "value": "f9b4ce5b6f38a36d8a212824b84ada5cd96a0ea33c20349ce0274f972da3cfe5"
           }
         },
         "diagnostics": []
@@ -832,7 +838,7 @@
       "file": "repeated-failure/runtime-repeated-failure.lxp",
       "digest": {
         "algorithm": "sha256",
-        "value": "070fd3aee434a70c6b77b043360da9f2f5958d5a74cccfbae9183de3d42711dd"
+        "value": "8b73c434107eeda4ec55ad8e8ff95a5ee7523ceeea1cfe3805b36cd9cecf68c3"
       },
       "coverage": [
         "repeated_failure",
@@ -842,7 +848,7 @@
       "expected": {
         "status": "compatible",
         "manifest": {
-          "manifest_version": "0.1.0",
+          "manifest_version": "0.2.0",
           "plugin_id": "com.lensx.fixture.runtime.repeated-failure",
           "version": "1.0.0",
           "display": {
@@ -866,15 +872,14 @@
               "max_version_exclusive": "0.2.0"
             },
             "host_api": {
-              "min_version": "0.1.0",
-              "max_version_exclusive": "0.2.0"
+              "min_version": "0.2.0",
+              "max_version_exclusive": "0.3.0"
             }
           },
           "runtime": {
             "kind": "iframe",
             "entry": "dist/index.html"
           },
-          "requested_permissions": [],
           "contributes": {
             "pages": [
               {
@@ -883,8 +888,7 @@
                   "en-US": "Runtime Fixture",
                   "zh-CN": "运行时夹具"
                 },
-                "route": "/",
-                "required_permissions": []
+                "route": "/"
               },
               {
                 "id": "route_probe",
@@ -893,8 +897,7 @@
                   "zh-CN": "路由探测"
                 },
                 "route": "/route-probe",
-                "parent_page_id": "home",
-                "required_permissions": []
+                "parent_page_id": "home"
               }
             ],
             "actions": [
@@ -929,20 +932,20 @@
         },
         "facts": {
           "packageFormatVersion": "0.1.0",
-          "compressedSize": 2253,
+          "compressedSize": 2229,
           "decompressedSize": 9728,
           "fileCount": 5,
           "files": [
             {
               "path": "manifest.json",
-              "size": 1271,
-              "sha256": "9d97324bcc3a447b3fbefdfae79c562f13a145a7ddf725a51a3555ba687d6e70",
+              "size": 1192,
+              "sha256": "dd4e4652e465ce970ad13883b69795b29f9f72bb547e5d59638bb60694be92c9",
               "checksumCovered": true
             },
             {
               "path": "checksums.json",
               "size": 536,
-              "sha256": "89db57092bbc9ef3454237c033a73762020e51cc0b5dc4d47cd7cf909ed702cd",
+              "sha256": "ea5af5a71e6d32d0953e1c1b4156c9597bb1a0e456c23ad5f48c341cbee0d7f7",
               "checksumCovered": false
             },
             {
@@ -966,7 +969,7 @@
           ],
           "packageDigest": {
             "algorithm": "sha256",
-            "value": "070fd3aee434a70c6b77b043360da9f2f5958d5a74cccfbae9183de3d42711dd"
+            "value": "8b73c434107eeda4ec55ad8e8ff95a5ee7523ceeea1cfe3805b36cd9cecf68c3"
           }
         },
         "diagnostics": []
@@ -977,7 +980,7 @@
       "file": "host-reload/runtime-host-reload.lxp",
       "digest": {
         "algorithm": "sha256",
-        "value": "2719e55e1a61c98c8a483602764bf8a9c5490387c1309f9e365cde929f7bd268"
+        "value": "b0272bc87fb2455f5eefb7e88acaa028194e503266b04d9e2a7c010134ca13ff"
       },
       "coverage": [
         "host_reload",
@@ -987,7 +990,7 @@
       "expected": {
         "status": "compatible",
         "manifest": {
-          "manifest_version": "0.1.0",
+          "manifest_version": "0.2.0",
           "plugin_id": "com.lensx.fixture.runtime.host-reload",
           "version": "1.0.0",
           "display": {
@@ -1011,15 +1014,14 @@
               "max_version_exclusive": "0.2.0"
             },
             "host_api": {
-              "min_version": "0.1.0",
-              "max_version_exclusive": "0.2.0"
+              "min_version": "0.2.0",
+              "max_version_exclusive": "0.3.0"
             }
           },
           "runtime": {
             "kind": "iframe",
             "entry": "dist/index.html"
           },
-          "requested_permissions": [],
           "contributes": {
             "pages": [
               {
@@ -1028,8 +1030,7 @@
                   "en-US": "Runtime Fixture",
                   "zh-CN": "运行时夹具"
                 },
-                "route": "/",
-                "required_permissions": []
+                "route": "/"
               },
               {
                 "id": "route_probe",
@@ -1038,8 +1039,7 @@
                   "zh-CN": "路由探测"
                 },
                 "route": "/route-probe",
-                "parent_page_id": "home",
-                "required_permissions": []
+                "parent_page_id": "home"
               }
             ],
             "actions": [
@@ -1074,20 +1074,20 @@
         },
         "facts": {
           "packageFormatVersion": "0.1.0",
-          "compressedSize": 2253,
+          "compressedSize": 2237,
           "decompressedSize": 9728,
           "fileCount": 5,
           "files": [
             {
               "path": "manifest.json",
-              "size": 1256,
-              "sha256": "bc92bed0ad6cd8592c61f25cc9f27207200a2fe12da07d467b556ec557f22468",
+              "size": 1177,
+              "sha256": "4dca763b95cbebc89dec0a789613afa7bf6dce2671cb51dbb21f4ccf5a8ea6db",
               "checksumCovered": true
             },
             {
               "path": "checksums.json",
               "size": 536,
-              "sha256": "ee61ee356050efd63db644b57cef7d1f961b8350b900b743b378f23252d7a9a4",
+              "sha256": "4675b79b159155dd640d484f01f73aef032e0c65924ded3630483db43dd535ea",
               "checksumCovered": false
             },
             {
@@ -1111,7 +1111,7 @@
           ],
           "packageDigest": {
             "algorithm": "sha256",
-            "value": "2719e55e1a61c98c8a483602764bf8a9c5490387c1309f9e365cde929f7bd268"
+            "value": "b0272bc87fb2455f5eefb7e88acaa028194e503266b04d9e2a7c010134ca13ff"
           }
         },
         "diagnostics": []
@@ -1122,7 +1122,7 @@
       "file": "replacement/runtime-replacement.lxp",
       "digest": {
         "algorithm": "sha256",
-        "value": "e5a82460285a7e385fe897106bdddee300f212d9e98be8b44e093034024de212"
+        "value": "7bf29949623cfc4d37c5ea9ca8677e69afc3a19901301a8df67517515a7a929c"
       },
       "coverage": [
         "replacement",
@@ -1132,7 +1132,7 @@
       "expected": {
         "status": "compatible",
         "manifest": {
-          "manifest_version": "0.1.0",
+          "manifest_version": "0.2.0",
           "plugin_id": "com.lensx.fixture.runtime.replacement",
           "version": "1.0.0",
           "display": {
@@ -1156,15 +1156,14 @@
               "max_version_exclusive": "0.2.0"
             },
             "host_api": {
-              "min_version": "0.1.0",
-              "max_version_exclusive": "0.2.0"
+              "min_version": "0.2.0",
+              "max_version_exclusive": "0.3.0"
             }
           },
           "runtime": {
             "kind": "iframe",
             "entry": "dist/index.html"
           },
-          "requested_permissions": [],
           "contributes": {
             "pages": [
               {
@@ -1173,8 +1172,7 @@
                   "en-US": "Runtime Fixture",
                   "zh-CN": "运行时夹具"
                 },
-                "route": "/",
-                "required_permissions": []
+                "route": "/"
               },
               {
                 "id": "route_probe",
@@ -1183,8 +1181,7 @@
                   "zh-CN": "路由探测"
                 },
                 "route": "/route-probe",
-                "parent_page_id": "home",
-                "required_permissions": []
+                "parent_page_id": "home"
               }
             ],
             "actions": [
@@ -1219,20 +1216,20 @@
         },
         "facts": {
           "packageFormatVersion": "0.1.0",
-          "compressedSize": 2252,
+          "compressedSize": 2240,
           "decompressedSize": 9728,
           "fileCount": 5,
           "files": [
             {
               "path": "manifest.json",
-              "size": 1256,
-              "sha256": "7cd822be6e9f8670127a1d2249ffa344043012cb9b38aa8c88dddecfe23520ca",
+              "size": 1177,
+              "sha256": "693e8afe68b80f2f27b112785d24c4ad4bc512cdf47737e791ff23dc2b706543",
               "checksumCovered": true
             },
             {
               "path": "checksums.json",
               "size": 536,
-              "sha256": "0d0ed265018e0b5f62c9cdb9066c0b02ee1aac0b64d8bdcfdb80c2e23bb48eca",
+              "sha256": "9bce38bb46736547acf267bdede3b96c0f75148de385c6bb8306b79b316396a9",
               "checksumCovered": false
             },
             {
@@ -1256,7 +1253,7 @@
           ],
           "packageDigest": {
             "algorithm": "sha256",
-            "value": "e5a82460285a7e385fe897106bdddee300f212d9e98be8b44e093034024de212"
+            "value": "7bf29949623cfc4d37c5ea9ca8677e69afc3a19901301a8df67517515a7a929c"
           }
         },
         "diagnostics": []

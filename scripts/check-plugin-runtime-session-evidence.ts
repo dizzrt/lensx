@@ -46,7 +46,7 @@ for (const fixture of fixtures) {
     value.evidence_version !== '0.1.0' ||
     value.session_contract_version !== '0.1.0' ||
     value.transport_contract_version !== '0.1.0' ||
-    value.host_api_dispatcher_version !== '0.1.0' ||
+    value.host_api_dispatcher_version !== '0.2.0' ||
     value.os !== 'macos' ||
     value.engine !== 'wkwebview' ||
     value.fixture !== fixture ||
@@ -60,6 +60,9 @@ for (const fixture of fixtures) {
   }
   for (const key of sessionBooleanKeys) {
     if (value[key] !== true) fail(`${fixture}.${key} did not pass`);
+  }
+  if (fixture !== 'malicious' && value.worker_teardown_observed !== true) {
+    fail(`${fixture}.worker_teardown_observed did not pass`);
   }
   const cspChecks = value.csp_checks;
   if (

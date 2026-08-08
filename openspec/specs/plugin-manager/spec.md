@@ -5,9 +5,9 @@
 Define the accepted Host-private Plugin Manager state, persistence, recovery,
 compatibility, quarantine, diagnostics, and Tauri managed-state boundaries.
 This capability establishes an internal installed-registration fact source and
-revision-bound grant mutation, but does not claim delivery of a public
+revision-bound lifecycle mutation, but does not claim delivery of a public
 registration contract, package installer, plugin Runtime, user-facing
-permission workflow, Action or Page projection, or frontend management surface.
+native-authority workflow, Action or Page projection, or frontend management surface.
 
 ## Requirements
 
@@ -18,7 +18,7 @@ instance to internal Host consumers through Tauri managed state. Each healthy
 plugin entry MUST store its validated normalized Manifest separately from its
 Host-owned registration facts. Manifest authors MUST NOT set the installation
 location, package digest, source, enabled intent, compatibility result,
-quarantine state, Runtime state, or granted permissions through author input.
+quarantine state, Runtime state, or Host authority through author input.
 
 #### Scenario: The Host accepts a validated registration record
 
@@ -45,81 +45,61 @@ quarantine state, Runtime state, or granted permissions through author input.
 
 ### Requirement: Registration facts MUST have explicit persistence lifetimes
 
-The Plugin Manager MUST persist the normalized Manifest, installation location,
-algorithm-tagged package digest, Host-controlled source, enabled intent,
-granted-permission ID snapshot, and recent diagnostics for an installed
-registration. The Manager MAY also maintain process-local development
-registrations in the same current snapshot. A development entry MUST use a
-distinct development-snapshot payload variant, `source=development`, and
-process-local grants and diagnostics, and MUST NOT write, delete, or masquerade
-as a Plugin Manager Store record. A record's existence MUST represent an
-installed registration; a process-local development entry's existence means
-only that a development snapshot was committed in the current process.
+The Plugin Manager MUST continue to distinguish durable installed records, process-local development entries, derived Runtime state, diagnostics, and resource generations. The current record format MUST NOT store `granted_permission_ids`, permission decisions, permission reasons, or permission history. Manifest `0.1.0` and grant data in an old record format MUST NOT produce new Host authority. Recovery MUST place such records into a stable incompatible or quarantined state, preserve program and data for explicit management, and MUST NOT fabricate Manifest `0.2.0`.
 
-Compatibility for both lifetimes MUST derive from the respective current
-Manifest ranges and current lensX and Host API versions. Runtime state MUST
-remain process-local. Installed record recovery MUST start as `inactive`, while
-a development entry, source-directory capability, snapshot, grants,
-diagnostics, and Runtime state MUST NOT recover in a new process.
+An installed record MUST persist the normalized Manifest, installation location, algorithm-tagged package digest, Host-controlled source, enabled intent, and recent bounded diagnostics. A development entry MUST use a distinct development-snapshot payload variant with `source=development`, remain process-local, and MUST NOT write, delete, or masquerade as a Plugin Manager Store record.
 
-#### Scenario: A healthy record is recovered after restart
+Compatibility for both durable and process-local lifetimes MUST derive from the respective current Manifest ranges and current lensX and Host API versions. Runtime state MUST remain process-local. A development entry, source-directory capability, immutable snapshot, diagnostics, and Runtime state MUST NOT recover in a new process.
 
-- **WHEN** an installed healthy record was persisted successfully and the
-  application restarts with the same Host versions
-- **THEN** the Plugin Manager recovers the same normalized Manifest,
-  installation facts, enabled intent, grant snapshot, and bounded diagnostics
-- **THEN** the Runtime state is `inactive`
+#### Scenario: Current-format record recovers
+- **WHEN** the Host starts and reads a valid current record
+- **THEN** the Manager restores installation, source, enabled state, diagnostics, and the current Manifest without a grant field
+- **THEN** the Runtime still starts from `inactive` with a new process-local generation
 
-#### Scenario: The Host version changes
+#### Scenario: Legacy permission record recovers
+- **WHEN** the Host reads a legacy Manifest `0.1.0` record or one containing `granted_permission_ids`
+- **THEN** the Manager fails closed into a stable incompatible or quarantined state without publishing clipboard or permission authority
+- **THEN** repeated startup is idempotent, program and data are not deleted automatically, and logs disclose no grants or paths
 
-- **WHEN** a record was compatible with an earlier Host but the current lensX
-  or Host API version no longer falls within its Manifest range during recovery
-- **THEN** the Plugin Manager derives the current compatibility as incompatible
-- **THEN** a compatibility conclusion held by the earlier process does not
-  override the new result
+#### Scenario: Old Host reads a current record
+- **WHEN** a rolled-back old Host encounters the current record format
+- **THEN** the old Host fails closed because the format is unknown
+- **THEN** it does not guess fields, restore old grants, or overwrite the current record
 
-#### Scenario: A Manifest requests permissions without a Host grant
+#### Scenario: Host version changes
 
-- **WHEN** an installed or development normalized Manifest declares one or more
-  requested permissions and the Host provides no grant snapshot
-- **THEN** the Plugin Manager uses an empty granted-permission ID snapshot for
-  that entry
-- **THEN** requested permissions do not become grants automatically
+- **WHEN** a record was compatible with an earlier Host but the current lensX or Host API version no longer falls within its Manifest range during recovery
+- **THEN** the Plugin Manager derives current compatibility as incompatible
+- **THEN** a compatibility conclusion held by the earlier process does not override the new result
 
-#### Scenario: The previous process had Runtime activity
+#### Scenario: Previous process had Runtime activity
 
-- **WHEN** an installed plugin had process-local Runtime activity before the
-  application exited or crashed
-- **THEN** the next recovery does not deserialize that activity as a live
-  session
+- **WHEN** an installed plugin had process-local Runtime activity before the application exited or crashed
+- **THEN** the next recovery does not deserialize that activity as a live Session
 - **THEN** the plugin starts as `inactive`
 
-#### Scenario: A development registration existed in the previous process
+#### Scenario: Development registration existed in previous process
 
-- **WHEN** the previous process contained a development registration,
-  source-directory capability, snapshot, or grants and then exited or crashed
-- **THEN** the new Plugin Manager process recovers none of those development
-  facts
-- **THEN** installed records, quarantine evidence, and Store revision preserve
-  their existing recovery semantics
+- **WHEN** the previous process contained a development registration, source-directory capability, or immutable snapshot and then exited or crashed
+- **THEN** the new Plugin Manager process recovers none of those development facts
+- **THEN** installed records, quarantine evidence, and Store revision preserve their existing recovery semantics
 
 ### Requirement: Development entries MUST share Manager identity and revision authority without becoming Store records
 
 The Plugin Manager MUST combine installed and process-local development entries
 in one atomic read projection and MUST enforce the same plugin ID uniqueness
 across builtin, external, development, and quarantine identities. Successful
-development register, reload, enabled or grant mutation, and remove operations
+development register, reload, enabled, and remove operations
 MUST use the same compare-current revision, affected-plugin resource generation,
 and changed-event semantics, but MUST NOT call Store write or delete. Development
 payload facts MUST be a strict Host-owned variant and MUST NOT allow a Manifest
-author to submit source, snapshot path or identity, enabled intent, grants, or
+author to submit source, snapshot path or identity, enabled intent, or
 Runtime state.
 
 #### Scenario: Development entry joins the current snapshot
 
 - **WHEN** the trusted Development coordinator submits a complete valid
-  development Manifest, snapshot payload facts, enabled intent, and empty
-  grants
+  development Manifest, snapshot payload facts, and enabled intent
 - **THEN** the Manager publishes a process-local healthy entry under the unique
   `plugin_id`, advances the revision and resource generation, and emits the
   ordinary changed event
@@ -128,11 +108,11 @@ Runtime state.
 
 #### Scenario: Development mutation loses a race
 
-- **WHEN** a development reload, grant, enabled, or remove mutation uses a stale
+- **WHEN** a development reload, enabled, or remove mutation uses a stale
   expected revision or entry identity
 - **THEN** the Manager returns a stable conflict without changing installed or
   development entries, the Store, revision, or resource generation
-- **THEN** the stale mutation cannot restore an old snapshot, grant, or Runtime
+- **THEN** the stale mutation cannot restore an old snapshot or Runtime
   authority
 
 #### Scenario: Development entry is removed
@@ -272,12 +252,12 @@ retain its current isolation reason.
 ### Requirement: Plugin Manager authority MUST remain Host-private
 
 The Plugin Manager MUST expose its Manager, Store, recovery report, lifecycle
-transitions, and revision-bound grant mutation only to trusted Host services.
+transitions and revision-bound lifecycle mutation only to trusted Host services.
 It MUST NOT expose raw Manager state or a general mutation boundary to plugins,
 the public Registration Contract, or frontend product code. This capability
 MUST NOT by itself claim delivery of a frontend query or management UI, Action
 or Page projection, package installation, iframe Runtime, public Host API, or
-user-facing permission workflow.
+user-facing native-authority workflow.
 
 #### Scenario: A consumer inspects the public application boundary
 
@@ -312,7 +292,7 @@ provider record.
   the current revision and Store deletion and directory syncing succeed
 - **THEN** subsequent snapshots and details no longer contain that entry and
   the Manager commits exactly one new revision
-- **THEN** the record's enabled intent, grants, and diagnostics no longer exist
+- **THEN** the record's enabled intent and diagnostics no longer exist
   as a healthy registration
 
 #### Scenario: A quarantine Store record is removed successfully
@@ -354,7 +334,7 @@ degraded Store MUST produce a stable rejection without modifying state.
   value and atomic persistence succeeds
 - **THEN** the Manager publishes the updated record and commits exactly one new
   revision
-- **THEN** compatibility, quarantine, grants, Runtime, and other plugin records
+- **THEN** compatibility, quarantine, Runtime, and other plugin records
   do not change automatically because of that boolean transition
 
 #### Scenario: The whole Store is degraded
@@ -365,69 +345,3 @@ degraded Store MUST produce a stable rejection without modifying state.
   overwriting unreadable evidence
 - **THEN** the application can still read the degraded Registration conclusion
   and continue Host functions that do not depend on plugins
-
-### Requirement: Grant snapshot mutations MUST be revision-bound, declaration-limited, and atomic
-
-The Plugin Manager MUST provide a Host-private mutation that changes one
-permission grant on a healthy Registration while preserving the normalized
-Manifest and every unrelated Host fact. Every mutation MUST require the current
-opaque entry identity and exact Registration revision. Granting MUST require the
-current normalized Manifest to request the permission and the current Host
-permission catalog to support it. Revocation MUST be able to remove an existing
-grant even if the permission is no longer requested or supported.
-
-The candidate grant snapshot MUST remain sorted, deduplicated, bounded, and
-Host-owned. A changed snapshot MUST be persisted through the existing atomic
-record replacement before the in-memory state is published, after which the
-Registration revision MUST advance exactly once. An idempotent target state
-MUST return unchanged without writing or advancing the revision. Source,
-Publisher text, version direction, enabled intent, and author-controlled fields
-MUST NOT affect this transition.
-
-#### Scenario: A currently requested permission is granted
-
-- **WHEN** a trusted Host caller grants a current Manifest request using the
-  current entry identity and revision
-- **THEN** the Manager atomically persists the normalized next grant snapshot
-  and publishes one new revision
-- **THEN** the normalized Manifest and unrelated Host facts remain unchanged
-
-#### Scenario: An existing permission is revoked
-
-- **WHEN** a trusted Host caller revokes an existing grant using the current
-  entry identity and revision
-- **THEN** the Manager atomically removes only that grant and publishes one new
-  revision
-- **THEN** other grants and unrelated plugin records remain unchanged
-
-#### Scenario: A grant is undeclared or unsupported
-
-- **WHEN** a caller attempts to add a permission that the current Manifest did
-  not request or the Host catalog does not support
-- **THEN** the Manager rejects the transition with a stable diagnostic
-- **THEN** memory, disk, revision, and the previous grant snapshot remain
-  unchanged
-
-#### Scenario: A grant mutation is idempotent
-
-- **WHEN** a caller grants an already granted permission or revokes a permission
-  absent from the current grant snapshot
-- **THEN** the Manager returns the current Registration without writing a record
-- **THEN** the revision and resource generation remain unchanged
-
-#### Scenario: A grant mutation loses a revision race
-
-- **WHEN** another lifecycle, replacement, installation, or permission mutation
-  advances the Registration revision before the current mutation commits
-- **THEN** the stale mutation fails with a stable conflict diagnostic
-- **THEN** it cannot overwrite the newly committed Manifest, grants, enabled
-  intent, diagnostics, or payload facts
-
-#### Scenario: Grant persistence fails
-
-- **WHEN** creation, writing, flushing, or atomic replacement of the changed
-  grant snapshot fails
-- **THEN** the Manager returns a stable persistence diagnostic and does not
-  publish a new revision
-- **THEN** the last successful in-memory and on-disk record remains
-  authoritative after restart

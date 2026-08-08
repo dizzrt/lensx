@@ -114,22 +114,30 @@
       "compatible": "兼容",
       "incompatible": "不兼容",
       "none": "无",
-      "source": { "builtin": "内置", "external": "外部", "development": "开发" },
+      "source": {
+        "builtin": "内置",
+        "external": "外部",
+        "development": "开发"
+      },
       "development": {
         "title": "插件开发模式",
-        "description": "仅在当前进程加载未打包、未签名的 dist 目录；不会安装、信任、授予权限或自动运行插件。",
+        "description": "仅在当前进程中加载未打包、未签名的 dist 目录。它不会安装、自动运行插件，也不会授予原生 Host 访问权。",
         "toggle": "为当前进程启用插件开发模式",
         "processLocal": "lensX 重启后会再次关闭。",
         "register": "注册开发目录",
         "reload": "从目录重新加载",
         "remove": "移除开发条目",
-        "unsignedDescription": "此插件来自 Host 持有的未打包目录快照。Publisher 文本未经验证，权限仍需单独授权。",
-        "labels": { "development": "开发", "unpacked": "未打包", "unsigned": "未签名" },
+        "unsignedDescription": "此插件从 Host 拥有的未打包目录快照加载。Publisher 文本未经验证；它与已安装插件使用相同的开放 Web、封闭 Host 边界。",
+        "labels": {
+          "development": "开发",
+          "unpacked": "未打包",
+          "unsigned": "未签名"
+        },
         "feedback": {
           "enabled": "当前进程已启用插件开发模式。",
           "disabled": "插件开发模式已关闭，开发条目已移除；插件数据与 Launcher 集合已保留。",
           "cancelled": "未选择开发目录。",
-          "registered": "开发目录已注册，默认未授予任何权限。",
+          "registered": "开发目录已注册，且没有原生 Host 权限。",
           "reloaded": "已从全新快照重新加载开发条目。",
           "removed": "开发条目已移除；插件数据与 Launcher 集合已保留。",
           "cleanup_pending": "Authority 已更新，但旧快照仍等待清理。",
@@ -145,7 +153,7 @@
         "confirm": {
           "reload": {
             "title": "重新加载开发插件？",
-            "description": "要从所选 dist 目录重新加载 {{name}} 吗？当前 Runtime authority 会结束，权限变化也会重新协调。",
+            "description": "从已选择的 dist 目录重新加载 {{name}}？当前 Runtime 及其所有 Worker、连接和 Session 都会结束。",
             "confirm": "重新加载"
           },
           "remove": {
@@ -155,43 +163,23 @@
           }
         }
       },
-      "runtime": { "inactive": "未运行", "active": "运行中", "failed": "失败", "starting": "启动中" },
-      "replacement": { "upgrade": "升级", "downgrade": "降级", "reinstall": "重新安装" },
+      "runtime": {
+        "inactive": "未运行",
+        "active": "运行中",
+        "failed": "失败",
+        "starting": "启动中"
+      },
+      "replacement": {
+        "upgrade": "升级",
+        "downgrade": "降级",
+        "reinstall": "重新安装"
+      },
       "fields": {
         "version": "版本",
         "source": "来源",
         "compatibility": "兼容性",
         "runtime": "运行时",
-        "permissions": "权限",
         "diagnostics": "诊断"
-      },
-      "permissions": {
-        "readOnly": "此处仅展示权限状态，不能修改。",
-        "description": "查看 Host 风险，并逐项授予或撤销权限。",
-        "authorReason": "插件提供的原因",
-        "publisherUnverified": "Publisher 未验证",
-        "publisherUnverifiedDescription": "Publisher 文本由插件包提供，不代表签名、可信来源或权限授权。",
-        "grant": "授予",
-        "revoke": "撤销",
-        "allow": "允许此权限",
-        "deny": "拒绝",
-        "laterAndInstall": "稍后决定并以零授权安装",
-        "confirmRevoke": "撤销权限",
-        "grantTitle": "允许敏感权限？",
-        "revokeTitle": "撤销权限？",
-        "revokeImpact": "撤销会立即生效，活动插件页面或 pending call 可能关闭。",
-        "singlePermissionOnly": "此决定仅适用于当前插件状态下的这一项权限。",
-        "risk": {
-          "standard": "标准风险",
-          "sensitive": "敏感",
-          "unknown": "未知"
-        },
-        "state": {
-          "granted": "已授予",
-          "not_granted": "未授予",
-          "not_requested": "未请求",
-          "unsupported": "不支持"
-        }
       },
       "diagnostics": {
         "corrupt_record": "插件记录已损坏。",
@@ -220,18 +208,11 @@
         "detailFailed": "无法安全加载插件详情。",
         "duplicate": "该操作正在进行中。",
         "installSucceeded": "已安装 {{pluginId}}，版本 {{version}}。",
-        "installPermissionsPartial": "插件已安装，但只应用了部分所选权限。重试前请检查当前设置。",
-        "installPermissionsFailed": "插件已安装，但未应用所选权限。重试前请检查当前设置。",
         "loadFailed": "无法安全加载插件。",
         "mutationFailed": "无法完成插件变更。",
         "notFound": "该插件已不存在。",
         "pluginEnabled": "清除数据前请先禁用插件。",
         "replacementSucceeded": "已将 {{pluginId}} 替换为版本 {{version}}。",
-        "replacementPermissionsPartial": "插件已替换，但未应用全部所选权限；当前较窄的权限状态已经生效。",
-        "permissionGranted": "权限已授予，新的插件 authority 使用刷新后的状态。",
-        "permissionRevoked": "权限已撤销，活动插件页面或 pending call 可能已经结束。",
-        "permissionUnchanged": "权限状态已经是最新状态。",
-        "permissionsDeferred": "未保存权限决定；插件将在没有新授权的状态下继续。",
         "setEnabledSucceeded": "插件可用状态已更新。",
         "unavailable": "当前无法从本地安装插件。",
         "uninstallSucceeded": "插件已卸载。",
@@ -247,9 +228,6 @@
         "replacement": {
           "title": "确认替换",
           "description": "请检查 {{name}} 的版本与权限变化。",
-          "addedPermissions": "新增权限",
-          "retainedPermissions": "保留的授权",
-          "removedPermissions": "移除权限",
           "confirm": "替换"
         },
         "uninstall": {
@@ -267,6 +245,11 @@
           "description": "要永久清除已禁用插件 {{name}} 持有的数据吗？",
           "confirm": "清除数据"
         }
+      },
+      "trust": {
+        "title": "安装即信任",
+        "description": "安装表示你信任此插件在隔离的开放 Web 运行时中处理你交给它的数据。lensX 不会逐项批准或背书其 Worker、网络请求或远程资源，同时原生 Host 访问保持封闭。",
+        "replacementDescription": "替换表示信任新插件包及其远程 Web 行为。原生 Host 访问仍仅限公开 Host API。"
       }
     },
     "save": {

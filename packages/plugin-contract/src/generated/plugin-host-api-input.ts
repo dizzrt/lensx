@@ -6,7 +6,7 @@
  */
 
 /**
- * Public semantic Host API 0.1.0 contract. This schema intentionally excludes private RPC transport and Host identity facts.
+ * Public semantic Host API 0.2.0 contract. This schema intentionally excludes private RPC transport and Host identity facts.
  */
 export type PluginHostApiInput =
   | HostApiRequestInput
@@ -14,12 +14,9 @@ export type PluginHostApiInput =
   | HostApiEventInput
   | HostApiErrorInput
   | PluginRuntimeContextInput
-  | HostApiPermissionInput
   | HostApiEventNameInput;
 export type HostApiRequestInput =
   | ActionsOpenRequest
-  | ClipboardReadRequest
-  | ClipboardWriteRequest
   | RuntimeGetContextRequest
   | StorageDeleteRequest
   | StorageGetRequest
@@ -28,7 +25,6 @@ export type HostApiRequestInput =
   | StorageSetRequest
   | UiCloseRequest;
 export type LocalActionId = string;
-export type BoundedText = string;
 export type StorageKey = string;
 export type OpaqueCursor = string;
 export type JsonValue =
@@ -42,8 +38,6 @@ export type JsonValue =
     };
 export type HostApiResultInput =
   | ActionsOpenResult
-  | ClipboardReadResult
-  | ClipboardWriteResult
   | RuntimeGetContextResult
   | StorageDeleteResult
   | StorageGetResult
@@ -54,8 +48,6 @@ export type HostApiResultInput =
 export type Semver = string;
 export type HostApiMethodInput =
   | 'actions.open'
-  | 'clipboard.read'
-  | 'clipboard.write'
   | 'runtime.get_context'
   | 'storage.delete'
   | 'storage.get'
@@ -72,10 +64,8 @@ export type HostApiErrorCodeInput =
   | 'limit_exceeded'
   | 'method_not_found'
   | 'not_found'
-  | 'permission_denied'
   | 'timeout'
   | 'unavailable';
-export type HostApiPermissionInput = 'clipboard.read' | 'clipboard.write';
 export type HostApiEventNameInput = 'runtime.context_changed';
 
 export interface ActionsOpenRequest {
@@ -84,21 +74,11 @@ export interface ActionsOpenRequest {
     actionId: LocalActionId;
   };
 }
-export interface ClipboardReadRequest {
-  method: 'clipboard.read';
-  params: EmptyParams;
-}
-export interface EmptyParams {}
-export interface ClipboardWriteRequest {
-  method: 'clipboard.write';
-  params: {
-    text: BoundedText;
-  };
-}
 export interface RuntimeGetContextRequest {
   method: 'runtime.get_context';
   params: EmptyParams;
 }
+export interface EmptyParams {}
 export interface StorageDeleteRequest {
   method: 'storage.delete';
   params: {
@@ -137,18 +117,6 @@ export interface ActionsOpenResult {
   method: 'actions.open';
   result: {
     opened: true;
-  };
-}
-export interface ClipboardReadResult {
-  method: 'clipboard.read';
-  result: {
-    text: BoundedText;
-  };
-}
-export interface ClipboardWriteResult {
-  method: 'clipboard.write';
-  result: {
-    written: true;
   };
 }
 export interface RuntimeGetContextResult {

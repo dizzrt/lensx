@@ -12,7 +12,7 @@ if (response.detail.kind !== 'registered') {
 const detail = response.detail;
 
 describe('Plugin Page mapper', () => {
-  test('maps a multi-Page graph with stable owner identity, private route, parent, and grant-subset availability', () => {
+  test('maps a multi-Page graph with stable owner identity, private route, parent, and open-Web availability', () => {
     const batch = mapPluginRegistrationToPageProviderBatch(detail);
     expect(batch).toEqual({
       provider: {
@@ -26,7 +26,6 @@ describe('Plugin Page mapper', () => {
           page_id: 'home',
           title: { 'en-US': 'Workspace Tools', 'zh-CN': '工作区工具' },
           route: '/',
-          required_permission_ids: [],
           available: true,
         },
         {
@@ -35,19 +34,17 @@ describe('Plugin Page mapper', () => {
           title: { 'en-US': 'Open Project', 'zh-CN': '打开项目' },
           route: '/open-project',
           parent: { owner_id: 'com.acme.workspace', page_id: 'home' },
-          required_permission_ids: ['lensx.filesystem.read_selected'],
-          available: false,
+          available: true,
         },
       ],
     });
     expect(Object.isFrozen(batch)).toBe(true);
-    expect(Object.isFrozen(batch?.pages[1]?.required_permission_ids)).toBe(true);
+    expect(batch?.pages[1]).not.toHaveProperty('required_permission_ids');
   });
 
-  test('marks a Page available only after every required grant is present', () => {
+  test('marks a valid contributed Page available without Host grants', () => {
     const batch = mapPluginRegistrationToPageProviderBatch({
       ...detail,
-      granted_permission_ids: ['lensx.filesystem.read_selected'],
     });
     expect(batch?.pages.find(({ page_id: pageId }) => pageId === 'open_project')?.available).toBe(true);
   });

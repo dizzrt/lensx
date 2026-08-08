@@ -1,7 +1,7 @@
 use crate::plugin_registration::is_valid_plugin_registration_entry_id;
 use serde::{Deserialize, Serialize};
 
-pub const PLUGIN_REPLACEMENT_CONTRACT_VERSION: &str = "0.1.0";
+pub const PLUGIN_REPLACEMENT_CONTRACT_VERSION: &str = "0.2.0";
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -61,8 +61,6 @@ pub enum PluginReplacementResult {
         current_version: String,
         candidate_version: String,
         classification: PluginReplacementClassification,
-        added_permission_ids: Vec<String>,
-        removed_permission_ids: Vec<String>,
     },
     Committed {
         contract_version: String,
@@ -235,8 +233,6 @@ pub fn deserialize_replacement_result(
             entry_id,
             current_version,
             candidate_version,
-            added_permission_ids,
-            removed_permission_ids,
             ..
         } => {
             contract_version == PLUGIN_REPLACEMENT_CONTRACT_VERSION
@@ -244,8 +240,6 @@ pub fn deserialize_replacement_result(
                 && is_valid_plugin_registration_entry_id(entry_id)
                 && semver::Version::parse(current_version).is_ok()
                 && semver::Version::parse(candidate_version).is_ok()
-                && is_sorted_unique_permissions(added_permission_ids)
-                && is_sorted_unique_permissions(removed_permission_ids)
         }
         PluginReplacementResult::Committed {
             contract_version,
@@ -307,19 +301,6 @@ fn is_plugin_id(value: &str) -> bool {
                     byte.is_ascii_lowercase()
                         || byte.is_ascii_digit()
                         || matches!(byte, b'_' | b'-')
-                })
-        })
-}
-
-fn is_sorted_unique_permissions(values: &[String]) -> bool {
-    values.windows(2).all(|pair| pair[0] < pair[1])
-        && values.iter().all(|value| {
-            !value.is_empty()
-                && value.len() <= 255
-                && value.bytes().all(|byte| {
-                    byte.is_ascii_lowercase()
-                        || byte.is_ascii_digit()
-                        || matches!(byte, b'.' | b'-' | b'_')
                 })
         })
 }

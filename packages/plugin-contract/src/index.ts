@@ -1,11 +1,9 @@
 export { PLUGIN_HOST_API_VERSION, PLUGIN_MANIFEST_VERSION } from './constants.js';
 export {
   HOST_API_METHOD_CATALOG,
-  HOST_API_PERMISSION_CATALOG,
   validateHostApiError,
   validateHostApiEvent,
   validateHostApiMethod,
-  validateHostApiPermission,
   validateHostApiRequest,
   validateHostApiResult,
   validatePluginRuntimeContext,
@@ -19,8 +17,6 @@ export type {
   HostApiEventName,
   HostApiMethod,
   HostApiMethodCatalogEntry,
-  HostApiPermission,
-  HostApiPermissionCatalogEntry,
   HostApiRequest,
   HostApiRequestInput,
   HostApiResult,

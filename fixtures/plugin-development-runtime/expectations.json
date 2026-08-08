@@ -3,22 +3,20 @@
   "source_packages": {
     "normal": {
       "file": "fixtures/plugin-iframe-runtime/normal/runtime-compatible.lxp",
-      "sha256": "81adbb774a6e96de5ee74a3f2e1990b11f2fcb2858f0efa6700a15d6338f307b"
+      "sha256": "5b51ccd655796841c65c6769e27ded202743552c4f05c8ff50d9110de5890d8d"
     },
     "malicious": {
       "file": "fixtures/plugin-iframe-runtime/malicious/runtime-adversarial.lxp",
-      "sha256": "a5010c0462ba1fae45c05da03617d88f314609125da64c038d97d8e658bb5297"
+      "sha256": "c1e586233c1ac5c512069ab4ed534451883ea89047cb1151fb345d0b41b2d48f"
     }
   },
   "development_transitions": {
-    "normal": ["register", "open", "reload", "permission_delta", "remove"],
+    "normal": ["register", "open", "reload", "manifest_version_advance", "remove"],
     "malicious": ["register", "open", "reload", "malicious_policy_matrix", "remove"]
   },
-  "permission_delta": {
+  "manifest_version_advance": {
     "plugin_id_unchanged": true,
-    "version": "1.1.0",
-    "requested_permission": "clipboard.read",
-    "expected_grant": false
+    "version": "1.1.0"
   },
   "shared_runtime_profile": {
     "sandbox": "allow-scripts allow-same-origin",

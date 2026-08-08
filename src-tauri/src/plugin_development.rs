@@ -306,7 +306,6 @@ fn development_facts(
     snapshot: &PublishedDevelopmentSnapshot,
     source_directory: std::path::PathBuf,
     enabled: bool,
-    grants: Vec<String>,
     operation: PluginDevelopmentOperation,
 ) -> Result<PluginRegistrationFacts, PluginDevelopmentError> {
     PluginRegistrationFacts::development(
@@ -314,7 +313,6 @@ fn development_facts(
         snapshot.identity.clone(),
         source_directory,
         enabled,
-        grants,
     )
     .map_err(|failure| map_manager_failure(failure, operation))
 }
@@ -339,7 +337,7 @@ impl PluginDevelopmentCoordinator {
             .snapshots
             .publish_from_source(&source_directory, &self.manager.host_versions())
             .map_err(|failure| map_snapshot_failure(failure, operation))?;
-        let facts = development_facts(&snapshot, source_directory, true, Vec::new(), operation)?;
+        let facts = development_facts(&snapshot, source_directory, true, operation)?;
         let manifest = snapshot.manifest.clone();
         let registration = crate::plugin_manager::PluginRegistration {
             manifest: manifest.clone(),
@@ -414,7 +412,6 @@ impl PluginDevelopmentCoordinator {
             &snapshot,
             source_directory,
             current.facts.enabled,
-            current.facts.granted_permission_ids.clone(),
             operation,
         )?;
         let manifest = snapshot.manifest.clone();

@@ -12,10 +12,29 @@
   "plugin_csp_native_get_head_verified": true,
   "plugin_csp_translated_get_head_verified": true,
   "csp_checks": {
+    "active_worker_started": true,
+    "author_csp_can_narrow": true,
+    "blob_content_allowed": true,
+    "blob_worker_allowed": true,
     "classic_script_allowed": true,
+    "data_content_allowed": true,
+    "data_worker_allowed": true,
     "es_module_allowed": true,
+    "fetch_allowed": true,
+    "fetch_connection_churn": true,
     "image_allowed": true,
-    "style_allowed": true
+    "indexeddb_roundtrip": true,
+    "package_worker_allowed": true,
+    "remote_module_allowed": true,
+    "style_allowed": true,
+    "wasm_allowed": true,
+    "websocket_constructed": true,
+    "worker_message_burst": true,
+    "worker_message_roundtrip": true
+  },
+  "unsupported_evidence": {
+    "service_worker": "not_available_for_scoped_custom-scheme-runtime",
+    "shared_worker": "not_in_runtime_baseline"
   },
   "sandbox": "allow-scripts allow-same-origin",
   "permissions_policy": "camera 'none'; microphone 'none'; geolocation 'none'; fullscreen 'none'; clipboard-read 'none'; clipboard-write 'none'; display-capture 'none'; payment 'none'; usb 'none'; serial 'none'; hid 'none'; bluetooth 'none'; screen-wake-lock 'none'",
@@ -41,6 +60,7 @@
   "download_callback_hits": 0,
   "resource_paths": [
     "dist/classic.js",
+    "dist/data.json",
     "dist/early-runtime-probe.js",
     "dist/image.svg",
     "dist/index.html",
@@ -48,7 +68,8 @@
     "dist/module.js",
     "dist/private-session.js",
     "dist/report.js",
-    "dist/styles.css"
+    "dist/styles.css",
+    "dist/worker.js"
   ],
   "malicious_attempts_rejected": true
 }

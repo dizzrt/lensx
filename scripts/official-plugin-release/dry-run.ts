@@ -41,11 +41,11 @@ const copyPlugin = (toolingRoot: string, fixtureRoot: string, slug: string): voi
   metadata.version = '1.0.0';
   metadata.packageManager = 'pnpm@11.17.0';
   metadata.engines = { node: '>=24 <25', pnpm: '>=11 <12' };
-  metadata.dependencies = { '@lensx/plugin-sdk': '^0.1.0' };
+  metadata.dependencies = { '@lensx/plugin-sdk': '^0.2.0' };
   metadata.devDependencies = {
     ...(metadata.devDependencies as Record<string, string>),
-    '@lensx/plugin-contract': '^0.1.0',
-    '@lensx/plugin-testkit': '^0.1.0',
+    '@lensx/plugin-contract': '^0.2.0',
+    '@lensx/plugin-testkit': '^0.2.0',
   };
   (metadata.scripts as Record<string, string>)['test:e2e'] = 'rstest run tests/runtime.test.ts';
   writeJson(join(target, 'package.json'), metadata);

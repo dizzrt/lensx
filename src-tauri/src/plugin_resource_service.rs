@@ -667,7 +667,7 @@ mod tests {
     fn versions() -> PluginHostVersions {
         PluginHostVersions {
             lensx: "0.1.0".to_owned(),
-            host_api: "0.1.0".to_owned(),
+            host_api: "0.2.0".to_owned(),
         }
     }
 
@@ -1425,7 +1425,6 @@ mod tests {
                     first_snapshot.identity.clone(),
                     source.clone(),
                     true,
-                    Vec::new(),
                 )
                 .unwrap(),
             )
@@ -1463,7 +1462,6 @@ mod tests {
                     second_snapshot.identity.clone(),
                     source,
                     true,
-                    Vec::new(),
                 )
                 .unwrap(),
             )

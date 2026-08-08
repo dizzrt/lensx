@@ -28,7 +28,6 @@ const hostResolution: PageResolution = Object.freeze({
     page_id: 'settings',
     title: Object.freeze({ 'en-US': 'Settings', 'zh-CN': '设置' }),
     route: '/settings',
-    required_permission_ids: Object.freeze([]),
     available: true,
   }),
 });
@@ -44,7 +43,6 @@ const pluginResolution: PageResolution = Object.freeze({
     page_id: 'home',
     title: Object.freeze({ 'en-US': 'Notes Home', 'zh-CN': '笔记主页' }),
     route: '/private-notes',
-    required_permission_ids: Object.freeze(['notes.read']),
     available: true,
   }),
 });

@@ -21,16 +21,17 @@ lensx-plugin create ./my-plugin --template react-semi --plugin-id com.example.my
 pnpm install
 ```
 
-CLI 写入完整项目，但不执行 dependency install、Host launch、plugin installation、permission grant
+CLI 写入完整项目，但不执行 dependency install、Host launch、plugin installation、Host authority
 或 execution。
 
 ## Manifest 与资源
 
-生成的 `manifest.json` 使用 Manifest `0.1.0`、独立 lensX/Host API compatibility range、未验证
-publisher text、空 requested permissions、一个 Page、一个指向 Page 的 Action，以及 `index.html`
+生成的 `manifest.json` 使用 Manifest `0.2.0`、独立 lensX/Host API compatibility range、未验证
+publisher text、无 permission 字段、一个 Page、一个指向 Page 的 Action，以及 `index.html`
 iframe entry。每个 Runtime/asset path 都必须存在于 build 后 `dist/`。
 
-Page requirement 必须属于 top-level requested permissions。request 永远不是 grant，默认教程保持无权限。
+Worker/network 行为无需 Manifest 声明。Host policy 字段、native capability、sandbox 与 CSP override
+仍是非法 Manifest input。
 
 ## Runtime 与 UI 生命周期
 
@@ -77,7 +78,7 @@ pnpm run dev:plugin-development-mode
 
 在 Settings 注册 self-contained `dist/`。编辑后重新 build，并用 manual reload 发布 fresh immutable
 process-local generation。检查 loading、两种 locale、两种 theme、error/recovery 与 reload 后 focus。
-Development source 不持久化、不安装 `.lxp`、不自动 reload、不 grant permission，也不会放宽 production
+Development source 不持久化、不安装 `.lxp`、不自动 reload、不创建 Host authority，也不会放宽 production
 Runtime/session/security boundary。
 
 ## 打包与安装
@@ -90,7 +91,7 @@ lensx-plugin inspect ./artifacts/com.example.my-plugin-0.1.0.lxp
 lensx-plugin pack --project .
 ```
 
-使用 Settings **从文件安装**，检查 publisher/permission facts 并确认 exact prepared candidate。
+使用 Settings **从文件安装**，检查 publisher 与 open-Web trust notice 并确认 exact prepared candidate。
 打开 launcher Action，验证 loading、ready、locale/theme replacement、keyboard control、
 error/recovery 与 close。Host 会独立于 CLI 重新 inspection 与 authorize。
 
@@ -102,9 +103,8 @@ error/recovery 与 close。Host 会独立于 CLI 重新 inspection 与 authorize
 - 移除 optional capability：UI 降级，不发出 hidden call。
 - failure 后 retry：fresh attempt 拥有 fresh subscription；旧 callback 为 inert。
 - 重复 dispose：cleanup 保持幂等。
-- 以后请求 sensitive permission：React、Semi、Plugin UI、CLI 与 click 都不能自动 grant。
+- 尝试不可用的 native/device API：React、Semi、Plugin UI、CLI 与插件 click 都不能创建 Host 私有 authority。
 - restart 后比较 source：development 消失；formal installation 持久且可管理。
 
 依赖所有权见[公共 package](public-packages.md)，method 见 [Host API](host-api.md)，authority 和
-teardown 见 [Runtime、权限与安全](runtime-permissions-security.md)。
-
+teardown 见 [Runtime 与安全](runtime-permissions-security.md)。

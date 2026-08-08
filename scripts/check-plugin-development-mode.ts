@@ -13,7 +13,7 @@ for (const path of ['docs/en/development/plugin-development-mode.md', 'docs/zh/d
   requireMarkers(path, [
     'pnpm run dev:plugin-development-mode',
     'development-mode-smoke',
-    'build:plugin-development-smoke:permission-delta',
+    'build:plugin-development-smoke:reload',
     'dist/',
     'cleanup_pending',
     'check:plugin-development-mode',
@@ -30,23 +30,23 @@ for (const path of ['docs/en/development/validation.md', 'docs/zh/development/va
 
 requireMarkers('examples/plugins/development-mode-smoke/package.json', [
   '@lensx/example-plugin-development-mode-smoke',
-  'build:permission-delta',
+  'build:reload',
   '@lensx/plugin-sdk',
 ]);
 requireMarkers('examples/plugins/development-mode-smoke/manifests/initial.json', [
   'dev.lensx.smoke.development-mode',
   '"version": "0.1.0"',
-  '"requested_permissions": []',
+  '"manifest_version": "0.2.0"',
 ]);
-requireMarkers('examples/plugins/development-mode-smoke/manifests/permission-delta.json', [
+requireMarkers('examples/plugins/development-mode-smoke/manifests/reload.json', [
   'dev.lensx.smoke.development-mode',
   '"version": "0.2.0"',
-  '"permission_id": "clipboard.read"',
+  '"manifest_version": "0.2.0"',
 ]);
 requireMarkers('examples/plugins/development-mode-smoke/src/main.ts', [
   '@lensx/plugin-sdk/iframe',
   '__LENSX_PLUGIN_DEVELOPMENT_SMOKE_PHASE__',
-  "context.capabilities.includes('clipboard.read')",
+  "context.capabilities.join(', ')",
 ]);
 
 requireMarkers('docs/en/architecture/extension-platform.md', [
@@ -75,7 +75,7 @@ requireMarkers('scripts/verify-plugin-management-visual.mjs', [
 ]);
 requireMarkers('package.json', [
   'build:plugin-development-smoke:initial',
-  'build:plugin-development-smoke:permission-delta',
+  'build:plugin-development-smoke:reload',
   'validate:plugin-development-smoke',
   'check:plugin-development-mode',
   'check:plugin-development-mode-boundaries',

@@ -14,11 +14,11 @@ export const nestedValue = (depth: number): unknown => {
 };
 
 export const exactFrameCostString = 'a'.repeat(PLUGIN_RPC_V1_POLICY.maxFrameBytes - 2);
-export const maximumContractClipboardText = 'x'.repeat(1_048_576);
+export const maximumContractStorageText = 'x'.repeat(1_048_576);
 
 export const validPluginRpcFixtures = Object.freeze([
   rpcRequest(1),
-  rpcRequest(2, 'clipboard.write', { text: maximumContractClipboardText }),
+  rpcRequest(2, 'storage.set', { key: 'large-value', value: maximumContractStorageText }),
   rpcRequest(3, 'storage.set', { key: 'nested', value: nestedValue(PLUGIN_RPC_V1_POLICY.maxSemanticDepth) }),
   rpcRequest(4, 'storage.set', {
     key: 'many-values',

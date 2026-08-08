@@ -8,7 +8,6 @@ import type {
   LocalizedKeywords,
   LocalizedText,
   Page,
-  PermissionRequest,
   PluginManifestInput,
   Publisher,
   Runtime,
@@ -73,18 +72,12 @@ export interface NormalizedRuntime extends Runtime {
   readonly entry: string;
 }
 
-export interface NormalizedPermissionRequest extends Omit<PermissionRequest, 'reason'> {
-  readonly permission_id: string;
-  readonly reason: NormalizedLocalizedText;
-}
-
-export interface NormalizedPluginPage extends Omit<Page, 'title' | 'icon' | 'required_permissions'> {
+export interface NormalizedPluginPage extends Omit<Page, 'title' | 'icon'> {
   readonly id: string;
   readonly title: NormalizedLocalizedText;
   readonly route: string;
   readonly parent_page_id?: string;
   readonly icon?: NormalizedAsset;
-  readonly required_permissions: readonly string[];
 }
 
 export interface NormalizedLocalizedKeywords extends Omit<LocalizedKeywords, 'en-US' | 'zh-CN'> {
@@ -116,18 +109,14 @@ export interface NormalizedContributes extends Omit<Contributes, 'pages' | 'acti
 }
 
 export interface NormalizedPluginManifest
-  extends Omit<
-    PluginManifestInput,
-    'display' | 'publisher' | 'compatibility' | 'runtime' | 'requested_permissions' | 'contributes'
-  > {
-  readonly manifest_version: '0.1.0';
+  extends Omit<PluginManifestInput, 'display' | 'publisher' | 'compatibility' | 'runtime' | 'contributes'> {
+  readonly manifest_version: '0.2.0';
   readonly plugin_id: string;
   readonly version: string;
   readonly display: NormalizedPluginDisplay;
   readonly publisher: NormalizedPublisher;
   readonly compatibility: NormalizedCompatibility;
   readonly runtime: NormalizedRuntime;
-  readonly requested_permissions: readonly NormalizedPermissionRequest[];
   readonly contributes: NormalizedContributes;
 }
 

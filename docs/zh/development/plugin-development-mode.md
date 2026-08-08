@@ -15,8 +15,8 @@
 并提供两个确定性的构建阶段。两个阶段使用相同 plugin ID 与输出目录，因此会经过真实的
 development reload transaction：
 
-- `initial` 构建 `0.1.0`、A 代版本，不请求权限；
-- `permission-delta` 构建 `0.2.0`、B 代版本，请求 `clipboard.read`，但不会因此获得 grant。
+- `initial` 构建 `0.1.0`、A 代版本；
+- `reload` 构建 `0.2.0`、B 代版本，并使用相同的开放 Web Runtime 边界。
 
 在仓库根目录构建并校验 A 代版本：
 
@@ -57,8 +57,7 @@ Plugin Manager、Resource 与 Runtime authority 只引用该快照；作者目�
 
 修改源码后，再次运行插件构建与验证，然后选择 **从目录重新加载**。每次成功的手动
 reload 都会创建全新 generation，即使字节完全相同。它会终止旧的 Resource 与 Runtime
-authority，根据新 Manifest 协调 grants，并发布新的 current registration。新增权限请求
-保持未授权，已移除的请求失去 grants，仍保留的请求继续使用已有 grants。
+authority，并发布新的 current registration。它不会创建 permission 或 grant 状态。
 
 **移除开发条目** 与关闭模式会移除进程内 development registrations，并终止其当前
 authority；插件数据与 Launcher collections 会保留。正式安装包、quarantine records 与
@@ -84,21 +83,21 @@ raw native errors 或 private Manager facts。
    **插件开发模式**，然后在 native folder picker 中注册
    `examples/plugins/development-mode-smoke/dist`。条目必须显示 `0.1.0`，以及
    **Development**、**Unpacked**、**Unsigned** 文本标签。Publisher 必须仍是
-   未验证的作者文本，requested、granted 与 effective permissions 都应为空。
+   未验证的作者文本，并且不存在 permission 或 grant facts。
 3. 再次打开 Launcher，执行 **打开开发模式 Smoke A**。真实插件 WebView 必须显示
-   A 代版本、未请求 `clipboard.read`，且没有实际 `clipboard.read` capability。
+   A 代版本与 Host API `0.2.0` capabilities。
 4. 不关闭 lensX，在另一个 terminal 构建并校验 B 代版本：
 
    ```bash
-   pnpm run build:plugin-development-smoke:permission-delta
+   pnpm run build:plugin-development-smoke:reload
    pnpm run validate:plugin-development-smoke
    ```
 
    手动 reload 之前，已经打开的页面必须仍显示 A 代版本。这证明 Host 服务的是不可变
    snapshot，而不是已经变化的作者目录文件。
 5. 返回 **设置 → 插件**，选择 development entry，然后执行 **从目录重新加载**。
-   当前条目必须变成 `0.2.0` 与 B 代版本。`clipboard.read` 必须显示为 requested，
-   但仍未 granted；刷新后的插件页面仍必须显示没有实际 `clipboard.read` capability。
+   当前条目必须变成 `0.2.0` 与 B 代版本。不得出现 permission/grant 状态；刷新后的插件页面
+   必须使用相同的开放隔离 Runtime profile。
    Launcher Action 必须变成 **打开开发模式 Smoke B**。
 6. 执行 **移除开发条目** 并确认。条目及其 Launcher Action 必须消失，已打开的插件
    Page 必须终止。结果必须说明 plugin data 与 Launcher collections 得到保留。

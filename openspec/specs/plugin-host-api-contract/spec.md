@@ -3,100 +3,63 @@
 ## Purpose
 
 Define the stable, bounded, and independently validatable public semantic
-contract for Host API `0.1.0` without claiming delivery of transport, dispatch,
+contract for Host API `0.2.0` without claiming delivery of transport, dispatch,
 permissions, or Host-side effects.
 
 ## Requirements
 
 ### Requirement: Host API v1 MUST expose one closed, versioned semantic catalog
 
-The system MUST define a closed method catalog for Host API `0.1.0` containing
-only `runtime.get_context`, `ui.close`, `actions.open`, `storage.get`,
-`storage.set`, `storage.delete`, `storage.list`, `storage.get_quota`,
-`clipboard.read`, and `clipboard.write`. Each catalog entry MUST bind one
-params Schema, one result Schema, and a `null | clipboard.read |
-clipboard.write` permission requirement. A package patch MUST NOT silently add,
-remove, rename, or change method, permission, result, or error semantics.
+The public Host API MUST expose an independently versioned `0.2.0` closed semantic catalog containing only the current methods, requests, results, events, and bounded errors for `actions.open`, `runtime.get_context`, plugin-scoped storage, and `ui.close`. The catalog MUST NOT contain `clipboard.read`, `clipboard.write`, Host API permission types, permission-requirement mappings, or any Tauri or native executor. Unknown or removed methods MUST fail closed through the Contract and Dispatcher.
 
-`system.open_external`, arbitrary file access, arbitrary network access, Shell,
-processes, Tauri commands, inter-plugin messaging, and background execution
-MUST NOT become v1 method or permission placeholders.
+#### Scenario: Consumer reads the Host API 0.2.0 catalog
+- **WHEN** an external consumer reads generated types and the runtime catalog
+- **THEN** it sees only current non-privileged, Session-bound methods and the independent version
+- **THEN** no clipboard method, permission catalog, grant helper, or private transport type exists
 
-#### Scenario: Consumer enumerates the v1 catalog
-
-- **WHEN** an external consumer reads the Host API v1 catalog through the
-  public Contract entry
-- **THEN** the consumer receives ten immutable, duplicate-free entries in a
-  stable sort order by method ID
-- **THEN** every entry references published params and result Schemas and an
-  explicit permission requirement
+#### Scenario: Legacy plugin calls clipboard
+- **WHEN** a plugin sends a `clipboard.read`, `clipboard.write`, or Host API `0.1.0` request
+- **THEN** the Contract or Dispatcher returns an incompatible, method-not-found, or stable unavailable result without a native effect
+- **THEN** installation facts do not automatically authorize the legacy call
 
 #### Scenario: Consumer requests an undeclared method
 
-- **WHEN** a consumer validates `system.open_external`, an arbitrary string, or
-  another undeclared method
-- **THEN** the Contract rejects the method with stable `method_not_found`
-  semantics
-- **THEN** an unknown method does not become a capability merely because it
-  matches a naming convention
+- **WHEN** a consumer validates `system.open_external`, an arbitrary string, or another undeclared method
+- **THEN** the Contract rejects the method with stable `method_not_found` semantics
+- **THEN** an unknown method does not become a capability merely because it matches a naming convention
 
 #### Scenario: Official provenance attempts to expand the catalog
 
-- **WHEN** a plugin's source, publisher, or future signature state indicates
-  official provenance
-- **THEN** its catalog, permission requirements, and payload Schemas are
-  exactly the same as those for a third-party plugin
-- **THEN** official provenance receives no hidden method or permission bypass
+- **WHEN** a plugin's source, Publisher, or future signature state indicates official provenance
+- **THEN** its catalog and payload Schemas are exactly the same as those for an external plugin
+- **THEN** official provenance receives no hidden method or Host-authority bypass
 
 ### Requirement: Runtime Context MUST be the single capability-discovery snapshot
 
-`runtime.get_context` MUST accept exact empty params and return a read-only
-`PluginRuntimeContext` whose fields are exactly the Host API SemVer
-`hostApiVersion`, an `en-US | zh-CN` locale, a `light | dark` theme, and a
-sorted, duplicate-free `capabilities` list of method IDs. A capability MUST
-mean that the method simultaneously has Host support, an available
-implementation, and a currently valid grant for the current Session. Context
-MUST NOT contain or accept a plugin ID, entry, Page, source, publisher,
-Manifest request, raw grant, installation path, executor, or Host lifecycle
-object.
+`PluginRuntimeContext` MUST continue to contain the Host API version, locale, theme, and the complete, sorted, unique method-capability set actually composed for the current Session. Capabilities MUST derive only from the current trusted Session, provider availability, and Host facts. They MUST NOT contain permissions, grants, Manifest reasons, Publisher, source, network, Worker, or other ordinary Web capabilities. Ordinary Web capabilities are determined by the Runtime baseline and are not discovered through Host API Context.
 
-The system MUST define a `runtime.context_changed` event whose payload is a
-complete, independently validatable Context replacement rather than a field
-patch. A change that invalidates trusted Session identity or the grant snapshot
-MUST terminate the old Session and MUST NOT reauthorize it through this event
-alone.
+`runtime.get_context` MUST accept exact empty parameters and return a read-only, copied, and frozen Context. `runtime.context_changed` MUST carry a complete independently validatable Context replacement rather than a field patch. A change that invalidates trusted Session identity MUST terminate the old Session and MUST NOT reauthorize it through the event alone.
 
-#### Scenario: Current Session receives its Context
+#### Scenario: New Session receives Context
+- **WHEN** the current plugin completes Session and SDK initialization
+- **THEN** Context returns Host API `0.2.0` and the current non-privileged method capabilities
+- **THEN** an empty capability set remains valid and does not mean that Worker, network, or other Web capabilities were denied
 
-- **WHEN** the current trusted Session requests `runtime.get_context`
-- **THEN** the result is derived from the current Host API version, locale,
-  theme, and currently callable method IDs
-- **THEN** the result is copied, sorted, deduplicated, and frozen without
-  leaking raw grants or Host-private facts
-
-#### Scenario: Session currently has no callable capability
-
-- **WHEN** the Host has no implemented method that can currently be exposed to
-  the Session
-- **THEN** `runtime.get_context` returns empty `capabilities`
-- **THEN** the Contract does not invent available capabilities from Manifest
-  requests, source, or the complete catalog
+#### Scenario: Provider or context changes
+- **WHEN** locale, theme, non-privileged provider availability, or Session currentness changes
+- **THEN** the Host sends a complete replacement Context or terminates the old Session
+- **THEN** no grant mutation or permission-driven hot injection exists
 
 #### Scenario: Locale or theme changes without invalidating identity
 
-- **WHEN** the current Session remains valid while the application locale or
-  theme changes
+- **WHEN** the current Session remains valid while the application locale or theme changes
 - **THEN** `runtime.context_changed` carries the complete new Context snapshot
-- **THEN** the plugin no longer treats a capability omitted from the new
-  snapshot as currently callable
+- **THEN** the plugin no longer treats a method omitted from the new snapshot as currently callable
 
 #### Scenario: Plugin supplies trusted Context fields
 
-- **WHEN** params, an event, or another author-controlled payload attempts to
-  submit identity, grants, source, Host API version, locale, theme, or a
-  capability override
-- **THEN** the exact Schema rejects extra fields or a Context from the wrong
-  source
+- **WHEN** parameters, an event, or another author-controlled payload attempts to submit identity, source, Host API version, locale, theme, or a capability override
+- **THEN** the exact Schema rejects extra fields or a Context from the wrong source
 - **THEN** plugin input cannot change Host-derived Runtime facts
 
 ### Requirement: Session-scoped UI and Action methods MUST NOT become general Host executors
@@ -207,40 +170,6 @@ recovery, but MUST NOT change these v1 discriminated structures.
   `invalid_params`
 - **THEN** invalid input cannot reach a later storage handler
 
-### Requirement: Clipboard methods MUST require explicit, distinct permissions
-
-`clipboard.read` MUST accept exact empty params, require the `clipboard.read`
-permission, and return `{ text }`; empty clipboard text MUST be a valid success
-result. `clipboard.write` MUST accept `{ text }`, require the distinct
-`clipboard.write` permission, and return `{ written: true }`; empty text MUST
-be usable to clear the text clipboard. Neither permission MUST imply the
-other, and a Manifest request, official provenance, or Host support alone MUST
-NOT constitute authorization.
-
-#### Scenario: Authorized plugin reads text
-
-- **WHEN** the current Session's valid capability snapshot contains
-  `clipboard.read` and the later permission check still succeeds
-- **THEN** `clipboard.read` can return bounded text or an empty string
-- **THEN** the response contains no native clipboard object, format list, or
-  non-text payload
-
-#### Scenario: Write permission does not grant read permission
-
-- **WHEN** the current Session has only a valid `clipboard.write` grant and
-  calls `clipboard.read`
-- **THEN** the call is rejected with `permission_denied`
-- **THEN** the Host does not read or return clipboard text
-
-#### Scenario: Permission changes during a call
-
-- **WHEN** permission is revoked after capability discovery but before handler
-  execution, or the current Session has become invalid
-- **THEN** the later authorization check for each call fails with
-  `permission_denied` or a terminal disconnect
-- **THEN** an old Context snapshot cannot serve as a durable authorization
-  credential
-
 ### Requirement: Semantic payload Schemas MUST be exact, paired and independently validatable
 
 The system MUST provide Draft 2020-12 JSON Schemas and corresponding generated
@@ -265,8 +194,8 @@ error.
 
 #### Scenario: Method and payload are mismatched
 
-- **WHEN** `clipboard.write` carries storage params or `storage.get` carries a
-  clipboard result
+- **WHEN** `actions.open` carries storage params or `storage.get` carries an
+  Action result
 - **THEN** the validator rejects the incorrect pairing with stable path and
   code diagnostics
 - **THEN** a payload cannot enter the wrong handler merely because it is valid
@@ -281,8 +210,8 @@ error.
 
 ### Requirement: Host API errors MUST be stable, bounded and separate from SDK lifecycle errors
 
-Host API v1 MUST define the closed error-code set `invalid_request`,
-`invalid_params`, `method_not_found`, `permission_denied`, `not_found`,
+Host API `0.2.0` MUST define the closed error-code set `invalid_request`,
+`invalid_params`, `method_not_found`, `not_found`,
 `conflict`, `limit_exceeded`, `unavailable`, `cancelled`, `timeout`, and
 `internal_error`. An error value MUST contain only a code and a stable,
 bounded, non-localized, safe message. It MUST NOT contain a raw exception,
@@ -303,8 +232,7 @@ NOT collapse a valid Host API rejection into `transport_failure`.
 
 #### Scenario: Consumer handles a stable rejection
 
-- **WHEN** a plugin catches `permission_denied`, `not_found`, `limit_exceeded`,
-  or `unavailable`
+- **WHEN** a plugin catches `not_found`, `limit_exceeded`, or `unavailable`
 - **THEN** the plugin can branch on the code without matching message text
 - **THEN** the message language does not change with the application locale
 
@@ -323,7 +251,7 @@ independently. The SDK MUST check its Host API support range using SemVer before
 accepting Runtime Context, and a plugin MUST call only methods declared in the
 current Context `capabilities`. A compatible new method MUST increase the Host
 API minor version and be exposed through capability discovery. An incompatible
-change to an existing payload, error, or permission behavior, or removal of a
+change to an existing payload or error behavior, or removal of a
 method, MUST increase the Host API major version. A deprecated method MUST
 retain its original semantics, be marked in the specification and
 machine-readable catalog, and remain for at least one compatible minor window
@@ -356,7 +284,7 @@ before it can be removed in a major version.
 ### Requirement: Contract delivery MUST prove cross-consumer drift without claiming execution
 
 Delivery MUST include a Schema and generated-type drift gate; valid and
-invalid fixtures covering every method, result, event, error, and permission;
+invalid fixtures covering every method, result, event, and error;
 TypeScript and Rust shared-fixture agreement; package boundary tests; an
 outside-the-repository no-DOM consumer of real Contract and SDK tarballs; and
 maintained English and Chinese documentation with equivalent semantics. Gates
@@ -365,7 +293,7 @@ MUST prove that public exports do not leak Host-private types and that
 capability.
 
 This capability MUST NOT register a Tauri command, send a MessagePort request,
-execute Action, close, clipboard, or storage side effects, grant permissions,
+execute Action, close, native clipboard, or storage side effects, create Host authority,
 or claim that the Milestone 5 Runtime call chain has been delivered.
 
 #### Scenario: Complete contract gate passes
@@ -378,7 +306,7 @@ or claim that the Milestone 5 Runtime call chain has been delivered.
 
 #### Scenario: Public types drift from Schema or catalog
 
-- **WHEN** any method, permission, Context, event, error, or payload fact
+- **WHEN** any method, Context, event, error, or payload fact
   changes in only one consumer
 - **THEN** at least one generation check, shared fixture, package boundary, or
   tarball gate fails

@@ -6,15 +6,15 @@ Track these dimensions independently:
 
 | Dimension | Current baseline | Meaning |
 | --- | --- | --- |
-| Public package | `0.1.0` | Package exports and implementation release. |
-| Manifest protocol | `0.1.0` | Author input and normalized Manifest wire contract. |
-| Host API protocol | `0.1.0` | Semantic methods, results, events, errors, and context. |
+| Public package | `0.2.0` | Package exports and implementation release. |
+| Manifest protocol | `0.2.0` | Author input and normalized Manifest wire contract. |
+| Host API protocol | `0.2.0` | Semantic methods, results, events, errors, and context. |
 | lensX application | `0.1.0` | Host compatibility range checked by the Manifest. |
 | `.lxp` package format | `0.1.0` | Canonical archive and checksums profile. |
 
 A package patch does not automatically change a protocol. The Manifest declares
 half-open compatibility ranges for lensX and Host API. The SDK supports Host
-API `>=0.1.0 <0.2.0` and rejects an incompatible context before ready.
+API `>=0.2.0 <0.3.0` and rejects an incompatible context before ready.
 
 ## Validation outcomes
 
@@ -41,7 +41,7 @@ disconnection, disposal, invalid context, and incompatible Host API.
 
 Never branch on an English message. Use the stable code and bounded public
 location, then show localized recovery text. Do not log package contents,
-selected paths, permission reasons, stored values, or private failure details.
+selected paths, stored values, or private failure details.
 
 ## Troubleshooting order
 
@@ -53,9 +53,9 @@ selected paths, permission reasons, stored values, or private failure details.
 6. For Development Mode, confirm the dedicated build, explicit opt-in, current
    registration, and manual reload result.
 7. For a formal package, use Settings local installation and follow the Host's
-   bounded preparation/permission result.
+   bounded preparation result and trust confirmation.
 8. At Runtime, inspect the newest context and distinguish missing capability,
-   permission denial, unavailable provider, disconnect, and timeout.
+   unavailable provider, `method_not_found`, disconnect, and timeout.
 
 Fix the first failing boundary and rerun from canonical inputs; do not reuse a
 generated cache from a previous failed attempt.
@@ -66,4 +66,3 @@ The public packages are not published to npm. There is no public download URL,
 watch/HMR, automatic Development Mode reload, signing, Marketplace, remote
 distribution, automatic update, or user-selected rollback history. Do not
 translate those absences into guessed commands or fallback imports.
-

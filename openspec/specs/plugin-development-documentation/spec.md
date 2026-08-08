@@ -44,7 +44,7 @@ The system MUST provide independently executable framework-neutral and React/Sem
 #### Scenario: A developer chooses fast feedback or formal installation
 
 - **WHEN** a tutorial reader needs to test an already-built, self-contained `dist/` or install a package for persistent management
-- **THEN** the documentation directs them respectively to explicit, process-local, manual-reload Development Mode or canonical local `.lxp` installation, and explains how source, persistence, permissions, and restart semantics differ
+- **THEN** the documentation directs them respectively to explicit, process-local, manual-reload Development Mode or canonical local `.lxp` installation, and explains how source, persistence, trust disclosure, and restart semantics differ
 
 #### Scenario: The dependency acquisition channel is not publicly published
 
@@ -67,51 +67,61 @@ The system MUST document the public package/version, supported exports, authorin
 
 ### Requirement: The Host API reference MUST distinguish public contract, Host provider, and session capability
 
-The system MUST document the method id, request parameters, result, associated permission, stable errors, version semantics, current Host provider condition, and recovery guidance for every method in the public Host API catalog. The documentation MUST make clear that presence in the public contract does not mean the current Host provides a method, and that a composed Host provider does not mean the current session is authorized or capable. A plugin MUST use the latest complete `PluginRuntimeContext.capabilities` as the authority for its current session. Method, permission, error, and version coverage MUST be validated from the existing public catalog/Schema and production composition evidence rather than a separate permission algorithm.
+The bilingual Host API reference MUST document the request, result, stable errors, version, provider condition, Session capability, and recovery for every Host API `0.2.0` method. It MUST make clear that the public catalog is not the current provider and that a provider is not arbitrary Host authority. The complete current `PluginRuntimeContext.capabilities` describes only the non-privileged methods actually available to the Session. The documentation MUST no longer describe Manifest permissions, grants, a clipboard provider, or permission-denied flows, and MUST distinguish Host API methods from ordinary Web capabilities that require no Context enumeration.
 
-#### Scenario: A developer looks up a permission-free Host method
+#### Scenario: Developer looks up current Host methods
+- **WHEN** a developer looks up a context, navigation, storage, or close method
+- **THEN** the reference provides exact contract, provider, Session, and recovery facts
+- **THEN** it does not imply that Worker or network use requires a Host API and does not expose a clipboard or permission method
 
-- **WHEN** a developer looks up `runtime.get_context`, `ui.close`, `actions.open`, or a storage method
-- **THEN** the reference describes the exact request/result, provider conditions, possible errors, session capability check, and cancellation/invalidation behavior without exposing the private transport envelope
+#### Scenario: Contract or provider drifts
+- **WHEN** a method, error, version, provider, or Context mapping differs from the real package or production composition
+- **THEN** the coverage gate fails and identifies missing, extra, or misclassified facts
+- **THEN** documentation cannot conceal drift by retaining a legacy permission section
 
-#### Scenario: A developer looks up a permission-protected method
+#### Scenario: Current Session lacks an optional capability
 
-- **WHEN** a developer looks up `clipboard.read` or `clipboard.write`
-- **THEN** the reference explains the distinction among Manifest declaration, requested, granted, effective, and session capability, as well as the results of denial, revocation, reload permission deltas, and unavailable providers
-
-#### Scenario: The current session lacks an optional capability
-
-- **WHEN** Runtime context capabilities are empty or omit a method the plugin wants to call
-- **THEN** the documentation requires the plugin to present an unavailable/degraded state or skip the call instead of manually constructing requests, automatically requesting permission, or assuming the public catalog equals effective authority
-
-#### Scenario: The Contract or production provider set changes
-
-- **WHEN** a method, permission, error, version, provider, or capability mapping differs from the published reference
-- **THEN** the coverage gate fails and identifies missing, extra, or incorrectly classified entries
+- **WHEN** Runtime Context capabilities are empty or omit a method the plugin wants to call
+- **THEN** the documentation requires the plugin to present an unavailable or degraded state or skip the call instead of manually constructing requests or assuming that the public catalog equals current Session capability
 
 ### Requirement: Runtime, permission, and security guidance MUST cover success, error, and recovery lifecycles
 
-The system MUST explain the developer-visible lifecycle from iframe document to authenticated Port, SDK initialize, `runtime.get_context`, ready, complete context replacement, request/cancel, page close/reload/session replacement, and idempotent destroy. The guidance MUST cover loading, ready, empty capability, invalid/incompatible context, transport failure, timeout, cancellation, disconnect, permission denied, provider unavailable, explicit retry, and inert old generations. It MUST also explain iframe sandboxing, CSP, source validation, the single-iframe rule, deadline/breaker behavior, Host API permissions, and the identical security boundary used by production and Development sources.
+Runtime and security guidance MUST explain the complete lifecycle from isolated iframe, Session and Port, SDK initialization, Context, ready, request and cancel through close, reload, replacement, and destroy. It MUST cover successful open Worker, network, remote, Blob, and Data behavior; unsupported browser APIs; transport, deadline, and breaker behavior; Host and cross-plugin isolation; and old-generation inertness. The documentation MUST describe installation as the current trust decision for plugin behavior and explain that lensX does not individually authorize or review ordinary Web behavior, without describing the open Web as Tauri or native authority.
 
-#### Scenario: SDK initialization succeeds and context is replaced
+#### Scenario: Developer builds an open Web plugin
+- **WHEN** a tutorial plugin uses a Dedicated Worker, network connection, or remote resource
+- **THEN** the documentation explains its support, teardown, errors, and platform differences inside the isolated Runtime
+- **THEN** the example creates no permission request or grant UI and uses no private Host bypass
 
-- **WHEN** a plugin completes the real Session/SDK handshake and later receives a locale, theme, or capabilities change event
-- **THEN** the documentation requires the plugin to atomically replace the complete context, update `en-US`/`zh-CN`, light/dark, and feature availability, and clean up listeners and pending work from the replaced attempt
+#### Scenario: Developer handles unavailable native capability
+- **WHEN** a plugin needs an unpublished file, Shell, process, camera, microphone, or clipboard Host capability
+- **THEN** the documentation marks it undelivered or unsupported instead of recommending Tauri, a private import, or automatic authorization
+- **THEN** the plugin provides a degraded state or changes its feature scope
+
+#### Scenario: Development source follows formal boundary
+- **WHEN** documentation describes Development Mode
+- **THEN** it requires the same open Runtime, Host isolation, manual reload, and teardown
+- **THEN** it describes no permission or grant difference and no development-only CSP bypass
+
+#### Scenario: SDK initialization succeeds and Context is replaced
+
+- **WHEN** a plugin completes the real Session and SDK handshake and later receives a locale, theme, or capabilities change event
+- **THEN** the documentation requires the plugin to atomically replace the complete Context, update `en-US` or `zh-CN`, light or dark theme, and feature availability, and clean up listeners and pending work from the replaced attempt
 
 #### Scenario: Recovery follows initialization or invocation failure
 
 - **WHEN** initialization, transport, a Host method, timeout, cancellation, disconnect, or reload fails or invalidates the current attempt
-- **THEN** the documentation provides stable error classification, user-understandable error/empty feedback, explicit retry conditions, and one idempotent teardown path, while late callbacks or an old Port cannot restore old authority
+- **THEN** the documentation provides stable error classification, understandable error or empty feedback, explicit retry conditions, and one idempotent teardown path, while late callbacks and an old Port cannot restore old authority
 
-#### Scenario: A React/Semi plugin adapts accessibility, language, and theme
+#### Scenario: React and Semi plugin adapts accessibility, language, and theme
 
-- **WHEN** the React/Semi tutorial renders loading, empty, error, ready, or recovery state
-- **THEN** the example uses `PluginUiProvider` and public tokens with the current locale/theme, preserves keyboard operation, focus restoration, semantic feedback, and support for both languages and both themes
+- **WHEN** the React and Semi tutorial renders a loading, empty, error, ready, or recovery state
+- **THEN** the example uses `PluginUiProvider` and public tokens with the current locale and theme, preserves keyboard operation, focus restoration, semantic feedback, and support for both languages and both themes
 
-#### Scenario: A development source attempts to bypass formal boundaries
+#### Scenario: Development source attempts to bypass formal boundaries
 
-- **WHEN** documentation or examples recommend bypassing CSP, Session source validation, permission grants, deadline/breaker behavior, or the canonical Host API for Development Mode
-- **THEN** the security coverage gate fails and requires the development source to use the formal Runtime and permission path
+- **WHEN** documentation or examples recommend bypassing CSP, Session source validation, deadline or breaker behavior, teardown, or the canonical Host API for Development Mode
+- **THEN** the security coverage gate fails and requires the development source to use the formal Runtime path
 
 ### Requirement: Every runnable documentation example MUST be automatically built or typechecked
 
@@ -153,14 +163,19 @@ The system MUST pack real Contract, SDK, UI, Testkit, and CLI tarballs in a syst
 
 ### Requirement: Task 6.6 completion MUST depend on complete validation evidence
 
-The system MUST provide one `check:plugin-development-documentation` aggregate entry point covering bilingual structure/links, coverage, runnable blocks, both external consumers, public packages/CLI/templates, Development Mode, Runtime, permissions, and package installation boundaries. The Roadmap MAY check Task 6.6, link the current change, and update Plugin Developer Preview progress to match source, tests, and stable specifications only after the focused gate and final repository validation all pass. Failure or rollback MUST keep or restore the incomplete state.
+`check:plugin-development-documentation` MUST cover bilingual structure and links, runnable blocks, external consumers, public packages, CLI and templates, Development Mode, the open isolated Runtime, Host API `0.2.0`, and canonical installation. Historical Task 6.6 status MAY remain complete only while documentation agrees with current source and specs. Legacy permission or clipboard claims MUST fail the gate.
 
-#### Scenario: Documentation capability passes complete acceptance
+#### Scenario: Updated documentation gate passes
+- **WHEN** the focused documentation gate, complete frontend and Rust validation, and strict OpenSpec validation all succeed
+- **THEN** the developer hub can claim that the current open Web and closed Host boundary is delivered
+- **THEN** it does not describe Task 7.2, Task 7.3, Marketplace, signatures, or native permissions as complete
 
-- **WHEN** the focused documentation gate, frontend test/check/typecheck/build, Rust format/test/check, and strict OpenSpec validation all succeed
-- **THEN** Task 6.6 may be marked complete, Plugin Developer Preview may state that Milestones 1–6 form a validated loop, and the stable spec uses English before sync/archive
+#### Scenario: Legacy permission guidance remains
+- **WHEN** English or Chinese documentation still instructs developers to use requested permissions, grant or revoke, the clipboard Host API, or a restrictive Worker or network CSP
+- **THEN** the gate fails with a deterministic repository-relative diagnostic
+- **THEN** the capability status cannot be marked converged
 
-#### Scenario: Any required evidence fails
+#### Scenario: Required evidence fails
 
 - **WHEN** bilingual documentation, an example, an external consumer, API coverage, an existing security boundary, or final validation has a failure, warning, or unverified assumption
-- **THEN** Task 6.6 remains incomplete, the Roadmap does not claim Plugin Developer Preview is reached, and the failed command and complete final validation set are rerun after correction
+- **THEN** Task 6.6 does not remain complete, the Roadmap does not claim an unsupported Plugin Developer Preview state, and the failed command and complete final validation set are rerun after correction

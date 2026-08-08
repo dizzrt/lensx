@@ -1,17 +1,4 @@
-import type { HostApiPermission } from '@lensx/plugin-contract';
-import {
-  deriveCurrentPermissionPrompt,
-  deriveInstallationPermissionPrompt,
-  deriveReplacementPermissionPrompt,
-  type EffectivePluginPermission,
-  type PluginPermissionPromptItem,
-} from '../permission';
-import type {
-  PluginRegistrationDetail,
-  PluginRegistrationSnapshot,
-  PluginRegistrationSummary,
-  RegisteredPluginRegistrationDetail,
-} from '../registration';
+import type { PluginRegistrationDetail, PluginRegistrationSnapshot, PluginRegistrationSummary } from '../registration';
 import type {
   PluginManagementDetailView,
   PluginManagementEntry,
@@ -19,11 +6,9 @@ import type {
   PluginManagementFeedbackCode,
   PluginManagementMutation,
   PluginManagementOperationAvailability,
-  PluginManagementPermissionView,
   PluginManagementService,
   PluginManagementServiceDependencies,
   PluginManagementViewModel,
-  PluginPermissionConfirmationView,
 } from './types';
 
 const EMPTY_OPERATIONS: PluginManagementOperationAvailability = Object.freeze({
@@ -63,26 +48,7 @@ const mapEntry = (entry: PluginRegistrationSummary): PluginManagementEntry =>
         diagnostic: entry.diagnostic,
       });
 
-const mapPermission = (
-  permission: EffectivePluginPermission,
-  prompt: PluginPermissionPromptItem,
-): PluginManagementPermissionView =>
-  Object.freeze({
-    permission_id: permission.permission_id,
-    requested: permission.state !== 'not_requested',
-    supported: permission.supported,
-    granted: permission.state === 'granted',
-    effective: permission.state,
-    methods: freezeArray(permission.methods),
-    ...(permission.reason ? { reason: permission.reason } : {}),
-    prompt,
-  });
-
-const mapDetail = (
-  detail: PluginRegistrationDetail,
-  permissionView: (detail: RegisteredPluginRegistrationDetail) => readonly EffectivePluginPermission[],
-  permissionCatalog: PluginManagementServiceDependencies['permissionService']['catalog'],
-): PluginManagementDetailView =>
+const mapDetail = (detail: PluginRegistrationDetail): PluginManagementDetailView =>
   detail.kind === 'quarantined'
     ? Object.freeze({
         kind: detail.kind,
@@ -90,27 +56,16 @@ const mapDetail = (
         ...(detail.plugin_id ? { plugin_id: detail.plugin_id } : {}),
         diagnostic: detail.diagnostic,
       })
-    : (() => {
-        const permissions = permissionView(detail);
-        const prompts = deriveCurrentPermissionPrompt(permissions, permissionCatalog);
-        return Object.freeze({
-          kind: detail.kind,
-          entry_id: detail.entry_id,
-          manifest: detail.manifest,
-          source: detail.source,
-          enabled: detail.enabled,
-          compatibility: detail.compatibility,
-          runtime: detail.runtime,
-          permissions: freezeArray(
-            permissions.map((permission) => {
-              const prompt = prompts.find((item) => item.permission_id === permission.permission_id);
-              if (!prompt) throw new TypeError('Permission prompt projection is incomplete.');
-              return mapPermission(permission, prompt);
-            }),
-          ),
-          diagnostics: freezeArray(detail.diagnostics),
-        });
-      })();
+    : Object.freeze({
+        kind: detail.kind,
+        entry_id: detail.entry_id,
+        manifest: detail.manifest,
+        source: detail.source,
+        enabled: detail.enabled,
+        compatibility: detail.compatibility,
+        runtime: detail.runtime,
+        diagnostics: freezeArray(detail.diagnostics),
+      });
 
 const errorCode = (error: unknown): string | undefined =>
   typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
@@ -140,7 +95,6 @@ export const createPluginManagementService = ({
   installationService,
   lifecycleService,
   replacementService,
-  permissionService,
   dataManagementService,
   developmentService,
 }: PluginManagementServiceDependencies): PluginManagementService => {
@@ -150,8 +104,6 @@ export const createPluginManagementService = ({
   let detail: PluginManagementDetailView = Object.freeze({ kind: 'none' });
   let mutation: PluginManagementMutation | undefined;
   let confirmation: PluginManagementViewModel['confirmation'];
-  let permissionConfirmation: PluginPermissionConfirmationView | undefined;
-  const selectedPermissionIds = new Set<string>();
   let currentFeedback: PluginManagementFeedback | undefined;
   let loadFailed = false;
   let detailRequest = 0;
@@ -166,8 +118,7 @@ export const createPluginManagementService = ({
       return Object.freeze({ ...EMPTY_OPERATIONS, retry: loadFailed });
     }
     const available = snapshot.availability.kind === 'available';
-    const idle =
-      mutation === undefined && confirmation === undefined && permissionConfirmation === undefined && available;
+    const idle = mutation === undefined && confirmation === undefined && available;
     const selected = selectedSummary();
     return Object.freeze({
       install: idle,
@@ -202,7 +153,6 @@ export const createPluginManagementService = ({
       operations: operations(),
       ...(mutation ? { mutation } : {}),
       ...(confirmation ? { confirmation } : {}),
-      ...(permissionConfirmation ? { permission_confirmation: permissionConfirmation } : {}),
       ...(currentFeedback ? { feedback: currentFeedback } : {}),
       ...(snapshot?.availability.kind === 'degraded' ? { diagnostic: snapshot.availability.diagnostic } : {}),
       ...(development?.visible ? { development } : {}),
@@ -240,7 +190,7 @@ export const createPluginManagementService = ({
         await surfaceProjection.refresh();
         return;
       }
-      detail = mapDetail(response.detail, permissionService.view, permissionService.catalog);
+      detail = mapDetail(response.detail);
       if (currentFeedback?.code === 'detail_failed') currentFeedback = undefined;
       publish();
     } catch {
@@ -259,8 +209,6 @@ export const createPluginManagementService = ({
     loadFailed = false;
     if (confirmation?.kind === 'replacement' && confirmation.expected_revision !== next.revision) {
       confirmation = undefined;
-      permissionConfirmation = undefined;
-      selectedPermissionIds.clear();
       currentFeedback = feedback('error', 'conflict');
       void replacementService.cancelPrepared().catch(() => undefined);
     }
@@ -309,8 +257,6 @@ export const createPluginManagementService = ({
       currentFeedback = feedback('error', isCommittedFailure(error) ? 'convergence_failed' : mapMutationFailure(error));
       if (mapMutationFailure(error) === 'conflict') {
         confirmation = undefined;
-        permissionConfirmation = undefined;
-        selectedPermissionIds.clear();
         await surfaceProjection.refresh().catch(() => undefined);
       }
     } finally {
@@ -323,68 +269,6 @@ export const createPluginManagementService = ({
     const entry = selectedSummary();
     if (!snapshot || !entry || snapshot.availability.kind !== 'available') return undefined;
     return { entry, entry_id: entry.entry_id, expected_revision: snapshot.revision } as const;
-  };
-
-  const replaceSelectedPermissions = () => {
-    if (!confirmation) return;
-    confirmation = Object.freeze({
-      ...confirmation,
-      selected_permission_ids: freezeArray([...selectedPermissionIds].sort()),
-    });
-  };
-
-  const applyConfirmedGrants = async (
-    pluginId: string,
-    initialRevision: string,
-    permissionIds: readonly string[],
-    partialCode: 'install_permissions_partial' | 'replacement_permissions_partial',
-    failedCode?: 'install_permissions_failed',
-  ) => {
-    let expectedRevision = initialRevision;
-    let applied = 0;
-    for (const permissionId of [...permissionIds].sort()) {
-      const current = snapshot?.entries.find((entry) => entry.kind === 'registered' && entry.plugin_id === pluginId);
-      if (current?.kind !== 'registered') {
-        currentFeedback = feedback('error', applied === 0 && failedCode ? failedCode : partialCode, {
-          plugin_id: pluginId,
-        });
-        await surfaceProjection.refresh().catch(() => undefined);
-        return false;
-      }
-      try {
-        const result = await permissionService.setGrant({
-          entry_id: current.entry_id,
-          expected_revision: expectedRevision,
-          permission_id: permissionId as HostApiPermission,
-          granted: true,
-        });
-        expectedRevision = result.revision;
-        await surfaceProjection.reconcileRevision(result.revision, pluginId);
-        await surfaceProjection.whenIdle();
-        const converged = surfaceProjection.currentSnapshot();
-        const convergedEntry = converged?.entries.find(
-          (entry) => entry.kind === 'registered' && entry.plugin_id === pluginId,
-        );
-        if (!converged || converged.revision !== result.revision || convergedEntry?.kind !== 'registered') {
-          throw Object.freeze({ code: 'surface_convergence_failed' });
-        }
-        await loadDetail(converged, convergedEntry.entry_id);
-        if (
-          detail.kind !== 'registered' ||
-          detail.permissions.find((permission) => permission.permission_id === permissionId)?.granted !== true
-        ) {
-          throw Object.freeze({ code: 'surface_convergence_failed' });
-        }
-        applied += 1;
-      } catch {
-        currentFeedback = feedback('error', applied === 0 && failedCode ? failedCode : partialCode, {
-          plugin_id: pluginId,
-        });
-        await surfaceProjection.refresh().catch(() => undefined);
-        return false;
-      }
-    }
-    return applied === permissionIds.length;
   };
 
   const service: PluginManagementService = Object.freeze({
@@ -433,38 +317,25 @@ export const createPluginManagementService = ({
           currentFeedback = feedback('status', 'cancelled');
           return;
         }
-        selectedPermissionIds.clear();
         confirmation = Object.freeze({
           kind: 'installation',
-          candidate: deriveInstallationPermissionPrompt(result.candidate, permissionService.catalog),
-          selected_permission_ids: Object.freeze([]),
+          candidate: result.candidate,
         });
       });
     },
     async commitInstallation() {
       if (confirmation?.kind !== 'installation') return;
-      const selected = freezeArray([...selectedPermissionIds].sort());
       await runMutation('commit_installation', async () => {
         const result = await installationService.commitPrepared();
         confirmation = undefined;
-        permissionConfirmation = undefined;
-        selectedPermissionIds.clear();
         selectionTarget = Object.freeze({ plugin_id: result.plugin_id, version: result.version });
         try {
           await surfaceProjection.reconcileRevision(result.revision, result.plugin_id);
           await surfaceProjection.whenIdle();
-          const grantsApplied = await applyConfirmedGrants(
-            result.plugin_id,
-            result.revision,
-            selected,
-            'install_permissions_partial',
-            'install_permissions_failed',
-          );
-          if (grantsApplied)
-            currentFeedback = feedback('status', 'install_succeeded', {
-              plugin_id: result.plugin_id,
-              version: result.version,
-            });
+          currentFeedback = feedback('status', 'install_succeeded', {
+            plugin_id: result.plugin_id,
+            version: result.version,
+          });
         } catch {
           currentFeedback = feedback('error', 'convergence_failed', {
             plugin_id: result.plugin_id,
@@ -476,8 +347,6 @@ export const createPluginManagementService = ({
     },
     async cancelInstallation() {
       confirmation = undefined;
-      permissionConfirmation = undefined;
-      selectedPermissionIds.clear();
       await installationService.cancelPrepared().catch(() => undefined);
       currentFeedback = feedback('status', 'cancelled');
       publish();
@@ -507,15 +376,6 @@ export const createPluginManagementService = ({
         } else if (result.status === 'duplicate') {
           currentFeedback = feedback('status', 'duplicate');
         } else if (result.status === 'prepared') {
-          selectedPermissionIds.clear();
-          const currentPermissions =
-            detail.kind === 'registered' ? detail.permissions.map(({ prompt }) => prompt) : Object.freeze([]);
-          const prompt = deriveReplacementPermissionPrompt(
-            currentPermissions,
-            result.added_permission_ids,
-            result.removed_permission_ids,
-            permissionService.catalog,
-          );
           confirmation = Object.freeze({
             kind: 'replacement',
             entry_id: result.entry_id,
@@ -523,12 +383,6 @@ export const createPluginManagementService = ({
             current_version: result.current_version,
             candidate_version: result.candidate_version,
             classification: result.classification,
-            added_permission_ids: freezeArray(result.added_permission_ids),
-            removed_permission_ids: freezeArray(result.removed_permission_ids),
-            retained_permissions: prompt.retained,
-            added_permissions: prompt.added,
-            removed_permissions: prompt.removed,
-            selected_permission_ids: Object.freeze([]),
             publisher_unverified: true,
           });
         }
@@ -536,28 +390,18 @@ export const createPluginManagementService = ({
     },
     async commitReplacement() {
       if (confirmation?.kind !== 'replacement') return;
-      const selected = freezeArray([...selectedPermissionIds].sort());
       await runMutation('commit_replacement', async () => {
         const result = await replacementService.commitPrepared();
         confirmation = undefined;
-        permissionConfirmation = undefined;
-        selectedPermissionIds.clear();
         if (result.status === 'committed') {
           try {
             await surfaceProjection.reconcileRevision(result.revision, result.plugin_id);
             await surfaceProjection.whenIdle();
-            const grantsApplied = await applyConfirmedGrants(
-              result.plugin_id,
-              result.revision,
-              selected,
-              'replacement_permissions_partial',
+            currentFeedback = feedback(
+              'status',
+              result.cleanup === 'pending' ? 'cleanup_pending' : 'replacement_succeeded',
+              { plugin_id: result.plugin_id, version: result.version },
             );
-            if (grantsApplied)
-              currentFeedback = feedback(
-                'status',
-                result.cleanup === 'pending' ? 'cleanup_pending' : 'replacement_succeeded',
-                { plugin_id: result.plugin_id, version: result.version },
-              );
           } catch {
             currentFeedback = feedback('error', 'convergence_failed', {
               plugin_id: result.plugin_id,
@@ -570,97 +414,8 @@ export const createPluginManagementService = ({
     },
     async cancelReplacement() {
       confirmation = undefined;
-      permissionConfirmation = undefined;
-      selectedPermissionIds.clear();
       await replacementService.cancelPrepared();
       currentFeedback = feedback('status', 'cancelled');
-      publish();
-    },
-    openPermissionConfirmation(permissionId: string, granted: boolean) {
-      if (mutation || permissionConfirmation) return;
-      const context = confirmation?.kind ?? 'settings';
-      const permission =
-        confirmation?.kind === 'installation'
-          ? confirmation.candidate.permissions.find((item) => item.permission_id === permissionId)
-          : confirmation?.kind === 'replacement'
-            ? confirmation.added_permissions.find((item) => item.permission_id === permissionId)
-            : detail.kind === 'registered'
-              ? detail.permissions.find((item) => item.permission_id === permissionId)?.prompt
-              : undefined;
-      if (!permission) return;
-      if (granted && !permission.grant_available) return;
-      if (!granted && context !== 'settings') {
-        selectedPermissionIds.delete(permissionId);
-        replaceSelectedPermissions();
-        publish();
-        return;
-      }
-      if (!granted && !permission.revoke_available) return;
-      permissionConfirmation = Object.freeze({
-        context,
-        action: granted ? 'grant' : 'revoke',
-        permission,
-      });
-      publish();
-    },
-    async confirmPermissionDecision() {
-      const pendingConfirmation = permissionConfirmation;
-      if (!pendingConfirmation) return;
-      if (pendingConfirmation.context !== 'settings') {
-        if (pendingConfirmation.action === 'grant') {
-          selectedPermissionIds.add(pendingConfirmation.permission.permission_id);
-          replaceSelectedPermissions();
-        }
-        permissionConfirmation = undefined;
-        publish();
-        return;
-      }
-      const input = currentInput();
-      if (!input || input.entry.kind !== 'registered') return;
-      permissionConfirmation = undefined;
-      await runMutation('set_permission', async () => {
-        const result = await permissionService.setGrant({
-          entry_id: input.entry_id,
-          expected_revision: input.expected_revision,
-          permission_id: pendingConfirmation.permission.permission_id as HostApiPermission,
-          granted: pendingConfirmation.action === 'grant',
-        });
-        await surfaceProjection.reconcileRevision(result.revision, input.entry.plugin_id);
-        await surfaceProjection.whenIdle();
-        const converged = surfaceProjection.currentSnapshot();
-        if (!converged || converged.revision !== result.revision) {
-          throw Object.freeze({ code: 'surface_convergence_failed' });
-        }
-        await loadDetail(converged, input.entry_id);
-        const expectedGranted = pendingConfirmation.action === 'grant';
-        if (
-          detail.kind !== 'registered' ||
-          detail.permissions.find(
-            (permission) => permission.permission_id === pendingConfirmation.permission.permission_id,
-          )?.granted !== expectedGranted
-        ) {
-          throw Object.freeze({ code: 'surface_convergence_failed' });
-        }
-        currentFeedback = feedback(
-          'status',
-          result.status === 'unchanged'
-            ? 'permission_unchanged'
-            : pendingConfirmation.action === 'grant'
-              ? 'permission_granted'
-              : 'permission_revoked',
-          { plugin_id: input.entry.plugin_id },
-        );
-      });
-    },
-    cancelPermissionDecision() {
-      permissionConfirmation = undefined;
-      publish();
-    },
-    deferPreparedPermissions() {
-      selectedPermissionIds.clear();
-      permissionConfirmation = undefined;
-      replaceSelectedPermissions();
-      currentFeedback = feedback('status', 'permissions_deferred');
       publish();
     },
     async uninstall(dataPolicy: Parameters<PluginManagementService['uninstall']>[0]) {
@@ -746,10 +501,6 @@ export const inertPluginManagementService: PluginManagementService = Object.free
   prepareReplacement: async () => undefined,
   commitReplacement: async () => undefined,
   cancelReplacement: async () => undefined,
-  openPermissionConfirmation: () => undefined,
-  confirmPermissionDecision: async () => undefined,
-  cancelPermissionDecision: () => undefined,
-  deferPreparedPermissions: () => undefined,
   uninstall: async () => undefined,
   clearData: async () => undefined,
   setDevelopmentMode: async () => undefined,

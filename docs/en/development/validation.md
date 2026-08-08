@@ -130,7 +130,7 @@ the Runtime E2E harness, and proves the other plugin and root app stay
 unchanged. It never creates a public release.
 
 This focused command composes the public CLI/package-format, local installation,
-Runtime lifecycle, permission prompt, and workspace gates. Final completion
+open isolated Runtime and workspace gates. Final completion
 still requires the complete frontend/shared and Rust commands below.
 
 ## Plugin Development Mode Validation
@@ -154,8 +154,8 @@ free of development commands and UI.
 The focused gate also consumes bounded canonical macOS WKWebView evidence for
 normal and malicious development registrations. The harness extracts the same
 maintained Runtime payloads used by the external Session evidence, registers a
-process-local development snapshot, opens it, forces a fresh reload, verifies
-the ungranted `clipboard.read` permission delta, and removes the registration.
+process-local development snapshot, opens it, forces a fresh reload with an
+advanced Manifest version, and removes the registration.
 It compares CSP, sandbox, Permissions Policy, Session, transport, Host API,
 deadline, and breaker facts with the external Runtime profile. Refresh this
 evidence only on macOS after reviewing the harness or Runtime boundary change:
@@ -271,11 +271,11 @@ compare-current disposal, Page/lifecycle/replacement/resource regressions,
 workspace-private imports, canonical real `.lxp` fixtures, bounded macOS
 WKWebView evidence, and both origin/navigation prerequisite gates. Evidence must
 continue to prove the ES Module graph, route fragment, storage partition,
-parent/frame/Tauri absence, zero privileged hits, and malicious navigation and
-capability rejection.
+parent/frame/Tauri absence, zero privileged hits, open-Web positive paths, and
+malicious navigation and native-capability rejection.
 
 This gate proves iframe `loaded`, never Runtime Session or SDK `ready`. It does
-not validate a message bridge, Host API, permission dispatcher, complete CSP,
+not validate a message bridge, Host API, complete CSP,
 general timeout/crash recovery, or Windows/Linux Runtime. Run it before the
 complete frontend and Rust validation sets; it does not replace them.
 
@@ -290,7 +290,7 @@ must run:
 pnpm run check:plugin-runtime-session
 ```
 
-The gate combines strict parser and state-machine tests, resolver/detail/grant
+The gate combines strict parser and state-machine tests, resolver/detail
 convergence, relevant versus unrelated invalidation, React iframe lifecycle,
 Registration/Page/lifecycle/replacement/resource regressions, canonical real
 `.lxp` drift checks, public tarball consumers, and the complete iframe/origin/
@@ -310,7 +310,7 @@ path, raw payload, or private error.
 This is a macOS-only delivery gate and does not establish Windows or Linux
 Runtime Session support. By itself it proves only the private authenticated
 Session and Port lease; it does not by itself prove the SDK iframe transport,
-Host API methods, permission decisions, complete CSP, general handshake
+Host API methods, complete CSP, general handshake
 timeouts/crash recovery, or background Runtime. The focused gate supplements
 and never replaces the complete frontend and Rust validation sets.
 
@@ -336,10 +336,9 @@ Bounded macOS WKWebView evidence additionally covers exact parent/origin/Port,
 single-use nonce, transport result/error/event round-trip, out-of-order
 responses, cancellation, replacement/close cleanup, pending termination, and
 zero privileged handler hits. Evidence contains no URL, nonce, Port content,
-payload, token, identity, path, grant, or private error. The gate proves the
+payload, token, identity, path, or private error. The gate proves the
 public transport and its Host adapter; the separate Dispatcher and scoped-storage
-gates prove the current production providers. The permission-management gate
-adds clipboard authorization, provider, and real native-smoke evidence. Neither
+gates prove the current production providers. Neither
 gate independently proves the complete RPC v1 policy or Windows/Linux Runtime
 transport.
 
@@ -360,14 +359,14 @@ fixtures; UTF-8 and JSON escaping cost; cycles and non-JSON values; strictly
 increasing request IDs; controlled-clock deadline/cancel races; safe errors,
 events, diagnostics and effects; and zero Handler hits for rejected input. It
 uses the real Contract and SDK through MessageChannel, the Dispatcher,
-permission and storage regressions, Runtime Session cleanup, public Contract
+closed-catalog and storage regressions, Runtime Session cleanup, public Contract
 and SDK tarballs, workspace/private-import boundaries, and bounded target
 macOS WKWebView evidence.
 
 The committed WKWebView evidence must prove one over-depth request is rejected
 with zero Handler hits and that a later legal request on the same healthy
 Session still completes. Evidence stores only bounded boolean facts and must
-not contain a payload, URL, origin, identity, grant, request ID, diagnostic or
+not contain a payload, URL, origin, identity, request ID, diagnostic or
 private error. This macOS evidence does not establish Windows/Linux transport.
 
 The gate proves per-frame bytes/depth/nodes/single-request limits and
@@ -392,48 +391,36 @@ real public Contract and SDK tarballs and verifies that Dispatcher bindings,
 Session identity, private wire values, Host services, and post-response effects
 remain absent from public exports and declarations. The Context capability
 snapshot contains `actions.open`, `runtime.get_context`, `ui.close`, and all
-five `storage.*` methods while the current namespace is available. Each
-`clipboard.*` method is included independently only for a current matching
-grant while the native provider is available.
+five `storage.*` methods while the current namespace is available. Removed
+clipboard and unknown methods fail through the closed `0.2.0` catalog.
 
 The existing target macOS WKWebView transport evidence remains required for
 the authenticated Port, cancellation, replacement, and terminal cleanup. The
 production-style MessageChannel fixture adds Dispatcher Context, Action,
 storage, and response-before-close evidence without treating its fake native
-boundary as Rust persistence, native clipboard execution, or general RPC delivery. This focused gate
+boundary as Rust persistence or general RPC delivery. This focused gate
 supplements rather than replaces the complete frontend and Rust validation
 sets.
 
-## Plugin Permission Management Validation
+## Open Isolated Plugin Runtime Validation
 
-Changes to the Host-private permission catalog, effective view, Manager grant
-mutation, clipboard command/provider, Dispatcher clipboard routing, Runtime
-capabilities, shared fixtures, or permission documentation must run:
-
-```bash
-pnpm run check:plugin-permission-management
-```
-
-The gate verifies exact shared TypeScript/Rust contract fixtures, closed catalog
-derivation, requested/reason/grant separation, revision-bound idempotent durable
-grant mutation, restart recovery, fail-closed degraded and quarantined states,
-residual revoke, event-delivery failure, unrelated-plugin stability, and
-grant/native-effect linearization. It also covers independent Dispatcher
-capabilities, immutable trusted Session identity, cancellation/currentness,
-safe errors, a real SDK/MessageChannel loop, public package boundaries, and the
-existing bounded macOS WKWebView transport evidence.
-
-On target macOS, run the real plain-text pasteboard smoke serially:
+Changes to Manifest/Host API `0.2.0`, permission-authority removal, plugin
+response CSP, Worker/network/Blob/Data/WASM support, Runtime teardown, or trust
+copy must run:
 
 ```bash
-pnpm run check:plugin-permission-management:native
+pnpm run check:open-isolated-plugin-runtime
 ```
 
-The smoke restores the original plain-text clipboard after read/write/empty
-checks. The WKWebView evidence proves the isolated authenticated Port and that
-the iframe has no browser clipboard or Tauri fallback; the native smoke proves
-the direct AppKit boundary. These complementary checks must not be described as
-Windows/Linux provider support or as a prompt/settings/history UI test.
+The gate composes generated Contract drift, real public tarballs, closed
+Dispatcher behavior, canonical open-Web fixtures, scoped Resource Service,
+iframe/origin/navigation isolation, Runtime Session, and security lifecycle
+checks. Its negative scan fails if removed native clipboard commands,
+permission modules, grant fields, prompt/mutation imports, or restrictive
+Worker/network policy returns. The canonical WKWebView harness provides
+positive package/Blob/Data Worker, message, fetch, WebSocket construction,
+WASM, origin-storage, and author-owned stricter-CSP evidence plus bounded
+unsupported results for capabilities outside the current platform baseline.
 
 ## Plugin Scoped Storage Validation
 
@@ -476,7 +463,7 @@ pnpm run check:plugin-management-settings
 
 The gate checks strict shared data-management fixtures, desktop and private
 boundaries, Registration-revision and selection behavior, mutation
-serialization, replacement confirmation, lifecycle/permission/storage
+serialization, replacement confirmation, lifecycle/storage
 regressions, Host component behavior, message-schema parity, workspace/public
 tarball boundaries, root `StrictMode` composition recreation, and Rust atomic
 clear behavior. It also builds an isolated
@@ -486,38 +473,20 @@ replacement, uninstall, and clear-data states at `650×600` for `en-US` and
 checks for the continuous split surface, border, locale, theme, and modal.
 
 This focused gate supplements the complete frontend/Rust suites and the
-upstream installation, Registration, lifecycle, replacement, permission, and
+upstream installation, Registration, lifecycle, replacement, open Runtime, and
 scoped-storage gates. Headless Chrome must run outside a restricted sandbox
 when the platform blocks GUI processes; a sandbox-only launch failure is not a
 product failure until the same script is rerun in the normal local context.
 
-## Plugin Permission Prompts Validation
+## Open-Web Trust Confirmation Validation
 
-Changes to installation preparation, Host-private permission prompts,
-post-commit grants, settings grant/revoke controls, prompt copy/styles, or
-Runtime invalidation must run:
-
-```bash
-pnpm run check:plugin-permission-prompts
-```
-
-The gate runs installation `0.2.0` TypeScript/Rust contracts, installer
-prepare/commit/cancel and fault tests, prompt derivation and management-service
-tests, component keyboard/focus coverage, message-schema parity, Runtime
-invalidation, and public/workspace boundary checks. It also runs the required
-installation, replacement, management, permission, Runtime Session, and Host
-API Dispatcher regressions serially.
-
-The visual matrix uses the fixed `650×600` viewport for English and Simplified
-Chinese in light and dark mode. It covers prepared install, zero grant, all
-sensitive, partial grant, replacement diff, settings granted/not-granted/
-unsupported, revoke, conflict, and long-reason states with screenshots plus
-computed-style and interaction checks. Security-negative evidence must show
-that plugin-originated messages, reasons, SDK payloads, Publisher/source, and
-claimed user activation cannot open a Host prompt or mutate grants. Partial
-grant tests must distinguish durable installation success from zero or some
-grants applied and prove that failures stop without rollback or automatic
-replay.
+Installation and replacement tests must prove that the trusted main-window UI
+shows the bilingual open-Web trust notice, commits only the exact prepared
+candidate, and has no permission checklist or post-commit grant phase. The
+fixed `650×600` visual matrix covers English and Simplified Chinese in light
+and dark mode with screenshots and computed styles. Plugin-originated messages,
+Publisher/source claims, SDK payloads, or claimed user activation cannot open
+Host-private management UI or native authority.
 
 ## Rust Validation
 

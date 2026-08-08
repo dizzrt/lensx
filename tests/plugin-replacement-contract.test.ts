@@ -31,17 +31,14 @@ describe('plugin replacement private contract', () => {
   test.each(fixtures('valid'))('accepts shared fixture $name', (fixture) => expect(() => parse(fixture)).not.toThrow());
   test.each(fixtures('invalid'))('rejects shared fixture $name', (fixture) =>
     expect(() => parse(fixture)).toThrow(TypeError));
-  test('returns detached deeply frozen permission differences', () => {
-    const input = structuredClone(fixtures('valid').find(({ name }) => name === 'prepared')?.value) as {
-      added_permission_ids: string[];
-    };
+  test('returns a detached deeply frozen bounded confirmation', () => {
+    const input = structuredClone(fixtures('valid').find(({ name }) => name === 'prepared')?.value);
     const result = parsePluginReplacementResult(input);
-    input.added_permission_ids.push('attacker.permission');
     expect(result.status).toBe('prepared');
     if (result.status === 'prepared') {
-      expect(result.added_permission_ids).toEqual(['lensx.network.read']);
-      expect(Object.isFrozen(result.added_permission_ids)).toBe(true);
       expect(Object.isFrozen(result)).toBe(true);
+      expect(result).not.toHaveProperty('added_permission_ids');
+      expect(result).not.toHaveProperty('removed_permission_ids');
     }
   });
 });

@@ -12,7 +12,7 @@ const entryId = 'entry_0123456789abcdef';
 const pluginId = 'com.acme.workspace';
 const token = 'prep_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const snapshot: PluginRegistrationSnapshot = {
-  contract_version: '0.2.0',
+  contract_version: '0.3.0',
   revision: '7',
   availability: { kind: 'available' },
   entries: [
@@ -37,8 +37,6 @@ const prepared = {
   current_version: '1.0.0',
   candidate_version: '2.0.0',
   classification: 'upgrade',
-  added_permission_ids: ['new.permission'],
-  removed_permission_ids: ['old.permission'],
 } as const;
 const committed = {
   status: 'committed',
@@ -104,8 +102,6 @@ describe('plugin replacement service', () => {
         current_version: '1.0.0',
         candidate_version: '2.0.0',
         classification: 'upgrade',
-        added_permission_ids: ['new.permission'],
-        removed_permission_ids: ['old.permission'],
       }),
     );
     expect(operations).toEqual([`quiesce:${pluginId}`, `reconcile:8:${pluginId}`]);

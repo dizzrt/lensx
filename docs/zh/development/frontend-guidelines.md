@@ -113,9 +113,9 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
 - Host 与 Plugin target 必须通过统一的 Host-owned Page Registry 解析。Plugin provider replacement
   必须保持完整批次和原子性；active Plugin Page 消失或变为 unavailable 时，必须通过 Host navigation
   invalidation transition 关闭，而不是通过插件 callback。
-- 私有 Page route、required permission ID、registration detail 与 provider bookkeeping 不得进入
-  `ActivePage` 或展示 props。在隔离 Runtime 交付前，available Plugin Page 只能渲染本地化 Host-owned
-  placeholder；该 surface 不得加载 route、entry、asset、iframe、插件代码或 Tauri bridge。
+- 私有 Page route、registration detail 与 provider bookkeeping 不得进入 `ActivePage` 或展示 props。
+  Plugin Page 只能通过 Host-owned 隔离 Runtime 渲染；插件展示代码不得获得 Tauri bridge、Host DOM、
+  其他插件 origin 或 Host 私有状态。
 - 根据规范化查询和扁平 `ActivePage` 状态推导 `home`、`search` 和 `page`；当前单层页面深度不
   引入 router 或并行 Shell store。
 - 保持统一顶部行几何：`home` 和 `search` 渲染 launcher 输入，`page` 渲染由 ID 派生的页面上下文
@@ -179,22 +179,21 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
   `StrictMode` setup-cleanup-setup 测试覆盖生产 owner。
 - 列表选择和每个 action 都必须可用键盘完成。上下方向键在相邻 entry 间移动。关闭 replacement、uninstall
   或 clear-data confirmation 后恢复触发控件焦点；移除成功后聚焦相邻 entry 或安装按钮。
-- mutation pending 时禁用所有冲突操作。replacement permission diff、uninstall data policy 与永久 clear-data
+- mutation pending 时禁用所有冲突操作。replacement classification、uninstall data policy 与永久 clear-data
   都需要显式 modal。卸载默认保留数据；仅当选中的 registered plugin 已禁用时才允许清除数据。
 - 通过 live region 通知安全的 status/error 摘要。不得渲染 raw native error、path、payload、stack trace 或
   diagnostic message。
 
-### Host 权限提示
+### 插件安装信任
 
-- installation/replacement permission 决策保持在现有连续 Plugins 表面内。使用 Semi Design `Modal`、
-  `Button`、`Checkbox`、`Tag`、`Banner` 与 `Typography`；prompt 层级、有界滚动、focus、hover、pending
-  与 disabled state 使用语义 Less。
-- Host 持有的风险/支持文本、author-provided reason 与 Publisher-unverified 提示必须分开显示；source 或
-  Publisher fact 不能呈现为 authority。敏感选项初始不勾选，并保留明确的零授权/稍后决定操作。
-- Settings grant/revoke 每次只确认一个 permission。pending operation 不可关闭或重复提交；通过 live region
-  通知安全的 partial/conflict feedback，并在每个 terminal outcome 后把焦点恢复到原触发控件或确定仍存在的入口。
-- 所有 copy 都进入应用 i18n resource，并在 light/dark 下测试英文与简体中文。固定 `650×600` 时，验证长
-  reason 可滚动且不破坏连续表面，同时 focus、disabled、modal 与 alert 状态不依赖颜色也清晰可见。
+- installation/replacement 确认保持在现有连续 Plugins 表面内。文案需明确：安装表示信任插件代码使用普通
+  开放 Web 能力，但 Host 边界保持封闭。
+- identity、version、source、Publisher-unverified 状态与 replacement classification 只作为有界事实展示。
+  package digest、source 或 Publisher metadata 不得呈现为 Host authority，也不代表 Host 背书远程行为。
+- 不得渲染 permission checklist、grant/revoke 控件、作者提供的 permission reason 或 partial-grant state。
+  当前公共 Host API 不包含 native capability。
+- 所有 copy 都进入应用 i18n resource，并在 light/dark 下测试英文与简体中文。固定 `650×600` 时，验证
+  focus、disabled、modal、alert、legacy recovery 与长内容状态不依赖颜色也清晰可见。
 
 ## 测试
 

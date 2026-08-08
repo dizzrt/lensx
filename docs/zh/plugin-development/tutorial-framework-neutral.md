@@ -23,10 +23,10 @@ pnpm install
 
 ## Manifest 与资源
 
-打开 `manifest.json`。保持 `manifest_version` 为 `0.1.0`，使用 namespaced `plugin_id` 与 SemVer
+打开 `manifest.json`。保持 `manifest_version` 为 `0.2.0`，使用 namespaced `plugin_id` 与 SemVer
 插件版本。compatibility 分别为 lensX 和 Host API 声明半开 range。publisher field 是未验证作者文本。
 
-无权限 starter 不请求 permission。它贡献一个 Page、一个指向该 Page 的 Action，以及 launcher
+starter 不包含 permission 字段。它贡献一个 Page、一个指向该 Page 的 Action，以及 launcher
 default action。iframe entry 与每个 icon/resource path 都必须是 package-relative 且存在于 `dist/`。
 Page/Action ID 只在插件内有效。Contract validation 不会安装、注册、授权或执行这些声明。
 
@@ -41,7 +41,7 @@ Empty capabilities 是合法 degraded state。disconnect 或 failure 时展示�
 cleanup 幂等，旧 attempt callback 无法恢复旧状态。
 
 Testkit 为这些状态提供 semantic fake transport 与 context fixture。它不模拟真实 Host 安全边界，
-也不会 grant permission。
+也不会创建 Host authority。
 
 ## 测试与构建
 
@@ -68,7 +68,7 @@ pnpm run dev:plugin-development-mode
 
 在 Settings 显式注册项目 `dist/`。Host 复制一个已验证的 immutable process-local generation。
 修改代码后重新 build 并选择手动 reload。Development registration 不是 `.lxp` 安装，不跨进程重启
-持久化，也不会改变 permission、Runtime isolation、deadline 或 session capability 规则。没有
+持久化，也不会改变 Runtime isolation、deadline 或 session capability 规则。没有
 watch/HMR 或自动 reload。
 
 ## 打包与安装
@@ -81,7 +81,7 @@ lensx-plugin inspect ./artifacts/com.example.my-plugin-0.1.0.lxp
 lensx-plugin pack --project .
 ```
 
-在 Settings 选择 **从文件安装**，选择该 `.lxp`，检查未验证 publisher 与 requested permissions，
+在 Settings 选择 **从文件安装**，选择该 `.lxp`，检查未验证 publisher 与 open-Web trust notice，
 然后确认。Host 对 exact candidate 重新 inspection，并通过 controlled preparation boundary commit。
 从 launcher 打开 contributed Action，确认 loading、ready、locale/theme replacement 与干净 close。
 CLI acceptance 不会授予 authority；此 starter 仍无权限。
@@ -93,9 +93,8 @@ CLI acceptance 不会授予 authority；此 starter 仍无权限。
 - 从 Testkit context 移除 capability：view 降级，不调用它。
 - 初始化失败后 retry：第二个 attempt 是 fresh，首个 attempt 的 late work 为 inert。
 - dispose 两次：listener 与 pending operation 保持已释放。
-- 撤销或省略未来 permission：插件代码不会发起 prompt 或自动 grant。
+- 尝试不可用的 native/device API：处理浏览器 rejection；插件代码不能打开 Host 私有 authority。
 - 重启 Host：Development Mode entry 消失；正式 installed entry 仍可管理。
 
 添加受保护 feature 前阅读 [Host API](host-api.md)，gate 失败时阅读
 [兼容与错误](compatibility-and-errors.md)。
-

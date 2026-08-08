@@ -28,7 +28,6 @@ export interface PageProviderDescriptor {
 export interface PageDescriptor extends HostPageTarget {
   readonly available: boolean;
   readonly parent?: HostPageTarget;
-  readonly required_permission_ids: readonly string[];
   readonly route: string;
   readonly title: LocalizedPageText;
 }

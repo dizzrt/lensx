@@ -3,9 +3,11 @@
     "name": "empty_snapshot",
     "type": "snapshot",
     "value": {
-      "contract_version": "0.2.0",
+      "contract_version": "0.3.0",
       "revision": "0",
-      "availability": { "kind": "available" },
+      "availability": {
+        "kind": "available"
+      },
       "entries": []
     }
   },
@@ -13,9 +15,11 @@
     "name": "healthy_disabled_incompatible_snapshot",
     "type": "snapshot",
     "value": {
-      "contract_version": "0.2.0",
+      "contract_version": "0.3.0",
       "revision": "3",
-      "availability": { "kind": "available" },
+      "availability": {
+        "kind": "available"
+      },
       "entries": [
         {
           "kind": "registered",
@@ -23,14 +27,28 @@
           "plugin_id": "com.acme.workspace",
           "version": "1.2.0",
           "display": {
-            "name": { "en-US": "Workspace Tools", "zh-CN": "工作区工具" },
-            "description": { "en-US": "Open and manage local workspaces.", "zh-CN": "打开和管理本地工作区。" },
-            "icon": { "kind": "asset", "path": "assets/plugin-icon.svg" }
+            "name": {
+              "en-US": "Workspace Tools",
+              "zh-CN": "工作区工具"
+            },
+            "description": {
+              "en-US": "Open and manage local workspaces.",
+              "zh-CN": "打开和管理本地工作区。"
+            },
+            "icon": {
+              "kind": "asset",
+              "path": "assets/plugin-icon.svg"
+            }
           },
           "source": "external",
           "enabled": false,
-          "compatibility": { "lensx": false, "host_api": true },
-          "runtime": { "kind": "inactive" }
+          "compatibility": {
+            "lensx": false,
+            "host_api": true
+          },
+          "runtime": {
+            "kind": "inactive"
+          }
         },
         {
           "kind": "quarantined",
@@ -49,7 +67,7 @@
     "name": "degraded_snapshot",
     "type": "snapshot",
     "value": {
-      "contract_version": "0.2.0",
+      "contract_version": "0.3.0",
       "revision": "0",
       "availability": {
         "kind": "degraded",
@@ -66,19 +84,28 @@
     "name": "healthy_detail",
     "type": "detail",
     "value": {
-      "contract_version": "0.2.0",
+      "contract_version": "0.3.0",
       "revision": "3",
       "detail": {
         "kind": "registered",
         "entry_id": "entry_0000000000000001",
         "manifest": {
-          "manifest_version": "0.1.0",
+          "manifest_version": "0.2.0",
           "plugin_id": "com.acme.workspace",
           "version": "1.2.0",
           "display": {
-            "name": { "en-US": "Workspace Tools", "zh-CN": "工作区工具" },
-            "description": { "en-US": "Open and manage local workspaces.", "zh-CN": "打开和管理本地工作区。" },
-            "icon": { "kind": "asset", "path": "assets/plugin-icon.svg" }
+            "name": {
+              "en-US": "Workspace Tools",
+              "zh-CN": "工作区工具"
+            },
+            "description": {
+              "en-US": "Open and manage local workspaces.",
+              "zh-CN": "打开和管理本地工作区。"
+            },
+            "icon": {
+              "kind": "asset",
+              "path": "assets/plugin-icon.svg"
+            }
           },
           "publisher": {
             "author": "lensX Official",
@@ -86,53 +113,78 @@
             "repository": "https://github.com/acme/workspace-tools"
           },
           "compatibility": {
-            "lensx": { "min_version": "0.1.0", "max_version_exclusive": "0.2.0" },
-            "host_api": { "min_version": "0.1.0", "max_version_exclusive": "2.0.0" }
-          },
-          "runtime": { "kind": "iframe", "entry": "dist/plugin.html" },
-          "requested_permissions": [
-            {
-              "permission_id": "lensx.filesystem.read_selected",
-              "reason": { "en-US": "Read folders selected by the user.", "zh-CN": "读取用户主动选择的目录。" }
+            "lensx": {
+              "min_version": "0.1.0",
+              "max_version_exclusive": "0.2.0"
+            },
+            "host_api": {
+              "min_version": "0.2.0",
+              "max_version_exclusive": "0.3.0"
             }
-          ],
+          },
+          "runtime": {
+            "kind": "iframe",
+            "entry": "dist/plugin.html"
+          },
           "contributes": {
             "pages": [
               {
                 "id": "home",
-                "title": { "en-US": "Workspace Tools", "zh-CN": "工作区工具" },
+                "title": {
+                  "en-US": "Workspace Tools",
+                  "zh-CN": "工作区工具"
+                },
                 "route": "/",
-                "icon": { "kind": "asset", "path": "assets/home.svg" },
-                "required_permissions": []
+                "icon": {
+                  "kind": "asset",
+                  "path": "assets/home.svg"
+                }
               },
               {
                 "id": "open_project",
-                "title": { "en-US": "Open Project", "zh-CN": "打开项目" },
+                "title": {
+                  "en-US": "Open Project",
+                  "zh-CN": "打开项目"
+                },
                 "route": "/open-project",
-                "parent_page_id": "home",
-                "required_permissions": ["lensx.filesystem.read_selected"]
+                "parent_page_id": "home"
               }
             ],
             "actions": [
               {
                 "id": "open_project",
-                "title": { "en-US": "Open Project", "zh-CN": "打开项目" },
-                "description": { "en-US": "Open the project selection page.", "zh-CN": "打开项目选择页面。" },
+                "title": {
+                  "en-US": "Open Project",
+                  "zh-CN": "打开项目"
+                },
+                "description": {
+                  "en-US": "Open the project selection page.",
+                  "zh-CN": "打开项目选择页面。"
+                },
                 "default_keywords": {
                   "en-US": ["open workspace", "open folder"],
                   "zh-CN": ["打开工作区", "打开文件夹"]
                 },
-                "target": { "kind": "page", "page_id": "open_project" }
+                "target": {
+                  "kind": "page",
+                  "page_id": "open_project"
+                }
               }
             ],
-            "launcher": { "default_action_id": "open_project" }
+            "launcher": {
+              "default_action_id": "open_project"
+            }
           }
         },
         "source": "development",
         "enabled": true,
-        "compatibility": { "lensx": true, "host_api": true },
-        "granted_permission_ids": ["clipboard.read", "files.read"],
-        "runtime": { "kind": "inactive" },
+        "compatibility": {
+          "lensx": true,
+          "host_api": true
+        },
+        "runtime": {
+          "kind": "inactive"
+        },
         "diagnostics": [
           {
             "code": "persist_failed",
@@ -147,7 +199,7 @@
     "name": "quarantine_detail",
     "type": "detail",
     "value": {
-      "contract_version": "0.2.0",
+      "contract_version": "0.3.0",
       "revision": "3",
       "detail": {
         "kind": "quarantined",
@@ -199,6 +251,9 @@
   {
     "name": "changed_event",
     "type": "event",
-    "value": { "contract_version": "0.2.0", "revision": "4" }
+    "value": {
+      "contract_version": "0.3.0",
+      "revision": "4"
+    }
   }
 ]

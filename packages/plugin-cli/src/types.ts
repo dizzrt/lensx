@@ -1,7 +1,7 @@
 import type { EN_US_MESSAGES } from './messages.js';
 
 export const CLI_SCHEMA_VERSION = '1' as const;
-export const PLUGIN_CLI_VERSION = '0.1.0' as const;
+export const PLUGIN_CLI_VERSION = '0.2.0' as const;
 
 export type PluginCliCommand = 'create' | 'build' | 'validate' | 'pack' | 'inspect' | 'help' | 'version';
 export type PluginCliLocale = 'en-US' | 'zh-CN';

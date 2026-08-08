@@ -7,8 +7,6 @@ import type {
   HostApiEvent,
   HostApiMethod,
   HostApiMethodCatalogEntry,
-  HostApiPermission,
-  HostApiPermissionCatalogEntry,
   HostApiRequest,
   HostApiResult,
   HostApiValidationDiagnostic,
@@ -17,16 +15,14 @@ import type {
 } from './host-api-types.js';
 
 const methodFacts = [
-  ['actions.open', null, 'ActionsOpenRequest', 'ActionsOpenResult'],
-  ['clipboard.read', 'clipboard.read', 'ClipboardReadRequest', 'ClipboardReadResult'],
-  ['clipboard.write', 'clipboard.write', 'ClipboardWriteRequest', 'ClipboardWriteResult'],
-  ['runtime.get_context', null, 'RuntimeGetContextRequest', 'RuntimeGetContextResult'],
-  ['storage.delete', null, 'StorageDeleteRequest', 'StorageDeleteResult'],
-  ['storage.get', null, 'StorageGetRequest', 'StorageGetResult'],
-  ['storage.get_quota', null, 'StorageGetQuotaRequest', 'StorageGetQuotaResult'],
-  ['storage.list', null, 'StorageListRequest', 'StorageListResult'],
-  ['storage.set', null, 'StorageSetRequest', 'StorageSetResult'],
-  ['ui.close', null, 'UiCloseRequest', 'UiCloseResult'],
+  ['actions.open', 'ActionsOpenRequest', 'ActionsOpenResult'],
+  ['runtime.get_context', 'RuntimeGetContextRequest', 'RuntimeGetContextResult'],
+  ['storage.delete', 'StorageDeleteRequest', 'StorageDeleteResult'],
+  ['storage.get', 'StorageGetRequest', 'StorageGetResult'],
+  ['storage.get_quota', 'StorageGetQuotaRequest', 'StorageGetQuotaResult'],
+  ['storage.list', 'StorageListRequest', 'StorageListResult'],
+  ['storage.set', 'StorageSetRequest', 'StorageSetResult'],
+  ['ui.close', 'UiCloseRequest', 'UiCloseResult'],
 ] as const;
 
 const deepFreeze = <Value>(value: Value): Value => {
@@ -39,32 +35,24 @@ const deepFreeze = <Value>(value: Value): Value => {
   return value;
 };
 
-/** Closed Host API 0.1.0 semantic catalog; entries do not imply Runtime availability. */
+/** Closed Host API 0.2.0 semantic catalog; entries do not imply Runtime availability. */
 export const HOST_API_METHOD_CATALOG: readonly HostApiMethodCatalogEntry[] = deepFreeze(
-  methodFacts.map(([method, permission, params, result]) => ({
+  methodFacts.map(([method, params, result]) => ({
     deprecated: false,
     method,
     paramsSchema: `${hostApiSchema.$id}#/$defs/${params}`,
-    permission,
     resultSchema: `${hostApiSchema.$id}#/$defs/${result}`,
   })),
 );
 
-/** Static permission requirements; authorization is enforced by a later Host boundary. */
-export const HOST_API_PERMISSION_CATALOG: readonly HostApiPermissionCatalogEntry[] = deepFreeze([
-  { deprecated: false, permission: 'clipboard.read' },
-  { deprecated: false, permission: 'clipboard.write' },
-]);
-
 const methodSet = new Set<HostApiMethod>(HOST_API_METHOD_CATALOG.map(({ method }) => method));
-const permissionSet = new Set<HostApiPermission>(HOST_API_PERMISSION_CATALOG.map(({ permission }) => permission));
 const schemaValidator = (definition: string): ValidateFunction =>
   generatedHostApiValidators[definition as keyof typeof generatedHostApiValidators] as unknown as ValidateFunction;
 const requestValidators = new Map<HostApiMethod, ValidateFunction>(
-  methodFacts.map(([method, , request]) => [method, schemaValidator(request)]),
+  methodFacts.map(([method, request]) => [method, schemaValidator(request)]),
 );
 const resultValidators = new Map<HostApiMethod, ValidateFunction>(
-  methodFacts.map(([method, , , result]) => [method, schemaValidator(result)]),
+  methodFacts.map(([method, , result]) => [method, schemaValidator(result)]),
 );
 const contextValidator = schemaValidator('PluginRuntimeContextInput');
 const eventValidator = schemaValidator('HostApiEventInput');
@@ -191,11 +179,6 @@ export const validateHostApiMethod = (input: unknown): HostApiValidationResult<H
   typeof input === 'string' && methodSet.has(input as HostApiMethod)
     ? valid(input as HostApiMethod)
     : invalid([{ code: 'method_not_found', path: '', message: 'The Host API method is not declared.' }]);
-
-export const validateHostApiPermission = (input: unknown): HostApiValidationResult<HostApiPermission> =>
-  typeof input === 'string' && permissionSet.has(input as HostApiPermission)
-    ? valid(input as HostApiPermission)
-    : invalid([{ code: 'invalid_value', path: '', message: 'The Host API permission is not declared.' }]);
 
 /** Validates and freezes a current-callability snapshot without creating grants or a transport. */
 export const validatePluginRuntimeContext = (input: unknown): HostApiValidationResult<PluginRuntimeContext> => {

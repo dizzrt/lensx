@@ -15,7 +15,6 @@ export const mapPluginRegistrationToPageProviderBatch = (
   }
 
   const ownerId = detail.manifest.plugin_id;
-  const grantedPermissionIds = new Set(detail.granted_permission_ids);
   const pages: readonly PageDescriptor[] = Object.freeze(
     detail.manifest.contributes.pages.map((page) =>
       Object.freeze({
@@ -31,8 +30,7 @@ export const mapPluginRegistrationToPageProviderBatch = (
               }),
             }
           : {}),
-        required_permission_ids: Object.freeze([...page.required_permissions].sort()),
-        available: page.required_permissions.every((permissionId) => grantedPermissionIds.has(permissionId)),
+        available: true,
       }),
     ),
   );

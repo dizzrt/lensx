@@ -5,9 +5,9 @@
 本文区分已经交付的静态插件 Manifest 契约、`.lxp` package inspection 与本地安装、Plugin SDK
 foundation、Plugin Testkit、可选 Plugin UI package、Host 私有 Plugin surface 投影与 Page 导航、
 Host 私有生命周期控制、本地 package replacement、Host 私有 scoped resource service、隔离 iframe
-Runtime、进程内 Runtime Session、公共 SDK iframe transport、Host 私有 Port adapter、公共 Host API
-语义契约、Host 私有 permission core 与 macOS 文本剪贴板 provider 和预期的运行时扩展边界。公共
-Plugin Developer CLI 与项目模板、完整前台插件执行 lifecycle、Host 私有管理与权限 surface，以及
+Runtime、进程内 Runtime Session、公共 SDK iframe transport、Host 私有 Port adapter 与公共 Host API
+语义契约和预期的运行时扩展边界。原 permission core 与 native clipboard provider 已删除。公共
+Plugin Developer CLI 与项目模板、完整前台插件执行 lifecycle、Host 私有管理 surface，以及
 feature-gated Plugin Development Mode 也已交付。仓库还交付了独立官方插件 `.lxp` release
 流水线，以及 Host 会忽略的外部 audit sidecar。npm 发布、签名、Marketplace 分发、远程更新、
 decision history 和用户主动 rollback history 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集；
@@ -20,7 +20,7 @@ decision history 和用户主动 rollback history 当前尚未实现。稳定 sp
 
 - 可搜索的启动器 action；
 - 通过明确 action 打开的页面；
-- 声明式权限；
+- 开放隔离 Web 执行；
 - 本地化名称和搜索别名；
 - 版本化兼容边界；
 - 可预测的生命周期和诊断。
@@ -32,13 +32,12 @@ Plugin
 ├── 元数据与兼容性
 ├── pages
 ├── actions ───────────────▶ 目标 pages
-├── permissions
 └── runtime
     ├── 可信 Host module
     └── 隔离的外部 iframe
 ```
 
-归属和引用必须明确。插件、页面、action、权限和其他可引用资源使用的 ID 必须在全局范围内
+归属和引用必须明确。插件、页面、action 和其他可引用资源使用的 ID 必须在全局范围内
 没有歧义。
 
 ## 契约分层
@@ -50,7 +49,7 @@ Plugin
 3. 可信的 Host 注册元数据；
 4. 向活动插件暴露的运行时上下文。
 
-插件作者不能声明安装来源、已授予权限或 Host 所有的生命周期策略等可信事实。Host 在完成校验后
+插件作者不能声明安装来源或 Host 所有的生命周期策略等可信事实。Host 在完成校验后
 补充这些事实。
 
 序列化契约应当具有唯一的版本化 schema 来源，并在 TypeScript 和 Rust 中进行一致校验。
@@ -58,14 +57,14 @@ Plugin
 
 ## 已交付的公共契约与静态 Manifest
 
-lensX 已交付可发布的 `@lensx/plugin-contract@0.1.0` workspace package。根 export 提供
+lensX 已交付可发布的 `@lensx/plugin-contract@0.2.0` workspace package。根 export 提供
 Manifest/Host API 版本、生成输入类型、规范化值、稳定诊断、catalog 与纯 validator。Manifest
 Schema 入口是 `@lensx/plugin-contract/schema` 与
 `@lensx/plugin-contract/manifest.schema.json`；Host API Schema 入口是
 `@lensx/plugin-contract/host-api-schema` 与
 `@lensx/plugin-contract/host-api.schema.json`。未声明的 deep import 不受支持。
 
-package 拥有作者可控的 `manifest_version: "0.1.0"` 协议，并将其实现为严格的 Draft
+package 拥有作者可控的 `manifest_version: "0.2.0"` 协议，并将其实现为严格的 Draft
 2020-12 JSON Schema。Schema 是 wire format 的结构真源，已提交的 `PluginManifestInput`
 由它确定性生成。package TypeScript 实现与明确的 Rust 模型读取相同的 package-owned valid、
 invalid、normalized 和 incompatible fixtures，从而保持 validity、compatibility、规范化输出
@@ -78,14 +77,13 @@ invalid、normalized 和 incompatible fixtures，从而保持 validity、compati
 
 | 字段 | 契约 |
 | --- | --- |
-| `manifest_version` | 必填，且必须精确等于 `0.1.0`。 |
+| `manifest_version` | 必填，且必须精确等于 `0.2.0`。 |
 | `plugin_id` 和 `version` | 必填的稳定命名空间插件 ID 和 SemVer 发布版本。 |
 | `display` | 必填的本地化 `name`；可选本地化 `description` 和包内 asset `icon`。 |
 | `publisher` | 必填的作者声明 `author`、HTTPS `homepage` 和 HTTPS `repository`；三者都不建立信任。 |
 | `compatibility` | 必填的 `lensx` 和 `host_api` SemVer 半开区间。 |
 | `runtime` | 必填 `kind: "iframe"` 和包内 HTML `entry`；它只是元数据，不会创建 iframe。 |
-| `requested_permissions` | 可选的唯一权限请求及本地化原因；请求不等于授权。 |
-| `contributes.pages` | 一个或多个具有唯一 ID 的 Page，包含本地化标题、内部 route，以及可选 parent/icon 和已请求权限依赖。 |
+| `contributes.pages` | 一个或多个具有唯一 ID 的 Page，包含本地化标题、内部 route，以及可选 parent/icon。 |
 | `contributes.actions` | 可选的唯一 Action，包含本地化标题/描述、Action 自有的 `default_keywords`、可选 icon 和只指向 Page 的 target。 |
 | `contributes.launcher` | 可选的 `default_action_id`，引用一个已贡献 Action；它不实现排序或注册。 |
 
@@ -97,7 +95,7 @@ Page 和 Action ID 都是插件内本地 ID。Host 私有 Plugin Action 投影�
 `<plugin_id>.<local_action_id>`；公共校验器本身不会执行该投影。Page parent 引用必须存在，
 且整个图必须无环。每个 Action target 必须是
 `{ "kind": "page", "page_id": "<local-page-id>" }`。Action 关键词始终归属于对应 Action，
-不会成为插件级别的共享别名。Page 权限依赖必须是顶层请求权限的子集。
+不会成为插件级别的共享别名。
 
 ### 校验、规范化与兼容性
 
@@ -112,9 +110,9 @@ Page 和 Action ID 都是插件内本地 ID。Host 私有 Plugin Action 投影�
 Manifest 是 `incompatible`，而不是 `invalid`。
 
 规范化 Manifest 只包含作者声明的数据和确定性默认值。它不能包含 executor、函数、React 或
-Tauri 值、Rust 实现对象，或 `source`、`lifecycle`、`enabled`、安装路径、已授予权限、签名
-状态、runtime 状态等 Host-owned 字段。Publisher 元数据是不受信任的作者输入，不能单独用于
-授予信任或权限。
+Tauri 值、Rust 实现对象，或 `source`、`lifecycle`、`enabled`、安装路径、签名、runtime、CSP、
+sandbox、network policy、native capability、permission 或 grant 等 Host-owned 字段。Publisher 元数据
+是不受信任的作者输入，不能单独用于建立信任。
 
 Contract package 版本、Manifest 协议、Host API 协议与 lensX 应用版本都从 `0.1.0` 起步，
 但此后独立演进。package 实现修复不会改变 wire protocol；Manifest 或 Host API 的 breaking
@@ -130,33 +128,32 @@ scripts 或 Host 私有源码。
 
 ### 静态校验范围外的能力
 
-静态校验本身不会发现或安装包、创建生产 registration 或 iframe、授予权限、交换 Host API 消息或
+静态校验本身不会发现或安装包、创建生产 registration 或 iframe、交换 Host API 消息或
 运行插件代码。下文的 Host 私有 capability 会把一个用户选中的兼容 `.lxp` 添加为 external
 registration，把 current Registration facts 投影进 Page 与 Action Registry，并且只在 eligible Plugin
-Page active 时创建隔离 iframe。Runtime Session、Host API 执行与 permission decision 是独立
-capability；其中下文的 Host 私有进程内 Runtime Session 与公共语义契约已经交付。
+Page active 时创建隔离 iframe。Runtime Session 与 Host API 执行是独立 capability；其中下文的
+Host 私有进程内 Runtime Session 与公共语义契约已经交付。
 
 ## 已交付的公共 Host API 语义契约
 
-`@lensx/plugin-contract` 现在持有 Host API protocol `0.1.0`：闭集 Draft 2020-12 Schema、
+`@lensx/plugin-contract` 现在持有 Host API protocol `0.2.0`：闭集 Draft 2020-12 Schema、
 生成的 TypeScript 输入、深度冻结的规范值、不可变 catalog，以及接受 `unknown` 的纯 validator。
 TypeScript 与测试专用 Rust consumer 读取同一批 package-owned valid/invalid fixtures，并对
 validity 及按 JSON Pointer 排序的诊断 `code`/`path` 达成一致。
 
 catalog 精确包含以下方法：
 
-| 范围 | 方法 | 显式权限 |
-| --- | --- | --- |
-| Runtime | `runtime.get_context` | 无 |
-| 当前 Page 与 Action | `ui.close`、`actions.open` | 无 |
-| 插件私有 storage | `storage.get`、`storage.set`、`storage.delete`、`storage.list`、`storage.get_quota` | 无 |
-| 文本剪贴板 | `clipboard.read`、`clipboard.write` | 分别为 `clipboard.read`、`clipboard.write` |
+| 范围 | 方法 |
+| --- | --- |
+| Runtime | `runtime.get_context` |
+| 当前 Page 与 Action | `ui.close`、`actions.open` |
+| 插件私有 storage | `storage.get`、`storage.set`、`storage.delete`、`storage.list`、`storage.get_quota` |
 
 `PluginRuntimeContext` 由 Contract 与 SDK 共享，只包含 `hostApiVersion`、locale、theme 与排序去重的
 当前可调用 method ID snapshot。空 capability 有效。`runtime.context_changed` 携带完整 replacement
-Context，而不是 patch。capability 同时表示当前 Host 支持、实现可用与授权有效，但不是持久 grant。
-plugin identity、Page、source、Manifest request、raw grant、path 与 executor 都会作为作者可控
-Context/method 字段被拒绝。
+Context，而不是 patch。capability 表示当前 Host 支持与实现可用。plugin identity、Page、source、
+Manifest 数据、path、permission/grant fact 与 executor 都会作为作者可控 Context/method 字段被拒绝。
+Worker、network、远程资源、Blob/Data、WASM 和 browser storage 不是 Host API method，不进入 Context。
 
 Host API error 使用稳定闭集 code 与有界安全英文 message，并与 SDK 的 `disconnected`、`disposed`、
 `transport_failure` 等 lifecycle error 保持可判别。package、Manifest protocol、Host API protocol、SDK
@@ -197,16 +194,15 @@ Registration Contract，而当前生产写入方是下文的本地安装协调�
 
 - 经过校验的 normalized Manifest 只包含作者可控数据和确定性默认值；
 - 持久化的 Host registration facts 包含安装路径、由 Host 提供且带算法标签的包摘要、Host 控制的
-  source、enabled intent、排序去重的 grant snapshot，以及最多最近 32 条规范且安全的诊断；
+  source、enabled intent，以及最多最近 32 条规范且安全的诊断；
 - 每次构造或恢复记录时，都根据 Manifest 范围以及当前 lensX 和 Host API 版本重新计算
   compatibility；
 - Runtime 状态只属于当前进程，并且在本基础中始终以 `inactive` 恢复。
 
-grant snapshot 默认为空。requested permissions 永远不会自动变成 grant。Host 控制的 source、
-作者声明的 publisher 数据、requested permissions 和官方 provenance 声明都只是存储或展示事实；
-它们都不能建立信任、授予权限或创建生命周期豁免。
+Host 控制的 source、作者声明的 publisher 数据和官方 provenance 声明都只是存储或展示事实；
+它们都不能建立信任或创建生命周期豁免。
 
-Plugin Manager 专用 Store 为每个插件使用一个 version 1 JSON 记录。确定性的十六进制编码 record
+Plugin Manager 专用 Store 为每个插件使用一个 version 2 JSON 记录。确定性的十六进制编码 record
 key 构成安全文件名。每次转换先校验完整 next record，在同目录写入唯一临时文件并刷新，然后只对
 该插件的目标记录执行原子替换。只有持久化成功后，Manager 才发布新的内存 snapshot。临时文件创建、
 写入、刷新或替换失败都会保留原有内存和磁盘状态；恢复时忽略未完成的临时文件。
@@ -238,10 +234,9 @@ snapshot。内部 domain-separated `sha256-development-tree-v1` identity 不是 
 register、reload、remove 与 mode shutdown 都是串行的 revision-bound transactions。Manager commit
 会推进 Resource generation，旧 Resource URL 立即失败；macOS navigation policy 会在清理旧 snapshot
 前撤销匹配插件的 current lease。frontend surfaces 在 native transition 前 quiesce，并在之后完整重读
-Registration state，因此 event 丢失不会成为 authority。reload 总会发布新 generation，只保留新 Manifest
-仍声明的 grants，也不会增加 watch 或 retry。
+Registration state，因此 event 丢失不会成为 authority。reload 总会发布新 generation，且不会增加 watch 或 retry。
 
-development entries、grants、diagnostics、source capabilities、snapshots 与 Runtime activity 都只存在于
+development entries、diagnostics、source capabilities、snapshots 与 Runtime activity 都只存在于
 当前进程。remove 与 mode shutdown 会保留插件数据与 Launcher collections，并且不改变正式安装包、
 quarantine records 或其他插件。bounded cleanup failure 永远不会恢复已撤销的 authority。操作流程与限制见
 [插件开发模式](../development/plugin-development-mode.md)。
@@ -251,7 +246,7 @@ quarantine records 或其他插件。bounded cleanup failure 永远不会恢复�
 设置页的 Plugins tab 提供一个 Host-owned **从本地安装** 操作。“本地”只描述本次安装来源，
 不是一种独立的插件类别。无路径参数的
 `install_local_plugin` command 打开原生文件选择器并只选择一个 `.lxp`；取消选择返回普通的
-cancelled 结果。前端只会看到严格的 installation contract `0.1.0` 成功、取消或有界错误值，
+cancelled 结果。前端只会看到严格的 installation contract `0.3.0` 成功、取消或有界错误值，
 不会提供或接收所选 source path、package digest、installation path、Store key、原始 native error
 或内部恢复事实。
 
@@ -272,7 +267,7 @@ replacement workflow 可以为同一健康 identity 提交另一个兼容 digest
 的语义。
 
 在已刷新的 staging directory 于同一文件系统原子 rename 后，协调器使用完整 Host facts 注册 normalized
-Manifest：已提交绝对路径、带算法标签的 digest、`source=external`、`enabled=true`、空 grants 和
+Manifest：已提交绝对路径、带算法标签的 digest、`source=external`、`enabled=true` 和
 `inactive` Runtime。已有健康 registration 或 quarantined identity 会在 commit 前 fail closed。Manager
 持久化失败会回滚 payload，或留下可证明的 orphan 供 recovery 处理；changed event 发送失败不会撤销
 已经成功持久化和发布的 registration。
@@ -292,7 +287,7 @@ history 仍需要后续已接受 change。
 
 ## 已交付的 Host 私有 Registration Contract
 
-Host 现已通过 Registration Contract version `0.2.0` 投影 managed Plugin Manager。该 contract
+Host 现已通过 Registration Contract version `0.3.0` 投影 managed Plugin Manager。该 contract
 只在 Rust、Tauri 与根应用 TypeScript 之间私有共享。`@lensx/plugin-contract`、
 `@lensx/plugin-sdk` 和其他插件 package 都不会导出它；workspace boundary 会拒绝官方插件与
 示例插件导入其类型、desktop adapter 或 event 入口。
@@ -302,7 +297,7 @@ Host 现已通过 Registration Contract version `0.2.0` 投影 managed Plugin Ma
 确定性排序的严格 `registered | quarantined` summary，以及 `available | degraded` Manager
 availability。`read_plugin_registration_detail` 只接受合法 opaque entry identity，并返回绑定 revision
 的 registered 或 quarantine detail。健康详情包含 normalized Manifest、`builtin | external | development` source、
-enabled intent、逐维 compatibility、排序去重 grant、有界安全诊断，以及当前唯一的 `inactive`
+enabled intent、逐维 compatibility、有界安全诊断，以及当前唯一的 `inactive`
 Runtime variant。quarantine 详情只包含 opaque identity、可选的已验证 plugin ID 和一条安全诊断。
 
 每个 snapshot、detail response 和 `plugin-registration://snapshot-changed` event 都携带独立的
@@ -317,12 +312,11 @@ cache 失效。监听恢复和 Launcher activation 后会执行完整刷新；de
 会重新读取。稳定 query error 只暴露 `code`、`operation` 与安全英文 message。
 
 该 contract 永远不暴露安装路径、package digest、Store key 或文件名、损坏记录内容、原始异常、
-stack、函数或 Tauri 对象。publisher、source、enabled intent、requested permissions，以及空或非空
-grant snapshot 都是相互独立的事实；任何一项都不能建立信任或自动授权。该 contract 不会安装、
+stack、函数或 Tauri 对象。publisher、source 与 enabled intent 是相互独立的事实；任何一项都不能
+建立信任。该 contract 不会安装、
 更新、卸载、enable、disable、执行或渲染插件。Registration Contract 本身仍然只读；下文的 Host
 私有 lifecycle 与 Action 投影核心消费它，但不改变 wire contract。管理 UI、真实 Runtime session、
-Host API method 与 permission core 已在本文其他章节交付；permission prompt 与 settings 也由独立
-Host 私有能力交付，decision history 与签名仍未实现。
+Host API method 已在本文其他章节交付；decision history 与签名仍未实现。
 
 ## 已交付的 Host 私有 Plugin Lifecycle Controls
 
@@ -332,7 +326,7 @@ Host 私有能力交付，decision history 与签名仍未实现。
 stale revision、unmanaged entry、Manager unavailable，以及不受支持或不安全的 cleanup target 都会
 fail closed；有界 code 和 message 不暴露路径、record key、损坏数据、原始异常或 stack。
 
-Enable 与 disable 会原子更新 Host-owned enabled intent，不改变 source、grant、compatibility facts 或
+Enable 与 disable 会原子更新 Host-owned enabled intent，不改变 source、compatibility fact 或
 Runtime state。兼容与不兼容的健康 registration 都可独立保留 enabled intent；quarantine entry 不能
 被 enable。真实变化会递增 Registration revision，并发送既有 snapshot-changed invalidation hint；no-op
 保留 revision。Event 发送失败不会回滚已持久化状态。
@@ -351,15 +345,15 @@ Uninstall 必须显式选择 `retain_data` 或 `delete_data` policy。Host 会�
 继续执行。Malformed、冲突、symlink 或 root 之外的 evidence 会被保留，并阻止破坏性 cleanup。
 
 专用 Rust、TypeScript、surface convergence、workspace boundary 与公共 package 打包门禁是
-`pnpm run check:plugin-lifecycle-controls`。这些控制有意不增加管理 UI、plugin Runtime、权限决策流程、
+`pnpm run check:plugin-lifecycle-controls`。这些控制有意不增加管理 UI、plugin Runtime、native capability、
 公共 lifecycle API、应用卸载或 replacement 行为；replacement 是下文独立的私有能力。
 
 ## 已交付的 Host 私有本地插件替换
 
-根应用现已交付独立的私有 Plugin Replacement Contract `0.1.0`。无路径参数的 prepare command
+根应用现已交付独立的私有 Plugin Replacement Contract `0.2.0`。无路径参数的 prepare command
 只接受当前健康 entry identity 与调用方观察到的 Registration revision，打开一个原生 `.lxp` picker，
 并返回 `cancelled`、`duplicate` 或有界 `prepared` 结果。Prepared 结果包含进程内 opaque token、
-from/to version、`upgrade | downgrade | reinstall` 分类，以及排序后的新增/移除 permission ID；不会包含
+from/to version、`upgrade | downgrade | reinstall` 分类与安装信任边界；不会包含
 source/staging path、package digest、Store key、package bytes 或原始 native error。Commit 与 cancel
 只接受该 token 及其原 entry/revision 绑定。Contract、desktop adapter、token 与 service 都不会向公共
 package 或插件代码开放。
@@ -372,14 +366,13 @@ preparation；cancel、失败 commit、service destroy 和 startup recovery 会�
 
 Commit 与 installation/lifecycle 共用进程 mutex 和 `.install.lock`。它重新读取 Manager 与 canonical
 filesystem facts，重新 inspection 不可变 bytes，校验每个 staging 文件，把候选原子 rename 到 sibling
-digest directory 并刷新，然后要求 Manager 完成一次绑定 revision 的完整 record replacement。Version-1
+digest directory 并刷新，然后要求 Manager 完成一次绑定 revision 的完整 record replacement。Version-2
 Manager record 中的 Manifest、installation path 和 digest 继续是唯一 active pointer；不存在第二 pointer、
 `previous` record、version history 或 rollback catalog。Manager persistence 与内存发布是 durable commit
 point。
 
 Next registration 保留 source、enabled intent、有界 diagnostics 和独立 plugin-data subtree，重新计算
-compatibility，并把 Runtime 重置为 `inactive`。Grants 精确收缩为旧 grants 与候选 requested permission
-ID 的交集，因此新增请求不会自动授权，移除请求也不会残留 grant。在 Rust commit 前，可信 TypeScript
+compatibility，并把 Runtime 重置为 `inactive`。在 Rust commit 前，可信 TypeScript
 service 先撤销 Action 再撤销 Page surface；提交前失败按 Page 后 Action 恢复原投影。提交后 service 主动
 刷新并等待 committed revision 按 Page 后 Action 收敛；收敛失败会报告 committed revision 并让 surface
 fail closed，而不会回滚 durable state。
@@ -552,18 +545,18 @@ workspace boundary。真实 WKWebView evidence 仅适用于 macOS，不宣称 Wi
 current iframe 报告 `load` 后，`PluginRuntimeFrame` 只把真实 `contentWindow` 与 Host 派生 descriptor
 交给进程内 `PluginRuntimeSessionService`。resolver 会收敛 Registration summary/detail、Page route、
 Resource entry 与 current revision，并绑定包含 opaque entry、plugin/version/Page、隔离 origin 与
-resource generation、Runtime attempt、排序后实际 grant snapshot 的不可变 identity。Manifest request、
-source、publisher 文本、enabled 文本与 plugin message 都不能创建或覆盖 identity/grant。
+resource generation 与 Runtime attempt 的不可变 identity。Manifest 数据、source、publisher 文本、enabled
+文本与 plugin message 都不能创建或覆盖 identity。
 
 每次 attempt 都由 Host 新建 128-bit 小写十六进制 nonce 与 `MessageChannel`，只向记录的 window 和
 精确隔离 `targetOrigin` 发送私有 `0.1.0` bootstrap，并且只 transfer 一次 child Port。只有 Host Port
 收到首个 exact、携带相同 nonce 的 ready acknowledgement，Session 才会从 `awaiting_handshake`
-进入 `ready`。bootstrap/ack 不含 plugin、entry、Page、grant、revision、resource token、URL 或 Host
+进入 `ready`。bootstrap/ack 不含 plugin、entry、Page、revision、resource token、URL 或 Host
 object。非法 Port input、重复或迟到 acknowledgement、`messageerror`、Host reload 或 current fact
 失效都会断开 Session，不提供 oracle，也不会自动重连。
 
 每次 Registration invalidation 后，currentness 会比较受影响的 entry、Page、version、origin/generation、
-attempt、availability 与 grants。任一相关事实改变都会撤销旧 Session、Port、iframe 与 navigation
+attempt 与 availability。任一相关事实改变都会撤销旧 Session、Port、iframe 与 navigation
 lease；只有其他插件导致的 global revision 变化会保留这四者，revision 只是竞态检测值而不是 Session
 generation。close、retry、replacement、进入 Home/Search/Host Page 与 App unmount 都进行幂等终止
 清理。Session、nonce、Port、window reference 与 message state 永不持久化；进程恢复后 Registration
@@ -591,24 +584,25 @@ Host document 与外部插件 document 使用两套相互独立、不可修改�
 profile 只允许打包的 Host resource、现有 Tauri IPC endpoint 与 `lensx-plugin:` child frame。当前
 Semi Design Runtime 唯一需要的 style 例外是 `style-src 'unsafe-inline'`；script inline/eval、wildcard、
 remote script、object、base、form 与 ancestor 放宽仍被拒绝。Resource Service 会给每个成功且 current
-的 plugin HTML `GET`/`HEAD` 添加同一套 Plugin Runtime profile。该 profile 默认拒绝，只允许同 origin
-script、style、image 与 font，禁用 connect、worker、child frame、media、object、base 与 form
-destination。production application document 只接纳准确的 `tauri://localhost` ancestor；`tauri dev`
+的 plugin HTML `GET`/`HEAD` 添加同一套 Plugin Runtime profile。该 profile 允许 current origin 加上
+HTTPS/Data/Blob 内容、HTTPS/WSS 连接、页面生命周期内的 Dedicated Worker 与 WASM，同时继续拒绝
+object、base 变更、form 与非可信 ancestor。production application document 只接纳准确的
+`tauri://localhost` ancestor；`tauri dev`
 只把 ancestor 替换为配置中准确的 `http://localhost:40755` application origin，其余 directive 保持逐字节
-一致。Manifest、publisher、source、grant、query、request header 与 plugin-authored meta 都不能修改这两套
+一致。Manifest、publisher、source、query、request header 与 plugin-authored meta 都不能修改这两套
 profile。
 
 CSP、隔离 origin、iframe sandbox、Permissions Policy、native navigation 与 Runtime Session 是互补
 边界。CSP 控制 resource/document destination；per-generation origin 分离 DOM 与 storage；sandbox 和
 Permissions Policy 约束 frame capability；native lease 控制顶层与 descendant navigation；Session
-认证一个 current window 与专用 Port。这些边界都不会创建 Host API grant。
+认证一个 current window 与专用 Port。这些边界不会通过 Host API 中介普通 Web 行为。
 
 Host 私有 controller 会拥有一个 Runtime attempt，并在全局最多创建一个 external-plugin iframe。
 独立的 10,000 ms resolution boundary 覆盖上一 terminal operation 的收敛、当前 Resource resolution 与
 native navigation activation；超时会 fail closed，且不会构造另一个 iframe。navigation lease 激活且
 `src` 提交后才启动 10,000 ms load deadline；bootstrap transfer 成功后，Session 才启动 5,000 ms
 handshake deadline。close、navigation、quiescence、disable、uninstall、replacement、
-相关 fact/grant 变化、retry、timeout、Session failure、Host reload 与 App teardown 全部收敛到同一幂等
+相关 fact 变化、retry、timeout、Session failure、Host reload 与 App teardown 全部收敛到同一幂等
 terminal operation：先让工作 stale，再取消 timer/subscription，dispose Session/Port，unbind/remove
 iframe，compare-current 释放 navigation lease，最后丢弃引用。因此迟到 promise、load、acknowledgement、
 timer 与 Port event 无法影响新 attempt。不存在 preload、hidden pool、background Runtime、跨 Page
@@ -622,10 +616,10 @@ graceful exit 不计数；generation 变化或连续 30,000 ms 健康 `ready` �
 可见 failure 只使用 `runtime_load_timeout`、`runtime_handshake_timeout`、
 `runtime_session_disconnected`、`runtime_security_policy_failure`、`runtime_crash_loop` 或
 `runtime_unavailable`，并通过现有可访问 feedback surface 提供 canonical English 和语义一致的简体中文
-文案。diagnostic/evidence 不包含完整或 blocked URL、origin/scope、path、nonce/Port 内容、grant、payload、
+文案。diagnostic/evidence 不包含完整或 blocked URL、origin/scope、path、nonce/Port 内容、payload、
 storage value、raw exception 或 stack，也没有远程 CSP report channel。已提交的真实 WKWebView matrix
 仅支持 macOS。公共 SDK iframe transport 不会继承这些 Host 私有 attempt、timer、breaker record 或
-failure code。运行 `pnpm run check:plugin-runtime-security-lifecycle` 可执行 focused gate
+failure code。运行 `pnpm run check:open-isolated-plugin-runtime` 可执行组合 gate
 及其 Resource、origin、navigation、iframe、Session、workspace 与 public-tarball 前置门禁。
 
 ## 已交付的 Host 私有 Plugin Surface 投影与 Page 导航
@@ -642,19 +636,18 @@ adapter。因此 surface coordinator 暴露 provider-scoped quiesce 和显式 re
 的完整 snapshot 映射完成收敛。
 
 两个 Registry 都支持可信 provider-scoped 完整批次替换，以及用空批次注销。Page Registry 保护
-`lensx.core`，在提交前校验 Page identity、parent ownership、本地化字段、私有 route、排序后的
-permission ID 与 availability，并返回隔离且确定性的 lookup 和 snapshot。非法、重复、跨 owner 或
+`lensx.core`，在提交前校验 Page identity、parent ownership、本地化字段、私有 route 与 availability，
+并返回隔离且确定性的 lookup 和 snapshot。非法、重复、跨 owner 或
 部分无效输入会保留完整调用前状态，且不能删除其他 provider 的 Page、descriptor 或 executor。
 
 纯 Page mapper 保持 `(owner_id = plugin_id, page_id = 插件本地 Page ID)` 为唯一 Page identity，
-保留同 owner parent target 与私有 route，并派生本地化 provider/Page presentation。Page 仅在全部
-required permission ID 都存在于当前 Host-owned grant snapshot 时 available；空 requirements 自然
-available。该子集检查不会创建 grant，也不代表 permission catalog、用户决策或 session enforcement。
+保留同 owner parent target 与私有 route，并派生本地化 provider/Page presentation。其他条件 eligible
+的 registration 中每个 Page 都 available；普通 Web capability 不进入 Page availability 计算。
 
 纯 Action mapper 设置 `owner_id = plugin_id`，派生
 `action_id = <plugin_id>.<local_action_id>`，保留规范化的本地化 Action metadata 与关键词，并设置
 `enabled = true`。Host-owned executor 只为注入的窄 Page opener 捕获冻结的插件 Page target 和 opening
-Action ID。只有目标当前 available 的 Action 会被发布。Manifest route、permission、publisher、
+Action ID。只有目标当前 available 的 Action 会被发布。Manifest route、publisher、
 source 与 `default_action_id` facts 不会进入
 descriptor，也不影响搜索排序。package-local asset icon 会被有意省略，在 scoped resource service
 存在前使用现有通用 Action fallback。
@@ -675,12 +668,12 @@ fallback。
 生产组合初始化该协调器，在 Launcher activation 与 listener recovery 时刷新，并在 cleanup 时销毁
 同一 subscription。available Plugin Page 会把 current resolution 交给已交付的 Host 私有 iframe
 Runtime resolver。surface projection 仍不会向插件暴露 route、entry ID、revision、origin fact、resource
-URL 或 native object。Host 私有 Task 5.5 permission core 与文本剪贴板路径现已实现；permission prompt、
-settings 与 decision history 仍不属于本次交付。
+URL 或 native object。Host 私有 management capability 消费这些 facts，但不改变 surface projection；
+decision history 仍不属于本次交付。
 
 ## 已交付的公共 Plugin SDK 与 iframe Transport
 
-lensX 已交付框架无关的 `@lensx/plugin-sdk@0.1.0` workspace package。package 具有公共 root 与
+lensX 已交付框架无关的 `@lensx/plugin-sdk@0.2.0` workspace package。package 具有公共 root 与
 `@lensx/plugin-sdk/iframe` 入口，Runtime 只依赖 `@lensx/plugin-contract`。未声明的 deep import 不受支持；其公共声明
 不要求 React、Semi Design、Tauri、DOM 全局、Node filesystem 类型或 Host 私有模块。
 
@@ -689,8 +682,8 @@ transport 类型，以及下列独立版本事实：
 
 | Export | 含义 |
 | --- | --- |
-| `PLUGIN_SDK_VERSION` | SDK package 与公共 API 版本，当前为 `0.1.0`。 |
-| `PLUGIN_SDK_SUPPORTED_HOST_API_RANGE` | 支持的 Host API 半开区间，当前为 `>=0.1.0 <0.2.0`。 |
+| `PLUGIN_SDK_VERSION` | SDK package 与公共 API 版本，当前为 `0.2.0`。 |
+| `PLUGIN_SDK_SUPPORTED_HOST_API_RANGE` | 支持的 Host API 半开区间，当前为 `>=0.2.0 <0.3.0`。 |
 | `PLUGIN_HOST_API_VERSION` | SDK 不会重新导出；当前 Host API 版本仍由 `@lensx/plugin-contract` 持有。 |
 
 `createPluginSdk({ transport })` 返回相互隔离的 client，而不是全局 singleton。client 依次使用
@@ -702,7 +695,7 @@ transport。
 进入 `ready` 前，SDK 通过 Contract validator 校验、复制并冻结共享 `PluginRuntimeContext`。该 context 包含兼容的
 `hostApiVersion`、`en-US | zh-CN` locale、`light | dark` theme，以及唯一且只读的 capability
 已声明 Host API method ID 的排序去重只读 snapshot。空 capability 列表有效，并不代表存在任何 method。plugin identity、Page
-identity、已授予权限、安装来源和 Host lifecycle 事实都不是受支持的 context 输入。
+identity、安装来源和 Host lifecycle 事实都不是受支持的 context 输入。
 SDK 消费的 Host API validator 会在构建时生成并提交为 AJV standalone function。它们不会在插件
 document 内编译 Schema 或执行动态求值，因此 SDK 无需增加 `unsafe-eval`，仍与 Runtime 的
 `script-src 'self'` policy 兼容。
@@ -714,7 +707,7 @@ SDK 管理的 operation 默认超时为 10000 毫秒，并允许正有限整数�
 `PluginSdkError.code` 提供稳定的 SDK 级分支：`cancelled`、`timeout`、`disconnected`、
 `disposed`、`incompatible_host_api`、`invalid_runtime_context`、`invalid_argument` 和
 `transport_failure`。transport exception 会映射为安全 SDK error，不暴露原始异常、私有 stack、
-Host 对象或 wire 数据。Host method、参数、权限、domain 与 internal error 类型来自 Contract，
+Host 对象或 wire 数据。Host method、参数、domain 与 internal error 类型来自 Contract，
 并与 SDK lifecycle failure 保持可判别；SDK 仍不会执行它们。
 
 `PluginSdkTransport` 是连接、抽象请求、抽象事件、断开通知与销毁的语义 adapter 注入边界。
@@ -733,7 +726,7 @@ parent 发出的首个 exact bootstrap，只返回一次现有 nonce acknowledge
 Port。该 policy 包含 production Tauri origins、配置中准确的 `http://localhost:40755` development origin
 与私有 real-WebView harness origin；相邻 localhost port 仍被拒绝。package 私有 `0.1.0` wire 由 exact
 request/response/event/cancel/disconnect frame 与 transport
-自有 bounded request ID 组成；不含 plugin/Page identity、origin、grant、path、executor、Tauri/Host
+自有 bounded request ID 组成；不含 plugin/Page identity、origin、path、executor、Tauri/Host
 object、stack 或 raw exception。package 不 export frame、codec、fixture、Host projection、nonce/origin
 policy 或 deep-import path。
 
@@ -741,8 +734,7 @@ Host 最多消费 ready lease 一次。私有 adapter 向窄 handler 注入不�
 cancellation signal，校验所有 result/error/event，支持并发乱序 settle，并让 Session/Page replacement
 与 dispose 收敛到幂等 cleanup。Production 会为每个 current ready Session 创建一个 Host 私有 Dispatcher
 binding。该 binding 实现 `runtime.get_context`、`ui.close`、`actions.open` 与五个 `storage.*` method；
-当匹配的 Session grant 与 native provider current 时，它还会分别暴露 `clipboard.read` 与
-`clipboard.write`。私有 post-response outcome 让 adapter
+已删除的 clipboard 与未知 method fail closed。私有 post-response outcome 让 adapter
 先校验并发送成功的 `ui.close` result，再执行匹配目标的关闭 effect。该 outcome 永不跨 wire，也不改变
 公共 SDK transport。
 
@@ -762,10 +754,10 @@ Host adapter 现在会在递归 Contract 校验之前以及每次出站交付之
 
 analyzer 以迭代方式遍历 JSON-compatible 输入，在不先序列化完整 value 的前提下计算 UTF-8 与 JSON escaping
 成本，在首次确认超限时停止；它拒绝循环、非 plain object、非有限数字及其他非 JSON value，且不会修改输入。
-Manifest、grant、插件来源、SDK option 或 payload 都不能提高这些上限。
+Manifest、插件来源、SDK option 或 payload 都不能提高这些上限。
 
 入站顺序固定为：浅层 exact envelope/request ID 分类、有界 frame 与语义 payload 分析、公共 Contract 校验，
-最后才准入 permission-aware Dispatcher。可安全关联的 malformed request 返回 `invalid_request`，无效 params
+最后才准入 closed Host API Dispatcher。可安全关联的 malformed request 返回 `invalid_request`，无效 params
 返回 `invalid_params`，未声明 method 返回 `method_not_found`，byte/depth/node/concurrency 拒绝返回
 `limit_exceeded`。这些失败不占用 Handler slot，并保持健康 Session 可用。未知版本、未知 frame type、私有
 envelope 字段、非 JSON frame，以及重复或倒退 request ID 仍属于 terminal protocol violation。严格递增的
@@ -783,7 +775,7 @@ Handler throw、无效/超限 value 或 method/result mismatch 会转换为一�
 
 production 通过冻结的 Host 私有 diagnostic record 观察失败；record 只包含 trusted plugin ID、存在时已验证的
 method、`ingress | execution | egress`、闭集 code 和固定英文消息。它绝不包含 request ID、payload、URL、path、
-origin、grant、exception、stack、Port、provider 或 Host object，sink throw 也不能影响 settlement。diagnostic
+origin、exception、stack、Port、provider 或 Host object，sink throw 也不能影响 settlement。diagnostic
 不会持久化，也不会向插件公开。
 
 本次交付不新增 batch/streaming RPC、持续调用频率限制、iframe/CPU/memory 监控、插件暂停、隔离升级、自动
@@ -799,14 +791,13 @@ Dispatcher/provider integration、私有边界和真实资源拒绝 evidence。
 
 Production App 使用当前 locale/theme 状态、App Navigation Service、Launcher Action Registry/Dispatcher
 与 Runtime currentness 组合出 Session-scoped Dispatcher。认证 lease 是 plugin/Page identity 的唯一来源；
-request 不能选择 owner、Page、provider、executor、route、Tauri command、grant 或其他 Host object。
+request 不能选择 owner、Page、provider、executor、route、Tauri command 或其他 Host object。
 
-`runtime.get_context` 返回 Host API `0.1.0`、当前 `en-US | zh-CN` locale、当前 `light | dark` theme，
+`runtime.get_context` 返回 Host API `0.2.0`、当前 `en-US | zh-CN` locale、当前 `light | dark` theme，
 以及排序并冻结的 `actions.open`、`runtime.get_context`、五个 `storage.*` method 与 `ui.close` capability
-snapshot（scoped-storage provider 可用时）；每个 clipboard method 仅在自身 grant 与 provider 可用时独立进入
-snapshot。只有当前 locale、
+snapshot（scoped-storage provider 可用时）。只有当前 locale、
 theme 或 capability snapshot 实际变化时才发送完整 `runtime.context_changed` replacement。identity、
-Registration revision、Runtime attempt、source、Manifest request、raw grant、path 与 Host lifecycle state
+Registration revision、Runtime attempt、source、Manifest 数据、path 与 Host lifecycle state
 继续保持私有。
 
 `ui.close` 只接受 `{}` 并从 Session 推导目标。Host 先发送并终结 `{ accepted: true }`，再执行至多一次
@@ -823,58 +814,18 @@ clipboard capability。
 MessageChannel、公共 tarball、export、dependency 与 workspace boundary 聚焦门禁。该能力不增加公共 export、
 wire frame 或 SDK dependency。持续 Runtime resource isolation、项目模板、CLI 与开发模式仍是独立能力。
 
-## 已交付的 Host 私有 Plugin Permission Core 与文本剪贴板
+## 已删除的 Host Permission 与 Native Clipboard Authority
 
-Host 从公共 Host API method/permission catalog 推导唯一闭集 permission catalog。`clipboard.read` 与
-`clipboard.write` 是两个独立的 sensitive permission。Manifest request 与本地化 author reason 只用于展示；
-持久化 Host grant 与它们保持分离，effective view 报告 `not_requested`、`unsupported`、`not_granted` 或
-`granted`。官方与外部插件遵循完全相同的规则。
+Host API `0.2.0` 删除 permission catalog 与 native clipboard method。Manifest `0.2.0`、Manager
+record format `2`、Registration `0.3.0`、installation `0.3.0` 与 replacement `0.2.0` 不携带
+request、grant、risk 或 permission fact。Rust permission state、grant command、AppKit clipboard
+provider、frontend service、prompt、Settings mutation 与 commit 后 grant 阶段均不在 production
+composition 中。旧 record 与 wire field fail closed。
 
-grant mutation 仅接受 main Host window 发起且携带精确 current Manager revision 的请求。grant 要求健康的已安装
-entry、current Manifest request 与 Host 支持；replacement Manifest 不再请求某权限后，revoke 仍可清理残留 grant。
-幂等 decision 不写盘也不推进 revision。Manager durable commit 是 decision point；之后 invalidation event 发送失败
-不会回滚已提交 grant。
-
-每次 native effect 都会用不可变 Runtime Session identity 对 live Manager entry、相关 plugin revision、
-compatibility、enabled state、Manifest request 与当前持久化 grant 重新授权。grant mutation 与 clipboard effect
-共享同一进程 coordinator，因此已经完成的 revoke 不会与之后的 privileged effect 竞态；其他插件的变更也不会
-使原本 current 的 Session 失效。
-
-macOS Host 在 main thread 直接使用 AppKit `NSPasteboard` 执行纯文本读写，严格校验 request/result/error 边界，
-并限制为 1,048,576 个字符。空或非文本读取返回空字符串；其他目标平台报告 provider unavailable。隔离 iframe
-仍由 Permissions Policy 禁用 browser clipboard，且不会获得 Tauri command、native clipboard object、path、
-raw grant 或 fallback channel。
-
-运行 `pnpm run check:plugin-permission-management` 可验证共享 TypeScript/Rust fixture、持久化/recovery、
-revision 与竞态行为、Dispatcher 与真实 SDK/MessageChannel、package boundary，以及既有 macOS WKWebView
-transport evidence。在 macOS 串行运行 `pnpm run check:plugin-permission-management:native` 可执行真实 pasteboard
-smoke。本交付不增加 prompt/settings/history UI、产品 copy、通用 permission framework、通用 RPC limit、模板、
-CLI、签名、marketplace 或 browser clipboard fallback。
-
-## 已交付的 Host 私有插件权限提示
-
-本地安装 Contract `0.2.0` 将 `prepare`、`commit` 与 `cancel` 分离。prepare 把有界 package bytes
-验证到 Installer 持有的 staging，只返回 opaque token 与有界 candidate projection，不发布 Registration
-状态或 grant。commit 只接受 token，在 installer lock 内重新校验 staged package 与当前 Host facts，并始终
-以 empty grant snapshot 创建持久安装。
-
-可信管理表面只从当前 Host facts 推导 permission prompt。Host 持有的风险/支持标签与有界的 author-provided
-reason 分开显示，并明确提示 Publisher 未验证。敏感选项默认关闭；用户可以取消、稍后决定或零授权安装，
-这些交互结果不产生 decision history。官方与外部插件使用同一路径。
-
-Registration 收敛后，Host 才会按稳定 permission ID 顺序逐项应用用户明确选择的 grant，并把每次返回的
-Manager revision 传给下一项。失败会立即停止，并说明 package 已安装但 grant 一个也未应用或只应用了一部分；
-不会回滚或自动重放安装。replacement 分开展示 retained、removed 与 added request，且只允许选择 Host 当前
-支持的 added permission。
-
-Settings grant/revoke 会绑定一个 current entry/revision，并在 snapshot/detail 收敛后才更新 UI。revoke 复用
-既有 permission core，因此当前 Runtime Session authority 与 pending privileged call 会立即 fail closed；Host
-不会自动重开 Page。插件 iframe message、Manifest reason、SDK payload、Publisher/source fact 与伪造的 user
-activation 都不能打开提示或调用 grant mutation。本能力不新增公共 permission-request API、permission
-directory、decision history、签名信任、marketplace 或通用 Runtime prompt。
-
-运行 `pnpm run check:plugin-permission-prompts` 可验证安装、管理、prompt、Runtime invalidation、公共边界、
-本地化、键盘/focus 与固定 `650×600` 视觉证据。
+可信安装与 replacement confirmation 改为说明开放隔离 Web Runtime 的信任决定。lensX 隔离 Host 与
+其他插件 authority，但不审查或逐项授权普通 Worker、network、远程资源、Blob/Data、WASM 或浏览器
+origin storage 行为。设备/native capability 仍不可用，除非未来设计明确的公共 Host boundary。
+`pnpm run check:open-isolated-plugin-runtime` 提供负向 authority 扫描与组合 Runtime 验证。
 
 ## 已交付的插件 Scoped Storage
 
@@ -908,9 +859,8 @@ prompt、通用 RPC limit、模板、CLI 或开发模式。
 ## 已交付的 Host 私有插件管理设置
 
 可信 Settings 页面现在只消费一个根级私有 `PluginManagementService`。该 facade 观察完整且不可变的
-Registration snapshot，只针对同一 revision 加载详情，投影有界 diagnostic 与
-requested/supported/persisted-grant/effective permission facts，并串行编排 prepared installation、启用/禁用、
-替换、单项 permission grant/revoke、卸载和数据清除。React 只接收 typed operation availability 与安全
+Registration snapshot，只针对同一 revision 加载详情，投影有界 diagnostic、lifecycle 与 source fact，并串行
+编排 prepared installation、启用/禁用、替换、卸载和数据清除。React 只接收 typed operation availability 与安全
 outcome；它不直接 invoke Tauri，也不复制 Manager transition 规则。
 
 根级 plugin composition 是共享 management、plugin lifecycle、Runtime lifecycle、replacement 与 Registration
@@ -919,21 +869,21 @@ cleanup 只销毁这一代实例；`App`、`PluginRuntimeFrame` 与 Settings 组
 dispose。这样开发模式 `StrictMode` 的 setup-cleanup-setup 不会复用已经销毁的 service，也不会让管理视图永久
 停留在 `loading`，或让 Runtime 在 iframe 尚未创建时永久停留在 `resolving`。
 
-替换仍采用 prepare/confirm/commit 流程。确认界面展示版本分类与 permission 增减；Registration revision
+替换仍采用 prepare/confirm/commit 流程。确认界面展示版本分类与信任边界；Registration revision
 变化后确认立即失效。卸载默认 `retain_data`，`delete_data` 必须显式选择。只有 current、disabled、registered
 entry 可以清除数据；该操作使用 Host 私有 Plugin Data Management Contract `0.1.0`。Rust 在持有 Installer
 data boundary 时重新校验 opaque entry identity、expected revision、disabled state、canonical ownership 与安全
 filesystem evidence，再以原子方式提交空的 canonical `storage-v1.json`。缺失或已经为空的 storage 保持幂等；
 ambiguous、linked、escaped、stale、enabled、quarantined 或 degraded evidence 一律 fail closed。
 
-permission mutation 始终保持 root-private 且绑定 revision。管理表面不暴露 raw path/error、Publisher trust、
+管理表面不暴露 raw path/error、Publisher trust、
 Registry patch/history protocol 或公共管理 API，也不会通过 Contract、SDK、Testkit 或 Plugin UI 导出任何
 管理能力。运行 `pnpm run check:plugin-management-settings` 可验证私有边界、facade/UI 回归、公共 package
 检查，以及固定 `650×600` 的双语 light/dark screenshot 与 computed style。
 
 ## 已交付的公共 Plugin Testkit
 
-lensX 已交付只有一个公共根入口的 `@lensx/plugin-testkit@0.1.0`。它的 Runtime dependency 是
+lensX 已交付只有一个公共根入口的 `@lensx/plugin-testkit@0.2.0`。它的 Runtime dependency 是
 `@lensx/plugin-contract` 与 `@lensx/plugin-sdk` 的公共根入口；Contract 与 SDK 不反向依赖
 Testkit。其 Runtime 和声明不需要 DOM、React、Semi Design、Tauri、Node filesystem、Host 私有
 module 或测试运行器。
@@ -967,17 +917,17 @@ await client.dispose();
 Manifest fixture 由真实 Contract validator/normalizer 校验；Runtime context 失败、取消、超时、
 transport failure、断开、重试与迟到结果抑制仍由真实 SDK 决定。fake transport 不定义 RPC
 envelope、request identity、nonce、origin、browser messaging object 或可信 Host identity。它的抽象
-request hook 不是已交付的 Host API method client。capability ID 使用共享闭集 method 类型，不是权限
-请求、grant 或 decision。
+request hook 不是已交付的 Host API method client。capability ID 使用共享闭集 method 类型，不是普通
+Web capability 声明。
 
 `pnpm run check:plugin-testkit` 校验 package 测试与声明、Contract -> SDK -> Testkit 依赖方向、真实
 tarball 内容，以及安装到 workspace 外的无 DOM ES2022 consumer。该 consumer 是发布 smoke fixture，
-不是正式插件项目模板。Testkit 不提供 permission harness、iframe Runtime、插件执行或真实 Host API
-执行；后续 transport、权限和 Runtime change 只能在对应契约接受后扩展此 package。
+不是正式插件项目模板。Testkit 不提供 iframe Runtime、插件执行或真实 Host API 执行；后续 transport
+和 Runtime change 只能在对应契约接受后扩展此 package。
 
 ## 已交付的可选 Plugin UI Package
 
-lensX 已交付面向 React 插件的可选 `@lensx/plugin-ui@0.1.0` package。根 export 严格限制为
+lensX 已交付面向 React 插件的可选 `@lensx/plugin-ui@0.2.0` package。根 export 严格限制为
 `PluginUiProvider`、`PluginPage`、`PluginFeedback` 及其公共类型；唯一额外公共入口是
 `@lensx/plugin-ui/styles.css`。未声明的 deep import、Host React Context、应用私有组件、
 Tauri adapter、Host 样式和完整 Semi Design API 都不会被导出。
@@ -1058,7 +1008,7 @@ dispatcher。特权行为仍然必须是明确的 Host capability，并具有自
 
 生产环境注册 Host 内建的隐藏 launcher 和打开设置 Action，并在 available Page target 提交后通过
 已交付 surface 协调器发布合格 Plugin Action。静态 Manifest 契约本身仍不会注册 Action。安全插件
-icon 解析、permission UI/history、生命周期写操作和外部 Runtime 执行仍是独立能力。最近使用与已
+icon 解析与生命周期写操作仍是独立能力。最近使用与已
 固定集合继续只保存 Action ID，因此投影 Action 会在 provider 缺失时隐藏，并在相同稳定 ID 返回时
 恢复解析。
 
@@ -1067,7 +1017,7 @@ icon 解析、permission UI/history、生命周期写操作和外部 Runtime 执
 ### 可信 Host Module
 
 内建界面可以作为可信 React module 在应用 Provider 内运行。其注册元数据应与外部插件使用相同的
-页面、action、权限和兼容性概念模型，同时 module 加载仍由 Host 控制。
+页面、action 和兼容性概念模型，同时 module 加载仍由 Host 控制。
 
 可信 module 的契约名称必须保持框架中立，避免外部契约依赖 React 实现细节。
 
@@ -1082,14 +1032,14 @@ Dispatcher method。
 - 私有前端模块；
 - Tauri command；
 - Rust 对象；
-- 已授权 Host 方法之外的本地文件系统或操作系统 API。
+- 本地文件系统或操作系统 API。
 
 外部运行时资源必须解析在已安装插件的边界内。
 
 ## Host API
 
-已交付的公共语义契约定义了上文十个 method ID、exact params/result、
-`runtime.context_changed`、`PluginRuntimeContext`、permission、error 与 capability/version 规则。
+已交付的公共语义契约定义了上文八个 method ID、exact params/result、
+`runtime.context_changed`、`PluginRuntimeContext`、error 与 capability/version 规则。
 Contract 校验本身不会发送或执行请求。公共 SDK client 现在提供一个 Contract-closed typed request
 operation，而不是 raw string method 或具体副作用 provider。
 
@@ -1102,11 +1052,10 @@ iframe
   -> 注入 Session-derived identity 的 Host Port adapter
   -> Session-scoped Host 私有 Dispatcher
   -> Context / 匹配当前 Page 的关闭 / 当前插件 Action / scoped storage
-  -> permission-authorized 文本剪贴板 -> 窄 Rust command
 ```
 
-Bridge 必须校验真实消息来源和受限制的 origin。已声明权限不等于已授予权限。特权方法必须在
-分发前检查当前授权状态。
+Bridge 必须校验真实消息来源和受限制的 origin。公共 Host API 不包含 native capability method；
+未知或已删除 method 会在分发前 fail closed。
 
 Host API 方法保持小型、类型化、版本化，并且可以独立测试。官方 SDK 已经提供相应方法时，
 插件不能手写私有传输消息。
@@ -1134,8 +1083,8 @@ Host API 方法保持小型、类型化、版本化，并且可以独立测试�
 enable/disable/uninstall 基础设施、scoped package-relative resources、Plugin surface 投影、生产
 Action 激活、Page Registry/navigation、macOS 隔离 iframe Runtime、Host 私有进程内 Runtime Session、
 公共 SDK iframe transport/Host Port adapter、公共 Host API 语义契约、Host 私有 RPC v1 validation boundary、
-Dispatcher、插件 scoped storage provider、permission core 与 macOS 文本剪贴板 provider 已经交付。其余每项
-能力还包括 Plugin Management Settings、permission prompt、公共项目模板与 CLI、feature-gated Plugin
+Dispatcher、插件 scoped storage provider、open isolated Web Runtime 与 Plugin Management Settings 已交付。
+其他能力还包括公共项目模板与 CLI、feature-gated Plugin
 Development Mode、双语外部开发者文档与官方插件 release 流水线。其余每项能力——npm 发布、签名、Marketplace 分发、
 远程/自动更新、decision 或用户主动 rollback history、后台 Runtime 或 executable/trusted sidecar——都需要独立的已接受
 规格和实现证据。本文定义架构方向和边界，不是发布检查清单。外部 package、API、教程和排障细节位于

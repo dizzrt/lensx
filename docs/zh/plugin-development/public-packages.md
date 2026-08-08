@@ -2,7 +2,7 @@
 
 ## Package 矩阵
 
-所有 package 当前版本均为 `0.1.0`。下列入口是完整的受支持 exports；即使某个文件存在于
+所有 package 当前版本均为 `0.2.0`。下列入口是完整的受支持 exports；即使某个文件存在于
 tarball，只要没有声明为 export，就仍是私有路径。
 
 | Package | 公共入口 | 角色 |
@@ -35,15 +35,14 @@ normalize 前先使用 `validatePluginManifest`。每个 Runtime attempt 创建�
 
 `PluginUiProvider` 消费最新 Runtime context 并适配 locale/theme。`PluginFeedback` 与
 `PluginPage` 只提供呈现原语，不提供 Host authority。CLI 创建、构建、校验、打包和检查文件；
-不会启动 Host、安装 package、授予权限或执行插件。
+不会启动 Host、安装 package 或执行插件。
 
 ## 非目标
 
-- Testkit 不是 Host、权限系统或来源安全模拟器。
+- Testkit 不是 Host、WebView 隔离边界或来源安全模拟器。
 - Plugin UI 不是共享 Host React，也不会跨越 iframe 边界。
 - Contract acceptance 不等于安装、注册、session ready、provider 可用或授权。
 - CLI acceptance 不等于 Host acceptance；安装会在可信边界重新检查同一 canonical package 规则。
 - Package 当前尚未发布到 npm。lensX build 产出的真实 tarball 是受支持的外部消费验证输入。
 
 继续阅读[工具与安装](tooling-and-installation.md)或 [Host API 参考](host-api.md)。
-

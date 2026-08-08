@@ -1,15 +1,12 @@
 use crate::{
-    plugin_manifest::{
-        NormalizedLocalizedText, NormalizedPermissionRequest, NormalizedPluginManifest,
-    },
+    plugin_manifest::{NormalizedLocalizedText, NormalizedPluginManifest},
     plugin_package_format::{package_diagnostic_message, PackageDiagnostic},
 };
 use serde::{Deserialize, Serialize};
 
-pub const LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION: &str = "0.2.0";
+pub const LOCAL_PLUGIN_INSTALLATION_CONTRACT_VERSION: &str = "0.3.0";
 pub const MAX_CANDIDATE_TEXT_BYTES: usize = 4_096;
 pub const MAX_CANDIDATE_URL_BYTES: usize = 2_048;
-pub const MAX_CANDIDATE_PERMISSIONS: usize = 64;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -54,38 +51,15 @@ pub struct LocalPluginInstallationPublisher {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct LocalPluginInstallationPermissionRequest {
-    pub permission_id: String,
-    pub reason: LocalPluginInstallationLocalizedText,
-}
-
-impl From<&NormalizedPermissionRequest> for LocalPluginInstallationPermissionRequest {
-    fn from(value: &NormalizedPermissionRequest) -> Self {
-        Self {
-            permission_id: value.permission_id.clone(),
-            reason: (&value.reason).into(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
 pub struct LocalPluginInstallationCandidate {
     pub plugin_id: String,
     pub version: String,
     pub display_name: LocalPluginInstallationLocalizedText,
     pub publisher: LocalPluginInstallationPublisher,
-    pub requested_permissions: Vec<LocalPluginInstallationPermissionRequest>,
 }
 
 impl LocalPluginInstallationCandidate {
     pub fn from_manifest(manifest: &NormalizedPluginManifest) -> Result<Self, ()> {
-        let mut requested_permissions: Vec<LocalPluginInstallationPermissionRequest> = manifest
-            .requested_permissions
-            .iter()
-            .map(Into::into)
-            .collect();
-        requested_permissions.sort_by(|left, right| left.permission_id.cmp(&right.permission_id));
         let candidate = Self {
             plugin_id: manifest.plugin_id.clone(),
             version: manifest.version.clone(),
@@ -95,7 +69,6 @@ impl LocalPluginInstallationCandidate {
                 homepage: manifest.publisher.homepage.clone(),
                 repository: manifest.publisher.repository.clone(),
             },
-            requested_permissions,
         };
         candidate.is_valid().then_some(candidate).ok_or(())
     }
@@ -107,14 +80,6 @@ impl LocalPluginInstallationCandidate {
             && is_bounded_text(&self.publisher.author, MAX_CANDIDATE_TEXT_BYTES)
             && is_https_url(&self.publisher.homepage)
             && is_https_url(&self.publisher.repository)
-            && self.requested_permissions.len() <= MAX_CANDIDATE_PERMISSIONS
-            && self
-                .requested_permissions
-                .windows(2)
-                .all(|pair| pair[0].permission_id < pair[1].permission_id)
-            && self.requested_permissions.iter().all(|request| {
-                is_permission_id(&request.permission_id) && is_localized_text(&request.reason)
-            })
     }
 }
 
@@ -398,10 +363,6 @@ fn is_https_url(value: &str) -> bool {
         && url::Url::parse(value).is_ok_and(|url| url.scheme() == "https")
 }
 
-fn is_permission_id(value: &str) -> bool {
-    is_plugin_id(value)
-}
-
 fn is_plugin_id(value: &str) -> bool {
     value.len() <= 255
         && value.split('.').count() >= 2
@@ -491,7 +452,6 @@ mod tests {
                 homepage: "https://example.com".to_owned(),
                 repository: "https://example.com/repo".to_owned(),
             },
-            requested_permissions: Vec::new(),
         };
         let serialized = serde_json::to_string(&LocalPluginInstallationResult::prepared(
             "a".repeat(32),

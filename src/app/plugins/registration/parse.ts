@@ -17,7 +17,6 @@ type NormalizedPluginDisplay = NormalizedPluginManifest['display'];
 
 const ENTRY_ID_PATTERN = /^entry_[0-9a-f]{16}$/u;
 const REVISION_PATTERN = /^(?:0|[1-9][0-9]*)$/u;
-const PERMISSION_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,254}$/u;
 const QUERY_ERROR_MESSAGES = {
   internal: 'Plugin registration query failed.',
   invalid_request: 'Plugin registration request is invalid.',
@@ -280,23 +279,11 @@ const parseDetail = (value: unknown): PluginRegistrationDetail => {
       'source',
       'enabled',
       'compatibility',
-      'granted_permission_ids',
       'runtime',
       'diagnostics',
     ]);
-    if (
-      typeof record.enabled !== 'boolean' ||
-      !Array.isArray(record.granted_permission_ids) ||
-      !Array.isArray(record.diagnostics)
-    ) {
+    if (typeof record.enabled !== 'boolean' || !Array.isArray(record.diagnostics)) {
       throw new TypeError('Registered plugin detail is invalid.');
-    }
-    const grants = record.granted_permission_ids;
-    if (
-      grants.some((grant) => typeof grant !== 'string' || !PERMISSION_ID_PATTERN.test(grant)) ||
-      grants.some((grant, index) => index > 0 && grants[index - 1] >= grant)
-    ) {
-      throw new TypeError('Plugin registration grants must be sorted and unique.');
     }
     return {
       kind: 'registered',
@@ -305,7 +292,6 @@ const parseDetail = (value: unknown): PluginRegistrationDetail => {
       source: parseSource(record.source),
       enabled: record.enabled,
       compatibility: parseCompatibility(record.compatibility),
-      granted_permission_ids: [...grants] as string[],
       runtime: parseRuntime(record.runtime),
       diagnostics: record.diagnostics.map(parseDiagnostic),
     };

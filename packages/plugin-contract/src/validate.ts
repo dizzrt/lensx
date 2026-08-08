@@ -113,7 +113,6 @@ const normalizeManifest = (input: PluginManifestInput): NormalizedPluginManifest
       route: page.route.trim(),
       ...(page.parent_page_id === undefined ? {} : { parent_page_id: page.parent_page_id.trim() }),
       ...(page.icon === undefined ? {} : { icon: trimAsset(page.icon) }),
-      required_permissions: (page.required_permissions ?? []).map((permissionId) => permissionId.trim()),
     }),
   ) as [NormalizedPluginPage, ...NormalizedPluginPage[]];
 
@@ -137,7 +136,7 @@ const normalizeManifest = (input: PluginManifestInput): NormalizedPluginManifest
   );
 
   return {
-    manifest_version: '0.1.0',
+    manifest_version: '0.2.0',
     plugin_id: input.plugin_id.trim(),
     version: input.version.trim(),
     display: {
@@ -164,10 +163,6 @@ const normalizeManifest = (input: PluginManifestInput): NormalizedPluginManifest
       kind: 'iframe',
       entry: input.runtime.entry.trim(),
     },
-    requested_permissions: (input.requested_permissions ?? []).map((permission) => ({
-      permission_id: permission.permission_id.trim(),
-      reason: trimLocalizedText(permission.reason),
-    })),
     contributes: {
       pages,
       actions,
@@ -356,16 +351,6 @@ const validateManifestSemantics = (manifest: NormalizedPluginManifest): PluginMa
     }
   }
 
-  const permissionIds = new Set<string>();
-  manifest.requested_permissions.forEach((permission, index) => {
-    const idPath = `/requested_permissions/${index}/permission_id`;
-    if (permissionIds.has(permission.permission_id)) {
-      diagnostics.push(createDiagnostic('duplicate_id', idPath, 'Permission ID must be unique.'));
-    }
-    permissionIds.add(permission.permission_id);
-    validateLocalizedText(permission.reason, `/requested_permissions/${index}/reason`, diagnostics);
-  });
-
   const pageIds = new Set<string>();
   const pageIndexes = new Map<string, number>();
   manifest.contributes.pages.forEach((page, index) => {
@@ -380,17 +365,6 @@ const validateManifestSemantics = (manifest: NormalizedPluginManifest): PluginMa
     if (page.icon) {
       validatePackagePath(page.icon.path, `/contributes/pages/${index}/icon/path`, diagnostics);
     }
-
-    const requiredPermissions = new Set<string>();
-    page.required_permissions.forEach((permissionId, permissionIndex) => {
-      const path = `/contributes/pages/${index}/required_permissions/${permissionIndex}`;
-      if (requiredPermissions.has(permissionId)) {
-        diagnostics.push(createDiagnostic('duplicate_value', path, 'Required permission must be unique.'));
-      } else if (!permissionIds.has(permissionId)) {
-        diagnostics.push(createDiagnostic('unknown_reference', path, 'Required permission was not requested.'));
-      }
-      requiredPermissions.add(permissionId);
-    });
   });
 
   manifest.contributes.pages.forEach((page, index) => {

@@ -27,7 +27,7 @@ describe('Plugin UI public package boundary', () => {
     expect(metadata.sideEffects).toEqual(['./dist/styles.css']);
     expect(metadata.dependencies).toEqual({ '@douyinfe/semi-ui': '^2.101.1' });
     expect(metadata.peerDependencies).toEqual({
-      '@lensx/plugin-sdk': '^0.1.0',
+      '@lensx/plugin-sdk': '^0.2.0',
       react: '^19.2.7',
       'react-dom': '^19.2.7',
     });

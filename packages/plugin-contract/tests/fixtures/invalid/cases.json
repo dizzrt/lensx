@@ -20,14 +20,78 @@
     "mutations": [
       {
         "op": "set",
-        "path": "/requested_permissions",
+        "path": "/display/description",
         "value": null
       }
     ],
     "expected_diagnostics": [
       {
         "code": "invalid_type",
+        "path": "/display/description"
+      }
+    ]
+  },
+  {
+    "name": "old Manifest version is rejected",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/manifest_version",
+        "value": "0.1.0"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "invalid_value",
+        "path": "/manifest_version"
+      }
+    ]
+  },
+  {
+    "name": "legacy requested permissions are rejected",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/requested_permissions",
+        "value": []
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "unknown_field",
         "path": "/requested_permissions"
+      }
+    ]
+  },
+  {
+    "name": "author CSP policy is rejected",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/csp",
+        "value": "default-src *"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "unknown_field",
+        "path": "/csp"
+      }
+    ]
+  },
+  {
+    "name": "author sandbox policy is rejected",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/runtime/sandbox",
+        "value": ["allow-same-origin"]
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "unknown_field",
+        "path": "/runtime/sandbox"
       }
     ]
   },
@@ -220,7 +284,7 @@
     ]
   },
   {
-    "name": "Page permission was not requested",
+    "name": "legacy Page permission gate is rejected",
     "mutations": [
       {
         "op": "set",
@@ -230,8 +294,8 @@
     ],
     "expected_diagnostics": [
       {
-        "code": "unknown_reference",
-        "path": "/contributes/pages/0/required_permissions/0"
+        "code": "unknown_field",
+        "path": "/contributes/pages/0/required_permissions"
       }
     ]
   },

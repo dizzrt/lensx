@@ -23,11 +23,12 @@ describe('SemVer and Host API compatibility', () => {
   });
 
   test('enforces the half-open supported Host API range', () => {
-    expect(isSupportedHostApiVersion('0.1.0-alpha.1')).toBe(false);
-    expect(isSupportedHostApiVersion('0.1.0')).toBe(true);
-    expect(isSupportedHostApiVersion('0.1.99')).toBe(true);
-    expect(isSupportedHostApiVersion('0.2.0-alpha.1')).toBe(true);
-    expect(isSupportedHostApiVersion('0.2.0')).toBe(false);
+    expect(isSupportedHostApiVersion('0.1.99')).toBe(false);
+    expect(isSupportedHostApiVersion('0.2.0-alpha.1')).toBe(false);
+    expect(isSupportedHostApiVersion('0.2.0')).toBe(true);
+    expect(isSupportedHostApiVersion('0.2.99')).toBe(true);
+    expect(isSupportedHostApiVersion('0.3.0-alpha.1')).toBe(true);
+    expect(isSupportedHostApiVersion('0.3.0')).toBe(false);
   });
 });
 
@@ -36,7 +37,7 @@ describe('Runtime context validation', () => {
     const sourceCapabilities = ['runtime.get_context'];
     const context = validateRuntimeContext({
       capabilities: sourceCapabilities,
-      hostApiVersion: '0.1.8',
+      hostApiVersion: '0.2.0',
       locale: 'zh-CN',
       theme: 'dark',
     });
@@ -47,7 +48,7 @@ describe('Runtime context validation', () => {
     expect(Object.isFrozen(context.capabilities)).toBe(true);
     expect(() => (context.capabilities as string[]).push('forbidden')).toThrow();
     expect(
-      validateRuntimeContext({ capabilities: [], hostApiVersion: '0.1.0', locale: 'en-US', theme: 'light' })
+      validateRuntimeContext({ capabilities: [], hostApiVersion: '0.2.0', locale: 'en-US', theme: 'light' })
         .capabilities,
     ).toEqual([]);
   });
@@ -56,14 +57,14 @@ describe('Runtime context validation', () => {
     undefined,
     {},
     { capabilities: [], hostApiVersion: 'invalid', locale: 'en-US', theme: 'light' },
-    { capabilities: [], hostApiVersion: '0.1.0', locale: 'fr-FR', theme: 'light' },
-    { capabilities: [], hostApiVersion: '0.1.0', locale: 'en-US', theme: 'system' },
-    { capabilities: ['unknown.method'], hostApiVersion: '0.1.0', locale: 'en-US', theme: 'light' },
-    { capabilities: ['storage.get', 'storage.get'], hostApiVersion: '0.1.0', locale: 'en-US', theme: 'light' },
-    { capabilities: ['storage.get', 'actions.open'], hostApiVersion: '0.1.0', locale: 'en-US', theme: 'light' },
+    { capabilities: [], hostApiVersion: '0.2.0', locale: 'fr-FR', theme: 'light' },
+    { capabilities: [], hostApiVersion: '0.2.0', locale: 'en-US', theme: 'system' },
+    { capabilities: ['unknown.method'], hostApiVersion: '0.2.0', locale: 'en-US', theme: 'light' },
+    { capabilities: ['storage.get', 'storage.get'], hostApiVersion: '0.2.0', locale: 'en-US', theme: 'light' },
+    { capabilities: ['storage.get', 'actions.open'], hostApiVersion: '0.2.0', locale: 'en-US', theme: 'light' },
     {
       capabilities: [],
-      hostApiVersion: '0.1.0',
+      hostApiVersion: '0.2.0',
       locale: 'en-US',
       pluginIdentity: 'untrusted',
       theme: 'light',

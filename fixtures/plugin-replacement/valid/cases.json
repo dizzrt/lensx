@@ -2,13 +2,17 @@
   {
     "name": "prepare_request",
     "type": "prepare_request",
-    "value": { "contract_version": "0.1.0", "entry_id": "entry_0123456789abcdef", "expected_revision": "7" }
+    "value": {
+      "contract_version": "0.2.0",
+      "entry_id": "entry_0123456789abcdef",
+      "expected_revision": "7"
+    }
   },
   {
     "name": "commit_request",
     "type": "commit_request",
     "value": {
-      "contract_version": "0.1.0",
+      "contract_version": "0.2.0",
       "preparation_token": "prep_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "entry_id": "entry_0123456789abcdef",
       "expected_revision": "7"
@@ -18,21 +22,24 @@
     "name": "cancel_request",
     "type": "cancel_request",
     "value": {
-      "contract_version": "0.1.0",
+      "contract_version": "0.2.0",
       "preparation_token": "prep_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
     }
   },
   {
     "name": "cancelled",
     "type": "result",
-    "value": { "status": "cancelled", "contract_version": "0.1.0" }
+    "value": {
+      "status": "cancelled",
+      "contract_version": "0.2.0"
+    }
   },
   {
     "name": "duplicate",
     "type": "result",
     "value": {
       "status": "duplicate",
-      "contract_version": "0.1.0",
+      "contract_version": "0.2.0",
       "entry_id": "entry_0123456789abcdef",
       "current_version": "1.0.0",
       "candidate_version": "1.0.0"
@@ -43,14 +50,12 @@
     "type": "result",
     "value": {
       "status": "prepared",
-      "contract_version": "0.1.0",
+      "contract_version": "0.2.0",
       "preparation_token": "prep_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "entry_id": "entry_0123456789abcdef",
       "current_version": "1.0.0",
       "candidate_version": "2.0.0",
-      "classification": "upgrade",
-      "added_permission_ids": ["lensx.network.read"],
-      "removed_permission_ids": ["lensx.filesystem.write"]
+      "classification": "upgrade"
     }
   },
   {
@@ -58,7 +63,7 @@
     "type": "result",
     "value": {
       "status": "committed",
-      "contract_version": "0.1.0",
+      "contract_version": "0.2.0",
       "entry_id": "entry_0123456789abcdef",
       "plugin_id": "com.acme.workspace",
       "version": "2.0.0",
@@ -71,7 +76,7 @@
     "name": "busy_error",
     "type": "error",
     "value": {
-      "contract_version": "0.1.0",
+      "contract_version": "0.2.0",
       "code": "busy",
       "operation": "prepare",
       "message": "Another plugin operation is in progress."

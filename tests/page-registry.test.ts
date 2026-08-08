@@ -21,7 +21,6 @@ const pluginBatch = (ownerId = 'com.acme.notes'): PageProviderBatch => ({
       page_id: 'home',
       title: { 'en-US': 'Notes' },
       route: '/private/home',
-      required_permission_ids: [],
       available: true,
     },
     {
@@ -30,7 +29,6 @@ const pluginBatch = (ownerId = 'com.acme.notes'): PageProviderBatch => ({
       title: { 'en-US': 'Note settings' },
       route: '/private/settings',
       parent: { owner_id: ownerId, page_id: 'home' },
-      required_permission_ids: ['notes.read'],
       available: false,
     },
   ],
@@ -112,7 +110,6 @@ describe('Page Registry', () => {
         available: boolean;
         owner_id: string;
         page_id: string;
-        required_permission_ids: string[];
         route: string;
         title: { 'en-US': string };
       }>;
@@ -124,12 +121,10 @@ describe('Page Registry', () => {
     }
     batch.provider.display_name['en-US'] = 'Mutated';
     mutablePage.title['en-US'] = 'Mutated';
-    mutablePage.required_permission_ids.push('secret.permission');
 
     const lookup = registry.lookup({ owner_id: 'com.acme.notes', page_id: 'home' });
     expect(lookup?.provider.display_name['en-US']).toBe('Acme Notes');
     expect(lookup?.page.title['en-US']).toBe('Notes');
-    expect(lookup?.page.required_permission_ids).toEqual([]);
     expect(Object.isFrozen(lookup)).toBe(true);
     expect(Object.isFrozen(lookup?.provider.display_name)).toBe(true);
     expect(Object.isFrozen(registry.snapshot())).toBe(true);

@@ -40,7 +40,7 @@
       {
         "op": "set",
         "path": "/compatibility/host_api/min_version",
-        "value": "0.1.0"
+        "value": "0.2.0"
       }
     ],
     "expected_status": "compatible"

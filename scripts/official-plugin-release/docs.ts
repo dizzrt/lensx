@@ -97,8 +97,7 @@ export const checkOfficialPluginReleaseDocs = (rootDir: string): void => {
     'check:plugin-developer-cli',
     'check:plugin-package-format',
     'check:local-plugin-installation',
-    'check:plugin-runtime-security-lifecycle',
-    'check:plugin-permission-prompts',
+    'check:open-isolated-plugin-runtime',
   ]) {
     if (!focusedGate?.includes(stage)) fail('focused-gate-composition-drift', stage);
   }

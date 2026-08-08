@@ -68,7 +68,7 @@ const createContractFixture = (
       },
     };
     const manifest: Record<string, unknown> = {
-      manifest_version: '0.1.0',
+      manifest_version: '0.2.0',
       plugin_id: `dev.lensx.fixture.${slug}`,
       version: '1.0.0',
     };

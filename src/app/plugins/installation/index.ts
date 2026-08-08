@@ -19,7 +19,6 @@ export type {
   LocalPluginInstallationErrorPayload,
   LocalPluginInstallationLocalizedText,
   LocalPluginInstallationOperation,
-  LocalPluginInstallationPermissionRequest,
   LocalPluginInstallationPublisher,
   LocalPluginInstallationRequest,
   LocalPluginInstallationResult,

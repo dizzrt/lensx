@@ -17,8 +17,9 @@ for Plugin Action projection. Only entries whose `kind` is `registered`, whose
 `enabled` state is `true`, whose `compatibility.lensx` and
 `compatibility.host_api` values are both `true`, and whose details belong to the
 same current revision MAY contribute Launcher Actions. Installation `source`,
-publisher declarations, requested permissions, and existing grants MUST NOT
-bypass these eligibility conditions.
+publisher declarations, remote behavior, and legacy permission claims MUST NOT
+bypass these eligibility conditions. Current Registration and Manifest `0.2.0`
+facts contain no grant authority.
 
 #### Scenario: A healthy eligible plugin becomes a projection candidate
 
@@ -196,8 +197,8 @@ its Page batch.
 
 #### Scenario: An Action targets an unavailable Page
 
-- **WHEN** a Page is unknown, missing a required Host grant, or otherwise
-  unavailable in the current Page batch
+- **WHEN** a Page is unknown, belongs to a legacy incompatible Manifest, or is
+  otherwise unavailable in the current Page batch
 - **THEN** an Action targeting that Page is excluded from the provider's
   published Action batch
 - **THEN** users do not see an Action that is already known to fail Page

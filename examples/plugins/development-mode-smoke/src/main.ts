@@ -3,7 +3,7 @@ import { createPluginIframeTransport } from '@lensx/plugin-sdk/iframe';
 
 import './styles.css';
 
-declare const __LENSX_PLUGIN_DEVELOPMENT_SMOKE_PHASE__: 'initial' | 'permission-delta';
+declare const __LENSX_PLUGIN_DEVELOPMENT_SMOKE_PHASE__: 'initial' | 'reload';
 
 const phase = __LENSX_PLUGIN_DEVELOPMENT_SMOKE_PHASE__;
 const root = document.getElementById('app');
@@ -11,26 +11,22 @@ if (root === null) throw new Error('Missing plugin application root.');
 
 const copy = {
   'en-US': {
-    capability: 'Effective clipboard.read capability',
+    capability: 'Current non-privileged Host API context',
     connecting: 'Connecting to lensX…',
     error: 'The public SDK session could not connect.',
     generation: 'Development snapshot generation',
-    no: 'no',
-    permissionDelta: 'Manifest request: clipboard.read',
+    openWeb: 'Open Web abilities do not require lensX grants',
     retry: 'Try again',
     title: 'Development Mode Smoke',
-    yes: 'yes',
   },
   'zh-CN': {
-    capability: '实际 clipboard.read capability',
+    capability: '当前非特权 Host API 上下文',
     connecting: '正在连接 lensX…',
     error: '公共 SDK session 无法连接。',
     generation: '开发快照代际',
-    no: '否',
-    permissionDelta: 'Manifest 请求：clipboard.read',
+    openWeb: '开放 Web 能力无需 lensX grant',
     retry: '重试',
     title: '开发模式 Smoke',
-    yes: '是',
   },
 } as const;
 
@@ -56,17 +52,14 @@ const renderReady = (context: PluginRuntimeContext): void => {
   const generation = document.createElement('p');
   generation.dataset.smokeGeneration = phase;
   generation.textContent = `${messages.generation}: ${phase === 'initial' ? 'A' : 'B'}`;
-  const permission = document.createElement('p');
-  permission.textContent =
-    phase === 'initial'
-      ? `${messages.permissionDelta}: ${messages.no}`
-      : `${messages.permissionDelta}: ${messages.yes}`;
+  const openWeb = document.createElement('p');
+  openWeb.textContent = messages.openWeb;
   const capability = document.createElement('p');
-  capability.dataset.smokeCapability = 'clipboard.read';
-  capability.textContent = `${messages.capability}: ${context.capabilities.includes('clipboard.read') ? messages.yes : messages.no}`;
+  capability.dataset.smokeCapability = 'non-privileged-host-api';
+  capability.textContent = `${messages.capability}: ${context.capabilities.join(', ')}`;
   const facts = document.createElement('code');
   facts.textContent = `${context.hostApiVersion} · ${context.locale} · ${context.theme}`;
-  main.append(heading, generation, permission, capability, facts);
+  main.append(heading, generation, openWeb, capability, facts);
   root.append(main);
 };
 

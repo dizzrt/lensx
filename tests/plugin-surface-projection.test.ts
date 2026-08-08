@@ -52,7 +52,7 @@ const snapshotFor = (
   entries: readonly PluginRegistrationSummary[] = [],
   availability: PluginRegistrationSnapshot['availability'] = { kind: 'available' },
 ): PluginRegistrationSnapshot => ({
-  contract_version: '0.2.0',
+  contract_version: '0.3.0',
   revision,
   availability,
   entries,
@@ -64,13 +64,12 @@ const detailFor = (
   pluginId: string,
   actionTitle = 'Open Project',
 ): PluginRegistrationDetailResponse => ({
-  contract_version: '0.2.0',
+  contract_version: '0.3.0',
   revision,
   detail: {
     ...structuredClone(baseDetail),
     entry_id: entryId,
     manifest: manifestFor(pluginId, actionTitle),
-    granted_permission_ids: ['lensx.filesystem.read_selected'],
   },
 });
 
@@ -176,8 +175,8 @@ describe('Plugin surface projection coordinator', () => {
     await projection.destroy();
   });
 
-  test('filters permission-blocked Actions and fails closed on degraded snapshots while preserving Host state', async () => {
-    const pluginId = 'com.acme.permissions';
+  test('publishes permission-free Actions and fails closed on degraded snapshots while preserving Host state', async () => {
+    const pluginId = 'com.acme.open-runtime';
     const entryId = 'entry_0000000000000042';
     const summary = summaryFor(pluginId, entryId);
     let adapter!: ControlledAdapter;
@@ -187,7 +186,6 @@ describe('Plugin surface projection coordinator', () => {
         ...baseDetail,
         entry_id: entryId,
         manifest: manifestFor(pluginId),
-        granted_permission_ids: [],
       },
     }));
     const actionRegistry = new LauncherActionRegistry();
@@ -200,8 +198,8 @@ describe('Plugin surface projection coordinator', () => {
     });
 
     await projection.initialize();
-    expect(actionRegistry.get(`${pluginId}.open_project`)).toBeUndefined();
-    expect(pageRegistry.lookup({ owner_id: pluginId, page_id: 'open_project' })?.page.available).toBe(false);
+    expect(actionRegistry.get(`${pluginId}.open_project`)).toBeDefined();
+    expect(pageRegistry.lookup({ owner_id: pluginId, page_id: 'open_project' })?.page.available).toBe(true);
     adapter.publish(
       snapshotFor('2', [summary], {
         kind: 'degraded',

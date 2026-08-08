@@ -47,8 +47,8 @@ const writeProject = async (input: { withDist?: boolean; build?: string } = {}) 
         test: 'node --test',
         check: 'node --check build.mjs',
       },
-      dependencies: { '@lensx/plugin-sdk': '^0.1.0' },
-      devDependencies: { '@lensx/plugin-contract': '^0.1.0' },
+      dependencies: { '@lensx/plugin-sdk': '^0.2.0' },
+      devDependencies: { '@lensx/plugin-contract': '^0.2.0' },
     })}\n`,
   );
   await mkdir(resolve(root, 'src'));
@@ -127,7 +127,7 @@ describe('transactional plugin packing', () => {
 
   test('does not expose an incompatible payload as a successful artifact', async () => {
     const incompatible = structuredClone(baseManifest);
-    incompatible.compatibility.host_api = { min_version: '0.2.0', max_version_exclusive: '0.3.0' };
+    incompatible.compatibility.host_api = { min_version: '0.3.0', max_version_exclusive: '0.4.0' };
     const project = await writeProject();
     await writeDist(project, incompatible);
     await expect(packPluginProject({ cwd: project, noBuild: true, json: true })).rejects.toMatchObject({

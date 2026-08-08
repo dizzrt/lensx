@@ -8,8 +8,8 @@ member matrix 会显式 no-op，完整路径由 committed fixture 覆盖。公�
 UI、Testkit 与 CLI package 仍未发布到 npm。
 
 官方仓库目录或 GitHub Release 不是 Host authority。普通本地安装器仍把下载字节分类为
-`external`，从空 grants 开始，并使用与外部插件相同的 permission prompt、revocation、
-Runtime Session 和 package 规则。签名、Marketplace、自动更新和 Host `official` trust
+`external`，并使用与外部插件相同的开放隔离 Runtime、封闭 Host API、Runtime Session 和 package
+规则。签名、Marketplace、自动更新和 Host `official` trust
 仍未交付。
 
 ## 目录与所有权契约
@@ -44,7 +44,7 @@ Describe the user-visible or maintenance change.
 ```
 
 路径分析控制验证集合，Changeset 控制 release 意图。插件本地路径只选择该插件；Contract、
-SDK、UI、Testkit、CLI、workspace、lockfile、package、安装、权限、Runtime 或 release
+SDK、UI、Testkit、CLI、workspace、lockfile、package、安装、Runtime 或 release
 基础设施变化会验证全部现有官方插件，但不会隐式创建 bump。无关变化产生显式 no-op。
 
 版本 PR 运行 `pnpm run version:official-plugins`。Changesets 只更新目标 package version
@@ -68,7 +68,7 @@ pnpm run check:official-plugin-release-pipeline
 
 focused gate 检查 contract、CODEOWNERS、Changeset policy、确定性 planner、canonical
 candidate/audit schema、workflow policy、双语文档、workspace boundary、公共 CLI/package
-format、普通 TypeScript/Rust 安装 preparation、Runtime/permission gate 与临时双插件 dry-run。
+format、普通 TypeScript/Rust 安装 preparation、open-isolated-Runtime gate 与临时双插件 dry-run。
 每个被选择的真实插件还会进入自己的只读 candidate matrix，因此共享边界变化可以验证每个当前
 consumer，而 pull request 不会获得任何写入路径。
 

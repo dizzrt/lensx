@@ -51,9 +51,7 @@ export const DOCUMENTATION_GATE_STAGES = Object.freeze([
   'check:plugin-project-template',
   'check:plugin-developer-cli',
   'check:plugin-development-mode',
-  'check:plugin-runtime-security-lifecycle',
-  'check:plugin-permission-prompts',
-  'check:plugin-contract',
+  'check:open-isolated-plugin-runtime',
   'check:plugin-testkit',
   'check:local-plugin-installation',
 ] as const);

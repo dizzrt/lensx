@@ -852,7 +852,7 @@ mod tests {
         .expect("fixture expectations should be valid JSON");
         let versions = PluginHostVersions {
             lensx: "0.1.0".to_owned(),
-            host_api: "0.1.0".to_owned(),
+            host_api: "0.2.0".to_owned(),
         };
         for case in cases {
             let bytes = fs::read(root.join(&case.file)).expect("fixture package should exist");
@@ -872,7 +872,7 @@ mod tests {
             b"/Users/private/plugin.lxp: codec failed",
             &PluginHostVersions {
                 lensx: "0.1.0".to_owned(),
-                host_api: "0.1.0".to_owned(),
+                host_api: "0.2.0".to_owned(),
             },
         );
         let serialized = serde_json::to_string(&result).expect("result should serialize");

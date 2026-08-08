@@ -1,0 +1,70 @@
+{
+  "manifest_version": "0.2.0",
+  "plugin_id": "dev.lensx.smoke.development-mode",
+  "version": "0.2.0",
+  "display": {
+    "name": {
+      "en-US": "Development Mode Smoke B",
+      "zh-CN": "开发模式 Smoke B"
+    },
+    "description": {
+      "en-US": "Generation B proves a manual reload creates a fresh isolated Runtime attempt.",
+      "zh-CN": "B 代版本用于证明手动重载会创建新的隔离 Runtime attempt。"
+    }
+  },
+  "publisher": {
+    "author": "lensX smoke fixture (unverified)",
+    "homepage": "https://github.com/dizzrt/lensx",
+    "repository": "https://github.com/dizzrt/lensx"
+  },
+  "compatibility": {
+    "lensx": {
+      "min_version": "0.1.0",
+      "max_version_exclusive": "0.2.0"
+    },
+    "host_api": {
+      "min_version": "0.2.0",
+      "max_version_exclusive": "0.3.0"
+    }
+  },
+  "runtime": {
+    "kind": "iframe",
+    "entry": "index.html"
+  },
+  "contributes": {
+    "pages": [
+      {
+        "id": "main",
+        "title": {
+          "en-US": "Development Mode Smoke B",
+          "zh-CN": "开发模式 Smoke B"
+        },
+        "route": "/"
+      }
+    ],
+    "actions": [
+      {
+        "id": "open",
+        "title": {
+          "en-US": "Open development-mode smoke B",
+          "zh-CN": "打开开发模式 Smoke B"
+        },
+        "description": {
+          "en-US": "Open generation B after a manual development reload.",
+          "zh-CN": "在手动开发重载后打开 B 代版本。"
+        },
+        "default_keywords": {
+          "en-US": ["development", "reload", "plugin", "smoke"],
+          "zh-CN": ["开发", "重载", "插件", "smoke"]
+        },
+        "target": {
+          "kind": "page",
+          "page_id": "main"
+        }
+      }
+    ],
+    "launcher": {
+      "default_action_id": "open"
+    }
+  }
+}

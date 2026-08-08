@@ -57,7 +57,7 @@ try {
     packedMetadata.license !== 'MIT' ||
     packedMetadata.bin?.['lensx-plugin'] !== './dist/src/bin.js' ||
     JSON.stringify(Object.keys(packedMetadata.exports ?? {})) !== JSON.stringify(['.']) ||
-    packedMetadata.dependencies?.['@lensx/plugin-contract'] !== '0.1.0' ||
+    packedMetadata.dependencies?.['@lensx/plugin-contract'] !== '0.2.0' ||
     packedMetadata.dependencies?.['@structured-world/structured-zstd'] !== '0.0.49'
   ) {
     throw new Error('Packed CLI metadata, bin, exports, license, or runtime dependencies drifted.');

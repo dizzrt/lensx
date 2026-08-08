@@ -51,7 +51,6 @@ const identity = Object.freeze({
   resource_generation: '0123456789abcdef0123456789abcdef',
   runtime_attempt_key: 'attempt-1',
   registration_revision: '7',
-  granted_permission_ids: Object.freeze(['clipboard.read']),
 });
 const request = (id: string, method = 'ui.close', params: unknown = {}) => ({
   contract_version: '0.1.0',
@@ -217,7 +216,7 @@ describe('Host-private Plugin Runtime transport adapter', () => {
     );
     const event: HostApiEvent = {
       event: 'runtime.context_changed',
-      payload: { capabilities: [], hostApiVersion: '0.1.0', locale: 'zh-CN', theme: 'dark' },
+      payload: { capabilities: [], hostApiVersion: '0.2.0', locale: 'zh-CN', theme: 'dark' },
     };
     expect(adapter.emit(event)).toBe(true);
     expect(adapter.emit({ ...event, payload: { ...event.payload, identity: 'private' } } as never)).toBe(false);
@@ -421,7 +420,7 @@ describe('Host-private Plugin Runtime transport adapter', () => {
     expect(
       adapter.emit({
         event: 'runtime.context_changed',
-        payload: { capabilities: [], hostApiVersion: '0.1.0', locale: 'en-US', theme: 'light', grant: 'private' },
+        payload: { capabilities: [], hostApiVersion: '0.2.0', locale: 'en-US', theme: 'light', grant: 'private' },
       } as never),
     ).toBe(false);
     expect(adapter.emit({ private: 'Host object' } as never)).toBe(false);

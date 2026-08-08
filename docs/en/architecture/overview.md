@@ -331,21 +331,20 @@ the existing page error boundary. The Host-private resolver cross-checks the
 current Page, Registration revision, Resource identity, isolated `entry_url`,
 and Registry route, then activates the exact native navigation lease before
 mounting. The iframe fixes `allow-scripts allow-same-origin`, `no-referrer`, and
-a deny-by-default Permissions Policy; close, retry, invalidation, replacement,
-and App teardown remove it. Its load event means only `loaded`, not SDK/Session
+a Host-owned Permissions Policy; close, retry, invalidation, replacement, and
+App teardown remove it. Its load event means only `loaded`, not SDK/Session
 `ready`. After load, the Host-private Session binds current entry, plugin,
-version, Page, resource generation, Runtime attempt, and actual grants to the
-real `contentWindow`; only an exact acknowledgement on the newly transferred
-Port produces Session `ready`. SDK `ready`, Host API transport, complete CSP,
-the Host-private Dispatcher, scoped storage, and permission-backed text
-clipboard are delivered. Host-private permission prompts and settings are also
-delivered; decision history remains unimplemented.
+version, Page, resource generation, and Runtime attempt to the real
+`contentWindow`; only an exact acknowledgement on the newly transferred Port
+produces Session `ready`. SDK `ready`, Host API transport, the open-Web CSP,
+the Host-private Dispatcher, and scoped storage are delivered. Manifest and
+Host API `0.2.0` expose no native clipboard or permission authority.
 
 Settings is rendered in the existing `main` Tauri window. It has first-level
 Preferences and Plugins sections. Preferences controls the supported
 `light`/`dark` theme and `en-US`/`zh-CN` locale. Plugins provides the shipped
 list-detail management surface for installation, replacement, lifecycle,
-permission, uninstall, and disabled-only data clearing through one typed
+uninstall, and disabled-only data clearing through one typed
 Host-private service. External authors should use the
 [Plugin Development hub](../plugin-development/index.md), not this maintainer
 overview, for tutorials and public references.

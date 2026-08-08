@@ -54,7 +54,6 @@ import {
 import { PageErrorBoundary } from './app/pages/PageErrorBoundary';
 import { SettingsPage } from './app/pages/SettingsPage';
 import { inertPluginManagementService, type PluginManagementService } from './app/plugins/management';
-import { desktopPluginClipboardProviderFactory } from './app/plugins/permission';
 import { desktopPluginResourceAdapter } from './app/plugins/resource';
 import {
   createMutablePluginHostApiContextSource,
@@ -183,7 +182,6 @@ const App = ({
     () =>
       createPluginHostApiDispatcherFactory({
         actions: actionService,
-        clipboard: desktopPluginClipboardProviderFactory,
         context: pluginHostApiContextSource,
         navigation: navigationService,
         storage: desktopPluginScopedStorageProviderFactory,

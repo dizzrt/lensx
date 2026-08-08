@@ -14,7 +14,7 @@ const pluginId = 'com.acme.development';
 const capability = { contract_version: PLUGIN_DEVELOPMENT_CONTRACT_VERSION, supported: true, enabled: true } as const;
 
 const snapshot = (revision = '1'): PluginRegistrationSnapshot => ({
-  contract_version: '0.2.0',
+  contract_version: '0.3.0',
   revision,
   availability: { kind: 'available' },
   entries: [

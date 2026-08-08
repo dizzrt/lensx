@@ -5,7 +5,7 @@ const root = join(import.meta.dirname, '..');
 const hostCsp =
   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self' ipc: http://ipc.localhost; frame-src lensx-plugin:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 const pluginCsp =
-  "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; media-src 'none'; worker-src 'none'; child-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors tauri://localhost";
+  "default-src 'self' https: data: blob:; script-src 'self' https: data: blob: 'wasm-unsafe-eval'; style-src 'self' https: data: blob: 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https: wss:; media-src 'self' https: data: blob:; worker-src 'self' https: data: blob:; child-src 'self' https: data: blob:; frame-src 'self' https: data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors tauri://localhost";
 const pluginTauriDevCsp = pluginCsp.replace(
   'frame-ancestors tauri://localhost',
   'frame-ancestors http://localhost:40755',
@@ -28,8 +28,8 @@ for (const configName of ['tauri.conf.json', 'plugin-runtime-host-csp-harness.co
   if (security.csp !== hostCsp) fail(`${configName} Host CSP drifted`);
 }
 if (/script-src[^;]*(?:unsafe-inline|unsafe-eval|\*)/.test(hostCsp)) fail('Host script policy was widened');
-if (/script-src[^;]*(?:unsafe-inline|unsafe-eval|\*)/.test(pluginCsp)) fail('Plugin script policy was widened');
-if (/script-src[^;]*(?:unsafe-inline|unsafe-eval|\*)/.test(pluginTauriDevCsp)) {
+if (/script-src[^;]*(?:'unsafe-inline'|'unsafe-eval'|\*)/.test(pluginCsp)) fail('Plugin script policy was widened');
+if (/script-src[^;]*(?:'unsafe-inline'|'unsafe-eval'|\*)/.test(pluginTauriDevCsp)) {
   fail('Plugin tauri-dev script policy was widened');
 }
 

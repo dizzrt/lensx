@@ -16,7 +16,7 @@ export type PluginManifestFixtureMutation =
 export const createPluginManifestFixture = (): PluginManifestInput => ({
   compatibility: {
     host_api: {
-      max_version_exclusive: '0.2.0',
+      max_version_exclusive: '0.3.0',
       min_version: PLUGIN_HOST_API_VERSION,
     },
     lensx: {

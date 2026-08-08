@@ -4,7 +4,6 @@ import type { AppNavigationService } from '../../navigation';
 import { createPluginDataManagementDesktopAdapter, createPluginDataManagementService } from '../data-management';
 import { createLocalPluginInstallationService, type LocalPluginInstallationClient } from '../installation';
 import { createPluginManagementService, type PluginManagementService } from '../management';
-import { createPluginPermissionMutationAdapter, createPluginPermissionService } from '../permission';
 import { createPluginRegistrationDesktopAdapter } from '../registration';
 import { createPluginReplacementDesktopAdapter, createPluginReplacementService } from '../replacement';
 import { createPluginRuntimeLifecycleService, type PluginRuntimeLifecycleService } from '../runtime';
@@ -46,7 +45,6 @@ export const createProductionPluginLifecycleComposition = (
     replacementAdapter: createPluginReplacementDesktopAdapter(),
     surfaceProjection: surfaceProjectionService,
   });
-  const permissionService = createPluginPermissionService(createPluginPermissionMutationAdapter());
   const dataManagementService = createPluginDataManagementService(createPluginDataManagementDesktopAdapter());
   const installationService = createLocalPluginInstallationService(installationClient);
   const developmentService = createProductionPluginDevelopmentService(surfaceProjectionService);
@@ -56,7 +54,6 @@ export const createProductionPluginLifecycleComposition = (
     installationService,
     lifecycleService,
     replacementService,
-    permissionService,
     dataManagementService,
     developmentService,
   });

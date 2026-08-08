@@ -788,6 +788,8 @@ React 模板额外依赖 Task 1.4。
 
 **OpenSpec change**：`add-official-json-tools-plugin`
 
+**前置 OpenSpec change**：[adopt-open-isolated-plugin-runtime](openspec/changes/archive/2026-08-08-adopt-open-isolated-plugin-runtime/)（仅表示公共 Runtime 前置已完成，不表示本产品 Task 已完成）
+
 **目标**：以纯前端 JSON 工具插件验证公共平台，而不是依赖 Host 私有代码。
 
 **范围**：
@@ -804,21 +806,20 @@ React 模板额外依赖 Task 1.4。
 
 - [ ] **Task 7.3：交付首个权限型官方插件**
 
-**OpenSpec change**：`add-official-clipboard-tools-plugin`
+**OpenSpec change**：待重新规划（原 `add-official-clipboard-tools-plugin` 依赖的 clipboard permission contract 已由 `adopt-open-isolated-plugin-runtime` 删除）
 
-**目标**：用剪贴板工具验证真实 Host API、权限提示、撤销和升级权限差异。
+**目标**：重新选择并定义首个确需 Host native capability 的官方插件场景；新方案不得假定已删除的 clipboard permission API、权限提示或 grant/revoke 流程仍然存在。
 
 **范围**：
 
-- 使用公开 SDK 调用受控 clipboard read/write API。
-- Manifest 声明权限与中英文原因。
-- 覆盖拒绝、授予、撤销、Host 不支持和新增权限升级场景。
-- 不直接调用浏览器或 Tauri 剪贴板能力。
-- 独立版本和发布，不与 JSON 工具共享生命周期。
+- 在独立 OpenSpec change 中重新论证用户场景、native capability contract、信任模型和 Host 隔离边界。
+- 不恢复已删除的 Manifest permission fields、clipboard Host API、权限提示或 grant mutation authority。
+- 继续要求官方插件只依赖公开平台边界，不直接调用 Tauri 或 Host-private API。
+- 保持独立版本和发布，不与 JSON 工具共享生命周期。
 
-**依赖**：Task 5.5、Task 6.2、Task 7.1、Task 7.2。
+**依赖**：Task 7.1、Task 7.2；其余依赖待重新规划。
 
-**完成标准**：权限选择始终由 Host 强制；官方来源不能绕过拒绝或撤销。
+**完成标准**：新的 OpenSpec change 获得批准并完成实现与验证；本次前置变更不代表该产品 Task 完成。
 
 - [ ] **Task 7.4：加固插件包摄入**
 

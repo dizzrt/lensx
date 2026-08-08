@@ -15,18 +15,16 @@ describe('plugin replacement desktop adapter', () => {
       command === PREPARE_LOCAL_PLUGIN_REPLACEMENT_COMMAND
         ? {
             status: 'prepared',
-            contract_version: '0.1.0',
+            contract_version: '0.2.0',
             preparation_token: token,
             entry_id: entryId,
             current_version: '1.0.0',
             candidate_version: '2.0.0',
             classification: 'upgrade',
-            added_permission_ids: [],
-            removed_permission_ids: [],
           }
         : {
             status: 'committed',
-            contract_version: '0.1.0',
+            contract_version: '0.2.0',
             entry_id: entryId,
             plugin_id: 'com.acme.workspace',
             version: '2.0.0',
@@ -59,7 +57,7 @@ describe('plugin replacement desktop adapter', () => {
   test('maps native errors and malformed success or rejection payloads safely', async () => {
     const validError = createPluginReplacementDesktopAdapter(async () => {
       throw {
-        contract_version: '0.1.0',
+        contract_version: '0.2.0',
         code: 'stale_revision',
         operation: 'register',
         message: 'The plugin registration revision is stale.',

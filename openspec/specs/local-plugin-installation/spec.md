@@ -128,28 +128,17 @@ path MUST be the sole active payload pointer.
 
 ### Requirement: First installation must use explicit Host registration facts
 
-When first registering a compatible package, the Host MUST use the normalized
-Manifest and package digest returned by the inspector, MUST inject the absolute
-committed installation path, `source=external`, `enabled=true`, and an empty
-granted-permission snapshot, and MUST leave the Runtime `inactive`. Manifest
-publisher text or requested permissions MUST NOT change source, enabled, grant,
-signature, provenance, or trust conclusions.
+When first registering a compatible package, the Host MUST use the normalized Manifest and package digest returned by the inspector, inject the committed installation path, `source=external`, and `enabled=true`, and keep the Runtime `inactive`. The current registration MUST NOT create a grant snapshot, permission state, signature, or trust. Manifest Publisher data, remote behavior, and installation confirmation MUST NOT change source, enabled state, provenance, or Host authority.
 
-#### Scenario: Compatible plugin requests permissions
-
-- **WHEN** a compatible package Manifest declares one or more requested
-  permissions and completes first installation
-- **THEN** the Plugin Manager record stores an empty grant snapshot, the plugin
-  has enabled intent, and its Runtime is `inactive`
-- **THEN** installation does not convert requested permissions into grants or
-  execute plugin code
+#### Scenario: Install an open Web plugin
+- **WHEN** a compatible Manifest `0.2.0` plugin declares ordinary Pages and Actions and completes first installation
+- **THEN** the Manager record stores explicit installation facts and the Runtime remains `inactive`
+- **THEN** installation does not execute plugin code, create a grant, or review future Worker or network behavior
 
 #### Scenario: Publisher claims an official identity
-
-- **WHEN** a local package's publisher text claims official lensX authorship
-- **THEN** the Host still records the first local installation as `external`
-- **THEN** installation creates no verified, signed, official, or additional
-  permission facts
+- **WHEN** a local package's Publisher text claims an official lensX identity
+- **THEN** the Host still records `source=external`
+- **THEN** installation creates no verified, signed, official, or additional Host authority
 
 ### Requirement: Payload commit and registration publication must remain recoverably consistent
 
@@ -208,34 +197,21 @@ missing path.
 
 ### Requirement: First installation must reject an existing healthy or quarantined identity
 
-The system MUST treat any healthy registration with the same `plugin_id`, or
-the corresponding quarantined record key, as an existing identity and MUST
-return a stable `already_installed` or `identity_quarantined` error. First
-installation MUST NOT infer upgrade, downgrade, reinstall, or quarantine repair
-from the Manifest version and MUST NOT overwrite the current record, payload,
-grants, or diagnostic evidence.
+The system MUST treat a healthy registration with the same `plugin_id`, or the corresponding quarantined or incompatible record key, as an existing identity and return stable `already_installed` or `identity_quarantined` results. First installation MUST NOT infer an upgrade, downgrade, reinstallation, or repair, and MUST NOT overwrite the current record, payload, data, or diagnostic evidence.
 
-#### Scenario: Exact same package is selected again
-
-- **WHEN** the user selects the same `.lxp` for the currently installed plugin
-  again
+#### Scenario: The same package is selected again
+- **WHEN** the user selects the same `.lxp` as the currently installed plugin
 - **THEN** installation deterministically rejects the duplicate identity
-- **THEN** the current payload, record, revision, grants, and event remain
-  unchanged
+- **THEN** the current payload, record, revision, data, and event remain unchanged
 
-#### Scenario: Same plugin ID has a different version or digest
-
-- **WHEN** the user selects a package with the same `plugin_id` as a current
-  healthy registration but a different version or digest
-- **THEN** first installation deterministically rejects the request without
-  classifying it as an upgrade, downgrade, or reinstall
-- **THEN** the current installation remains intact and no sibling payload is
-  created
+#### Scenario: The same ID has a different version
+- **WHEN** the candidate has the same plugin ID but a different version or digest
+- **THEN** first installation rejects it and directs the user to the replacement flow
+- **THEN** no permission or grant migration or implicit trust change occurs
 
 #### Scenario: Same identity is quarantined
 
-- **WHEN** the package Manifest's `plugin_id` corresponds to an existing
-  quarantined record key
+- **WHEN** the package Manifest's `plugin_id` corresponds to an existing quarantined record key
 - **THEN** first installation refuses to replace or clear quarantine silently
 - **THEN** the damaged record and any associated payload evidence are preserved
 
@@ -286,203 +262,102 @@ cannot commit safely and expose a bounded safe diagnostic.
 
 ### Requirement: The installation command contract must be strict, private, and minimally disclosing
 
-The local installation boundary MUST use an independently versioned Host-private
-strict contract `0.2.0` with separate `prepare`, `commit`, and `cancel`
-operations, and every result, cancellation, and error payload MUST carry that
-version and exact operation. This version MUST evolve independently from the
-Manifest, package protocol, Registration Contract, Plugin Manager Store,
-permission contract, and application version. Rust and TypeScript MUST reject
-an unknown contract version, unknown field, unknown variant, invalid value, or
-cross-operation payload.
+The local installation boundary MUST use an independent, Host-private, strict contract `0.3.0` with separate `prepare`, `commit`, and `cancel` operations. A `prepared` result MUST contain only an opaque token and the bounded candidate identity, Manifest version, localized display name, and Publisher display facts required by trusted confirmation UI. It MUST NOT contain permission candidates or reasons, grants, paths, digests, package bytes, staging facts, the complete Manifest, source authority, raw errors, or Host objects. `commit` MUST accept only the current token and return the installed identity, version, and revision.
 
-`prepare` success MUST distinguish `cancelled | prepared`. `prepared` MUST
-contain one process-local opaque token and only a bounded safe candidate
-projection needed by the trusted Host UI: plugin ID, Manifest version,
-normalized localized display name, Publisher display facts, and requested
-permission IDs with bounded localized reasons. It MUST NOT contain a path,
-digest, package bytes, staging fact, complete Manifest, grant, source authority,
-raw exception, stack, environment text, file content, Rust/Tauri object, or
-public plugin type. `commit` MUST accept only the current opaque token and
-return `installed` with plugin ID, Manifest version, and Registration revision.
-`cancel` MUST invalidate the current token and report a strict
-cancelled/unchanged conclusion without creating Registration facts. Failure
-MUST use a finite code, operation, and stable safe message and MAY reuse logical
-package diagnostics.
+Every result, cancellation, and error payload MUST carry the exact contract version and operation. The version MUST evolve independently from the Manifest, package protocol, Registration Contract, Plugin Manager Store, and application version. Rust and TypeScript MUST reject an unknown contract version, unknown field, unknown variant, invalid value, or cross-operation payload. `prepare` MUST distinguish `cancelled | prepared`; `cancel` MUST invalidate the current token without creating Registration facts; and failures MUST use finite codes, operations, and stable safe messages.
 
-The old select-and-immediately-install production operation MUST NOT remain as
-a trusted UI bypass. Each process MUST hold at most one preparation; a new
-prepare, explicit cancel, failed commit, service destruction, or process restart
-MUST invalidate the old token and make a best effort to clean its staging.
-Commit MUST reuse the exact inspected/staged candidate and MUST NOT reopen the
-user-selected source path. Before durable commit it MUST revalidate the token,
-staging, package facts, current Host compatibility, and that the candidate
-identity is still absent and not quarantined.
+The former select-and-immediately-install production operation MUST NOT remain as a trusted UI bypass. Each process MUST hold at most one preparation. A new prepare, explicit cancel, failed commit, service destruction, or process restart MUST invalidate the old token and make a best effort to clean its owned staging. Commit MUST reuse the exact inspected candidate without reopening the user-selected source path and MUST revalidate the token, staging, package facts, compatibility, and identity absence before durable commit.
 
 #### Scenario: Frontend receives a prepared candidate
+- **WHEN** Rust completes inspection and staging of a valid compatible candidate
+- **THEN** the adapter strictly validates the `0.3.0` prepared payload and bounded display facts
+- **THEN** the payload contains no permission selection, grant, path, digest, bytes, or private object
 
-- **WHEN** Rust completes inspection and staging for a valid compatible
-  first-install candidate
-- **THEN** the TypeScript adapter validates and freezes the `prepared` contract
-  version, operation, opaque token, and bounded display projection from
-  `unknown`
-- **THEN** the result contains no path, digest, package bytes, staging fact,
-  complete Manifest, grant, raw error, or private Host object, and no
-  Registration has been created
+#### Scenario: Commit succeeds
+- **WHEN** the trusted management service commits the current token and durable installation succeeds
+- **THEN** the Host creates a current Registration with no grant fields and makes the token single-use
+- **THEN** subsequent plugin selection converges only through the complete Registration
 
-#### Scenario: Frontend commits the current preparation
-
-- **WHEN** the trusted management service submits the one current token and
-  Rust revalidation plus durable installation succeeds
-- **THEN** the adapter returns a strict `installed` result with plugin ID,
-  version, and Registration revision
-- **THEN** the Registration is created with the existing explicit Host facts
-  and empty grant snapshot, and the token can never be committed again
+#### Scenario: Legacy permission candidate appears
+- **WHEN** a boundary payload contains a requested permission, reason, selection, or post-commit grant intent
+- **THEN** the strict Rust or TypeScript parser rejects the entire payload
+- **THEN** no Registration, revision, or permission authority is created
 
 #### Scenario: Frontend cancels a preparation
 
-- **WHEN** the user cancels after `prepared` or the trusted service is destroyed
-  before commit
-- **THEN** the Host invalidates the token, makes a best effort to clean only its
-  owned staging, and returns a strict cancellation conclusion
-- **THEN** no payload, Manager record, revision, event, or grant is committed
+- **WHEN** the user cancels after `prepared` or the trusted service is destroyed before commit
+- **THEN** the Host invalidates the token, makes a best effort to clean only its owned staging, and returns a strict cancellation conclusion
+- **THEN** no payload, Manager record, revision, or event is committed
 
 #### Scenario: Preparation becomes invalid before commit
 
-- **WHEN** the same plugin identity is installed or quarantined, the token is
-  stale, staging changes, or package/compatibility revalidation fails before
-  commit
-- **THEN** commit fails closed with a stable safe error and invalidates the
-  preparation
-- **THEN** the competing/current Registration, filesystem evidence, grants,
-  revision, and event remain unchanged
+- **WHEN** the same plugin identity is installed or quarantined, the token is stale, staging changes, or package or compatibility revalidation fails before commit
+- **THEN** commit fails closed with a stable safe error and invalidates the preparation
+- **THEN** the competing or current Registration, filesystem evidence, revision, and event remain unchanged
 
 #### Scenario: Frontend receives a malformed payload
 
-- **WHEN** Tauri returns an unknown status, operation mismatch, unknown field,
-  invalid token/candidate value, invalid error type, or malformed error
-- **THEN** the adapter rejects the entire value and produces a stable boundary
-  error
-- **THEN** the UI does not publish partial preparation/success or display raw
-  untrusted text
+- **WHEN** Tauri returns an unknown status, operation mismatch, unknown field, invalid token or candidate value, invalid error type, or malformed error
+- **THEN** the adapter rejects the entire value and produces a stable boundary error
+- **THEN** the UI publishes no partial preparation or success and displays no raw untrusted text
 
 #### Scenario: Low-level error contains sensitive information
 
-- **WHEN** a dialog, read, codec, filesystem, staging, cleanup, or persistence
-  error contains an absolute path, environment text, package content, or raw
-  exception
-- **THEN** the Rust boundary maps it to a stable safe code, operation, and
-  message
-- **THEN** sensitive content does not enter the Tauri payload, log assertions,
-  UI, or shared fixtures
+- **WHEN** a dialog, read, codec, filesystem, staging, cleanup, or persistence error contains an absolute path, environment text, package content, or raw exception
+- **THEN** the Rust boundary maps it to a stable safe code, operation, and message
+- **THEN** sensitive content does not enter the Tauri payload, log assertions, UI, or shared fixtures
 
 ### Requirement: The settings installation entry point must be accessible, localized, and theme-compatible
 
-The Plugins settings section MUST use the existing application i18n and Semi
-Design theme to provide installation guidance, a clearly named accessible
-installation button, an explicit prepared-candidate confirmation, and
-asynchronous feedback. While prepare, confirm, commit, cancellation,
-Registration convergence, or composed post-commit permission work is pending,
-the UI MUST prevent incompatible reentry. Native picker cancellation MUST
-restore idle state without an error; cancelling a prepared candidate MUST invoke
-the typed cancel boundary and return focus to the installation entry point;
-success and failure MUST use live-status or alert semantics that do not rely
-only on color.
+Plugins Settings MUST use the existing internationalization and Semi Design theme systems to provide installation guidance, an accessible entry point, prepared-candidate confirmation, and asynchronous feedback. Confirmation MUST explain that installation trusts the plugin to process data the user gives it inside an isolated Web Runtime, while lensX does not individually authorize or endorse its Worker, network, or remote-resource behavior. The UI MUST NOT display a permission checklist, grant state, partial-grant feedback, or post-commit permission work.
 
-The confirmation MUST display bounded candidate name/version and compose the
-independently specified permission-prompt presentation before durable commit.
-It MUST allow installation with zero grants and MUST NOT treat the installation
-confirmation itself as permission authorization. All product text MUST have
-canonical English and a semantically aligned Simplified Chinese translation
-and MUST remain readable, scrollable, and focusable in light and dark themes.
-When composed into `plugin-management-settings`, successful installation MUST
-converge through a current Registration snapshot, perform any separately
-confirmed grants only through the permission service, and select the newly
-installed plugin using current detail.
+The interface MUST prevent incompatible reentry while prepare, confirm, commit, cancel, or Registration-convergence work is pending. All copy MUST have canonical English and semantically aligned Chinese versions and remain usable in light and dark themes, the fixed viewport, keyboard operation, and focus recovery.
 
-#### Scenario: User prepares installation with a keyboard
+Native picker cancellation MUST restore idle state without an error. Success and failure MUST use live-status or alert semantics that do not rely only on color, and the prepared confirmation MUST remain readable, scrollable, and focusable at the fixed viewport.
 
-- **WHEN** a keyboard user focuses and activates the local installation button
-  and selects a compatible package
-- **THEN** the native file picker opens once, the button cannot be activated
-  again while prepare is pending, and an accessible confirmation opens only
-  after a strict `prepared` result
-- **THEN** confirmation, cancellation, and focus remain operable without a
-  pointer and no durable Registration exists before explicit install
-  confirmation
+#### Scenario: Keyboard user confirms installation
+- **WHEN** a keyboard user selects a valid package and opens confirmation
+- **THEN** the dialog shows bounded identity, version, Publisher, and installation-trust guidance and is fully keyboard operable
+- **THEN** no durable Registration is created before explicit installation confirmation
 
-#### Scenario: User cancels prepared installation
+#### Scenario: User cancels preparation
+- **WHEN** the user cancels or closes confirmation before commit
+- **THEN** the Host cancels the opaque preparation, cleans owned staging, and restores focus deterministically
+- **THEN** no Registration, grant, permission decision, or error notice remains
 
-- **WHEN** the user cancels or dismisses a prepared candidate before commit
-- **THEN** the management service cancels the opaque preparation, clears
-  transient permission choices, and announces cancellation without an error
-- **THEN** focus returns to the installation entry point and no plugin or grant
-  appears in current Registration state
+#### Scenario: Locale and theme change
+- **WHEN** the installation entry renders in `en-US` or `zh-CN` and in light or dark theme
+- **THEN** trust guidance and pending, cancel, success, and failure copy follow the locale and theme
+- **THEN** no legacy permission guidance, selection, or partial-grant copy appears
 
 #### Scenario: Installation succeeds in plugin management settings
 
-- **WHEN** the adapter returns a valid `installed` result after explicit
-  candidate confirmation
-- **THEN** settings announces durable installation success with the plugin ID
-  and version in the current locale
-- **THEN** the management service refreshes through the shared Registration
-  adapter, applies only separately confirmed grants through the independent
-  permission service, and selects the matching current plugin only after
-  snapshot/detail convergence
-- **THEN** the installation capability itself does not fabricate details or
-  perform enable, disable, replacement, uninstall, permission or data operations
+- **WHEN** the adapter returns a valid `installed` result after explicit candidate confirmation
+- **THEN** settings announces durable installation success with the plugin ID and version in the current locale
+- **THEN** the management service refreshes through the shared Registration adapter and selects the matching current plugin only after snapshot and detail convergence
+- **THEN** the installation capability does not fabricate details or perform enable, disable, replacement, uninstall, permission, or data operations
 
 #### Scenario: Installation or preparation fails
 
-- **WHEN** the adapter returns a valid safe prepare/commit/cancel error or
-  boundary validation fails
-- **THEN** settings closes or preserves the interaction only as allowed by the
-  typed result, displays localized actionable feedback, and allows a safe retry
-  from a new preparation
-- **THEN** the UI displays no source path, Host installation path, digest,
-  staging fact, stack, package payload, or raw error text
-
-#### Scenario: Locale and theme change
-
-- **WHEN** the installation entry point and prepared confirmation render in
-  `en-US` or `zh-CN` with a light or dark theme
-- **THEN** button, candidate facts, permission guidance, pending, cancellation,
-  success, partial-permission, and failure copy follows the application locale
-- **THEN** controls use supported Semi theme and focus behavior and do not use
-  hard-coded color as the only status signal
+- **WHEN** the adapter returns a valid safe prepare, commit, or cancel error or boundary validation fails
+- **THEN** settings closes or preserves the interaction only as allowed by the typed result, displays localized actionable feedback, and allows a safe retry from a new preparation
+- **THEN** the UI displays no source path, Host installation path, digest, staging fact, stack, package payload, or raw error text
 
 ### Requirement: Local installation must not deliver later plugin capabilities early
 
-This capability MUST deliver only preparation and first installation of a local
-compatible `.lxp`, its installation entry point, Registration notification,
-and recovery cleanup. It MUST NOT itself download a remote package, accept a
-development directory, upgrade, downgrade, reinstall, enable, disable,
-uninstall, delete or clear plugin data, grant permissions, verify signatures or
-official provenance, serve plugin resources, create an iframe or Runtime
-session, invoke the Host API, or execute plugin code. A trusted Host management
-page MAY compose this prepared installation entry point with independently
-specified lifecycle, replacement, permission-prompt, permission-mutation, and
-data-management services, but MUST NOT broaden the installation command, pass
-a grant set into commit, or infer those authorities from preparation or
-installation success.
+This capability MUST deliver only preparation and first installation of a local compatible `.lxp`, its entry point, Registration notification, and recovery cleanup. It MUST NOT download a remote package, execute a plugin, create a Runtime, expose a Tauri or native capability, replace or uninstall a plugin, or implement a Marketplace. A trusted management page MAY compose independent lifecycle, replacement, and data services, but MUST NOT compose a permission service, pass grants into commit, or interpret successful installation as native Host authority.
 
-#### Scenario: A plugin finishes installation
+It also MUST NOT accept a development directory, upgrade or downgrade, enable or disable a plugin, delete or clear plugin data, verify signatures or official provenance, serve plugin resources, create an iframe or Runtime Session, or invoke the Host API.
 
-- **WHEN** a local `.lxp` has been written and registered successfully
-- **THEN** the existing Host metadata projection and management service can
-  refresh from the current Registration and separately apply user-confirmed
-  grants through the permission authority
-- **THEN** this capability does not read the Runtime entry, load resources,
-  create an iframe, execute code, grant requested permissions, or perform a
-  later lifecycle operation
+#### Scenario: Plugin finishes installation
+- **WHEN** a local `.lxp` is written and registered successfully
+- **THEN** the management service converges from the current Registration and the user can explicitly open the plugin
+- **THEN** the installer does not read the Runtime entry, execute code, or create a permission, grant, or native provider
 
-#### Scenario: User wants to replace, remove, or change permissions for an installed plugin
-
-- **WHEN** the user selects replacement, lifecycle, or permission controls from
-  the composed plugin management page
-- **THEN** the replacement service, lifecycle service, or permission service
-  owns the operation through its independent typed and revision-bound contract
-- **THEN** the local installation command neither accepts the request nor gains
-  update, uninstall, permission or data-management authority
+#### Scenario: User wants another management operation
+- **WHEN** the user chooses replacement, lifecycle, or data control
+- **THEN** the corresponding independent typed service owns that operation
+- **THEN** the local installation command gains no update, uninstall, permission, or data authority
 
 ### Requirement: Installer-owned program, data, and cleanup roots must remain separated
 
@@ -582,32 +457,11 @@ bounded degraded diagnostic.
 - **THEN** the Host rejects writes that could overwrite the evidence until
   trusted recovery resolves the conflict
 
-### Requirement: Reinstallation after lifecycle removal must preserve data policy and reset Host grants
+### Requirement: Reinstallation after lifecycle removal must preserve data policy without restoring removed authority
 
-A later successful installation of the same identity MUST clear an old
-completed cleanup record only after there is no pending cleanup conflict and
-both package commit and Manager registration have succeeded. A data subtree
-left by `retain_data` MUST remain unchanged. Grants, diagnostics, and enabled
-intent from the previous Manager record MUST NOT be restored from a cleanup
-record or retained data. The new installation MUST continue to follow the
-current first-install rules: `enabled=true`, empty grants, and an `inactive`
-Runtime. The revision or operation identity of an old uninstall request MUST
-NOT delete the new payload.
+A later successful installation of the same identity MUST clear an old completed-cleanup record only after there is no pending cleanup conflict and both package commit and Manager registration succeed. Data left by `retain_data` MUST remain. Grants, diagnostics, enabled intent, or permission facts in old records, cleanup state, or retained data MUST NOT be restored. The new installation MUST use the current Manifest `0.2.0`, `enabled=true`, and an `inactive` Runtime.
 
-#### Scenario: Reinstallation follows retained-data uninstall
-
-- **WHEN** an old uninstall of the same plugin identity has completed, its data
-  was retained, and a new compatible package installs successfully
-- **THEN** the new Manager record points to the new canonical payload with an
-  empty grant snapshot and enabled intent set to true
-- **THEN** the retained data remains in place and the completed cleanup record
-  is cleared only after the new registration succeeds
-
-#### Scenario: Reinstallation is attempted while cleanup is pending
-
-- **WHEN** the old identity still has incomplete or conflicting cleanup
-  evidence
-- **THEN** the installer returns a stable cleanup-pending or busy result and
-  creates neither staging nor a new Manager record
-- **THEN** the old intent is completed or resolved by trusted recovery before
-  any new installation can prevent an old retry from deleting a new payload
+#### Scenario: Retained-data identity is reinstalled
+- **WHEN** a previous uninstall completed while retaining data and a new compatible `0.2.0` package installs successfully
+- **THEN** the new record points to the new canonical payload and retained data remains
+- **THEN** old permission or grant facts do not enter the new record or Runtime

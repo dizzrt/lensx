@@ -22,8 +22,7 @@ for (const marker of [
   'plugin-management-surface',
   'data-plugin-management-action="clear-data"',
   'data-plugin-management-action="uninstall"',
-  'settings.plugins.permissions.description',
-  'openPermissionConfirmation',
+  'settings.plugins.trust.description',
   'aria-live',
 ]) {
   if (!component.includes(marker)) fail(`management component is missing ${marker}`);
@@ -38,8 +37,6 @@ for (const marker of [
   'cancelReplacement',
   'prepareInstallation',
   'commitInstallation',
-  'confirmPermissionDecision',
-  'install_permissions_partial',
   'selectionTarget',
   'cleanup_pending',
 ]) {
@@ -48,7 +45,6 @@ for (const marker of [
 for (const marker of [
   'createPluginManagementService',
   'createPluginDataManagementService',
-  'createPluginPermissionService',
   'createPluginReplacementService',
 ]) {
   if (!production.includes(marker)) fail(`production composition is missing ${marker}`);

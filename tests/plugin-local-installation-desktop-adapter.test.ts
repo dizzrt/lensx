@@ -12,7 +12,6 @@ const candidate = {
   version: '1.2.3',
   display_name: { 'en-US': 'Workspace' },
   publisher: { author: 'Acme', homepage: 'https://example.com', repository: 'https://example.com/repository' },
-  requested_permissions: [],
 };
 const token = 'abcdefghijklmnopqrstuvwxyzABCDEF';
 
@@ -22,7 +21,7 @@ describe('local plugin installation desktop client', () => {
       if (command === PREPARE_LOCAL_PLUGIN_INSTALLATION_COMMAND)
         return {
           status: 'prepared',
-          contract_version: '0.2.0',
+          contract_version: '0.3.0',
           operation: 'prepare',
           preparation_token: token,
           candidate,
@@ -30,13 +29,13 @@ describe('local plugin installation desktop client', () => {
       if (command === COMMIT_LOCAL_PLUGIN_INSTALLATION_COMMAND)
         return {
           status: 'installed',
-          contract_version: '0.2.0',
+          contract_version: '0.3.0',
           operation: 'commit',
           plugin_id: candidate.plugin_id,
           version: candidate.version,
           revision: '7',
         };
-      return { status: 'cancelled', contract_version: '0.2.0', operation: 'cancel' };
+      return { status: 'cancelled', contract_version: '0.3.0', operation: 'cancel' };
     });
     const client = createLocalPluginInstallationClient(invoke);
     await expect(client.prepare()).resolves.toMatchObject({ status: 'prepared' });
@@ -44,17 +43,17 @@ describe('local plugin installation desktop client', () => {
     await expect(client.cancel(token)).resolves.toMatchObject({ status: 'cancelled', operation: 'cancel' });
     expect(invoke).toHaveBeenNthCalledWith(1, PREPARE_LOCAL_PLUGIN_INSTALLATION_COMMAND, undefined);
     expect(invoke).toHaveBeenNthCalledWith(2, COMMIT_LOCAL_PLUGIN_INSTALLATION_COMMAND, {
-      request: { contract_version: '0.2.0', preparation_token: token },
+      request: { contract_version: '0.3.0', preparation_token: token },
     });
     expect(invoke).toHaveBeenNthCalledWith(3, CANCEL_LOCAL_PLUGIN_INSTALLATION_COMMAND, {
-      request: { contract_version: '0.2.0', preparation_token: token },
+      request: { contract_version: '0.3.0', preparation_token: token },
     });
   });
 
   test('maps a strict native error without exposing raw details', async () => {
     const client = createLocalPluginInstallationClient(async () => {
       throw {
-        contract_version: '0.2.0',
+        contract_version: '0.3.0',
         code: 'busy',
         operation: 'prepare',
         message: 'Another plugin installation is in progress.',
@@ -71,7 +70,7 @@ describe('local plugin installation desktop client', () => {
     for (const value of [
       {
         status: 'installed',
-        contract_version: '0.2.0',
+        contract_version: '0.3.0',
         operation: 'commit',
         plugin_id: 'com.acme.workspace',
         version: '1.2.3',

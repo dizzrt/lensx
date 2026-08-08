@@ -3,7 +3,6 @@ import {
   createCryptographicPluginRuntimeNonce,
   createPluginRuntimeSessionBootstrap,
   freezePluginRuntimeSessionIdentity,
-  PluginRuntimeSessionError,
   parsePluginRuntimeSessionReadyAcknowledgement,
 } from '../src/app/plugins/runtime';
 
@@ -69,7 +68,7 @@ describe('Host-private Plugin Runtime Session contract', () => {
     expect(value).toMatch(/^[0-9a-f]{32}$/u);
   });
 
-  test('freezes a bounded Host identity and rejects unsorted, duplicate, or unsafe facts', () => {
+  test('freezes a bounded Host identity and rejects unsafe facts', () => {
     const identity = freezePluginRuntimeSessionIdentity({
       entry_id: 'entry_0123456789abcdef',
       plugin_id: 'com.acme.workspace',
@@ -79,23 +78,9 @@ describe('Host-private Plugin Runtime Session contract', () => {
       resource_generation: '0123456789abcdef0123456789abcdef',
       runtime_attempt_key: 'attempt-1',
       registration_revision: '7',
-      granted_permission_ids: ['lensx.filesystem.read', 'lensx.workspace.read'],
     });
     expect(Object.isFrozen(identity)).toBe(true);
-    expect(Object.isFrozen(identity.granted_permission_ids)).toBe(true);
-
-    expect(() =>
-      freezePluginRuntimeSessionIdentity({
-        ...identity,
-        granted_permission_ids: ['lensx.workspace.read', 'lensx.filesystem.read'],
-      }),
-    ).toThrow(new PluginRuntimeSessionError('invalid_identity'));
-    expect(() =>
-      freezePluginRuntimeSessionIdentity({
-        ...identity,
-        granted_permission_ids: ['lensx.workspace.read', 'lensx.workspace.read'],
-      }),
-    ).toThrow(expect.objectContaining({ code: 'invalid_identity' }));
+    expect(identity).not.toHaveProperty('granted_permission_ids');
     expect(() => freezePluginRuntimeSessionIdentity({ ...identity, expected_origin: 'not an origin' })).toThrow(
       expect.objectContaining({ code: 'invalid_identity' }),
     );

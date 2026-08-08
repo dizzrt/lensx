@@ -47,7 +47,7 @@ describe('Plugin SDK client lifecycle', () => {
     expect(second).toBe(first);
     expect(transport.connectCalls).toBe(0);
     connection.resolve(validRuntimeContext());
-    await expect(first).resolves.toMatchObject({ hostApiVersion: '0.1.0' });
+    await expect(first).resolves.toMatchObject({ hostApiVersion: '0.2.0' });
     expect(transport.connectCalls).toBe(1);
   });
 
@@ -88,7 +88,7 @@ describe('Plugin SDK client lifecycle', () => {
     expect(client.state).toBe('idle');
     expect(client.context).toBeUndefined();
 
-    transport.connectImplementation = async () => ({ ...validRuntimeContext(), hostApiVersion: '0.2.0' });
+    transport.connectImplementation = async () => ({ ...validRuntimeContext(), hostApiVersion: '0.3.0' });
     await expect(client.initialize()).rejects.toMatchObject({ code: 'incompatible_host_api' });
     expect(client.state).toBe('idle');
     expect(client.context).toBeUndefined();

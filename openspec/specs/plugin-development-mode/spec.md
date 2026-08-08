@@ -4,7 +4,7 @@
 
 Define the Host-private, explicitly enabled workflow for registering and
 manually reloading an unpacked plugin development directory without weakening
-the production Registration, Resource, Runtime, Session, or permission
+the production Registration, Resource, Runtime, Session, or Host-authority
 boundaries.
 
 ## Requirements
@@ -28,7 +28,7 @@ Tauri commands, managed state, or frontend operation entry points.
 - **THEN** the current process can display and invoke development-directory
   registration
 - **THEN** enabling the mode does not register a plugin, read a directory,
-  grant permission, or create a Runtime
+  create Host authority, or create a Runtime
 
 #### Scenario: Application restarts
 
@@ -109,7 +109,7 @@ snapshot and MUST NOT read the author's changing directory directly.
 - **WHEN** staging copy, complete validation, flush, atomic publication, and
   Manager compare-and-commit all succeed
 - **THEN** the Host publishes a process-local registration with
-  `source=development`, `enabled=true`, Runtime `inactive`, and empty grants
+  `source=development`, `enabled=true`, and Runtime `inactive`
 - **THEN** the current snapshot identity and resource generation are uniquely
   bound, and the staging path never becomes an executable payload
 
@@ -119,8 +119,8 @@ snapshot and MUST NOT read the author's changing directory directly.
   before publication
 - **THEN** the Host attempts to remove that request's staging or snapshot and
   publishes no registration, revision, generation, or changed event
-- **THEN** any existing registration with the same ID, its snapshot, grants,
-  and Runtime authority remain unchanged
+- **THEN** any existing registration with the same ID, its snapshot, and
+  Runtime authority remain unchanged
 
 #### Scenario: Revoked snapshot cleanup fails
 
@@ -137,9 +137,9 @@ A development registration MUST use its Manifest plugin ID in the same global
 uniqueness check as builtin, external, quarantine, and other development
 entries. The Host MUST generate the `development` source; Manifest publisher or
 other author-controlled fields MUST NOT set source or establish official,
-verified, signed, installed, trusted, or additional permission conclusions.
-Development registrations, source-directory capabilities, snapshots, and
-grants MUST exist only in the current process and MUST NOT be written to the
+verified, signed, installed, trusted, or additional Host-authority conclusions.
+Development registrations, source-directory capabilities, and snapshots MUST
+exist only in the current process and MUST NOT be written to the
 Plugin Manager Store.
 
 #### Scenario: The same plugin ID already exists
@@ -148,7 +148,7 @@ Plugin Manager Store.
   external, quarantine, or development identity
 - **THEN** registration returns a stable conflict instead of shadowing,
   upgrading, repairing, or replacing the existing entry
-- **THEN** the existing record, payload, snapshot, revision, grants, and Runtime
+- **THEN** the existing record, payload, snapshot, revision, and Runtime
   remain unchanged
 
 #### Scenario: Development Manifest claims an official publisher
@@ -157,7 +157,7 @@ Plugin Manager Store.
   trusted organization
 - **THEN** Registration and settings still label the entry Development,
   Unpacked, and Unsigned
-- **THEN** the text changes no source, permission, Host API capability, CSP, or
+- **THEN** the text changes no source, Host API capability, CSP, or
   Session validation result
 
 #### Scenario: Process exits unexpectedly
@@ -205,18 +205,18 @@ NOT automatically watch, reload, or retry indefinitely.
 - **WHEN** the new directory content becomes invalid, incompatible, unsafe, or
   unreadable before snapshot commit
 - **THEN** the Host returns a bounded failure while keeping the old Manifest,
-  snapshot, generation, grants, and Runtime usable
+  snapshot, generation, and Runtime usable
 - **THEN** the failed staging generation enters neither the Resource service
   nor Registration projection
 
 #### Scenario: Reload loses a revision race
 
-- **WHEN** the entry is disabled, removed, grant-mutated, or reloaded again
+- **WHEN** the entry is disabled, removed, replaced, or reloaded again
   while reload preparation is in progress
 - **THEN** compare-and-commit returns a stable conflict and removes the
   uncommitted snapshot
 - **THEN** the stale operation cannot overwrite the current Manifest, payload,
-  enabled intent, grants, revision, or Runtime
+  enabled intent, revision, or Runtime
 
 #### Scenario: Reload changes plugin ID
 
@@ -225,33 +225,6 @@ NOT automatically watch, reload, or retry indefinitely.
 - **THEN** reload is rejected and is not interpreted as remove followed by
   register
 - **THEN** the current entry, snapshot, scope, and Runtime remain unchanged
-
-### Requirement: Development reload MUST preserve only still-declared grants and never auto-grant new permissions
-
-Initial development registration MUST use an empty grant snapshot. Reload MAY
-preserve existing grants declared by both the old and new Manifests, MUST remove
-grants no longer declared by the new Manifest, and MUST leave newly requested
-permissions ungranted. Development source, a local directory, and reload MUST
-NOT bypass the existing permission confirmation, Host API capability, or
-dispatcher currentness boundaries.
-
-#### Scenario: Reload adds a permission request
-
-- **WHEN** the new Manifest declares a permission request absent from the old
-  generation
-- **THEN** the new registration shows the request with ungranted and
-  ineffective state
-- **THEN** the plugin must complete the existing Host-owned user authorization
-  flow before calling the corresponding Host API
-
-#### Scenario: Reload removes a granted permission
-
-- **WHEN** the new Manifest no longer declares a permission ID granted in the
-  old generation
-- **THEN** commit removes the ID from the new grant snapshot and invalidates
-  the old Session or capability
-- **THEN** declaring the ID again later does not restore the old grant
-  automatically
 
 ### Requirement: Disable and remove MUST quiesce development authority without deleting plugin data
 
@@ -282,32 +255,25 @@ pinned collections, production packages, or another plugin's content.
 
 ### Requirement: Development execution MUST use the exact formal Runtime and permission boundaries
 
-A development entry MUST use the existing Page and Action projection, scoped
-Resource service, isolated origin, iframe sandbox, Host-owned CSP, Runtime
-Session, SDK transport, Host API dispatcher, permission core, deadlines, crash
-breaker, and single-iframe policy. Development source, the mode switch, and
-local-path facts MUST NOT create an exception. Public Contract, SDK, UI,
-Testkit, CLI, and plugin code MUST NOT gain an import or API for the Development
-coordinator, source path, snapshot, native command, or Manager internals.
+Development execution MUST use the same open isolated Web Runtime, iframe sandbox, origin, Resource Service, Session and SDK, Host API `0.2.0`, deadline, breaker, single-iframe, and teardown boundaries as an installed source. A development source MUST NOT receive Tauri, Host-private command, shared-origin, persistent-background, or management authority, and MUST NOT use a lensX permission or grant path because that path has been removed. Ordinary Worker, network, remote-resource, Blob, Data, and WASM behavior MUST match installed and official sources.
 
-#### Scenario: Development plugin attempts to forge or expand authority
+Public Contract, SDK, UI, Testkit, CLI, and plugin code MUST NOT gain an import or API for the Development coordinator, source path, snapshot, native command, or Manager internals.
 
-- **WHEN** a development iframe self-reports another plugin ID, uses a stale
-  nonce or scope, sends a message across origin or window, calls an unauthorized
-  Host API, or requests a capability outside CSP or Permissions Policy
-- **THEN** the production Session, Resource, dispatcher, permission, or browser
-  policy rejects it with the same stable semantics
-- **THEN** development source does not change the error, grant, handler-hit, or
-  recovery result
+#### Scenario: Development plugin uses Monaco-style Worker
+- **WHEN** the current development snapshot page creates a Dedicated Worker and performs ordinary network activity
+- **THEN** the WebView follows the same open Runtime baseline as an installed plugin
+- **THEN** development provenance does not relax Host or cross-plugin isolation or lifecycle boundaries
+
+#### Scenario: Development code attempts Host bypass
+- **WHEN** a development plugin attempts Tauri, a private command, Host DOM, another plugin origin, or persistent background execution
+- **THEN** the formal isolation boundary blocks the attempt
+- **THEN** the local source path and explicit mode opt-in create no exception
 
 #### Scenario: Public package boundaries are checked
 
-- **WHEN** workspace-boundary and real-tarball-consumer gates inspect Contract,
-  SDK, UI, Testkit, CLI, and official and example plugins
-- **THEN** they neither import nor package Host-private Development Mode source,
-  commands, paths, snapshots, or Manager internals
-- **THEN** Plugin Developer CLI continues to claim content validation only, not
-  Host installation, Development Mode, source, or authorization success
+- **WHEN** workspace-boundary and real-tarball-consumer gates inspect Contract, SDK, UI, Testkit, CLI, and official and example plugins
+- **THEN** they neither import nor package Host-private Development Mode source, commands, paths, snapshots, or Manager internals
+- **THEN** Plugin Developer CLI continues to claim content validation only, not Host installation, Development Mode, source, or authorization success
 
 ### Requirement: Delivery MUST prove safe directory handling, atomic reload, production exclusion, and real Runtime teardown
 
@@ -316,7 +282,7 @@ TypeScript contract and service tests; React accessibility, localization, and
 theme tests; the shared directory corpus; workspace and release boundary gates;
 and target macOS WebView evidence. Validation MUST cover valid, invalid,
 incompatible, cancelled, source-race, link, limit, collision, reload success,
-failure and conflict, unchanged reload, permission delta, disable and remove,
+failure and conflict, unchanged reload, legacy-contract rejection, disable and remove,
 cleanup failure, process restart, production build exclusion, and zero residual
 authority from the old generation.
 
@@ -333,7 +299,7 @@ authority from the old generation.
 #### Scenario: A security or production-build invariant cannot be proven
 
 - **WHEN** required evidence cannot prove directory currentness, snapshot
-  atomicity, source distinction, permission non-escalation, terminal cleanup,
+  atomicity, source distinction, Host-authority non-escalation, terminal cleanup,
   production exclusion, or cross-layer contract consistency
 - **THEN** Task 6.5 remains incomplete while the specification, design, or
   implementation is corrected

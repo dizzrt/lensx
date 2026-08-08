@@ -116,12 +116,30 @@
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "loadTimeout": { "type": "string", "minLength": 1 },
-                "handshakeTimeout": { "type": "string", "minLength": 1 },
-                "disconnected": { "type": "string", "minLength": 1 },
-                "securityPolicy": { "type": "string", "minLength": 1 },
-                "crashLoop": { "type": "string", "minLength": 1 },
-                "unavailable": { "type": "string", "minLength": 1 }
+                "loadTimeout": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "handshakeTimeout": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "disconnected": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "securityPolicy": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "crashLoop": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "unavailable": {
+                  "type": "string",
+                  "minLength": 1
+                }
               },
               "required": [
                 "loadTimeout",
@@ -375,34 +393,106 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "title": { "type": "string", "minLength": 1 },
-            "description": { "type": "string", "minLength": 1 },
-            "install": { "type": "string", "minLength": 1 },
-            "preparing": { "type": "string", "minLength": 1 },
-            "pending": { "type": "string", "minLength": 1 },
-            "loading": { "type": "string", "minLength": 1 },
-            "loadingDetail": { "type": "string", "minLength": 1 },
-            "empty": { "type": "string", "minLength": 1 },
-            "listLabel": { "type": "string", "minLength": 1 },
-            "detailLabel": { "type": "string", "minLength": 1 },
-            "selectPrompt": { "type": "string", "minLength": 1 },
-            "retry": { "type": "string", "minLength": 1 },
-            "enabled": { "type": "string", "minLength": 1 },
-            "disabled": { "type": "string", "minLength": 1 },
-            "quarantined": { "type": "string", "minLength": 1 },
-            "quarantineDescription": { "type": "string", "minLength": 1 },
-            "degradedTitle": { "type": "string", "minLength": 1 },
-            "degraded": { "type": "string", "minLength": 1 },
-            "compatible": { "type": "string", "minLength": 1 },
-            "incompatible": { "type": "string", "minLength": 1 },
-            "none": { "type": "string", "minLength": 1 },
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "install": {
+              "type": "string",
+              "minLength": 1
+            },
+            "preparing": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pending": {
+              "type": "string",
+              "minLength": 1
+            },
+            "loading": {
+              "type": "string",
+              "minLength": 1
+            },
+            "loadingDetail": {
+              "type": "string",
+              "minLength": 1
+            },
+            "empty": {
+              "type": "string",
+              "minLength": 1
+            },
+            "listLabel": {
+              "type": "string",
+              "minLength": 1
+            },
+            "detailLabel": {
+              "type": "string",
+              "minLength": 1
+            },
+            "selectPrompt": {
+              "type": "string",
+              "minLength": 1
+            },
+            "retry": {
+              "type": "string",
+              "minLength": 1
+            },
+            "enabled": {
+              "type": "string",
+              "minLength": 1
+            },
+            "disabled": {
+              "type": "string",
+              "minLength": 1
+            },
+            "quarantined": {
+              "type": "string",
+              "minLength": 1
+            },
+            "quarantineDescription": {
+              "type": "string",
+              "minLength": 1
+            },
+            "degradedTitle": {
+              "type": "string",
+              "minLength": 1
+            },
+            "degraded": {
+              "type": "string",
+              "minLength": 1
+            },
+            "compatible": {
+              "type": "string",
+              "minLength": 1
+            },
+            "incompatible": {
+              "type": "string",
+              "minLength": 1
+            },
+            "none": {
+              "type": "string",
+              "minLength": 1
+            },
             "source": {
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "builtin": { "type": "string", "minLength": 1 },
-                "external": { "type": "string", "minLength": 1 },
-                "development": { "type": "string", "minLength": 1 }
+                "builtin": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "external": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "development": {
+                  "type": "string",
+                  "minLength": 1
+                }
               },
               "required": ["builtin", "external", "development"]
             },
@@ -410,21 +500,54 @@
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "title": { "type": "string", "minLength": 1 },
-                "description": { "type": "string", "minLength": 1 },
-                "toggle": { "type": "string", "minLength": 1 },
-                "processLocal": { "type": "string", "minLength": 1 },
-                "register": { "type": "string", "minLength": 1 },
-                "reload": { "type": "string", "minLength": 1 },
-                "remove": { "type": "string", "minLength": 1 },
-                "unsignedDescription": { "type": "string", "minLength": 1 },
+                "title": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "toggle": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "processLocal": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "register": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reload": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "remove": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "unsignedDescription": {
+                  "type": "string",
+                  "minLength": 1
+                },
                 "labels": {
                   "type": "object",
                   "additionalProperties": false,
                   "properties": {
-                    "development": { "type": "string", "minLength": 1 },
-                    "unpacked": { "type": "string", "minLength": 1 },
-                    "unsigned": { "type": "string", "minLength": 1 }
+                    "development": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "unpacked": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "unsigned": {
+                      "type": "string",
+                      "minLength": 1
+                    }
                   },
                   "required": ["development", "unpacked", "unsigned"]
                 },
@@ -432,21 +555,66 @@
                   "type": "object",
                   "additionalProperties": false,
                   "properties": {
-                    "enabled": { "type": "string", "minLength": 1 },
-                    "disabled": { "type": "string", "minLength": 1 },
-                    "cancelled": { "type": "string", "minLength": 1 },
-                    "registered": { "type": "string", "minLength": 1 },
-                    "reloaded": { "type": "string", "minLength": 1 },
-                    "removed": { "type": "string", "minLength": 1 },
-                    "cleanup_pending": { "type": "string", "minLength": 1 },
-                    "invalid": { "type": "string", "minLength": 1 },
-                    "incompatible": { "type": "string", "minLength": 1 },
-                    "source_changed": { "type": "string", "minLength": 1 },
-                    "conflict": { "type": "string", "minLength": 1 },
-                    "unsafe_state": { "type": "string", "minLength": 1 },
-                    "unavailable": { "type": "string", "minLength": 1 },
-                    "convergence_failed": { "type": "string", "minLength": 1 },
-                    "failed": { "type": "string", "minLength": 1 }
+                    "enabled": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "disabled": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "cancelled": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "registered": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "reloaded": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "removed": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "cleanup_pending": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "invalid": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "incompatible": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "source_changed": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "conflict": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "unsafe_state": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "unavailable": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "convergence_failed": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "failed": {
+                      "type": "string",
+                      "minLength": 1
+                    }
                   },
                   "required": [
                     "enabled",
@@ -474,9 +642,18 @@
                       "type": "object",
                       "additionalProperties": false,
                       "properties": {
-                        "title": { "type": "string", "minLength": 1 },
-                        "description": { "type": "string", "minLength": 1 },
-                        "confirm": { "type": "string", "minLength": 1 }
+                        "title": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "description": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "confirm": {
+                          "type": "string",
+                          "minLength": 1
+                        }
                       },
                       "required": ["title", "description", "confirm"]
                     },
@@ -484,9 +661,18 @@
                       "type": "object",
                       "additionalProperties": false,
                       "properties": {
-                        "title": { "type": "string", "minLength": 1 },
-                        "description": { "type": "string", "minLength": 1 },
-                        "confirm": { "type": "string", "minLength": 1 }
+                        "title": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "description": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "confirm": {
+                          "type": "string",
+                          "minLength": 1
+                        }
                       },
                       "required": ["title", "description", "confirm"]
                     }
@@ -512,10 +698,22 @@
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "inactive": { "type": "string", "minLength": 1 },
-                "active": { "type": "string", "minLength": 1 },
-                "failed": { "type": "string", "minLength": 1 },
-                "starting": { "type": "string", "minLength": 1 }
+                "inactive": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "active": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "failed": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "starting": {
+                  "type": "string",
+                  "minLength": 1
+                }
               },
               "required": ["inactive", "active", "failed", "starting"]
             },
@@ -523,9 +721,18 @@
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "upgrade": { "type": "string", "minLength": 1 },
-                "downgrade": { "type": "string", "minLength": 1 },
-                "reinstall": { "type": "string", "minLength": 1 }
+                "upgrade": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "downgrade": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reinstall": {
+                  "type": "string",
+                  "minLength": 1
+                }
               },
               "required": ["upgrade", "downgrade", "reinstall"]
             },
@@ -533,87 +740,61 @@
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "version": { "type": "string", "minLength": 1 },
-                "source": { "type": "string", "minLength": 1 },
-                "compatibility": { "type": "string", "minLength": 1 },
-                "runtime": { "type": "string", "minLength": 1 },
-                "permissions": { "type": "string", "minLength": 1 },
-                "diagnostics": { "type": "string", "minLength": 1 }
-              },
-              "required": ["version", "source", "compatibility", "runtime", "permissions", "diagnostics"]
-            },
-            "permissions": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "readOnly": { "type": "string", "minLength": 1 },
-                "description": { "type": "string", "minLength": 1 },
-                "authorReason": { "type": "string", "minLength": 1 },
-                "publisherUnverified": { "type": "string", "minLength": 1 },
-                "publisherUnverifiedDescription": { "type": "string", "minLength": 1 },
-                "grant": { "type": "string", "minLength": 1 },
-                "revoke": { "type": "string", "minLength": 1 },
-                "allow": { "type": "string", "minLength": 1 },
-                "deny": { "type": "string", "minLength": 1 },
-                "laterAndInstall": { "type": "string", "minLength": 1 },
-                "confirmRevoke": { "type": "string", "minLength": 1 },
-                "grantTitle": { "type": "string", "minLength": 1 },
-                "revokeTitle": { "type": "string", "minLength": 1 },
-                "revokeImpact": { "type": "string", "minLength": 1 },
-                "singlePermissionOnly": { "type": "string", "minLength": 1 },
-                "risk": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "properties": {
-                    "standard": { "type": "string", "minLength": 1 },
-                    "sensitive": { "type": "string", "minLength": 1 },
-                    "unknown": { "type": "string", "minLength": 1 }
-                  },
-                  "required": ["standard", "sensitive", "unknown"]
+                "version": {
+                  "type": "string",
+                  "minLength": 1
                 },
-                "state": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "properties": {
-                    "granted": { "type": "string", "minLength": 1 },
-                    "not_granted": { "type": "string", "minLength": 1 },
-                    "not_requested": { "type": "string", "minLength": 1 },
-                    "unsupported": { "type": "string", "minLength": 1 }
-                  },
-                  "required": ["granted", "not_granted", "not_requested", "unsupported"]
+                "source": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "compatibility": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "runtime": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "diagnostics": {
+                  "type": "string",
+                  "minLength": 1
                 }
               },
-              "required": [
-                "readOnly",
-                "description",
-                "authorReason",
-                "publisherUnverified",
-                "publisherUnverifiedDescription",
-                "grant",
-                "revoke",
-                "allow",
-                "deny",
-                "laterAndInstall",
-                "confirmRevoke",
-                "grantTitle",
-                "revokeTitle",
-                "revokeImpact",
-                "singlePermissionOnly",
-                "risk",
-                "state"
-              ]
+              "required": ["version", "source", "compatibility", "runtime", "diagnostics"]
             },
             "diagnostics": {
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "corrupt_record": { "type": "string", "minLength": 1 },
-                "incompatible_contract": { "type": "string", "minLength": 1 },
-                "invalid_manifest": { "type": "string", "minLength": 1 },
-                "missing_record": { "type": "string", "minLength": 1 },
-                "recovery_failed": { "type": "string", "minLength": 1 },
-                "unavailable": { "type": "string", "minLength": 1 },
-                "unknown": { "type": "string", "minLength": 1 }
+                "corrupt_record": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "incompatible_contract": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "invalid_manifest": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "missing_record": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "recovery_failed": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "unavailable": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "unknown": {
+                  "type": "string",
+                  "minLength": 1
+                }
               },
               "required": [
                 "corrupt_record",
@@ -629,11 +810,26 @@
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "enable": { "type": "string", "minLength": 1 },
-                "disable": { "type": "string", "minLength": 1 },
-                "replace": { "type": "string", "minLength": 1 },
-                "uninstall": { "type": "string", "minLength": 1 },
-                "clearData": { "type": "string", "minLength": 1 }
+                "enable": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "disable": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "replace": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "uninstall": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "clearData": {
+                  "type": "string",
+                  "minLength": 1
+                }
               },
               "required": ["enable", "disable", "replace", "uninstall", "clearData"]
             },
@@ -641,32 +837,82 @@
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "busy": { "type": "string", "minLength": 1 },
-                "cancelled": { "type": "string", "minLength": 1 },
-                "cleanupPending": { "type": "string", "minLength": 1 },
-                "clearChanged": { "type": "string", "minLength": 1 },
-                "clearUnchanged": { "type": "string", "minLength": 1 },
-                "conflict": { "type": "string", "minLength": 1 },
-                "convergenceFailed": { "type": "string", "minLength": 1 },
-                "detailFailed": { "type": "string", "minLength": 1 },
-                "duplicate": { "type": "string", "minLength": 1 },
-                "installSucceeded": { "type": "string", "minLength": 1 },
-                "installPermissionsPartial": { "type": "string", "minLength": 1 },
-                "installPermissionsFailed": { "type": "string", "minLength": 1 },
-                "loadFailed": { "type": "string", "minLength": 1 },
-                "mutationFailed": { "type": "string", "minLength": 1 },
-                "notFound": { "type": "string", "minLength": 1 },
-                "pluginEnabled": { "type": "string", "minLength": 1 },
-                "replacementSucceeded": { "type": "string", "minLength": 1 },
-                "replacementPermissionsPartial": { "type": "string", "minLength": 1 },
-                "permissionGranted": { "type": "string", "minLength": 1 },
-                "permissionRevoked": { "type": "string", "minLength": 1 },
-                "permissionUnchanged": { "type": "string", "minLength": 1 },
-                "permissionsDeferred": { "type": "string", "minLength": 1 },
-                "setEnabledSucceeded": { "type": "string", "minLength": 1 },
-                "unavailable": { "type": "string", "minLength": 1 },
-                "uninstallSucceeded": { "type": "string", "minLength": 1 },
-                "unsafeStorage": { "type": "string", "minLength": 1 }
+                "busy": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "cancelled": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "cleanupPending": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "clearChanged": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "clearUnchanged": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "conflict": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "convergenceFailed": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "detailFailed": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "duplicate": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "installSucceeded": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "loadFailed": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "mutationFailed": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "notFound": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "pluginEnabled": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "replacementSucceeded": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "setEnabledSucceeded": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "unavailable": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "uninstallSucceeded": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "unsafeStorage": {
+                  "type": "string",
+                  "minLength": 1
+                }
               },
               "required": [
                 "busy",
@@ -679,18 +925,11 @@
                 "detailFailed",
                 "duplicate",
                 "installSucceeded",
-                "installPermissionsPartial",
-                "installPermissionsFailed",
                 "loadFailed",
                 "mutationFailed",
                 "notFound",
                 "pluginEnabled",
                 "replacementSucceeded",
-                "replacementPermissionsPartial",
-                "permissionGranted",
-                "permissionRevoked",
-                "permissionUnchanged",
-                "permissionsDeferred",
                 "setEnabledSucceeded",
                 "unavailable",
                 "uninstallSucceeded",
@@ -701,14 +940,26 @@
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "cancel": { "type": "string", "minLength": 1 },
+                "cancel": {
+                  "type": "string",
+                  "minLength": 1
+                },
                 "installation": {
                   "type": "object",
                   "additionalProperties": false,
                   "properties": {
-                    "title": { "type": "string", "minLength": 1 },
-                    "description": { "type": "string", "minLength": 1 },
-                    "confirm": { "type": "string", "minLength": 1 }
+                    "title": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "confirm": {
+                      "type": "string",
+                      "minLength": 1
+                    }
                   },
                   "required": ["title", "description", "confirm"]
                 },
@@ -716,34 +967,57 @@
                   "type": "object",
                   "additionalProperties": false,
                   "properties": {
-                    "title": { "type": "string", "minLength": 1 },
-                    "description": { "type": "string", "minLength": 1 },
-                    "addedPermissions": { "type": "string", "minLength": 1 },
-                    "retainedPermissions": { "type": "string", "minLength": 1 },
-                    "removedPermissions": { "type": "string", "minLength": 1 },
-                    "confirm": { "type": "string", "minLength": 1 }
+                    "title": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "confirm": {
+                      "type": "string",
+                      "minLength": 1
+                    }
                   },
-                  "required": [
-                    "title",
-                    "description",
-                    "addedPermissions",
-                    "retainedPermissions",
-                    "removedPermissions",
-                    "confirm"
-                  ]
+                  "required": ["title", "description", "confirm"]
                 },
                 "uninstall": {
                   "type": "object",
                   "additionalProperties": false,
                   "properties": {
-                    "title": { "type": "string", "minLength": 1 },
-                    "description": { "type": "string", "minLength": 1 },
-                    "dataPolicy": { "type": "string", "minLength": 1 },
-                    "retainData": { "type": "string", "minLength": 1 },
-                    "deleteData": { "type": "string", "minLength": 1 },
-                    "retainDescription": { "type": "string", "minLength": 1 },
-                    "deleteDescription": { "type": "string", "minLength": 1 },
-                    "confirm": { "type": "string", "minLength": 1 }
+                    "title": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "dataPolicy": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "retainData": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "deleteData": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "retainDescription": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "deleteDescription": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "confirm": {
+                      "type": "string",
+                      "minLength": 1
+                    }
                   },
                   "required": [
                     "title",
@@ -760,48 +1034,76 @@
                   "type": "object",
                   "additionalProperties": false,
                   "properties": {
-                    "title": { "type": "string", "minLength": 1 },
-                    "description": { "type": "string", "minLength": 1 },
-                    "confirm": { "type": "string", "minLength": 1 }
+                    "title": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "confirm": {
+                      "type": "string",
+                      "minLength": 1
+                    }
                   },
                   "required": ["title", "description", "confirm"]
                 }
               },
               "required": ["cancel", "installation", "replacement", "uninstall", "clear"]
+            },
+            "trust": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "replacementDescription": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["title", "description", "replacementDescription"]
             }
           },
           "required": [
-            "title",
+            "actions",
+            "compatible",
+            "confirm",
+            "degraded",
+            "degradedTitle",
             "description",
+            "detailLabel",
+            "development",
+            "diagnostics",
+            "disabled",
+            "empty",
+            "enabled",
+            "feedback",
+            "fields",
+            "incompatible",
             "install",
-            "preparing",
-            "pending",
+            "listLabel",
             "loading",
             "loadingDetail",
-            "empty",
-            "listLabel",
-            "detailLabel",
-            "selectPrompt",
-            "retry",
-            "enabled",
-            "disabled",
-            "quarantined",
-            "quarantineDescription",
-            "degradedTitle",
-            "degraded",
-            "compatible",
-            "incompatible",
             "none",
-            "source",
-            "development",
-            "runtime",
+            "pending",
+            "preparing",
+            "quarantineDescription",
+            "quarantined",
             "replacement",
-            "fields",
-            "permissions",
-            "diagnostics",
-            "actions",
-            "feedback",
-            "confirm"
+            "retry",
+            "runtime",
+            "selectPrompt",
+            "source",
+            "title",
+            "trust"
           ]
         },
         "save": {

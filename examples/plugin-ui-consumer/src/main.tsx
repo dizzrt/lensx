@@ -6,7 +6,7 @@ import '@lensx/plugin-ui/styles.css';
 
 const context: PluginRuntimeContext = Object.freeze({
   capabilities: Object.freeze([]),
-  hostApiVersion: '0.1.0',
+  hostApiVersion: '0.2.0',
   locale: 'en-US',
   theme: 'light',
 });

@@ -4,7 +4,7 @@
 
 Define Host-owned persistent key-value storage for each plugin identity, with
 trusted namespace derivation, deterministic limits, durable writes, lifecycle
-coordination, corruption isolation, and unchanged public Host API `0.1.0`
+coordination, corruption isolation, and unchanged public Host API `0.2.0`
 semantics.
 
 ## Requirements
@@ -52,11 +52,11 @@ storage MUST remain inaccessible.
 - **THEN** an old Session cannot regain write authority after disable,
   uninstall, or identity replacement
 
-### Requirement: Storage methods MUST implement the existing Host API 0.1.0 semantics
+### Requirement: Storage methods MUST implement the existing Host API 0.2.0 semantics
 
 The system MUST implement `storage.get`, `storage.set`, `storage.delete`,
 `storage.list`, and `storage.get_quota` without changing the public Host API
-`0.1.0` payloads. Inputs and values MUST pass existing Contract validation, and
+`0.2.0` payloads. Inputs and values MUST pass existing Contract validation, and
 Rust MUST again reject unknown fields, invalid keys, non-JSON values, and
 payloads that do not match the Host-private contract version.
 
@@ -269,7 +269,7 @@ data subtree; a call after logical uninstall MUST NOT recreate it.
   reinstalled successfully
 - **THEN** the storage provider returns `unavailable` without changing the
   retained store while no Registration exists
-- **THEN** reinstall does not restore old grants or Manager facts, but a new
+- **THEN** reinstall does not restore legacy grant or Manager facts, but a new
   current Session can read retained plugin data
 
 #### Scenario: Delete-data uninstall races a write
@@ -328,7 +328,7 @@ evidence after proving subtree ownership.
 ### Requirement: Storage delivery MUST preserve public package and documentation boundaries
 
 The public Contract, SDK, and Testkit MUST continue to expose only the existing
-Host API `0.1.0` semantic methods and types. They MUST NOT export a Host-private
+Host API `0.2.0` semantic methods and types. They MUST NOT export a Host-private
 storage request, cursor codec, data model, path, Tauri command, provider, or
 Rust error. Official and third-party plugins MUST use the same public
 SDK/Contract storage boundary; official provenance MUST NOT bypass namespace or
@@ -360,8 +360,8 @@ Existing accessibility, locale, and theme behavior MUST remain regression-free.
 
 - **WHEN** focused and complete validation pass and documentation and the
   Roadmap are updated
-- **THEN** the storage provider is described as delivered while clipboard,
-  permission management, and general RPC limits remain undelivered
+- **THEN** the storage provider is described as delivered while native
+  clipboard authority and general RPC limits remain unavailable
 - **THEN** the Task 5.5, Task 5.6, and Milestone 5 checkboxes remain incomplete
 
 ### Requirement: Trusted Host management MUST clear a disabled plugin namespace through a private contract
@@ -378,7 +378,8 @@ value, payload, raw error, exception or stack.
 The operation MUST reject an enabled, quarantined, missing, stale, degraded or
 unprovable target with a stable bounded error. It MUST remain private to Rust,
 Tauri and the lensX root application and MUST NOT become a public Host API,
-Manifest permission, SDK method, Testkit behavior or iframe capability.
+Manifest field, SDK method, Testkit behavior or iframe capability. Current
+request and result payloads MUST contain no permission or grant facts.
 
 #### Scenario: Clear a current disabled namespace
 
@@ -387,7 +388,7 @@ Manifest permission, SDK method, Testkit behavior or iframe capability.
 - **THEN** the Host commits a canonical empty store and returns a strict result
   with `changed=true`, or returns idempotent `changed=false` when no logical
   values existed
-- **THEN** the Registration, enabled intent, grants, Manifest, program payload
+- **THEN** the Registration, enabled intent, Manifest, program payload
   and Registration revision remain unchanged
 
 #### Scenario: Reject clearing an enabled namespace

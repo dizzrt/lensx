@@ -22,16 +22,16 @@ pnpm install
 ```
 
 `create` writes files only. It does not download dependencies, initialize Git,
-install the plugin, start the Host, or grant authority. The generated project
+install the plugin, start the Host, or create Host authority. The generated project
 uses public package roots and ordinary version ranges.
 
 ## Manifest and resources
 
-Open `manifest.json`. Keep `manifest_version` at `0.1.0`; use a namespaced
+Open `manifest.json`. Keep `manifest_version` at `0.2.0`; use a namespaced
 `plugin_id` and SemVer plugin version. Compatibility has separate half-open
 ranges for lensX and Host API. Publisher fields are unverified author text.
 
-The permissionless starter requests no permissions. It contributes one Page,
+The starter has no permission fields. It contributes one Page,
 one Action targeting that Page, and a launcher default action. The iframe entry
 and every icon or resource path must be package-relative and present in
 `dist/`. Page and Action IDs are local to this plugin. Contract validation does
@@ -50,8 +50,7 @@ disconnect or failure, show bounded feedback and an explicit retry. Cleanup is
 idempotent, and callbacks from an older attempt cannot restore it.
 
 The Testkit supplies a semantic fake transport and context fixtures for these
-states. It does not simulate the real Host security boundary or grant a
-permission.
+states. It does not simulate the real Host security boundary.
 
 ## Test and build
 
@@ -83,7 +82,7 @@ In Settings, explicitly register this project's `dist/`. The Host copies a
 verified immutable process-local generation. After changing code, run the
 build again and choose manual reload. Development registration is not `.lxp`
 installation, is not persisted across process restart, and does not change
-permissions, Runtime isolation, deadlines, or session capability rules. There
+Runtime isolation, deadlines, or session capability rules. There
 is no watch/HMR or automatic reload.
 
 ## Pack and install
@@ -98,11 +97,11 @@ lensx-plugin pack --project .
 ```
 
 In Settings choose **Install from file**, select that `.lxp`, review the
-unverified publisher and requested permissions, and confirm. The Host reinspects
+unverified publisher and open-Web trust notice, and confirm. The Host reinspects
 the exact candidate and commits through its controlled preparation boundary.
 Open the contributed Action from the launcher and confirm loading, ready,
 locale/theme replacement, and clean close. CLI acceptance did not grant any
-authority; this starter remains permissionless.
+Host authority; ordinary Web behavior remains inside the isolated Runtime.
 
 ## Negative paths
 
@@ -114,11 +113,10 @@ authority; this starter remains permissionless.
 - Fail initialization, then retry: the second attempt is fresh and the first
   attempt's late work is inert.
 - Dispose twice: listeners and pending operations stay released.
-- Revoke or omit a future permission: no prompt or automatic grant originates
-  from plugin code.
+- Try an unavailable native/device API: handle the browser rejection; plugin
+  code cannot open Host-private authority.
 - Restart the Host: a Development Mode entry disappears; a formally installed
   entry remains manageable.
 
 Use [Host API](host-api.md) before adding a protected feature and
 [Compatibility and errors](compatibility-and-errors.md) when a gate fails.
-

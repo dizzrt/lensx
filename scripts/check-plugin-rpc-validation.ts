@@ -33,7 +33,6 @@ for (const fragment of [
   'plugin-runtime-transport-adapter.test.ts',
   'plugin-sdk-transport-integration.test.ts',
   'plugin-host-api-dispatcher.test.ts',
-  'plugin-permission-management.test.ts',
   'plugin-scoped-storage-contract.test.ts',
   'plugin-runtime-session-service.test.ts',
   'plugin-runtime-session-evidence.test.ts',

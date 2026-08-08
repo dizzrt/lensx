@@ -11,15 +11,15 @@ import func0Module from 'ajv/dist/runtime/equal.js';
 const func0 = typeof func0Module === 'function' ? func0Module : func0Module.default;
 "use strict";
 export const ActionsOpenRequest = validate20;
-const schema31 = {"$id":"urn:lensx:plugin-host-api-validator:ActionsOpenRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ActionsOpenRequest"};
+const schema31 = {"$id":"urn:lensx:plugin-host-api-validator:ActionsOpenRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/ActionsOpenRequest"};
 const schema34 = {"type":"object","additionalProperties":false,"required":["method","params"],"properties":{"method":{"const":"actions.open"},"params":{"type":"object","additionalProperties":false,"required":["actionId"],"properties":{"actionId":{"$ref":"#/$defs/LocalActionId"}}}}};
 const schema35 = {"type":"string","minLength":1,"maxLength":64,"pattern":"^[a-z][a-z0-9_-]*$"};
 const pattern4 = new RegExp("^[a-z][a-z0-9_-]*$", "u");
 
-function validate65(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate59(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate65.evaluated;
+const evaluated0 = validate59.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -164,10 +164,10 @@ vErrors.push(err11);
 }
 errors++;
 }
-validate65.errors = vErrors;
+validate59.errors = vErrors;
 return errors === 0;
 }
-validate65.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate59.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 
 function validate20(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
@@ -181,8 +181,8 @@ evaluated0.props = undefined;
 if(evaluated0.dynamicItems){
 evaluated0.items = undefined;
 }
-if(!(validate65(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate65.errors : vErrors.concat(validate65.errors);
+if(!(validate59(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate59.errors : vErrors.concat(validate59.errors);
 errors = vErrors.length;
 }
 validate20.errors = vErrors;
@@ -190,15 +190,15 @@ return errors === 0;
 }
 validate20.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const ActionsOpenResult = validate67;
-const schema79 = {"$id":"urn:lensx:plugin-host-api-validator:ActionsOpenResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ActionsOpenResult"};
-const schema56 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"actions.open"},"result":{"type":"object","additionalProperties":false,"required":["opened"],"properties":{"opened":{"const":true}}}}};
+export const ActionsOpenResult = validate61;
+const schema71 = {"$id":"urn:lensx:plugin-host-api-validator:ActionsOpenResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/ActionsOpenResult"};
+const schema52 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"actions.open"},"result":{"type":"object","additionalProperties":false,"required":["opened"],"properties":{"opened":{"const":true}}}}};
 
-function validate67(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate61(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:ActionsOpenResult" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate67.evaluated;
+const evaluated0 = validate61.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -207,7 +207,7 @@ evaluated0.items = undefined;
 }
 if(data && typeof data == "object" && !Array.isArray(data)){
 if(data.method === undefined){
-const err0 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ActionsOpenResult/required",keyword:"required",params:{missingProperty: "method"},message:"must have required property '"+"method"+"'"};
+const err0 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/ActionsOpenResult/required",keyword:"required",params:{missingProperty: "method"},message:"must have required property '"+"method"+"'"};
 if(vErrors === null){
 vErrors = [err0];
 }
@@ -217,7 +217,7 @@ vErrors.push(err0);
 errors++;
 }
 if(data.result === undefined){
-const err1 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ActionsOpenResult/required",keyword:"required",params:{missingProperty: "result"},message:"must have required property '"+"result"+"'"};
+const err1 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/ActionsOpenResult/required",keyword:"required",params:{missingProperty: "result"},message:"must have required property '"+"result"+"'"};
 if(vErrors === null){
 vErrors = [err1];
 }
@@ -228,7 +228,7 @@ errors++;
 }
 for(const key0 in data){
 if(!((key0 === "method") || (key0 === "result"))){
-const err2 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ActionsOpenResult/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"};
+const err2 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/ActionsOpenResult/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err2];
 }
@@ -240,7 +240,7 @@ errors++;
 }
 if(data.method !== undefined){
 if("actions.open" !== data.method){
-const err3 = {instancePath:instancePath+"/method",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ActionsOpenResult/properties/method/const",keyword:"const",params:{allowedValue: "actions.open"},message:"must be equal to constant"};
+const err3 = {instancePath:instancePath+"/method",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/ActionsOpenResult/properties/method/const",keyword:"const",params:{allowedValue: "actions.open"},message:"must be equal to constant"};
 if(vErrors === null){
 vErrors = [err3];
 }
@@ -254,7 +254,7 @@ if(data.result !== undefined){
 let data1 = data.result;
 if(data1 && typeof data1 == "object" && !Array.isArray(data1)){
 if(data1.opened === undefined){
-const err4 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ActionsOpenResult/properties/result/required",keyword:"required",params:{missingProperty: "opened"},message:"must have required property '"+"opened"+"'"};
+const err4 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/ActionsOpenResult/properties/result/required",keyword:"required",params:{missingProperty: "opened"},message:"must have required property '"+"opened"+"'"};
 if(vErrors === null){
 vErrors = [err4];
 }
@@ -265,7 +265,7 @@ errors++;
 }
 for(const key1 in data1){
 if(!(key1 === "opened")){
-const err5 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ActionsOpenResult/properties/result/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
+const err5 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/ActionsOpenResult/properties/result/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err5];
 }
@@ -277,7 +277,7 @@ errors++;
 }
 if(data1.opened !== undefined){
 if(true !== data1.opened){
-const err6 = {instancePath:instancePath+"/result/opened",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ActionsOpenResult/properties/result/properties/opened/const",keyword:"const",params:{allowedValue: true},message:"must be equal to constant"};
+const err6 = {instancePath:instancePath+"/result/opened",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/ActionsOpenResult/properties/result/properties/opened/const",keyword:"const",params:{allowedValue: true},message:"must be equal to constant"};
 if(vErrors === null){
 vErrors = [err6];
 }
@@ -289,7 +289,7 @@ errors++;
 }
 }
 else {
-const err7 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ActionsOpenResult/properties/result/type",keyword:"type",params:{type: "object"},message:"must be object"};
+const err7 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/ActionsOpenResult/properties/result/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err7];
 }
@@ -301,7 +301,7 @@ errors++;
 }
 }
 else {
-const err8 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ActionsOpenResult/type",keyword:"type",params:{type: "object"},message:"must be object"};
+const err8 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/ActionsOpenResult/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err8];
 }
@@ -310,583 +310,20 @@ vErrors.push(err8);
 }
 errors++;
 }
-validate67.errors = vErrors;
+validate61.errors = vErrors;
 return errors === 0;
 }
-validate67.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate61.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const ClipboardReadRequest = validate68;
-const schema81 = {"$id":"urn:lensx:plugin-host-api-validator:ClipboardReadRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ClipboardReadRequest"};
-const schema36 = {"type":"object","additionalProperties":false,"required":["method","params"],"properties":{"method":{"const":"clipboard.read"},"params":{"$ref":"#/$defs/EmptyParams"}}};
+export const RuntimeGetContextRequest = validate62;
+const schema73 = {"$id":"urn:lensx:plugin-host-api-validator:RuntimeGetContextRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/RuntimeGetContextRequest"};
+const schema36 = {"type":"object","additionalProperties":false,"required":["method","params"],"properties":{"method":{"const":"runtime.get_context"},"params":{"$ref":"#/$defs/EmptyParams"}}};
 const schema37 = {"type":"object","additionalProperties":false};
 
-function validate69(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate63(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate69.evaluated;
-if(evaluated0.dynamicProps){
-evaluated0.props = undefined;
-}
-if(evaluated0.dynamicItems){
-evaluated0.items = undefined;
-}
-if(data && typeof data == "object" && !Array.isArray(data)){
-if(data.method === undefined){
-const err0 = {instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: "method"},message:"must have required property '"+"method"+"'"};
-if(vErrors === null){
-vErrors = [err0];
-}
-else {
-vErrors.push(err0);
-}
-errors++;
-}
-if(data.params === undefined){
-const err1 = {instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: "params"},message:"must have required property '"+"params"+"'"};
-if(vErrors === null){
-vErrors = [err1];
-}
-else {
-vErrors.push(err1);
-}
-errors++;
-}
-for(const key0 in data){
-if(!((key0 === "method") || (key0 === "params"))){
-const err2 = {instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"};
-if(vErrors === null){
-vErrors = [err2];
-}
-else {
-vErrors.push(err2);
-}
-errors++;
-}
-}
-if(data.method !== undefined){
-if("clipboard.read" !== data.method){
-const err3 = {instancePath:instancePath+"/method",schemaPath:"#/properties/method/const",keyword:"const",params:{allowedValue: "clipboard.read"},message:"must be equal to constant"};
-if(vErrors === null){
-vErrors = [err3];
-}
-else {
-vErrors.push(err3);
-}
-errors++;
-}
-}
-if(data.params !== undefined){
-let data1 = data.params;
-if(data1 && typeof data1 == "object" && !Array.isArray(data1)){
-for(const key1 in data1){
-const err4 = {instancePath:instancePath+"/params",schemaPath:"#/$defs/EmptyParams/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
-if(vErrors === null){
-vErrors = [err4];
-}
-else {
-vErrors.push(err4);
-}
-errors++;
-}
-}
-else {
-const err5 = {instancePath:instancePath+"/params",schemaPath:"#/$defs/EmptyParams/type",keyword:"type",params:{type: "object"},message:"must be object"};
-if(vErrors === null){
-vErrors = [err5];
-}
-else {
-vErrors.push(err5);
-}
-errors++;
-}
-}
-}
-else {
-const err6 = {instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"};
-if(vErrors === null){
-vErrors = [err6];
-}
-else {
-vErrors.push(err6);
-}
-errors++;
-}
-validate69.errors = vErrors;
-return errors === 0;
-}
-validate69.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
-
-
-function validate68(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
-/*# sourceURL="urn:lensx:plugin-host-api-validator:ClipboardReadRequest" */;
-let vErrors = null;
-let errors = 0;
-const evaluated0 = validate68.evaluated;
-if(evaluated0.dynamicProps){
-evaluated0.props = undefined;
-}
-if(evaluated0.dynamicItems){
-evaluated0.items = undefined;
-}
-if(!(validate69(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate69.errors : vErrors.concat(validate69.errors);
-errors = vErrors.length;
-}
-validate68.errors = vErrors;
-return errors === 0;
-}
-validate68.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
-
-export const ClipboardReadResult = validate71;
-const schema84 = {"$id":"urn:lensx:plugin-host-api-validator:ClipboardReadResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ClipboardReadResult"};
-const schema57 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"clipboard.read"},"result":{"type":"object","additionalProperties":false,"required":["text"],"properties":{"text":{"$ref":"#/$defs/BoundedText"}}}}};
-const schema39 = {"type":"string","maxLength":1048576};
-
-function validate72(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
-let vErrors = null;
-let errors = 0;
-const evaluated0 = validate72.evaluated;
-if(evaluated0.dynamicProps){
-evaluated0.props = undefined;
-}
-if(evaluated0.dynamicItems){
-evaluated0.items = undefined;
-}
-if(data && typeof data == "object" && !Array.isArray(data)){
-if(data.method === undefined){
-const err0 = {instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: "method"},message:"must have required property '"+"method"+"'"};
-if(vErrors === null){
-vErrors = [err0];
-}
-else {
-vErrors.push(err0);
-}
-errors++;
-}
-if(data.result === undefined){
-const err1 = {instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: "result"},message:"must have required property '"+"result"+"'"};
-if(vErrors === null){
-vErrors = [err1];
-}
-else {
-vErrors.push(err1);
-}
-errors++;
-}
-for(const key0 in data){
-if(!((key0 === "method") || (key0 === "result"))){
-const err2 = {instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"};
-if(vErrors === null){
-vErrors = [err2];
-}
-else {
-vErrors.push(err2);
-}
-errors++;
-}
-}
-if(data.method !== undefined){
-if("clipboard.read" !== data.method){
-const err3 = {instancePath:instancePath+"/method",schemaPath:"#/properties/method/const",keyword:"const",params:{allowedValue: "clipboard.read"},message:"must be equal to constant"};
-if(vErrors === null){
-vErrors = [err3];
-}
-else {
-vErrors.push(err3);
-}
-errors++;
-}
-}
-if(data.result !== undefined){
-let data1 = data.result;
-if(data1 && typeof data1 == "object" && !Array.isArray(data1)){
-if(data1.text === undefined){
-const err4 = {instancePath:instancePath+"/result",schemaPath:"#/properties/result/required",keyword:"required",params:{missingProperty: "text"},message:"must have required property '"+"text"+"'"};
-if(vErrors === null){
-vErrors = [err4];
-}
-else {
-vErrors.push(err4);
-}
-errors++;
-}
-for(const key1 in data1){
-if(!(key1 === "text")){
-const err5 = {instancePath:instancePath+"/result",schemaPath:"#/properties/result/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
-if(vErrors === null){
-vErrors = [err5];
-}
-else {
-vErrors.push(err5);
-}
-errors++;
-}
-}
-if(data1.text !== undefined){
-let data2 = data1.text;
-if(typeof data2 === "string"){
-if(func1(data2) > 1048576){
-const err6 = {instancePath:instancePath+"/result/text",schemaPath:"#/$defs/BoundedText/maxLength",keyword:"maxLength",params:{limit: 1048576},message:"must NOT have more than 1048576 characters"};
-if(vErrors === null){
-vErrors = [err6];
-}
-else {
-vErrors.push(err6);
-}
-errors++;
-}
-}
-else {
-const err7 = {instancePath:instancePath+"/result/text",schemaPath:"#/$defs/BoundedText/type",keyword:"type",params:{type: "string"},message:"must be string"};
-if(vErrors === null){
-vErrors = [err7];
-}
-else {
-vErrors.push(err7);
-}
-errors++;
-}
-}
-}
-else {
-const err8 = {instancePath:instancePath+"/result",schemaPath:"#/properties/result/type",keyword:"type",params:{type: "object"},message:"must be object"};
-if(vErrors === null){
-vErrors = [err8];
-}
-else {
-vErrors.push(err8);
-}
-errors++;
-}
-}
-}
-else {
-const err9 = {instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"};
-if(vErrors === null){
-vErrors = [err9];
-}
-else {
-vErrors.push(err9);
-}
-errors++;
-}
-validate72.errors = vErrors;
-return errors === 0;
-}
-validate72.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
-
-
-function validate71(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
-/*# sourceURL="urn:lensx:plugin-host-api-validator:ClipboardReadResult" */;
-let vErrors = null;
-let errors = 0;
-const evaluated0 = validate71.evaluated;
-if(evaluated0.dynamicProps){
-evaluated0.props = undefined;
-}
-if(evaluated0.dynamicItems){
-evaluated0.items = undefined;
-}
-if(!(validate72(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate72.errors : vErrors.concat(validate72.errors);
-errors = vErrors.length;
-}
-validate71.errors = vErrors;
-return errors === 0;
-}
-validate71.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
-
-export const ClipboardWriteRequest = validate74;
-const schema87 = {"$id":"urn:lensx:plugin-host-api-validator:ClipboardWriteRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ClipboardWriteRequest"};
-const schema38 = {"type":"object","additionalProperties":false,"required":["method","params"],"properties":{"method":{"const":"clipboard.write"},"params":{"type":"object","additionalProperties":false,"required":["text"],"properties":{"text":{"$ref":"#/$defs/BoundedText"}}}}};
-
-function validate75(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
-let vErrors = null;
-let errors = 0;
-const evaluated0 = validate75.evaluated;
-if(evaluated0.dynamicProps){
-evaluated0.props = undefined;
-}
-if(evaluated0.dynamicItems){
-evaluated0.items = undefined;
-}
-if(data && typeof data == "object" && !Array.isArray(data)){
-if(data.method === undefined){
-const err0 = {instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: "method"},message:"must have required property '"+"method"+"'"};
-if(vErrors === null){
-vErrors = [err0];
-}
-else {
-vErrors.push(err0);
-}
-errors++;
-}
-if(data.params === undefined){
-const err1 = {instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: "params"},message:"must have required property '"+"params"+"'"};
-if(vErrors === null){
-vErrors = [err1];
-}
-else {
-vErrors.push(err1);
-}
-errors++;
-}
-for(const key0 in data){
-if(!((key0 === "method") || (key0 === "params"))){
-const err2 = {instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"};
-if(vErrors === null){
-vErrors = [err2];
-}
-else {
-vErrors.push(err2);
-}
-errors++;
-}
-}
-if(data.method !== undefined){
-if("clipboard.write" !== data.method){
-const err3 = {instancePath:instancePath+"/method",schemaPath:"#/properties/method/const",keyword:"const",params:{allowedValue: "clipboard.write"},message:"must be equal to constant"};
-if(vErrors === null){
-vErrors = [err3];
-}
-else {
-vErrors.push(err3);
-}
-errors++;
-}
-}
-if(data.params !== undefined){
-let data1 = data.params;
-if(data1 && typeof data1 == "object" && !Array.isArray(data1)){
-if(data1.text === undefined){
-const err4 = {instancePath:instancePath+"/params",schemaPath:"#/properties/params/required",keyword:"required",params:{missingProperty: "text"},message:"must have required property '"+"text"+"'"};
-if(vErrors === null){
-vErrors = [err4];
-}
-else {
-vErrors.push(err4);
-}
-errors++;
-}
-for(const key1 in data1){
-if(!(key1 === "text")){
-const err5 = {instancePath:instancePath+"/params",schemaPath:"#/properties/params/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
-if(vErrors === null){
-vErrors = [err5];
-}
-else {
-vErrors.push(err5);
-}
-errors++;
-}
-}
-if(data1.text !== undefined){
-let data2 = data1.text;
-if(typeof data2 === "string"){
-if(func1(data2) > 1048576){
-const err6 = {instancePath:instancePath+"/params/text",schemaPath:"#/$defs/BoundedText/maxLength",keyword:"maxLength",params:{limit: 1048576},message:"must NOT have more than 1048576 characters"};
-if(vErrors === null){
-vErrors = [err6];
-}
-else {
-vErrors.push(err6);
-}
-errors++;
-}
-}
-else {
-const err7 = {instancePath:instancePath+"/params/text",schemaPath:"#/$defs/BoundedText/type",keyword:"type",params:{type: "string"},message:"must be string"};
-if(vErrors === null){
-vErrors = [err7];
-}
-else {
-vErrors.push(err7);
-}
-errors++;
-}
-}
-}
-else {
-const err8 = {instancePath:instancePath+"/params",schemaPath:"#/properties/params/type",keyword:"type",params:{type: "object"},message:"must be object"};
-if(vErrors === null){
-vErrors = [err8];
-}
-else {
-vErrors.push(err8);
-}
-errors++;
-}
-}
-}
-else {
-const err9 = {instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"};
-if(vErrors === null){
-vErrors = [err9];
-}
-else {
-vErrors.push(err9);
-}
-errors++;
-}
-validate75.errors = vErrors;
-return errors === 0;
-}
-validate75.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
-
-
-function validate74(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
-/*# sourceURL="urn:lensx:plugin-host-api-validator:ClipboardWriteRequest" */;
-let vErrors = null;
-let errors = 0;
-const evaluated0 = validate74.evaluated;
-if(evaluated0.dynamicProps){
-evaluated0.props = undefined;
-}
-if(evaluated0.dynamicItems){
-evaluated0.items = undefined;
-}
-if(!(validate75(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate75.errors : vErrors.concat(validate75.errors);
-errors = vErrors.length;
-}
-validate74.errors = vErrors;
-return errors === 0;
-}
-validate74.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
-
-export const ClipboardWriteResult = validate77;
-const schema90 = {"$id":"urn:lensx:plugin-host-api-validator:ClipboardWriteResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ClipboardWriteResult"};
-const schema59 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"clipboard.write"},"result":{"type":"object","additionalProperties":false,"required":["written"],"properties":{"written":{"const":true}}}}};
-
-function validate77(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
-/*# sourceURL="urn:lensx:plugin-host-api-validator:ClipboardWriteResult" */;
-let vErrors = null;
-let errors = 0;
-const evaluated0 = validate77.evaluated;
-if(evaluated0.dynamicProps){
-evaluated0.props = undefined;
-}
-if(evaluated0.dynamicItems){
-evaluated0.items = undefined;
-}
-if(data && typeof data == "object" && !Array.isArray(data)){
-if(data.method === undefined){
-const err0 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ClipboardWriteResult/required",keyword:"required",params:{missingProperty: "method"},message:"must have required property '"+"method"+"'"};
-if(vErrors === null){
-vErrors = [err0];
-}
-else {
-vErrors.push(err0);
-}
-errors++;
-}
-if(data.result === undefined){
-const err1 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ClipboardWriteResult/required",keyword:"required",params:{missingProperty: "result"},message:"must have required property '"+"result"+"'"};
-if(vErrors === null){
-vErrors = [err1];
-}
-else {
-vErrors.push(err1);
-}
-errors++;
-}
-for(const key0 in data){
-if(!((key0 === "method") || (key0 === "result"))){
-const err2 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ClipboardWriteResult/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"};
-if(vErrors === null){
-vErrors = [err2];
-}
-else {
-vErrors.push(err2);
-}
-errors++;
-}
-}
-if(data.method !== undefined){
-if("clipboard.write" !== data.method){
-const err3 = {instancePath:instancePath+"/method",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ClipboardWriteResult/properties/method/const",keyword:"const",params:{allowedValue: "clipboard.write"},message:"must be equal to constant"};
-if(vErrors === null){
-vErrors = [err3];
-}
-else {
-vErrors.push(err3);
-}
-errors++;
-}
-}
-if(data.result !== undefined){
-let data1 = data.result;
-if(data1 && typeof data1 == "object" && !Array.isArray(data1)){
-if(data1.written === undefined){
-const err4 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ClipboardWriteResult/properties/result/required",keyword:"required",params:{missingProperty: "written"},message:"must have required property '"+"written"+"'"};
-if(vErrors === null){
-vErrors = [err4];
-}
-else {
-vErrors.push(err4);
-}
-errors++;
-}
-for(const key1 in data1){
-if(!(key1 === "written")){
-const err5 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ClipboardWriteResult/properties/result/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
-if(vErrors === null){
-vErrors = [err5];
-}
-else {
-vErrors.push(err5);
-}
-errors++;
-}
-}
-if(data1.written !== undefined){
-if(true !== data1.written){
-const err6 = {instancePath:instancePath+"/result/written",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ClipboardWriteResult/properties/result/properties/written/const",keyword:"const",params:{allowedValue: true},message:"must be equal to constant"};
-if(vErrors === null){
-vErrors = [err6];
-}
-else {
-vErrors.push(err6);
-}
-errors++;
-}
-}
-}
-else {
-const err7 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ClipboardWriteResult/properties/result/type",keyword:"type",params:{type: "object"},message:"must be object"};
-if(vErrors === null){
-vErrors = [err7];
-}
-else {
-vErrors.push(err7);
-}
-errors++;
-}
-}
-}
-else {
-const err8 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/ClipboardWriteResult/type",keyword:"type",params:{type: "object"},message:"must be object"};
-if(vErrors === null){
-vErrors = [err8];
-}
-else {
-vErrors.push(err8);
-}
-errors++;
-}
-validate77.errors = vErrors;
-return errors === 0;
-}
-validate77.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
-
-export const RuntimeGetContextRequest = validate78;
-const schema92 = {"$id":"urn:lensx:plugin-host-api-validator:RuntimeGetContextRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/RuntimeGetContextRequest"};
-const schema40 = {"type":"object","additionalProperties":false,"required":["method","params"],"properties":{"method":{"const":"runtime.get_context"},"params":{"$ref":"#/$defs/EmptyParams"}}};
-
-function validate79(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
-let vErrors = null;
-let errors = 0;
-const evaluated0 = validate79.evaluated;
+const evaluated0 = validate63.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -974,44 +411,44 @@ vErrors.push(err6);
 }
 errors++;
 }
-validate79.errors = vErrors;
+validate63.errors = vErrors;
 return errors === 0;
 }
-validate79.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate63.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 
-function validate78(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate62(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:RuntimeGetContextRequest" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate78.evaluated;
+const evaluated0 = validate62.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
 if(evaluated0.dynamicItems){
 evaluated0.items = undefined;
 }
-if(!(validate79(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate79.errors : vErrors.concat(validate79.errors);
+if(!(validate63(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate63.errors : vErrors.concat(validate63.errors);
 errors = vErrors.length;
 }
-validate78.errors = vErrors;
+validate62.errors = vErrors;
 return errors === 0;
 }
-validate78.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate62.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const RuntimeGetContextResult = validate81;
-const schema95 = {"$id":"urn:lensx:plugin-host-api-validator:RuntimeGetContextResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/RuntimeGetContextResult"};
-const schema60 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"runtime.get_context"},"result":{"$ref":"#/$defs/PluginRuntimeContextInput"}}};
-const schema61 = {"type":"object","additionalProperties":false,"required":["hostApiVersion","locale","theme","capabilities"],"properties":{"hostApiVersion":{"$ref":"#/$defs/Semver"},"locale":{"type":"string","enum":["en-US","zh-CN"]},"theme":{"type":"string","enum":["light","dark"]},"capabilities":{"type":"array","uniqueItems":true,"items":{"$ref":"#/$defs/HostApiMethodInput"}}}};
-const schema62 = {"type":"string","maxLength":255,"pattern":"^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"};
-const schema63 = {"type":"string","enum":["actions.open","clipboard.read","clipboard.write","runtime.get_context","storage.delete","storage.get","storage.get_quota","storage.list","storage.set","ui.close"]};
+export const RuntimeGetContextResult = validate65;
+const schema76 = {"$id":"urn:lensx:plugin-host-api-validator:RuntimeGetContextResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/RuntimeGetContextResult"};
+const schema53 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"runtime.get_context"},"result":{"$ref":"#/$defs/PluginRuntimeContextInput"}}};
+const schema54 = {"type":"object","additionalProperties":false,"required":["hostApiVersion","locale","theme","capabilities"],"properties":{"hostApiVersion":{"$ref":"#/$defs/Semver"},"locale":{"type":"string","enum":["en-US","zh-CN"]},"theme":{"type":"string","enum":["light","dark"]},"capabilities":{"type":"array","uniqueItems":true,"items":{"$ref":"#/$defs/HostApiMethodInput"}}}};
+const schema55 = {"type":"string","maxLength":255,"pattern":"^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"};
+const schema56 = {"type":"string","enum":["actions.open","runtime.get_context","storage.delete","storage.get","storage.get_quota","storage.list","storage.set","ui.close"]};
 const pattern8 = new RegExp("^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$", "u");
 
-function validate50(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate44(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate50.evaluated;
+const evaluated0 = validate44.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -1119,7 +556,7 @@ vErrors.push(err8);
 errors++;
 }
 if(!((data1 === "en-US") || (data1 === "zh-CN"))){
-const err9 = {instancePath:instancePath+"/locale",schemaPath:"#/properties/locale/enum",keyword:"enum",params:{allowedValues: schema61.properties.locale.enum},message:"must be equal to one of the allowed values"};
+const err9 = {instancePath:instancePath+"/locale",schemaPath:"#/properties/locale/enum",keyword:"enum",params:{allowedValues: schema54.properties.locale.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err9];
 }
@@ -1142,7 +579,7 @@ vErrors.push(err10);
 errors++;
 }
 if(!((data2 === "light") || (data2 === "dark"))){
-const err11 = {instancePath:instancePath+"/theme",schemaPath:"#/properties/theme/enum",keyword:"enum",params:{allowedValues: schema61.properties.theme.enum},message:"must be equal to one of the allowed values"};
+const err11 = {instancePath:instancePath+"/theme",schemaPath:"#/properties/theme/enum",keyword:"enum",params:{allowedValues: schema54.properties.theme.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err11];
 }
@@ -1168,8 +605,8 @@ vErrors.push(err12);
 }
 errors++;
 }
-if(!((((((((((data4 === "actions.open") || (data4 === "clipboard.read")) || (data4 === "clipboard.write")) || (data4 === "runtime.get_context")) || (data4 === "storage.delete")) || (data4 === "storage.get")) || (data4 === "storage.get_quota")) || (data4 === "storage.list")) || (data4 === "storage.set")) || (data4 === "ui.close"))){
-const err13 = {instancePath:instancePath+"/capabilities/" + i0,schemaPath:"#/$defs/HostApiMethodInput/enum",keyword:"enum",params:{allowedValues: schema63.enum},message:"must be equal to one of the allowed values"};
+if(!((((((((data4 === "actions.open") || (data4 === "runtime.get_context")) || (data4 === "storage.delete")) || (data4 === "storage.get")) || (data4 === "storage.get_quota")) || (data4 === "storage.list")) || (data4 === "storage.set")) || (data4 === "ui.close"))){
+const err13 = {instancePath:instancePath+"/capabilities/" + i0,schemaPath:"#/$defs/HostApiMethodInput/enum",keyword:"enum",params:{allowedValues: schema56.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err13];
 }
@@ -1222,16 +659,16 @@ vErrors.push(err16);
 }
 errors++;
 }
-validate50.errors = vErrors;
+validate44.errors = vErrors;
 return errors === 0;
 }
-validate50.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate44.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 
-function validate82(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate66(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate82.evaluated;
+const evaluated0 = validate66.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -1284,8 +721,8 @@ errors++;
 }
 }
 if(data.result !== undefined){
-if(!(validate50(data.result, {instancePath:instancePath+"/result",parentData:data,parentDataProperty:"result",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate50.errors : vErrors.concat(validate50.errors);
+if(!(validate44(data.result, {instancePath:instancePath+"/result",parentData:data,parentDataProperty:"result",rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate44.errors : vErrors.concat(validate44.errors);
 errors = vErrors.length;
 }
 }
@@ -1300,42 +737,42 @@ vErrors.push(err4);
 }
 errors++;
 }
-validate82.errors = vErrors;
+validate66.errors = vErrors;
 return errors === 0;
 }
-validate82.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate66.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 
-function validate81(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate65(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:RuntimeGetContextResult" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate81.evaluated;
+const evaluated0 = validate65.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
 if(evaluated0.dynamicItems){
 evaluated0.items = undefined;
 }
-if(!(validate82(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate82.errors : vErrors.concat(validate82.errors);
+if(!(validate66(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate66.errors : vErrors.concat(validate66.errors);
 errors = vErrors.length;
 }
-validate81.errors = vErrors;
+validate65.errors = vErrors;
 return errors === 0;
 }
-validate81.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate65.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const StorageDeleteRequest = validate85;
-const schema97 = {"$id":"urn:lensx:plugin-host-api-validator:StorageDeleteRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageDeleteRequest"};
-const schema42 = {"type":"object","additionalProperties":false,"required":["method","params"],"properties":{"method":{"const":"storage.delete"},"params":{"type":"object","additionalProperties":false,"required":["key"],"properties":{"key":{"$ref":"#/$defs/StorageKey"}}}}};
-const schema43 = {"type":"string","minLength":1,"maxLength":256,"pattern":"^[^\\u0000-\\u001F\\u007F]+$"};
+export const StorageDeleteRequest = validate69;
+const schema78 = {"$id":"urn:lensx:plugin-host-api-validator:StorageDeleteRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageDeleteRequest"};
+const schema38 = {"type":"object","additionalProperties":false,"required":["method","params"],"properties":{"method":{"const":"storage.delete"},"params":{"type":"object","additionalProperties":false,"required":["key"],"properties":{"key":{"$ref":"#/$defs/StorageKey"}}}}};
+const schema39 = {"type":"string","minLength":1,"maxLength":256,"pattern":"^[^\\u0000-\\u001F\\u007F]+$"};
 const pattern5 = new RegExp("^[^\\u0000-\\u001F\\u007F]+$", "u");
 
-function validate86(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate70(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate86.evaluated;
+const evaluated0 = validate70.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -1480,41 +917,41 @@ vErrors.push(err11);
 }
 errors++;
 }
-validate86.errors = vErrors;
+validate70.errors = vErrors;
 return errors === 0;
 }
-validate86.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate70.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 
-function validate85(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate69(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:StorageDeleteRequest" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate85.evaluated;
+const evaluated0 = validate69.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
 if(evaluated0.dynamicItems){
 evaluated0.items = undefined;
 }
-if(!(validate86(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate86.errors : vErrors.concat(validate86.errors);
+if(!(validate70(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate70.errors : vErrors.concat(validate70.errors);
 errors = vErrors.length;
 }
-validate85.errors = vErrors;
+validate69.errors = vErrors;
 return errors === 0;
 }
-validate85.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate69.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const StorageDeleteResult = validate88;
-const schema100 = {"$id":"urn:lensx:plugin-host-api-validator:StorageDeleteResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageDeleteResult"};
-const schema64 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"storage.delete"},"result":{"type":"object","additionalProperties":false,"required":["deleted"],"properties":{"deleted":{"type":"boolean"}}}}};
+export const StorageDeleteResult = validate72;
+const schema81 = {"$id":"urn:lensx:plugin-host-api-validator:StorageDeleteResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageDeleteResult"};
+const schema57 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"storage.delete"},"result":{"type":"object","additionalProperties":false,"required":["deleted"],"properties":{"deleted":{"type":"boolean"}}}}};
 
-function validate88(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate72(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:StorageDeleteResult" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate88.evaluated;
+const evaluated0 = validate72.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -1523,7 +960,7 @@ evaluated0.items = undefined;
 }
 if(data && typeof data == "object" && !Array.isArray(data)){
 if(data.method === undefined){
-const err0 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageDeleteResult/required",keyword:"required",params:{missingProperty: "method"},message:"must have required property '"+"method"+"'"};
+const err0 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageDeleteResult/required",keyword:"required",params:{missingProperty: "method"},message:"must have required property '"+"method"+"'"};
 if(vErrors === null){
 vErrors = [err0];
 }
@@ -1533,7 +970,7 @@ vErrors.push(err0);
 errors++;
 }
 if(data.result === undefined){
-const err1 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageDeleteResult/required",keyword:"required",params:{missingProperty: "result"},message:"must have required property '"+"result"+"'"};
+const err1 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageDeleteResult/required",keyword:"required",params:{missingProperty: "result"},message:"must have required property '"+"result"+"'"};
 if(vErrors === null){
 vErrors = [err1];
 }
@@ -1544,7 +981,7 @@ errors++;
 }
 for(const key0 in data){
 if(!((key0 === "method") || (key0 === "result"))){
-const err2 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageDeleteResult/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"};
+const err2 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageDeleteResult/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err2];
 }
@@ -1556,7 +993,7 @@ errors++;
 }
 if(data.method !== undefined){
 if("storage.delete" !== data.method){
-const err3 = {instancePath:instancePath+"/method",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageDeleteResult/properties/method/const",keyword:"const",params:{allowedValue: "storage.delete"},message:"must be equal to constant"};
+const err3 = {instancePath:instancePath+"/method",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageDeleteResult/properties/method/const",keyword:"const",params:{allowedValue: "storage.delete"},message:"must be equal to constant"};
 if(vErrors === null){
 vErrors = [err3];
 }
@@ -1570,7 +1007,7 @@ if(data.result !== undefined){
 let data1 = data.result;
 if(data1 && typeof data1 == "object" && !Array.isArray(data1)){
 if(data1.deleted === undefined){
-const err4 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageDeleteResult/properties/result/required",keyword:"required",params:{missingProperty: "deleted"},message:"must have required property '"+"deleted"+"'"};
+const err4 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageDeleteResult/properties/result/required",keyword:"required",params:{missingProperty: "deleted"},message:"must have required property '"+"deleted"+"'"};
 if(vErrors === null){
 vErrors = [err4];
 }
@@ -1581,7 +1018,7 @@ errors++;
 }
 for(const key1 in data1){
 if(!(key1 === "deleted")){
-const err5 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageDeleteResult/properties/result/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
+const err5 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageDeleteResult/properties/result/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err5];
 }
@@ -1593,7 +1030,7 @@ errors++;
 }
 if(data1.deleted !== undefined){
 if(typeof data1.deleted !== "boolean"){
-const err6 = {instancePath:instancePath+"/result/deleted",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageDeleteResult/properties/result/properties/deleted/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"};
+const err6 = {instancePath:instancePath+"/result/deleted",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageDeleteResult/properties/result/properties/deleted/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"};
 if(vErrors === null){
 vErrors = [err6];
 }
@@ -1605,7 +1042,7 @@ errors++;
 }
 }
 else {
-const err7 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageDeleteResult/properties/result/type",keyword:"type",params:{type: "object"},message:"must be object"};
+const err7 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageDeleteResult/properties/result/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err7];
 }
@@ -1617,7 +1054,7 @@ errors++;
 }
 }
 else {
-const err8 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageDeleteResult/type",keyword:"type",params:{type: "object"},message:"must be object"};
+const err8 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageDeleteResult/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err8];
 }
@@ -1626,19 +1063,19 @@ vErrors.push(err8);
 }
 errors++;
 }
-validate88.errors = vErrors;
+validate72.errors = vErrors;
 return errors === 0;
 }
-validate88.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate72.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const StorageGetRequest = validate89;
-const schema102 = {"$id":"urn:lensx:plugin-host-api-validator:StorageGetRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetRequest"};
-const schema44 = {"type":"object","additionalProperties":false,"required":["method","params"],"properties":{"method":{"const":"storage.get"},"params":{"type":"object","additionalProperties":false,"required":["key"],"properties":{"key":{"$ref":"#/$defs/StorageKey"}}}}};
+export const StorageGetRequest = validate73;
+const schema83 = {"$id":"urn:lensx:plugin-host-api-validator:StorageGetRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetRequest"};
+const schema40 = {"type":"object","additionalProperties":false,"required":["method","params"],"properties":{"method":{"const":"storage.get"},"params":{"type":"object","additionalProperties":false,"required":["key"],"properties":{"key":{"$ref":"#/$defs/StorageKey"}}}}};
 
-function validate90(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate74(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate90.evaluated;
+const evaluated0 = validate74.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -1783,42 +1220,42 @@ vErrors.push(err11);
 }
 errors++;
 }
-validate90.errors = vErrors;
+validate74.errors = vErrors;
 return errors === 0;
 }
-validate90.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate74.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 
-function validate89(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate73(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:StorageGetRequest" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate89.evaluated;
+const evaluated0 = validate73.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
 if(evaluated0.dynamicItems){
 evaluated0.items = undefined;
 }
-if(!(validate90(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate90.errors : vErrors.concat(validate90.errors);
+if(!(validate74(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate74.errors : vErrors.concat(validate74.errors);
 errors = vErrors.length;
 }
-validate89.errors = vErrors;
+validate73.errors = vErrors;
 return errors === 0;
 }
-validate89.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate73.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const StorageGetResult = validate92;
-const schema105 = {"$id":"urn:lensx:plugin-host-api-validator:StorageGetResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetResult"};
-const schema65 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"storage.get"},"result":{"oneOf":[{"type":"object","additionalProperties":false,"required":["found"],"properties":{"found":{"const":false}}},{"type":"object","additionalProperties":false,"required":["found","value"],"properties":{"found":{"const":true},"value":{"$ref":"#/$defs/JsonValue"}}}]}}};
-const schema52 = {"anyOf":[{"type":"null"},{"type":"boolean"},{"type":"string"},{"type":"number"},{"type":"array","items":{"$ref":"#/$defs/JsonValue"}},{"type":"object","additionalProperties":{"$ref":"#/$defs/JsonValue"}}]};
-const wrapper0 = {validate: validate40};
+export const StorageGetResult = validate76;
+const schema86 = {"$id":"urn:lensx:plugin-host-api-validator:StorageGetResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetResult"};
+const schema58 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"storage.get"},"result":{"oneOf":[{"type":"object","additionalProperties":false,"required":["found"],"properties":{"found":{"const":false}}},{"type":"object","additionalProperties":false,"required":["found","value"],"properties":{"found":{"const":true},"value":{"$ref":"#/$defs/JsonValue"}}}]}}};
+const schema48 = {"anyOf":[{"type":"null"},{"type":"boolean"},{"type":"string"},{"type":"number"},{"type":"array","items":{"$ref":"#/$defs/JsonValue"}},{"type":"object","additionalProperties":{"$ref":"#/$defs/JsonValue"}}]};
+const wrapper0 = {validate: validate36};
 
-function validate40(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate36(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate40.evaluated;
+const evaluated0 = validate36.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -1949,18 +1386,18 @@ vErrors = null;
 }
 }
 }
-validate40.errors = vErrors;
+validate36.errors = vErrors;
 evaluated0.props = props2;
 evaluated0.items = items1;
 return errors === 0;
 }
-validate40.evaluated = {"dynamicProps":true,"dynamicItems":true};
+validate36.evaluated = {"dynamicProps":true,"dynamicItems":true};
 
 
-function validate93(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate77(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate93.evaluated;
+const evaluated0 = validate77.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -2117,8 +1554,8 @@ errors++;
 }
 }
 if(data1.value !== undefined){
-if(!(validate40(data1.value, {instancePath:instancePath+"/result/value",parentData:data1,parentDataProperty:"value",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate40.errors : vErrors.concat(validate40.errors);
+if(!(validate36(data1.value, {instancePath:instancePath+"/result/value",parentData:data1,parentDataProperty:"value",rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate36.errors : vErrors.concat(validate36.errors);
 errors = vErrors.length;
 }
 }
@@ -2180,40 +1617,40 @@ vErrors.push(err14);
 }
 errors++;
 }
-validate93.errors = vErrors;
+validate77.errors = vErrors;
 return errors === 0;
 }
-validate93.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate77.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 
-function validate92(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate76(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:StorageGetResult" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate92.evaluated;
+const evaluated0 = validate76.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
 if(evaluated0.dynamicItems){
 evaluated0.items = undefined;
 }
-if(!(validate93(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate93.errors : vErrors.concat(validate93.errors);
+if(!(validate77(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate77.errors : vErrors.concat(validate77.errors);
 errors = vErrors.length;
 }
-validate92.errors = vErrors;
+validate76.errors = vErrors;
 return errors === 0;
 }
-validate92.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate76.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const StorageGetQuotaRequest = validate96;
-const schema107 = {"$id":"urn:lensx:plugin-host-api-validator:StorageGetQuotaRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetQuotaRequest"};
-const schema46 = {"type":"object","additionalProperties":false,"required":["method","params"],"properties":{"method":{"const":"storage.get_quota"},"params":{"$ref":"#/$defs/EmptyParams"}}};
+export const StorageGetQuotaRequest = validate80;
+const schema88 = {"$id":"urn:lensx:plugin-host-api-validator:StorageGetQuotaRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetQuotaRequest"};
+const schema42 = {"type":"object","additionalProperties":false,"required":["method","params"],"properties":{"method":{"const":"storage.get_quota"},"params":{"$ref":"#/$defs/EmptyParams"}}};
 
-function validate97(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate81(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate97.evaluated;
+const evaluated0 = validate81.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -2301,41 +1738,41 @@ vErrors.push(err6);
 }
 errors++;
 }
-validate97.errors = vErrors;
+validate81.errors = vErrors;
 return errors === 0;
 }
-validate97.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate81.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 
-function validate96(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate80(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:StorageGetQuotaRequest" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate96.evaluated;
+const evaluated0 = validate80.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
 if(evaluated0.dynamicItems){
 evaluated0.items = undefined;
 }
-if(!(validate97(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate97.errors : vErrors.concat(validate97.errors);
+if(!(validate81(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate81.errors : vErrors.concat(validate81.errors);
 errors = vErrors.length;
 }
-validate96.errors = vErrors;
+validate80.errors = vErrors;
 return errors === 0;
 }
-validate96.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate80.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const StorageGetQuotaResult = validate99;
-const schema110 = {"$id":"urn:lensx:plugin-host-api-validator:StorageGetQuotaResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetQuotaResult"};
-const schema66 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"storage.get_quota"},"result":{"type":"object","additionalProperties":false,"required":["usedBytes","limitBytes"],"properties":{"usedBytes":{"type":"integer","minimum":0,"maximum":9007199254740991},"limitBytes":{"type":"integer","minimum":1,"maximum":9007199254740991}}}}};
+export const StorageGetQuotaResult = validate83;
+const schema91 = {"$id":"urn:lensx:plugin-host-api-validator:StorageGetQuotaResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetQuotaResult"};
+const schema59 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"storage.get_quota"},"result":{"type":"object","additionalProperties":false,"required":["usedBytes","limitBytes"],"properties":{"usedBytes":{"type":"integer","minimum":0,"maximum":9007199254740991},"limitBytes":{"type":"integer","minimum":1,"maximum":9007199254740991}}}}};
 
-function validate99(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate83(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:StorageGetQuotaResult" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate99.evaluated;
+const evaluated0 = validate83.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -2344,7 +1781,7 @@ evaluated0.items = undefined;
 }
 if(data && typeof data == "object" && !Array.isArray(data)){
 if(data.method === undefined){
-const err0 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetQuotaResult/required",keyword:"required",params:{missingProperty: "method"},message:"must have required property '"+"method"+"'"};
+const err0 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetQuotaResult/required",keyword:"required",params:{missingProperty: "method"},message:"must have required property '"+"method"+"'"};
 if(vErrors === null){
 vErrors = [err0];
 }
@@ -2354,7 +1791,7 @@ vErrors.push(err0);
 errors++;
 }
 if(data.result === undefined){
-const err1 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetQuotaResult/required",keyword:"required",params:{missingProperty: "result"},message:"must have required property '"+"result"+"'"};
+const err1 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetQuotaResult/required",keyword:"required",params:{missingProperty: "result"},message:"must have required property '"+"result"+"'"};
 if(vErrors === null){
 vErrors = [err1];
 }
@@ -2365,7 +1802,7 @@ errors++;
 }
 for(const key0 in data){
 if(!((key0 === "method") || (key0 === "result"))){
-const err2 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetQuotaResult/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"};
+const err2 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetQuotaResult/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err2];
 }
@@ -2377,7 +1814,7 @@ errors++;
 }
 if(data.method !== undefined){
 if("storage.get_quota" !== data.method){
-const err3 = {instancePath:instancePath+"/method",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetQuotaResult/properties/method/const",keyword:"const",params:{allowedValue: "storage.get_quota"},message:"must be equal to constant"};
+const err3 = {instancePath:instancePath+"/method",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetQuotaResult/properties/method/const",keyword:"const",params:{allowedValue: "storage.get_quota"},message:"must be equal to constant"};
 if(vErrors === null){
 vErrors = [err3];
 }
@@ -2391,7 +1828,7 @@ if(data.result !== undefined){
 let data1 = data.result;
 if(data1 && typeof data1 == "object" && !Array.isArray(data1)){
 if(data1.usedBytes === undefined){
-const err4 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/required",keyword:"required",params:{missingProperty: "usedBytes"},message:"must have required property '"+"usedBytes"+"'"};
+const err4 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/required",keyword:"required",params:{missingProperty: "usedBytes"},message:"must have required property '"+"usedBytes"+"'"};
 if(vErrors === null){
 vErrors = [err4];
 }
@@ -2401,7 +1838,7 @@ vErrors.push(err4);
 errors++;
 }
 if(data1.limitBytes === undefined){
-const err5 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/required",keyword:"required",params:{missingProperty: "limitBytes"},message:"must have required property '"+"limitBytes"+"'"};
+const err5 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/required",keyword:"required",params:{missingProperty: "limitBytes"},message:"must have required property '"+"limitBytes"+"'"};
 if(vErrors === null){
 vErrors = [err5];
 }
@@ -2412,7 +1849,7 @@ errors++;
 }
 for(const key1 in data1){
 if(!((key1 === "usedBytes") || (key1 === "limitBytes"))){
-const err6 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
+const err6 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err6];
 }
@@ -2425,7 +1862,7 @@ errors++;
 if(data1.usedBytes !== undefined){
 let data2 = data1.usedBytes;
 if(!(((typeof data2 == "number") && (!(data2 % 1) && !isNaN(data2))) && (isFinite(data2)))){
-const err7 = {instancePath:instancePath+"/result/usedBytes",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/properties/usedBytes/type",keyword:"type",params:{type: "integer"},message:"must be integer"};
+const err7 = {instancePath:instancePath+"/result/usedBytes",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/properties/usedBytes/type",keyword:"type",params:{type: "integer"},message:"must be integer"};
 if(vErrors === null){
 vErrors = [err7];
 }
@@ -2436,7 +1873,7 @@ errors++;
 }
 if((typeof data2 == "number") && (isFinite(data2))){
 if(data2 > 9007199254740991 || isNaN(data2)){
-const err8 = {instancePath:instancePath+"/result/usedBytes",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/properties/usedBytes/maximum",keyword:"maximum",params:{comparison: "<=", limit: 9007199254740991},message:"must be <= 9007199254740991"};
+const err8 = {instancePath:instancePath+"/result/usedBytes",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/properties/usedBytes/maximum",keyword:"maximum",params:{comparison: "<=", limit: 9007199254740991},message:"must be <= 9007199254740991"};
 if(vErrors === null){
 vErrors = [err8];
 }
@@ -2446,7 +1883,7 @@ vErrors.push(err8);
 errors++;
 }
 if(data2 < 0 || isNaN(data2)){
-const err9 = {instancePath:instancePath+"/result/usedBytes",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/properties/usedBytes/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
+const err9 = {instancePath:instancePath+"/result/usedBytes",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/properties/usedBytes/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
 if(vErrors === null){
 vErrors = [err9];
 }
@@ -2460,7 +1897,7 @@ errors++;
 if(data1.limitBytes !== undefined){
 let data3 = data1.limitBytes;
 if(!(((typeof data3 == "number") && (!(data3 % 1) && !isNaN(data3))) && (isFinite(data3)))){
-const err10 = {instancePath:instancePath+"/result/limitBytes",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/properties/limitBytes/type",keyword:"type",params:{type: "integer"},message:"must be integer"};
+const err10 = {instancePath:instancePath+"/result/limitBytes",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/properties/limitBytes/type",keyword:"type",params:{type: "integer"},message:"must be integer"};
 if(vErrors === null){
 vErrors = [err10];
 }
@@ -2471,7 +1908,7 @@ errors++;
 }
 if((typeof data3 == "number") && (isFinite(data3))){
 if(data3 > 9007199254740991 || isNaN(data3)){
-const err11 = {instancePath:instancePath+"/result/limitBytes",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/properties/limitBytes/maximum",keyword:"maximum",params:{comparison: "<=", limit: 9007199254740991},message:"must be <= 9007199254740991"};
+const err11 = {instancePath:instancePath+"/result/limitBytes",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/properties/limitBytes/maximum",keyword:"maximum",params:{comparison: "<=", limit: 9007199254740991},message:"must be <= 9007199254740991"};
 if(vErrors === null){
 vErrors = [err11];
 }
@@ -2481,7 +1918,7 @@ vErrors.push(err11);
 errors++;
 }
 if(data3 < 1 || isNaN(data3)){
-const err12 = {instancePath:instancePath+"/result/limitBytes",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/properties/limitBytes/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"};
+const err12 = {instancePath:instancePath+"/result/limitBytes",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/properties/limitBytes/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"};
 if(vErrors === null){
 vErrors = [err12];
 }
@@ -2494,7 +1931,7 @@ errors++;
 }
 }
 else {
-const err13 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/type",keyword:"type",params:{type: "object"},message:"must be object"};
+const err13 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetQuotaResult/properties/result/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err13];
 }
@@ -2506,7 +1943,7 @@ errors++;
 }
 }
 else {
-const err14 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageGetQuotaResult/type",keyword:"type",params:{type: "object"},message:"must be object"};
+const err14 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageGetQuotaResult/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err14];
 }
@@ -2515,20 +1952,20 @@ vErrors.push(err14);
 }
 errors++;
 }
-validate99.errors = vErrors;
+validate83.errors = vErrors;
 return errors === 0;
 }
-validate99.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate83.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const StorageListRequest = validate100;
-const schema112 = {"$id":"urn:lensx:plugin-host-api-validator:StorageListRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageListRequest"};
-const schema48 = {"type":"object","additionalProperties":false,"required":["method","params"],"properties":{"method":{"const":"storage.list"},"params":{"type":"object","additionalProperties":false,"properties":{"cursor":{"$ref":"#/$defs/OpaqueCursor"},"limit":{"type":"integer","minimum":1,"maximum":1000}}}}};
-const schema49 = {"type":"string","minLength":1,"maxLength":1024};
+export const StorageListRequest = validate84;
+const schema93 = {"$id":"urn:lensx:plugin-host-api-validator:StorageListRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageListRequest"};
+const schema44 = {"type":"object","additionalProperties":false,"required":["method","params"],"properties":{"method":{"const":"storage.list"},"params":{"type":"object","additionalProperties":false,"properties":{"cursor":{"$ref":"#/$defs/OpaqueCursor"},"limit":{"type":"integer","minimum":1,"maximum":1000}}}}};
+const schema45 = {"type":"string","minLength":1,"maxLength":1024};
 
-function validate101(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate85(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate101.evaluated;
+const evaluated0 = validate85.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -2688,40 +2125,40 @@ vErrors.push(err12);
 }
 errors++;
 }
-validate101.errors = vErrors;
+validate85.errors = vErrors;
 return errors === 0;
 }
-validate101.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate85.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 
-function validate100(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate84(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:StorageListRequest" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate100.evaluated;
+const evaluated0 = validate84.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
 if(evaluated0.dynamicItems){
 evaluated0.items = undefined;
 }
-if(!(validate101(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate101.errors : vErrors.concat(validate101.errors);
+if(!(validate85(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate85.errors : vErrors.concat(validate85.errors);
 errors = vErrors.length;
 }
-validate100.errors = vErrors;
+validate84.errors = vErrors;
 return errors === 0;
 }
-validate100.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate84.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const StorageListResult = validate103;
-const schema115 = {"$id":"urn:lensx:plugin-host-api-validator:StorageListResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageListResult"};
-const schema67 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"storage.list"},"result":{"type":"object","additionalProperties":false,"required":["keys"],"properties":{"keys":{"type":"array","maxItems":1000,"uniqueItems":true,"items":{"$ref":"#/$defs/StorageKey"}},"nextCursor":{"$ref":"#/$defs/OpaqueCursor"}}}}};
+export const StorageListResult = validate87;
+const schema96 = {"$id":"urn:lensx:plugin-host-api-validator:StorageListResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageListResult"};
+const schema60 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"storage.list"},"result":{"type":"object","additionalProperties":false,"required":["keys"],"properties":{"keys":{"type":"array","maxItems":1000,"uniqueItems":true,"items":{"$ref":"#/$defs/StorageKey"}},"nextCursor":{"$ref":"#/$defs/OpaqueCursor"}}}}};
 
-function validate104(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate88(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate104.evaluated;
+const evaluated0 = validate88.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -2947,40 +2384,40 @@ vErrors.push(err17);
 }
 errors++;
 }
-validate104.errors = vErrors;
+validate88.errors = vErrors;
 return errors === 0;
 }
-validate104.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate88.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 
-function validate103(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate87(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:StorageListResult" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate103.evaluated;
+const evaluated0 = validate87.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
 if(evaluated0.dynamicItems){
 evaluated0.items = undefined;
 }
-if(!(validate104(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate104.errors : vErrors.concat(validate104.errors);
+if(!(validate88(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate88.errors : vErrors.concat(validate88.errors);
 errors = vErrors.length;
 }
-validate103.errors = vErrors;
+validate87.errors = vErrors;
 return errors === 0;
 }
-validate103.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate87.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const StorageSetRequest = validate106;
-const schema119 = {"$id":"urn:lensx:plugin-host-api-validator:StorageSetRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageSetRequest"};
-const schema50 = {"type":"object","additionalProperties":false,"required":["method","params"],"properties":{"method":{"const":"storage.set"},"params":{"type":"object","additionalProperties":false,"required":["key","value"],"properties":{"key":{"$ref":"#/$defs/StorageKey"},"value":{"$ref":"#/$defs/JsonValue"}}}}};
+export const StorageSetRequest = validate90;
+const schema100 = {"$id":"urn:lensx:plugin-host-api-validator:StorageSetRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageSetRequest"};
+const schema46 = {"type":"object","additionalProperties":false,"required":["method","params"],"properties":{"method":{"const":"storage.set"},"params":{"type":"object","additionalProperties":false,"required":["key","value"],"properties":{"key":{"$ref":"#/$defs/StorageKey"},"value":{"$ref":"#/$defs/JsonValue"}}}}};
 
-function validate107(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate91(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate107.evaluated;
+const evaluated0 = validate91.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -3113,8 +2550,8 @@ errors++;
 }
 }
 if(data1.value !== undefined){
-if(!(validate40(data1.value, {instancePath:instancePath+"/params/value",parentData:data1,parentDataProperty:"value",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate40.errors : vErrors.concat(validate40.errors);
+if(!(validate36(data1.value, {instancePath:instancePath+"/params/value",parentData:data1,parentDataProperty:"value",rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate36.errors : vErrors.concat(validate36.errors);
 errors = vErrors.length;
 }
 }
@@ -3141,41 +2578,41 @@ vErrors.push(err12);
 }
 errors++;
 }
-validate107.errors = vErrors;
+validate91.errors = vErrors;
 return errors === 0;
 }
-validate107.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate91.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 
-function validate106(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate90(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:StorageSetRequest" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate106.evaluated;
+const evaluated0 = validate90.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
 if(evaluated0.dynamicItems){
 evaluated0.items = undefined;
 }
-if(!(validate107(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate107.errors : vErrors.concat(validate107.errors);
+if(!(validate91(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate91.errors : vErrors.concat(validate91.errors);
 errors = vErrors.length;
 }
-validate106.errors = vErrors;
+validate90.errors = vErrors;
 return errors === 0;
 }
-validate106.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate90.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const StorageSetResult = validate110;
-const schema122 = {"$id":"urn:lensx:plugin-host-api-validator:StorageSetResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageSetResult"};
-const schema70 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"storage.set"},"result":{"type":"object","additionalProperties":false,"required":["stored"],"properties":{"stored":{"const":true}}}}};
+export const StorageSetResult = validate94;
+const schema103 = {"$id":"urn:lensx:plugin-host-api-validator:StorageSetResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageSetResult"};
+const schema63 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"storage.set"},"result":{"type":"object","additionalProperties":false,"required":["stored"],"properties":{"stored":{"const":true}}}}};
 
-function validate110(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate94(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:StorageSetResult" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate110.evaluated;
+const evaluated0 = validate94.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -3184,7 +2621,7 @@ evaluated0.items = undefined;
 }
 if(data && typeof data == "object" && !Array.isArray(data)){
 if(data.method === undefined){
-const err0 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageSetResult/required",keyword:"required",params:{missingProperty: "method"},message:"must have required property '"+"method"+"'"};
+const err0 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageSetResult/required",keyword:"required",params:{missingProperty: "method"},message:"must have required property '"+"method"+"'"};
 if(vErrors === null){
 vErrors = [err0];
 }
@@ -3194,7 +2631,7 @@ vErrors.push(err0);
 errors++;
 }
 if(data.result === undefined){
-const err1 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageSetResult/required",keyword:"required",params:{missingProperty: "result"},message:"must have required property '"+"result"+"'"};
+const err1 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageSetResult/required",keyword:"required",params:{missingProperty: "result"},message:"must have required property '"+"result"+"'"};
 if(vErrors === null){
 vErrors = [err1];
 }
@@ -3205,7 +2642,7 @@ errors++;
 }
 for(const key0 in data){
 if(!((key0 === "method") || (key0 === "result"))){
-const err2 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageSetResult/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"};
+const err2 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageSetResult/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err2];
 }
@@ -3217,7 +2654,7 @@ errors++;
 }
 if(data.method !== undefined){
 if("storage.set" !== data.method){
-const err3 = {instancePath:instancePath+"/method",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageSetResult/properties/method/const",keyword:"const",params:{allowedValue: "storage.set"},message:"must be equal to constant"};
+const err3 = {instancePath:instancePath+"/method",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageSetResult/properties/method/const",keyword:"const",params:{allowedValue: "storage.set"},message:"must be equal to constant"};
 if(vErrors === null){
 vErrors = [err3];
 }
@@ -3231,7 +2668,7 @@ if(data.result !== undefined){
 let data1 = data.result;
 if(data1 && typeof data1 == "object" && !Array.isArray(data1)){
 if(data1.stored === undefined){
-const err4 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageSetResult/properties/result/required",keyword:"required",params:{missingProperty: "stored"},message:"must have required property '"+"stored"+"'"};
+const err4 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageSetResult/properties/result/required",keyword:"required",params:{missingProperty: "stored"},message:"must have required property '"+"stored"+"'"};
 if(vErrors === null){
 vErrors = [err4];
 }
@@ -3242,7 +2679,7 @@ errors++;
 }
 for(const key1 in data1){
 if(!(key1 === "stored")){
-const err5 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageSetResult/properties/result/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
+const err5 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageSetResult/properties/result/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err5];
 }
@@ -3254,7 +2691,7 @@ errors++;
 }
 if(data1.stored !== undefined){
 if(true !== data1.stored){
-const err6 = {instancePath:instancePath+"/result/stored",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageSetResult/properties/result/properties/stored/const",keyword:"const",params:{allowedValue: true},message:"must be equal to constant"};
+const err6 = {instancePath:instancePath+"/result/stored",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageSetResult/properties/result/properties/stored/const",keyword:"const",params:{allowedValue: true},message:"must be equal to constant"};
 if(vErrors === null){
 vErrors = [err6];
 }
@@ -3266,7 +2703,7 @@ errors++;
 }
 }
 else {
-const err7 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageSetResult/properties/result/type",keyword:"type",params:{type: "object"},message:"must be object"};
+const err7 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageSetResult/properties/result/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err7];
 }
@@ -3278,7 +2715,7 @@ errors++;
 }
 }
 else {
-const err8 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/StorageSetResult/type",keyword:"type",params:{type: "object"},message:"must be object"};
+const err8 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/StorageSetResult/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err8];
 }
@@ -3287,19 +2724,19 @@ vErrors.push(err8);
 }
 errors++;
 }
-validate110.errors = vErrors;
+validate94.errors = vErrors;
 return errors === 0;
 }
-validate110.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate94.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const UiCloseRequest = validate111;
-const schema124 = {"$id":"urn:lensx:plugin-host-api-validator:UiCloseRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/UiCloseRequest"};
-const schema53 = {"type":"object","additionalProperties":false,"required":["method","params"],"properties":{"method":{"const":"ui.close"},"params":{"$ref":"#/$defs/EmptyParams"}}};
+export const UiCloseRequest = validate95;
+const schema105 = {"$id":"urn:lensx:plugin-host-api-validator:UiCloseRequest","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/UiCloseRequest"};
+const schema49 = {"type":"object","additionalProperties":false,"required":["method","params"],"properties":{"method":{"const":"ui.close"},"params":{"$ref":"#/$defs/EmptyParams"}}};
 
-function validate112(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate96(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate112.evaluated;
+const evaluated0 = validate96.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -3387,41 +2824,41 @@ vErrors.push(err6);
 }
 errors++;
 }
-validate112.errors = vErrors;
+validate96.errors = vErrors;
 return errors === 0;
 }
-validate112.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate96.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 
-function validate111(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate95(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:UiCloseRequest" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate111.evaluated;
+const evaluated0 = validate95.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
 if(evaluated0.dynamicItems){
 evaluated0.items = undefined;
 }
-if(!(validate112(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate112.errors : vErrors.concat(validate112.errors);
+if(!(validate96(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate96.errors : vErrors.concat(validate96.errors);
 errors = vErrors.length;
 }
-validate111.errors = vErrors;
+validate95.errors = vErrors;
 return errors === 0;
 }
-validate111.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate95.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const UiCloseResult = validate114;
-const schema127 = {"$id":"urn:lensx:plugin-host-api-validator:UiCloseResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/UiCloseResult"};
-const schema71 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"ui.close"},"result":{"type":"object","additionalProperties":false,"required":["accepted"],"properties":{"accepted":{"const":true}}}}};
+export const UiCloseResult = validate98;
+const schema108 = {"$id":"urn:lensx:plugin-host-api-validator:UiCloseResult","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/UiCloseResult"};
+const schema64 = {"type":"object","additionalProperties":false,"required":["method","result"],"properties":{"method":{"const":"ui.close"},"result":{"type":"object","additionalProperties":false,"required":["accepted"],"properties":{"accepted":{"const":true}}}}};
 
-function validate114(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate98(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:UiCloseResult" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate114.evaluated;
+const evaluated0 = validate98.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -3430,7 +2867,7 @@ evaluated0.items = undefined;
 }
 if(data && typeof data == "object" && !Array.isArray(data)){
 if(data.method === undefined){
-const err0 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/UiCloseResult/required",keyword:"required",params:{missingProperty: "method"},message:"must have required property '"+"method"+"'"};
+const err0 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/UiCloseResult/required",keyword:"required",params:{missingProperty: "method"},message:"must have required property '"+"method"+"'"};
 if(vErrors === null){
 vErrors = [err0];
 }
@@ -3440,7 +2877,7 @@ vErrors.push(err0);
 errors++;
 }
 if(data.result === undefined){
-const err1 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/UiCloseResult/required",keyword:"required",params:{missingProperty: "result"},message:"must have required property '"+"result"+"'"};
+const err1 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/UiCloseResult/required",keyword:"required",params:{missingProperty: "result"},message:"must have required property '"+"result"+"'"};
 if(vErrors === null){
 vErrors = [err1];
 }
@@ -3451,7 +2888,7 @@ errors++;
 }
 for(const key0 in data){
 if(!((key0 === "method") || (key0 === "result"))){
-const err2 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/UiCloseResult/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"};
+const err2 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/UiCloseResult/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err2];
 }
@@ -3463,7 +2900,7 @@ errors++;
 }
 if(data.method !== undefined){
 if("ui.close" !== data.method){
-const err3 = {instancePath:instancePath+"/method",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/UiCloseResult/properties/method/const",keyword:"const",params:{allowedValue: "ui.close"},message:"must be equal to constant"};
+const err3 = {instancePath:instancePath+"/method",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/UiCloseResult/properties/method/const",keyword:"const",params:{allowedValue: "ui.close"},message:"must be equal to constant"};
 if(vErrors === null){
 vErrors = [err3];
 }
@@ -3477,7 +2914,7 @@ if(data.result !== undefined){
 let data1 = data.result;
 if(data1 && typeof data1 == "object" && !Array.isArray(data1)){
 if(data1.accepted === undefined){
-const err4 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/UiCloseResult/properties/result/required",keyword:"required",params:{missingProperty: "accepted"},message:"must have required property '"+"accepted"+"'"};
+const err4 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/UiCloseResult/properties/result/required",keyword:"required",params:{missingProperty: "accepted"},message:"must have required property '"+"accepted"+"'"};
 if(vErrors === null){
 vErrors = [err4];
 }
@@ -3488,7 +2925,7 @@ errors++;
 }
 for(const key1 in data1){
 if(!(key1 === "accepted")){
-const err5 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/UiCloseResult/properties/result/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
+const err5 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/UiCloseResult/properties/result/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err5];
 }
@@ -3500,7 +2937,7 @@ errors++;
 }
 if(data1.accepted !== undefined){
 if(true !== data1.accepted){
-const err6 = {instancePath:instancePath+"/result/accepted",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/UiCloseResult/properties/result/properties/accepted/const",keyword:"const",params:{allowedValue: true},message:"must be equal to constant"};
+const err6 = {instancePath:instancePath+"/result/accepted",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/UiCloseResult/properties/result/properties/accepted/const",keyword:"const",params:{allowedValue: true},message:"must be equal to constant"};
 if(vErrors === null){
 vErrors = [err6];
 }
@@ -3512,7 +2949,7 @@ errors++;
 }
 }
 else {
-const err7 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/UiCloseResult/properties/result/type",keyword:"type",params:{type: "object"},message:"must be object"};
+const err7 = {instancePath:instancePath+"/result",schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/UiCloseResult/properties/result/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err7];
 }
@@ -3524,7 +2961,7 @@ errors++;
 }
 }
 else {
-const err8 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/UiCloseResult/type",keyword:"type",params:{type: "object"},message:"must be object"};
+const err8 = {instancePath,schemaPath:"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/UiCloseResult/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err8];
 }
@@ -3533,18 +2970,18 @@ vErrors.push(err8);
 }
 errors++;
 }
-validate114.errors = vErrors;
+validate98.errors = vErrors;
 return errors === 0;
 }
-validate114.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate98.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const PluginRuntimeContextInput = validate115;
-const schema129 = {"$id":"urn:lensx:plugin-host-api-validator:PluginRuntimeContextInput","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/PluginRuntimeContextInput"};
+export const PluginRuntimeContextInput = validate99;
+const schema110 = {"$id":"urn:lensx:plugin-host-api-validator:PluginRuntimeContextInput","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/PluginRuntimeContextInput"};
 
-function validate116(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate100(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate116.evaluated;
+const evaluated0 = validate100.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -3652,7 +3089,7 @@ vErrors.push(err8);
 errors++;
 }
 if(!((data1 === "en-US") || (data1 === "zh-CN"))){
-const err9 = {instancePath:instancePath+"/locale",schemaPath:"#/properties/locale/enum",keyword:"enum",params:{allowedValues: schema61.properties.locale.enum},message:"must be equal to one of the allowed values"};
+const err9 = {instancePath:instancePath+"/locale",schemaPath:"#/properties/locale/enum",keyword:"enum",params:{allowedValues: schema54.properties.locale.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err9];
 }
@@ -3675,7 +3112,7 @@ vErrors.push(err10);
 errors++;
 }
 if(!((data2 === "light") || (data2 === "dark"))){
-const err11 = {instancePath:instancePath+"/theme",schemaPath:"#/properties/theme/enum",keyword:"enum",params:{allowedValues: schema61.properties.theme.enum},message:"must be equal to one of the allowed values"};
+const err11 = {instancePath:instancePath+"/theme",schemaPath:"#/properties/theme/enum",keyword:"enum",params:{allowedValues: schema54.properties.theme.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err11];
 }
@@ -3701,8 +3138,8 @@ vErrors.push(err12);
 }
 errors++;
 }
-if(!((((((((((data4 === "actions.open") || (data4 === "clipboard.read")) || (data4 === "clipboard.write")) || (data4 === "runtime.get_context")) || (data4 === "storage.delete")) || (data4 === "storage.get")) || (data4 === "storage.get_quota")) || (data4 === "storage.list")) || (data4 === "storage.set")) || (data4 === "ui.close"))){
-const err13 = {instancePath:instancePath+"/capabilities/" + i0,schemaPath:"#/$defs/HostApiMethodInput/enum",keyword:"enum",params:{allowedValues: schema63.enum},message:"must be equal to one of the allowed values"};
+if(!((((((((data4 === "actions.open") || (data4 === "runtime.get_context")) || (data4 === "storage.delete")) || (data4 === "storage.get")) || (data4 === "storage.get_quota")) || (data4 === "storage.list")) || (data4 === "storage.set")) || (data4 === "ui.close"))){
+const err13 = {instancePath:instancePath+"/capabilities/" + i0,schemaPath:"#/$defs/HostApiMethodInput/enum",keyword:"enum",params:{allowedValues: schema56.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err13];
 }
@@ -3755,40 +3192,40 @@ vErrors.push(err16);
 }
 errors++;
 }
-validate116.errors = vErrors;
+validate100.errors = vErrors;
 return errors === 0;
 }
-validate116.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate100.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 
-function validate115(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate99(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:PluginRuntimeContextInput" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate115.evaluated;
+const evaluated0 = validate99.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
 if(evaluated0.dynamicItems){
 evaluated0.items = undefined;
 }
-if(!(validate116(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate116.errors : vErrors.concat(validate116.errors);
+if(!(validate100(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate100.errors : vErrors.concat(validate100.errors);
 errors = vErrors.length;
 }
-validate115.errors = vErrors;
+validate99.errors = vErrors;
 return errors === 0;
 }
-validate115.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate99.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const HostApiEventInput = validate118;
-const schema133 = {"$id":"urn:lensx:plugin-host-api-validator:HostApiEventInput","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/HostApiEventInput"};
-const schema72 = {"type":"object","additionalProperties":false,"required":["event","payload"],"properties":{"event":{"const":"runtime.context_changed"},"payload":{"$ref":"#/$defs/PluginRuntimeContextInput"}}};
+export const HostApiEventInput = validate102;
+const schema114 = {"$id":"urn:lensx:plugin-host-api-validator:HostApiEventInput","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/HostApiEventInput"};
+const schema65 = {"type":"object","additionalProperties":false,"required":["event","payload"],"properties":{"event":{"const":"runtime.context_changed"},"payload":{"$ref":"#/$defs/PluginRuntimeContextInput"}}};
 
-function validate119(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate103(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate119.evaluated;
+const evaluated0 = validate103.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -3841,8 +3278,8 @@ errors++;
 }
 }
 if(data.payload !== undefined){
-if(!(validate50(data.payload, {instancePath:instancePath+"/payload",parentData:data,parentDataProperty:"payload",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate50.errors : vErrors.concat(validate50.errors);
+if(!(validate44(data.payload, {instancePath:instancePath+"/payload",parentData:data,parentDataProperty:"payload",rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate44.errors : vErrors.concat(validate44.errors);
 errors = vErrors.length;
 }
 }
@@ -3857,41 +3294,41 @@ vErrors.push(err4);
 }
 errors++;
 }
-validate119.errors = vErrors;
+validate103.errors = vErrors;
 return errors === 0;
 }
-validate119.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate103.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 
-function validate118(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate102(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:HostApiEventInput" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate118.evaluated;
+const evaluated0 = validate102.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
 if(evaluated0.dynamicItems){
 evaluated0.items = undefined;
 }
-if(!(validate119(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate119.errors : vErrors.concat(validate119.errors);
+if(!(validate103(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate103.errors : vErrors.concat(validate103.errors);
 errors = vErrors.length;
 }
-validate118.errors = vErrors;
+validate102.errors = vErrors;
 return errors === 0;
 }
-validate118.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate102.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const HostApiErrorInput = validate122;
-const schema135 = {"$id":"urn:lensx:plugin-host-api-validator:HostApiErrorInput","$ref":"https://lensx.dev/schemas/plugin-host-api-0.1.0.schema.json#/$defs/HostApiErrorInput"};
-const schema73 = {"type":"object","additionalProperties":false,"required":["code","message"],"properties":{"code":{"$ref":"#/$defs/HostApiErrorCodeInput"},"message":{"type":"string","minLength":1,"maxLength":512}}};
-const schema74 = {"type":"string","enum":["cancelled","conflict","internal_error","invalid_params","invalid_request","limit_exceeded","method_not_found","not_found","permission_denied","timeout","unavailable"]};
+export const HostApiErrorInput = validate106;
+const schema116 = {"$id":"urn:lensx:plugin-host-api-validator:HostApiErrorInput","$ref":"https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json#/$defs/HostApiErrorInput"};
+const schema66 = {"type":"object","additionalProperties":false,"required":["code","message"],"properties":{"code":{"$ref":"#/$defs/HostApiErrorCodeInput"},"message":{"type":"string","minLength":1,"maxLength":512}}};
+const schema67 = {"type":"string","enum":["cancelled","conflict","internal_error","invalid_params","invalid_request","limit_exceeded","method_not_found","not_found","timeout","unavailable"]};
 
-function validate123(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate107(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate123.evaluated;
+const evaluated0 = validate107.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -3943,8 +3380,8 @@ vErrors.push(err3);
 }
 errors++;
 }
-if(!(((((((((((data0 === "cancelled") || (data0 === "conflict")) || (data0 === "internal_error")) || (data0 === "invalid_params")) || (data0 === "invalid_request")) || (data0 === "limit_exceeded")) || (data0 === "method_not_found")) || (data0 === "not_found")) || (data0 === "permission_denied")) || (data0 === "timeout")) || (data0 === "unavailable"))){
-const err4 = {instancePath:instancePath+"/code",schemaPath:"#/$defs/HostApiErrorCodeInput/enum",keyword:"enum",params:{allowedValues: schema74.enum},message:"must be equal to one of the allowed values"};
+if(!((((((((((data0 === "cancelled") || (data0 === "conflict")) || (data0 === "internal_error")) || (data0 === "invalid_params")) || (data0 === "invalid_request")) || (data0 === "limit_exceeded")) || (data0 === "method_not_found")) || (data0 === "not_found")) || (data0 === "timeout")) || (data0 === "unavailable"))){
+const err4 = {instancePath:instancePath+"/code",schemaPath:"#/$defs/HostApiErrorCodeInput/enum",keyword:"enum",params:{allowedValues: schema67.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err4];
 }
@@ -4000,30 +3437,30 @@ vErrors.push(err8);
 }
 errors++;
 }
-validate123.errors = vErrors;
+validate107.errors = vErrors;
 return errors === 0;
 }
-validate123.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate107.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 
-function validate122(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate106(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 /*# sourceURL="urn:lensx:plugin-host-api-validator:HostApiErrorInput" */;
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate122.evaluated;
+const evaluated0 = validate106.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
 if(evaluated0.dynamicItems){
 evaluated0.items = undefined;
 }
-if(!(validate123(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate123.errors : vErrors.concat(validate123.errors);
+if(!(validate107(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate107.errors : vErrors.concat(validate107.errors);
 errors = vErrors.length;
 }
-validate122.errors = vErrors;
+validate106.errors = vErrors;
 return errors === 0;
 }
-validate122.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate106.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-export const validators = { ActionsOpenRequest, ActionsOpenResult, ClipboardReadRequest, ClipboardReadResult, ClipboardWriteRequest, ClipboardWriteResult, RuntimeGetContextRequest, RuntimeGetContextResult, StorageDeleteRequest, StorageDeleteResult, StorageGetRequest, StorageGetResult, StorageGetQuotaRequest, StorageGetQuotaResult, StorageListRequest, StorageListResult, StorageSetRequest, StorageSetResult, UiCloseRequest, UiCloseResult, PluginRuntimeContextInput, HostApiEventInput, HostApiErrorInput } as const;
+export const validators = { ActionsOpenRequest, ActionsOpenResult, RuntimeGetContextRequest, RuntimeGetContextResult, StorageDeleteRequest, StorageDeleteResult, StorageGetRequest, StorageGetResult, StorageGetQuotaRequest, StorageGetQuotaResult, StorageListRequest, StorageListResult, StorageSetRequest, StorageSetResult, UiCloseRequest, UiCloseResult, PluginRuntimeContextInput, HostApiEventInput, HostApiErrorInput } as const;

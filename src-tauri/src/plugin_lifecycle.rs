@@ -449,7 +449,7 @@ mod tests {
     fn versions() -> PluginHostVersions {
         PluginHostVersions {
             lensx: "0.1.0".to_owned(),
-            host_api: "0.1.0".to_owned(),
+            host_api: "0.2.0".to_owned(),
         }
     }
 

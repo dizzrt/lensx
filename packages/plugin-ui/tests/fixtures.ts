@@ -6,7 +6,7 @@ export const runtimeContext = (
 ): PluginRuntimeContext =>
   Object.freeze({
     capabilities: Object.freeze([]),
-    hostApiVersion: '0.1.0',
+    hostApiVersion: '0.2.0',
     locale,
     theme,
   });

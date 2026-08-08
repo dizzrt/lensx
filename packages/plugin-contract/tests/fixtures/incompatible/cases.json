@@ -26,7 +26,7 @@
       {
         "op": "set",
         "path": "/compatibility/host_api/max_version_exclusive",
-        "value": "0.1.0"
+        "value": "0.2.0"
       }
     ],
     "expected_status": "incompatible"
@@ -41,7 +41,7 @@
       {
         "op": "set",
         "path": "/compatibility/host_api/min_version",
-        "value": "0.1.0"
+        "value": "0.2.0"
       },
       {
         "op": "set",

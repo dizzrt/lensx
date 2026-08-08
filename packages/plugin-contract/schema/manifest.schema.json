@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://lensx.app/schemas/plugin/manifest-0.1.0.schema.json",
-  "title": "lensX Plugin Manifest 0.1.0",
+  "$id": "https://lensx.app/schemas/plugin/manifest-0.2.0.schema.json",
+  "title": "lensX Plugin Manifest 0.2.0",
   "description": "Author-controlled static manifest input for an external lensX plugin.",
   "type": "object",
   "additionalProperties": false,
@@ -17,7 +17,7 @@
   ],
   "properties": {
     "manifest_version": {
-      "const": "0.1.0"
+      "const": "0.2.0"
     },
     "plugin_id": {
       "$ref": "#/$defs/pluginId"
@@ -36,12 +36,6 @@
     },
     "runtime": {
       "$ref": "#/$defs/runtime"
-    },
-    "requested_permissions": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/permissionRequest"
-      }
     },
     "contributes": {
       "$ref": "#/$defs/contributes"
@@ -63,12 +57,6 @@
       "minLength": 1,
       "maxLength": 64,
       "pattern": "^[a-z][a-z0-9_-]*$"
-    },
-    "permissionId": {
-      "type": "string",
-      "minLength": 3,
-      "maxLength": 255,
-      "pattern": "^[a-z][a-z0-9_-]{0,63}(?:\\.[a-z][a-z0-9_-]{0,63})+$"
     },
     "packagePath": {
       "type": "string",
@@ -209,19 +197,6 @@
         }
       }
     },
-    "permissionRequest": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["permission_id", "reason"],
-      "properties": {
-        "permission_id": {
-          "$ref": "#/$defs/permissionId"
-        },
-        "reason": {
-          "$ref": "#/$defs/localizedText"
-        }
-      }
-    },
     "page": {
       "type": "object",
       "additionalProperties": false,
@@ -241,12 +216,6 @@
         },
         "icon": {
           "$ref": "#/$defs/asset"
-        },
-        "required_permissions": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/permissionId"
-          }
         }
       }
     },

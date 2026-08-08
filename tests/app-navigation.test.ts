@@ -23,7 +23,6 @@ const pluginBatch = (available = true, title = 'Notes'): PageProviderBatch => ({
       page_id: 'home',
       title: { 'en-US': title },
       route: '/notes',
-      required_permission_ids: available ? [] : ['notes.read'],
       available,
     },
   ],

@@ -64,22 +64,32 @@ The system MUST use Changesets to express each official plugin's SemVer bump and
 - **THEN** after the defect is fixed, the version PR MUST regenerate from the committed Changeset and produce the same deterministic version plan
 
 ### Requirement: Every release candidate must pass platform and plugin automation gates
-Before publishing, the system MUST run the existing Contract, SDK transport, canonical package-format, permission, and Runtime security and session gates. For each candidate it MUST run the package-local lifecycle, public CLI build, validate, pack, and inspect commands, repeat packing, TypeScript and Rust inspection, ordinary local-install preparation, generic Runtime E2E, and the plugin's own `test:e2e`. The published `.lxp` MUST be the same immutable bytes that passed every gate, MUST use the external-plugin package protocol, and MUST NOT be a workflow-built custom archive or depend on Host source imports.
 
-#### Scenario: A candidate passes the complete release gate
-- **WHEN** a candidate passes the global platform gate, plugin lifecycle, two byte-identical packs, both inspectors, ordinary install preparation, Runtime open/session/close smoke, and plugin E2E
-- **THEN** the system MUST pin the complete SHA-256 of the candidate `.lxp` and may place it in a read-only artifact handoff
-- **THEN** later publish steps MUST consume that exact file instead of rebuilding or repacking
+Every selected official plugin candidate MUST pass, within build authority, the Contract `0.2.0`, SDK, package format, open isolated Runtime, Host and cross-plugin isolation, plugin unit, integration, and E2E tests, type checking, build, and official-boundary gates in sequence. The candidate MUST pass public CLI inspection, ordinary local-install preparation, and Runtime execution as a canonical `.lxp`. The release pipeline MUST NOT depend on the removed permission-prompt or permission-management gate and MUST NOT add Host authority because a source is official.
 
-#### Scenario: The ordinary installer validates an official candidate
-- **WHEN** a gated candidate `.lxp` is submitted to the existing local-install preparation boundary
-- **THEN** the Host MUST accept or reject its content using the existing package, Manifest, compatibility, and installation rules
-- **THEN** the result MUST NOT depend on a GitHub Release, Changeset, repository path, or official sidecar
+The releasable `.lxp` MUST be the same immutable bytes that passed every gate, MUST use the external-plugin package protocol, and MUST NOT be rebuilt, repacked as a custom workflow archive, or depend on Host source imports after validation.
 
-#### Scenario: A gate fails or bytes change after handoff
-- **WHEN** any global, plugin, or E2E gate fails, repeated packing differs, inspectors disagree, or the handoff digest does not match
-- **THEN** the plugin version MUST NOT receive a created or public release
-- **THEN** after a fix, the failed gate and the complete candidate gate MUST run again, and the old candidate artifact MUST NOT be reused
+#### Scenario: Official candidate uses Worker or network
+- **WHEN** a candidate E2E uses a supported Dedicated Worker, remote resource, or network connection
+- **THEN** both the open Runtime success path and Host and cross-plugin negative paths pass
+- **THEN** the release job creates no grant, permission exception, or official-only CSP
+
+#### Scenario: Candidate or platform gate fails
+- **WHEN** any Contract, package, Runtime, isolation, plugin test, type, build, or candidate-agreement gate fails
+- **THEN** the candidate does not enter the write-authorized publish job
+- **THEN** after correction, the failed gate and complete candidate gate MUST be rerun without reusing the old artifact
+
+#### Scenario: Candidate passes the complete release gate
+
+- **WHEN** a candidate passes the global platform gate, plugin lifecycle, two byte-identical packs, both inspectors, ordinary installation preparation, Runtime open, Session, and close smoke, and plugin E2E
+- **THEN** the system pins the complete SHA-256 of the candidate `.lxp` and may place it in a read-only artifact handoff
+- **THEN** later publish steps consume that exact file instead of rebuilding or repacking it
+
+#### Scenario: Ordinary installer validates an official candidate
+
+- **WHEN** a gated candidate `.lxp` is submitted to the ordinary local-install preparation boundary
+- **THEN** the Host accepts or rejects its content using the existing package, Manifest, compatibility, and installation rules
+- **THEN** the result does not depend on a GitHub Release, Changeset, repository path, or official sidecar
 
 ### Requirement: CI must isolate executable plugin code from release authority
 Jobs that install dependencies or execute plugin build, test, or E2E code MUST have read-only permissions and MUST NOT receive a release secret. A job with version-PR or GitHub Release write permission MUST NOT execute plugin source, plugin lifecycle commands, dependency lifecycle scripts, or `.lxp` content. Such a job MUST only process controlled version metadata or download and revalidate a digest-pinned candidate artifact. Pull-request and fork events MUST NOT receive release authority. Every third-party action MUST be pinned to an immutable revision, and publishing MUST be constrained by a protected branch or environment and concurrency controls.
@@ -117,35 +127,41 @@ For each official plugin version, the system MUST use a stable tag `official/<pl
 - **THEN** the workflow MUST NOT overwrite a public asset, delete published history, or roll SemVer backward
 
 ### Requirement: The release audit record must be verifiable and must never create Host trust or permission
-For each `.lxp`, the system MUST generate a locale-neutral, field-restricted, deterministically encoded external audit JSON using schema version `1`. It MUST record plugin identity and version, artifact name, size, and SHA-256, source repository, commit, and ref, workflow run URL, and release tag. The record MUST remain outside the `.lxp` and author Manifest and MUST NOT contain or claim a signature, trusted publisher, Host source, permission, grant, or authorization. The ordinary Host installer and Runtime MUST ignore it. An official release source MUST NOT alter empty grants, permission prompts, denial, revocation, or capability calculation.
 
-#### Scenario: The audit record exactly matches the candidate
-- **WHEN** the sidecar identity, version, artifact, size, digest, commit, ref, run, and tag match the published candidate and CI context
-- **THEN** the release checker MUST accept it as an operational audit record
-- **THEN** acceptance MUST NOT be interpreted as a signature, trusted provenance, or Host authorization
+Every `.lxp` MUST continue to produce a schema-version `1`, locale-neutral, field-restricted, deterministic external audit record containing plugin identity and version, artifact name, size, and SHA-256, source repository, commit and ref, workflow run URL, and release tag. The record MUST remain outside the `.lxp` and author Manifest and MUST NOT declare a signature, trusted publisher, Host source, permission, grant, or authorization. The ordinary Host installer and Runtime MUST ignore this sidecar. An official release source MUST NOT change conclusions about open Web behavior, Host isolation, Session authority, or native Host APIs.
 
-#### Scenario: The audit record is tampered with or injects authority
+#### Scenario: Audit record matches candidate
+- **WHEN** sidecar facts exactly match the candidate bytes and CI context
+- **THEN** the checker accepts the operational audit relationship
+- **THEN** acceptance does not constitute a signature, Host trust, permission, or Runtime capability
+
+#### Scenario: User installs official release asset
+- **WHEN** the user selects a release `.lxp` through the ordinary local-install entry point
+- **THEN** the Host still injects the normal external installation source and uses the installation-as-trust flow
+- **THEN** the release URL, sidecar, repository ownership, and Publisher do not relax Host or cross-plugin isolation
+
+#### Scenario: Audit record is tampered with or injects authority
+
 - **WHEN** the sidecar differs from the `.lxp` facts, bytes, or CI context, contains an unknown field, or claims official, verified, signature, permission, or grant status
-- **THEN** the release MUST fail before publication with a safe, stable diagnostic
-- **THEN** the Host MUST NOT recover or infer authority from the sidecar
-
-#### Scenario: A user installs a release asset through the ordinary entry point
-- **WHEN** a user downloads the `.lxp` from a release and selects it through the existing local-install entry point
-- **THEN** the Host MUST continue to inject the existing external source and an empty granted-permission snapshot
-- **THEN** Manifest publisher metadata, release URL, sidecar, or repository ownership MUST NOT automatically grant permission or bypass later denial or revocation
+- **THEN** the release fails before publication with a safe, stable diagnostic
+- **THEN** the Host does not recover or infer authority from the sidecar
 
 ### Requirement: The official release process must have bilingual maintenance documentation and automated drift validation
-The system MUST provide canonical English and path-matched Simplified Chinese official-plugin release documentation covering the directory contract, Changesets, PR gate, version PR, candidate gate, asset and tag naming, failure and retry, CODEOWNERS, least privilege, and signing and trust boundaries. Both language indexes MUST link to the document. Commands, JSON fields, tags, asset names, and diagnostic codes MUST remain locale-neutral. The documentation and its runnable commands MUST be covered by automation and MUST NOT describe signing, Marketplace distribution, automatic updates, or Host official trust as delivered capabilities.
 
-#### Scenario: A maintainer follows either language to release one plugin
+Canonical English and path-matched Chinese release documentation MUST remain aligned on Changesets, PR, version, candidate and release flow, CODEOWNERS, least privilege, audit, open Runtime, and Host-isolation boundaries. The documentation MUST NOT describe removed permission gates or grants and MUST NOT interpret an official source as Host trust. Automated drift gates MUST cover the actual scripts, workflows, Contract versions, JSON, tags, assets, and capability status.
+
+Commands, JSON fields, tags, asset names, and diagnostic codes MUST remain locale-neutral. The documentation MUST NOT describe signing, Marketplace distribution, automatic updates, or Host official trust as delivered capabilities.
+
+#### Scenario: Permission model or Runtime docs drift
+- **WHEN** a workflow, script, Contract, Runtime, audit record, or document still depends on a legacy permission gate or claims official sources receive additional authority
+- **THEN** the release documentation gate fails with a stable repository-relative reason
+- **THEN** pipeline-completion status cannot conceal current platform drift
+
+#### Scenario: Maintainer follows either language to release one plugin
+
 - **WHEN** a maintainer enters the official-plugin release document from the English or Simplified Chinese index
-- **THEN** that language MUST describe the complete corresponding sequence from Changeset and PR gate through version PR, candidate, release, and retry, including safety boundaries
-- **THEN** both languages MUST use the same machine interfaces, relative paths, and capability status
-
-#### Scenario: Documentation drifts from release interfaces
-- **WHEN** a workflow, script, Changesets configuration, tag or asset schema, permission model, or capability status no longer matches the documentation
-- **THEN** the documentation and release gate MUST fail with a repository-relative path and stable reason
-- **THEN** Task 7.1 MUST remain incomplete until both languages and automation agree again
+- **THEN** that language describes the complete corresponding sequence from Changeset and PR gate through version PR, candidate, release, and retry, including safety boundaries
+- **THEN** both languages use the same machine interfaces, relative paths, and capability status
 
 ### Requirement: Task 7.1 completion must depend on repeatable independent-release evidence
 The system MUST use committed valid and invalid fixtures and a temporary two-plugin dry-run to prove single-plugin path selection, independent version bumps, canonical packing, ordinary install preparation, Runtime E2E, audit records, idempotency, and failure recovery. Fixtures MUST NOT reside in product `plugins/official/*`, be registered by the Host, or produce a public release. Task 7.1 may be marked complete only after the focused gate, frontend tests, formatting, static analysis, type checking and build, Rust formatting, tests and checks, and strict OpenSpec validation all succeed.
@@ -159,4 +175,3 @@ The system MUST use committed valid and invalid fixtures and a temporary two-plu
 - **WHEN** the focused gate, complete frontend or Rust validation, strict OpenSpec validation, or any required fixture scenario fails
 - **THEN** Task 7.1 MUST remain incomplete and the Roadmap MUST NOT claim that the official release pipeline is delivered
 - **THEN** after a fix, the failed command and the complete final validation set MUST run again
-

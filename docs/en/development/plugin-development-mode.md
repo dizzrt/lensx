@@ -7,7 +7,7 @@ self-contained plugin `dist/` directory. It is available only in the dedicated
 feature-enabled development build, starts disabled on every lensX process, and
 does not persist registrations or the mode switch across restart.
 
-It does not install a `.lxp`, sign or trust publisher claims, grant permissions,
+It does not install a `.lxp`, sign or trust publisher claims, create Host authority,
 watch files, run a build, or automatically reload a plugin.
 
 ## Canonical Smoke Plugin
@@ -17,9 +17,8 @@ public-SDK plugin with two deterministic build phases. Both phases use the same
 plugin ID and output directory so that they exercise the actual development
 reload transaction:
 
-- `initial` builds version `0.1.0`, generation A, with no requested permission;
-- `permission-delta` builds version `0.2.0`, generation B, requesting
-  `clipboard.read` without receiving a grant.
+- `initial` builds version `0.1.0`, generation A;
+- `reload` builds version `0.2.0`, generation B with the same open-Web Runtime boundary.
 
 Build and validate generation A from the repository root:
 
@@ -67,9 +66,8 @@ a `.lxp` package digest.
 After editing source, run the plugin build and validation again, then choose
 **Reload from directory**. Every successful manual reload creates a fresh
 generation even when bytes are unchanged. It terminates the old Resource and
-Runtime authority, reconciles grants against the new Manifest, and publishes a
-fresh current registration. New permission requests remain ungranted, removed
-requests lose their grants, and retained requests keep existing grants.
+Runtime authority and publishes a fresh current registration. It does not
+create permission or grant state.
 
 **Remove development entry** and disabling the mode remove process-local
 development registrations and terminate their current authority. They retain
@@ -100,14 +98,13 @@ Use a fresh lensX process and keep its terminal open throughout this sequence.
    `examples/plugins/development-mode-smoke/dist` in the native folder picker.
    The entry must show version `0.1.0` and the text labels **Development**,
    **Unpacked**, and **Unsigned**. Its publisher remains unverified author text,
-   and requested, granted, and effective permissions are empty.
+   and no permission or grant facts are present.
 3. Open the Launcher again and run **Open development-mode smoke A**. The real
-   plugin WebView must report generation A, no `clipboard.read` Manifest
-   request, and no effective `clipboard.read` capability.
+   plugin WebView must report generation A and Host API `0.2.0` capabilities.
 4. Without closing lensX, build and validate generation B in another terminal:
 
    ```bash
-   pnpm run build:plugin-development-smoke:permission-delta
+   pnpm run build:plugin-development-smoke:reload
    pnpm run validate:plugin-development-smoke
    ```
 
@@ -115,9 +112,8 @@ Use a fresh lensX process and keep its terminal open throughout this sequence.
    that the Host serves its immutable snapshot rather than changed author files.
 5. Return to **Settings → Plugins**, select the development entry, and choose
    **Reload from directory**. The current entry must become version `0.2.0` and
-   generation B. `clipboard.read` must appear as requested but remain ungranted;
-   the refreshed plugin page must still report no effective `clipboard.read`
-   capability. The Launcher action must change to **Open development-mode smoke
+   generation B. No permission/grant state may appear, and the refreshed page
+   must use the same open isolated Runtime profile. The Launcher action must change to **Open development-mode smoke
    B**.
 6. Choose **Remove development entry** and confirm. The entry and its Launcher
    action must disappear, and any open plugin Page must terminate. The result

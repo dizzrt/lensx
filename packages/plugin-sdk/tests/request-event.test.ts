@@ -50,11 +50,11 @@ describe('Plugin SDK Contract-closed request and event API', () => {
     const client = createPluginSdk({ transport });
     await client.initialize();
     transport.requestImplementation = async () => {
-      throw { code: 'permission_denied', message: 'Permission denied.' };
+      throw { code: 'unavailable', message: 'Capability unavailable.' };
     };
     await expect(client.request({ method: 'ui.close', params: {} })).rejects.toEqual({
-      code: 'permission_denied',
-      message: 'Permission denied.',
+      code: 'unavailable',
+      message: 'Capability unavailable.',
     });
     transport.requestImplementation = async () => {
       throw new Error('/private/path payload stack');
@@ -105,7 +105,7 @@ describe('Plugin SDK Contract-closed request and event API', () => {
     client.subscribe('runtime.context_changed', (event) => contexts.push([client.context, event]));
     transport.emit('runtime.context_changed', {
       capabilities: [],
-      hostApiVersion: '0.1.0',
+      hostApiVersion: '0.2.0',
       locale: 'zh-CN',
       theme: 'dark',
     });

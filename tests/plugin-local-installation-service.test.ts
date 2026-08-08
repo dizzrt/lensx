@@ -5,7 +5,7 @@ import { createLocalPluginInstallationService } from '../src/app/plugins/install
 const token = 'abcdefghijklmnopqrstuvwxyzABCDEF';
 const prepared = (preparationToken = token) => ({
   status: 'prepared' as const,
-  contract_version: '0.2.0' as const,
+  contract_version: '0.3.0' as const,
   operation: 'prepare' as const,
   preparation_token: preparationToken,
   candidate: {
@@ -13,14 +13,13 @@ const prepared = (preparationToken = token) => ({
     version: '1.2.3',
     display_name: { 'en-US': 'Workspace' },
     publisher: { author: 'Acme', homepage: 'https://example.com', repository: 'https://example.com/repository' },
-    requested_permissions: [],
   },
 });
 
 describe('local plugin installation service', () => {
   test('cancels an old preparation before a new prepare and destroys the current token', async () => {
     const cancel = rs.fn(
-      async () => ({ status: 'cancelled', contract_version: '0.2.0', operation: 'cancel' }) as const,
+      async () => ({ status: 'cancelled', contract_version: '0.3.0', operation: 'cancel' }) as const,
     );
     const prepare = rs
       .fn<LocalPluginInstallationClient['prepare']>()
@@ -40,7 +39,7 @@ describe('local plugin installation service', () => {
       async () =>
         ({
           status: 'installed',
-          contract_version: '0.2.0',
+          contract_version: '0.3.0',
           operation: 'commit',
           plugin_id: 'com.acme.workspace',
           version: '1.2.3',

@@ -17,8 +17,7 @@ stable global identity MUST be
 `{ owner_id: manifest.plugin_id, page_id: plugin-local Page ID }`; the system
 MUST NOT create a second author-controlled or concatenated Page identity. A
 descriptor MUST retain the locale-resolvable Page title, plugin-private route,
-same-owner parent target, required permission IDs, and Host-derived
-availability. Routes, permission IDs, Publisher data, installation paths, and
+same-owner parent target, and Host-derived availability. Routes, Publisher data, installation paths, and
 Runtime entries MUST NOT enter `ActivePage`, Launcher Action descriptors, or
 presentation props.
 
@@ -37,7 +36,7 @@ presentation props.
 - **WHEN** the Host resolves a projected Page for navigation and presentation
 - **THEN** `ActivePage` contains only the owner ID, Page ID, and opening Action
   ID
-- **THEN** routes, permission IDs, installation paths, Runtime entries,
+- **THEN** routes, installation paths, Runtime entries,
   executors, and Host objects do not enter Launcher snapshots, React
   presentation props, or public errors
 
@@ -78,40 +77,24 @@ NOT expose provider bookkeeping or mutation APIs to plugins.
 
 ### Requirement: Page availability must fail closed from current Registration facts
 
-The system MUST retain a Page provider only when snapshot and detail identities
-and revisions match, Registration is available, and the plugin is enabled and
-compatible with both lensX and the Host API. For each eligible provider, a Page
-MUST be available only when every one of its `required_permissions` exists in
-the current Host-owned `granted_permission_ids` snapshot. This decision MUST be
-only a set-containment check over current facts; it MUST NOT grant permissions,
-establish a permission catalog, trust builtin provenance, or claim session
-permissions are implemented. Action publication MUST exclude Actions whose
-target Page is currently unavailable.
+Plugin Page availability MUST derive from the current healthy Registration, enabled intent, compatibility, quarantine state, current descriptor, and resource and Runtime prerequisites. It MUST NOT read `required_permissions`, a grant snapshot, or a permission service. Open Web behavior, Publisher or source, and remote content MUST NOT change Host-owned Page identity, route, or availability. Invalid, disabled, incompatible, quarantined, stale, or removed entries MUST continue to fail closed.
 
-#### Scenario: A Page requires no permission
+The system MUST retain a Page provider only when snapshot and detail identities and revisions match. Action publication MUST exclude Actions whose target Page is currently unavailable.
 
-- **WHEN** a Page from a current eligible plugin requires no permission
-- **THEN** the Page descriptor is marked available
-- **THEN** a valid Action targeting that Page may enter subsequent production
-  publication
+#### Scenario: Healthy permissionless Page is available
+- **WHEN** a current Manifest `0.2.0` Page belongs to a healthy, enabled, compatible Registration and Runtime prerequisites are available
+- **THEN** the Page descriptor is available without a lensX grant
+- **THEN** ordinary Web behavior such as Worker or network use is not part of the Page-availability calculation
 
-#### Scenario: A Page lacks a required grant
+#### Scenario: Legacy Page contains required permissions
+- **WHEN** a package uses a legacy Manifest or Page `required_permissions`
+- **THEN** the Contract or Registration classifies it as incompatible or invalid without creating a partial Page descriptor
+- **THEN** navigation does not silently ignore the legacy gate and open the Page
 
-- **WHEN** at least one permission required by a Page is absent from the current
-  Host grant snapshot
-- **THEN** the descriptor remains in the provider's Page graph but is marked
-  unavailable
-- **THEN** navigation rejects the Page, and an Action targeting it does not
-  enter the executable Registry snapshot
-- **THEN** the system creates no grant or permission prompt automatically
-
-#### Scenario: A plugin becomes ineligible or Registration degrades
-
-- **WHEN** a plugin is disabled, becomes incompatible, is quarantined,
-  disappears from the snapshot, or Registration availability becomes degraded
-- **THEN** the system fails closed by withdrawing the affected Plugin Actions
-  and Pages
-- **THEN** other eligible plugins and Host Pages remain available
+#### Scenario: Registration becomes unavailable
+- **WHEN** a plugin is disabled, removed, replaced, quarantined, or its current facts become stale
+- **THEN** the Page immediately disappears from the current registry and a matching active Page closes
+- **THEN** open network, Worker, or remote code cannot preserve the old descriptor
 
 ### Requirement: Page and Action projection must converge from one Registration revision
 
@@ -267,13 +250,13 @@ replacement. When the target is removed or its availability becomes false, a
 Host-owned navigation invalidation transition MUST close the Page, return Home,
 and restore safe Launcher state; a plugin MUST NOT receive or call the
 invalidation handler. Changes only to title, Owner presentation, parent, route,
-or a grant snapshot that preserves availability MUST NOT close an active Page
+  while availability remains true MUST NOT close an active Page
 with the same identity.
 
 #### Scenario: An active Page loses availability
 
-- **WHEN** a new Registration revision removes the active Page, revokes one of
-  its required grants, or makes its provider ineligible
+- **WHEN** a new Registration revision removes the active Page or makes its
+  provider ineligible
 - **THEN** the Host navigation boundary closes the active Page and returns Home
 - **THEN** unregistered plugin code receives no execution opportunity, and
   other providers' active and registered state is unaffected
@@ -293,7 +276,7 @@ production Action coordination, framework-neutral navigation, presentation
 resolution, a Host placeholder, invalidation, tests, and maintained
 documentation. It MUST NOT install, enable, disable, uninstall, or execute a
 plugin, and MUST NOT create a safe resource URL, iframe, Runtime session, Host
-API transport, permission-grant decision, or plugin management UI.
+API transport, native authority decision, or plugin management UI.
 
 #### Scenario: Only Task 2.4 is complete
 

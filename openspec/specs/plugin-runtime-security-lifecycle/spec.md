@@ -11,53 +11,59 @@ enforcement, safe diagnostics, and real WebView evidence.
 
 ### Requirement: Host and plugin documents MUST run under distinct Host-owned Content Security Policies
 
-The production Host main document and every eligible plugin Runtime document MUST use non-null, independently defined Content Security Policies controlled by lensX. The Host policy MUST allow only the bundled Host resources, Tauri IPC forms, and plugin frame source classes proven necessary by the production application; the plugin policy MUST begin with `default-src 'none'`, allow only current same-origin packaged script, style, image, and font resources, and deny network connections, media, workers, nested frames, objects, base mutation, and form submission by default. Neither policy MAY use wildcard hosts, arbitrary remote scripts, script inline execution, or script eval. Manifest fields, author HTML, publisher/source status, query values, request headers, and plugin messages MUST NOT select or relax either policy.
+The production Host main document and every eligible plugin Runtime document MUST use non-empty, mutually independent Content Security Policies controlled by lensX. The Host policy MUST continue to allow only the validated Host bundle, Tauri IPC, and the current plugin frame class. The plugin policy MUST enforce only trusted Host ancestry, Host and cross-plugin isolation, and Runtime boundaries that an author cannot relax. It MUST NOT treat Worker, network, remote HTTPS or WSS resources, `blob:`, `data:`, WASM, or browser origin storage as lensX permission-gated content categories. A plugin's own policy MAY narrow its content sources further, but the Manifest, HTML, or remote content MUST NOT relax isolation policy in the Host header.
 
-#### Scenario: Production Host starts with the bounded policy
+The Host main policy MUST NOT change because the plugin Web Runtime is open. Both policies MUST prevent a plugin from obtaining Host Tauri authority, using the plugin document as the Host main document, reusing an origin across plugins, or embedding through a wildcard ancestor.
+
+#### Scenario: Plugin uses open content capability
+- **WHEN** the current plugin document creates a Dedicated Worker, loads package, remote, Blob, or Data content, or opens a network connection
+- **THEN** the plugin policy requires no lensX grant and the target WebView follows the open Web baseline
+- **THEN** the Host main CSP, trusted ancestor, Tauri initialization, and another plugin origin remain unreachable
+
+#### Scenario: Plugin attempts to relax Host isolation
+- **WHEN** a Manifest, HTML, remote script, or plugin message declares a wildcard ancestor, Host or Tauri source, shared plugin origin, or broader Host bridge
+- **THEN** the Host-owned response policy and iframe and origin boundaries remain authoritative and prevent escalation
+- **THEN** installation, official source, Publisher, and community labels create no exception
+
+#### Scenario: Production Host starts with bounded policy
 
 - **WHEN** the production Tauri application loads its bundled Host document
-- **THEN** a non-null Host CSP permits the verified lensX bundle, Tauri IPC, and current plugin frame class without enabling arbitrary remote or inline script execution
-- **THEN** Host settings, Launcher, locale, theme, Action dispatch, and trusted Tauri invocation retain their existing behavior
-
-#### Scenario: A plugin attempts to relax its policy
-
-- **WHEN** a plugin Manifest or HTML declares a broader meta policy, wildcard source, remote script, inline script, eval, network endpoint, nested frame, form target, or author-selected CSP value
-- **THEN** the Host-owned response policy remains authoritative and the browser blocks behavior outside that policy
-- **THEN** official provenance, publisher text, enabled state, or a grant snapshot creates no CSP exception
+- **THEN** a non-empty Host CSP permits the verified lensX bundle, Tauri IPC, and current plugin frame class without enabling arbitrary remote or inline script execution
+- **THEN** Host Settings, Launcher, locale, theme, Action dispatch, and trusted Tauri invocation retain their existing behavior
 
 #### Scenario: Existing Host styling requires an exception
 
-- **WHEN** the real production Host bundle cannot render its verified Semi Design UI without a style-only inline mechanism
-- **THEN** any accepted exception is restricted to `style-src`, is locked by production bundle and light/dark visual evidence, and does not expand script, connect, frame, object, base, or form policy
+- **WHEN** the production Host bundle cannot render its verified Semi Design UI without a style-only inline mechanism
+- **THEN** any accepted exception is restricted to `style-src`, is locked by production bundle and light and dark visual evidence, and does not expand script, connect, frame, object, base, or form policy
 - **THEN** inability to justify that minimum exception prevents completion rather than enabling a general unsafe policy
 
 ### Requirement: Plugin CSP MUST be delivered by the current scoped resource response and proven on the target WebView
 
-The Host MUST attach the exact plugin CSP as a response header to every successful current scoped HTML response, with identical security headers for GET and HEAD. The policy MUST preserve the canonical same-origin package module graph and MUST use the exact verified Host ancestor source; it MUST NOT depend on an author meta element, HTML rewriting, wildcard/null CORS, a remote reporting service, or a classic-only/inline-only bundle. A stale, cross-plugin, unknown, noncurrent, or failed resource response MUST NOT return usable plugin bytes or a relaxed policy.
+The Host MUST attach the current plugin isolation CSP as a response header to every successful current scoped HTML response and preserve matching security headers for GET and HEAD. The policy MUST use the exact trusted Host ancestor and operate together with scope, generation, path, MIME, `nosniff`, `no-store`, and no-Host-CORS guarantees. It MUST NOT rely on an author meta element, HTML rewriting, reflected Host origin, a shared plugin origin, or removal of frame and navigation negative cases.
 
-#### Scenario: Current package module graph loads
+The open package and remote module graph, Dedicated Worker, network, Blob, Data, and WASM MUST have positive evidence in the target WebView. Host and Tauri, cross-plugin, stale-generation, popup, top-navigation, and persistent-background execution MUST have negative evidence. A plugin author policy MAY intersect with the Host header to narrow its own behavior.
 
-- **WHEN** the current isolated plugin entry loads its packaged HTML, classic script, ES Module graph, CSS, image, and font through valid scoped URLs
-- **THEN** the target macOS WKWebView executes the allowed same-origin graph under the Host-owned plugin CSP
-- **THEN** the response retains the existing exact MIME, `nosniff`, `no-store`, scope, generation, path, lifecycle, and no-CORS guarantees
+#### Scenario: Current open module graph loads
+- **WHEN** a current isolated plugin loads package and remote script, style, image, and font content, creates a Dedicated Worker, and opens a browser connection
+- **THEN** the supported graph executes inside the current plugin origin and sandbox
+- **THEN** every Host-owned resource response preserves current scope, generation, MIME, `nosniff`, `no-store`, and safe diagnostic boundaries
 
-#### Scenario: Plugin requests a forbidden content class
+#### Scenario: Open content attempts to obtain Host or old authority
+- **WHEN** package, remote, Blob, Data, or Worker code attempts to access Host or Tauri, another plugin, an old generation, a popup, top navigation, or a persistent background context
+- **THEN** the iframe, origin, navigation, Session, or Resource boundary blocks the attempt
+- **THEN** negative evidence records only bounded content categories and platform facts without disclosing a target URI, origin token, scope, path, payload, or private error
 
-- **WHEN** the plugin attempts a remote or inline script, eval, network connection, worker, nested frame, object, base mutation, form submission, `data:` or `blob:` source that is not explicitly allowed
-- **THEN** the target browser blocks the attempt before it obtains Host, Tauri, cross-plugin, or external capability
-- **THEN** the negative evidence identifies only the bounded directive/content class and reveals no blocked URI, origin token, scope, path, payload, nonce, or private error
-
-#### Scenario: Target WebView cannot enforce the response policy
-
-- **WHEN** the supported macOS WKWebView cannot prove custom-protocol response CSP, the exact Host ancestor, GET/HEAD header agreement, or the canonical module graph under that policy
-- **THEN** this capability remains incomplete and production does not fall back to CSP `null`, wildcard sources, author meta, HTML rewriting, relaxed CORS, or deleted negative cases
+#### Scenario: Target WebView cannot enforce open and isolated policy
+- **WHEN** a supported platform cannot prove the open Web success path, exact Host ancestor, GET and HEAD header agreement, Host and cross-plugin negative paths, and teardown together
+- **THEN** the capability remains incomplete
+- **THEN** production does not fall back to a shared origin, Tauri exposure, no ancestor restriction, or an unverified residual Worker
 
 ### Requirement: Every Runtime attempt MUST have one idempotent generation-aware terminal cleanup
 
 The Host MUST assign each explicit open, retry, or successful development
 reload a fresh process-local Runtime attempt and MUST route manual close,
 navigation away, retry, provider quiescence, disable, uninstall, replacement,
-development reload, remove, or mode shutdown, relevant current-fact or grant
+development reload, remove, or mode shutdown, relevant current-fact
 change, resolution, load, or handshake failure, unexpected Session disconnect,
 Host reload, App unmount, and graceful application exit through one terminal
 operation. The operation MUST reject new Runtime-owned work, cancel cancellable
@@ -95,7 +101,7 @@ late callback MUST compare the attempt before changing current state.
   authority before creating a fresh attempt, iframe, nonce, MessageChannel, and
   Session for the still-current page
 - **THEN** development source relaxes none of CSP, sandbox, Permissions Policy,
-  deadlines, breaker, single-iframe, Host API, or permission boundaries
+  deadlines, breaker, single-iframe, Host API, or Host-authority boundaries
 
 #### Scenario: Development reload fails before commit
 
@@ -147,7 +153,7 @@ The Host MUST count qualifying failures by trusted entry identity and current re
 #### Scenario: Current generation changes or remains healthy
 
 - **WHEN** replacement creates a new resource generation, or the current generation remains continuously Session-ready for 30 seconds
-- **THEN** the corresponding failure history is cleared without mutating Plugin Manager, quarantine, source, enabled intent or grants
+- **THEN** the corresponding failure history is cleared without mutating Plugin Manager, quarantine, source, or enabled intent
 - **THEN** unrelated plugin failures do not open or reset this entry's breaker
 
 ### Requirement: The Host MUST keep at most one active external Plugin Page iframe in the window
@@ -206,10 +212,24 @@ Delivery MUST combine Rust response tests, deterministic TypeScript state/race t
 
 ### Requirement: Task 4.4 MUST leave SDK transport and later platform capabilities unimplemented
 
-This capability MUST deliver only Host/private document CSP, Runtime lifecycle coordination, Runtime-owned cancellation, deadlines, process-local failure breaking, bounded diagnostics, single-instance enforcement, tests and maintained documentation. It MUST NOT define public SDK iframe transport, JSON-RPC/request IDs, Host API methods or dispatch, permission decisions, plugin storage, RPC pending-call cancellation, management UI, development-mode relaxation, background/sidecar execution, remote reporting, general resource quotas, signing, Catalog, Marketplace, or Windows/Linux Runtime support.
+This capability MUST deliver only Host/private document CSP, Runtime lifecycle coordination, Runtime-owned cancellation, deadlines, process-local failure breaking, bounded diagnostics, single-instance enforcement, tests and maintained documentation. It MUST NOT define public SDK iframe transport, JSON-RPC/request IDs, Host API methods or dispatch, native-authority decisions, plugin storage, RPC pending-call cancellation, management UI, development-mode relaxation, background/sidecar execution, remote reporting, general resource quotas, signing, Catalog, Marketplace, or Windows/Linux Runtime support.
 
 #### Scenario: Task 4.4 completes before Task 5.2
 
 - **WHEN** all Task 4.4 validation passes while SDK iframe transport and Host API work remain undelivered
 - **THEN** an isolated local plugin Page can load, authenticate, fail and terminate under bounded CSP/lifecycle rules but still cannot issue a real Host API request
 - **THEN** Runtime-owned cleanup does not create request IDs, RPC envelopes, method schemas, concurrency rules or public transport behavior
+
+### Requirement: Open execution contexts MUST terminate completely with the Runtime attempt
+
+Every Dedicated Worker, plugin-page-initiated long-lived connection, Blob URL, and other page-owned open Web context MUST be bound to the lifecycle of the current Runtime attempt and resource generation. Close, navigation away, disable, uninstall, replacement, development reload, Session disconnect, breaker activation, Host reload, application unmount, or process exit MUST prevent an old context from continuing to obtain Session, Host, or new-generation authority.
+
+#### Scenario: Page closes while Worker and connection are active
+- **WHEN** the user closes a plugin page that still has a Dedicated Worker and active network work
+- **THEN** iframe teardown terminates its page-owned execution contexts or leaves them uncontrollable and without Host authority
+- **THEN** a new page does not reuse the old Worker, connection, Blob URL, Session, Port, or origin scope
+
+#### Scenario: Persistent worker is requested
+- **WHEN** a plugin attempts to register a SharedWorker, ServiceWorker, or background context that could outlive the current page or generation
+- **THEN** the current supported baseline rejects or does not claim support for that capability
+- **THEN** the context retains no plugin authority after page close, replacement, or Host restart

@@ -4,7 +4,7 @@ Define the Host-owned Plugin Registration Contract shared by the Rust Host,
 Tauri query and event boundaries, and the trusted lensX application frontend.
 The contract exposes recoverable, minimally disclosed registration snapshots
 and details without turning Host facts into plugin-author input or claiming
-downstream installation, execution, lifecycle, permission, or UI capabilities.
+downstream installation, execution, lifecycle, native authority, or UI capabilities.
 
 ## Requirements
 
@@ -17,7 +17,7 @@ TypeScript. It MUST NOT become author Manifest input, a plugin iframe API,
 plugin can import. Every registered plugin payload MUST be composed by the Host
 from a validated normalized Manifest and Host-owned facts. The payload MUST NOT
 accept author-supplied source, enabled, compatibility, quarantine, Runtime,
-granted permission, lifecycle, signature, or provenance facts.
+lifecycle, signature, or provenance facts.
 
 #### Scenario: Host composes a healthy registration detail
 
@@ -29,7 +29,7 @@ granted permission, lifecycle, signature, or provenance facts.
 
 - **WHEN** normalized Manifest publisher text claims that the plugin was published by lensX or another trusted organization
 - **THEN** the read model continues to treat that text as an unverified author claim
-- **THEN** publisher does not change Host source, enabled intent, permission grants, compatibility, or any trust conclusion
+- **THEN** publisher does not change Host source, enabled intent, compatibility, native authority, or any trust conclusion
 
 #### Scenario: Workspace plugin attempts to import the Registration Contract
 
@@ -39,26 +39,28 @@ granted permission, lifecycle, signature, or provenance facts.
 
 ### Requirement: Registration wire payloads MUST use an independent explicit version
 
-Every registration snapshot, detail response, and changed-event payload MUST
-carry Registration Contract version `0.2.0`. This version MUST be independent
-of the Manifest protocol, Host API, lensX application version, and Plugin
-Manager Store format. Rust and TypeScript boundaries MUST reject a missing, old
-`0.1.0`, unknown, or incorrectly typed version and MUST NOT silently interpret
-the payload as another version or apply a fallback for `development` source.
+Registration snapshot, detail, event, error, and request payloads MUST use an independent strict version `0.3.0` and MUST reject an old version, unknown field, missing field, wrong type, or cross-operation variant. The version MUST be independent of Manifest `0.2.0`, Host API `0.2.0`, package, Manager record, and application versions. Current payloads MUST NOT contain `granted_permission_ids`, permission state, reasons, risk, or grant-mutation facts.
+
+#### Scenario: Current Registration payload is read
+- **WHEN** a trusted frontend adapter receives a complete `0.3.0` snapshot or detail
+- **THEN** it strictly validates and freezes current identity, source, lifecycle, availability, Manifest, and security diagnostics
+- **THEN** the payload contains no grant or permission authority
+
+#### Scenario: Legacy payload contains grants
+- **WHEN** the adapter receives `0.2.0`, `granted_permission_ids`, or another legacy permission field
+- **THEN** the entire payload is treated as incompatible or invalid boundary data
+- **THEN** the frontend constructs no capability or management UI from the legacy field
 
 #### Scenario: Both boundaries read a current-version payload
 
-- **WHEN** the Rust serializer and TypeScript parser read a valid shared fixture
-  with Registration Contract version `0.2.0`
-- **THEN** both boundaries accept the payload and produce the same observable
-  fields and values, including the closed source enum
+- **WHEN** the Rust serializer and TypeScript parser read a valid shared fixture with Registration Contract version `0.3.0`
+- **THEN** both boundaries accept the payload and produce the same observable fields and values, including the closed source enum
 
 #### Scenario: Frontend receives an unknown version
 
-- **WHEN** a Tauri command or event returns an old, unknown, missing, or
-  incorrectly typed Registration Contract version
+- **WHEN** a Tauri command or event returns an old, unknown, missing, or incorrectly typed Registration Contract version
 - **THEN** the TypeScript adapter rejects the payload and maps it to a stable boundary error
-- **THEN** the adapter does not publish a partially parsed snapshot, detail, or revision
+- **THEN** the adapter publishes no partially parsed snapshot, detail, or revision
 
 ### Requirement: Host MUST expose deterministic complete registration snapshots
 
@@ -118,8 +120,8 @@ response MUST carry the current revision used to produce the detail and return
 either a healthy registered detail or a quarantine detail as a strict variant.
 
 A healthy detail MUST include the complete normalized Manifest and safe Host
-facts: source, enabled intent, per-dimension compatibility, sorted and unique
-granted permission IDs, current `inactive` Runtime status, and bounded safe
+facts: source, enabled intent, per-dimension compatibility, current `inactive`
+Runtime status, and bounded safe
 diagnostics. A quarantine detail MUST contain only the opaque entry identity,
 an optional plugin ID, and the current safe quarantine diagnostic. No detail
 MUST contain an absolute installation path, package digest, Store filename,
@@ -130,13 +132,13 @@ React or Tauri object, or Host executor.
 
 - **WHEN** the caller queries with the opaque entry identity of a healthy snapshot entry
 - **THEN** the Host returns that registration's normalized Manifest, separate Host facts, and the current revision
-- **THEN** requested permissions remain part of the Manifest and granted permission IDs remain Host facts, without automatic conversion between them
+- **THEN** the current Manifest and Host facts contain no permission or grant authority
 
 #### Scenario: Read a quarantine detail
 
 - **WHEN** the caller queries with the opaque entry identity of a quarantine summary
 - **THEN** the Host returns the quarantine variant and a safe quarantine diagnostic
-- **THEN** the Host does not parse, return, or guess Manifest, enabled, permission, or Runtime data from the damaged record
+- **THEN** the Host does not parse, return, or guess Manifest, enabled, authority, or Runtime data from the damaged record
 
 #### Scenario: Entry disappears after the snapshot
 
@@ -174,26 +176,23 @@ text.
 
 ### Requirement: Runtime, lifecycle, signature, and permission decision facts MUST remain narrowly scoped
 
-Registration Contract v0 MUST express only the currently available transient
-Runtime status `inactive`, and MUST start from `inactive` after application
-recovery. It MUST NOT claim that an active session, session identity, iframe,
-RPC, or Runtime transition is implemented. It MUST NOT add a lifecycle enum,
-disableable or uninstallable policy, user enable, disable, or uninstall
-operation, signature status, trusted provenance, or permission decision. Host
-source, enabled intent, compatibility, quarantine, requested permissions, and
-the granted permission ID snapshot MUST remain independent facts.
+The Registration Contract MUST project only the current Host facts required for Pages, Actions, management, and Runtime resolution. Runtime attempts, Sessions, Ports, nonces, CSP, network, Workers, signature authority, community trust, complete package bytes, and native Host capabilities MUST remain outside the Contract in their respective boundaries. The current Contract MUST NOT project permission requests, grant snapshots, risk, or decisions because that authority has been removed.
+
+#### Scenario: Consumer reads current detail
+- **WHEN** a trusted Host consumer reads details for a healthy plugin
+- **THEN** it receives bounded facts needed for management, projection, and Runtime resolution
+- **THEN** it cannot obtain Tauri, a Host command, permission, grant, Session, or control of open Web behavior from the detail
+
+#### Scenario: Plugin source claims authority
+- **WHEN** a Manifest, Publisher, official source, remote code, or plugin message claims permission, grant, signature, or Host trust
+- **THEN** the Registration Contract does not accept or project that authority
+- **THEN** the claim does not change isolation, Host API, or Runtime lifecycle
 
 #### Scenario: Recover a record that was active in an earlier process
 
 - **WHEN** the application starts and recovers a persisted registration record
-- **THEN** the registration summary and detail both report Runtime status `inactive`
-- **THEN** the payload does not recover or guess the earlier process's session identity, pages, or call state
-
-#### Scenario: External plugin is marked enabled
-
-- **WHEN** an external registration has enabled intent and its Manifest requests permissions
-- **THEN** the payload separately represents external source, enabled intent, requested permissions, and the actual grant snapshot
-- **THEN** no external, enabled, or requested fact produces a signature, trusted, authorized, disableable, or uninstallable conclusion
+- **THEN** the registration summary and detail report no recovered active Runtime attempt
+- **THEN** the payload does not recover or guess the earlier process's Session identity, Pages, or call state
 
 ### Requirement: Successful Manager transitions MUST publish revisions and invalidation events after commit
 
@@ -267,8 +266,8 @@ The project MUST maintain one set of positive and negative Registration Contract
 fixtures consumed by both Rust serializer and deserializer tests and TypeScript
 Runtime parser tests. Fixtures MUST cover at least an empty snapshot, healthy,
 disabled, incompatible, quarantine, degraded, detail, stable error, changed
-event, unknown field, unsupported version, invalid variant, unsorted or
-duplicate grant, and sensitive-field disclosure. A dedicated root check MUST
+event, unknown field, unsupported version, invalid variant, legacy grant field,
+and sensitive-field disclosure. A dedicated root check MUST
 combine both boundaries and MUST fail when wire shape, enum, version, sorting,
 error, or security boundaries drift.
 
@@ -289,15 +288,15 @@ This capability MUST deliver only the Host-owned read model, read-only Tauri
 queries, changed-event recovery semantics, TypeScript adapter, shared fixtures,
 tests, and maintained documentation. It MUST NOT install, update, uninstall, or
 execute plugins. It MUST NOT provide user lifecycle writes, Action or Page
-projection, plugin management UI, an iframe Runtime, Host API, permission
-grants, or signature verification. It MUST NOT change existing Launcher search,
+projection, plugin management UI, an iframe Runtime, Host API, native authority,
+or signature verification. It MUST NOT change existing Launcher search,
 Dispatcher, navigation, or window presentation behavior.
 
 #### Scenario: Only Task 2.2 is complete
 
 - **WHEN** the Registration Contract passes all validation while later tasks remain unimplemented
 - **THEN** the root application can query Host registration snapshots and details and receive change notifications, but has no new plugin management page
-- **THEN** plugin Actions do not automatically enter the Launcher, Pages do not open, plugin code does not execute, and permissions are not granted
+- **THEN** plugin Actions do not automatically enter the Launcher, Pages do not open, plugin code does not execute, and no native authority is created
 
 #### Scenario: Verify existing Launcher behavior
 

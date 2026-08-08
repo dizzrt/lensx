@@ -114,22 +114,30 @@
       "compatible": "Compatible",
       "incompatible": "Incompatible",
       "none": "None",
-      "source": { "builtin": "Built in", "external": "External", "development": "Development" },
+      "source": {
+        "builtin": "Built in",
+        "external": "External",
+        "development": "Development"
+      },
       "development": {
         "title": "Plugin Development Mode",
-        "description": "Loads an unpacked, unsigned dist directory for this process only. It does not install, trust, grant permissions to, or automatically run the plugin.",
+        "description": "Loads an unpacked, unsigned dist directory for this process only. It does not install, automatically run, or grant native Host access to the plugin.",
         "toggle": "Enable Plugin Development Mode for this process",
         "processLocal": "Disabled again when lensX restarts.",
         "register": "Register development directory",
         "reload": "Reload from directory",
         "remove": "Remove development entry",
-        "unsignedDescription": "This plugin is loaded from a Host-owned snapshot of an unpacked directory. Publisher text is unverified and permissions remain separate grants.",
-        "labels": { "development": "Development", "unpacked": "Unpacked", "unsigned": "Unsigned" },
+        "unsignedDescription": "This plugin is loaded from a Host-owned snapshot of an unpacked directory. Publisher text is unverified; it uses the same open Web and closed Host boundary as installed plugins.",
+        "labels": {
+          "development": "Development",
+          "unpacked": "Unpacked",
+          "unsigned": "Unsigned"
+        },
         "feedback": {
           "enabled": "Plugin Development Mode is enabled for this process.",
           "disabled": "Plugin Development Mode is disabled and development entries were removed. Plugin data and Launcher collections were retained.",
           "cancelled": "No development directory was selected.",
-          "registered": "The development directory was registered with no permission grants.",
+          "registered": "The development directory was registered with no native Host authority.",
           "reloaded": "The development entry was reloaded from a fresh snapshot.",
           "removed": "The development entry was removed. Plugin data and Launcher collections were retained.",
           "cleanup_pending": "Authority was updated, but old snapshot cleanup is still pending.",
@@ -145,7 +153,7 @@
         "confirm": {
           "reload": {
             "title": "Reload development plugin?",
-            "description": "Reload {{name}} from its selected dist directory? Current Runtime authority will end and permission changes will be reconciled.",
+            "description": "Reload {{name}} from its selected dist directory? The current Runtime and all of its workers, connections, and sessions will end.",
             "confirm": "Reload"
           },
           "remove": {
@@ -155,43 +163,23 @@
           }
         }
       },
-      "runtime": { "inactive": "Inactive", "active": "Active", "failed": "Failed", "starting": "Starting" },
-      "replacement": { "upgrade": "Upgrade", "downgrade": "Downgrade", "reinstall": "Reinstall" },
+      "runtime": {
+        "inactive": "Inactive",
+        "active": "Active",
+        "failed": "Failed",
+        "starting": "Starting"
+      },
+      "replacement": {
+        "upgrade": "Upgrade",
+        "downgrade": "Downgrade",
+        "reinstall": "Reinstall"
+      },
       "fields": {
         "version": "Version",
         "source": "Source",
         "compatibility": "Compatibility",
         "runtime": "Runtime",
-        "permissions": "Permissions",
         "diagnostics": "Diagnostics"
-      },
-      "permissions": {
-        "readOnly": "Permission state is read-only here.",
-        "description": "Review Host risk and grant or revoke one permission at a time.",
-        "authorReason": "Plugin-provided reason",
-        "publisherUnverified": "Publisher unverified",
-        "publisherUnverifiedDescription": "Publisher text is supplied by the plugin package. It is not a signature, trusted source, or permission grant.",
-        "grant": "Grant",
-        "revoke": "Revoke",
-        "allow": "Allow this permission",
-        "deny": "Deny",
-        "laterAndInstall": "Decide later and install without grants",
-        "confirmRevoke": "Revoke permission",
-        "grantTitle": "Allow sensitive permission?",
-        "revokeTitle": "Revoke permission?",
-        "revokeImpact": "Revoking takes effect immediately. An active plugin page or pending call may close.",
-        "singlePermissionOnly": "This decision applies only to this permission and the current plugin state.",
-        "risk": {
-          "standard": "Standard risk",
-          "sensitive": "Sensitive",
-          "unknown": "Unknown"
-        },
-        "state": {
-          "granted": "Granted",
-          "not_granted": "Not granted",
-          "not_requested": "Not requested",
-          "unsupported": "Unsupported"
-        }
       },
       "diagnostics": {
         "corrupt_record": "The plugin record is corrupt.",
@@ -220,18 +208,11 @@
         "detailFailed": "Plugin details could not be loaded safely.",
         "duplicate": "This action is already in progress.",
         "installSucceeded": "Installed {{pluginId}} version {{version}}.",
-        "installPermissionsPartial": "The plugin was installed, but only some selected permissions were applied. Review the current settings before retrying.",
-        "installPermissionsFailed": "The plugin was installed without the selected permissions. Review the current settings before retrying.",
         "loadFailed": "Plugins could not be loaded safely.",
         "mutationFailed": "The plugin change could not be completed.",
         "notFound": "The plugin no longer exists.",
         "pluginEnabled": "Disable the plugin before clearing its data.",
         "replacementSucceeded": "Replaced {{pluginId}} with version {{version}}.",
-        "replacementPermissionsPartial": "The plugin was replaced, but not all selected permissions were applied. The current narrower permission state is active.",
-        "permissionGranted": "Permission granted. New plugin authority uses the refreshed state.",
-        "permissionRevoked": "Permission revoked. Active plugin pages or pending calls may have ended.",
-        "permissionUnchanged": "Permission state was already current.",
-        "permissionsDeferred": "No permission decision was saved. The plugin will continue without new grants.",
         "setEnabledSucceeded": "Plugin availability was updated.",
         "unavailable": "Installation from a local file is unavailable right now.",
         "uninstallSucceeded": "The plugin was uninstalled.",
@@ -247,9 +228,6 @@
         "replacement": {
           "title": "Confirm replacement",
           "description": "Review the version and permission changes for {{name}}.",
-          "addedPermissions": "Added permissions",
-          "retainedPermissions": "Retained grants",
-          "removedPermissions": "Removed permissions",
           "confirm": "Replace"
         },
         "uninstall": {
@@ -267,6 +245,11 @@
           "description": "Permanently clear the data owned by disabled plugin {{name}}?",
           "confirm": "Clear data"
         }
+      },
+      "trust": {
+        "title": "Install as trust",
+        "description": "Installing trusts this plugin to process data you give it in an isolated, open Web runtime. lensX does not individually approve or endorse its workers, network requests, or remote resources, while native Host access remains closed.",
+        "replacementDescription": "Replacing this plugin trusts the new package and its remote Web behavior. Native Host access remains limited to the public Host API."
       }
     },
     "save": {

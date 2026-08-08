@@ -64,7 +64,7 @@ const AUTHORING_TOOL_NODE_BUILTINS = new Set([
   'node:process',
   'node:url',
 ]);
-const PORTABLE_LENSX_SEMVER = /^(?:\^|~)?0\.1\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
+const PORTABLE_LENSX_SEMVER = /^(?:\^|~)?0\.2\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 
 const toPosixPath = (value: string): string => value.split(sep).join('/');
 

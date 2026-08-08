@@ -14,8 +14,6 @@ const app = read('src/App.tsx');
 
 for (const method of [
   'actions.open',
-  'clipboard.read',
-  'clipboard.write',
   'runtime.get_context',
   'storage.delete',
   'storage.get',

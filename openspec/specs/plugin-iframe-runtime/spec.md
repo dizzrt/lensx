@@ -87,46 +87,33 @@ complete URL, origin token, Tauri object, or Host executor.
 
 ### Requirement: Isolated iframe MUST use the exact Host-fixed capability policy
 
-An external plugin iframe MUST use exactly
-`sandbox="allow-scripts allow-same-origin"`, and `allow-same-origin` MUST take
-effect only after the isolated-origin prerequisite proves that the current
-entry browser origin differs from the Host, other plugins, and old generations.
-The Host MUST NOT add forms, popups, downloads, modals, pointer lock,
-presentation, storage access, or any top-navigation token. The iframe MUST use
-`no-referrer`, and a Host-fixed Permissions Policy MUST deny camera,
-microphone, geolocation, fullscreen, clipboard read and write, and other
-sensitive browser capabilities available on the supported platform. The
-Manifest and plugin code MUST NOT override these attributes. The Host MUST NOT
-inject the Tauri invoke key, `__TAURI_INTERNALS__`, React internals, a Resource
-or Registration adapter, or a native object.
+The plugin page MUST continue to run in a Host-created iframe with an exact sandbox, referrer policy, Permissions Policy, and isolated origin that cannot be selected through the Manifest or a plugin message. The sandbox MUST allow the current package document to execute scripts and use its real independent origin while continuing to block top-level navigation, popups, unauthorized auxiliary contexts, Host-document replacement, and cross-plugin DOM or storage access.
 
-#### Scenario: A valid module plugin runs in its isolated origin
+The iframe MUST use exactly `sandbox="allow-scripts allow-same-origin"`, with `allow-same-origin` effective only after the isolated-origin prerequisite proves that the current entry origin differs from the Host, other plugins, and old generations. It MUST use `no-referrer`; the Host MUST NOT add forms, downloads, modals, pointer lock, presentation, storage-access, or top-navigation tokens, and MUST NOT inject a Tauri invoke key, `__TAURI_INTERNALS__`, React internals, a Resource or Registration adapter, or a native object.
 
-- **WHEN** the Host creates an iframe for the current descriptor
-- **THEN** the iframe uses the exact sandbox, referrer, and Permissions Policy
-  and loads package HTML, CSS, images, classic scripts, and the ES Module
-  dependency graph
-- **THEN** the document receives ordinary browser semantics only for its own
-  isolated origin and gains no Host, other-plugin, old-generation, or additional
-  sandbox capability
+The iframe policy MUST NOT express lensX permission requests, grants, or Publisher or source privilege, and MUST NOT block ordinary Worker, network, remote-resource, Blob, Data, WASM, or origin-storage capabilities declared supported by `open-isolated-plugin-runtime`. Browser or OS device APIs outside the supported baseline MAY remain unavailable, but that unavailability MUST NOT be described as a lensX grant decision.
 
-#### Scenario: Plugin attempts to reach the parent or Host storage
+#### Scenario: Open Web plugin loads
+- **WHEN** the current plugin iframe loads and uses supported open Web capabilities
+- **THEN** the iframe runs within the Host-fixed sandbox and independent origin without reading a lensX grant
+- **THEN** the plugin cannot remove the parent document sandbox, access Host DOM or Tauri, or share another plugin origin
 
-- **WHEN** a plugin attempts to read or modify the `window.parent` DOM,
-  `frameElement`, Host React state, Host storage, a Tauri surface, or a native
-  object
-- **THEN** the browser, origin, and bootstrap boundary rejects the attempt
-  before privileged Host behavior
-- **THEN** the representative Tauri handler-hit count remains zero and Host
-  state is unchanged
+#### Scenario: Plugin declares sandbox or permission policy
+- **WHEN** a Manifest or plugin message attempts to add a sandbox token, Host bridge, top navigation, popup, shared origin, or device permission
+- **THEN** the Host ignores or rejects the input and continues using the fixed iframe isolation policy
+- **THEN** official, external, and development sources receive the same result
+
+#### Scenario: Plugin attempts to reach parent or Host storage
+
+- **WHEN** a plugin attempts to read or modify `window.parent` DOM, `frameElement`, Host React state, Host storage, a Tauri surface, or a native object
+- **THEN** the browser, origin, and bootstrap boundary rejects the attempt before privileged Host behavior
+- **THEN** representative Tauri handler-hit count remains zero and Host state is unchanged
 
 #### Scenario: Shared origin is presented to the container
 
-- **WHEN** the resolver receives the shared `lensx-plugin://localhost` form, an
-  equivalent translated host, or a URL whose exclusivity cannot be proved
+- **WHEN** the resolver receives a shared `lensx-plugin://localhost` form, an equivalent translated host, or a URL whose exclusivity cannot be proved
 - **THEN** the iframe policy validator rejects container creation
-- **THEN** the Host neither degrades by removing `allow-same-origin` nor adds
-  wildcard or null CORS to a response
+- **THEN** the Host neither degrades by removing `allow-same-origin` nor adds wildcard or null CORS to a response
 
 ### Requirement: Document navigation and package resources MUST remain current-target scoped
 
@@ -259,7 +246,7 @@ iframe MUST have a non-empty accessible title derived from the localized Page
 title and MUST fill the existing Page content slot. Shared Page context, the
 close control, and focus restoration MUST remain available. Feedback MUST use
 stable bounded codes/copy and MUST NOT reveal author HTML, a complete URL,
-blocked URI, origin/scope, path, nonce, Port content, grants, raw browser/Rust/
+blocked URI, origin/scope, path, nonce, Port content, legacy grant facts, raw browser/Rust/
 Tauri error, or stack.
 
 #### Scenario: Display loading feedback in either locale and theme
@@ -297,7 +284,7 @@ an available Plugin Page, the descriptor remains current, and the corresponding
 attempt is not failed, terminating, disposed, or in breaker cooldown. Manual
 close, provider quiescence, disable, uninstall, replacement, a relevant change
 to the current entry, Page, version, resource generation, origin URL, Runtime
-attempt or grants, load/handshake failure, unexpected Session disconnect, Home
+attempt, load/handshake failure, unexpected Session disconnect, Home
 or Search navigation, Host Page navigation, retry, Host reload, App unmount or
 graceful application exit MUST route through the same idempotent terminal
 cleanup and remove the old iframe before another is constructed. Registration
@@ -332,7 +319,7 @@ reuse.
 
 - **WHEN** Page invalidation, provider quiescence, disable, uninstall,
   replacement, or a relevant entry, Page, version, resource generation, origin
-  URL, Runtime attempt, availability or grant change occurs
+  URL, Runtime attempt, or availability change occurs
 - **THEN** the old iframe, timers, listeners, navigation lease and bound Runtime
   Session are revoked without retaining a second active Runtime
 - **THEN** Home, Search and a `lensx.core` Host Page still create no external
@@ -342,7 +329,7 @@ reuse.
 
 - **WHEN** another plugin changes the global Registration revision while the
   current Plugin Page's entry, Page, version, resource generation, origin URL,
-  Runtime attempt, availability and grants remain unchanged
+  Runtime attempt and availability remain unchanged
 - **THEN** the current iframe, navigation lease and bound Runtime Session remain
   active and are not recreated solely because the global revision changed
 - **THEN** the Host still refreshes and compares relevant current facts rather
@@ -396,7 +383,7 @@ isolated-origin iframe container, fixed sandbox, Permissions Policy, and
 navigation boundary, container state, retry, one-active-Page lifecycle, tests,
 and maintained documentation. It MUST NOT define a Runtime Session, message
 source, identity, nonce, or MessagePort, SDK iframe transport, JSON-RPC, Host
-API, permission dispatch, pending calls, a complete CSP, general timeout or
+API, native-authority dispatch, pending calls, a complete CSP, general timeout or
 crash recovery, external opener, background Runtime, sidecar, formal template,
 or management UI.
 
@@ -407,5 +394,14 @@ or management UI.
 - **THEN** the user can open, view, retry, and close an isolated local plugin UI
   in the existing Page surface
 - **THEN** the plugin still cannot establish trusted Host communication, call a
-  Host API, obtain a permission decision, run background work, or claim that a
+  Host API, obtain native authority, run background work, or claim that a
   complete CSP or lifecycle has shipped
+
+### Requirement: Iframe lifetime MUST own every supported child execution context
+
+The current iframe MUST be the sole page-execution owner of its Dedicated Workers, network activity, Blob URLs, and browser-origin state. The Host MUST revoke the Session, Port, and navigation lease before the iframe attempt ends and MUST prove that an old child context cannot affect the next attempt, another plugin, or the Host.
+
+#### Scenario: Plugin switch occurs while Worker is active
+- **WHEN** the user switches to another plugin Page while the current plugin still has an active Worker
+- **THEN** the Host makes the old attempt terminal and removes the old iframe before creating the new iframe
+- **THEN** at most one plugin Page attempt owns the current Session and navigation lease at any observable time

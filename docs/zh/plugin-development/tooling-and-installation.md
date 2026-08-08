@@ -30,7 +30,7 @@ lensx-plugin inspect ./my-plugin/artifacts/com.example.my-plugin-0.1.0.lxp
 
 `valid`、`incompatible` 与 `invalid` 是不同结论。CLI compatible 只证明公共 payload
 acceptance。Host 会在安装前重新检查所选字节，并继续拥有 source、compatibility、
-registration、grant 和 Runtime state 的 authority。
+registration 和 Runtime state 的 authority。
 
 ## Development Mode
 
@@ -45,18 +45,18 @@ Host 校验后复制一个 immutable process-local generation。重新构建后�
 即使字节未变化，reload 也会创建 fresh generation 和 Runtime attempt；reload 失败则保留
 之前的 current generation。
 
-这里没有 watch、HMR、自动 reload、持久 development registration 或更宽松权限模式。
+这里没有 watch、HMR、自动 reload、持久 development registration 或更宽松 Runtime 模式。
 移除 development registration 不会卸载正式 package，也不会清除插件数据。
 
 ## 本地安装
 
 使用 `pack` 生成 canonical `.lxp` 并 inspect，然后在 Settings 选择 **从文件安装**。
-Host prepare 精确的已选字节，展示未验证 publisher 和 requested permissions，接受显式用户决定，
-并只提交该 prepared candidate。安装以空 grant 开始；随后才通过 Host permission service 应用
-用户选择的敏感权限。
+Host prepare 精确的已选字节，展示未验证 publisher 和 open-Web trust notice，接受显式用户决定，
+并只提交该 prepared candidate。notice 说明 lensX 会隔离 Host 与其他插件 authority，但不会审核
+或逐项授权 Worker、网络、远程资源、Blob/Data、WASM 或浏览器 origin storage 行为。
 
-commit 前取消不会创建 registration。commit 后的权限应用失败可能保留已安装 package 与更窄的
-实际 grant 集合；UI 会报告 partial result，而不会伪装 rollback 或 replay。
+commit 前取消不会创建 registration。成功 commit 会发布一个持久、无 permission 的 registration；
+不存在 commit 后 grant 阶段。
 
 ## 边界对比
 
@@ -67,9 +67,8 @@ commit 前取消不会创建 registration。commit 后的权限应用失败可�
 | 生命周期 | Process-local | 持久化且可管理 |
 | 刷新 | 显式手动 reload | 显式 replacement 工作流 |
 | 是否安装 package | 否 | 是 |
-| Grant | Process-local current facts | 持久 Host grant snapshot |
+| Permission/grant state | 无 | 无 |
 | Runtime 安全 | 与 production 相同 | 与 production 相同 |
 
-生命周期和权限细节见 [Runtime、权限与安全](runtime-permissions-security.md)，分类失败见
+生命周期和开放 Web 细节见 [Runtime 与安全](runtime-permissions-security.md)，分类失败见
 [兼容与错误](compatibility-and-errors.md)。
-

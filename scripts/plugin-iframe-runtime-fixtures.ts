@@ -61,7 +61,7 @@ const originProbe = (kind: 'normal' | 'malicious') => `
 `;
 
 const manifest = (kind: FixtureKind) => ({
-  manifest_version: '0.1.0',
+  manifest_version: '0.2.0',
   plugin_id: `com.lensx.fixture.runtime.${kind}`,
   version: '1.0.0',
   display: {
@@ -81,24 +81,21 @@ const manifest = (kind: FixtureKind) => ({
   },
   compatibility: {
     lensx: { min_version: '0.1.0', max_version_exclusive: '0.2.0' },
-    host_api: { min_version: '0.1.0', max_version_exclusive: '0.2.0' },
+    host_api: { min_version: '0.2.0', max_version_exclusive: '0.3.0' },
   },
   runtime: { kind: 'iframe', entry: 'dist/index.html' },
-  requested_permissions: [],
   contributes: {
     pages: [
       {
         id: 'home',
         title: { 'en-US': 'Runtime Fixture', 'zh-CN': '运行时夹具' },
         route: '/',
-        required_permissions: [],
       },
       {
         id: 'route_probe',
         title: { 'en-US': 'Route Probe', 'zh-CN': '路由探测' },
         route: '/route-probe',
         parent_page_id: 'home',
-        required_permissions: [],
       },
     ],
     actions: [
@@ -200,7 +197,143 @@ const privateSessionConsumer = `
 `;
 
 const normalReporter = `
-      window.addEventListener('load', () => {
+      const workerRoundtrip = (url, options) => new Promise((resolve) => {
+        let worker;
+        try { worker = new Worker(url, options); } catch { resolve(false); return; }
+        const timer = setTimeout(() => { worker.terminate(); resolve(false); }, 2000);
+        worker.onmessage = ({ data }) => {
+          clearTimeout(timer);
+          worker.terminate();
+          resolve(data === 'lensx-open-web-worker-ok');
+        };
+        worker.onerror = () => { clearTimeout(timer); worker.terminate(); resolve(false); };
+        worker.postMessage('lensx-open-web-worker');
+      });
+      const workerBurstRoundtrip = (url, count = 128) => new Promise((resolve) => {
+        let worker;
+        try { worker = new Worker(url); } catch { resolve(false); return; }
+        const received = new Set();
+        const timer = setTimeout(() => { worker.terminate(); resolve(false); }, 3000);
+        worker.onmessage = ({ data }) => {
+          if (typeof data?.burst !== 'number') return;
+          received.add(data.burst);
+          if (received.size !== count) return;
+          clearTimeout(timer);
+          worker.terminate();
+          resolve(true);
+        };
+        worker.onerror = () => { clearTimeout(timer); worker.terminate(); resolve(false); };
+        for (let index = 0; index < count; index += 1) worker.postMessage({ burst: index });
+      });
+      const imageLoads = (url) => new Promise((resolve) => {
+        const image = new Image();
+        const timer = setTimeout(() => resolve(false), 2000);
+        image.onload = () => { clearTimeout(timer); resolve(true); };
+        image.onerror = () => { clearTimeout(timer); resolve(false); };
+        image.src = url;
+      });
+      const indexedDbRoundtrip = () => new Promise((resolve) => {
+        const timer = setTimeout(() => resolve(false), 2000);
+        const request = indexedDB.open('lensx-open-web-runtime', 1);
+        request.onupgradeneeded = () => request.result.createObjectStore('values');
+        request.onerror = () => { clearTimeout(timer); resolve(false); };
+        request.onsuccess = () => {
+          const database = request.result;
+          const transaction = database.transaction('values', 'readwrite');
+          const store = transaction.objectStore('values');
+          store.put('ok', 'proof');
+          const read = store.get('proof');
+          read.onerror = () => { clearTimeout(timer); database.close(); resolve(false); };
+          read.onsuccess = () => { clearTimeout(timer); database.close(); resolve(read.result === 'ok'); };
+        };
+      });
+      const remoteModuleRoundtrip = async () => {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const loaded = await Promise.race([
+            import('https://esm.sh/is-number@7.0.0?bundle&target=es2022&attempt=' + attempt)
+              .then(({ default: isNumber }) => isNumber(42) === true && isNumber('lensx') === false)
+              .catch(() => false),
+            new Promise((resolve) => setTimeout(() => resolve(false), 5000)),
+          ]);
+          if (loaded) return true;
+        }
+        return false;
+      };
+      window.addEventListener('load', async () => {
+        const blobWorkerUrl = URL.createObjectURL(new Blob([
+          "self.onmessage = ({ data }) => self.postMessage(data === 'lensx-open-web-worker' ? 'lensx-open-web-worker-ok' : 'unexpected')",
+        ], { type: 'text/javascript' }));
+        const dataWorkerUrl = "data:text/javascript," + encodeURIComponent(
+          "self.onmessage = ({ data }) => self.postMessage(data === 'lensx-open-web-worker' ? 'lensx-open-web-worker-ok' : 'unexpected')",
+        );
+        const blobImageUrl = URL.createObjectURL(new Blob([
+          '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>',
+        ], { type: 'image/svg+xml' }));
+        const dataImageUrl = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
+        const persistentWorkerUrl = URL.createObjectURL(new Blob([
+          "self.onmessage = () => setInterval(() => self.postMessage('heartbeat'), 20)",
+        ], { type: 'text/javascript' }));
+        let persistentWorker;
+        const persistentWorkerStarted = new Promise((resolve) => {
+          const timer = setTimeout(() => resolve(false), 2000);
+          try {
+            persistentWorker = new Worker(persistentWorkerUrl);
+            persistentWorker.onmessage = () => {
+              clearTimeout(timer);
+              window.parent.postMessage(Object.freeze({
+                namespace: 'lensx.plugin-open-web-worker-heartbeat',
+              }), '*');
+              resolve(true);
+            };
+            persistentWorker.onerror = () => { clearTimeout(timer); resolve(false); };
+            persistentWorker.postMessage('start');
+          } catch { clearTimeout(timer); resolve(false); }
+        });
+        const [
+          packageWorker,
+          blobWorker,
+          dataWorker,
+          workerBurst,
+          indexedDbAllowed,
+          blobImage,
+          dataImage,
+          remoteModule,
+          connectionChurn,
+          activeWorker,
+        ] =
+          await Promise.all([
+            workerRoundtrip('./worker.js'),
+            workerRoundtrip(blobWorkerUrl),
+            workerRoundtrip(dataWorkerUrl),
+            workerBurstRoundtrip('./worker.js'),
+            indexedDbRoundtrip(),
+            imageLoads(blobImageUrl),
+            imageLoads(dataImageUrl),
+            remoteModuleRoundtrip(),
+            Promise.all(Array.from({ length: 32 }, () =>
+              fetch('./data.json', { cache: 'no-store' })
+                .then((response) => response.json())
+                .then((value) => value.runtime === 'fixture')
+                .catch(() => false),
+            )).then((results) => results.every(Boolean)),
+            persistentWorkerStarted,
+          ]);
+        let fetchAllowed = false;
+        try {
+          const fetchResponse = await fetch('./data.json');
+          fetchAllowed = fetchResponse.ok && (await fetchResponse.json()).runtime === 'fixture';
+        } catch {}
+        let websocketConstructed = false;
+        try {
+          const socket = new WebSocket('wss://example.invalid/lensx-open-web-probe');
+          websocketConstructed = true;
+          socket.onerror = () => socket.close();
+        } catch {}
+        const wasmAllowed = (await WebAssembly.instantiate(
+          new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]),
+        )).instance instanceof WebAssembly.Instance;
+        URL.revokeObjectURL(blobWorkerUrl);
+        URL.revokeObjectURL(blobImageUrl);
         window.parent.postMessage(Object.freeze({
           ...window.__LENSX_EARLY_RUNTIME_PROBE__,
           namespace: 'lensx.plugin-iframe-runtime-harness',
@@ -215,6 +348,25 @@ const normalReporter = `
             es_module_allowed: document.documentElement.dataset.module === 'loaded',
             style_allowed: getComputedStyle(document.documentElement).getPropertyValue('--lensx-runtime-fixture').trim() === 'loaded',
             image_allowed: document.querySelector('img').complete && document.querySelector('img').naturalWidth > 0,
+            package_worker_allowed: packageWorker,
+            blob_worker_allowed: blobWorker,
+            data_worker_allowed: dataWorker,
+            worker_message_roundtrip: packageWorker && blobWorker && dataWorker,
+            worker_message_burst: workerBurst,
+            active_worker_started: activeWorker,
+            fetch_allowed: fetchAllowed,
+            fetch_connection_churn: connectionChurn,
+            websocket_constructed: websocketConstructed,
+            blob_content_allowed: blobImage,
+            data_content_allowed: dataImage,
+            wasm_allowed: wasmAllowed,
+            indexeddb_roundtrip: indexedDbAllowed,
+            author_csp_can_narrow: true,
+            remote_module_allowed: remoteModule,
+          }),
+          unsupported_evidence: Object.freeze({
+            shared_worker: typeof SharedWorker === 'undefined' ? 'unsupported_by_target_webview' : 'not_in_runtime_baseline',
+            service_worker: 'not_available_for_scoped_custom-scheme-runtime',
           }),
         }), '*');
       });
@@ -295,27 +447,13 @@ await attempt('camera', () => navigator.mediaDevices.getUserMedia({ video: true 
 await attempt('microphone', () => navigator.mediaDevices.getUserMedia({ audio: true }));
 await attempt('geolocation', () => new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject)));
 await attempt('fullscreen', () => document.documentElement.requestFullscreen());
-await expectViolation('remote_script_blocked', ['script-src', 'script-src-elem'], () => {
-  const script = document.createElement('script'); script.src = 'https://example.invalid/runtime.js'; document.head.append(script);
-});
 cspChecks.inline_script_blocked = window.__LENSX_INLINE_SCRIPT_RAN__ !== true;
 await expectViolation('eval_blocked', ['script-src'], () => { Function('return 1')(); });
-await expectViolation('connect_blocked', ['connect-src'], () => { void fetch('https://example.invalid/runtime'); });
-await expectViolation('worker_blocked', ['worker-src'], () => { void new Worker('./worker.js'); });
-await expectViolation('frame_blocked', ['frame-src', 'child-src'], () => {
-  const frame = document.createElement('iframe'); frame.src = './frame.html'; document.body.append(frame);
-});
 await expectViolation('object_blocked', ['object-src'], () => {
   const object = document.createElement('object'); object.data = './image.svg'; document.body.append(object);
 });
 await expectViolation('base_blocked', ['base-uri'], () => {
   const base = document.createElement('base'); base.href = 'https://example.invalid/'; document.head.append(base);
-});
-await expectViolation('data_blocked', ['img-src'], () => {
-  const image = document.createElement('img'); image.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>'; document.body.append(image);
-});
-await expectViolation('blob_blocked', ['img-src'], () => {
-  const image = document.createElement('img'); image.src = URL.createObjectURL(new Blob(['x'], { type: 'image/svg+xml' })); document.body.append(image);
 });
 const formLocation = location.href;
 document.querySelector('form').requestSubmit();
@@ -409,6 +547,21 @@ const fixtureInputs = [
       'message_port_transfer',
       'rpc_limit_rejection',
       'rpc_recovery_after_limit',
+      'package_worker',
+      'blob_worker',
+      'data_worker',
+      'worker_message',
+      'worker_message_burst',
+      'fetch',
+      'connection_churn',
+      'remote_module',
+      'websocket',
+      'blob_content',
+      'data_content',
+      'wasm',
+      'indexeddb',
+      'author_owned_stricter_csp',
+      'bounded_unsupported_evidence',
     ],
     files: [
       { path: 'manifest.json', bytes: manifestBytes(manifest('normal')) },
@@ -424,6 +577,18 @@ const fixtureInputs = [
       { path: 'dist/index.html', bytes: bytes(normalHtml) },
       { path: 'dist/private-session.js', bytes: bytes(privateSessionConsumer) },
       { path: 'dist/report.js', bytes: bytes(normalReporter) },
+      {
+        path: 'dist/worker.js',
+        bytes: bytes(
+          "self.onmessage = ({ data }) => { if (typeof data?.burst === 'number') self.postMessage({ burst: data.burst }); else self.postMessage(data === 'lensx-open-web-worker' ? 'lensx-open-web-worker-ok' : 'unexpected'); };\n",
+        ),
+      },
+      {
+        path: 'dist/strict-policy.html',
+        bytes: bytes(
+          '<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'self\'"><title>Author-owned stricter CSP</title>\n',
+        ),
+      },
       {
         path: 'dist/module-dependency.js',
         bytes: bytes("export const moduleValue = 'loaded';\n"),
@@ -471,16 +636,10 @@ const fixtureInputs = [
       'cross_plugin_session_forgery',
       'old_generation_session_replay',
       'wrong_origin_bootstrap',
-      'csp_remote_script',
       'csp_inline_script',
       'csp_eval',
-      'csp_connect',
-      'csp_worker',
-      'csp_frame',
       'csp_object',
       'csp_base',
-      'csp_data',
-      'csp_blob',
       'csp_form',
       'rpc_limit_rejection',
       'rpc_recovery_after_limit',
@@ -519,7 +678,7 @@ for (const fixture of fixtureInputs) {
 }
 outputs.set(
   'expectations.json',
-  Buffer.from(`${JSON.stringify({ fixture_version: '0.1.0', packages: expectations }, null, 2)}\n`, 'utf8'),
+  Buffer.from(`${JSON.stringify({ fixture_version: '0.2.0', packages: expectations }, null, 2)}\n`, 'utf8'),
 );
 
 const listFiles = (directory: string): string[] => {

@@ -1,6 +1,6 @@
 {
   "name": "@lensx/plugin-ui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Optional React and Semi Design UI foundation for lensX plugins.",
   "keywords": [
     "lensx",
@@ -51,7 +51,7 @@
     "@douyinfe/semi-ui": "^2.101.1"
   },
   "peerDependencies": {
-    "@lensx/plugin-sdk": "^0.1.0",
+    "@lensx/plugin-sdk": "^0.2.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

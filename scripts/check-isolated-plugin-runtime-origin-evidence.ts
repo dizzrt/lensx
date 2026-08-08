@@ -70,7 +70,8 @@ for (const fixture of fixtures) {
   const raw = readFileSync(join(evidenceRoot, `${fixture}.json`), 'utf8');
   if (forbiddenValue.test(raw)) fail(`${fixture} contains a raw URL, token, identity, or local path`);
   const value = JSON.parse(raw) as Record<string, unknown>;
-  if (JSON.stringify(Object.keys(value)) !== JSON.stringify(expectedKeys)) fail(`${fixture} field set drifted`);
+  const fixtureKeys = expectedKeys.flatMap((key) => (key === 'csp_checks' ? [key, 'unsupported_evidence'] : [key]));
+  if (JSON.stringify(Object.keys(value)) !== JSON.stringify(fixtureKeys)) fail(`${fixture} field set drifted`);
   if (
     value.evidence_version !== '0.1.0' ||
     value.os !== 'macos' ||
@@ -93,20 +94,28 @@ for (const fixture of fixtures) {
   }
   const expectedCspChecks =
     fixture === 'malicious'
-      ? [
-          'base_blocked',
-          'blob_blocked',
-          'connect_blocked',
-          'data_blocked',
-          'eval_blocked',
-          'form_blocked',
-          'frame_blocked',
-          'inline_script_blocked',
-          'object_blocked',
-          'remote_script_blocked',
-          'worker_blocked',
-        ]
-      : ['classic_script_allowed', 'es_module_allowed', 'image_allowed', 'style_allowed'];
+      ? ['base_blocked', 'eval_blocked', 'form_blocked', 'inline_script_blocked', 'object_blocked']
+      : [
+          'active_worker_started',
+          'author_csp_can_narrow',
+          'blob_content_allowed',
+          'blob_worker_allowed',
+          'classic_script_allowed',
+          'data_content_allowed',
+          'data_worker_allowed',
+          'es_module_allowed',
+          'fetch_allowed',
+          'fetch_connection_churn',
+          'image_allowed',
+          'indexeddb_roundtrip',
+          'package_worker_allowed',
+          'remote_module_allowed',
+          'style_allowed',
+          'wasm_allowed',
+          'websocket_constructed',
+          'worker_message_burst',
+          'worker_message_roundtrip',
+        ];
   const cspChecks = value.csp_checks;
   if (
     typeof cspChecks !== 'object' ||
@@ -131,6 +140,13 @@ for (const fixture of fixtures) {
     fail(`${fixture} resource path summary is invalid`);
   }
   if (fixture !== 'malicious') {
+    const unsupported = value.unsupported_evidence as Record<string, unknown> | undefined;
+    if (
+      unsupported?.service_worker !== 'not_available_for_scoped_custom-scheme-runtime' ||
+      !['unsupported_by_target_webview', 'not_in_runtime_baseline'].includes(String(unsupported?.shared_worker))
+    ) {
+      fail(`${fixture} unsupported browser evidence drifted`);
+    }
     for (const key of [
       'css_loaded',
       'image_loaded',
@@ -143,6 +159,8 @@ for (const fixture of fixtures) {
     for (const path of ['dist/index.html', 'dist/module.js', 'dist/module-dependency.js']) {
       if (!resources.includes(path)) fail(`${fixture} did not request ${path}`);
     }
+  } else if (JSON.stringify(value.unsupported_evidence) !== '{}') {
+    fail('malicious fixture must not claim unsupported open-Web evidence');
   }
 }
 

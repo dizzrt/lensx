@@ -14,7 +14,6 @@ export const HOST_PAGE_OWNER_ID = 'lensx.core';
 
 const OWNER_PATTERN = /^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)+$/u;
 const PAGE_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/u;
-const PERMISSION_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,254}$/u;
 
 const pageKey = ({ owner_id: ownerId, page_id: pageId }: HostPageTarget) => `${ownerId}/${pageId}`;
 
@@ -41,7 +40,6 @@ const clonePage = (page: PageDescriptor): PageDescriptor =>
     title: cloneLocalizedText(page.title),
     route: page.route,
     ...(page.parent ? { parent: cloneTarget(page.parent) } : {}),
-    required_permission_ids: Object.freeze([...page.required_permission_ids]),
     available: page.available,
   });
 
@@ -92,12 +90,7 @@ const validatePluginBatch = (providerOwner: string, batch: PageProviderBatch): r
       !isLocalizedText(page.title) ||
       typeof page.route !== 'string' ||
       !page.route.startsWith('/') ||
-      typeof page.available !== 'boolean' ||
-      !Array.isArray(page.required_permission_ids) ||
-      page.required_permission_ids.some((permissionId) => !PERMISSION_ID_PATTERN.test(permissionId)) ||
-      page.required_permission_ids.some((permissionId, permissionIndex) =>
-        permissionIndex > 0 ? page.required_permission_ids[permissionIndex - 1] >= permissionId : false,
-      )
+      typeof page.available !== 'boolean'
     ) {
       diagnostics.push(diagnostic('invalid_descriptor', base, 'Page descriptor is invalid.'));
     }
@@ -130,7 +123,6 @@ const createHostResolution = (page: HostPageDefinition): PageResolution =>
         page.title ?? { 'en-US': `${page.page_id.slice(0, 1).toUpperCase()}${page.page_id.slice(1)}` },
       ),
       route: page.route ?? `/${page.page_id}`,
-      required_permission_ids: Object.freeze([]),
       available: page.enabled,
     }),
   });

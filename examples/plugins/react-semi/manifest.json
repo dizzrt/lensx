@@ -1,5 +1,5 @@
 {
-  "manifest_version": "0.1.0",
+  "manifest_version": "0.2.0",
   "plugin_id": "dev.lensx.template.react-semi",
   "version": "0.1.0",
   "display": {
@@ -23,15 +23,14 @@
       "max_version_exclusive": "0.2.0"
     },
     "host_api": {
-      "min_version": "0.1.0",
-      "max_version_exclusive": "0.2.0"
+      "min_version": "0.2.0",
+      "max_version_exclusive": "0.3.0"
     }
   },
   "runtime": {
     "kind": "iframe",
     "entry": "index.html"
   },
-  "requested_permissions": [],
   "contributes": {
     "pages": [
       {
@@ -40,8 +39,7 @@
           "en-US": "React and Semi starter",
           "zh-CN": "React 与 Semi 起步模板"
         },
-        "route": "/",
-        "required_permissions": []
+        "route": "/"
       }
     ],
     "actions": [

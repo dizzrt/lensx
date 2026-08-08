@@ -23,7 +23,7 @@ use std::{
 use tauri::{AppHandle, Manager, Runtime};
 
 const PLUGIN_MANAGER_DIRECTORY: &str = "plugin-manager";
-const RECORD_FORMAT_VERSION: u32 = 1;
+const RECORD_FORMAT_VERSION: u32 = 2;
 const RECORD_FILE_EXTENSION: &str = "json";
 const MAX_DIAGNOSTICS: usize = 32;
 static TEMP_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -154,7 +154,6 @@ pub struct PluginRegistrationFacts {
     pub payload: PluginRegistrationPayload,
     pub source: PluginSource,
     pub enabled: bool,
-    pub granted_permission_ids: Vec<String>,
     pub diagnostics: Vec<PluginManagerDiagnostic>,
 }
 
@@ -165,25 +164,6 @@ impl PluginRegistrationFacts {
         source: PluginSource,
         enabled: bool,
     ) -> Result<Self, PluginManagerDiagnostic> {
-        Self::with_grants(
-            installation_path,
-            package_digest,
-            source,
-            enabled,
-            Vec::new(),
-        )
-    }
-
-    pub fn with_grants(
-        installation_path: impl Into<String>,
-        package_digest: PackageDigest,
-        source: PluginSource,
-        enabled: bool,
-        granted_permission_ids: Vec<String>,
-    ) -> Result<Self, PluginManagerDiagnostic> {
-        let mut granted_permission_ids = granted_permission_ids;
-        granted_permission_ids.sort();
-        granted_permission_ids.dedup();
         let facts = Self {
             payload: PluginRegistrationPayload::InstalledPackage {
                 installation_path: installation_path.into(),
@@ -191,7 +171,6 @@ impl PluginRegistrationFacts {
             },
             source,
             enabled,
-            granted_permission_ids,
             diagnostics: Vec::new(),
         };
         facts.validate()?;
@@ -204,11 +183,7 @@ impl PluginRegistrationFacts {
         snapshot_identity: String,
         source_directory: PathBuf,
         enabled: bool,
-        granted_permission_ids: Vec<String>,
     ) -> Result<Self, PluginManagerDiagnostic> {
-        let mut granted_permission_ids = granted_permission_ids;
-        granted_permission_ids.sort();
-        granted_permission_ids.dedup();
         let facts = Self {
             payload: PluginRegistrationPayload::DevelopmentSnapshot {
                 snapshot_root,
@@ -217,7 +192,6 @@ impl PluginRegistrationFacts {
             },
             source: PluginSource::Development,
             enabled,
-            granted_permission_ids,
             diagnostics: Vec::new(),
         };
         facts.validate()?;
@@ -289,11 +263,6 @@ impl PluginRegistrationFacts {
             }
         };
         if !payload_valid
-            || !is_sorted_unique(&self.granted_permission_ids)
-            || self
-                .granted_permission_ids
-                .iter()
-                .any(|permission_id| !is_safe_permission_id(permission_id))
             || self.diagnostics.len() > MAX_DIAGNOSTICS
             || self
                 .diagnostics
@@ -319,18 +288,6 @@ fn is_safe_token(value: &str) -> bool {
         && value.bytes().all(|byte| {
             byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-' || byte == b'_'
         })
-}
-
-fn is_safe_permission_id(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 255
-        && value.bytes().all(|byte| {
-            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'-' | b'_')
-        })
-}
-
-fn is_sorted_unique(values: &[String]) -> bool {
-    values.windows(2).all(|pair| pair[0] < pair[1])
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -394,19 +351,6 @@ pub(crate) struct PluginManagerReplacement {
     pub change: PluginRegistrationChangedEvent,
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct PluginManagerGrantMutation {
-    pub change: Option<PluginRegistrationChangedEvent>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum PluginManagerPermissionCheckError {
-    InvalidIdentity,
-    PermissionDenied,
-    StaleSession,
-    Unavailable,
-}
-
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PluginManagerRecoveryReport {
     pub degraded: bool,
@@ -440,7 +384,7 @@ pub(crate) enum PluginManagerResourceProjectionError {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
-struct PluginRecordV1 {
+struct PluginRecordV2 {
     format_version: u32,
     record_key: String,
     manifest: NormalizedPluginManifest,
@@ -455,12 +399,10 @@ struct InstalledPluginRegistrationRecordFacts {
     source: PluginSource,
     enabled: bool,
     #[serde(default)]
-    granted_permission_ids: Vec<String>,
-    #[serde(default)]
     diagnostics: Vec<PluginManagerDiagnostic>,
 }
 
-impl PluginRecordV1 {
+impl PluginRecordV2 {
     fn from_registration(
         registration: &PluginRegistration,
     ) -> Result<Self, PluginManagerDiagnostic> {
@@ -477,7 +419,6 @@ impl PluginRecordV1 {
                 package_digest: package_digest.clone(),
                 source: registration.facts.source,
                 enabled: registration.facts.enabled,
-                granted_permission_ids: registration.facts.granted_permission_ids.clone(),
                 diagnostics: registration.facts.diagnostics.clone(),
             },
         })
@@ -493,7 +434,6 @@ impl InstalledPluginRegistrationRecordFacts {
             },
             source: self.source,
             enabled: self.enabled,
-            granted_permission_ids: self.granted_permission_ids,
             diagnostics: self.diagnostics,
         };
         facts.validate()?;
@@ -836,7 +776,7 @@ impl PluginManager {
         entry_id: &str,
         expected_revision: &str,
         manifest: NormalizedPluginManifest,
-        mut facts: PluginRegistrationFacts,
+        facts: PluginRegistrationFacts,
     ) -> Result<PluginManagerReplacement, PluginManagerDiagnostic> {
         self.reject_degraded_write()?;
         facts.validate()?;
@@ -872,18 +812,6 @@ impl PluginManager {
                 PluginManagerDiagnosticPhase::Validate,
             ));
         }
-        let requested = manifest
-            .requested_permissions
-            .iter()
-            .map(|request| request.permission_id.as_str())
-            .collect::<std::collections::BTreeSet<_>>();
-        facts.granted_permission_ids = current
-            .facts
-            .granted_permission_ids
-            .iter()
-            .filter(|permission| requested.contains(permission.as_str()))
-            .cloned()
-            .collect();
         facts.validate()?;
         let registration = PluginRegistration {
             manifest,
@@ -1058,138 +986,6 @@ impl PluginManager {
         ))
     }
 
-    pub(crate) fn set_permission_grant(
-        &self,
-        entry_id: &str,
-        expected_revision: &str,
-        permission_id: &str,
-        granted: bool,
-        host_supported: bool,
-    ) -> Result<PluginManagerGrantMutation, PluginManagerDiagnostic> {
-        self.reject_degraded_write()?;
-        if !is_safe_permission_id(permission_id) {
-            return Err(PluginManagerDiagnostic::new(
-                PluginManagerDiagnosticCode::InvalidState,
-                PluginManagerDiagnosticPhase::Validate,
-            ));
-        }
-        let mut snapshot = self.lock_snapshot();
-        if snapshot.revision.to_string() != expected_revision {
-            return Err(PluginManagerDiagnostic::new(
-                PluginManagerDiagnosticCode::StaleRevision,
-                PluginManagerDiagnosticPhase::Validate,
-            ));
-        }
-        let entry = Self::resolve_lifecycle_entry_locked(&snapshot, entry_id)?;
-        let PluginManagerLifecycleEntry::Healthy {
-            plugin_id,
-            mut registration,
-            ..
-        } = entry
-        else {
-            return Err(PluginManagerDiagnostic::new(
-                PluginManagerDiagnosticCode::InvalidState,
-                PluginManagerDiagnosticPhase::Validate,
-            ));
-        };
-        let currently_granted = registration
-            .facts
-            .granted_permission_ids
-            .binary_search_by(|candidate| candidate.as_str().cmp(permission_id))
-            .is_ok();
-        if currently_granted == granted {
-            return Ok(PluginManagerGrantMutation { change: None });
-        }
-        if granted
-            && (!host_supported
-                || !registration
-                    .manifest
-                    .requested_permissions
-                    .iter()
-                    .any(|request| request.permission_id == permission_id))
-        {
-            return Err(PluginManagerDiagnostic::new(
-                PluginManagerDiagnosticCode::InvalidState,
-                PluginManagerDiagnosticPhase::Validate,
-            ));
-        }
-        if granted {
-            registration
-                .facts
-                .granted_permission_ids
-                .push(permission_id.to_owned());
-            registration.facts.granted_permission_ids.sort();
-            registration.facts.granted_permission_ids.dedup();
-        } else {
-            registration
-                .facts
-                .granted_permission_ids
-                .retain(|candidate| candidate != permission_id);
-        }
-        registration.facts.validate()?;
-        self.persist_registration(&registration)?;
-        snapshot
-            .healthy
-            .insert(plugin_id.clone(), registration.clone());
-        let change = snapshot.commit_relevant_change(&plugin_id);
-        Ok(PluginManagerGrantMutation {
-            change: Some(change),
-        })
-    }
-
-    pub(crate) fn authorize_permission_call(
-        &self,
-        entry_id: &str,
-        plugin_id: &str,
-        version: &str,
-        session_revision: &str,
-        permission_id: &str,
-    ) -> Result<(), PluginManagerPermissionCheckError> {
-        if self.recovery_report.degraded {
-            return Err(PluginManagerPermissionCheckError::Unavailable);
-        }
-        let session_revision = session_revision
-            .parse::<u64>()
-            .map_err(|_| PluginManagerPermissionCheckError::InvalidIdentity)?;
-        let snapshot = self.lock_snapshot();
-        let registration = snapshot
-            .healthy
-            .get(plugin_id)
-            .ok_or(PluginManagerPermissionCheckError::InvalidIdentity)?;
-        if healthy_entry_id(registration) != entry_id || registration.manifest.version != version {
-            return Err(PluginManagerPermissionCheckError::InvalidIdentity);
-        }
-        if session_revision
-            < snapshot
-                .relevant_revisions
-                .get(plugin_id)
-                .copied()
-                .unwrap_or_default()
-        {
-            return Err(PluginManagerPermissionCheckError::StaleSession);
-        }
-        if !registration.facts.enabled
-            || !registration.compatibility.lensx
-            || !registration.compatibility.host_api
-        {
-            return Err(PluginManagerPermissionCheckError::Unavailable);
-        }
-        if !registration
-            .manifest
-            .requested_permissions
-            .iter()
-            .any(|request| request.permission_id == permission_id)
-            || registration
-                .facts
-                .granted_permission_ids
-                .binary_search_by(|candidate| candidate.as_str().cmp(permission_id))
-                .is_err()
-        {
-            return Err(PluginManagerPermissionCheckError::PermissionDenied);
-        }
-        Ok(())
-    }
-
     pub(crate) fn remove_entry(
         &self,
         entry_id: &str,
@@ -1262,7 +1058,7 @@ impl PluginManager {
         if registration.facts.installed_payload().is_none() {
             return Ok(());
         }
-        let record = PluginRecordV1::from_registration(registration)?;
+        let record = PluginRecordV2::from_registration(registration)?;
         self.store.write_record(&record)
     }
 
@@ -1360,7 +1156,7 @@ fn recover_candidate(
             ),
         });
     }
-    let record: PluginRecordV1 = serde_json::from_value(value).map_err(|_| QuarantineStub {
+    let record: PluginRecordV2 = serde_json::from_value(value).map_err(|_| QuarantineStub {
         record_key: candidate_key.clone(),
         plugin_id: None,
         diagnostic: PluginManagerDiagnostic::new(
@@ -1480,7 +1276,7 @@ impl PluginManagerStore {
             .collect())
     }
 
-    fn write_record(&self, record: &PluginRecordV1) -> Result<(), PluginManagerDiagnostic> {
+    fn write_record(&self, record: &PluginRecordV2) -> Result<(), PluginManagerDiagnostic> {
         record.registration.clone().into_registration_facts()?;
         if record.format_version != RECORD_FORMAT_VERSION
             || record.record_key != plugin_record_key(&record.manifest.plugin_id)
@@ -1698,6 +1494,12 @@ mod tests {
         ))
         .expect("base fixture should be valid JSON");
         input["plugin_id"] = json!(plugin_id);
+        if maximum == "0.1.0" {
+            input["compatibility"]["lensx"]["min_version"] = json!("0.0.1");
+            input["compatibility"]["host_api"]["min_version"] = json!("0.0.1");
+        } else if maximum == "0.2.0" {
+            input["compatibility"]["host_api"]["min_version"] = json!("0.1.0");
+        }
         input["compatibility"]["lensx"]["max_version_exclusive"] = json!(maximum);
         input["compatibility"]["host_api"]["max_version_exclusive"] = json!(maximum);
         validate_plugin_manifest(&input, &versions("0.1.0"))
@@ -1726,7 +1528,6 @@ mod tests {
             package_digest: package_digest.clone(),
             source: facts.source,
             enabled: facts.enabled,
-            granted_permission_ids: facts.granted_permission_ids,
             diagnostics: facts.diagnostics,
         }
     }
@@ -1736,13 +1537,13 @@ mod tests {
         directory: &TestDirectory,
         generation: &str,
         enabled: bool,
-        grants: Vec<String>,
+        _: Vec<String>,
     ) -> PluginRegistrationFacts {
         let source = directory.path.join("author-dist");
         let snapshot = directory.path.join("cache").join(generation);
         fs::create_dir_all(&source).expect("source directory should exist");
         fs::create_dir_all(&snapshot).expect("snapshot directory should exist");
-        PluginRegistrationFacts::development(snapshot, "ab".repeat(32), source, enabled, grants)
+        PluginRegistrationFacts::development(snapshot, "ab".repeat(32), source, enabled)
             .expect("development facts should be valid")
     }
 
@@ -1788,7 +1589,7 @@ mod tests {
     }
 
     #[test]
-    fn registration_keeps_author_and_host_facts_layered_with_empty_grants() {
+    fn registration_keeps_author_and_host_facts_layered_without_grants() {
         let directory = TestDirectory::new("layering");
         let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
         manager
@@ -1797,7 +1598,6 @@ mod tests {
         let registration = manager
             .registration("com.acme.layered")
             .expect("registration should exist");
-        assert!(registration.facts.granted_permission_ids.is_empty());
         assert_eq!(registration.facts.source, PluginSource::External);
         let manifest_json = serde_json::to_value(registration.manifest)
             .expect("Manifest should serialize independently");
@@ -1810,29 +1610,6 @@ mod tests {
         ] {
             assert!(manifest_json.get(host_field).is_none());
         }
-    }
-
-    #[test]
-    fn grants_are_sorted_and_deduplicated() {
-        let facts = PluginRegistrationFacts::with_grants(
-            "/tmp/lensx-plugin",
-            PackageDigest {
-                algorithm: "sha256".to_owned(),
-                value: "abcd".to_owned(),
-            },
-            PluginSource::External,
-            false,
-            vec![
-                "files.read".to_owned(),
-                "clipboard.read".to_owned(),
-                "files.read".to_owned(),
-            ],
-        )
-        .expect("facts should normalize grants");
-        assert_eq!(
-            facts.granted_permission_ids,
-            vec!["clipboard.read".to_owned(), "files.read".to_owned()]
-        );
     }
 
     #[cfg(feature = "plugin-development-mode")]
@@ -1849,7 +1626,6 @@ mod tests {
         assert_eq!(change.revision, "1");
         let registration = manager.registration("com.acme.development").unwrap();
         assert_eq!(registration.facts.source, PluginSource::Development);
-        assert!(registration.facts.granted_permission_ids.is_empty());
         assert!(registration.facts.development_payload().is_some());
         assert!(!directory.path.join(PLUGIN_MANAGER_DIRECTORY).exists());
         let snapshot = manager.read_registration_snapshot();
@@ -1866,7 +1642,7 @@ mod tests {
 
     #[cfg(feature = "plugin-development-mode")]
     #[test]
-    fn development_reload_is_revision_bound_forces_generation_and_reconciles_grants() {
+    fn development_reload_is_revision_bound_and_forces_generation() {
         let directory = TestDirectory::new("development-reload");
         let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
         let manifest = manifest("com.acme.development", "0.2.0");
@@ -1877,10 +1653,6 @@ mod tests {
             )
             .unwrap();
         let entry = entry_id(&manager, "com.acme.development");
-        let permission = manifest.requested_permissions[0].permission_id.clone();
-        manager
-            .set_permission_grant(&entry, "1", &permission, true, true)
-            .expect("declared grant should commit");
         let before = manager
             .read_resource_projection(&entry, None)
             .unwrap()
@@ -1888,7 +1660,7 @@ mod tests {
         let stale = manager
             .reload_development_entry(
                 &entry,
-                "1",
+                "0",
                 manifest.clone(),
                 development_facts(&directory, "generation-b", true, Vec::new()),
             )
@@ -1897,14 +1669,12 @@ mod tests {
         let replacement = manager
             .reload_development_entry(
                 &entry,
-                "2",
+                "1",
                 manifest,
                 development_facts(&directory, "generation-b", true, Vec::new()),
             )
             .expect("same-byte explicit reload should commit");
-        assert_eq!(replacement.change.revision, "3");
-        let current = manager.registration("com.acme.development").unwrap();
-        assert_eq!(current.facts.granted_permission_ids, vec![permission]);
+        assert_eq!(replacement.change.revision, "2");
         let after = manager
             .read_resource_projection(&entry, None)
             .unwrap()
@@ -1915,65 +1685,10 @@ mod tests {
 
     #[cfg(feature = "plugin-development-mode")]
     #[test]
-    fn development_reload_drops_removed_grants_and_never_restores_them_implicitly() {
-        let directory = TestDirectory::new("development-permission-delta");
-        let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
-        let initial = manifest("com.acme.development", "0.2.0");
-        let permission = initial.requested_permissions[0].permission_id.clone();
-        manager
-            .register_development(
-                initial.clone(),
-                development_facts(&directory, "generation-a", true, Vec::new()),
-            )
-            .unwrap();
-        let entry = entry_id(&manager, "com.acme.development");
-        manager
-            .set_permission_grant(&entry, "1", &permission, true, true)
-            .unwrap();
-
-        let mut without_permission = initial.clone();
-        without_permission.requested_permissions.clear();
-        for page in &mut without_permission.contributes.pages {
-            page.required_permissions.clear();
-        }
-        manager
-            .reload_development_entry(
-                &entry,
-                "2",
-                without_permission,
-                development_facts(&directory, "generation-b", true, vec![permission.clone()]),
-            )
-            .unwrap();
-        assert!(manager
-            .registration("com.acme.development")
-            .unwrap()
-            .facts
-            .granted_permission_ids
-            .is_empty());
-
-        manager
-            .reload_development_entry(
-                &entry,
-                "3",
-                initial,
-                development_facts(&directory, "generation-c", true, vec![permission]),
-            )
-            .unwrap();
-        assert!(manager
-            .registration("com.acme.development")
-            .unwrap()
-            .facts
-            .granted_permission_ids
-            .is_empty());
-    }
-
-    #[cfg(feature = "plugin-development-mode")]
-    #[test]
-    fn development_mutations_lose_stale_disable_grant_reload_and_remove_races() {
+    fn development_mutations_lose_stale_disable_reload_and_remove_races() {
         let directory = TestDirectory::new("development-races");
         let manager = PluginManager::recover(&directory.path, versions("0.1.0"));
         let manifest = manifest("com.acme.development", "0.2.0");
-        let permission = manifest.requested_permissions[0].permission_id.clone();
         manager
             .register_development(
                 manifest.clone(),
@@ -1983,9 +1698,6 @@ mod tests {
         let entry = entry_id(&manager, "com.acme.development");
         manager.set_enabled_entry(&entry, "1", false).unwrap();
 
-        let stale_grant = manager
-            .set_permission_grant(&entry, "1", &permission, true, true)
-            .expect_err("grant must compare current revision");
         let stale_reload = manager
             .reload_development_entry(
                 &entry,
@@ -1997,7 +1709,7 @@ mod tests {
         let stale_remove = manager
             .remove_development_entry(&entry, "1")
             .expect_err("remove must compare current revision");
-        for error in [stale_grant, stale_reload, stale_remove] {
+        for error in [stale_reload, stale_remove] {
             assert_eq!(error.code(), PluginManagerDiagnosticCode::StaleRevision);
         }
         assert!(
@@ -2128,7 +1840,7 @@ mod tests {
         let entry = entry_id(&manager, "com.acme.replace");
         let mut candidate = manifest("com.acme.replace", "0.2.0");
         candidate.version = "2.0.0".to_owned();
-        let next_facts = PluginRegistrationFacts::with_grants(
+        let next_facts = PluginRegistrationFacts::new(
             "/tmp/lensx-plugin-next",
             PackageDigest {
                 algorithm: "sha256".to_owned(),
@@ -2136,7 +1848,6 @@ mod tests {
             },
             PluginSource::External,
             true,
-            vec!["lensx.filesystem.read_selected".to_owned()],
         )
         .expect("replacement facts should be valid");
 
@@ -2521,11 +2232,11 @@ mod tests {
         fs::write(store_dir.join("v1-dead.json"), b"{").expect("damaged record should be written");
         fs::write(
             store_dir.join("v1-beef.json"),
-            serde_json::to_vec(&json!({"format_version": 2})).expect("JSON should serialize"),
+            serde_json::to_vec(&json!({"format_version": 99})).expect("JSON should serialize"),
         )
         .expect("unknown record should be written");
         let wrong_manifest = manifest("com.acme.wrong", "0.2.0");
-        let wrong_record = PluginRecordV1 {
+        let wrong_record = PluginRecordV2 {
             format_version: RECORD_FORMAT_VERSION,
             record_key: "v1-cafe".to_owned(),
             manifest: wrong_manifest,
@@ -2538,23 +2249,37 @@ mod tests {
         .expect("mismatch record should be written");
         let inconsistent_manifest = manifest("com.acme.inconsistent", "0.2.0");
         let inconsistent_key = plugin_record_key(&inconsistent_manifest.plugin_id);
-        let mut inconsistent_facts = record_facts(false);
-        inconsistent_facts.granted_permission_ids =
-            vec!["files.read".to_owned(), "clipboard.read".to_owned()];
-        let inconsistent_record = PluginRecordV1 {
+        let inconsistent_record = PluginRecordV2 {
             format_version: RECORD_FORMAT_VERSION,
             record_key: inconsistent_key.clone(),
             manifest: inconsistent_manifest,
-            registration: inconsistent_facts,
+            registration: record_facts(false),
         };
+        let mut inconsistent_record = serde_json::to_value(inconsistent_record).unwrap();
+        inconsistent_record["registration"]["granted_permission_ids"] = json!(["clipboard.read"]);
         fs::write(
             store_dir.join(format!("{inconsistent_key}.json")),
             serde_json::to_vec(&inconsistent_record).expect("record should serialize"),
         )
         .expect("inconsistent record should be written");
+        let empty_grant_manifest = manifest("com.acme.empty-legacy-grant", "0.2.0");
+        let empty_grant_key = plugin_record_key(&empty_grant_manifest.plugin_id);
+        let mut empty_grant_record = serde_json::to_value(PluginRecordV2 {
+            format_version: RECORD_FORMAT_VERSION,
+            record_key: empty_grant_key.clone(),
+            manifest: empty_grant_manifest,
+            registration: record_facts(false),
+        })
+        .expect("legacy empty-grant record should serialize");
+        empty_grant_record["registration"]["granted_permission_ids"] = json!([]);
+        fs::write(
+            store_dir.join(format!("{empty_grant_key}.json")),
+            serde_json::to_vec(&empty_grant_record).expect("record should serialize"),
+        )
+        .expect("legacy empty-grant record should be written");
         let recovered = PluginManager::recover(&directory.path, versions("0.1.0"));
         assert_eq!(recovered.recovery_report().healthy_records, 1);
-        assert_eq!(recovered.recovery_report().quarantined_records, 4);
+        assert_eq!(recovered.recovery_report().quarantined_records, 5);
         assert_eq!(
             recovered
                 .quarantine("v1-dead")
@@ -2587,7 +2312,20 @@ mod tests {
                 .code,
             PluginManagerDiagnosticCode::RecordInvalid
         );
+        assert_eq!(
+            recovered
+                .quarantine(&empty_grant_key)
+                .expect("legacy empty-grant record should be quarantined")
+                .diagnostic
+                .code,
+            PluginManagerDiagnosticCode::RecordInvalid
+        );
         assert!(store_dir.join("v1-dead.json").exists());
+        let repeated = PluginManager::recover(&directory.path, versions("0.1.0"));
+        assert_eq!(repeated.recovery_report().healthy_records, 1);
+        assert_eq!(repeated.recovery_report().quarantined_records, 5);
+        assert!(repeated.quarantine(&inconsistent_key).is_some());
+        assert!(repeated.quarantine(&empty_grant_key).is_some());
     }
 
     #[test]

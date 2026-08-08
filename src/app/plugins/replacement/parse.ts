@@ -16,7 +16,6 @@ const REVISION_PATTERN = /^(?:0|[1-9][0-9]*)$/u;
 const SEMVER_PATTERN =
   /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 const TOKEN_PATTERN = /^[0-9A-Za-z_-]{32,128}$/u;
-const PERMISSION_PATTERN = /^[a-z0-9][a-z0-9._-]{0,254}$/u;
 const CLASSIFICATIONS = new Set<PluginReplacementClassification>(['upgrade', 'downgrade', 'reinstall']);
 const OPERATIONS = new Set<PluginReplacementOperation>([
   'prepare',
@@ -88,15 +87,6 @@ const classification = (value: unknown) => {
     throw new TypeError('Invalid classification.');
   return value as PluginReplacementClassification;
 };
-const permissions = (value: unknown) => {
-  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string' || !PERMISSION_PATTERN.test(item)))
-    throw new TypeError('Invalid permission diff.');
-  const result = [...value] as string[];
-  if (result.some((item, index) => index > 0 && result[index - 1] >= item))
-    throw new TypeError('Permission diff is not sorted and unique.');
-  return result;
-};
-
 export const parsePreparePluginReplacementRequest = (value: unknown): PreparePluginReplacementRequest => {
   const item = exact(value, ['contract_version', 'entry_id', 'expected_revision']);
   return freeze({
@@ -150,8 +140,6 @@ export const parsePluginReplacementResult = (value: unknown): PluginReplacementR
       'current_version',
       'candidate_version',
       'classification',
-      'added_permission_ids',
-      'removed_permission_ids',
     ]);
     if (typeof item.preparation_token !== 'string' || !TOKEN_PATTERN.test(item.preparation_token))
       throw new TypeError('Invalid preparation token.');
@@ -163,8 +151,6 @@ export const parsePluginReplacementResult = (value: unknown): PluginReplacementR
       current_version: semver(item.current_version),
       candidate_version: semver(item.candidate_version),
       classification: classification(item.classification),
-      added_permission_ids: permissions(item.added_permission_ids),
-      removed_permission_ids: permissions(item.removed_permission_ids),
     });
   }
   if (value.status === 'committed') {

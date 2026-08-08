@@ -34,7 +34,6 @@ const pageResolution: PageResolution = {
     owner_id: entry.plugin_id,
     page_id: 'home',
     available: true,
-    required_permission_ids: [],
     route: '/route-probe',
     title: { 'en-US': 'Home' },
   },
@@ -71,17 +70,15 @@ const registrationDetail: Extract<PluginRegistrationDetailResponse['detail'], { 
           ...firstManifestPage,
           id: activePage.page_id,
           route: pageResolution.page.route,
-          required_permissions: [],
         },
         ...remainingManifestPages,
       ],
     },
   },
-  granted_permission_ids: [],
 };
 
 const snapshot = (overrides: Partial<PluginRegistrationSnapshot> = {}): PluginRegistrationSnapshot => ({
-  contract_version: '0.2.0',
+  contract_version: '0.3.0',
   revision: entry.revision,
   availability: { kind: 'available' },
   entries: [registeredEntry],
@@ -100,7 +97,7 @@ const harness = (
   const resolveEntry = rs.fn(async () => ({ ...result, revision: current?.revision ?? result.revision }));
   const readRegistrationDetail = rs.fn(
     async (): Promise<PluginRegistrationDetailResponse> => ({
-      contract_version: '0.2.0' as const,
+      contract_version: '0.3.0' as const,
       revision: detailRevision ?? current?.revision ?? entry.revision,
       detail: currentDetail,
     }),
@@ -159,7 +156,6 @@ describe('Host-private Plugin Page Runtime resolver', () => {
       expected_origin: 'lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost',
       resource_generation: '0123456789abcdef0123456789abcdef',
       registration_revision: entry.revision,
-      granted_permission_ids: [],
     });
     expect(Object.isFrozen(descriptor)).toBe(true);
     expect(pageResolution.page).not.toHaveProperty('entry_id');
@@ -261,19 +257,7 @@ describe('Host-private Plugin Page Runtime resolver', () => {
     expect(second.runtime_key).not.toBe(first.runtime_key);
   });
 
-  test('binds only sorted actual grants and rejects detail/Page/revision divergence', async () => {
-    const granted = harness();
-    granted.setDetail({
-      ...registrationDetail,
-      granted_permission_ids: ['lensx.runtime.actual'],
-    });
-    const descriptor = await granted.resolver.resolve({ activePage, pageResolution, attempt: 0 });
-    expect(descriptor.granted_permission_ids).toEqual(['lensx.runtime.actual']);
-    expect(Object.isFrozen(descriptor.granted_permission_ids)).toBe(true);
-    expect(descriptor.granted_permission_ids).not.toEqual(
-      registrationDetail.manifest.requested_permissions.map(({ permission_id: permissionId }) => permissionId),
-    );
-
+  test('rejects detail, Page, and revision divergence without projecting grants', async () => {
     const staleDetail = harness();
     staleDetail.setDetail(registrationDetail, '999');
     await expect(staleDetail.resolver.resolve({ activePage, pageResolution, attempt: 0 })).rejects.toMatchObject({
@@ -287,10 +271,7 @@ describe('Host-private Plugin Page Runtime resolver', () => {
         ...registrationDetail.manifest,
         contributes: {
           ...registrationDetail.manifest.contributes,
-          pages: [
-            { ...firstManifestPage, id: activePage.page_id, route: '/different', required_permissions: [] },
-            ...remainingManifestPages,
-          ],
+          pages: [{ ...firstManifestPage, id: activePage.page_id, route: '/different' }, ...remainingManifestPages],
         },
       },
     });
@@ -324,9 +305,8 @@ describe('Host-private Plugin Page Runtime resolver', () => {
 
     current.setDetail({
       ...registrationDetail,
-      granted_permission_ids: ['lensx.filesystem.read_selected'],
     });
-    current.publish(snapshot({ revision: '9' }));
+    current.publish(snapshot({ revision: '9', entries: [] }));
     await expect(current.resolver.isCurrent?.(request, descriptor)).resolves.toBe(false);
     unsubscribe?.();
     current.publish(snapshot({ revision: '10' }));

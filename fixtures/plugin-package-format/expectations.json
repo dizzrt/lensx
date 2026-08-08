@@ -6,7 +6,7 @@
     "expected": {
       "status": "compatible",
       "manifest": {
-        "manifest_version": "0.1.0",
+        "manifest_version": "0.2.0",
         "plugin_id": "com.acme.workspace",
         "version": "1.2.0",
         "display": {
@@ -34,23 +34,14 @@
             "max_version_exclusive": "0.2.0"
           },
           "host_api": {
-            "min_version": "0.1.0",
-            "max_version_exclusive": "2.0.0"
+            "min_version": "0.2.0",
+            "max_version_exclusive": "0.3.0"
           }
         },
         "runtime": {
           "kind": "iframe",
           "entry": "dist/plugin.html"
         },
-        "requested_permissions": [
-          {
-            "permission_id": "lensx.filesystem.read_selected",
-            "reason": {
-              "en-US": "Read folders selected by the user.",
-              "zh-CN": "读取用户主动选择的目录。"
-            }
-          }
-        ],
         "contributes": {
           "pages": [
             {
@@ -63,8 +54,7 @@
               "icon": {
                 "kind": "asset",
                 "path": "assets/home.svg"
-              },
-              "required_permissions": []
+              }
             },
             {
               "id": "open_project",
@@ -73,10 +63,7 @@
                 "zh-CN": "打开项目"
               },
               "route": "/open-project",
-              "parent_page_id": "home",
-              "required_permissions": [
-                "lensx.filesystem.read_selected"
-              ]
+              "parent_page_id": "home"
             }
           ],
           "actions": [
@@ -117,20 +104,20 @@
       },
       "facts": {
         "packageFormatVersion": "0.1.0",
-        "compressedSize": 1207,
-        "decompressedSize": 8192,
+        "compressedSize": 1084,
+        "decompressedSize": 7680,
         "fileCount": 5,
         "files": [
           {
             "path": "manifest.json",
-            "size": 1597,
-            "sha256": "b767937c56bb63974e149f3eac9e4cb74b80528550f6ff541ab17de2392231f1",
+            "size": 1333,
+            "sha256": "c73c428ca67f266b31d658c38d6ba6cb4f7868db9ad370dcd1107bfee8df2f0a",
             "checksumCovered": true
           },
           {
             "path": "checksums.json",
             "size": 525,
-            "sha256": "f7f9fddb7e4b1f82da14f278a13f3ec79e806e1419a1a198f22a9ecedb94eb70",
+            "sha256": "0c958294fb59e1704c3a5b3078e7bc5b75cece34abb75c8505384bad3be671bf",
             "checksumCovered": false
           },
           {
@@ -154,7 +141,7 @@
         ],
         "packageDigest": {
           "algorithm": "sha256",
-          "value": "07a992e8da7d2b02ecd6e5e90c42d420d6382c19e333f1cd4f8cf51a68bd5caf"
+          "value": "bb90222ff44d5aad2ee27daa978b93b1e110e032e053bafb9649ac95eee0ed8c"
         }
       },
       "diagnostics": []
@@ -167,7 +154,7 @@
     "expected": {
       "status": "compatible",
       "manifest": {
-        "manifest_version": "0.1.0",
+        "manifest_version": "0.2.0",
         "plugin_id": "com.acme.workspace",
         "version": "1.2.0",
         "display": {
@@ -195,23 +182,14 @@
             "max_version_exclusive": "0.2.0"
           },
           "host_api": {
-            "min_version": "0.1.0",
-            "max_version_exclusive": "2.0.0"
+            "min_version": "0.2.0",
+            "max_version_exclusive": "0.3.0"
           }
         },
         "runtime": {
           "kind": "iframe",
           "entry": "dist/plugin.html"
         },
-        "requested_permissions": [
-          {
-            "permission_id": "lensx.filesystem.read_selected",
-            "reason": {
-              "en-US": "Read folders selected by the user.",
-              "zh-CN": "读取用户主动选择的目录。"
-            }
-          }
-        ],
         "contributes": {
           "pages": [
             {
@@ -224,8 +202,7 @@
               "icon": {
                 "kind": "asset",
                 "path": "assets/home.svg"
-              },
-              "required_permissions": []
+              }
             },
             {
               "id": "open_project",
@@ -234,10 +211,7 @@
                 "zh-CN": "打开项目"
               },
               "route": "/open-project",
-              "parent_page_id": "home",
-              "required_permissions": [
-                "lensx.filesystem.read_selected"
-              ]
+              "parent_page_id": "home"
             }
           ],
           "actions": [
@@ -278,20 +252,20 @@
       },
       "facts": {
         "packageFormatVersion": "0.1.0",
-        "compressedSize": 1207,
-        "decompressedSize": 8192,
+        "compressedSize": 1084,
+        "decompressedSize": 7680,
         "fileCount": 5,
         "files": [
           {
             "path": "manifest.json",
-            "size": 1597,
-            "sha256": "b767937c56bb63974e149f3eac9e4cb74b80528550f6ff541ab17de2392231f1",
+            "size": 1333,
+            "sha256": "c73c428ca67f266b31d658c38d6ba6cb4f7868db9ad370dcd1107bfee8df2f0a",
             "checksumCovered": true
           },
           {
             "path": "checksums.json",
             "size": 525,
-            "sha256": "f7f9fddb7e4b1f82da14f278a13f3ec79e806e1419a1a198f22a9ecedb94eb70",
+            "sha256": "0c958294fb59e1704c3a5b3078e7bc5b75cece34abb75c8505384bad3be671bf",
             "checksumCovered": false
           },
           {
@@ -315,7 +289,7 @@
         ],
         "packageDigest": {
           "algorithm": "sha256",
-          "value": "07a992e8da7d2b02ecd6e5e90c42d420d6382c19e333f1cd4f8cf51a68bd5caf"
+          "value": "bb90222ff44d5aad2ee27daa978b93b1e110e032e053bafb9649ac95eee0ed8c"
         }
       },
       "diagnostics": []
@@ -328,7 +302,7 @@
     "expected": {
       "status": "incompatible",
       "manifest": {
-        "manifest_version": "0.1.0",
+        "manifest_version": "0.2.0",
         "plugin_id": "com.acme.workspace",
         "version": "1.2.0",
         "display": {
@@ -356,23 +330,14 @@
             "max_version_exclusive": "0.3.0"
           },
           "host_api": {
-            "min_version": "0.1.0",
-            "max_version_exclusive": "2.0.0"
+            "min_version": "0.2.0",
+            "max_version_exclusive": "0.3.0"
           }
         },
         "runtime": {
           "kind": "iframe",
           "entry": "dist/plugin.html"
         },
-        "requested_permissions": [
-          {
-            "permission_id": "lensx.filesystem.read_selected",
-            "reason": {
-              "en-US": "Read folders selected by the user.",
-              "zh-CN": "读取用户主动选择的目录。"
-            }
-          }
-        ],
         "contributes": {
           "pages": [
             {
@@ -385,8 +350,7 @@
               "icon": {
                 "kind": "asset",
                 "path": "assets/home.svg"
-              },
-              "required_permissions": []
+              }
             },
             {
               "id": "open_project",
@@ -395,10 +359,7 @@
                 "zh-CN": "打开项目"
               },
               "route": "/open-project",
-              "parent_page_id": "home",
-              "required_permissions": [
-                "lensx.filesystem.read_selected"
-              ]
+              "parent_page_id": "home"
             }
           ],
           "actions": [
@@ -439,20 +400,20 @@
       },
       "facts": {
         "packageFormatVersion": "0.1.0",
-        "compressedSize": 1210,
-        "decompressedSize": 8192,
+        "compressedSize": 1081,
+        "decompressedSize": 7680,
         "fileCount": 5,
         "files": [
           {
             "path": "manifest.json",
-            "size": 1597,
-            "sha256": "1ba3ff57a31f7124a60cf8256deadf2e19193dec2fe1fdfbfc6f857b6ed199cc",
+            "size": 1333,
+            "sha256": "795dc724f393830d8d48e7e5de4fea6533ec642fa2afdbf672075b963eb21ec7",
             "checksumCovered": true
           },
           {
             "path": "checksums.json",
             "size": 525,
-            "sha256": "68ea8e3b71136ccfd443af547b54637cd0d875712f3d65c9b6a1a491d714e4e8",
+            "sha256": "dd24c37d5bd4afe67a8d037a40e0a17a976d08191a0f11a59c42c48cdcca7b51",
             "checksumCovered": false
           },
           {
@@ -476,7 +437,7 @@
         ],
         "packageDigest": {
           "algorithm": "sha256",
-          "value": "98625f1b71f56279185f3474ca1a9b9ccb53595fb09d604635b8f757e81abc46"
+          "value": "44da6e839bdd48f4efc5e9dcf699b0a398b5a74bb09f2d22f02862f51abb2f66"
         }
       },
       "diagnostics": []

@@ -10,20 +10,14 @@ const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
 const locales = ['en-US', 'zh-CN'];
 const themes = ['light', 'dark'];
 const states = [
+  'loading',
   'empty',
   'healthy',
   'quarantined',
   'degraded',
   'prepared-install',
-  'zero-grant',
-  'all-sensitive',
-  'partial-grant',
   'replacement',
-  'settings-not-granted',
-  'settings-unsupported',
-  'revoke',
   'conflict',
-  'long-reason',
   'uninstall',
   'clear',
   'development-healthy',
@@ -34,11 +28,7 @@ const states = [
 ];
 const dialogStates = new Set([
   'prepared-install',
-  'zero-grant',
-  'all-sensitive',
   'replacement',
-  'revoke',
-  'long-reason',
   'uninstall',
   'clear',
   'development-reload',
@@ -166,8 +156,6 @@ try {
                   const bounds = element.getBoundingClientRect();
                   return style.display !== 'none' && style.visibility !== 'hidden' && bounds.width > 0 && bounds.height > 0;
                 });
-                const promptList = dialog?.querySelector('.plugin-management-permission-prompt-list');
-                const promptStyle = promptList ? getComputedStyle(promptList) : undefined;
                 const detail = document.querySelector('.plugin-management-detail');
                 return {
                   ready: document.body.dataset.visualCheck,
@@ -179,12 +167,8 @@ try {
                   dark: document.body.getAttribute('theme-mode') === 'dark',
                   dialog: Boolean(dialog),
                   dialogFocus: Boolean(dialog?.contains(document.activeElement)),
-                  promptOverflow: !promptList || ['auto', 'scroll'].includes(promptStyle?.overflowY),
-                  promptWithinViewport: !dialog || dialog.getBoundingClientRect().bottom <= 600,
+                  dialogWithinViewport: !dialog || dialog.getBoundingClientRect().bottom <= 600,
                   detailOverflow: detail ? ['auto', 'scroll'].includes(getComputedStyle(detail).overflowY) : false,
-                  unsupportedWritable: document.body.dataset.state === 'settings-unsupported'
-                    ? Boolean(document.querySelector('#plugin-permission-grant-future\\.permission, #plugin-permission-revoke-future\\.permission'))
-                    : false
                 };
               })()`,
               returnByValue: true,
@@ -205,15 +189,13 @@ try {
           if (dialogStates.has(state) && !facts.dialog) {
             throw new Error(`Confirmation dialog is missing for ${locale}/${theme}/${state}.`);
           }
-          if (dialogStates.has(state) && (!facts.dialogFocus || !facts.promptOverflow || !facts.promptWithinViewport)) {
+          if (dialogStates.has(state) && (!facts.dialogFocus || !facts.dialogWithinViewport)) {
             throw new Error(
               `Dialog focus/overflow styles failed for ${locale}/${theme}/${state}: ${JSON.stringify(facts)}.`,
             );
           }
-          if (!facts.detailOverflow || facts.unsupportedWritable) {
-            throw new Error(
-              `Detail overflow or unsupported permission controls failed for ${locale}/${theme}/${state}.`,
-            );
+          if (!facts.detailOverflow) {
+            throw new Error(`Detail overflow styles failed for ${locale}/${theme}/${state}.`);
           }
           const capture = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
           await writeFile(screenshotPath, Buffer.from(capture.data, 'base64'));

@@ -11,8 +11,8 @@ not published to npm.
 
 An official repository location or GitHub Release is not Host authority. The
 ordinary local installer still classifies downloaded bytes as `external`,
-starts with empty grants, and applies the same permission prompts, revocation,
-Runtime Session, and package rules used by any external plugin. Signing,
+and applies the same open isolated Runtime, closed Host API, Runtime Session,
+and package rules used by any external plugin. Signing,
 Marketplace distribution, automatic updates, and Host `official` trust remain
 undelivered.
 
@@ -52,7 +52,7 @@ Describe the user-visible or maintenance change.
 
 Path analysis controls the validation set; the Changeset controls release
 intent. A plugin-local path selects that plugin. Contract, SDK, UI, Testkit,
-CLI, workspace, lockfile, package, installation, permission, Runtime, or
+CLI, workspace, lockfile, package, installation, Runtime, or
 release-infrastructure changes validate all existing official plugins without
 inventing bumps. Unrelated changes are an explicit no-op.
 
@@ -82,7 +82,7 @@ pnpm run check:official-plugin-release-pipeline
 The focused gate checks the contract, CODEOWNERS, Changeset policy, deterministic
 planner, canonical candidate/audit schemas, workflow policy, bilingual docs,
 workspace boundaries, public CLI/package format, ordinary TypeScript/Rust
-installation preparation, Runtime/permission gates, and a temporary two-plugin
+installation preparation, open-isolated-Runtime gates, and a temporary two-plugin
 dry-run.
 Each selected real plugin also enters its own read-only candidate matrix so
 shared boundary changes validate every current consumer without granting a

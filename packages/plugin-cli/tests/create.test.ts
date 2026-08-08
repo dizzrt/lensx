@@ -54,8 +54,9 @@ describe('create plugin project', () => {
     expect(manifest).toMatchObject({
       plugin_id: result.plugin_id,
       display: { name: { 'en-US': 'Example Plugin', 'zh-CN': 'Example Plugin' } },
-      requested_permissions: [],
     });
+    expect(manifest).not.toHaveProperty('requested_permissions');
+    expect(manifest.contributes.pages[0]).not.toHaveProperty('required_permissions');
     expect(validatePluginManifest(manifest).status).toBe('valid');
     expect(await readdir(target)).toEqual(expect.arrayContaining(['manifest.json', 'package.json', 'src', 'tests']));
     for (const forbidden of ['.git', 'node_modules', 'dist', 'artifacts']) {

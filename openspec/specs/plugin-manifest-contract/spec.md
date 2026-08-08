@@ -4,7 +4,7 @@
 
 Define the accepted author-controlled external plugin Manifest protocol,
 including strict structure, stable identity, localized metadata, package-local
-resources, Page and Action contributions, permission references, compatibility
+resources, Page and Action contributions, compatibility
 classification, deterministic normalization and diagnostics, and the boundary
 between author data and Host-owned state.
 
@@ -12,55 +12,48 @@ between author data and Host-owned state.
 
 ### Requirement: Plugin author Manifests must be strict and versioned inputs
 
-The system MUST accept an external plugin author Manifest as a JSON object and
-MUST require `manifest_version` to exactly match the Host-supported `0.1.0`
-protocol version. The Manifest MUST contain `plugin_id`, `version`,
-`display`, `publisher`, `compatibility`, `runtime`, and `contributes` at the
-top level. Fields outside the Schema-declared scope and every explicit `null`
-MUST be rejected. An author Manifest MUST NOT contain Host-owned source,
-lifecycle, enabled state, installation state, compatibility results, runtime
-state, permission grants, signature facts, or update facts.
-The system MUST NOT accept another Manifest protocol through a compatibility
-alias, fallback Schema, or migration path.
+Plugin author Manifests MUST be strict, versioned, JSON Schema-driven inputs, with current version `0.2.0`. The Schema MUST reject unknown fields, including legacy `requested_permissions`, Page `required_permissions`, Host source, grants, trust, signatures, lifecycle, sandbox, CSP, and Host bridge configuration. Manifest, Host API, package protocol, and application versions MUST evolve independently.
 
-#### Scenario: Accept a complete first-version Manifest
+The Manifest MUST contain `plugin_id`, `version`, `display`, `publisher`, `compatibility`, `runtime`, and `contributes` at the top level. Every explicit `null` MUST be rejected. The system MUST NOT accept another Manifest protocol through a compatibility alias, fallback Schema, or implicit migration path.
 
-- **WHEN** author input contains the supported Manifest version, every required
-  structure, and values that pass semantic validation
-- **THEN** the system recognizes the input as a structurally and semantically
-  valid Manifest
-- **THEN** the system does not treat the author input as an installed or
-  enabled plugin
+#### Scenario: Accept current Manifest
+- **WHEN** author input declares `manifest_version: "0.2.0"` and satisfies the current strict Schema
+- **THEN** the Contract validates and normalizes the input without creating permission or Host authority
+- **THEN** absent optional ordinary collections normalize to empty collections under the current specification
 
-#### Scenario: Reject an unsupported Manifest protocol version
+#### Scenario: Legacy Manifest requests permissions
+- **WHEN** author input declares `manifest_version: "0.1.0"`, `requested_permissions`, or Page `required_permissions`
+- **THEN** the current Contract classifies it as an unsupported version or unknown field
+- **THEN** the Host does not silently ignore, migrate, or interpret the legacy declaration as open Web or native authority
 
-- **WHEN** author input contains any `manifest_version` other than `0.1.0`
-- **THEN** the system rejects the Manifest with a diagnostic at
-  `/manifest_version`
-- **THEN** the system does not translate or retry the input through another
-  protocol contract
+#### Scenario: Author attempts to declare Host Web policy
+- **WHEN** a Manifest declares CSP, sandbox, network allowlist, Worker policy, Tauri bridge, or Host command
+- **THEN** the Schema rejects the unknown field
+- **THEN** the current Runtime Contract continues to define open Web behavior and Host isolation
 
-#### Scenario: Reject an unknown field
+#### Scenario: Reject unsupported Manifest protocol version
 
-- **WHEN** author input contains a field not declared by the Schema in any
-  strict object
+- **WHEN** author input contains any `manifest_version` other than `0.2.0`
+- **THEN** the system rejects the Manifest with a diagnostic at `/manifest_version`
+- **THEN** the system does not translate or retry the input through another protocol contract
+
+#### Scenario: Reject unknown field
+
+- **WHEN** author input contains a field not declared by the Schema in any strict object
 - **THEN** the system rejects the Manifest
 - **THEN** the diagnostic points to the JSON Pointer for the unknown field
 
-#### Scenario: Reject an explicit null value
+#### Scenario: Reject explicit null value
 
 - **WHEN** an author explicitly sets a required or optional field to `null`
 - **THEN** the system rejects the Manifest
-- **THEN** the system does not treat `null` as an absent field or a default
-  empty collection
+- **THEN** the system does not treat `null` as an absent field or default empty collection
 
 #### Scenario: Reject author-declared Host state
 
-- **WHEN** an author Manifest contains `source`, `lifecycle`, `enabled`,
-  `granted_permissions`, or other Host-owned state
+- **WHEN** an author Manifest contains `source`, `lifecycle`, `enabled`, `granted_permissions`, or other Host-owned state
 - **THEN** the system rejects the corresponding field as unknown
-- **THEN** the author cannot obtain trusted state or permissions through the
-  Manifest
+- **THEN** the author cannot obtain trusted state or Host authority through the Manifest
 
 ### Requirement: Plugin identity and version must be stable and validatable
 
@@ -124,8 +117,8 @@ alone.
 
 ### Requirement: User-visible metadata must be localized with English fallback
 
-The Plugin display name, Page title, Action title, permission reason, and any
-description that is present MUST provide a non-empty `en-US` value after
+The Plugin display name, Page title, Action title, and any description that is
+present MUST provide a non-empty `en-US` value after
 trimming. `zh-CN` MAY be absent and MUST fall back to `en-US` when absent.
 Unknown locale fields in the first version MUST be rejected. A Plugin MUST NOT
 declare `aliases` or `default_aliases`; Action search synonyms MUST be
@@ -217,50 +210,48 @@ background process, or iframe sandbox relaxation configuration.
 
 ### Requirement: Page contributions must form a valid plugin-local navigation graph
 
-Every external plugin MUST contribute at least one Page. Each Page MUST contain
-a unique local `id`, localized `title`, and plugin-internal `route`, and MAY
-contain `parent_page_id`, an asset icon, and `required_permissions`. A local ID
-MUST be one segment that satisfies the Launcher Action local-segment character
-and length rules. A route MUST begin with exactly one `/` and MUST NOT be an
-external URL or contain a backslash, parent traversal, query, or fragment. A
-parent Page reference MUST point to a different Page in the same plugin, and
-the Page parent graph MUST be acyclic.
+Every external plugin MUST contribute at least one Page. Each Page MUST contain a unique local `id`, localized `title`, and plugin-internal `route`, MAY contain `parent_page_id` and an asset icon, and MUST NOT contain `required_permissions` or another grant gate. Local IDs, routes, parent references, and the acyclic graph MUST continue to satisfy the existing plugin-local navigation rules.
 
-#### Scenario: Accept multiple Pages
+A local ID MUST be one segment that satisfies Launcher Action local-segment character and length rules. A route MUST begin with exactly one `/` and MUST NOT be an external URL or contain a backslash, parent traversal, query, or fragment. A parent Page reference MUST point to a different Page in the same plugin, and the Page parent graph MUST be acyclic.
 
-- **WHEN** a Manifest declares unique `home` and `settings` Pages and sets
-  `home` as the parent Page of `settings`
-- **THEN** the system accepts the Page collection and parent relationship
-- **THEN** each Page retains an independent plugin-local identity
+#### Scenario: Accept multiple permissionless Pages
+- **WHEN** a Manifest declares `home` and `settings` Pages and makes `home` the parent of `settings`
+- **THEN** the system accepts the collection and parent relationship
+- **THEN** availability of each Page does not depend on a lensX permission request or grant
+
+#### Scenario: Page declares legacy permission gate
+- **WHEN** a Page contains `required_permissions`
+- **THEN** the system rejects the field as unknown
+- **THEN** the Page cannot become superficially present while controlled by a removed grant
+
+#### Scenario: Page graph is invalid
+- **WHEN** Pages are missing, an ID is duplicated, a route is external, a parent is absent, or the parent graph is cyclic
+- **THEN** the system rejects the entire Manifest with a stable JSON Pointer diagnostic
+- **THEN** removal of permission fields does not relax Page identity or internal navigation rules
 
 #### Scenario: No Page is contributed
 
 - **WHEN** `contributes.pages` is absent or an empty array
-- **THEN** the system rejects the first-version external plugin Manifest
-- **THEN** a plugin with no reachable UI surface does not enter a later runtime
-  flow
+- **THEN** the system rejects the current external plugin Manifest
+- **THEN** a plugin with no reachable UI surface does not enter a later Runtime flow
 
-#### Scenario: A Page ID is duplicated
+#### Scenario: Page ID is duplicated
 
 - **WHEN** two Pages in the same plugin use the same local ID
 - **THEN** the system rejects the entire Manifest
 - **THEN** the diagnostic points to the duplicated Page ID
 
-#### Scenario: A Page parent is absent or cyclic
+#### Scenario: Page parent is absent or cyclic
 
-- **WHEN** `parent_page_id` points to an unknown Page, points to the Page itself,
-  or multiple Pages form a parent cycle
+- **WHEN** `parent_page_id` points to an unknown Page, points to the Page itself, or multiple Pages form a parent cycle
 - **THEN** the system rejects the entire Manifest
-- **THEN** the diagnostic can identify the invalid parent reference or cycle
-  member
+- **THEN** the diagnostic identifies the invalid parent reference or cycle member
 
-#### Scenario: A Page route is not internal
+#### Scenario: Page route is not internal
 
-- **WHEN** a Page route does not begin with exactly one `/` or contains an
-  external URL, backslash, parent traversal, query, or fragment
+- **WHEN** a Page route does not begin with exactly one `/` or contains an external URL, backslash, parent traversal, query, or fragment
 - **THEN** the system rejects the Manifest
-- **THEN** an Action cannot use the Page route to open an arbitrary external
-  target
+- **THEN** an Action cannot use the Page route to open an arbitrary external target
 
 ### Requirement: A plugin can contribute multiple Page-only Actions
 
@@ -366,50 +357,10 @@ and does not define a search ranking algorithm.
 - **THEN** the system does not implicitly select any Action as the default entry
   point
 
-### Requirement: Permission declarations must preserve internal reference consistency
-
-`requested_permissions` MAY be absent or empty. Each request MUST contain a
-plugin-local, unique, syntactically valid `permission_id` and a localized
-`reason`. Each Page's `required_permissions` MAY be absent or empty; every ID
-in the collection MUST be unique and MUST reference a permission requested at
-the top level. An Action MUST NOT redeclare permissions; its permission
-dependencies MUST be derived from its target Page. The Manifest contract MUST
-NOT treat a requested permission as a granted permission.
-
-#### Scenario: A Page uses requested permissions
-
-- **WHEN** every permission required by a Page appears in the top-level
-  requested permissions
-- **THEN** the system accepts the permission references
-- **THEN** the normalized result continues to distinguish requests from future
-  Host grant state
-
-#### Scenario: A Page uses an unrequested permission
-
-- **WHEN** a Page's required permission is absent from the top-level request
-  collection
-- **THEN** the system rejects the entire Manifest
-- **THEN** the diagnostic points to the invalid permission reference
-
-#### Scenario: A permission reference is duplicated
-
-- **WHEN** the request collection or one Page's required permissions contain a
-  duplicate ID
-- **THEN** the system rejects the Manifest
-- **THEN** the diagnostic points to the duplicate item
-
-#### Scenario: The current Host has no permission catalog
-
-- **WHEN** a Manifest's internal permission references are consistent but no
-  Host permission catalog exists at the current validation stage
-- **THEN** static Manifest validation checks only permission ID syntax and
-  internal references
-- **THEN** Host support and user grant state remain for a later permission
-  boundary to determine
-
 ### Requirement: Compatibility status must be separate from Manifest validity
 
-The current LensX and Host API protocol versions MUST both begin at `0.1.0`.
+The current LensX version MUST be `0.1.0` and the current Host API protocol
+version MUST be `0.2.0`.
 Their compatibility ranges MUST each contain valid SemVer
 `min_version` and `max_version_exclusive` values, and the minimum version MUST
 be strictly less than the exclusive maximum version. A dimension is compatible
@@ -417,19 +368,20 @@ when its current version satisfies
 `min_version <= current_version < max_version_exclusive`. A structurally and
 semantically valid Manifest for which either current version is outside its
 range MUST return `incompatible` status rather than `invalid`. Compatibility
-MUST depend only on the declared ranges and current `0.1.0` baselines; the
-system MUST NOT recognize or convert an earlier experimental Host API version.
+MUST depend only on the declared ranges and current LensX `0.1.0` and Host API
+`0.2.0` baselines; the system MUST NOT recognize or convert an earlier
+experimental Host API version.
 
 #### Scenario: Initial current versions are within both ranges
 
-- **WHEN** the current LensX and Host API versions are both `0.1.0` and each is
-  within its declared half-open range
+- **WHEN** the current LensX `0.1.0` and Host API `0.2.0` versions are each
+  within their declared half-open ranges
 - **THEN** the system classifies the valid Manifest as `compatible`
 
 #### Scenario: A current version is outside its range
 
-- **WHEN** the current LensX or Host API `0.1.0` is outside its declared
-  half-open range
+- **WHEN** the current LensX `0.1.0` or Host API `0.2.0` is outside its
+  declared half-open range
 - **THEN** the system classifies the valid Manifest as `incompatible`
 - **THEN** the system does not use an alias or migration rule to satisfy the
   range
@@ -450,10 +402,10 @@ system MUST NOT recognize or convert an earlier experimental Host API version.
 
 ### Requirement: Normalization and diagnostics must be deterministic and cross-language consistent
 
-The system MUST normalize absent `requested_permissions`,
-`contributes.actions`, Action `default_keywords`, and Page
-`required_permissions` to empty collections while preserving the non-empty
-constraint for required `contributes.pages`. Public diagnostics MUST use a
+The system MUST normalize absent `contributes.actions` and Action
+`default_keywords` to empty collections while preserving the non-empty
+constraint for required `contributes.pages`. Legacy `requested_permissions`
+and Page `required_permissions` MUST be rejected rather than normalized. Public diagnostics MUST use a
 stable `{code, path, message}` structure, and `path` MUST be a JSON Pointer.
 Diagnostics that can be aggregated safely MUST be returned together and sorted
 by `path` and then by `code`. The Schema, TypeScript, and Rust MUST maintain the
@@ -489,7 +441,7 @@ The system MUST model raw author input, a validated normalized Manifest, and
 future Host registration state as distinct boundaries. A normalized Manifest
 MUST contain only author-declarable contract data and deterministic defaults.
 Host-owned source, lifecycle, enabled state, installation information,
-compatibility results, Runtime state, granted permissions, signature facts,
+compatibility results, Runtime state, signature facts,
 and update information MUST be composed separately by the trusted Host and
 MUST NOT be written back or presented as author declarations.
 
@@ -501,11 +453,11 @@ MUST NOT be written back or presented as author declarations.
 - **THEN** the result contains no implication that the plugin is installed,
   enabled, or authorized
 
-#### Scenario: The Host registers a plugin in the future
+#### Scenario: The Host registers a plugin
 
-- **WHEN** a future capability registers a normalized Manifest with the Host
-- **THEN** the Host injects source, lifecycle, compatibility, and permission
-  state from the trusted installation and runtime environment
+- **WHEN** the Host registers a normalized Manifest
+- **THEN** the Host injects source, lifecycle, compatibility, and Runtime facts
+  from the trusted installation and runtime environment
 - **THEN** author input cannot override those fields
 
 #### Scenario: Only this change is complete

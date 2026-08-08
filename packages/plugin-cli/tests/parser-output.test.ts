@@ -68,7 +68,7 @@ describe('plugin CLI parsing and output', () => {
 
   test('returns stable exit codes for help, version, success, and usage errors', async () => {
     await expect(invoke(['--help'])).resolves.toMatchObject({ exitCode: 0, stderr: '' });
-    await expect(invoke(['--version'])).resolves.toMatchObject({ exitCode: 0, stdout: 'lensx-plugin 0.1.0\n' });
+    await expect(invoke(['--version'])).resolves.toMatchObject({ exitCode: 0, stdout: 'lensx-plugin 0.2.0\n' });
     await expect(invoke(['missing'])).resolves.toMatchObject({ exitCode: 2, stdout: '' });
   });
 

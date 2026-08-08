@@ -170,6 +170,8 @@ struct RuntimeReport {
     attempts: BTreeMap<String, String>,
     #[serde(default)]
     csp_checks: BTreeMap<String, bool>,
+    #[serde(default)]
+    unsupported_evidence: BTreeMap<String, String>,
     document_origin: String,
     engine_version: String,
     origin_non_opaque: bool,
@@ -236,6 +238,8 @@ struct RuntimeReport {
     host_api_context_replacement: Option<bool>,
     #[serde(default)]
     host_api_unimplemented_unavailable: Option<bool>,
+    #[serde(default)]
+    worker_teardown_observed: Option<bool>,
     #[cfg(feature = "plugin-development-runtime-harness")]
     #[serde(default)]
     development: Option<DevelopmentBrowserReport>,
@@ -246,8 +250,7 @@ struct RuntimeReport {
 #[serde(deny_unknown_fields)]
 struct DevelopmentBrowserReport {
     old_scope_revoked: bool,
-    permission_delta_not_granted: bool,
-    permission_delta_requested: bool,
+    manifest_version_advanced: bool,
     registration_removed: bool,
     reload_revision_advanced: bool,
     reload_scope_changed: bool,
@@ -269,6 +272,7 @@ struct RuntimeEvidence {
     plugin_csp_native_get_head_verified: bool,
     plugin_csp_translated_get_head_verified: bool,
     csp_checks: BTreeMap<String, bool>,
+    unsupported_evidence: BTreeMap<String, String>,
     sandbox: &'static str,
     permissions_policy: &'static str,
     referrer_policy: &'static str,
@@ -349,6 +353,8 @@ struct RuntimeEvidence {
     host_api_context_replacement: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     host_api_unimplemented_unavailable: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    worker_teardown_observed: Option<bool>,
     #[cfg(feature = "plugin-development-runtime-harness")]
     #[serde(skip_serializing_if = "Option::is_none")]
     development_checks: Option<BTreeMap<String, bool>>,
@@ -387,19 +393,28 @@ fn expected_csp_checks(fixture: FixtureKind) -> &'static [&'static str] {
             "es_module_allowed",
             "style_allowed",
             "image_allowed",
+            "package_worker_allowed",
+            "blob_worker_allowed",
+            "data_worker_allowed",
+            "worker_message_roundtrip",
+            "worker_message_burst",
+            "active_worker_started",
+            "fetch_allowed",
+            "fetch_connection_churn",
+            "websocket_constructed",
+            "blob_content_allowed",
+            "data_content_allowed",
+            "wasm_allowed",
+            "indexeddb_roundtrip",
+            "author_csp_can_narrow",
+            "remote_module_allowed",
         ],
         FixtureKind::Malicious => &[
-            "remote_script_blocked",
             "inline_script_blocked",
             "eval_blocked",
-            "connect_blocked",
-            "worker_blocked",
-            "frame_blocked",
             "object_blocked",
             "base_blocked",
             "form_blocked",
-            "data_blocked",
-            "blob_blocked",
         ],
     }
 }
@@ -490,7 +505,9 @@ fn plugin_iframe_runtime_harness_record(
             .into_iter()
             .any(|value| value != Some(true))
             || report.transport_contract_version.as_deref() != Some("0.1.0")
-            || report.host_api_dispatcher_version.as_deref() != Some("0.1.0"))
+            || report.host_api_dispatcher_version.as_deref() != Some("0.2.0")
+            || (matches!(state.fixture.package_kind(), FixtureKind::Normal)
+                && report.worker_teardown_observed != Some(true)))
     {
         return Err("runtime_harness_report_rejected");
     }
@@ -506,6 +523,23 @@ fn plugin_iframe_runtime_harness_record(
                 })
         }
     };
+    if matches!(state.fixture.package_kind(), FixtureKind::Normal)
+        && (report.unsupported_evidence.len() != 2
+            || !matches!(
+                report
+                    .unsupported_evidence
+                    .get("shared_worker")
+                    .map(String::as_str),
+                Some("unsupported_by_target_webview" | "not_in_runtime_baseline")
+            )
+            || report
+                .unsupported_evidence
+                .get("service_worker")
+                .map(String::as_str)
+                != Some("not_available_for_scoped_custom-scheme-runtime"))
+    {
+        return Err("runtime_harness_report_rejected");
+    }
     let mut resources = state
         .resource_paths
         .lock()
@@ -546,10 +580,6 @@ fn plugin_iframe_runtime_harness_record(
                     && state.plugin_csp_translated_get_head_verified,
             ),
             (
-                "register_grants_empty".to_owned(),
-                registration.grants_empty,
-            ),
-            (
                 "register_source_development".to_owned(),
                 registration.source_development,
             ),
@@ -579,12 +609,8 @@ fn plugin_iframe_runtime_harness_record(
             FixtureKind::Normal | FixtureKind::Replacement
         ) {
             checks.insert(
-                "permission_delta_not_granted".to_owned(),
-                development.permission_delta_not_granted,
-            );
-            checks.insert(
-                "permission_delta_requested".to_owned(),
-                development.permission_delta_requested,
+                "manifest_version_advanced".to_owned(),
+                development.manifest_version_advanced,
             );
         } else {
             checks.insert(
@@ -628,6 +654,7 @@ fn plugin_iframe_runtime_harness_record(
         plugin_csp_native_get_head_verified: state.plugin_csp_native_get_head_verified,
         plugin_csp_translated_get_head_verified: state.plugin_csp_translated_get_head_verified,
         csp_checks: report.csp_checks,
+        unsupported_evidence: report.unsupported_evidence,
         sandbox: SANDBOX,
         permissions_policy: PERMISSIONS_POLICY,
         referrer_policy: REFERRER_POLICY,
@@ -692,6 +719,7 @@ fn plugin_iframe_runtime_harness_record(
         host_api_ui_close_response_before_effect: report.host_api_ui_close_response_before_effect,
         host_api_context_replacement: report.host_api_context_replacement,
         host_api_unimplemented_unavailable: report.host_api_unimplemented_unavailable,
+        worker_teardown_observed: report.worker_teardown_observed,
         #[cfg(feature = "plugin-development-runtime-harness")]
         development_checks,
     };
@@ -720,8 +748,7 @@ struct DevelopmentReloadBrowserResult {
     target: String,
     origin: String,
     old_scope_revoked: bool,
-    permission_delta_not_granted: bool,
-    permission_delta_requested: bool,
+    manifest_version_advanced: bool,
     reload_revision_advanced: bool,
     reload_scope_changed: bool,
 }
@@ -762,8 +789,7 @@ fn plugin_development_runtime_harness_reload(
         target,
         origin,
         old_scope_revoked: result.old_scope_revoked,
-        permission_delta_not_granted: result.permission_delta_not_granted,
-        permission_delta_requested: result.permission_delta_requested,
+        manifest_version_advanced: result.manifest_version_advanced,
         reload_revision_advanced: result.revision_advanced,
         reload_scope_changed: result.scope_changed,
     })
@@ -996,7 +1022,9 @@ fn plugin_csp_header_matrix(service: &PluginResourceService, native_entry: &str)
                 .get(tauri::http::header::CONTENT_SECURITY_POLICY)
                 .is_some_and(|value| {
                     value.to_str().is_ok_and(|policy| {
-                        policy.starts_with("default-src 'none'")
+                        policy.starts_with("default-src 'self' https: data: blob:")
+                            && policy.contains("connect-src 'self' https: wss:")
+                            && policy.contains("worker-src 'self' https: data: blob:")
                             && policy.contains("frame-ancestors lensx-runtime-harness://localhost")
                             && !policy.contains('*')
                     })
@@ -1047,6 +1075,8 @@ fn host_document(
         let firstWindow;
         let oldHostPort;
         let oldPortEvents = 0;
+        let firstWorkerHeartbeats = 0;
+        let oldWorkerHeartbeatsAfterRemoval = 0;
         let submitting = false;
         try {{ localStorage.setItem(storageKey, hostStorageValue); }} catch {{}}
         const exact = (value, keys) =>
@@ -1115,7 +1145,7 @@ fn host_document(
               if (requests.has('request_0000000000000001')) response(
                 'request_0000000000000001',
                 {{ method: 'runtime.get_context', result: {{
-                  capabilities: ['actions.open', 'runtime.get_context', 'ui.close'], hostApiVersion: '0.1.0',
+                  capabilities: ['actions.open', 'runtime.get_context', 'ui.close'], hostApiVersion: '0.2.0',
                   locale: 'en-US', theme: 'light',
                 }} }},
               );
@@ -1132,7 +1162,7 @@ fn host_document(
                 contract_version: '0.1.0', type: 'lensx.plugin_transport.event',
                 event: Object.freeze({{ event: 'runtime.context_changed', payload: Object.freeze({{
                   capabilities: ['actions.open', 'runtime.get_context', 'ui.close'],
-                  hostApiVersion: '0.1.0', locale: 'zh-CN', theme: 'dark',
+                  hostApiVersion: '0.2.0', locale: 'zh-CN', theme: 'dark',
                 }}) }}),
               }}));
             }}
@@ -1210,8 +1240,13 @@ fn host_document(
         }};
         window.addEventListener('message', async (event) => {{
           const report = event.data;
-          if (report?.type === 'lensx.plugin_runtime.ready') return;
           const frame = document.querySelector('#runtime');
+          if (report?.namespace === 'lensx.plugin-open-web-worker-heartbeat') {{
+            if (firstWindow && event.source === firstWindow && stage >= 1) oldWorkerHeartbeatsAfterRemoval += 1;
+            else if (stage === 0 && frame && event.source === frame.contentWindow) firstWorkerHeartbeats += 1;
+            return;
+          }}
+          if (report?.type === 'lensx.plugin_runtime.ready') return;
           if (!frame || event.source !== frame.contentWindow ||
               typeof report !== 'object' || report === null ||
               report.namespace !== '{HARNESS_NAMESPACE}' || report.kind !== '{package_kind}') return;
@@ -1225,6 +1260,8 @@ fn host_document(
             const unrelatedStable = frame.contentWindow === firstWindow && oldHostPort !== undefined;
             oldHostPort.close();
             frame.remove();
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            const oldWorkerHeartbeatBaseline = oldWorkerHeartbeatsAfterRemoval;
             {development_reload}
             const replacement = document.createElement('iframe');
             replacement.id = 'runtime';
@@ -1236,7 +1273,7 @@ fn host_document(
             document.body.prepend(replacement);
             window.__LENSX_SESSION_FACTS__ = {{
               wrongRejected, unrelatedStable, firstExact: first.exactWindow, firstTransport: first.transport,
-              developmentReload,
+              developmentReload, oldWorkerHeartbeatBaseline,
             }};
             return;
           }}
@@ -1275,7 +1312,7 @@ fn host_document(
                 prior.firstTransport.limitZeroHandlerHits && second.transport.limitZeroHandlerHits,
               transport_recovery_after_limit:
                 prior.firstTransport.recoveryAfterLimit && second.transport.recoveryAfterLimit,
-              host_api_dispatcher_version: '0.1.0',
+              host_api_dispatcher_version: '0.2.0',
               host_api_context: prior.firstTransport.contextProvided && second.transport.contextProvided,
               host_api_actions_open: prior.firstTransport.actionOpened && second.transport.actionOpened,
               host_api_ui_close_response_before_effect:
@@ -1284,10 +1321,12 @@ fn host_document(
                 prior.firstTransport.contextReplacement && second.transport.contextReplacement,
               host_api_unimplemented_unavailable:
                 prior.firstTransport.unavailableReturned && second.transport.unavailableReturned,
+              worker_teardown_observed: firstReport.kind === 'normal' ?
+                firstWorkerHeartbeats > 0 &&
+                oldWorkerHeartbeatsAfterRemoval === prior.oldWorkerHeartbeatBaseline : undefined,
               development: prior.developmentReload === null ? undefined : {{
                 old_scope_revoked: prior.developmentReload.old_scope_revoked,
-                permission_delta_not_granted: prior.developmentReload.permission_delta_not_granted,
-                permission_delta_requested: prior.developmentReload.permission_delta_requested,
+                manifest_version_advanced: prior.developmentReload.manifest_version_advanced,
                 registration_removed: developmentRemoval.registration_removed,
                 reload_revision_advanced: prior.developmentReload.reload_revision_advanced,
                 reload_scope_changed: prior.developmentReload.reload_scope_changed,
@@ -1361,15 +1400,13 @@ pub fn run(session_mode: bool, development_mode: bool) {
                 "lensx-development-runtime-harness-{}-{nonce}",
                 process::id()
             ));
-            let (development, registration) = PluginDevelopmentRuntimeHarness::register(
-                root,
-                fixture.package(),
-                matches!(fixture, FixtureKind::Normal | FixtureKind::Replacement),
-            )
-            .unwrap_or_else(|_| {
-                eprintln!("plugin development Runtime fixture is invalid");
-                process::exit(2);
-            });
+            let (development, registration) =
+                PluginDevelopmentRuntimeHarness::register(root, fixture.package()).unwrap_or_else(
+                    |_| {
+                        eprintln!("plugin development Runtime fixture is invalid");
+                        process::exit(2);
+                    },
+                );
             (
                 None,
                 development.resource_service(),
@@ -1545,7 +1582,7 @@ pub fn run(session_mode: bool, development_mode: bool) {
             .build()?;
             let app_handle = app.handle().clone();
             thread::spawn(move || {
-                thread::sleep(Duration::from_secs(8));
+                thread::sleep(Duration::from_secs(20));
                 if !reported_timeout.load(Ordering::SeqCst) {
                     app_handle.exit(3);
                 }

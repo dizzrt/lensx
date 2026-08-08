@@ -1,6 +1,6 @@
 {
   "name": "@lensx/plugin-testkit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Framework-neutral fixtures and semantic transport controls for lensX plugin tests.",
   "keywords": [
     "lensx",

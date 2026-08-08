@@ -71,8 +71,8 @@ the author's source directory.
 
 The Host MUST issue a URL only when the Manager is not degraded, the
 registration is healthy, enabled, and compatible, and ownership of the
-corresponding payload can be proven. Host source, Publisher text, requested
-permissions, and Runtime `inactive` MUST NOT by themselves grant or deny
+corresponding payload can be proven. Host source, Publisher text, remote
+behavior, and Runtime `inactive` MUST NOT by themselves grant or deny
 resource access; the Host MUST fail closed when managed payload ownership
 cannot be proven.
 
@@ -301,7 +301,7 @@ serve the validated bytes unchanged and MUST NOT rewrite HTML to inject CSP.
 - **THEN** the response includes the exact Host-owned Plugin Runtime CSP in
   addition to the fixed MIME, length, `nosniff`, and `no-store` headers
 - **THEN** the returned body remains the validated package bytes and no author
-  meta policy, request input, source, publisher, or grant widens the Header
+  meta policy, request input, source, publisher, or legacy grant claim widens the Header
 
 #### Scenario: HEAD requests a valid resource
 
@@ -428,7 +428,7 @@ adapter, Manager resource generation and projection, scoped protocol service,
 path, MIME, and lifecycle enforcement, tests, and maintained documentation. It
 MUST NOT create an iframe, execute plugin code, change the Plugin Page
 placeholder, display a package-local icon, inline SVG, establish a Runtime
-Session, transport, RPC, or Host API, grant permissions, or claim a complete
+Session, transport, RPC, or Host API, create native authority, or claim a complete
 CSP. Because this change adds no UI, its completion MUST NOT alter the existing
 English-default or Simplified Chinese locales, keyboard and accessibility
 behavior, Semi Design theme, or light and dark presentation.

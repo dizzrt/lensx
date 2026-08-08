@@ -11,142 +11,71 @@ public Contract boundaries.
 
 ### Requirement: Production Host MUST route requests through a closed Dispatcher bound to a trusted Session
 
-The system MUST create one Host-private Dispatcher binding for every current,
-ready Runtime Session. Every dispatch MUST use only the identity frozen in the
-authenticated Port lease, a Contract-valid Host API request, a Host-owned
-cancellation signal, and current Host service state. A plugin or wire payload
-MUST NOT select or override a plugin ID, Page ID, Registration revision,
-Runtime attempt, origin, grant, provider, executor, Tauri command, storage
-namespace, path, or other Host object.
+The production Host MUST route Host API `0.2.0` requests through a closed Dispatcher bound to the current trusted Runtime Session identity. The Dispatcher MUST compose only base navigation and Context, plugin-scoped storage, and other current non-privileged providers. It MUST NOT compose a permission service, grant source, native clipboard provider, arbitrary Tauri command, or mediation for ordinary Web network or Worker behavior. Every request MUST still pass strict Contract validation, identity and currentness checks, cancellation, deadline, and bounded response validation.
 
-The Dispatcher MUST use a closed dispatch table for the Host API `0.1.0`
-method catalog. An unknown or malformed method in the normal production path
-MUST be rejected by the Contract or transport before reaching a handler. A
-defensive direct dispatch MUST fail with stable `method_not_found`. A declared
-method without a current production provider MUST fail with stable
-`unavailable` and MUST NOT produce a side effect. The five `storage.*` methods
-MUST route only to the Host-private scoped-storage provider. `clipboard.read`
-and `clipboard.write` MUST route only to the Host-private, permission-backed
-plain-text clipboard provider, and MUST reauthorize the current Session against
-current Host facts before every native effect.
+A plugin or wire payload MUST NOT select or override a plugin ID, Page ID, Registration revision, Runtime attempt, origin, provider, executor, Tauri command, storage namespace, path, or another Host object. An unknown or malformed method MUST be rejected before reaching a handler, while a defensive direct dispatch MUST return stable `method_not_found`; a declared method without a current provider MUST return stable `unavailable` without a side effect.
 
-#### Scenario: Current Session calls an implemented method
+#### Scenario: Current Session calls a non-privileged method
+- **WHEN** the current plugin calls a navigation, Context, storage, or close method that is both in the catalog and actually composed
+- **THEN** the Dispatcher executes from Session identity and Host facts and returns a Contract-valid result
+- **THEN** plugin-provided identity, source, or Web behavior cannot change the Host target
 
-- **WHEN** a current ready Session sends a Contract-valid
-  `runtime.get_context`, `ui.close`, `actions.open`, `storage.get`,
-  `storage.set`, `storage.delete`, `storage.list`, `storage.get_quota`,
-  `clipboard.read`, or `clipboard.write` request through its authenticated Port
-- **THEN** the Host adapter passes the lease identity, validated request, and
-  Host-owned cancellation signal to that Session's Dispatcher
-- **THEN** the Dispatcher invokes only the narrow provider for that method and
-  does not allow the request to select an identity, storage namespace, path,
-  native clipboard object, permission decision, or executor
+#### Scenario: Plugin calls a removed or private method
+- **WHEN** a plugin calls a clipboard, permission mutation, Tauri, unknown, or Host-private method
+- **THEN** the Dispatcher returns a stable closed-contract failure before any native effect
+- **THEN** installation, official source, network, or Worker context creates no bypass
 
 #### Scenario: Plugin attempts to forge authority
 
-- **WHEN** a request, private frame, or plugin code attempts to submit a
-  plugin or Page identity, origin, grant, Registration revision, provider,
-  executor, Tauri command, storage namespace, path, or Host object
-- **THEN** the exact Contract or transport boundary rejects that value before
-  the Dispatcher, or the Dispatcher ignores every authority value not derived
-  from the lease
-- **THEN** no plugin, Page, Registration, permission, storage namespace, or
-  Host service is operated through the forged value
+- **WHEN** a request, private frame, or plugin code attempts to submit a plugin or Page identity, origin, Registration revision, provider, executor, Tauri command, storage namespace, path, or Host object
+- **THEN** the exact Contract or transport boundary rejects that value before the Dispatcher, or the Dispatcher ignores every authority value not derived from the Session lease
+- **THEN** no plugin, Page, Registration, storage namespace, or Host service is operated through the forged value
 
-#### Scenario: Method is unknown or its provider is unavailable
+#### Scenario: Method is unknown or provider is unavailable
 
-- **WHEN** a caller invokes a method outside the Host API catalog, invokes a
-  storage method while its provider is unavailable, or invokes a clipboard
-  method while its native or permission provider is unavailable
-- **THEN** an unknown method fails with stable `method_not_found`, and a
-  declared but unavailable method fails with stable `unavailable`
-- **THEN** the Dispatcher invokes no fallback storage, clipboard, browser,
-  native, permission, or arbitrary executor
-
-#### Scenario: Clipboard authorization is absent
-
-- **WHEN** a current Session invokes a clipboard method that its Manifest did
-  not request or its current Registration did not grant
-- **THEN** the Dispatcher returns stable `permission_denied`
-- **THEN** no native clipboard read or write occurs, and clipboard content does
-  not enter an error or diagnostic
+- **WHEN** a caller invokes a method outside the Host API catalog or invokes a declared method while its provider is unavailable
+- **THEN** the unknown method fails with stable `method_not_found` and the declared unavailable method fails with stable `unavailable`
+- **THEN** the Dispatcher invokes no fallback storage, browser, native, or arbitrary executor
 
 ### Requirement: Runtime Context MUST derive from current Host facts and real provider availability
 
-`runtime.get_context` MUST accept exact `{}` and return a complete,
-Contract-valid, copied, and frozen Runtime Context. Context fields MUST contain
-only the Contract's current Host API SemVer, current `en-US | zh-CN` locale,
-current `light | dark` theme, and a sorted and deduplicated list of capability
-method IDs.
+The Dispatcher MUST generate the complete Context from the current Host API `0.2.0` catalog, Session identity, locale and theme source, and actually composed non-privileged providers. It MUST NOT read Manifest permission requests, persisted grants, a permission catalog, or clipboard availability, and MUST NOT list ordinary Web capabilities as Host API method capabilities.
 
-A capability MUST mean that the Host currently has a real provider, the
-provider is available to the current Session, and current authorization permits
-the call. Production capabilities delivered through the Dispatcher MUST include
-the real `runtime.get_context`, `ui.close`, `actions.open`, `storage.get`,
-`storage.set`, `storage.delete`, `storage.list`, and `storage.get_quota`
-providers while their corresponding Host services and current namespace remain
-available. `clipboard.read` and `clipboard.write` MUST appear independently only
-when the current platform has the narrow native provider, the permission
-catalog supports that method, and the Session identity contains the
-corresponding actual grant. Context MUST NOT include plugin or Page identity,
-source, Manifest requests, raw grants, Registration revision, storage usage,
-clipboard content, paths, executors, or Host lifecycle objects.
+`runtime.get_context` MUST accept exact `{}` and return a complete, Contract-valid, copied, and frozen Runtime Context. While the same Session remains current, a real locale, theme, or provider-availability change MUST publish one complete `runtime.context_changed` replacement; an identical snapshot MUST NOT be published again. Invalidation of identity, Registration revision, resource generation, or Runtime attempt MUST terminate the old Session and MUST NOT reauthorize it through an event.
 
-While the same Session remains current, a real locale, theme, or capability
-snapshot change, including confirmed storage-provider degradation or recovery,
-MUST publish a complete `runtime.context_changed` replacement. An identical
-snapshot MUST NOT be published again. Invalidation of identity,
-Registration revision, resource generation, Runtime attempt, or grant snapshot
-MUST terminate the old Session and MUST NOT reauthorize it through an event.
+#### Scenario: Only base and storage providers are available
+- **WHEN** the current Session binds the base and scoped-storage providers
+- **THEN** Context lists only the corresponding `0.2.0` methods in sorted, unique order
+- **THEN** clipboard, permission, network, and Worker do not appear in the method list
 
-#### Scenario: SDK initializes from a real Context
-
-- **WHEN** the official iframe transport sends its initialization
-  `runtime.get_context` request on a current ready Session whose storage
-  provider is available and whose identity has one currently supported
-  clipboard grant
-- **THEN** the Dispatcher returns the current Host API version, locale, theme,
-  and sorted callable capability snapshot including all five storage methods
-  and only the granted clipboard method
-- **THEN** the SDK passes Contract validation and can call those methods without
-  receiving the former production placeholder `unavailable`
+#### Scenario: Legacy permission facts remain in an isolated record
+- **WHEN** recovery encounters permission or grant fields in an old record or stale frontend payload
+- **THEN** the Dispatcher ignores their authority and rejects incompatible boundary data
+- **THEN** Context does not project a legacy clipboard capability
 
 #### Scenario: Unavailable capabilities are excluded from Context
 
-- **WHEN** scoped storage is unavailable, the native clipboard provider is
-  unavailable, or the Session lacks one clipboard grant
+- **WHEN** a composed provider is unavailable to the current Session
 - **THEN** Context capabilities exclude only the affected methods
-- **THEN** catalog membership, a Manifest permission request, official
-  provenance, or a stale grant snapshot does not turn a method into a current
-  capability
+- **THEN** catalog membership, Manifest content, official provenance, and stale legacy facts do not turn a method into a current capability
 
 #### Scenario: Storage namespace becomes degraded
 
-- **WHEN** the Host confirms that the current identity's storage namespace is
-  damaged or blocked while the same Session otherwise remains current
-- **THEN** the Host publishes one complete Context replacement without the five
-  storage methods and does not modify unrelated capabilities
-- **THEN** an identical degraded snapshot is not emitted repeatedly and no
-  storage path, value, usage, or diagnostic enters Context
+- **WHEN** the Host confirms that the current identity's storage namespace is damaged or blocked while the same Session otherwise remains current
+- **THEN** the Host publishes one complete Context replacement without the storage methods and does not modify unrelated capabilities
+- **THEN** an identical degraded snapshot is not emitted repeatedly and no storage path, value, usage, or diagnostic enters Context
 
 #### Scenario: Locale or theme changes
 
-- **WHEN** the application locale or theme changes while the current Session's
-  trusted identity and capability availability remain valid
-- **THEN** the Host sends one complete, Contract-valid, and frozen Context
-  replacement
-- **THEN** the SDK replaces the entire Context before notifying subscribers,
-  and the plugin observes no Host-private state
+- **WHEN** the application locale or theme changes while the current Session's trusted identity and provider availability remain valid
+- **THEN** the Host sends one complete, Contract-valid, frozen Context replacement
+- **THEN** the SDK replaces the entire Context before notifying subscribers, and the plugin observes no Host-private state
 
 #### Scenario: Session authority changes
 
-- **WHEN** a Registration revision, resource generation, Runtime attempt, or
-  grant snapshot change makes the old Session identity no longer current
-- **THEN** the old Session terminates through the existing lifecycle and
-  rejects new calls, including clipboard calls initiated before event
-  convergence
-- **THEN** `runtime.context_changed` does not give the old Session a new
-  identity or reauthorize it
+- **WHEN** a Registration revision, resource generation, or Runtime attempt change makes the old Session identity no longer current
+- **THEN** the old Session terminates through the existing lifecycle and rejects new calls
+- **THEN** `runtime.context_changed` does not give the old Session a new identity or reauthorize it
 
 ### Requirement: ui.close MUST close only the calling Session's current Page after delivering a successful response
 
@@ -280,38 +209,34 @@ Production `PluginRuntimeFrame` MUST install a real Session-scoped Dispatcher
 for a current ready lease instead of a fixed unavailable handler. Tests MUST
 retain explicit fake or unavailable binding injection. Delivery MUST cover
 Dispatcher unit tests, Navigation and Action regressions, all five scoped
-storage methods, both independently authorized clipboard methods, real SDK and
-MessageChannel round trips, concurrency, cancellation, replacement, cleanup,
-malicious or stale identity, complete Context events, response-before-close
-ordering, persistent storage restart, permission revocation, bounded native
-clipboard evidence, and target macOS WKWebView evidence.
+storage methods, real SDK and MessageChannel round trips, concurrency,
+cancellation, replacement, cleanup, malicious or stale identity, complete
+Context events, response-before-close ordering, persistent storage restart,
+bounded diagnostics, and target macOS WKWebView evidence. It MUST prove that
+clipboard, permission mutation, arbitrary Tauri, and other removed or private
+methods are unavailable.
 
 English architecture, workspace, and validation documentation and their
-same-path Simplified Chinese mirrors MUST distinguish delivery status for the
-Host API Contract, transport, Dispatcher, permission, storage, and RPC
-validation. Root frontend build, type checking, tests, formatting and static
-checks, plus Rust formatting, tests, and static checks, MUST pass without
-regression. This capability MUST NOT claim delivery of permission prompts or
-settings, general RPC limits, templates, CLI, or development mode.
+same-path Simplified Chinese mirrors MUST distinguish the Host API Contract,
+transport, Dispatcher, storage, RPC validation, and open-Web versus native
+authority boundaries. Root frontend and Rust validation MUST pass without
+regression. This capability MUST NOT claim delivery of native clipboard,
+permission UI, general RPC quotas, templates, CLI, or development mode.
 
-#### Scenario: Production Dispatcher, storage, and clipboard loops pass
+#### Scenario: Production Dispatcher and storage loops pass
 
 - **WHEN** an external plugin uses only the public Contract and SDK tarballs to
-  initialize and call the ten implemented methods on a real Runtime Session
-- **THEN** Context, Page close, same-plugin Action, scoped persistent storage,
-  and independently granted plain-text clipboard operations complete through
-  the same authenticated Port and real Host providers with stable results,
-  errors, isolation, per-call authorization, and terminal cleanup
-- **THEN** the plugin neither needs nor can import Host-private modules, private
-  wire types, Tauri, storage paths, cursor codecs, native clipboard objects,
-  permission coordinators, or executors
+  initialize and call every Host API `0.2.0` method on a real Runtime Session
+- **THEN** Context, Page close, same-plugin Action, and scoped persistent
+  storage complete through the authenticated Port and current Host providers
+- **THEN** the plugin cannot import Host-private modules, private wire types,
+  Tauri, storage paths, cursor codecs, authority coordinators, or executors
 
-#### Scenario: Permission UI and RPC limits remain undelivered
+#### Scenario: Removed native and permission methods stay unavailable
 
-- **WHEN** the Task 5.5 focused and complete validation gates pass while the
-  permission UI and RPC-limit changes remain incomplete
-- **THEN** scoped `storage.*` methods and currently granted clipboard methods
-  are callable, while permission prompts, settings, and general RPC limits
-  remain unavailable
-- **THEN** the Roadmap and documentation mark Task 5.5 complete but do not
-  describe Task 5.6 or Milestone 5 as complete
+- **WHEN** a current or legacy plugin requests clipboard, permission mutation,
+  an arbitrary Tauri command, or another method outside Host API `0.2.0`
+- **THEN** the closed Contract or Dispatcher rejects it without a provider side
+  effect or capability projection
+- **THEN** focused and WebView evidence does not describe the removed method as
+  permission-denied, grantable, or delivered

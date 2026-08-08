@@ -60,21 +60,22 @@ Read these pages in the order that matches your question:
    lifecycle ownership.
 2. [Tooling and installation](tooling-and-installation.md) for CLI,
    Development Mode, packaging, and Settings installation.
-3. [Host API](host-api.md) for methods, providers, permissions, capabilities,
+3. [Host API](host-api.md) for methods, providers, capabilities,
    and stable errors.
-4. [Runtime, permissions, and security](runtime-permissions-security.md) for
+4. [Runtime and security](runtime-permissions-security.md) for
    initialization, replacement, retry, teardown, and isolation.
 5. [Compatibility and errors](compatibility-and-errors.md) for version
    dimensions, validation outcomes, and troubleshooting order.
 
 ## Boundaries
 
-The Manifest requests permissions; it never grants them. CLI validation proves
-that author-controlled bytes satisfy public contracts; it never installs a
-plugin or creates Host authority. Development Mode uses a process-local source
+The Manifest declares static plugin identity, compatibility, Runtime entry, and
+contributions; it contains no permission or Host-policy fields. CLI validation
+proves that author-controlled bytes satisfy public contracts; it never installs
+a plugin or creates Host authority. Development Mode uses a process-local source
 and manual reload; it does not install an `.lxp`. Production and development
-sources use the same Runtime, session, capability, permission, deadline, and
-isolation boundaries.
+sources use the same open isolated Runtime, session, deadline, and teardown
+boundaries.
 
 The repository verifies public-package tarballs and now owns a GitHub Release
 pipeline for future official `.lxp` plugins. No product official plugin exists

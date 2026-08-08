@@ -23,7 +23,7 @@ export const validTransportFrames = Object.freeze([
     type: 'lensx.plugin_transport.event',
     event: Object.freeze({
       event: 'runtime.context_changed',
-      payload: Object.freeze({ capabilities: [], hostApiVersion: '0.1.0', locale: 'en-US', theme: 'light' }),
+      payload: Object.freeze({ capabilities: [], hostApiVersion: '0.2.0', locale: 'en-US', theme: 'light' }),
     }),
   }),
   Object.freeze({

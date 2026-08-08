@@ -49,9 +49,9 @@ Runtime, CSP, permission, Host API, or workspace dependency rules.
 
 Each template MUST contain a Manifest accepted by the real Contract, one Page,
 one Action targeting that Page, one package-local iframe Runtime entry, and all
-build resources referenced by the Manifest. The examples MUST omit requested
-permissions or use an empty requested-permission set, MUST NOT call a Host API
-that requires authorization, and MUST NOT claim trusted origin through
+build resources referenced by the Manifest. The examples MUST use Manifest
+`0.2.0` without legacy permission fields, MUST NOT call an unpublished native
+Host API, and MUST NOT claim trusted origin through
 publisher text or an official repository location. The build output MUST be a
 self-contained package payload that does not depend on remote scripts, inline
 scripts, `eval`, an external network, a Host bundle, or repository source code.
@@ -65,14 +65,13 @@ scripts, `eval`, an external network, a Host bundle, or repository source code.
 - **THEN** the Action can open the Page contributed by the template through the
   current Host projection
 
-#### Scenario: Example requests no permissions
+#### Scenario: Example uses the open isolated Runtime
 
 - **WHEN** the template plugin is installed and initializes its Runtime
-- **THEN** installation produces no permissions awaiting authorization from the
-  example, and the example does not call storage, clipboard, or another
-  capability that requires authorization
-- **THEN** absent permissions do not prevent the Page, SDK initialization,
-  Runtime context display, or local frontend-only interaction
+- **THEN** installation creates no permission or grant workflow, and the
+  example may use supported ordinary Web capabilities inside its isolated page
+- **THEN** the Page, SDK initialization, Runtime context display, and local
+  frontend interaction remain separated from native Host authority
 
 #### Scenario: Manifest or resource is invalid
 
@@ -307,7 +306,7 @@ Manifest/Page/Action/Runtime structure, lifecycle commands, isolation
 validation, and current limitations in canonical English engineering
 documentation and MUST provide a semantically aligned Simplified Chinese mirror
 at the same relative path. The documentation MUST state explicitly that the
-templates are not a public CLI, Development Mode, a permission tutorial, or a
+templates are not a public CLI, Development Mode, a native-authority tutorial, or a
 complete plugin development tutorial. The dedicated gate, standard frontend
 gates, and Rust gates MUST jointly cover this capability; every introduced
 warning or error MUST be fixed before rerunning the failed command and the final

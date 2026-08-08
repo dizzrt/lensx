@@ -31,7 +31,6 @@ const pageResolution: PageResolution = {
     owner_id: activePage.owner_id,
     page_id: activePage.page_id,
     available: true,
-    required_permission_ids: [],
     route: '/route-probe',
     title: { 'en-US': 'Workspace Home' },
   },
@@ -51,7 +50,6 @@ const descriptor: PluginPageRuntimeDescriptor = Object.freeze({
   resource_generation: '0123456789abcdef0123456789abcdef',
   runtime_attempt_key: 'attempt-1',
   registration_revision: '7',
-  granted_permission_ids: [],
 });
 
 const deferred = <T,>() => {
@@ -181,7 +179,6 @@ describe('PluginRuntimeFrame', () => {
           resource_generation: descriptor.resource_generation,
           runtime_attempt_key: descriptor.runtime_attempt_key,
           registration_revision: descriptor.registration_revision,
-          granted_permission_ids: descriptor.granted_permission_ids,
         },
         targetWindow: (iframe as HTMLIFrameElement).contentWindow,
         targetOrigin: descriptor.expected_origin,

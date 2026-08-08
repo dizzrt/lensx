@@ -5,7 +5,6 @@ import {
   type LocalPluginInstallationErrorPayload,
   type LocalPluginInstallationLocalizedText,
   type LocalPluginInstallationOperation,
-  type LocalPluginInstallationPermissionRequest,
   type LocalPluginInstallationPublisher,
   type LocalPluginInstallationRequest,
   type LocalPluginInstallationResult,
@@ -18,7 +17,6 @@ const REVISION_PATTERN = /^(?:0|[1-9][0-9]*)$/u;
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{32,128}$/u;
 const MAX_TEXT_BYTES = 4_096;
 const MAX_URL_BYTES = 2_048;
-const MAX_PERMISSIONS = 64;
 
 const ERROR_MESSAGES = {
   already_installed: 'A plugin with this identity is already installed.',
@@ -122,42 +120,21 @@ const parsePublisher = (value: unknown): LocalPluginInstallationPublisher => {
   }
   return { author: record.author, homepage: record.homepage, repository: record.repository };
 };
-const parsePermission = (value: unknown): LocalPluginInstallationPermissionRequest => {
-  const record = assertRecord(value, ['permission_id', 'reason']);
-  if (
-    typeof record.permission_id !== 'string' ||
-    !PLUGIN_ID_PATTERN.test(record.permission_id) ||
-    record.permission_id.length > 255
-  )
-    throw new TypeError('Local plugin installation permission is invalid.');
-  return { permission_id: record.permission_id, reason: parseLocalizedText(record.reason) };
-};
 const parseCandidate = (value: unknown): LocalPluginInstallationCandidate => {
-  const record = assertRecord(value, ['plugin_id', 'version', 'display_name', 'publisher', 'requested_permissions']);
+  const record = assertRecord(value, ['plugin_id', 'version', 'display_name', 'publisher']);
   if (
     typeof record.plugin_id !== 'string' ||
     !PLUGIN_ID_PATTERN.test(record.plugin_id) ||
     record.plugin_id.length > 255 ||
     typeof record.version !== 'string' ||
-    !SEMVER_PATTERN.test(record.version) ||
-    !Array.isArray(record.requested_permissions) ||
-    record.requested_permissions.length > MAX_PERMISSIONS
+    !SEMVER_PATTERN.test(record.version)
   )
     throw new TypeError('Local plugin installation candidate is invalid.');
-  const requestedPermissions = record.requested_permissions.map(parsePermission);
-  if (
-    requestedPermissions.some((item, index) => {
-      const previous = requestedPermissions[index - 1];
-      return previous !== undefined && previous.permission_id >= item.permission_id;
-    })
-  )
-    throw new TypeError('Local plugin installation permissions are not sorted and unique.');
   return {
     plugin_id: record.plugin_id,
     version: record.version,
     display_name: parseLocalizedText(record.display_name),
     publisher: parsePublisher(record.publisher),
-    requested_permissions: requestedPermissions,
   };
 };
 const parseDiagnostic = (value: unknown): LocalPluginInstallationDiagnostic => {

@@ -65,7 +65,7 @@ describe('Plugin SDK public package boundary', () => {
 
   test('publish validation rejects missing exports, private files, dependency leaks, and forbidden declarations', () => {
     const metadata = {
-      dependencies: { '@lensx/plugin-contract': '0.1.0' },
+      dependencies: { '@lensx/plugin-contract': '0.2.0' },
       exports: {
         '.': { import: './dist/src/index.js', types: './dist/src/index.d.ts' },
         './iframe': { import: './dist/src/iframe.js', types: './dist/src/iframe.d.ts' },

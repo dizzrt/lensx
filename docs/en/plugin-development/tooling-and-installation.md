@@ -35,7 +35,7 @@ lensx-plugin inspect ./my-plugin/artifacts/com.example.my-plugin-0.1.0.lxp
 `valid`, `incompatible`, and `invalid` are different outcomes. A compatible CLI
 result proves public payload acceptance only. The Host rechecks selected bytes
 before installation and remains the authority for source, compatibility,
-registration, grants, and Runtime state.
+registration and Runtime state.
 
 ## Development Mode
 
@@ -54,22 +54,22 @@ Runtime attempt, even when bytes are unchanged; a failed reload preserves the
 previous current generation.
 
 There is no watch, HMR, automatic reload, persistent development registration,
-or looser permission mode. Removing a development registration does not
+or looser Runtime mode. Removing a development registration does not
 uninstall a formal package or clear plugin data.
 
 ## Local installation
 
 Use `pack` to produce the canonical `.lxp`, inspect it, then choose **Install
 from file** in Settings. The Host prepares the exact selected bytes, displays
-the unverified publisher and requested permissions, accepts an explicit user
-decision, and commits only that prepared candidate. Installation begins with
-no grants; selected sensitive permissions are applied afterward through the
-Host permission service.
+the unverified publisher and an open-Web trust notice, accepts an explicit user
+decision, and commits only that prepared candidate. The notice explains that
+lensX isolates Host and other-plugin authority but does not approve or
+individually authorize Worker, network, remote-resource, Blob/Data, WASM, or
+browser-origin storage behavior.
 
-Cancellation before commit creates no registration. A post-commit permission
-failure can leave the package installed with a narrower actual grant set; the
-UI reports that partial result rather than pretending to roll back or replay
-the selection.
+Cancellation before commit creates no registration. A successful commit
+publishes one durable permission-free registration; there is no post-commit
+grant phase.
 
 ## Boundary comparison
 
@@ -80,10 +80,9 @@ the selection.
 | Lifetime | Process-local | Persisted and manageable |
 | Refresh | Explicit manual reload | Explicit replacement workflow |
 | Package installed | No | Yes |
-| Grants | Process-local current facts | Persisted Host grant snapshot |
+| Permission/grant state | None | None |
 | Runtime security | Same production boundaries | Same production boundaries |
 
-For lifecycle and permission details, read
-[Runtime, permissions, and security](runtime-permissions-security.md). For
+For lifecycle and open-Web details, read
+[Runtime and security](runtime-permissions-security.md). For
 classification failures, use [Compatibility and errors](compatibility-and-errors.md).
-

@@ -64,7 +64,6 @@ struct CurrentDevelopmentGeneration {
 #[derive(Clone, Debug, Serialize)]
 pub struct DevelopmentHarnessRegistration {
     pub entry_url: String,
-    pub grants_empty: bool,
     pub source_development: bool,
 }
 
@@ -72,8 +71,7 @@ pub struct DevelopmentHarnessRegistration {
 pub struct DevelopmentHarnessReload {
     pub entry_url: String,
     pub old_scope_revoked: bool,
-    pub permission_delta_requested: bool,
-    pub permission_delta_not_granted: bool,
+    pub manifest_version_advanced: bool,
     pub revision_advanced: bool,
     pub scope_changed: bool,
 }
@@ -92,14 +90,12 @@ pub struct PluginDevelopmentRuntimeHarness {
     snapshots: Arc<DevelopmentSnapshotStore>,
     resources: Arc<PluginResourceService>,
     current: Mutex<Option<CurrentDevelopmentGeneration>>,
-    permission_delta: bool,
 }
 
 impl PluginDevelopmentRuntimeHarness {
     pub fn register(
         root: PathBuf,
         package: &[u8],
-        permission_delta: bool,
     ) -> Result<(Arc<Self>, DevelopmentHarnessRegistration), ()> {
         if !root.is_absolute() || root.exists() {
             return Err(());
@@ -118,7 +114,6 @@ impl PluginDevelopmentRuntimeHarness {
             snapshot.identity.clone(),
             source.clone(),
             true,
-            Vec::new(),
         )
         .map_err(|_| ())?;
         manager
@@ -144,7 +139,6 @@ impl PluginDevelopmentRuntimeHarness {
                 registration.facts.payload,
                 PluginRegistrationPayload::DevelopmentSnapshot { .. }
             );
-        let grants_empty = registration.facts.granted_permission_ids.is_empty();
         let harness = Arc::new(Self {
             root,
             source,
@@ -156,13 +150,11 @@ impl PluginDevelopmentRuntimeHarness {
                 entry_url: entry_url.clone(),
                 snapshot,
             })),
-            permission_delta,
         });
         Ok((
             harness,
             DevelopmentHarnessRegistration {
                 entry_url,
-                grants_empty,
                 source_development,
             },
         ))
@@ -176,9 +168,7 @@ impl PluginDevelopmentRuntimeHarness {
         let mut current = self.lock_current();
         let previous = current.take().ok_or(())?;
         let previous_revision = self.manager.registration_revision();
-        if self.permission_delta {
-            apply_permission_delta(&self.source)?;
-        }
+        advance_manifest_version(&self.source)?;
         let snapshot = self
             .snapshots
             .publish_from_source(&self.source, &self.manager.host_versions())
@@ -192,7 +182,6 @@ impl PluginDevelopmentRuntimeHarness {
             snapshot.identity.clone(),
             self.source.clone(),
             existing.facts.enabled,
-            existing.facts.granted_permission_ids.clone(),
         )
         .map_err(|_| ())?;
         if self
@@ -222,20 +211,7 @@ impl PluginDevelopmentRuntimeHarness {
             })
             .map_err(|_| ())?
             .entry_url;
-        let registration = self
-            .manager
-            .registration(&snapshot.manifest.plugin_id)
-            .ok_or(())?;
-        let permission_delta_requested = snapshot
-            .manifest
-            .requested_permissions
-            .iter()
-            .any(|request| request.permission_id == "clipboard.read");
-        let permission_delta_not_granted = !registration
-            .facts
-            .granted_permission_ids
-            .iter()
-            .any(|permission| permission == "clipboard.read");
+        let manifest_version_advanced = snapshot.manifest.version == "1.1.0";
         let scope_changed = previous.entry_url != entry_url;
         *current = Some(CurrentDevelopmentGeneration {
             entry_id: previous.entry_id,
@@ -245,8 +221,7 @@ impl PluginDevelopmentRuntimeHarness {
         Ok(DevelopmentHarnessReload {
             entry_url,
             old_scope_revoked,
-            permission_delta_requested,
-            permission_delta_not_granted,
+            manifest_version_advanced,
             revision_advanced: previous_revision != next_revision,
             scope_changed,
         })
@@ -302,7 +277,7 @@ fn extract_package_payload(package: &[u8], source: &Path) -> Result<(), ()> {
     Ok(())
 }
 
-fn apply_permission_delta(source: &Path) -> Result<(), ()> {
+fn advance_manifest_version(source: &Path) -> Result<(), ()> {
     let path = source.join("manifest.json");
     let mut manifest: serde_json::Value =
         serde_json::from_slice(&fs::read(&path).map_err(|_| ())?).map_err(|_| ())?;
@@ -310,16 +285,6 @@ fn apply_permission_delta(source: &Path) -> Result<(), ()> {
     object.insert(
         "version".to_owned(),
         serde_json::Value::String("1.1.0".to_owned()),
-    );
-    object.insert(
-        "requested_permissions".to_owned(),
-        serde_json::json!([{
-            "permission_id": "clipboard.read",
-            "reason": {
-                "en-US": "Verify that development reload does not auto-grant clipboard access.",
-                "zh-CN": "验证开发 reload 不会自动授予剪贴板权限。"
-            }
-        }]),
     );
     let mut bytes = serde_json::to_vec(&manifest).map_err(|_| ())?;
     bytes.push(b'\n');

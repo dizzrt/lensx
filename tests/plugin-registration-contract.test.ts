@@ -72,9 +72,7 @@ describe('Plugin Registration Contract fixtures', () => {
     const parsedDetail = parsed.detail;
     if (parsedDetail.kind === 'registered') {
       expect(parsedDetail.enabled).toBe(true);
-      expect(() => {
-        (parsedDetail.granted_permission_ids as string[]).push('secret.permission');
-      }).toThrow();
+      expect(parsedDetail).not.toHaveProperty('granted_permission_ids');
     }
   });
 });

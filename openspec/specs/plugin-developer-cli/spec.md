@@ -196,9 +196,10 @@ produce byte-for-byte identical `.lxp` files and whole-package SHA-256 digests.
 
 `inspect` MUST perform read-only inspection of an `.lxp` within package-format
 size limits, MUST return `compatible | incompatible | invalid`, a safe
-normalized Manifest and compatibility result, and permitted package facts, and
-MUST NOT extract to the filesystem, invoke the Host installer, change Plugin
-Manager, grant permissions, create a Runtime Session, or execute the payload.
+normalized Manifest `0.2.0` and compatibility result, and permitted package
+facts, and MUST NOT extract to the filesystem, invoke the Host installer,
+change Plugin Manager, create a permission or grant, create Host authority,
+create a Runtime Session, or execute the payload.
 
 #### Scenario: Inspect a compatible package
 
@@ -271,7 +272,7 @@ MUST continue to revalidate untrusted bytes independently and MAY additionally
 reject them because of Host-private conditions such as source file identity,
 races, installation storage, Manager state, or lifecycle state. A CLI result
 MUST NOT claim installation authorization, source trust, signature status, or
-permissions.
+Host authority.
 
 #### Scenario: Shared corpus is evaluated in both languages
 

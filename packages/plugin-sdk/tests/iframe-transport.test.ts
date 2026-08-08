@@ -48,7 +48,7 @@ const bootstrap = {
 };
 const context = Object.freeze({
   capabilities: Object.freeze(['storage.get', 'ui.close']),
-  hostApiVersion: '0.1.0',
+  hostApiVersion: '0.2.0',
   locale: 'en-US',
   theme: 'light',
 });

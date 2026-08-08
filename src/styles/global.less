@@ -447,8 +447,6 @@ body {
 }
 
 .plugin-management-entry-list,
-.plugin-management-permissions,
-.plugin-management-permission-prompt-list,
 .plugin-management-diagnostics {
   padding: 0;
   margin: 0;
@@ -538,46 +536,7 @@ body {
   }
 }
 
-.plugin-management-permissions li {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding-block: 5px;
-  border-bottom: 1px solid var(--semi-color-border);
-}
-
-.plugin-management-permission-main {
-  min-width: 0;
-  flex: 1;
-
-  p {
-    margin-block: 4px;
-    overflow-wrap: anywhere;
-  }
-}
-
-.plugin-management-permission-prompt-list {
-  max-height: min(280px, 40vh);
-  overflow: auto;
-  overscroll-behavior: contain;
-
-  li {
-    padding: 10px 0;
-    border-bottom: 1px solid var(--semi-color-border);
-
-    p {
-      margin-block: 6px 0;
-      overflow-wrap: anywhere;
-    }
-  }
-
-  .semi-checkbox:focus-within {
-    outline: 2px solid var(--semi-color-focus-border);
-    outline-offset: 2px;
-  }
-}
-
-.plugin-management-permission-modal {
+.plugin-management-confirmation-modal {
   .semi-modal {
     margin: 16px auto;
   }

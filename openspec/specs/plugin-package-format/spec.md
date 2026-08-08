@@ -316,7 +316,7 @@ state.
 ### Requirement: The package format must not declare Host source, signature, permission, or lifecycle facts
 
 An `.lxp` Manifest, checksums, and payload MUST NOT declare Host-owned source,
-installed path, package digest, enabled state, permission grants, signature
+installed path, package digest, enabled state, legacy permission or grant fields, signature
 status, verified or official provenance, lifecycle, or Runtime session.
 Development sources and unsigned local sources MUST use the same canonical
 package payload, and the Host MUST inject source facts outside the package.
@@ -327,7 +327,7 @@ an expected official source.
 A future signing capability MUST cover the entire canonical `.lxp` package
 digest or use a separate outer or sidecar envelope for the signature and
 provenance. It MUST NOT write signature facts into the author Manifest or
-change this capability's local validation or permission result.
+change this capability's local validation or Host authority result.
 
 #### Scenario: A Publisher claims an official source
 
@@ -351,6 +351,6 @@ change this capability's local validation or permission result.
 - **WHEN** an `.lxp` passes package-format inspection
 - **THEN** this capability does not create an installation directory, Plugin
   Manager record, Tauri command, Action or Page, iframe, Runtime session, Host
-  API, grant, or signing conclusion
-- **THEN** later installation, execution, permission, and signing tasks must
+  API, native authority, or signing conclusion
+- **THEN** later installation, execution, Host API, and signing tasks must
   consume and constrain these package facts explicitly
