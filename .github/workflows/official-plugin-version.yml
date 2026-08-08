@@ -1,0 +1,43 @@
+name: Official plugin version PR
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.changeset/*.md'
+      - '.changeset/config.json'
+      - 'plugins/official/**'
+
+permissions: {}
+
+concurrency:
+  group: official-plugin-version-main
+  cancel-in-progress: false
+
+jobs:
+  version:
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d
+        with:
+          version: 11.17.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: changesets/action@8eb63fb4cfc7f9643537c7d39d0b68c835012a19
+        with:
+          version: pnpm run version:official-plugins
+          publish: pnpm run publish:official-plugins:no-op
+          title: 'chore: version official plugins'
+          commit: 'chore: version official plugins'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

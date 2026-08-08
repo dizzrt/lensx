@@ -766,9 +766,9 @@ React 模板额外依赖 Task 1.4。
 
 ## Milestone 7：落地官方插件并完成平台加固
 
-- [ ] **Task 7.1：建立官方插件发布流水线**
+- [x] **Task 7.1：建立官方插件发布流水线**
 
-**OpenSpec change**：`add-official-plugin-release-pipeline`
+**OpenSpec change**：[add-official-plugin-release-pipeline](openspec/changes/archive/2026-08-08-add-official-plugin-release-pipeline/)
 
 **目标**：让 `plugins/official/*` 可以独立版本、验证、构建和发布，而不绑定 lensX 应用版本。
 

@@ -34,9 +34,11 @@ use dpi::{LogicalPosition, LogicalSize};
 use objc2::runtime::Bool;
 use objc2::{
   rc::Retained,
-  runtime::{AnyObject, NSObject, ProtocolObject},
+  runtime::{AnyObject, ProtocolObject},
   AllocAnyThread, DeclaredClass, MainThreadOnly, Message,
 };
+#[cfg(any(debug_assertions, feature = "devtools", feature = "mac-proxy"))]
+use objc2::runtime::NSObject;
 #[cfg(target_os = "macos")]
 use objc2_app_kit::{NSApplication, NSAutoresizingMaskOptions, NSTitlebarSeparatorStyle, NSView};
 #[cfg(target_os = "macos")]

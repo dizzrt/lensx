@@ -92,6 +92,25 @@ CLI `build` 与默认 `pack` 会执行项目代码；`validate`、`inspect` 和 
 绝不替代 Host 对不可信 package bytes 的复验。该门禁不代表 Development Mode/watch/reload 或
 signing/provenance 已交付；它们仍属于 roadmap Task 6.5 与 8.1。
 
+## 官方插件发布流水线验证
+
+修改 `plugins/official/*`、Changesets、CODEOWNERS、release planner、candidate/audit schema、
+官方 release workflow、installer/Runtime gate 或双语发布文档时必须运行：
+
+```bash
+pnpm run check:official-plugin-release-pipeline
+```
+
+该 gate 验证零/单/双 member 与非法 contract fixture、workspace/Host import 边界、确定性 base/head
+规划、显式 Changeset policy、metadata-only versioning、canonical candidate record、mock GitHub
+draft/幂等/冲突行为、固定 revision 的最小权限 workflow 与文档 drift。临时双插件 consumer 使用
+全局 pnpm store，只升版其中一个插件，以公共 CLI build 并重复 pack，对比 TypeScript/Rust facts，
+运行普通 install preparation 与 Runtime E2E harness，并证明另一个插件和根应用保持不变。它不会
+创建 public release。
+
+该 focused command 组合公共 CLI/package-format、本地安装、Runtime lifecycle、permission prompt
+与 workspace gate。最终完成仍必须运行下文完整 frontend/shared 与 Rust 命令。
+
 ## 插件开发模式验证
 
 修改 feature/capability handshake、directory inspector、snapshot store、process-local Manager

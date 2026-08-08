@@ -22,6 +22,8 @@
   仓库维护的插件起步项目。
 - [插件开发者 CLI](development/plugin-developer-cli.md) — 通过公共 CLI 创建、构建、校验、
   打包和检查插件。
+- [官方插件发布流水线](development/official-plugin-release.md) — 独立 Changesets、candidate、
+  audit 与最小权限 `.lxp` release。
 - [插件开发模式](development/plugin-development-mode.md) — 在专用 Host 构建中手动注册、
   重新加载与移除未打包的 `dist/`。
 - [前端指南](development/frontend-guidelines.md) — React、Semi Design、样式、主题、

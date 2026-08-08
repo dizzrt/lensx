@@ -20,6 +20,7 @@ Status has a precise meaning:
 | Contract, SDK, Testkit, CLI | Shipped | Public package boundaries and real tarballs are verified. |
 | Optional Plugin UI | Shipped | The plugin owns React, React DOM, Semi Design, and the UI package. |
 | Local `.lxp` installation | Shipped | Settings uses the canonical Host inspection and preparation boundary. |
+| Official `.lxp` release pipeline | Shipped | Future official plugins have independent Changesets, candidates, audit records, and releases; no product plugin exists yet. |
 | Development Mode | Conditional | A dedicated build and explicit process switch are required. |
 | Host API | Conditional | A catalog entry is not authority; use the latest session capabilities. |
 | npm publication | Not delivered | The repository can produce tarballs, but the packages are not on npm. |
@@ -31,6 +32,7 @@ Status has a precise meaning:
 <!-- lensx-capability-status {"id":"testkit-package","status":"shipped"} -->
 <!-- lensx-capability-status {"id":"cli-package","status":"shipped"} -->
 <!-- lensx-capability-status {"id":"local-installation","status":"shipped"} -->
+<!-- lensx-capability-status {"id":"official-release-pipeline","status":"shipped"} -->
 <!-- lensx-capability-status {"id":"development-mode","status":"conditional"} -->
 <!-- lensx-capability-status {"id":"host-api-session","status":"conditional"} -->
 <!-- lensx-capability-status {"id":"npm-publication","status":"not-delivered"} -->
@@ -74,8 +76,8 @@ and manual reload; it does not install an `.lxp`. Production and development
 sources use the same Runtime, session, capability, permission, deadline, and
 isolation boundaries.
 
-The repository currently verifies distributable tarballs, not a registry
-channel. Obtain those tarballs from the lensX build you are testing. Do not
-invent npm commands, download URLs, automatic reload, signing, Marketplace, or
-update behavior.
-
+The repository verifies public-package tarballs and now owns a GitHub Release
+pipeline for future official `.lxp` plugins. No product official plugin exists
+yet, and the public packages are still not on npm. Do not invent package
+registry commands, product download URLs, automatic reload/update, signing,
+Marketplace, or Host trust behavior.

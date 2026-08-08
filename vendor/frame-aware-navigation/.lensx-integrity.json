@@ -12,6 +12,7 @@
     "tauri-runtime/src/webview.rs",
     "tauri-runtime-wry/src/lib.rs",
     "wry/src/lib.rs",
+    "wry/src/wkwebview/download.rs",
     "wry/src/wkwebview/class/wry_navigation_delegate.rs",
     "wry/src/wkwebview/mod.rs",
     "wry/src/wkwebview/navigation.rs"
@@ -1003,7 +1004,7 @@
     },
     {
       "path": "wry/src/wkwebview/download.rs",
-      "sha256": "3b67113c3d13a2082992d284a1e995e07c06a9b892b3ed2dae9b7370daa0f6c0"
+      "sha256": "5753fda444393001031430092eb2cbf777e292f8525f978695ec1d305b2c2daf"
     },
     {
       "path": "wry/src/wkwebview/drag_drop.rs",
@@ -1019,7 +1020,7 @@
     },
     {
       "path": "wry/src/wkwebview/mod.rs",
-      "sha256": "f2061b195b35f3838a843e467061383a220cef68045ec879a85a166671be98fa"
+      "sha256": "06eddf52465ab6742a961e05325c5c04d414b46c859ee1a3f61614d61e0a2da9"
     },
     {
       "path": "wry/src/wkwebview/navigation.rs",

@@ -19,6 +19,7 @@ export const WORKSPACE_BOUNDARY_RULES = {
   hostInternalStyle: 'workspace/host-internal-style',
   hostPrivateDependency: 'workspace/host-private-dependency',
   hostPrivateImport: 'workspace/host-private-import',
+  hostOfficialPluginSourceImport: 'workspace/host-official-plugin-source-import',
   hostTauriAdapter: 'workspace/host-tauri-adapter',
   authoringToolNodeBuiltin: 'workspace/authoring-tool-node-builtin',
   pluginAuthoringToolRuntimeImport: 'workspace/plugin-authoring-tool-runtime-import',
@@ -220,6 +221,35 @@ const packageSubpathIsExported = (manifest: PackageManifest, packageName: string
 
 const memberContainingPath = (members: readonly WorkspaceMember[], targetPath: string): WorkspaceMember | undefined =>
   members.find((member) => isWithin(member.rootDir, targetPath));
+
+const validateHostSourceSpecifier = (
+  rootDir: string,
+  members: readonly WorkspaceMember[],
+  sourceFile: string,
+  specifier: string,
+  aliases: readonly AliasMapping[],
+): WorkspaceBoundaryDiagnostic[] => {
+  const packageName =
+    !specifier.startsWith('.') && !specifier.startsWith('/') ? packageNameFromSpecifier(specifier) : undefined;
+  const packageTarget = members.find((member) => member.kind === 'official-plugin' && member.name === packageName);
+  const resolvedTarget =
+    resolveAlias(specifier, aliases) ??
+    (specifier.startsWith('.') ? resolve(dirname(sourceFile), specifier) : undefined);
+  const sourceTarget =
+    resolvedTarget === undefined
+      ? undefined
+      : members.find((member) => member.kind === 'official-plugin' && isWithin(member.rootDir, resolvedTarget));
+  if (packageTarget === undefined && sourceTarget === undefined) return [];
+  return [
+    diagnostic(
+      rootDir,
+      WORKSPACE_BOUNDARY_RULES.hostOfficialPluginSourceImport,
+      sourceFile,
+      specifier,
+      'Host source must consume installed plugin registrations rather than import official plugin code.',
+    ),
+  ];
+};
 
 const resolveModuleCandidate = (candidate: string): string => {
   if (existsSync(candidate)) {
@@ -625,6 +655,11 @@ export const checkWorkspaceBoundaries = (rootDir: string): WorkspaceBoundaryDiag
           ...validateSourceSpecifier(resolvedRoot, rootManifest, members, member, sourceFile, specifier, aliases),
         );
       }
+    }
+  }
+  for (const sourceFile of collectSourceFiles(join(resolvedRoot, 'src'))) {
+    for (const specifier of collectModuleSpecifiers(sourceFile)) {
+      diagnostics.push(...validateHostSourceSpecifier(resolvedRoot, members, sourceFile, specifier, aliases));
     }
   }
 

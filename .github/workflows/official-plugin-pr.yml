@@ -1,0 +1,103 @@
+name: Official plugin PR gate
+
+on:
+  pull_request:
+    paths:
+      - '.changeset/**'
+      - '.github/CODEOWNERS'
+      - '.github/workflows/official-plugin-*.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'packages/plugin-*/**'
+      - 'plugins/official/**'
+      - 'scripts/official-plugin-release.ts'
+      - 'scripts/official-plugin-release/**'
+      - 'src/app/plugins/**'
+      - 'src-tauri/src/plugin_*.rs'
+      - 'tests/official-plugin-*.test.ts*'
+      - 'tests/fixtures/official-plugin-release/**'
+
+permissions: {}
+
+concurrency:
+  group: official-plugin-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d
+        with:
+          version: 11.17.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - id: plan
+        run: >-
+          echo "matrix=$(node --experimental-strip-types scripts/official-plugin-release.ts plan-matrix
+          --base '${{ github.event.pull_request.base.sha }}'
+          --head '${{ github.event.pull_request.head.sha }}')" >> "$GITHUB_OUTPUT"
+
+  gate:
+    needs: plan
+    permissions:
+      contents: read
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d
+        with:
+          version: 11.17.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run check:official-plugin-release-pipeline
+
+  plugin:
+    needs: [plan, gate]
+    if: ${{ needs.plan.outputs.matrix != '{"include":[]}' }}
+    permissions:
+      contents: read
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d
+        with:
+          version: 11.17.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm --dir packages/plugin-cli run build
+      - run: >-
+          node --experimental-strip-types scripts/official-plugin-release.ts candidate
+          --plugin '${{ matrix.slug }}'
+          --output '${{ runner.temp }}/official-plugin-${{ matrix.slug }}'
+          --repository 'https://github.com/${{ github.repository }}'
+          --commit '${{ github.event.pull_request.head.sha }}'
+          --ref 'refs/pull/${{ github.event.pull_request.number }}/head'
+          --run-url 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'

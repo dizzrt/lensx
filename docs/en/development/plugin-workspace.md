@@ -337,6 +337,18 @@ and light/dark at `650×600`, including semantic structure, live regions,
 keyboard recovery, focus, computed tokens, long text, and screenshots. These
 gates do not implement or simulate Host installation or iframe execution.
 
+## Official Plugin Release Units
+
+Every direct `plugins/official/*` member remains a normal public-boundary
+plugin, but it also owns an independent private package version, Manifest
+version, CHANGELOG, tests, `test:e2e`, and explicit CODEOWNERS entry. The Host
+must not import official plugin source. Changesets expresses release intent;
+the repository publishes canonical `.lxp` assets rather than npm packages.
+
+See [Official Plugin Release Pipeline](official-plugin-release.md) for path
+planning, version PRs, candidate gates, asset schemas, retries, and the
+non-authoritative release audit boundary.
+
 ## Root Commands
 
 The standard root commands are repository-wide entry points:
@@ -363,6 +375,7 @@ pnpm run test:workspace-lifecycle
 pnpm run check:plugin-sdk
 pnpm run check:plugin-testkit
 pnpm run check:plugin-ui
+pnpm run check:official-plugin-release-pipeline
 ```
 
 ## Dependency Direction

@@ -12,7 +12,9 @@ adapter, public Host API semantic contract, Host-private permission core, and
 the macOS text-clipboard provider from the intended runtime extension boundary.
 The public Plugin Developer CLI and project templates, complete foreground
 plugin execution lifecycle, Host-private management and permission surfaces,
-and feature-gated Plugin Development Mode are also shipped. npm publication,
+and feature-gated Plugin Development Mode are also shipped. The repository also
+ships an independent official-plugin `.lxp` release pipeline and external audit
+sidecar that the Host ignores. npm publication,
 signing, Marketplace distribution, remote updates, decision history, and
 user-initiated rollback history are not currently implemented. Stable specs
 and source code define the shipped subset; external authors should start from
@@ -1530,9 +1532,9 @@ Host-private RPC v1 validation boundary, Dispatcher, plugin-scoped storage
 provider, permission core, macOS text-clipboard provider, Plugin Management
 Settings, permission prompts, public project templates and CLI, feature-gated
 Plugin Development Mode, and the bilingual external-developer documentation
-are delivered. Each remaining capability—npm publication, signing,
+and the official-plugin release pipeline are delivered. Each remaining capability—npm publication, signing,
 Marketplace distribution, remote/automatic updates, decision or
-user-initiated rollback history, background Runtime, or sidecars—requires its
+user-initiated rollback history, background Runtime, or executable/trusted sidecars—requires its
 own accepted specification and implementation evidence. This architectural
 document defines direction and boundaries, not a release checklist. External
 package, API, tutorial, and troubleshooting details live in the

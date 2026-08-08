@@ -1,0 +1,16 @@
+{
+  "valid": ["empty", "single", "double"],
+  "invalid": [
+    "identity-drift",
+    "version-drift",
+    "package-public",
+    "missing-script",
+    "missing-test",
+    "missing-changelog",
+    "missing-owner",
+    "wildcard-owner",
+    "duplicate-owner",
+    "unknown-owner",
+    "tauri-dependency"
+  ]
+}

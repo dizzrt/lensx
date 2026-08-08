@@ -20,6 +20,7 @@ const patchedFiles = Object.freeze([
   'tauri-runtime/src/webview.rs',
   'tauri-runtime-wry/src/lib.rs',
   'wry/src/lib.rs',
+  'wry/src/wkwebview/download.rs',
   'wry/src/wkwebview/class/wry_navigation_delegate.rs',
   'wry/src/wkwebview/mod.rs',
   'wry/src/wkwebview/navigation.rs',

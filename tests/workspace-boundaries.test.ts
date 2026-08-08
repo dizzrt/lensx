@@ -51,6 +51,17 @@ describe('workspace boundary checker', () => {
     expect(checkWorkspaceBoundaries(fixtureRoot('valid'))).toEqual([]);
   });
 
+  test('rejects Host imports of official plugin packages or source paths', () => {
+    const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid')).filter(
+      (item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.hostOfficialPluginSourceImport,
+    );
+
+    expect(diagnostics.map((item) => [item.file, item.specifier])).toEqual([
+      ['src/app/official.ts', '../../plugins/official/bad/src/index'],
+      ['src/app/official.ts', '@fixture/official-bad'],
+    ]);
+  });
+
   test('keeps both project templates on ordinary SemVer and resolves them to current workspace packages', () => {
     const templates = [
       ['framework-neutral', ['@lensx/plugin-contract', '@lensx/plugin-sdk', '@lensx/plugin-testkit']],

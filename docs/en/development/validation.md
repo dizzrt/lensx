@@ -109,6 +109,30 @@ revalidation of untrusted package bytes. This gate does not establish
 Development Mode/watch/reload or signing/provenance delivery, which remain
 roadmap Tasks 6.5 and 8.1.
 
+## Official Plugin Release Pipeline Validation
+
+Changes to `plugins/official/*`, Changesets, CODEOWNERS, release planning,
+candidate/audit schemas, official release workflows, installer/Runtime gates,
+or the bilingual release documentation must run:
+
+```bash
+pnpm run check:official-plugin-release-pipeline
+```
+
+The gate validates zero/one/two-member and invalid contract fixtures,
+workspace/Host import boundaries, deterministic base/head planning, explicit
+Changeset policy, metadata-only versioning, canonical candidate records, mock
+GitHub draft/idempotency/conflict behavior, pinned least-privilege workflows,
+and documentation drift. Its temporary two-plugin consumer uses the global
+pnpm store, versions only one plugin, builds and repeat-packs with the public
+CLI, compares TypeScript and Rust facts, runs ordinary install preparation and
+the Runtime E2E harness, and proves the other plugin and root app stay
+unchanged. It never creates a public release.
+
+This focused command composes the public CLI/package-format, local installation,
+Runtime lifecycle, permission prompt, and workspace gates. Final completion
+still requires the complete frontend/shared and Rust commands below.
+
 ## Plugin Development Mode Validation
 
 Changes to the feature/capability handshake, directory inspector, snapshot

@@ -17,6 +17,7 @@
 | Contract、SDK、Testkit、CLI | 已交付 | 公共 package 边界和真实 tarball 已验证。 |
 | 可选 Plugin UI | 已交付 | 插件自行拥有 React、React DOM、Semi Design 和 UI package。 |
 | 本地 `.lxp` 安装 | 已交付 | Settings 使用 canonical Host inspection 和 preparation 边界。 |
+| 官方 `.lxp` 发布流水线 | 已交付 | 未来官方插件拥有独立 Changesets、candidate、audit record 与 release；当前尚无产品插件。 |
 | Development Mode | 条件可用 | 需要专用 build 和显式进程开关。 |
 | Host API | 条件可用 | catalog 条目不是 authority；以最新 session capabilities 为准。 |
 | npm 发布 | 尚未交付 | 仓库可以产出 tarball，但 package 尚未发布到 npm。 |
@@ -50,6 +51,6 @@ Manifest 只能请求权限，不能授予权限。CLI validation 证明作者�
 reload，不安装 `.lxp`。production 与 development source 共享同一 Runtime、session、
 capability、permission、deadline 和隔离边界。
 
-仓库当前验证可分发 tarball，而不是 registry 渠道。应从正在测试的 lensX build 获取
-tarball，不得虚构 npm 命令、下载 URL、自动 reload、签名、Marketplace 或更新能力。
-
+仓库会验证公共 package tarball，并已为未来官方 `.lxp` 插件建立 GitHub Release 流水线。
+当前尚无产品官方插件，公共 package 仍未进入 npm。不得虚构 package registry 命令、产品下载
+URL、自动 reload/update、签名、Marketplace 或 Host trust 能力。
