@@ -30,6 +30,7 @@ describe('workspace lifecycle aggregation', () => {
         `@lensx/example-plugin-framework-neutral (examples/plugins/framework-neutral):${lifecycle}`,
         `@lensx/plugin-ui (packages/plugin-ui):${lifecycle}`,
         `@lensx/example-plugin-react-semi (examples/plugins/react-semi):${lifecycle}`,
+        `@lensx/official-config-lens (plugins/official/config-lens):${lifecycle}`,
       ]);
     }
   });

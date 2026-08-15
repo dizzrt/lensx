@@ -25,8 +25,11 @@ export class PluginPageRuntimeError extends Error {
 }
 
 export interface PluginPageRuntimeRequest {
-  readonly activePage: ActivePage;
-  readonly pageResolution: PageResolution;
+  readonly activePage: Readonly<Pick<ActivePage, 'owner_id' | 'page_id'>>;
+  readonly pageResolution: {
+    readonly provider: Readonly<Pick<PageResolution['provider'], 'kind' | 'owner_id'>>;
+    readonly page: Readonly<Pick<PageResolution['page'], 'owner_id' | 'page_id' | 'available' | 'route'>>;
+  };
   readonly attempt: number;
 }
 

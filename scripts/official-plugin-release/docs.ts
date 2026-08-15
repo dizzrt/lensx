@@ -38,6 +38,8 @@ export const checkOfficialPluginReleaseDocs = (rootDir: string): void => {
 
   const enPath = 'docs/en/development/official-plugin-release.md';
   const zhPath = 'docs/zh/development/official-plugin-release.md';
+  const configEnPath = 'docs/en/development/config-lens.md';
+  const configZhPath = 'docs/zh/development/config-lens.md';
   const en = read(root, enPath);
   const zh = read(root, zhPath);
   if (!en.startsWith('# Official Plugin Release Pipeline\n')) fail('docs-title-drift', enPath);
@@ -70,6 +72,8 @@ export const checkOfficialPluginReleaseDocs = (rootDir: string): void => {
   for (const path of [
     enPath,
     zhPath,
+    configEnPath,
+    configZhPath,
     'docs/en/index.md',
     'docs/zh/index.md',
     'docs/en/development/plugin-workspace.md',
@@ -87,6 +91,7 @@ export const checkOfficialPluginReleaseDocs = (rootDir: string): void => {
     'pnpm exec changeset status',
     'check:official-plugin-release-contract',
     'check:official-plugin-release-boundaries',
+    'check:official-config-lens-plugin',
     'tests/official-plugin-release-pipeline.test.ts',
     'tests/official-plugin-runtime-e2e.test.tsx',
     'official_plugin_candidate_inspector',
@@ -146,7 +151,113 @@ export const checkOfficialPluginReleaseDocs = (rootDir: string): void => {
     if (!candidate.includes(field)) fail('docs-schema-drift', field);
   }
   const status = read(root, 'docs/en/plugin-development/index.md');
-  if (!status.includes('official-release-pipeline') || !status.includes('No product official plugin exists')) {
+  if (!status.includes('official-release-pipeline') || !status.includes('ConfigLens is the first ordinary consumer')) {
     fail('docs-capability-status-drift', 'docs/en/plugin-development/index.md');
+  }
+  const configEn = read(root, configEnPath);
+  const configZh = read(root, configZhPath);
+  const normalizeWhitespace = (source: string) => source.replaceAll(/\s+/gu, ' ');
+  for (const marker of [
+    'ConfigLens',
+    '@lensx/official-config-lens',
+    'dev.lensx.config-lens',
+    'monaco-editor',
+    'YAML 1.2',
+    'TOML 1.0',
+    'XML 1.0',
+    'check:official-config-lens-plugin',
+  ]) {
+    if (!configEn.includes(marker) || !configZh.includes(marker)) fail('config-lens-docs-drift', marker);
+  }
+  for (const marker of [
+    'one editable Monaco model',
+    'Format replaces its content directly',
+    'each successful operation is one undoable editor edit',
+    'Language choice remains explicit',
+    '28-case visual matrix',
+  ]) {
+    if (!normalizeWhitespace(configEn).includes(marker))
+      fail('config-lens-single-editor-docs-drift', `${configEnPath}: ${marker}`);
+  }
+  for (const marker of [
+    '一个可编辑 Monaco model',
+    '四种语言的格式化会直接',
+    '每次成功操作都是一次可撤销的编辑器 edit',
+    '语言始终由用户显式选择',
+    '28 场景视觉矩阵',
+  ]) {
+    if (!normalizeWhitespace(configZh).includes(marker))
+      fail('config-lens-single-editor-docs-drift', `${configZhPath}: ${marker}`);
+  }
+  for (const legacyInteraction of [
+    'Formatting is preview-first and requires explicit application',
+    'valid preview',
+    'language-suggestion states',
+    '格式化先生成预览并且必须显式应用',
+    '语言建议状态',
+  ]) {
+    for (const path of [configEnPath, configZhPath]) {
+      if (read(root, path).includes(legacyInteraction))
+        fail('config-lens-legacy-interaction-drift', `${path}: ${legacyInteraction}`);
+    }
+  }
+  const runtimeEnPath = 'docs/en/plugin-development/runtime-permissions-security.md';
+  const runtimeZhPath = 'docs/zh/plugin-development/runtime-permissions-security.md';
+  const runtimeEn = read(root, runtimeEnPath);
+  const runtimeZh = read(root, runtimeZhPath);
+  if (
+    !normalizeWhitespace(configEn).includes('Hiding and restoring the Launcher does not close that Page') ||
+    !normalizeWhitespace(runtimeEn).includes(
+      'Temporarily hiding and restoring the Launcher window is not Page close or Runtime teardown',
+    )
+  ) {
+    fail('config-lens-lifecycle-docs-drift', configEnPath);
+  }
+  if (
+    !normalizeWhitespace(configZh).includes('隐藏和恢复 Launcher 不会关闭该 Page') ||
+    !normalizeWhitespace(runtimeZh).includes('暂时隐藏和恢复 Launcher 窗口不等于关闭 Page 或 teardown Runtime')
+  ) {
+    fail('config-lens-lifecycle-docs-drift', configZhPath);
+  }
+  for (const forbiddenPersistenceClaim of [
+    'restore the draft from localStorage',
+    'restore the draft from IndexedDB',
+    'restore the draft from Host persistence',
+    '从 localStorage 恢复草稿',
+    '从 IndexedDB 恢复草稿',
+    '从 Host 持久化恢复草稿',
+  ]) {
+    for (const path of [configEnPath, configZhPath, runtimeEnPath, runtimeZhPath]) {
+      if (read(root, path).includes(forbiddenPersistenceClaim))
+        fail('config-lens-lifecycle-persistence-drift', `${path}: ${forbiddenPersistenceClaim}`);
+    }
+  }
+  for (const forbidden of [
+    'No product official plugin exists',
+    'no product official plugin',
+    '尚无产品官方插件',
+    'JSON Tools',
+    'JSON 工具',
+    'Host built-in',
+    'Host 内置',
+    'trusted official plugin',
+    '受信任官方插件',
+    'signing is shipped',
+    '签名已交付',
+    'Marketplace is shipped',
+    'Marketplace 已交付',
+    'automatic updates are shipped',
+    '自动更新已交付',
+  ]) {
+    for (const path of [
+      enPath,
+      zhPath,
+      configEnPath,
+      configZhPath,
+      'docs/en/plugin-development/index.md',
+      'docs/zh/plugin-development/index.md',
+    ]) {
+      if (read(root, path).includes(forbidden)) fail('config-lens-capability-overclaim', `${path}: ${forbidden}`);
+    }
   }
 };

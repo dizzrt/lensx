@@ -33,6 +33,12 @@ examples/plugins/*
 `examples/plugin-testkit-consumer` 与 `examples/plugin-ui-consumer` 中的外部消费示例仍是普通项目
 数据，不是 workspace package。
 
+首个官方产品成员是 `plugins/official/config-lens`
+（`@lensx/official-config-lens`、`dev.lensx.config-lens`）。它通过一个可编辑
+Monaco model 和包内 language Worker 支持 JSON、YAML 1.2、TOML 1.0 与 XML 1.0；
+Format 以一次可撤销操作直接替换编辑器内容，Compact 仅支持 JSON。官方仓库位置
+不会改变安装或 Runtime authority；参见 [ConfigLens 官方插件](config-lens.md)。
+
 每个实际成员都必须声明全部四个 lifecycle scripts：
 
 ```json

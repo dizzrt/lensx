@@ -28,6 +28,8 @@ structure.
   build, validate, package, and inspect plugins through the public CLI.
 - [Official Plugin Release Pipeline](development/official-plugin-release.md) —
   independent Changesets, candidate, audit, and least-privilege `.lxp` releases.
+- [ConfigLens Official Plugin](development/config-lens.md) — four-language,
+  Worker-isolated configuration formatting and its dependency/evidence bounds.
 - [Plugin Development Mode](development/plugin-development-mode.md) — manually
   register, reload, and remove an unpacked `dist/` in a dedicated Host build.
 - [Frontend Guidelines](development/frontend-guidelines.md) — React, Semi

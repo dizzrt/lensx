@@ -40,6 +40,14 @@ workspace member. The external Contract and SDK consumers at
 `examples/plugin-testkit-consumer`, and `examples/plugin-ui-consumer` remain
 ordinary project data and are not workspace packages.
 
+The first official product member is
+`plugins/official/config-lens` (`@lensx/official-config-lens`,
+`dev.lensx.config-lens`). It supports JSON, YAML 1.2, TOML 1.0, and XML 1.0
+through one editable Monaco model and package-owned language Workers. Format
+replaces the editor content as one undoable operation, and Compact is JSON-only.
+Its official location does not change installation or Runtime authority; see
+[ConfigLens Official Plugin](config-lens.md).
+
 Every actual member must declare all four lifecycle scripts:
 
 ```json

@@ -1,0 +1,92 @@
+:root {
+  color-scheme: light dark;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  background: var(--lensx-plugin-color-background);
+}
+
+.config-lens {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: var(--lensx-plugin-space-page);
+  grid-template-rows: minmax(240px, 1fr) auto auto auto;
+  gap: 10px;
+  color: var(--lensx-plugin-color-text);
+  background: var(--lensx-plugin-color-background);
+}
+
+.config-lens__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+
+.config-lens__language {
+  display: grid;
+  min-width: 132px;
+  gap: 4px;
+  color: var(--lensx-plugin-color-text-secondary);
+  font-size: 12px;
+}
+
+.config-lens__status {
+  min-height: 20px;
+  padding-left: 10px;
+  border-left: 3px solid var(--lensx-plugin-color-accent);
+  color: var(--lensx-plugin-color-text-secondary);
+  font-size: 13px;
+}
+
+.config-lens-editor {
+  position: relative;
+  min-height: 240px;
+  overflow: hidden;
+  border: 1px solid var(--lensx-plugin-color-border);
+  border-radius: var(--lensx-plugin-radius-page);
+  background: var(--lensx-plugin-color-surface);
+}
+
+.config-lens-editor__surface {
+  position: absolute;
+  inset: 0;
+}
+
+.config-lens__diagnostics {
+  max-height: 96px;
+  margin: 0;
+  padding: 8px 8px 8px 28px;
+  overflow: auto;
+  border: 1px solid var(--lensx-plugin-color-danger);
+  border-radius: var(--lensx-plugin-radius-page);
+  color: var(--lensx-plugin-color-text);
+  font-size: 12px;
+}
+
+.config-lens :focus-visible {
+  outline: 2px solid var(--lensx-plugin-color-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .config-lens__toolbar {
+    align-items: stretch;
+  }
+
+  .config-lens__language {
+    flex: 1 1 100%;
+  }
+}

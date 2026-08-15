@@ -20,7 +20,7 @@ Status has a precise meaning:
 | Contract, SDK, Testkit, CLI | Shipped | Public package boundaries and real tarballs are verified. |
 | Optional Plugin UI | Shipped | The plugin owns React, React DOM, Semi Design, and the UI package. |
 | Local `.lxp` installation | Shipped | Settings uses the canonical Host inspection and preparation boundary. |
-| Official `.lxp` release pipeline | Shipped | Future official plugins have independent Changesets, candidates, audit records, and releases; no product plugin exists yet. |
+| Official `.lxp` release pipeline | Shipped | ConfigLens is the first ordinary consumer, with independent Changesets, candidates, audit records, and releases. |
 | Development Mode | Conditional | A dedicated build and explicit process switch are required. |
 | Host API | Conditional | A catalog entry is not authority; use the latest session capabilities. |
 | npm publication | Not delivered | The repository can produce tarballs, but the packages are not on npm. |
@@ -77,8 +77,11 @@ and manual reload; it does not install an `.lxp`. Production and development
 sources use the same open isolated Runtime, session, deadline, and teardown
 boundaries.
 
-The repository verifies public-package tarballs and now owns a GitHub Release
-pipeline for future official `.lxp` plugins. No product official plugin exists
-yet, and the public packages are still not on npm. Do not invent package
+The repository verifies public-package tarballs and owns a GitHub Release
+pipeline whose first product member is the non-privileged ConfigLens plugin.
+ConfigLens uses one editable Monaco model for explicit JSON, YAML, TOML, or XML
+formatting, with JSON-only Compact and one-operation undo; see the
+[maintainer reference](../development/config-lens.md).
+The public packages are still not on npm. Do not invent package
 registry commands, product download URLs, automatic reload/update, signing,
 Marketplace, or Host trust behavior.

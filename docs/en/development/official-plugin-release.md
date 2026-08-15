@@ -3,11 +3,11 @@
 ## Scope And Current Status
 
 The repository ships the maintenance pipeline that independently validates,
-versions, builds, and publishes future `plugins/official/*` members as
-canonical `.lxp` assets. No Task 7.2 product plugin exists yet, so the real
-member matrix is currently an explicit no-op and committed fixtures prove the
-complete path. Public Contract, SDK, UI, Testkit, and CLI packages still are
-not published to npm.
+versions, builds, and publishes `plugins/official/*` members as canonical
+`.lxp` assets. ConfigLens is the first product member, so the real matrix now
+validates `plugins/official/config-lens` in addition to committed zero-, one-,
+and two-member fixtures. Public Contract, SDK, UI, Testkit, and CLI packages
+still are not published to npm.
 
 An official repository location or GitHub Release is not Host authority. The
 ordinary local installer still classifies downloaded bytes as `external`,
@@ -95,6 +95,12 @@ immutable `.lxp` then passes the Rust inspector, ordinary local-install
 preparation, sandbox iframe open, Runtime Session/SDK-ready, Page/Action open,
 close/teardown, and the plugin's own `test:e2e`. A failure requires a new
 candidate; old bytes are never reused.
+
+ConfigLens additionally runs its four-language corpus, Monaco/package-owned
+Worker closure, 28-case visual matrix, direct single-editor replacement and
+undo evidence in bounded macOS WKWebView, and the privacy gate. See
+[ConfigLens Official Plugin](config-lens.md) for the reviewed runtime
+dependencies, budgets, and product boundary.
 
 ## Assets, Tags, And Audit Record
 

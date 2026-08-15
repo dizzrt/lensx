@@ -2,10 +2,11 @@
 
 ## 范围与当前状态
 
-仓库已经交付维护流水线，可将未来的 `plugins/official/*` 成员作为独立 release unit
-完成校验、升版、构建和 canonical `.lxp` 发布。当前尚无 Task 7.2 产品插件，因此真实
-member matrix 会显式 no-op，完整路径由 committed fixture 覆盖。公共 Contract、SDK、
-UI、Testkit 与 CLI package 仍未发布到 npm。
+仓库已经交付维护流水线，可将 `plugins/official/*` 成员作为独立 release unit 完成
+校验、升版、构建和 canonical `.lxp` 发布。ConfigLens 是首个真实产品成员，因此真实
+member matrix 除已提交的零、单、双成员 fixture 外，还会验证
+`plugins/official/config-lens`。公共 Contract、SDK、UI、Testkit 与 CLI package 仍未
+发布到 npm。
 
 官方仓库目录或 GitHub Release 不是 Host authority。普通本地安装器仍把下载字节分类为
 `external`，并使用与外部插件相同的开放隔离 Runtime、封闭 Host API、Runtime Session 和 package
@@ -77,6 +78,11 @@ consumer，而 pull request 不会获得任何写入路径。
 byte-identical。同一不可变 `.lxp` 随后通过 Rust inspector、普通本地安装 preparation、
 sandbox iframe open、Runtime Session/SDK-ready、Page/Action open、close/teardown 与插件
 自己的 `test:e2e`。任何失败都必须生成新 candidate，旧字节不得复用。
+
+ConfigLens 还会运行四语言语料、Monaco/包内 Worker closure、28 场景视觉矩阵、
+有界 macOS WKWebView 中的单编辑器直接替换与 undo 证据和隐私门禁。已审查
+Runtime 依赖、预算和产品边界见
+[ConfigLens 官方插件](config-lens.md)。
 
 ## 资产、Tag 与审计记录
 

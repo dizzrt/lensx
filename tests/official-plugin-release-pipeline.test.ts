@@ -95,6 +95,22 @@ const withFixture = async (root: string, body: () => void | Promise<void>): Prom
 };
 
 describe('official plugin release contract', () => {
+  test('discovers the real ConfigLens member with its ordinary external-consumer identity', () => {
+    const root = join(import.meta.dirname, '..');
+    const result = validateOfficialPluginContract(root);
+    expect(result.diagnostics).toEqual([]);
+    expect(
+      result.members.map(({ packageName, pluginId, slug, version }) => ({ packageName, pluginId, slug, version })),
+    ).toEqual([
+      {
+        packageName: '@lensx/official-config-lens',
+        pluginId: 'dev.lensx.config-lens',
+        slug: 'config-lens',
+        version: '0.1.0',
+      },
+    ]);
+  });
+
   test('committed case inventory covers zero, one, two, metadata, ownership, tests, and dependency failures', () => {
     const cases = JSON.parse(
       readFileSync(join(import.meta.dirname, 'fixtures/official-plugin-release/cases.json'), 'utf8'),
@@ -193,6 +209,25 @@ describe('official plugin release contract', () => {
 });
 
 describe('official plugin path and Changeset planner', () => {
+  test('selects only the real ConfigLens release unit for a plugin-local path', () => {
+    const root = join(import.meta.dirname, '..');
+    const plan = createOfficialPluginReleasePlan({
+      baseCommit: 'a'.repeat(40),
+      changedPaths: ['plugins/official/config-lens/src/App.tsx'],
+      headCommit: 'b'.repeat(40),
+      members: validateOfficialPluginContract(root).members,
+      rootDir: root,
+    });
+    expect(plan.validate.map(({ slug }) => slug)).toEqual(['config-lens']);
+    expect(plan.release.map(({ bump, package_name, plugin_id }) => ({ bump, package_name, plugin_id }))).toEqual([
+      {
+        bump: 'patch',
+        package_name: '@lensx/official-config-lens',
+        plugin_id: 'dev.lensx.config-lens',
+      },
+    ]);
+  });
+
   test('keeps plugin-local release units independent and output deterministic', async () => {
     const root = createContractFixture(['alpha', 'beta']);
     mkdirSync(join(root, '.changeset'), { recursive: true });

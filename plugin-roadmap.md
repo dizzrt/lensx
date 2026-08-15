@@ -784,25 +784,32 @@ React 模板额外依赖 Task 1.4。
 
 **完成标准**：一个官方插件可单独发版且不触发桌面应用发布；产物可由普通安装器验证。
 
-- [ ] **Task 7.2：交付首个无权限官方插件**
+- [x] **Task 7.2：交付首个无权限官方插件**
 
-**OpenSpec change**：`add-official-json-tools-plugin`
+**OpenSpec change**：[add-official-config-lens-plugin](openspec/changes/archive/2026-08-15-add-official-config-lens-plugin/)
 
 **前置 OpenSpec change**：[adopt-open-isolated-plugin-runtime](openspec/changes/archive/2026-08-08-adopt-open-isolated-plugin-runtime/)（仅表示公共 Runtime 前置已完成，不表示本产品 Task 已完成）
 
-**目标**：以纯前端 JSON 工具插件验证公共平台，而不是依赖 Host 私有代码。
+**目标**：以纯前端 ConfigLens 配置语言工作区验证公共平台，而不是依赖 Host 私有代码。
 
 **范围**：
 
-- 在 `plugins/official/json-tools` 实现格式化、压缩和基础校验页面。
+- 在 `plugins/official/config-lens` 实现 JSON、YAML 1.2、TOML 1.0 和 XML 1.0 校验与格式化，
+  并仅为 JSON 提供压缩。
+- 只提供一个可编辑 Monaco model；Format 与 JSON-only Compact 直接执行一次可撤销的
+  全文替换，不提供格式化结果比较或变更应用流程，也不根据内容检测或建议语言。
 - 通过 Manifest 贡献 Page 和 Page-only Actions。
 - 只依赖公开 Contract、SDK、可选 UI 和 Testkit。
-- 不申请系统权限，不 import 根应用 `src/app/**`。
-- 使用正式 CLI、包格式、安装器和 Runtime 完成 dogfood。
+- 使用包内 Monaco、editor Worker 和四语言 Worker；不依赖远程资源或 Host 私有模块。
+- 不申请系统权限，不 import 根应用 `src/app/**`，不持久化用户内容；隐藏 Launcher 后通过快捷键恢复会保留同一 Runtime 和临时输入，实际关闭 Page 后才丢弃临时输入。
+- 使用正式 CLI、包格式、普通安装器、隔离 Runtime 和独立官方发布候选完成 dogfood。
 
 **依赖**：Task 4.4、Task 6.4、Task 7.1。
 
-**完成标准**：官方 JSON 工具从独立产物安装、搜索、打开、关闭、禁用、升级和卸载均通过。
+**完成标准**：ConfigLens 的独立、可复现 `.lxp` 已通过普通安装、搜索、打开、SDK ready、
+包内 Monaco/Worker 与四语言 smoke、隐藏后快捷键恢复同一 Runtime 与临时输入、实际关闭后以新
+Runtime 重新打开、禁用、双版本升级和卸载；双语文档、28 个视觉基线、真实 macOS WKWebView
+证据、官方发布流水线和完整前端/Rust/OpenSpec 验证均通过。
 
 - [ ] **Task 7.3：交付首个权限型官方插件**
 
@@ -815,7 +822,7 @@ React 模板额外依赖 Task 1.4。
 - 在独立 OpenSpec change 中重新论证用户场景、native capability contract、信任模型和 Host 隔离边界。
 - 不恢复已删除的 Manifest permission fields、clipboard Host API、权限提示或 grant mutation authority。
 - 继续要求官方插件只依赖公开平台边界，不直接调用 Tauri 或 Host-private API。
-- 保持独立版本和发布，不与 JSON 工具共享生命周期。
+- 保持独立版本和发布，不与 ConfigLens 共享生命周期。
 
 **依赖**：Task 7.1、Task 7.2；其余依赖待重新规划。
 

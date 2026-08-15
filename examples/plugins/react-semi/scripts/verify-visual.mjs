@@ -85,29 +85,35 @@ try {
   for (const [locale, theme] of combinations) {
     const name = `${locale}-${theme}.png`;
     const capture = resolve(captureRoot, name);
-    const result = spawnSync(
-      chromePath,
-      [
-        '--headless=new',
-        '--disable-background-networking',
-        '--disable-extensions',
-        '--disable-gpu',
-        '--hide-scrollbars',
-        '--no-default-browser-check',
-        '--no-first-run',
-        '--no-sandbox',
-        `--user-data-dir=${resolve(captureRoot, `chrome-${locale}-${theme}`)}`,
-        '--virtual-time-budget=3000',
-        '--window-size=650,600',
-        `--screenshot=${capture}`,
-        '--dump-dom',
-        `${baseUrl}/?locale=${locale}&theme=${theme}`,
-      ],
-      { cwd: packageRoot, encoding: 'utf8', killSignal: 'SIGKILL', timeout: 10_000 },
-    );
-    const html = result.stdout;
+    let result;
+    let html = '';
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      result = spawnSync(
+        chromePath,
+        [
+          '--headless=new',
+          '--disable-background-networking',
+          '--disable-extensions',
+          '--disable-gpu',
+          '--hide-scrollbars',
+          '--no-default-browser-check',
+          '--no-first-run',
+          '--no-sandbox',
+          `--user-data-dir=${resolve(captureRoot, `chrome-${locale}-${theme}-${attempt}`)}`,
+          '--virtual-time-budget=3000',
+          '--window-size=650,600',
+          `--screenshot=${capture}`,
+          '--dump-dom',
+          `${baseUrl}/?locale=${locale}&theme=${theme}`,
+        ],
+        { cwd: packageRoot, encoding: 'utf8', killSignal: 'SIGKILL', timeout: 10_000 },
+      );
+      html = result.stdout;
+      if (html.includes('data-visual-check="passed"') && html.includes('data-token-count="10"')) break;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+    }
     if (!html.includes('data-visual-check="passed"') || !html.includes('data-token-count="10"')) {
-      throw new Error(`Visual semantics/styles failed for ${locale}/${theme}.\n${html}\n${result.stderr}`);
+      throw new Error(`Visual semantics/styles failed for ${locale}/${theme}.\n${html}\n${result?.stderr ?? ''}`);
     }
     if (!html.includes(`lang="${locale}"`) || !html.includes(`color-scheme: ${theme}`)) {
       throw new Error(`Visual locale/theme failed for ${locale}/${theme}.`);

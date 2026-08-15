@@ -1,0 +1,20 @@
+{
+  "evidence_version": "0.1.0",
+  "platform": "macos-wkwebview",
+  "valid_language_count": 4,
+  "malicious_fail_closed_count": 4,
+  "checks": {
+    "exact_limits_observed": true,
+    "diagnostic_limit_observed": true,
+    "five_second_deadline_observed": true,
+    "worker_timeout_terminated": true,
+    "worker_recreated_after_failure": true,
+    "editor_and_package_worker_loaded": true,
+    "single_editor_direct_replace_and_undo": true,
+    "four_language_minimum_operations": true,
+    "malicious_inputs_fail_closed": true,
+    "launcher_responsive_during_worker_work": true,
+    "teardown_completed": true,
+    "bounded_content_free_record": true
+  }
+}

@@ -24,6 +24,8 @@
   打包和检查插件。
 - [官方插件发布流水线](development/official-plugin-release.md) — 独立 Changesets、candidate、
   audit 与最小权限 `.lxp` release。
+- [ConfigLens 官方插件](development/config-lens.md) — 四语言、Worker 隔离的配置
+  格式化及其依赖与证据边界。
 - [插件开发模式](development/plugin-development-mode.md) — 在专用 Host 构建中手动注册、
   重新加载与移除未打包的 `dist/`。
 - [前端指南](development/frontend-guidelines.md) — React、Semi Design、样式、主题、

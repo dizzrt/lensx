@@ -335,6 +335,23 @@ native clipboard command、permission module、grant field、prompt/mutation imp
 policy 回流时失败。canonical WKWebView harness 提供 package/Blob/Data Worker、message、fetch、WebSocket
 构造、WASM、origin storage、author-owned stricter CSP 正向证据，以及平台基线外能力的有界 unsupported 结果。
 
+## ConfigLens 官方插件验证
+
+修改 `plugins/official/config-lens`、已审查语言依赖、release 选择、package chunk、
+Runtime lifecycle、视觉证据或产品文档时，必须运行：
+
+```bash
+pnpm run check:official-config-lens-plugin
+```
+
+该门禁运行成员 lifecycle 与四语言恶意/golden 语料，检查依赖许可证和准确版本，
+构建 Monaco 与 language module Worker，验证全部包内 chunk 和预算，对比固定双语
+light/dark 28 场景视觉矩阵，并消费单一可编辑 model、直接替换和 undo 的有界真实
+macOS WKWebView 证据。随后它使用公共 CLI
+执行 build、validate、inspect 和两次 pack，与 Rust inspector 和普通安装 preparation
+达成一致，再把同一 digest-fixed `.lxp` 传入 Host Runtime E2E。证据和诊断不得包含
+配置内容、URL、origin、path、nonce、Port、payload、stack 或 raw error。
+
 ## Plugin Scoped Storage 验证
 
 修改 Host 私有 storage contract、fixture、Rust store/command、Installer data coordinator、desktop provider、

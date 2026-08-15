@@ -1,0 +1,47 @@
+{
+  "name": "@lensx/official-config-lens",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.17.0",
+  "scripts": {
+    "build": "rsbuild build",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "rstest run",
+    "check": "pnpm run typecheck && pnpm run test && node scripts/check.mjs",
+    "test:e2e": "node scripts/test-e2e.mjs",
+    "visual": "node scripts/verify-visual.mjs"
+  },
+  "dependencies": {
+    "@douyinfe/semi-ui": "^2.101.1",
+    "@lensx/plugin-sdk": "^0.2.0",
+    "@lensx/plugin-ui": "^0.2.0",
+    "monaco-editor": "0.56.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "saxes": "6.0.0",
+    "toml-eslint-parser": "1.0.3",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@lensx/plugin-contract": "^0.2.0",
+    "@lensx/plugin-testkit": "^0.2.0",
+    "@rsbuild/core": "^2.1.8",
+    "@rsbuild/plugin-less": "^2.0.1",
+    "@rsbuild/plugin-react": "^2.1.0",
+    "@rstest/adapter-rsbuild": "^0.11.2",
+    "@rstest/core": "^0.11.2",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "happy-dom": "^20.11.0",
+    "less": "^4.8.1",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=11 <12"
+  }
+}

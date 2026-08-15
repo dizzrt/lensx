@@ -8,6 +8,12 @@ navigation lease 与最终 teardown。close、navigation、disable、uninstall�
 development reload、disconnect、Host reload 和 app unmount 会让旧 iframe、Worker、连接、
 Blob URL、timer、listener、Session 与 port 失效。
 
+暂时隐藏和恢复 Launcher 窗口不等于关闭 Page 或 teardown Runtime。每次恢复时的
+activation 都会刷新并重新验证当前 Registration 与 Resource 事实。如果当前插件的
+entry、Page、version、origin、resource generation 和 Runtime attempt 没有改变，Host
+会保留同一 iframe、navigation lease、Session 与 Page 内存。全局 Registration revision
+只是 invalidation 提示；其他插件的无关变化不会替换当前 Runtime。
+
 ## Context replacement
 
 每个 iframe attempt 只初始化一次 SDK。`runtime.get_context` 与后续 Context event 提供完整

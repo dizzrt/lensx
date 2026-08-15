@@ -9,6 +9,14 @@ teardown. Close, navigation, disable, uninstall, replacement, development
 reload, disconnect, Host reload, and app unmount make the old iframe, Worker,
 connection, Blob URL, timer, listener, session, and port inert.
 
+Temporarily hiding and restoring the Launcher window is not Page close or
+Runtime teardown. Each restore activation refreshes and revalidates current
+Registration and Resource facts. If the current plugin's entry, Page, version,
+origin, resource generation, and Runtime attempt are unchanged, the Host keeps
+the same iframe, navigation lease, Session, and page memory. A global
+Registration revision is only an invalidation hint; an unrelated plugin change
+does not replace the current Runtime.
+
 ## Context replacement
 
 Initialize the SDK once per iframe attempt. `runtime.get_context` and later

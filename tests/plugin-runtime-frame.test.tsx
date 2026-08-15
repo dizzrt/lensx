@@ -96,21 +96,31 @@ const renderFrame = (options?: {
       disconnect: () => undefined,
       dispose: () => undefined,
     } as unknown as PluginRuntimeSessionService);
-  const view = render(
+  const frame = (
+    resolution: PageResolution = pageResolution,
+    pageTitle = options?.locale === 'zh-CN' ? '工作区主页' : 'Workspace Home',
+  ) => (
     <AppProviders initialLocale={options?.locale}>
       <PluginRuntimeFrame
         activePage={activePage}
         hostApiDispatcherFactory={options?.hostApiDispatcherFactory}
         navigationAdapter={navigationAdapter}
         lifecycleService={options?.lifecycleService}
-        pageResolution={pageResolution}
-        pageTitle={options?.locale === 'zh-CN' ? '工作区主页' : 'Workspace Home'}
+        pageResolution={resolution}
+        pageTitle={pageTitle}
         resolver={resolver}
         sessionService={sessionService}
       />
-    </AppProviders>,
+    </AppProviders>
   );
-  return { ...view, navigationAdapter, resolver, sessionService };
+  const view = render(frame());
+  return {
+    ...view,
+    navigationAdapter,
+    resolver,
+    rerenderFrame: (resolution: PageResolution, pageTitle?: string) => view.rerender(frame(resolution, pageTitle)),
+    sessionService,
+  };
 };
 
 class ManualScheduler implements PluginRuntimeScheduler {
@@ -135,6 +145,37 @@ class ManualScheduler implements PluginRuntimeScheduler {
 }
 
 describe('PluginRuntimeFrame', () => {
+  test('keeps the current iframe, attempt, lease, and Session across an equivalent Page resolution clone', async () => {
+    const view = renderFrame();
+    const iframe = (await waitFor(() => expect(document.querySelector('iframe')).not.toBeNull()).then(() =>
+      document.querySelector('iframe'),
+    )) as HTMLIFrameElement;
+    fireEvent.load(iframe);
+    expect(view.sessionService.start).toHaveBeenCalledTimes(1);
+
+    view.rerenderFrame(
+      {
+        provider: {
+          ...pageResolution.provider,
+          display_name: { 'en-US': 'Renamed Workspace' },
+        },
+        page: {
+          ...pageResolution.page,
+          title: { 'en-US': 'Renamed Home' },
+        },
+      },
+      'Renamed Home',
+    );
+
+    expect(document.querySelector('iframe')).toBe(iframe);
+    expect(iframe).toHaveAttribute('title', 'Renamed Home plugin runtime');
+    expect(view.resolver.resolve).toHaveBeenCalledTimes(1);
+    expect(view.navigationAdapter.activate).toHaveBeenCalledTimes(1);
+    expect(view.navigationAdapter.dispose).not.toHaveBeenCalled();
+    expect(view.sessionService.start).toHaveBeenCalledTimes(1);
+    expect(document.body).not.toHaveTextContent('Loading the plugin page');
+  });
+
   test('mounts exactly one iframe only after exact lease activation and treats load as loaded, not ready', async () => {
     const resolve = deferred<PluginPageRuntimeDescriptor>();
     const activation = deferred<{ lease_id: string }>();
@@ -267,7 +308,21 @@ describe('PluginRuntimeFrame', () => {
     const retry = screen.getByRole('button', { name: '重试' });
     expect(retry).toHaveFocus();
     fireEvent.click(retry);
-    await waitFor(() => expect(resolver.resolve).toHaveBeenLastCalledWith({ activePage, pageResolution, attempt: 1 }));
+    await waitFor(() =>
+      expect(resolver.resolve).toHaveBeenLastCalledWith({
+        activePage: { owner_id: activePage.owner_id, page_id: activePage.page_id },
+        pageResolution: {
+          provider: { kind: pageResolution.provider.kind, owner_id: pageResolution.provider.owner_id },
+          page: {
+            owner_id: pageResolution.page.owner_id,
+            page_id: pageResolution.page.page_id,
+            available: pageResolution.page.available,
+            route: pageResolution.page.route,
+          },
+        },
+        attempt: 1,
+      }),
+    );
     await waitFor(() => expect(document.querySelectorAll('iframe')).toHaveLength(1));
   });
 

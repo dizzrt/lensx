@@ -1,0 +1,70 @@
+{
+  "manifest_version": "0.2.0",
+  "plugin_id": "dev.lensx.config-lens",
+  "version": "0.1.0",
+  "display": {
+    "name": {
+      "en-US": "ConfigLens",
+      "zh-CN": "ConfigLens"
+    },
+    "description": {
+      "en-US": "Safely validate and format JSON, YAML, TOML, and XML.",
+      "zh-CN": "安全校验并格式化 JSON、YAML、TOML 和 XML。"
+    }
+  },
+  "publisher": {
+    "author": "lensX contributors",
+    "homepage": "https://github.com/dizzrt/lensx",
+    "repository": "https://github.com/dizzrt/lensx"
+  },
+  "compatibility": {
+    "lensx": {
+      "min_version": "0.1.0",
+      "max_version_exclusive": "0.2.0"
+    },
+    "host_api": {
+      "min_version": "0.2.0",
+      "max_version_exclusive": "0.3.0"
+    }
+  },
+  "runtime": {
+    "kind": "iframe",
+    "entry": "index.html"
+  },
+  "contributes": {
+    "pages": [
+      {
+        "id": "main",
+        "title": {
+          "en-US": "ConfigLens",
+          "zh-CN": "ConfigLens"
+        },
+        "route": "/"
+      }
+    ],
+    "actions": [
+      {
+        "id": "open",
+        "title": {
+          "en-US": "Open ConfigLens",
+          "zh-CN": "打开 ConfigLens"
+        },
+        "description": {
+          "en-US": "Validate and format configuration text.",
+          "zh-CN": "校验并格式化配置文本。"
+        },
+        "default_keywords": {
+          "en-US": ["ConfigLens", "JSON", "YAML", "TOML", "XML", "format", "validate"],
+          "zh-CN": ["ConfigLens", "JSON", "YAML", "TOML", "XML", "格式化", "校验"]
+        },
+        "target": {
+          "kind": "page",
+          "page_id": "main"
+        }
+      }
+    ],
+    "launcher": {
+      "default_action_id": "open"
+    }
+  }
+}

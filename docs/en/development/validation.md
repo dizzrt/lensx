@@ -422,6 +422,27 @@ positive package/Blob/Data Worker, message, fetch, WebSocket construction,
 WASM, origin-storage, and author-owned stricter-CSP evidence plus bounded
 unsupported results for capabilities outside the current platform baseline.
 
+## ConfigLens Official Plugin Validation
+
+Changes to `plugins/official/config-lens`, its reviewed language dependencies,
+release selection, package chunks, Runtime lifecycle, visual evidence, or
+product documentation must run:
+
+```bash
+pnpm run check:official-config-lens-plugin
+```
+
+The gate runs the member lifecycle and four-language malicious/golden corpora,
+checks dependency licenses and exact versions, builds the Monaco and language
+module Workers, verifies all package-owned chunks and budgets, compares the
+fixed 28-case bilingual light/dark visual matrix, and consumes bounded real
+macOS WKWebView evidence for one editable model, direct replacement, and undo.
+It then uses the public CLI to build, validate, inspect,
+and pack twice, agrees with the Rust inspector and ordinary installation
+preparation, and sends the same digest-fixed `.lxp` into the Host Runtime E2E.
+Evidence and diagnostics must not include configuration content, URL, origin,
+path, nonce, Port, payload, stack, or raw errors.
+
 ## Plugin Scoped Storage Validation
 
 Changes to the Host-private storage contract, fixtures, Rust store or command,

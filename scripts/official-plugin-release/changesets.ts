@@ -22,6 +22,7 @@ const parseChangeset = (
   rootDir: string,
   path: string,
   membersByName: ReadonlyMap<string, OfficialPluginMember>,
+  knownNonOfficialPackages: ReadonlySet<string>,
 ): { readonly changeset?: ParsedChangeset; readonly diagnostics: OfficialReleaseDiagnostic[] } => {
   const diagnostics: OfficialReleaseDiagnostic[] = [];
   const relativePath = relative(rootDir, path).replaceAll('\\', '/');
@@ -41,6 +42,7 @@ const parseChangeset = (
     );
   }
   const bumps = new Map<string, SemverBump>();
+  let containsKnownNonOfficialTarget = false;
   for (const line of match[1].split(/\r?\n/u).filter((value) => value.trim() !== '')) {
     const entry = /^\s*["']([^"']+)["']\s*:\s*(major|minor|patch)\s*$/u.exec(line);
     if (entry?.[1] === undefined || entry[2] === undefined) {
@@ -55,7 +57,9 @@ const parseChangeset = (
     }
     const packageName = entry[1];
     const bump = entry[2] as SemverBump;
-    if (!membersByName.has(packageName)) {
+    if (knownNonOfficialPackages.has(packageName)) {
+      containsKnownNonOfficialTarget = true;
+    } else if (!membersByName.has(packageName)) {
       diagnostics.push(
         diagnostic(
           'official-release/changeset-target-unknown',
@@ -75,7 +79,7 @@ const parseChangeset = (
       bumps.set(packageName, bump);
     }
   }
-  if (bumps.size === 0) {
+  if (bumps.size === 0 && !containsKnownNonOfficialTarget) {
     diagnostics.push(
       diagnostic(
         'official-release/changeset-no-target',
@@ -90,6 +94,17 @@ const parseChangeset = (
   };
 };
 
+const packageNamesIn = (directory: string): string[] => {
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    if (!entry.isDirectory()) return [];
+    const metadataPath = join(directory, entry.name, 'package.json');
+    if (!existsSync(metadataPath)) return [];
+    const metadata = JSON.parse(readFileSync(metadataPath, 'utf8')) as { name?: unknown };
+    return typeof metadata.name === 'string' ? [metadata.name] : [];
+  });
+};
+
 const strongestBump = (bumps: readonly SemverBump[]): SemverBump =>
   bumps.includes('major') ? 'major' : bumps.includes('minor') ? 'minor' : 'patch';
 
@@ -101,6 +116,12 @@ export const validateChangesetPolicy = (
   const root = resolve(rootDir);
   const directory = join(root, '.changeset');
   const membersByName = new Map(members.map((member) => [member.packageName, member]));
+  const rootMetadata = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { name?: unknown };
+  const knownNonOfficialPackages = new Set([
+    ...(typeof rootMetadata.name === 'string' ? [rootMetadata.name] : []),
+    ...packageNamesIn(join(root, 'packages')),
+    ...packageNamesIn(join(root, 'examples', 'plugins')),
+  ]);
   const diagnostics: OfficialReleaseDiagnostic[] = [];
   const changesets: ParsedChangeset[] = [];
   const markdown = existsSync(directory)
@@ -109,7 +130,7 @@ export const validateChangesetPolicy = (
         .sort()
     : [];
   for (const name of markdown) {
-    const parsed = parseChangeset(root, join(directory, name), membersByName);
+    const parsed = parseChangeset(root, join(directory, name), membersByName, knownNonOfficialPackages);
     diagnostics.push(...parsed.diagnostics);
     if (parsed.changeset !== undefined) changesets.push(parsed.changeset);
   }

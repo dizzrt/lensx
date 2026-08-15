@@ -27,7 +27,12 @@ import {
   type PluginRuntimeSessionService,
 } from './session-service';
 import { attachPluginRuntimeTransport } from './transport-adapter';
-import type { PluginPageRuntimeDescriptor, PluginPageRuntimeResolver, PluginRuntimeNavigationAdapter } from './types';
+import type {
+  PluginPageRuntimeDescriptor,
+  PluginPageRuntimeRequest,
+  PluginPageRuntimeResolver,
+  PluginRuntimeNavigationAdapter,
+} from './types';
 
 const observePluginRpcDiagnostic = (diagnostic: PluginRpcDiagnostic): void => {
   console.warn('[lensX] Plugin Runtime RPC diagnostic.', diagnostic);
@@ -107,7 +112,38 @@ export const PluginRuntimeFrame = ({
     () => sessionService ?? createPluginRuntimeSessionService(),
     [sessionService],
   );
-  const request = useMemo(() => ({ activePage, pageResolution, attempt }), [activePage, attempt, pageResolution]);
+  const request = useMemo<PluginPageRuntimeRequest>(
+    () => ({
+      activePage: {
+        owner_id: activePage.owner_id,
+        page_id: activePage.page_id,
+      },
+      pageResolution: {
+        provider: {
+          kind: pageResolution.provider.kind,
+          owner_id: pageResolution.provider.owner_id,
+        },
+        page: {
+          owner_id: pageResolution.page.owner_id,
+          page_id: pageResolution.page.page_id,
+          available: pageResolution.page.available,
+          route: pageResolution.page.route,
+        },
+      },
+      attempt,
+    }),
+    [
+      activePage.owner_id,
+      activePage.page_id,
+      attempt,
+      pageResolution.provider.kind,
+      pageResolution.provider.owner_id,
+      pageResolution.page.owner_id,
+      pageResolution.page.page_id,
+      pageResolution.page.available,
+      pageResolution.page.route,
+    ],
+  );
   const bindIframeElement = useCallback((iframe: HTMLIFrameElement | null) => {
     iframeRef.current = iframe;
     if (iframe) activeBindingRef.current?.attempt.startLoadDeadline();

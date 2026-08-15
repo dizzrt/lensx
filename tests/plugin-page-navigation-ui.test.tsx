@@ -10,6 +10,12 @@ import {
   LauncherActionDispatcher,
   LauncherActionRegistry,
 } from '../src/app/launcher/actions';
+import type {
+  LauncherActivationErrorListener,
+  LauncherActivationListener,
+  LauncherActivationPayload,
+  LauncherActivationSource,
+} from '../src/app/launcher/activation';
 import { EMPTY_LAUNCHER_ACTION_COLLECTIONS } from '../src/app/launcher/collections';
 import { AppNavigationService, PageRegistry } from '../src/app/navigation';
 import {
@@ -122,7 +128,22 @@ const TestProviderControls = () => {
   );
 };
 
-const renderPluginComposition = (options: { readonly strictMode?: boolean } = {}) => {
+class TestLauncherActivationSource implements LauncherActivationSource {
+  readonly listeners = new Set<LauncherActivationListener>();
+
+  subscribe = async (listener: LauncherActivationListener, _onError: LauncherActivationErrorListener) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  emit(payload: LauncherActivationPayload) {
+    for (const listener of this.listeners) listener(payload);
+  }
+}
+
+const renderPluginComposition = (
+  options: { readonly activationSource?: TestLauncherActivationSource; readonly strictMode?: boolean } = {},
+) => {
   const pageRegistry = new PageRegistry([
     { owner_id: 'lensx.core', page_id: 'settings', enabled: true, title: { 'en-US': 'Settings' } },
   ]);
@@ -151,13 +172,14 @@ const renderPluginComposition = (options: { readonly strictMode?: boolean } = {}
     dispose: () => undefined,
   } as unknown as PluginRuntimeSessionService;
   const pluginRuntimeLifecycleService = createPluginRuntimeLifecycleService();
+  const activationSource = options.activationSource ?? new TestLauncherActivationSource();
   void projection.initialize();
   const view = (
     <AppProviders>
       <TestProviderControls />
       <App
         actionService={actionService}
-        activationSource={{ subscribe: async () => () => undefined }}
+        activationSource={activationSource}
         collectionsClient={collectionsClient}
         navigationService={navigationService}
         pluginRuntimeLifecycleService={pluginRuntimeLifecycleService}
@@ -169,7 +191,16 @@ const renderPluginComposition = (options: { readonly strictMode?: boolean } = {}
     </AppProviders>
   );
   render(options.strictMode ? <StrictMode>{view}</StrictMode> : view);
-  return { actionService, navigationService, pageRegistry, pluginRuntimeNavigationAdapter, pluginRuntimeResolver };
+  return {
+    actionService,
+    activationSource,
+    navigationService,
+    pageRegistry,
+    pluginRuntimeNavigationAdapter,
+    pluginRuntimeResolver,
+    pluginRuntimeSessionService,
+    projection,
+  };
 };
 
 describe('Plugin Page navigation UI', () => {
@@ -183,6 +214,53 @@ describe('Plugin Page navigation UI', () => {
 
     await waitFor(() => expect(document.querySelectorAll('iframe')).toHaveLength(1));
     expect(pluginRuntimeNavigationAdapter.activate).toHaveBeenCalledTimes(1);
+  });
+
+  test('keeps one current Runtime across shortcut activation refresh and replaces it only after a real close', async () => {
+    const activationSource = new TestLauncherActivationSource();
+    const view = renderPluginComposition({ activationSource });
+    await waitFor(() => expect(view.actionService.registry.get(`${pluginId}.open_project`)).toBeDefined());
+    await waitFor(() => expect(activationSource.listeners.size).toBe(1));
+
+    act(() =>
+      view.navigationService.openPage({ owner_id: pluginId, page_id: 'open_project' }, `${pluginId}.open_project`),
+    );
+    const iframe = (await waitFor(() => expect(document.querySelector('iframe')).not.toBeNull()).then(() =>
+      document.querySelector('iframe'),
+    )) as HTMLIFrameElement;
+    fireEvent.load(iframe);
+    expect(view.pluginRuntimeSessionService.start).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      activationSource.emit({ reason: 'global_shortcut' });
+      await view.projection.whenIdle();
+      await Promise.resolve();
+    });
+
+    expect(document.querySelector('iframe')).toBe(iframe);
+    expect(view.pluginRuntimeResolver.resolve).toHaveBeenCalledTimes(1);
+    expect(view.pluginRuntimeNavigationAdapter.activate).toHaveBeenCalledTimes(1);
+    expect(view.pluginRuntimeNavigationAdapter.dispose).not.toHaveBeenCalled();
+    expect(view.pluginRuntimeSessionService.start).toHaveBeenCalledTimes(1);
+    expect(document.body).not.toHaveTextContent('Loading the plugin page');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close page and return home' }));
+    await waitFor(() => expect(document.querySelector('iframe')).toBeNull());
+    await waitFor(() =>
+      expect(view.pluginRuntimeNavigationAdapter.dispose).toHaveBeenCalledWith({ lease_id: '0000000000000001' }),
+    );
+
+    act(() =>
+      view.navigationService.openPage({ owner_id: pluginId, page_id: 'open_project' }, `${pluginId}.open_project`),
+    );
+    const reopenedIframe = await waitFor(() => {
+      const current = document.querySelector('iframe');
+      expect(current).not.toBeNull();
+      return current;
+    });
+    expect(reopenedIframe).not.toBe(iframe);
+    expect(view.pluginRuntimeResolver.resolve).toHaveBeenCalledTimes(2);
+    expect(view.pluginRuntimeNavigationAdapter.activate).toHaveBeenCalledTimes(2);
   });
 
   test('navigates a projected Action to one isolated Runtime iframe and resolves current metadata', async () => {

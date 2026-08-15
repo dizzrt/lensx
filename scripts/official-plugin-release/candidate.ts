@@ -318,10 +318,25 @@ export const buildOfficialPluginCandidate = (
       version: input.member.version,
     });
 
-    run('pnpm', ['exec', 'rstest', 'run', 'tests/official-plugin-runtime-e2e.test.tsx'], toolingRoot, {
-      LENSX_OFFICIAL_CANDIDATE_PLUGIN_ID: input.member.pluginId,
-      LENSX_OFFICIAL_CANDIDATE_VERSION: input.member.version,
-    });
+    run(
+      'pnpm',
+      [
+        'exec',
+        'rstest',
+        'run',
+        'tests/official-plugin-runtime-e2e.test.tsx',
+        'tests/plugin-runtime-frame.test.tsx',
+        'tests/plugin-lifecycle-service.test.ts',
+        'tests/plugin-replacement-service.test.ts',
+      ],
+      toolingRoot,
+      {
+        LENSX_OFFICIAL_CANDIDATE_DIGEST: digest,
+        LENSX_OFFICIAL_CANDIDATE_PATH: firstPath,
+        LENSX_OFFICIAL_CANDIDATE_PLUGIN_ID: input.member.pluginId,
+        LENSX_OFFICIAL_CANDIDATE_VERSION: input.member.version,
+      },
+    );
 
     const artifactName = `${input.member.pluginId}-${input.member.version}.lxp`;
     const checksumName = `${artifactName}.sha256`;
