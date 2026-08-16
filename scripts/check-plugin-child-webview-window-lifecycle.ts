@@ -8,22 +8,52 @@ const fail = (message: string): never => {
 };
 
 const launcher = read('src-tauri/src/launcher_window.rs');
-const dispatchStart = launcher.indexOf('pub fn dispatch<R: Runtime>');
-const dispatchEnd = launcher.indexOf('\n    }\n}', dispatchStart);
-const dispatch = launcher.slice(dispatchStart, dispatchEnd);
-if (dispatch.indexOf('hide_current_plugin_presentation(app)') > dispatch.indexOf('execute_with_resolver_policy(')) {
-  fail('Launcher hides the parent before the current Child WebView');
-}
 for (const required of [
-  'restore_current_plugin_presentation(app)',
-  'service.hide_current(snapshot.attempt)',
-  'service.show_current(snapshot.attempt)',
-  'service.focus_current(snapshot.attempt)',
+  '.get_window(MAIN_WINDOW_LABEL)',
+  '.get_webview(MAIN_WINDOW_LABEL)',
+  'hide_current_plugin_presentation(child)',
+  'rollback_current_plugin_presentation(child, hidden_attempt)',
+  'restore_current_plugin_presentation(child)',
+  'child.hide_current(snapshot.attempt)',
+  'child.show_current(snapshot.attempt)',
+  'child.focus_current(snapshot.attempt)',
 ]) {
   if (!launcher.includes(required)) fail(`Launcher lifecycle omits ${required}`);
 }
-if (!launcher.includes('compare_current_teardown(snapshot.attempt)')) {
+if (!launcher.includes('child.compare_current_teardown(snapshot.attempt)')) {
   fail('failed native hide does not fail closed through compare-current teardown');
+}
+if (launcher.includes('get_webview_window(MAIN_WINDOW_LABEL)') || launcher.includes('WebviewWindow<R>')) {
+  fail('post-creation Launcher paths regressed to the single-WebviewWindow lookup');
+}
+
+const surface = read('src-tauri/src/launcher_surface.rs');
+if (!surface.includes('.get_window(MAIN_WINDOW_LABEL)') || surface.includes('get_webview_window')) {
+  fail('Launcher surface sizing does not resolve the complete native Window');
+}
+
+const presentation = read('src-tauri/src/plugin_child_webview_presentation.rs');
+if (presentation.includes('get_webview_window(MAIN_WINDOW_LABEL)')) {
+  fail('presentation geometry depends on a post-creation single-WebviewWindow conversion');
+}
+
+const nativeDialogStart = launcher.indexOf('pub(crate) fn begin_launcher_native_dialog');
+const nativeDialogEnd = launcher.indexOf('\n}', nativeDialogStart);
+const nativeDialog = launcher.slice(nativeDialogStart, nativeDialogEnd);
+if (!nativeDialog.includes('app.get_window(MAIN_WINDOW_LABEL)')) {
+  fail('native dialog parent does not resolve the complete native Window');
+}
+
+const rustTests = launcher.slice(launcher.indexOf('#[cfg(test)]\nmod tests'));
+for (const required of [
+  'composed_hide_resolves_native_window_before_child_first_parent_second_mutation',
+  'dialog_guard_suppresses_child_and_parent_hide_after_native_resolution',
+  'native_hide_failure_restores_and_refocuses_the_same_child',
+  'rollback_failure_tears_down_current_child_but_stale_rollback_is_inert',
+  'restore_resolves_host_then_shows_parent_before_the_same_child',
+  'target_resolution_failures_never_mutate_child_presentation',
+]) {
+  if (!rustTests.includes(required)) fail(`Rust atomic lifecycle coverage omits ${required}`);
 }
 
 const slot = read('src/app/plugins/runtime/PluginRuntimeSlot.tsx');
@@ -53,5 +83,21 @@ if (!slotTests.includes('recomputes physical bounds and scale on the same curren
 if (!navigationTests.includes('keeps one current Runtime across shortcut activation refresh')) {
   fail('missing shortcut activation continuity evidence');
 }
+if (!navigationTests.includes('returns Home and restores input focus before deferred Child teardown completes')) {
+  fail('missing deferred Page-close resize and focus evidence');
+}
 
-console.log('Checked resize, scale, hide/restore, focus, shortcut, close, and App teardown presentation wiring.');
+const surfaceAdapter = read('src/app/launcher/surface.ts');
+const surfaceTests = read('tests/launcher-surface-desktop-adapter.test.ts');
+for (const mode of ["'home'", "'search'", "'page'"]) {
+  if (!surfaceAdapter.includes(mode) || !surfaceTests.includes(mode)) {
+    fail(`typed Launcher surface boundary omits ${mode}`);
+  }
+}
+for (const forbidden of ['windowLabel', 'width', 'height', '@tauri-apps/api/window']) {
+  if (surfaceAdapter.includes(forbidden)) fail(`Launcher surface adapter exposes ${forbidden}`);
+}
+
+console.log(
+  'Checked native Window/Host WebView identity, atomic failure recovery, resize, focus, shortcut, close, and teardown wiring.',
+);

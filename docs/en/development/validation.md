@@ -293,6 +293,8 @@ binding, navigation policy, or lifecycle cleanup must run:
 
 ```bash
 pnpm run check:plugin-child-webview-runtime
+pnpm run check:plugin-child-webview-window-lifecycle
+pnpm run check:plugin-child-webview-macos-evidence
 ```
 
 The gate combines React slot and state tests, physical-bounds revisions,
@@ -300,6 +302,17 @@ compare-current native lifecycle, generation-bound resources, open-Web positive
 paths, top-level navigation denial, terminal cleanup, current `.lxp` fixtures,
 bounded macOS WKWebView evidence, ACL negatives, and workspace-private imports.
 Native load, bridge ready, and SDK ready remain separate evidence facts.
+
+The window-lifecycle gate specifically prevents the multi-WebView regression
+where post-creation Launcher resize, window events, native-dialog parenting, or
+`Cmd+W` hide use a single-`WebviewWindow` lookup. Its Rust and React composition
+coverage requires resolve-before-mutation, Child-first/native-parent-second
+hide, native-hide rollback or compare-current teardown, parent-first restore,
+immediate `650×320` Home resize on Page close, and input-focus restoration
+while Child destruction is still pending. The bounded real macOS ConfigLens
+record additionally covers complete-window `Cmd+W` and focus-loss hide,
+same-WebView/Session/Monaco/Worker shortcut restore without loading again, and
+zero authority after a real Page close.
 
 ## Plugin Child WebView Session Validation
 

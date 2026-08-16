@@ -304,7 +304,7 @@ fn create_plugin_child_webview_presentation_inner(
                 PluginChildWebviewPresentationErrorCode::CurrentExists,
             )
         })?;
-    let window = app.get_webview_window(MAIN_WINDOW_LABEL).ok_or_else(|| {
+    let window = app.get_window(MAIN_WINDOW_LABEL).ok_or_else(|| {
         teardown_failed_creation(&service, attempt);
         PluginChildWebviewPresentationError::new(
             PluginChildWebviewPresentationErrorCode::InvalidRequest,
@@ -460,7 +460,7 @@ pub(crate) fn create_config_lens_evidence_presentation(
     expected_revision: String,
     evidence: Arc<dyn PluginChildWebviewEvidenceIngress>,
 ) -> Result<PluginChildWebviewAttempt, PluginChildWebviewPresentationError> {
-    let window = app.get_webview_window(MAIN_WINDOW_LABEL).ok_or_else(|| {
+    let window = app.get_window(MAIN_WINDOW_LABEL).ok_or_else(|| {
         PluginChildWebviewPresentationError::new(
             PluginChildWebviewPresentationErrorCode::InvalidRequest,
         )

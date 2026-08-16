@@ -18,7 +18,9 @@ heights of 320px, 480px, and 600px for the App Shell's `home`, `search`, and
 `page` presentation states, respectively. The system MUST NOT accept arbitrary
 dimensions supplied by the frontend and MUST NOT change the native window
 height based on DOM measurements, home collection counts, or search-result
-counts.
+counts. These fixed transitions MUST continue to address the complete native
+`main` Window while a plugin Child WebView is attached, and MUST NOT depend on
+asynchronous Child WebView teardown completing first.
 
 #### Scenario: Start the desktop application
 
@@ -54,6 +56,16 @@ counts.
 - **THEN** the launcher input and shared Recent and Pinned content region remain
   visible
 
+#### Scenario: Close a plugin page while its Child WebView is attached
+
+- **WHEN** the App Shell closes an active plugin Page and returns to `home`
+  while asynchronous Child WebView teardown is still pending
+- **THEN** the complete native main Window restores to the fixed 320px height
+  without waiting, polling, or retrying a single-WebView conversion
+- **THEN** the Child WebView becomes hidden and terminal through its
+  compare-current close path
+- **THEN** Home does not retain the 600px `page` height
+
 #### Scenario: Home collections change
 
 - **WHEN** a Recent or Pinned collection changes from empty to non-empty or
@@ -71,11 +83,45 @@ counts.
 
 #### Scenario: Native height transition fails
 
-- **WHEN** Rust cannot resolve the main window or set the fixed height for the
-  requested mode
+- **WHEN** Rust cannot resolve the native main Window or set the fixed height
+  for the requested mode
 - **THEN** the command returns a serializable error containing a stable code,
   mode, operation, and safe message
 - **THEN** the current App Shell state is not cleared
+
+### Requirement: Launcher MUST separate native Window and Host WebView identities
+
+The system MUST treat the native `main` Window, the trusted Host WebView, and
+the plugin Child WebView as distinct identities. Native sizing, visibility,
+show, hide, focus, window-event, and native-dialog parent operations MUST
+always target the complete native `main` Window and MUST remain resolvable
+before and after a Child WebView is attached or removed. Host activation events
+MUST target only the trusted Host WebView and MUST NOT be broadcast to plugin
+Child WebViews as a consequence of native Window operations.
+
+#### Scenario: Resolve the native parent after attaching a Child WebView
+
+- **WHEN** the native `main` Window contains both the Host WebView and the
+  current plugin Child WebView
+- **THEN** Launcher native size, visibility, show, hide, focus, and window-event
+  operations still resolve the same complete native Window
+- **THEN** the Child WebView's distinct label does not invalidate the main
+  Window lookup
+
+#### Scenario: Emit activation after restoring a plugin page
+
+- **WHEN** the Launcher restores a hidden native Window containing the current
+  plugin Child WebView
+- **THEN** the typed activation event is sent only to the trusted Host WebView
+- **THEN** the plugin Child WebView receives neither the Host activation event
+  nor additional Host authority as a consequence of the native Window restore
+
+#### Scenario: Open a native dialog from the Host
+
+- **WHEN** the Host opens a native dialog from an allowed Launcher surface
+- **THEN** the dialog uses the complete native `main` Window as its parent
+- **THEN** the dialog guard continues to suppress focus-loss hiding throughout
+  the dialog lifecycle without changing Child WebView authority
 
 ### Requirement: The unified launcher top region must support native window dragging
 
@@ -247,6 +293,14 @@ information available for developer diagnosis, MUST NOT expose native error
 details to the user, and MUST NOT terminate the application process because of
 the failure.
 
+When a current Child WebView exists, the hide boundary MUST resolve the
+complete native main Window before changing Child presentation. It MUST hide
+the Child WebView before the native parent to prevent overlay leakage, and MUST
+either hide both surfaces or restore the still-current Child presentation when
+native parent hide fails. A failed hide MUST NOT leave the Host window visible
+with only the plugin content blank. Restore MUST show and focus the native
+parent before restoring and focusing the same current Child WebView.
+
 #### Scenario: Close a ready launcher window
 
 - **WHEN** the default global shortcut has been registered successfully
@@ -267,14 +321,36 @@ the failure.
 - **THEN** the main window is not destroyed and the application process
   continues running
 
+#### Scenario: Press Cmd+W while a plugin Child WebView is visible
+
+- **WHEN** the foreground macOS Launcher contains a visible current plugin
+  Child WebView
+- **AND** the user presses `Cmd+W`
+- **THEN** the unified action resolves and hides the complete native Window and
+  current Child WebView as one semantic transition
+- **THEN** the Host page chrome and plugin content are both absent from the
+  screen while the process and same Runtime attempt continue
+- **THEN** the Launcher does not remain visible with an empty plugin content
+  region
+
 #### Scenario: Restore the launcher after Cmd+W
 
 - **WHEN** the macOS main window has been hidden by `Cmd+W`
 - **AND** the user presses the default global shortcut
 - **THEN** the system shows and focuses the main window through the unified
   action boundary
-- **THEN** the existing typed activation event restores focus to the launcher
-  input
+- **THEN** the existing typed activation event restores focus according to the
+  Host-owned page/input policy
+
+#### Scenario: Restore a plugin page after Cmd+W
+
+- **WHEN** `Cmd+W` semantically hid a Launcher with an equivalent current
+  plugin attempt
+- **AND** the user restores Launcher with the default global shortcut
+- **THEN** the complete native Window is shown before the same Child WebView is
+  shown and focused
+- **THEN** the plugin document, Session, model, and Worker are reused without a
+  fresh loading cycle
 
 #### Scenario: Default recovery shortcut is unavailable on macOS
 
@@ -286,15 +362,25 @@ the failure.
 - **THEN** the system does not produce a hidden window that cannot be restored
   through a configured path
 
-#### Scenario: Cmd+W hide fails
+#### Scenario: Cmd+W hide fails before Child presentation changes
 
-- **WHEN** the application-local macOS `Cmd+W` entry point has handled the key
-  press
-- **AND** the unified `hide` action cannot resolve or hide the main window
-- **THEN** the system preserves the window's last successfully established
-  visibility state
+- **WHEN** the application-local macOS `Cmd+W` entry point cannot resolve the
+  complete native main Window
+- **THEN** the system preserves both the Host and current Child WebView at their
+  last successfully established visibility state
+- **THEN** the failure identifies the requested action and `resolve_window`
+  stage for developer diagnosis
+- **THEN** no empty plugin content region is introduced
+
+#### Scenario: Cmd+W native hide fails after Child WebView hides
+
+- **WHEN** the application-local macOS `Cmd+W` entry point resolves the native
+  main Window and hides the current Child WebView
+- **AND** hiding the native parent fails
+- **THEN** the system restores the equivalent current Child WebView or
+  terminates it fail-closed if rollback cannot be proven current
 - **THEN** the failure information identifies the requested action and failed
-  native operation stage for developer diagnosis
+  native operation stage
 - **THEN** the system does not expose native error details to the user or
   terminate the application process
 
@@ -302,8 +388,10 @@ the failure.
 
 - **WHEN** the default global shortcut has been registered successfully
 - **AND** the visible main window loses focus
-- **THEN** the system hides the main window through the unified action boundary
-- **THEN** the user can restore the window with the default global shortcut
+- **THEN** the system hides the complete native main Window and current Child
+  WebView through the unified action boundary
+- **THEN** the user can restore the window and same equivalent attempt with the
+  default global shortcut
 
 ### Requirement: Launcher activation must restore input focus
 
@@ -343,10 +431,31 @@ unmounts.
 ### Requirement: Launcher lifecycle MUST coordinate Host and Child WebView surfaces atomically
 Hide, restore, resize, scale-factor change, focus, blur, shortcut activation, close and application teardown MUST update the native Child WebView through the current revisioned presentation binding. Semantic hide/restore MUST preserve the same attempt; Page close or application teardown MUST destroy it. Host-owned overlay or unavailable slot MUST hide the Child WebView before trusted DOM interaction is exposed.
 
+The complete native Window and current Child WebView MUST NOT settle in
+contradictory presentation states after an operation reports failure. All
+rollback or teardown work MUST remain compare-current so an old attempt cannot
+reveal, focus, resize, or destroy a replacement.
+
 #### Scenario: Launcher hides and restores
 - **WHEN** the current plugin facts remain equivalent across temporary Launcher hide and restore
 - **THEN** the same Child WebView and Session are hidden then shown without reload
 - **THEN** launcher input focus and plugin focus follow the Host-owned activation policy
+
+#### Scenario: Parent lookup fails before semantic hide
+
+- **WHEN** the system cannot resolve the complete native parent before a
+  semantic hide
+- **THEN** the current Child WebView is not hidden independently
+- **THEN** the action reports a bounded failure while preserving the last
+  complete presentation state
+
+#### Scenario: A stale rollback completes after replacement
+
+- **WHEN** a failed hide starts Child presentation rollback and a newer Runtime
+  attempt becomes current first
+- **THEN** the old rollback is inert and cannot show, focus, resize, or destroy
+  the replacement
+- **THEN** the replacement follows only its own current presentation revision
 
 #### Scenario: Window geometry changes
 - **WHEN** resize or scale-factor change produces a new slot revision
@@ -355,4 +464,3 @@ Hide, restore, resize, scale-factor change, focus, blur, shortcut activation, cl
 #### Scenario: Launcher terminates
 - **WHEN** the app unmounts or exits
 - **THEN** Child WebView teardown joins the existing root lifecycle and leaves no native surface or bridge binding
-

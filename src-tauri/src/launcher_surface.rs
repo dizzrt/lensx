@@ -1,6 +1,6 @@
 use crate::launcher_window::MAIN_WINDOW_LABEL;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, LogicalSize, Manager, Runtime, WebviewWindow};
+use tauri::{AppHandle, LogicalSize, Manager, Runtime, Window};
 
 const LAUNCHER_SURFACE_RESIZE_FAILED: &str = "launcher_surface_resize_failed";
 pub const LAUNCHER_WIDTH: f64 = 650.0;
@@ -57,7 +57,7 @@ trait LauncherSurfaceWindow {
     fn set_logical_size(&self, width: f64, height: f64) -> Result<(), String>;
 }
 
-impl<R: Runtime> LauncherSurfaceWindow for WebviewWindow<R> {
+impl<R: Runtime> LauncherSurfaceWindow for Window<R> {
     fn set_logical_size(&self, width: f64, height: f64) -> Result<(), String> {
         self.set_size(LogicalSize::new(width, height))
             .map_err(|error| error.to_string())
@@ -79,7 +79,7 @@ pub fn set_launcher_surface_mode(
     mode: LauncherSurfaceMode,
 ) -> Result<(), LauncherSurfaceError> {
     let window = app
-        .get_webview_window(MAIN_WINDOW_LABEL)
+        .get_window(MAIN_WINDOW_LABEL)
         .ok_or_else(|| LauncherSurfaceError::new(mode, "window_lookup"))?;
     set_surface_mode(&window, mode)
 }

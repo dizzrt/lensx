@@ -10,11 +10,12 @@ use tauri::menu::{
     AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu, HELP_SUBMENU_ID, WINDOW_SUBMENU_ID,
 };
 use tauri::plugin::TauriPlugin;
-use tauri::{AppHandle, Emitter, Manager, Runtime, State, WebviewWindow, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, Runtime, State, Webview, Window, WindowEvent};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 use crate::plugin_child_webview_service::{
-    PluginChildWebviewPresentationResult, PluginChildWebviewService, PluginChildWebviewState,
+    PluginChildWebviewAttempt, PluginChildWebviewPresentationResult, PluginChildWebviewService,
+    PluginChildWebviewState,
 };
 
 pub const MAIN_WINDOW_LABEL: &str = "main";
@@ -158,13 +159,77 @@ trait LauncherWindowAdapter {
     fn show(&mut self) -> Result<(), String>;
     fn hide(&mut self) -> Result<(), String>;
     fn focus(&mut self) -> Result<(), String>;
+}
+
+trait LauncherHostWebviewEmitter {
     fn emit_activation(&mut self, reason: LauncherActivationReason) -> Result<(), String>;
 }
 
 trait LauncherWindowResolver {
     type Window: LauncherWindowAdapter;
+    type Host: LauncherHostWebviewEmitter;
 
-    fn resolve(&self) -> Result<Self::Window, String>;
+    fn resolve_window(&self) -> Result<Self::Window, String>;
+    fn resolve_host(&self) -> Result<Self::Host, String>;
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct LauncherChildPresentationSnapshot {
+    attempt: PluginChildWebviewAttempt,
+    state: PluginChildWebviewState,
+}
+
+trait LauncherChildPresentation {
+    fn snapshot(&self) -> Option<LauncherChildPresentationSnapshot>;
+    fn hide_current(
+        &self,
+        attempt: PluginChildWebviewAttempt,
+    ) -> PluginChildWebviewPresentationResult;
+    fn show_current(
+        &self,
+        attempt: PluginChildWebviewAttempt,
+    ) -> PluginChildWebviewPresentationResult;
+    fn focus_current(
+        &self,
+        attempt: PluginChildWebviewAttempt,
+    ) -> PluginChildWebviewPresentationResult;
+    fn compare_current_teardown(&self, attempt: PluginChildWebviewAttempt) -> Result<bool, ()>;
+}
+
+impl<R: Runtime> LauncherChildPresentation for PluginChildWebviewService<R> {
+    fn snapshot(&self) -> Option<LauncherChildPresentationSnapshot> {
+        PluginChildWebviewService::<R>::snapshot(self).map(|snapshot| {
+            LauncherChildPresentationSnapshot {
+                attempt: snapshot.attempt,
+                state: snapshot.state,
+            }
+        })
+    }
+
+    fn hide_current(
+        &self,
+        attempt: PluginChildWebviewAttempt,
+    ) -> PluginChildWebviewPresentationResult {
+        PluginChildWebviewService::<R>::hide_current(self, attempt)
+    }
+
+    fn show_current(
+        &self,
+        attempt: PluginChildWebviewAttempt,
+    ) -> PluginChildWebviewPresentationResult {
+        PluginChildWebviewService::<R>::show_current(self, attempt)
+    }
+
+    fn focus_current(
+        &self,
+        attempt: PluginChildWebviewAttempt,
+    ) -> PluginChildWebviewPresentationResult {
+        PluginChildWebviewService::<R>::focus_current(self, attempt)
+    }
+
+    fn compare_current_teardown(&self, attempt: PluginChildWebviewAttempt) -> Result<bool, ()> {
+        PluginChildWebviewService::<R>::compare_current_teardown(self, attempt)
+    }
 }
 
 #[cfg(test)]
@@ -172,19 +237,20 @@ fn execute_with_resolver<R: LauncherWindowResolver>(
     resolver: &R,
     action: LauncherWindowAction,
 ) -> Result<(), LauncherWindowActionError> {
-    execute_with_resolver_policy(resolver, action, false)
+    execute_with_resolver_policy(resolver, None, action, false)
 }
 
 fn execute_with_resolver_policy<R: LauncherWindowResolver>(
     resolver: &R,
+    child: Option<&dyn LauncherChildPresentation>,
     action: LauncherWindowAction,
     suppress_hide: bool,
 ) -> Result<(), LauncherWindowActionError> {
-    let mut window = resolver.resolve().map_err(|details| {
+    let mut window = resolver.resolve_window().map_err(|details| {
         LauncherWindowActionError::new(action, LauncherWindowOperation::ResolveWindow, details)
     })?;
 
-    execute_with_adapter_policy(&mut window, action, suppress_hide)
+    execute_composed_with_adapter_policy(resolver, &mut window, child, action, suppress_hide)
 }
 
 #[cfg(test)]
@@ -195,15 +261,16 @@ fn execute_with_adapter<A: LauncherWindowAdapter>(
     execute_with_adapter_policy(window, action, false)
 }
 
+#[cfg(test)]
 fn execute_with_adapter_policy<A: LauncherWindowAdapter>(
     window: &mut A,
     action: LauncherWindowAction,
     suppress_hide: bool,
 ) -> Result<(), LauncherWindowActionError> {
     match action {
-        LauncherWindowAction::Show(reason) => show(window, action, reason),
+        LauncherWindowAction::Show(_) => show_native(window, action),
         LauncherWindowAction::Hide if suppress_hide => Ok(()),
-        LauncherWindowAction::Hide => hide(window, action),
+        LauncherWindowAction::Hide => hide_native(window, action),
         LauncherWindowAction::Toggle(reason) => {
             let is_visible = window.is_visible().map_err(|details| {
                 LauncherWindowActionError::new(
@@ -217,35 +284,98 @@ fn execute_with_adapter_policy<A: LauncherWindowAdapter>(
                 if suppress_hide {
                     Ok(())
                 } else {
-                    hide(window, action)
+                    hide_native(window, action)
                 }
             } else {
-                show(window, action, reason)
+                let _ = reason;
+                show_native(window, action)
             }
         }
     }
 }
 
-fn show<A: LauncherWindowAdapter>(
+fn execute_composed_with_adapter_policy<R: LauncherWindowResolver>(
+    resolver: &R,
+    window: &mut R::Window,
+    child: Option<&dyn LauncherChildPresentation>,
+    action: LauncherWindowAction,
+    suppress_hide: bool,
+) -> Result<(), LauncherWindowActionError> {
+    match action {
+        LauncherWindowAction::Show(reason) => {
+            show_with_host(resolver, window, child, action, reason)
+        }
+        LauncherWindowAction::Hide if suppress_hide => Ok(()),
+        LauncherWindowAction::Hide => hide_with_child(window, child, action),
+        LauncherWindowAction::Toggle(reason) => {
+            let is_visible = window.is_visible().map_err(|details| {
+                LauncherWindowActionError::new(
+                    action,
+                    LauncherWindowOperation::ReadVisibility,
+                    details,
+                )
+            })?;
+            if is_visible {
+                if suppress_hide {
+                    Ok(())
+                } else {
+                    hide_with_child(window, child, action)
+                }
+            } else {
+                show_with_host(resolver, window, child, action, reason)
+            }
+        }
+    }
+}
+
+fn show_native<A: LauncherWindowAdapter>(
     window: &mut A,
     action: LauncherWindowAction,
-    reason: LauncherActivationReason,
 ) -> Result<(), LauncherWindowActionError> {
     run_operation(window.restore(), action, LauncherWindowOperation::Restore)?;
     run_operation(window.show(), action, LauncherWindowOperation::Show)?;
-    run_operation(window.focus(), action, LauncherWindowOperation::Focus)?;
-    run_operation(
-        window.emit_activation(reason),
-        action,
-        LauncherWindowOperation::EmitActivation,
-    )
+    run_operation(window.focus(), action, LauncherWindowOperation::Focus)
 }
 
-fn hide<A: LauncherWindowAdapter>(
+fn show_with_host<R: LauncherWindowResolver>(
+    resolver: &R,
+    window: &mut R::Window,
+    child: Option<&dyn LauncherChildPresentation>,
+    action: LauncherWindowAction,
+    reason: LauncherActivationReason,
+) -> Result<(), LauncherWindowActionError> {
+    // Resolve both identities before any native or Child presentation mutation.
+    let mut host = resolver.resolve_host().map_err(|details| {
+        LauncherWindowActionError::new(action, LauncherWindowOperation::ResolveWindow, details)
+    })?;
+    show_native(window, action)?;
+    let activation = run_operation(
+        host.emit_activation(reason),
+        action,
+        LauncherWindowOperation::EmitActivation,
+    );
+    restore_current_plugin_presentation(child);
+    activation
+}
+
+fn hide_native<A: LauncherWindowAdapter>(
     window: &mut A,
     action: LauncherWindowAction,
 ) -> Result<(), LauncherWindowActionError> {
     run_operation(window.hide(), action, LauncherWindowOperation::Hide)
+}
+
+fn hide_with_child<A: LauncherWindowAdapter>(
+    window: &mut A,
+    child: Option<&dyn LauncherChildPresentation>,
+    action: LauncherWindowAction,
+) -> Result<(), LauncherWindowActionError> {
+    let hidden_attempt = hide_current_plugin_presentation(child);
+    let result = hide_native(window, action);
+    if result.is_err() {
+        rollback_current_plugin_presentation(child, hidden_attempt);
+    }
+    result
 }
 
 fn run_operation(
@@ -257,7 +387,7 @@ fn run_operation(
 }
 
 struct TauriLauncherWindowAdapter<R: Runtime> {
-    window: WebviewWindow<R>,
+    window: Window<R>,
 }
 
 impl<R: Runtime> LauncherWindowAdapter for TauriLauncherWindowAdapter<R> {
@@ -280,9 +410,15 @@ impl<R: Runtime> LauncherWindowAdapter for TauriLauncherWindowAdapter<R> {
     fn focus(&mut self) -> Result<(), String> {
         self.window.set_focus().map_err(|error| error.to_string())
     }
+}
 
+struct TauriLauncherHostWebviewEmitter<R: Runtime> {
+    host: Webview<R>,
+}
+
+impl<R: Runtime> LauncherHostWebviewEmitter for TauriLauncherHostWebviewEmitter<R> {
     fn emit_activation(&mut self, reason: LauncherActivationReason) -> Result<(), String> {
-        self.window
+        self.host
             .emit(
                 LAUNCHER_ACTIVATED_EVENT,
                 LauncherActivationPayload { reason },
@@ -297,12 +433,20 @@ struct TauriLauncherWindowResolver<'app, R: Runtime> {
 
 impl<R: Runtime> LauncherWindowResolver for TauriLauncherWindowResolver<'_, R> {
     type Window = TauriLauncherWindowAdapter<R>;
+    type Host = TauriLauncherHostWebviewEmitter<R>;
 
-    fn resolve(&self) -> Result<Self::Window, String> {
+    fn resolve_window(&self) -> Result<Self::Window, String> {
         self.app
-            .get_webview_window(MAIN_WINDOW_LABEL)
+            .get_window(MAIN_WINDOW_LABEL)
             .map(|window| TauriLauncherWindowAdapter { window })
-            .ok_or_else(|| format!("webview window '{MAIN_WINDOW_LABEL}' was not found"))
+            .ok_or_else(|| format!("native window '{MAIN_WINDOW_LABEL}' was not found"))
+    }
+
+    fn resolve_host(&self) -> Result<Self::Host, String> {
+        self.app
+            .get_webview(MAIN_WINDOW_LABEL)
+            .map(|host| TauriLauncherHostWebviewEmitter { host })
+            .ok_or_else(|| format!("Host webview '{MAIN_WINDOW_LABEL}' was not found"))
     }
 }
 
@@ -347,70 +491,86 @@ impl LauncherWindowActions {
         action: LauncherWindowAction,
     ) -> Result<(), LauncherWindowActionError> {
         let suppress_hide = self.native_dialog_active();
-        let will_hide = !suppress_hide
-            && match action {
-                LauncherWindowAction::Hide => true,
-                LauncherWindowAction::Toggle(_) => app
-                    .get_webview_window(MAIN_WINDOW_LABEL)
-                    .and_then(|window| window.is_visible().ok())
-                    .unwrap_or(false),
-                LauncherWindowAction::Show(_) => false,
-            };
-        if will_hide {
-            hide_current_plugin_presentation(app);
-        }
-        let result = execute_with_resolver_policy(
+        let service = app.try_state::<Arc<PluginChildWebviewService<R>>>();
+        let child = service
+            .as_ref()
+            .map(|service| service.inner().as_ref() as &dyn LauncherChildPresentation);
+        execute_with_resolver_policy(
             &TauriLauncherWindowResolver { app },
+            child,
             action,
             suppress_hide,
-        );
-        if result.is_ok()
-            && app
-                .get_webview_window(MAIN_WINDOW_LABEL)
-                .and_then(|window| window.is_visible().ok())
-                .unwrap_or(false)
-        {
-            restore_current_plugin_presentation(app);
+        )
+    }
+}
+
+fn hide_current_plugin_presentation(
+    child: Option<&dyn LauncherChildPresentation>,
+) -> Option<PluginChildWebviewAttempt> {
+    let child = child?;
+    let snapshot = child.snapshot()?;
+    if snapshot.state != PluginChildWebviewState::Visible {
+        return None;
+    };
+    match child.hide_current(snapshot.attempt) {
+        PluginChildWebviewPresentationResult::Applied => Some(snapshot.attempt),
+        PluginChildWebviewPresentationResult::StaleAttempt => None,
+        _ => {
+            let _ = child.compare_current_teardown(snapshot.attempt);
+            None
         }
-        result
     }
 }
 
-fn hide_current_plugin_presentation<R: Runtime>(app: &AppHandle<R>) {
-    let Some(service) = app.try_state::<Arc<PluginChildWebviewService<R>>>() else {
+fn rollback_current_plugin_presentation(
+    child: Option<&dyn LauncherChildPresentation>,
+    hidden_attempt: Option<PluginChildWebviewAttempt>,
+) {
+    let (Some(child), Some(attempt)) = (child, hidden_attempt) else {
         return;
     };
-    let Some(snapshot) = service.snapshot() else {
-        return;
-    };
-    if !matches!(
-        service.hide_current(snapshot.attempt),
-        PluginChildWebviewPresentationResult::Applied
-            | PluginChildWebviewPresentationResult::StaleAttempt
-    ) {
-        let _ = service.compare_current_teardown(snapshot.attempt);
+    match child.show_current(attempt) {
+        PluginChildWebviewPresentationResult::Applied => {
+            if child.focus_current(attempt) != PluginChildWebviewPresentationResult::Applied {
+                let _ = child.compare_current_teardown(attempt);
+            }
+        }
+        PluginChildWebviewPresentationResult::StaleAttempt => {}
+        _ => {
+            let _ = child.compare_current_teardown(attempt);
+        }
     }
 }
 
-fn restore_current_plugin_presentation<R: Runtime>(app: &AppHandle<R>) {
-    let Some(service) = app.try_state::<Arc<PluginChildWebviewService<R>>>() else {
+fn restore_current_plugin_presentation(child: Option<&dyn LauncherChildPresentation>) {
+    let Some(child) = child else {
         return;
     };
-    let Some(snapshot) = service
+    let Some(snapshot) = child
         .snapshot()
         .filter(|snapshot| snapshot.state == PluginChildWebviewState::Hidden)
     else {
         return;
     };
-    if service.show_current(snapshot.attempt) == PluginChildWebviewPresentationResult::Applied {
-        let _ = service.focus_current(snapshot.attempt);
+    match child.show_current(snapshot.attempt) {
+        PluginChildWebviewPresentationResult::Applied => {
+            if child.focus_current(snapshot.attempt)
+                != PluginChildWebviewPresentationResult::Applied
+            {
+                let _ = child.compare_current_teardown(snapshot.attempt);
+            }
+        }
+        PluginChildWebviewPresentationResult::StaleAttempt => {}
+        _ => {
+            let _ = child.compare_current_teardown(snapshot.attempt);
+        }
     }
 }
 
 pub(crate) fn begin_launcher_native_dialog<R: Runtime>(
     app: &AppHandle<R>,
-) -> Option<(LauncherNativeDialogGuard, WebviewWindow<R>)> {
-    let parent = app.get_webview_window(MAIN_WINDOW_LABEL)?;
+) -> Option<(LauncherNativeDialogGuard, Window<R>)> {
+    let parent = app.get_window(MAIN_WINDOW_LABEL)?;
     let actions = app.try_state::<LauncherWindowActions>()?;
     Some((actions.begin_native_dialog(), parent))
 }
@@ -453,7 +613,7 @@ fn route_macos_menu_event(menu_id: &str) -> Option<LauncherWindowAction> {
         .map(|binding| binding.action)
 }
 
-fn dispatch_macos_menu_event<F>(
+pub(crate) fn dispatch_macos_menu_event<F>(
     menu_id: &str,
     dispatch: F,
 ) -> Result<bool, LauncherWindowActionError>
@@ -609,12 +769,12 @@ where
 fn resolve_main_window<R: Runtime>(
     app: &AppHandle<R>,
     action: LauncherWindowAction,
-) -> Result<WebviewWindow<R>, LauncherWindowActionError> {
-    app.get_webview_window(MAIN_WINDOW_LABEL).ok_or_else(|| {
+) -> Result<Window<R>, LauncherWindowActionError> {
+    app.get_window(MAIN_WINDOW_LABEL).ok_or_else(|| {
         LauncherWindowActionError::new(
             action,
             LauncherWindowOperation::ResolveWindow,
-            format!("webview window '{MAIN_WINDOW_LABEL}' was not found"),
+            format!("native window '{MAIN_WINDOW_LABEL}' was not found"),
         )
     })
 }
@@ -842,7 +1002,6 @@ mod tests {
         calls: Vec<LauncherWindowOperation>,
         fail_at: Option<LauncherWindowOperation>,
         visible: bool,
-        activation_reasons: Vec<LauncherActivationReason>,
     }
 
     impl FakeWindow {
@@ -877,11 +1036,20 @@ mod tests {
         fn focus(&mut self) -> Result<(), String> {
             self.record(LauncherWindowOperation::Focus)
         }
+    }
 
-        fn emit_activation(&mut self, reason: LauncherActivationReason) -> Result<(), String> {
-            self.record(LauncherWindowOperation::EmitActivation)?;
-            self.activation_reasons.push(reason);
-            Ok(())
+    #[derive(Default)]
+    struct FakeHost {
+        fail: bool,
+    }
+
+    impl LauncherHostWebviewEmitter for FakeHost {
+        fn emit_activation(&mut self, _reason: LauncherActivationReason) -> Result<(), String> {
+            if self.fail {
+                Err("Host activation failed".to_owned())
+            } else {
+                Ok(())
+            }
         }
     }
 
@@ -892,8 +1060,9 @@ mod tests {
 
     impl LauncherWindowResolver for FakeResolver {
         type Window = FakeWindow;
+        type Host = FakeHost;
 
-        fn resolve(&self) -> Result<Self::Window, String> {
+        fn resolve_window(&self) -> Result<Self::Window, String> {
             if self.fail {
                 Err("main window missing".to_owned())
             } else {
@@ -903,6 +1072,326 @@ mod tests {
                 })
             }
         }
+
+        fn resolve_host(&self) -> Result<Self::Host, String> {
+            if self.fail {
+                Err("Host webview missing".to_owned())
+            } else {
+                Ok(FakeHost::default())
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    struct OrderedWindow {
+        calls: Rc<RefCell<Vec<&'static str>>>,
+        visible: bool,
+        fail_at: Option<LauncherWindowOperation>,
+    }
+
+    impl OrderedWindow {
+        fn record(
+            &self,
+            label: &'static str,
+            operation: LauncherWindowOperation,
+        ) -> Result<(), String> {
+            self.calls.borrow_mut().push(label);
+            if self.fail_at == Some(operation) {
+                Err(format!("{operation} failed"))
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    impl LauncherWindowAdapter for OrderedWindow {
+        fn is_visible(&mut self) -> Result<bool, String> {
+            self.record("window_visibility", LauncherWindowOperation::ReadVisibility)?;
+            Ok(self.visible)
+        }
+
+        fn restore(&mut self) -> Result<(), String> {
+            self.record("window_restore", LauncherWindowOperation::Restore)
+        }
+
+        fn show(&mut self) -> Result<(), String> {
+            self.record("window_show", LauncherWindowOperation::Show)
+        }
+
+        fn hide(&mut self) -> Result<(), String> {
+            self.record("window_hide", LauncherWindowOperation::Hide)
+        }
+
+        fn focus(&mut self) -> Result<(), String> {
+            self.record("window_focus", LauncherWindowOperation::Focus)
+        }
+    }
+
+    struct OrderedHost {
+        calls: Rc<RefCell<Vec<&'static str>>>,
+        fail: bool,
+    }
+
+    impl LauncherHostWebviewEmitter for OrderedHost {
+        fn emit_activation(&mut self, _reason: LauncherActivationReason) -> Result<(), String> {
+            self.calls.borrow_mut().push("host_emit");
+            if self.fail {
+                Err("Host activation failed".to_owned())
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    struct OrderedResolver {
+        calls: Rc<RefCell<Vec<&'static str>>>,
+        window: OrderedWindow,
+        fail_window: bool,
+        fail_host: bool,
+    }
+
+    impl LauncherWindowResolver for OrderedResolver {
+        type Window = OrderedWindow;
+        type Host = OrderedHost;
+
+        fn resolve_window(&self) -> Result<Self::Window, String> {
+            self.calls.borrow_mut().push("resolve_window");
+            if self.fail_window {
+                Err("native window missing".to_owned())
+            } else {
+                Ok(self.window.clone())
+            }
+        }
+
+        fn resolve_host(&self) -> Result<Self::Host, String> {
+            self.calls.borrow_mut().push("resolve_host");
+            if self.fail_host {
+                Err("Host webview missing".to_owned())
+            } else {
+                Ok(OrderedHost {
+                    calls: Rc::clone(&self.calls),
+                    fail: false,
+                })
+            }
+        }
+    }
+
+    struct FakeChildPresentation {
+        calls: Rc<RefCell<Vec<&'static str>>>,
+        state: PluginChildWebviewState,
+        hide_result: PluginChildWebviewPresentationResult,
+        show_result: PluginChildWebviewPresentationResult,
+        focus_result: PluginChildWebviewPresentationResult,
+    }
+
+    impl FakeChildPresentation {
+        fn attempt() -> PluginChildWebviewAttempt {
+            PluginChildWebviewAttempt::from_opaque_id("attempt_0000000000000001")
+                .expect("test attempt should parse")
+        }
+    }
+
+    impl LauncherChildPresentation for FakeChildPresentation {
+        fn snapshot(&self) -> Option<LauncherChildPresentationSnapshot> {
+            self.calls.borrow_mut().push("child_snapshot");
+            Some(LauncherChildPresentationSnapshot {
+                attempt: Self::attempt(),
+                state: self.state,
+            })
+        }
+
+        fn hide_current(
+            &self,
+            _attempt: PluginChildWebviewAttempt,
+        ) -> PluginChildWebviewPresentationResult {
+            self.calls.borrow_mut().push("child_hide");
+            self.hide_result
+        }
+
+        fn show_current(
+            &self,
+            _attempt: PluginChildWebviewAttempt,
+        ) -> PluginChildWebviewPresentationResult {
+            self.calls.borrow_mut().push("child_show");
+            self.show_result
+        }
+
+        fn focus_current(
+            &self,
+            _attempt: PluginChildWebviewAttempt,
+        ) -> PluginChildWebviewPresentationResult {
+            self.calls.borrow_mut().push("child_focus");
+            self.focus_result
+        }
+
+        fn compare_current_teardown(
+            &self,
+            _attempt: PluginChildWebviewAttempt,
+        ) -> Result<bool, ()> {
+            self.calls.borrow_mut().push("child_teardown");
+            Ok(true)
+        }
+    }
+
+    fn ordered_fixture(
+        visible: bool,
+        fail_at: Option<LauncherWindowOperation>,
+    ) -> (Rc<RefCell<Vec<&'static str>>>, OrderedResolver) {
+        let calls = Rc::new(RefCell::new(Vec::new()));
+        let resolver = OrderedResolver {
+            calls: Rc::clone(&calls),
+            window: OrderedWindow {
+                calls: Rc::clone(&calls),
+                visible,
+                fail_at,
+            },
+            fail_window: false,
+            fail_host: false,
+        };
+        (calls, resolver)
+    }
+
+    fn child_fixture(
+        calls: &Rc<RefCell<Vec<&'static str>>>,
+        state: PluginChildWebviewState,
+    ) -> FakeChildPresentation {
+        FakeChildPresentation {
+            calls: Rc::clone(calls),
+            state,
+            hide_result: PluginChildWebviewPresentationResult::Applied,
+            show_result: PluginChildWebviewPresentationResult::Applied,
+            focus_result: PluginChildWebviewPresentationResult::Applied,
+        }
+    }
+
+    #[test]
+    fn composed_hide_resolves_native_window_before_child_first_parent_second_mutation() {
+        let (calls, resolver) = ordered_fixture(true, None);
+        let child = child_fixture(&calls, PluginChildWebviewState::Visible);
+
+        execute_with_resolver_policy(&resolver, Some(&child), LauncherWindowAction::Hide, false)
+            .expect("composed hide should succeed");
+
+        assert_eq!(
+            *calls.borrow(),
+            vec![
+                "resolve_window",
+                "child_snapshot",
+                "child_hide",
+                "window_hide"
+            ]
+        );
+    }
+
+    #[test]
+    fn dialog_guard_suppresses_child_and_parent_hide_after_native_resolution() {
+        let (calls, resolver) = ordered_fixture(true, None);
+        let child = child_fixture(&calls, PluginChildWebviewState::Visible);
+
+        execute_with_resolver_policy(&resolver, Some(&child), LauncherWindowAction::Hide, true)
+            .expect("guarded hide should be suppressed");
+
+        assert_eq!(*calls.borrow(), vec!["resolve_window"]);
+    }
+
+    #[test]
+    fn native_hide_failure_restores_and_refocuses_the_same_child() {
+        let (calls, resolver) = ordered_fixture(true, Some(LauncherWindowOperation::Hide));
+        let child = child_fixture(&calls, PluginChildWebviewState::Visible);
+
+        let error = execute_with_resolver_policy(
+            &resolver,
+            Some(&child),
+            LauncherWindowAction::Hide,
+            false,
+        )
+        .expect_err("native hide failure should remain diagnosable");
+
+        assert_eq!(error.operation, LauncherWindowOperation::Hide);
+        assert_eq!(
+            *calls.borrow(),
+            vec![
+                "resolve_window",
+                "child_snapshot",
+                "child_hide",
+                "window_hide",
+                "child_show",
+                "child_focus",
+            ]
+        );
+    }
+
+    #[test]
+    fn rollback_failure_tears_down_current_child_but_stale_rollback_is_inert() {
+        let (calls, resolver) = ordered_fixture(true, Some(LauncherWindowOperation::Hide));
+        let mut child = child_fixture(&calls, PluginChildWebviewState::Visible);
+        child.show_result = PluginChildWebviewPresentationResult::NativeFailed;
+        execute_with_resolver_policy(&resolver, Some(&child), LauncherWindowAction::Hide, false)
+            .expect_err("native hide should fail");
+        assert!(calls.borrow().ends_with(&["child_show", "child_teardown"]));
+
+        calls.borrow_mut().clear();
+        child.show_result = PluginChildWebviewPresentationResult::StaleAttempt;
+        execute_with_resolver_policy(&resolver, Some(&child), LauncherWindowAction::Hide, false)
+            .expect_err("native hide should still fail");
+        assert!(calls.borrow().ends_with(&["window_hide", "child_show"]));
+        assert!(!calls.borrow().contains(&"child_teardown"));
+    }
+
+    #[test]
+    fn restore_resolves_host_then_shows_parent_before_the_same_child() {
+        let (calls, resolver) = ordered_fixture(false, None);
+        let child = child_fixture(&calls, PluginChildWebviewState::Hidden);
+
+        execute_with_resolver_policy(
+            &resolver,
+            Some(&child),
+            LauncherWindowAction::Show(LauncherActivationReason::GlobalShortcut),
+            false,
+        )
+        .expect("restore should succeed");
+
+        assert_eq!(
+            *calls.borrow(),
+            vec![
+                "resolve_window",
+                "resolve_host",
+                "window_restore",
+                "window_show",
+                "window_focus",
+                "host_emit",
+                "child_snapshot",
+                "child_show",
+                "child_focus",
+            ]
+        );
+    }
+
+    #[test]
+    fn target_resolution_failures_never_mutate_child_presentation() {
+        let (calls, mut resolver) = ordered_fixture(false, None);
+        let child = child_fixture(&calls, PluginChildWebviewState::Hidden);
+        resolver.fail_window = true;
+        execute_with_resolver_policy(
+            &resolver,
+            Some(&child),
+            LauncherWindowAction::Show(LauncherActivationReason::Programmatic),
+            false,
+        )
+        .expect_err("native resolution should fail");
+        assert_eq!(*calls.borrow(), vec!["resolve_window"]);
+
+        calls.borrow_mut().clear();
+        resolver.fail_window = false;
+        resolver.fail_host = true;
+        execute_with_resolver_policy(
+            &resolver,
+            Some(&child),
+            LauncherWindowAction::Show(LauncherActivationReason::Programmatic),
+            false,
+        )
+        .expect_err("Host resolution should fail");
+        assert_eq!(*calls.borrow(), vec!["resolve_window", "resolve_host"]);
     }
 
     #[test]
@@ -921,12 +1410,7 @@ mod tests {
                 LauncherWindowOperation::Restore,
                 LauncherWindowOperation::Show,
                 LauncherWindowOperation::Focus,
-                LauncherWindowOperation::EmitActivation,
             ]
-        );
-        assert_eq!(
-            window.activation_reasons,
-            vec![LauncherActivationReason::Programmatic]
         );
     }
 
@@ -1010,7 +1494,6 @@ mod tests {
                 LauncherWindowOperation::Restore,
                 LauncherWindowOperation::Show,
                 LauncherWindowOperation::Focus,
-                LauncherWindowOperation::EmitActivation,
             ]
         );
     }
@@ -1066,7 +1549,6 @@ mod tests {
                     LauncherWindowOperation::Restore,
                     LauncherWindowOperation::Show,
                     LauncherWindowOperation::Focus,
-                    LauncherWindowOperation::EmitActivation,
                 ]
             );
         }
@@ -1093,7 +1575,6 @@ mod tests {
             LauncherWindowOperation::Restore,
             LauncherWindowOperation::Show,
             LauncherWindowOperation::Focus,
-            LauncherWindowOperation::EmitActivation,
         ];
 
         for operation in operations {

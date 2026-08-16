@@ -53,6 +53,34 @@ const validateLifecycleAttempt = (value: unknown, label: string): void => {
   boundedNumber(attempt.destroy_ms, 1000, `${label}.destroy_ms`);
 };
 
+const launcherLifecycleKeys = [
+  'home_650x320',
+  'page_650x600',
+  'close_home_650x320_before_teardown',
+  'cmd_w_native_window_hidden',
+  'cmd_w_process_alive',
+  'focus_loss_native_window_hidden',
+  'no_host_visible_plugin_hidden_blank_state',
+  'global_shortcut_native_window_restored',
+  'same_child_webview_restored',
+  'same_runtime_attempt_restored',
+  'same_session_restored',
+  'monaco_model_not_reloaded',
+  'worker_not_recreated',
+  'page_close_destroyed_attempt',
+  'zero_native_bridge_resource_authority',
+] as const;
+
+const validateLauncherLifecycle = (value: unknown, label: string): Record<string, unknown> => {
+  const lifecycle = record(value, label);
+  const keys = Object.keys(lifecycle).sort();
+  if (keys.join('\n') !== [...launcherLifecycleKeys].sort().join('\n')) {
+    throw new Error(`Child WebView macOS evidence failed: ${label} fields drifted.`);
+  }
+  allTrue(lifecycle, label);
+  return lifecycle;
+};
+
 const validateSources = (sources: {
   acl: Record<string, unknown>;
   slot: Record<string, unknown>;
@@ -134,6 +162,8 @@ const committed = {
   lifecycle: readJson('fixtures/plugin-child-webview-lifecycle/evidence/macos.json'),
 };
 validateSources(committed);
+const launcherLifecyclePath = 'fixtures/official-config-lens/evidence/macos/launcher-lifecycle.json';
+validateLauncherLifecycle(readJson(launcherLifecyclePath), 'committed ConfigLens Launcher lifecycle');
 
 const matrix = readJson('fixtures/plugin-child-webview-evidence-matrix/macos.json');
 if (matrix.evidence_version !== '0.1.0' || matrix.platform !== 'macos' || matrix.engine !== 'wkwebview') {
@@ -195,8 +225,12 @@ for (const index of ['docs/en/index.md', 'docs/zh/index.md']) {
 const coldPath = 'fixtures/official-config-lens/evidence/macos/cold-open.json';
 const runRequested = process.argv.includes('--run');
 const updateColdOpen = process.argv.includes('--update-cold-open');
+const updateLauncherLifecycle = process.argv.includes('--update-launcher-lifecycle');
 if (updateColdOpen && !runRequested) {
   throw new Error('Child WebView macOS evidence failed: --update-cold-open requires --run.');
+}
+if (updateLauncherLifecycle && !runRequested) {
+  throw new Error('Child WebView macOS evidence failed: --update-launcher-lifecycle requires --run.');
 }
 const validateColdBudgets = (cold: ConfigLensColdOpenEvidence): void => {
   boundedNumber(cold.profiles.release_like.stage_ms.host_loading.p95, 250, 'release-like Host loading p95');
@@ -296,6 +330,7 @@ if (runRequested) {
       readonly restore_samples: { restore_ms: number }[];
       readonly heartbeat_gaps_ms: number[];
       readonly production_components: Record<string, boolean>;
+      readonly launcher_lifecycle?: Record<string, unknown>;
     }
     const runColdProfile = (profile: RawColdHarness['profile']): RawColdHarness => {
       const output = join(temporaryRoot, `${profile}.json`);
@@ -341,6 +376,16 @@ if (runRequested) {
     ) {
       throw new Error('Child WebView macOS evidence failed: product-path producer identity drifted.');
     }
+    const freshLauncherLifecycle = validateLauncherLifecycle(
+      release.launcher_lifecycle,
+      'fresh ConfigLens Launcher lifecycle',
+    );
+    if (development.launcher_lifecycle !== undefined) {
+      throw new Error('Child WebView macOS evidence failed: Development snapshot emitted release lifecycle evidence.');
+    }
+    if (updateLauncherLifecycle) {
+      writeFileSync(join(root, launcherLifecyclePath), `${JSON.stringify(freshLauncherLifecycle, null, 2)}\n`);
+    }
     const distRoot = join(root, 'plugins/config-lens/dist');
     const files = (directory: string): string[] =>
       readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -376,6 +421,8 @@ if (runRequested) {
 
 console.log(
   `Child WebView macOS positive, negative, lifecycle, performance, and privacy evidence ${
-    runRequested ? `reran successfully${updateColdOpen ? ' and explicitly updated' : ''}` : 'is complete'
+    runRequested
+      ? `reran successfully${updateColdOpen || updateLauncherLifecycle ? ' and explicitly updated' : ''}`
+      : 'is complete'
   }.`,
 );

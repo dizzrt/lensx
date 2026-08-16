@@ -21,6 +21,14 @@ flowchart LR
 The Host and plugin documents are native siblings. Correctness does not assume
 OS process isolation or that WebKit assigns them different processes.
 
+The shared container has three distinct identities. `Window("main")` is the
+complete native Launcher and owns size, visibility, show/hide, focus, window
+events, and native-dialog parenting. The trusted `Webview("main")` is only the
+Host document and is the sole target of `launcher://activated`. The current
+plugin Child WebView has a separate generated identity and never receives that
+Host event. Post-creation Launcher operations must not convert the native
+Window back into a single `WebviewWindow`.
+
 ## Session And Lifecycle
 
 One attempt advances through native load, bridge ready, and SDK context ready
@@ -61,6 +69,16 @@ version, resource generation, and native source remain current. A real close
 or generation change destroys it before a fresh reopen. There is no hidden
 Runtime, preload pool, background Page, or second current plugin WebView.
 
+Launcher actions resolve their required native Window and Host WebView targets
+before changing Child presentation. Hide remains Child-first and native-parent
+second to prevent overlay leakage. If native parent hide fails, Rust restores
+and refocuses only the same compare-current Child; a failed rollback tears that
+attempt down, while a stale rollback is inert. Restore shows and focuses the
+native parent before the same Child. A plugin Page close submits `home`
+immediately, so the native Window can return from `650×600` to `650×320` while
+Child teardown finishes asynchronously; resize never waits for a
+single-WebviewWindow conversion.
+
 ## Security And Web Capabilities
 
 Each generation has an isolated origin, data-store identity, resource scope,
@@ -99,6 +117,8 @@ ordinary `check:` command validates the committed bounded evidence and is safe
 for non-interactive aggregate validation. A normal evidence run never rewrites
 positive records. After reviewing a fresh passing result, maintainers explicitly
 run `node --experimental-strip-types scripts/plugin-child-webview-macos-evidence.ts --run --update-cold-open`.
+The bounded multi-WebView Launcher record has a separate reviewed update path:
+`node --experimental-strip-types scripts/plugin-child-webview-macos-evidence.ts --run --update-launcher-lifecycle`.
 
 ## Performance Budgets And Evidence Schema
 
@@ -128,6 +148,11 @@ destroyed WebViews, inert late callbacks, terminated Workers/connections, and
 zero remaining bridge/resource authority; process separation is not measured
 or assumed.
 
+The ConfigLens Launcher lifecycle record contains only reviewed booleans. It
+proves Home/Page/close geometry, application-local `Cmd+W` and focus-loss hide,
+global-shortcut same-attempt restore without another editor/Worker load, Page
+close destruction, and zero remaining native/bridge/resource authority.
+
 ## Troubleshooting
 
 1. If the Host stays in loading, distinguish native load from bridge ready and
@@ -136,11 +161,16 @@ or assumed.
    high `ui_bundle`/`worker` stages point to plugin bootstrap.
 2. If content is hidden or misaligned, run the slot/bounds gate and verify
    scale factor, presentation revision, and Host overlay ordering.
-3. If a Web feature fails, use browser feature detection and check plugin CSP;
+3. If `Cmd+W`, focus loss, or Page close leaves a blank or incorrectly sized
+   Launcher, run `pnpm run check:plugin-child-webview-window-lifecycle`. Verify
+   post-creation paths resolve `Window("main")`, Host activation resolves only
+   `Webview("main")`, and inspect native-hide rollback before changing teardown
+   timing.
+4. If a Web feature fails, use browser feature detection and check plugin CSP;
    do not add a Host permission or native fallback.
-4. If reload or replacement fails, verify staging before teardown and confirm
+5. If reload or replacement fails, verify staging before teardown and confirm
    the old generation cannot send a late callback.
-5. If evidence changes, rerun the real macOS matrix and review the bounded
+6. If evidence changes, rerun the real macOS matrix and review the bounded
    result. Never edit a positive boolean to bypass a failed harness.
 
 The Resource Service keeps a process-local 32 MiB/256-entry verified byte cache

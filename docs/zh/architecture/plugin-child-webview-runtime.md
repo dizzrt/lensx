@@ -18,6 +18,12 @@ flowchart LR
 
 Host 与插件 document 是 native sibling。正确性不假设 WebKit 将它们分配到不同 OS process。
 
+共享 container 包含三个彼此不同的 identity。`Window("main")` 表示完整 native Launcher，拥有
+size、visibility、show/hide、focus、window event 与 native-dialog parent；可信
+`Webview("main")` 只表示 Host document，并且是 `launcher://activated` 的唯一目标。current plugin
+Child WebView 使用独立的 generated identity，绝不会收到该 Host event。post-creation Launcher
+操作不得把 native Window 重新转换成 single `WebviewWindow`。
+
 ## Session 与 Lifecycle
 
 同一 attempt 将 native load、bridge ready 与 SDK Context ready 作为不同状态推进。所有 current
@@ -54,6 +60,13 @@ stateDiagram-v2
 hide/restore 才保留同一 attempt。真实 close 或 generation 变化会先 destroy，再 fresh reopen。
 不存在 hidden Runtime、preload pool、background Page 或第二个 current plugin WebView。
 
+Launcher action 会先解析所需的 native Window 与 Host WebView target，再改变 Child
+presentation。hide 保持 Child-first、native-parent-second，避免 overlay 泄漏。如果 native parent
+hide 失败，Rust 只恢复并重新聚焦同一个 compare-current Child；rollback 失败会 teardown 该
+attempt，stale rollback 保持 inert。restore 会先 show/focus native parent，再恢复同一个 Child。
+plugin Page close 会立即提交 `home`，因此 Child teardown 异步完成期间 native Window 仍可从
+`650×600` 返回 `650×320`；resize 不等待 single-WebviewWindow conversion。
+
 ## 安全与 Web 能力
 
 每个 generation 都有隔离的 origin、data-store identity、resource scope、native label 与 opaque
@@ -87,6 +100,8 @@ pnpm run check:open-isolated-plugin-runtime
 bounded evidence，适合 non-interactive aggregate validation。普通 evidence run 不会改写 positive
 record。审查新鲜且通过的结果后，维护者才显式运行
 `node --experimental-strip-types scripts/plugin-child-webview-macos-evidence.ts --run --update-cold-open`。
+bounded multi-WebView Launcher record 使用单独的审查后更新路径：
+`node --experimental-strip-types scripts/plugin-child-webview-macos-evidence.ts --run --update-launcher-lifecycle`。
 
 ## 性能预算与 Evidence Schema
 
@@ -112,6 +127,10 @@ Host-private token。memory/resource release 通过 registry absence、destroyed
 callback、terminated Worker/connection 与零残留 bridge/resource authority 证明；不测量或假设
 process separation。
 
+ConfigLens Launcher lifecycle record 只包含审查后的 boolean。它证明 Home/Page/close geometry、
+application-local `Cmd+W` 与 focus-loss hide、global-shortcut same-attempt restore 且没有新的
+editor/Worker load、Page close destroy，以及 native/bridge/resource authority 零残留。
+
 ## 故障排查
 
 1. Host 一直停留在 loading 时，区分 native load、bridge ready 与 SDK Context ready；按负责 stage
@@ -119,11 +138,15 @@ process separation。
    偏高指向插件 bootstrap。
 2. 内容隐藏或错位时，运行 slot/bounds gate，并校验 scale factor、presentation revision 与 Host
    overlay 顺序。
-3. Web 能力失败时，使用 browser feature detection 并检查插件 CSP；不要增加 Host permission 或
+3. 如果 `Cmd+W`、focus loss 或 Page close 留下空白或尺寸错误的 Launcher，运行
+   `pnpm run check:plugin-child-webview-window-lifecycle`。确认 post-creation path 解析
+   `Window("main")`、Host activation 只解析 `Webview("main")`，并在改变 teardown timing 前检查
+   native-hide rollback。
+4. Web 能力失败时，使用 browser feature detection 并检查插件 CSP；不要增加 Host permission 或
    native fallback。
-4. reload 或 replacement 失败时，验证 teardown 前的 staging，并确认旧 generation 不能发送 late
+5. reload 或 replacement 失败时，验证 teardown 前的 staging，并确认旧 generation 不能发送 late
    callback。
-5. evidence 变化时重跑真实 macOS matrix 并审查 bounded result。不得手改 positive boolean 来绕过
+6. evidence 变化时重跑真实 macOS matrix 并审查 bounded result。不得手改 positive boolean 来绕过
    失败 harness。
 
 Resource Service 保留 process-local、32 MiB/256-entry 的 verified byte cache，key 包含 entry、

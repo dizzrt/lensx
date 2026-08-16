@@ -1,0 +1,17 @@
+{
+  "home_650x320": true,
+  "page_650x600": true,
+  "close_home_650x320_before_teardown": true,
+  "cmd_w_native_window_hidden": true,
+  "cmd_w_process_alive": true,
+  "focus_loss_native_window_hidden": true,
+  "no_host_visible_plugin_hidden_blank_state": true,
+  "global_shortcut_native_window_restored": true,
+  "same_child_webview_restored": true,
+  "same_runtime_attempt_restored": true,
+  "same_session_restored": true,
+  "monaco_model_not_reloaded": true,
+  "worker_not_recreated": true,
+  "page_close_destroyed_attempt": true,
+  "zero_native_bridge_resource_authority": true
+}

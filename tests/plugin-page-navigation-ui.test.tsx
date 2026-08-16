@@ -151,7 +151,12 @@ class TestLauncherActivationSource implements LauncherActivationSource {
 }
 
 const renderPluginComposition = (
-  options: { readonly activationSource?: TestLauncherActivationSource; readonly strictMode?: boolean } = {},
+  options: {
+    readonly activationSource?: TestLauncherActivationSource;
+    readonly destroy?: ReturnType<typeof rs.fn>;
+    readonly strictMode?: boolean;
+    readonly surfaceController?: { setPresentationState: ReturnType<typeof rs.fn> };
+  } = {},
 ) => {
   const pageRegistry = new PageRegistry([
     { owner_id: 'lensx.core', page_id: 'settings', enabled: true, title: { 'en-US': 'Settings' } },
@@ -171,7 +176,7 @@ const renderPluginComposition = (
     readReadiness: rs.fn(async () => ({ status: 'ready' as const })),
     waitReadiness: rs.fn(async () => ({ status: 'ready' as const })),
     setVisible: rs.fn(async () => undefined),
-    destroy: rs.fn(async () => true),
+    destroy: options.destroy ?? rs.fn(async () => true),
   };
   const pluginRuntimeLifecycleService = createPluginRuntimeLifecycleService();
   const activationSource = options.activationSource ?? new TestLauncherActivationSource();
@@ -187,6 +192,7 @@ const renderPluginComposition = (
         pluginChildWebviewPresentationController={pluginChildWebviewPresentationController}
         pluginRuntimeLifecycleService={pluginRuntimeLifecycleService}
         pluginRuntimeResolver={pluginRuntimeResolver}
+        surfaceController={options.surfaceController}
         surfaceProjectionService={projection}
       />
     </AppProviders>
@@ -200,6 +206,7 @@ const renderPluginComposition = (
     pluginChildWebviewPresentationController,
     pluginRuntimeResolver,
     projection,
+    surfaceController: options.surfaceController,
   };
 };
 
@@ -340,6 +347,40 @@ describe('Plugin Page navigation UI', () => {
     act(() => navigationService.openPage({ owner_id: pluginId, page_id: 'open_project' }, actionId));
     fireEvent.click(await screen.findByRole('button', { name: 'Close page and return home' }), { detail: 1 });
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Launcher query' })).toHaveFocus());
+  });
+
+  test('returns Home and restores input focus before deferred Child teardown completes', async () => {
+    let finishDestroy: ((value: boolean) => void) | undefined;
+    const destroy = rs.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishDestroy = resolve;
+        }),
+    );
+    const submittedModes: string[] = [];
+    const surfaceController = {
+      setPresentationState: rs.fn(async (mode: string) => {
+        submittedModes.push(mode);
+      }),
+    };
+    const view = renderPluginComposition({ destroy, surfaceController });
+    await waitFor(() => expect(view.actionService.registry.get(`${pluginId}.open_project`)).toBeDefined());
+
+    act(() =>
+      view.navigationService.openPage({ owner_id: pluginId, page_id: 'open_project' }, `${pluginId}.open_project`),
+    );
+    await waitFor(() => expect(submittedModes).toContain('page'));
+    await waitFor(() => expect(view.pluginChildWebviewPresentationController.create).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close page and return home' }));
+
+    await waitFor(() => expect(destroy).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }));
+    expect(finishDestroy).toBeDefined();
+    await waitFor(() => expect(submittedModes.at(-1)).toBe('home'));
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Launcher query' })).toHaveFocus());
+    expect(document.querySelector('[data-plugin-runtime-slot="true"]')).toBeNull();
+
+    await act(async () => finishDestroy?.(true));
   });
 
   test('does not render Settings for an unresolved non-Host owner', async () => {

@@ -1,5 +1,9 @@
 use crate::{
-    launcher_window::MAIN_WINDOW_LABEL,
+    launcher_surface::{set_launcher_surface_mode, LauncherSurfaceMode},
+    launcher_window::{
+        dispatch_macos_menu_event, LauncherActivationReason, LauncherWindowAction,
+        LauncherWindowActions, MACOS_CLOSE_WINDOW_MENU_ID, MAIN_WINDOW_LABEL,
+    },
     plugin_child_webview_adapter::{send_native_text_input, PluginChildWebviewEvidenceIngress},
     plugin_child_webview_presentation::create_config_lens_evidence_presentation,
     plugin_child_webview_rpc::PluginChildWebviewRpcIngressResult,
@@ -8,7 +12,7 @@ use crate::{
         PluginChildWebviewPresentationResult, PluginChildWebviewReadyDispatcher,
         PluginChildWebviewReadyFacts, PluginChildWebviewRpcCancellationFacts,
         PluginChildWebviewRpcDispatchFacts, PluginChildWebviewRpcDispatcher,
-        PluginChildWebviewService, PluginChildWebviewWaitReadiness,
+        PluginChildWebviewService, PluginChildWebviewState, PluginChildWebviewWaitReadiness,
     },
     plugin_development_snapshot::DevelopmentSnapshotStore,
     plugin_identity::plugin_record_key,
@@ -74,6 +78,7 @@ pub struct ConfigLensColdOpenHarnessInput {
 struct StageState {
     expected_source: Option<String>,
     stages: BTreeMap<String, f64>,
+    stage_counts: BTreeMap<String, usize>,
 }
 
 #[derive(Default)]
@@ -98,11 +103,14 @@ impl StageCollector {
     }
 
     fn record(&self, stage: &str, duration: Duration) {
-        self.state
+        let mut state = self
+            .state
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state
             .stages
             .insert(stage.to_owned(), duration.as_secs_f64() * 1000.0);
+        *state.stage_counts.entry(stage.to_owned()).or_default() += 1;
         self.changed.notify_all();
     }
 
@@ -134,6 +142,16 @@ impl StageCollector {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .stages
             .clone()
+    }
+
+    fn count(&self, stage: &str) -> usize {
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .stage_counts
+            .get(stage)
+            .copied()
+            .unwrap_or_default()
     }
 }
 
@@ -214,6 +232,25 @@ struct RestoreSample {
     restore_ms: f64,
 }
 
+#[derive(Clone, Serialize)]
+struct LauncherLifecycleEvidence {
+    home_650x320: bool,
+    page_650x600: bool,
+    close_home_650x320_before_teardown: bool,
+    cmd_w_native_window_hidden: bool,
+    cmd_w_process_alive: bool,
+    focus_loss_native_window_hidden: bool,
+    no_host_visible_plugin_hidden_blank_state: bool,
+    global_shortcut_native_window_restored: bool,
+    same_child_webview_restored: bool,
+    same_runtime_attempt_restored: bool,
+    same_session_restored: bool,
+    monaco_model_not_reloaded: bool,
+    worker_not_recreated: bool,
+    page_close_destroyed_attempt: bool,
+    zero_native_bridge_resource_authority: bool,
+}
+
 #[derive(Serialize)]
 struct HarnessOutput {
     evidence_version: &'static str,
@@ -222,6 +259,38 @@ struct HarnessOutput {
     restore_samples: Vec<RestoreSample>,
     heartbeat_gaps_ms: Vec<f64>,
     production_components: BTreeMap<&'static str, bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    launcher_lifecycle: Option<LauncherLifecycleEvidence>,
+}
+
+fn launcher_has_logical_size(app: &tauri::AppHandle<Wry>, width: f64, height: f64) -> bool {
+    let Some(window) = app.get_window(MAIN_WINDOW_LABEL) else {
+        return false;
+    };
+    let Ok(size) = window.inner_size() else {
+        return false;
+    };
+    let Ok(scale_factor) = window.scale_factor() else {
+        return false;
+    };
+    let logical = size.to_logical::<f64>(scale_factor);
+    (logical.width - width).abs() < 0.5 && (logical.height - height).abs() < 0.5
+}
+
+fn wait_for_launcher_logical_size(
+    app: &tauri::AppHandle<Wry>,
+    width: f64,
+    height: f64,
+    timeout: Duration,
+) -> bool {
+    let deadline = Instant::now() + timeout;
+    while !launcher_has_logical_size(app, width, height) {
+        if Instant::now() >= deadline {
+            return false;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    true
 }
 
 struct Registration {
@@ -348,9 +417,11 @@ pub fn builder(input: ConfigLensColdOpenHarnessInput) -> Result<tauri::Builder<W
                 .map_err(tauri::Error::InvalidUrl)?;
             WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, WebviewUrl::External(target))
                 .title("lensX ConfigLens cold-open evidence")
-                .inner_size(650.0, 600.0)
+                .inner_size(650.0, 320.0)
                 .build()?;
+            let home_size_before_page = launcher_has_logical_size(app.handle(), 650.0, 320.0);
             let service = setup_plugin_child_webview_service(app.handle());
+            assert!(app.manage(LauncherWindowActions::default()));
             let dispatcher = Arc::new(HarnessDispatcher {
                 service: Arc::clone(&service),
             });
@@ -370,9 +441,17 @@ pub fn builder(input: ConfigLensColdOpenHarnessInput) -> Result<tauri::Builder<W
                 let _guard = guard;
                 let mut cold_samples = Vec::new();
                 let mut restore_samples = Vec::new();
+                let mut launcher_lifecycle = None;
                 for _ in 0..samples {
                     if service.snapshot().is_some() {
                         eprintln!("ConfigLens cold-open harness failed: current_not_absent");
+                        app_handle.exit(3);
+                        return;
+                    }
+                    if set_launcher_surface_mode(app_handle.clone(), LauncherSurfaceMode::Page)
+                        .is_err()
+                    {
+                        eprintln!("ConfigLens cold-open harness failed: page_resize");
                         app_handle.exit(3);
                         return;
                     }
@@ -462,6 +541,7 @@ pub fn builder(input: ConfigLensColdOpenHarnessInput) -> Result<tauri::Builder<W
                         app_handle.exit(3);
                         return;
                     }
+                    let mut pending_lifecycle = None;
                     if profile == "release_like" {
                         for _ in 0..2 {
                             if service.hide_current(attempt)
@@ -483,6 +563,117 @@ pub fn builder(input: ConfigLensColdOpenHarnessInput) -> Result<tauri::Builder<W
                             }
                             restore_samples.push(RestoreSample {
                                 restore_ms: restore_started.elapsed().as_secs_f64() * 1000.0,
+                            });
+                        }
+                        if launcher_lifecycle.is_none() {
+                            let page_650x600 = launcher_has_logical_size(&app_handle, 650.0, 600.0);
+                            let before_restore = service.snapshot();
+                            let editor_count = collector.count("editor");
+                            let worker_count = collector.count("worker");
+                            let actions = app_handle.state::<LauncherWindowActions>();
+                            let cmd_w_routed = dispatch_macos_menu_event(
+                                MACOS_CLOSE_WINDOW_MENU_ID,
+                                |action| actions.dispatch(&app_handle, action),
+                            ) == Ok(true);
+                            let cmd_w_native_window_hidden = cmd_w_routed
+                                && app_handle
+                                    .get_window(MAIN_WINDOW_LABEL)
+                                    .and_then(|window| window.is_visible().ok())
+                                    == Some(false);
+                            let child_hidden_after_cmd_w = service
+                                .snapshot()
+                                .is_some_and(|snapshot| snapshot.state == PluginChildWebviewState::Hidden);
+                            let cmd_w_process_alive = service.snapshot().is_some()
+                                && app_handle.get_window(MAIN_WINDOW_LABEL).is_some();
+                            let restored = actions
+                                .dispatch(
+                                    &app_handle,
+                                    LauncherWindowAction::Show(
+                                        LauncherActivationReason::GlobalShortcut,
+                                    ),
+                                )
+                                .is_ok();
+                            let after_restore = service.snapshot();
+                            let global_shortcut_native_window_restored = restored
+                                && app_handle
+                                    .get_window(MAIN_WINDOW_LABEL)
+                                    .and_then(|window| window.is_visible().ok())
+                                    == Some(true);
+                            let same_runtime_attempt_restored = before_restore
+                                .as_ref()
+                                .zip(after_restore.as_ref())
+                                .is_some_and(|(before, after)| before.attempt == after.attempt);
+                            let same_session_restored = before_restore
+                                .as_ref()
+                                .zip(after_restore.as_ref())
+                                .is_some_and(|(before, after)| {
+                                    before.session_state == after.session_state
+                                        && before.bridge_ready == after.bridge_ready
+                                });
+                            let same_child_webview_restored = after_restore
+                                .as_ref()
+                                .is_some_and(|snapshot| {
+                                    snapshot.source_label == source_label
+                                        && snapshot.state == PluginChildWebviewState::Visible
+                                        && app_handle.get_webview(&source_label).is_some()
+                                });
+                            let monaco_model_not_reloaded = collector.count("editor") == editor_count;
+                            let worker_not_recreated = collector.count("worker") == worker_count;
+                            let focus_loss_hidden = actions
+                                .dispatch(&app_handle, LauncherWindowAction::Hide)
+                                .is_ok()
+                                && app_handle
+                                    .get_window(MAIN_WINDOW_LABEL)
+                                    .and_then(|window| window.is_visible().ok())
+                                    == Some(false)
+                                && service.snapshot().is_some_and(|snapshot| {
+                                    snapshot.state == PluginChildWebviewState::Hidden
+                                });
+                            let focus_restored = actions
+                                .dispatch(
+                                    &app_handle,
+                                    LauncherWindowAction::Show(
+                                        LauncherActivationReason::Programmatic,
+                                    ),
+                                )
+                                .is_ok();
+                            let no_blank_state = child_hidden_after_cmd_w
+                                && cmd_w_native_window_hidden
+                                && focus_loss_hidden
+                                && focus_restored
+                                && service.snapshot().is_some_and(|snapshot| {
+                                    snapshot.state == PluginChildWebviewState::Visible
+                                });
+                            let close_home_650x320_before_teardown =
+                                set_launcher_surface_mode(
+                                    app_handle.clone(),
+                                    LauncherSurfaceMode::Home,
+                                )
+                                .is_ok()
+                                    && service.snapshot().is_some()
+                                    && wait_for_launcher_logical_size(
+                                        &app_handle,
+                                        650.0,
+                                        320.0,
+                                        Duration::from_secs(1),
+                                    )
+                                    && service.snapshot().is_some();
+                            pending_lifecycle = Some(LauncherLifecycleEvidence {
+                                home_650x320: home_size_before_page,
+                                page_650x600,
+                                close_home_650x320_before_teardown,
+                                cmd_w_native_window_hidden,
+                                cmd_w_process_alive,
+                                focus_loss_native_window_hidden: focus_loss_hidden,
+                                no_host_visible_plugin_hidden_blank_state: no_blank_state,
+                                global_shortcut_native_window_restored,
+                                same_child_webview_restored,
+                                same_runtime_attempt_restored,
+                                same_session_restored,
+                                monaco_model_not_reloaded,
+                                worker_not_recreated,
+                                page_close_destroyed_attempt: false,
+                                zero_native_bridge_resource_authority: false,
                             });
                         }
                     }
@@ -507,6 +698,15 @@ pub fn builder(input: ConfigLensColdOpenHarnessInput) -> Result<tauri::Builder<W
                     {
                         app_handle.exit(3);
                         return;
+                    }
+                    if let Some(mut evidence) = pending_lifecycle {
+                        evidence.page_close_destroyed_attempt = terminal.webviews_absent
+                            && terminal.sessions_absent
+                            && service.snapshot().is_none();
+                        evidence.zero_native_bridge_resource_authority = terminal.webviews_absent
+                            && terminal.bridge_authority_absent
+                            && terminal.resource_authority_absent;
+                        launcher_lifecycle = Some(evidence);
                     }
                     let stages = collector.snapshot();
                     if [
@@ -549,6 +749,7 @@ pub fn builder(input: ConfigLensColdOpenHarnessInput) -> Result<tauri::Builder<W
                         ("presentation", true),
                         ("resource_service", true),
                     ]),
+                    launcher_lifecycle,
                 };
                 match serde_json::to_vec_pretty(&result)
                     .ok()

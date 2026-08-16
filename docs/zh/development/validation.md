@@ -236,12 +236,22 @@ lifecycle cleanup 时，必须运行：
 
 ```bash
 pnpm run check:plugin-child-webview-runtime
+pnpm run check:plugin-child-webview-window-lifecycle
+pnpm run check:plugin-child-webview-macos-evidence
 ```
 
 该门禁组合 React slot/state tests、物理 bounds revision、compare-current native lifecycle、
 generation-bound resource、开放 Web 正向路径、top-level navigation deny、terminal cleanup、current
 `.lxp` fixtures、有界 macOS WKWebView evidence、ACL negative matrix 与 workspace-private imports。
 native load、bridge ready 与 SDK ready 始终是相互独立的 evidence fact。
+
+window-lifecycle 门禁专门阻止 multi-WebView regression：post-creation Launcher resize、window event、
+native-dialog parent 或 `Cmd+W` hide 不得使用 single-`WebviewWindow` lookup。其 Rust 与 React
+composition coverage 要求 resolve-before-mutation、Child-first/native-parent-second hide、native-hide
+rollback 或 compare-current teardown、parent-first restore、Page close 时立即恢复 `650×320` Home，
+并在 Child destroy 仍 pending 时恢复 input focus。bounded real macOS ConfigLens record 还覆盖完整
+window 的 `Cmd+W`/focus-loss hide、同 WebView/Session/Monaco/Worker 且不重新 loading 的 shortcut
+restore，以及真实 Page close 后 authority 零残留。
 
 ## Plugin Child WebView Session 验证
 
