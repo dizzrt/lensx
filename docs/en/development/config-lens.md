@@ -73,10 +73,17 @@ independently, 4 MiB per Monaco or language chunk, and 2 MiB per Worker entry.
 The package gate records every
 Monaco/language/CSS/Worker chunk and rejects remote loading, source maps,
 private Host imports, unreviewed dependency versions, or budget drift. The
-fixed 650 x 600, 28-case visual matrix covers English and Simplified Chinese, light and
+initial `800×600` resizable Page's 28-case primary visual matrix covers English and Simplified Chinese, light and
 dark themes, empty, valid formatted content, invalid, limit, long-copy, focus,
 and recovery states. The macOS WKWebView evidence also proves direct
 single-editor replacement and one-operation undo.
+
+Additional hard-minimum and larger user-resized cases verify the semantic
+`content` plus `footer` layout. Monaco fills `content`; the language selector,
+status, Format, JSON-only Compact, and bounded conditional diagnostics remain
+inside `footer`. Same-attempt hide/restore preserves the current size, model,
+Worker, input, and language. Real close/reopen resets to effective `800×600`;
+user size is not persisted.
 
 `first-interactive` is not a render marker. It requires the current Monaco
 model, an explicit initial layout, a package-owned editor Worker handshake, and

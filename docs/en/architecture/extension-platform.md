@@ -42,7 +42,7 @@ Plugin
 ├── actions ───────────────▶ target pages
 └── runtime
     ├── trusted Host module
-    └── isolated external iframe
+    └── isolated external Child WebView
 ```
 
 Ownership and references must be explicit. IDs used across plugins, pages,
@@ -76,7 +76,7 @@ Schema entries are `@lensx/plugin-contract/schema` and
 `@lensx/plugin-contract/host-api-schema` and
 `@lensx/plugin-contract/host-api.schema.json`. Undeclared deep imports are not supported.
 
-The package owns the author-controlled `manifest_version: "0.2.0"` protocol as
+The package owns the author-controlled `manifest_version: "0.4.0"` protocol as
 a strict Draft 2020-12 JSON Schema. The Schema is the structural source of
 truth for the wire format. The committed `PluginManifestInput` type is
 generated deterministically from it. The package TypeScript implementation and
@@ -91,13 +91,13 @@ The complete project-owned example is
 
 | Field | Contract |
 | --- | --- |
-| `manifest_version` | Required and exactly `0.2.0`. |
+| `manifest_version` | Required and exactly `0.4.0`. |
 | `plugin_id` and `version` | Required stable namespaced plugin ID and SemVer release version. |
 | `display` | Required localized `name`; optional localized `description` and package-local asset `icon`. |
 | `publisher` | Required author-declared `author`, HTTPS `homepage`, and HTTPS `repository`; none establish trust. |
 | `compatibility` | Required half-open SemVer ranges for both `lensx` and `host_api`. |
-| `runtime` | Required `kind: "iframe"` and package-local HTML `entry`; this is metadata and does not create an iframe. |
-| `contributes.pages` | One or more uniquely identified pages with localized titles, internal routes, and optional parent/icon. |
+| `runtime` | Required `kind: "webview"` and package-local HTML `entry`; it grants no native authority. |
+| `contributes.pages` | One or more uniquely identified pages with localized titles, internal routes, optional parent/icon, and optional bounded `presentation`. |
 | `contributes.actions` | Optional unique actions with localized title/description, action-owned `default_keywords`, optional icon, and a Page-only target. |
 | `contributes.launcher` | Optional `default_action_id` referencing one contributed action; it does not implement ranking or registration. |
 
@@ -112,6 +112,13 @@ validator itself does not perform that projection. Page parent references must e
 acyclic graph. Every Action target must be
 `{ "kind": "page", "page_id": "<local-page-id>" }`. Action keywords remain
 owned by that Action and never become plugin-wide aliases.
+
+Page `presentation`, when present, contains exactly integer logical
+`initial_size.width` in `320..=4096`, integer logical `initial_size.height` in
+`180..=4096`, and boolean `resizable`. Omission normalizes to `650×600` and
+`resizable: false`. The normalized value remains author metadata; effective
+work-area constraints, current user size, monitor facts, and native failures
+never enter the Manifest or Registration wire.
 
 ### Validation, Normalization, And Compatibility
 
@@ -157,11 +164,11 @@ source.
 ### Capabilities Outside Static Validation
 
 Static validation alone does not discover or install packages, create a
-production registration or iframe, exchange Host API
+production registration or Child WebView, exchange Host API
 messages, or run plugin code. The Host-private capabilities described below add
 one selected compatible `.lxp` as an external registration, project current
 Registration facts into Page and Action Registries, and create the isolated
-iframe only while an eligible Plugin Page is active. Runtime Sessions, Host API
+Child WebView only while an eligible Plugin Page is active. Runtime Sessions, Host API
 execution is a separate capability; the Host-private process-local Runtime
 Session and public semantic contract described below are now shipped.
 
@@ -224,7 +231,7 @@ signature, grant, lifecycle, or trust conclusions.
 
 This is an inspection core, not an installer or plugin-facing API. It has no
 Tauri command, Plugin Manager mutation, installation directory write, public
-CLI, development-directory input, resource service, iframe, Runtime session,
+CLI, development-directory input, resource service, Child WebView, Runtime session,
 permission decision, or signing behavior. See
 [Plugin Package Format](plugin-package-format.md) for the exact layout, limits,
 dependency review, diagnostics, and drift gate.
@@ -678,7 +685,7 @@ authority/path mismatches, and ambiguous targets are rejected. Ordinary
 subresources remain solely under the Resource Service.
 
 Production installs this policy with no active plugin target. The Host Runtime
-adapter activates it before mounting the current iframe and compare-current
+adapter activates it before creating the current Child WebView and compare-current
 disposes it on close, retry, replacement, invalidation, or App teardown. The
 policy also denies every WebView new-window request and download, without
 routing the target to the opener. Tauri initialization remains main-frame-only: the Host
@@ -758,33 +765,27 @@ application document admits exactly
 directive byte-for-byte. Manifest, publisher, source, query,
 request-header, and plugin-authored meta values cannot change either profile.
 
-CSP, isolated origin, iframe sandbox, Permissions Policy, native navigation,
-and Runtime Session are complementary boundaries. CSP controls resource and
-document destinations; the per-generation origin separates DOM and storage;
-the sandbox and Permissions Policy constrain frame capabilities; the native
-lease controls top-level and descendant navigation; and the Session authenticates
-one current window and dedicated Port. These boundaries do not mediate ordinary
-Web behavior through Host API.
+CSP, isolated origin and data store, native navigation, the closed native
+bridge, and Runtime Session are complementary boundaries. CSP controls resource
+and document destinations; the per-generation origin separates DOM and storage;
+the native lease controls top-level navigation; and the Session authenticates
+one current Child WebView and source-bound bridge. These boundaries do not
+mediate ordinary Web behavior through Host API.
 
 A Host-private controller owns one Runtime attempt and one external-plugin
-iframe globally. A separate 10,000 ms resolution boundary covers convergence
-of the previous terminal operation plus current Resource resolution and native
-navigation activation; expiry fails closed without constructing another
-iframe. It starts the 10,000 ms load deadline only after the navigation lease
-is active and `src` is committed. The Session starts its 5,000 ms handshake
-deadline only after bootstrap transfer succeeds. Close, navigation,
-quiescence, disable, uninstall, replacement, relevant fact changes,
-retry, timeout, Session failure, Host reload, and App teardown all converge on
-one idempotent terminal operation: make work stale, cancel timers and
-subscriptions, dispose Session and Ports, unbind and remove the iframe,
-compare-current release the navigation lease, then discard references. Late
-promise, load, acknowledgement, timer, and Port events therefore cannot affect
-a newer attempt. There is no preload, hidden pool, background Runtime,
-cross-Page reuse, automatic retry, or persisted Runtime state.
+Child WebView globally. Bounded resolution, load, and handshake deadlines fail
+closed without constructing another Child. Close, navigation, quiescence,
+disable, uninstall, replacement, relevant fact changes, retry, timeout, Session
+failure, Host reload, and App teardown converge on one idempotent compare-current
+terminal operation that makes work stale, cancels timers/subscriptions, disposes
+Session/bridge state, destroys the Child, releases its navigation authority, and
+discards references. Late promise, load, acknowledgement, timer, and bridge
+events cannot affect a newer attempt. There is no preload, hidden pool,
+background Runtime, cross-Page reuse, automatic retry, or persisted Runtime state.
 
 The process-local breaker is keyed by trusted entry identity and resource
 generation. A third qualifying load, handshake, or unexpected-disconnect
-failure in 60,000 ms opens a 30,000 ms cooldown before resolve, lease, iframe,
+failure in 60,000 ms opens a 30,000 ms cooldown before resolve, lease, Child WebView,
 or Session creation. Cooldown expiry still requires an explicit user retry.
 Close, navigation, invalidation, and graceful exit do not count; a generation
 change or 30,000 ms continuously healthy `ready` state clears the record, and
@@ -831,7 +832,8 @@ another provider's Page, descriptor, or executor.
 
 The pure Page mapper keeps `(owner_id = plugin_id, page_id = local Page ID)` as
 the only Page identity, preserves same-owner parent targets and private routes,
-and derives localized provider/Page presentation. Every Page of an otherwise
+clones its validated presentation, and derives localized provider/Page text.
+Every Page of an otherwise
 eligible registration is available; ordinary Web capabilities do not enter
 Page availability calculation.
 
@@ -871,6 +873,15 @@ Host-private Child WebView Runtime resolver. Surface projection still does not e
 routes, entry IDs, revisions, origin facts, resource URLs, or native objects to
 plugins. The Host-private management capability consumes these facts without
 changing surface projection; decision history remains outside the platform.
+
+The App Shell maps Host-owned `home`, `search`, and `host_page` targets to fixed
+non-resizable sizes. Only `plugin_page` carries the cloned initial logical size,
+resizable flag, Page identity, and process-local Page-attempt identity. The Rust
+coordinator validates current Registration, applies current-work-area bounds,
+serializes native setters with rollback, and keeps a user-resized size only for
+the same attempt. Hide/restore preserves that attempt; real close, replacement,
+reload, disable, retry, or reopen creates a fresh target and reapplies the
+Manifest initial size. No size is persisted.
 
 ## Shipped Public Plugin SDK And WebView Transport
 
@@ -1068,7 +1079,7 @@ CLI, and development mode remain separate capabilities.
 ## Removed Host Permission And Native Clipboard Authority
 
 Host API `0.2.0` removes the permission catalog and native clipboard methods.
-Manifest `0.2.0`, Manager record format `2`, Registration `0.3.0`, installation
+Manifest `0.4.0`, Manager record format `2`, Registration `0.3.0`, installation
 `0.3.0`, and replacement `0.2.0` carry no request, grant, risk, or permission
 facts. The Rust permission state, grant command, AppKit clipboard provider,
 frontend service, prompts, settings mutations, and post-commit grant phase are
@@ -1336,10 +1347,10 @@ external contract does not depend on React implementation details.
 
 ### External Plugins
 
-External plugin UI runs in the shipped isolated iframe. The shipped private
-Runtime Session authenticates one dedicated Port through a controlled Host
-bootstrap, and the public iframe SDK consumes it through the private closed
-wire. Production exposes only the three Host-private Dispatcher methods
+External plugin UI runs in the shipped isolated Child WebView. The shipped
+private Runtime Session authenticates one source-bound native bridge through a
+controlled Host bootstrap, and the public WebView SDK consumes the private
+closed wire. Production exposes only the Host-private Dispatcher methods
 described above. External plugins
 must not directly access:
 
@@ -1382,7 +1393,7 @@ method exists.
 ## Loading And Performance
 
 - Register metadata without loading inactive external UI.
-- Create an iframe only when the corresponding page is opened.
+- Create a Child WebView only when the corresponding page is opened.
 - Dispose listeners, pending calls, and runtime resources when a page closes.
 - Keep background-resident behavior and sidecar execution outside the initial
   runtime unless accepted by dedicated specs.
@@ -1395,7 +1406,7 @@ method exists.
 - Resolve package paths without allowing absolute paths or parent traversal.
 - Keep ordinary Web capabilities out of Host-private authority models.
 - Use deny-by-default behavior for unknown methods and capabilities.
-- Never expose internal Tauri or native objects to an iframe.
+- Never expose internal Tauri or native objects to a plugin Child WebView.
 
 ## Capability Delivery
 

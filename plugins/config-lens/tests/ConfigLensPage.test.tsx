@@ -67,6 +67,14 @@ describe('ConfigLens product workflow', () => {
     const language = screen.getByRole('combobox');
     const format = screen.getByRole('button', { name: 'Format' });
     expect(workspace).toBeInTheDocument();
+    expect(workspace.children).toHaveLength(2);
+    expect(workspace.children[0]).toHaveClass('config-lens__content');
+    expect(workspace.children[0]?.tagName).toBe('SECTION');
+    expect(workspace.children[1]).toHaveClass('config-lens__footer');
+    expect(workspace.children[1]?.tagName).toBe('FOOTER');
+    expect(workspace.children[0]).toContainElement(editor);
+    expect(workspace.children[1]).toContainElement(language);
+    expect(workspace.children[1]).toContainElement(format);
     expect(screen.queryByRole('heading')).not.toBeInTheDocument();
     expect(screen.queryByText(/temporary workspace|临时工作区/u)).not.toBeInTheDocument();
     expect(editor.compareDocumentPosition(language) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
@@ -108,6 +116,8 @@ describe('ConfigLens product workflow', () => {
     fireEvent.change(input, { target: { value: 'bad' } });
     fireEvent.click(screen.getByRole('button', { name: 'Format' }));
     await waitFor(() => expect(screen.getByText('json.syntax')).toBeInTheDocument());
+    expect(screen.getByText('json.syntax').closest('ul')).toHaveClass('config-lens__diagnostics');
+    expect(screen.getByText('json.syntax').closest('ul')?.closest('footer')).toHaveClass('config-lens__footer');
     expect(input).toHaveValue('bad');
     rerender(
       <ConfigLensPage

@@ -21,6 +21,7 @@ const pluginBatch = (ownerId = 'com.acme.notes'): PageProviderBatch => ({
       page_id: 'home',
       title: { 'en-US': 'Notes' },
       route: '/private/home',
+      presentation: { initial_size: { width: 720, height: 540 }, resizable: true },
       available: true,
     },
     {
@@ -30,6 +31,7 @@ const pluginBatch = (ownerId = 'com.acme.notes'): PageProviderBatch => ({
       route: '/private/settings',
       parent: { owner_id: ownerId, page_id: 'home' },
       available: false,
+      presentation: { initial_size: { width: 650, height: 600 }, resizable: false },
     },
   ],
 });
@@ -102,6 +104,22 @@ describe('Page Registry', () => {
     expect(registry.snapshot()).toEqual(before);
   });
 
+  test('requires exact bounded plugin presentation and keeps Host Pages presentation-free', () => {
+    const registry = new PageRegistry([hostPage]);
+    const invalid = structuredClone(pluginBatch()) as unknown as PageProviderBatch;
+    const first = invalid.pages[0] as unknown as Record<string, unknown>;
+    first.presentation = {
+      initial_size: { width: 720, height: 540 },
+      resizable: true,
+      monitor: 'primary',
+    };
+    expect(registry.replaceProviderBatch('com.acme.notes', invalid)).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: 'invalid_descriptor', path: '/pages/0/presentation/monitor' }],
+    });
+    expect(registry.lookup({ owner_id: 'lensx.core', page_id: 'settings' })?.page).not.toHaveProperty('presentation');
+  });
+
   test('isolates mutable inputs and returns deeply frozen lookup and snapshot copies', () => {
     const registry = new PageRegistry([hostPage]);
     const batch = structuredClone(pluginBatch()) as {
@@ -112,6 +130,7 @@ describe('Page Registry', () => {
         page_id: string;
         route: string;
         title: { 'en-US': string };
+        presentation: { initial_size: { width: number; height: number }; resizable: boolean };
       }>;
     };
     expect(registry.replaceProviderBatch('com.acme.notes', batch).ok).toBe(true);
@@ -121,10 +140,12 @@ describe('Page Registry', () => {
     }
     batch.provider.display_name['en-US'] = 'Mutated';
     mutablePage.title['en-US'] = 'Mutated';
+    mutablePage.presentation.initial_size.width = 4096;
 
     const lookup = registry.lookup({ owner_id: 'com.acme.notes', page_id: 'home' });
     expect(lookup?.provider.display_name['en-US']).toBe('Acme Notes');
     expect(lookup?.page.title['en-US']).toBe('Notes');
+    expect(lookup?.page.presentation?.initial_size.width).toBe(720);
     expect(Object.isFrozen(lookup)).toBe(true);
     expect(Object.isFrozen(lookup?.provider.display_name)).toBe(true);
     expect(Object.isFrozen(registry.snapshot())).toBe(true);

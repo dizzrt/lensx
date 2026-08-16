@@ -95,7 +95,7 @@ quarantine 和 development identities 统一检查 ID。任一重复都会产生
 或 cache 协调失败会回滚本次 bootstrap batch 并终止 setup，避免前端看到部分初始投影。
 
 错误稳定且不包含路径。`invalid` 表示 payload 不完整或违反目录规则；`incompatible`
-表示声明范围排除了当前 Host，或使用旧 Manifest `0.2.x`/iframe Runtime 协议；
+表示声明范围排除了当前 Host，或使用 Manifest `0.3.x` 或更早/iframe Runtime 协议；
 `source_changed` 表示捕获期间文件发生变化；`conflict`
 表示界面 revision 已过期；`unsafe_state` 表示无法证明 Host ownership；`cleanup_pending`
 表示 authority 已成功变更，但旧缓存仍需重试清理或等待进程退出时清理。
@@ -128,7 +128,9 @@ raw native errors 或 private Manager facts。
 5. 返回 **设置 → 插件**，选择 development entry，然后执行 **从目录重新加载**。
    当前条目必须变成 `0.2.0` 与 B 代版本。不得出现 permission/grant 状态；刷新后的插件页面
    必须使用相同的开放隔离 Runtime profile。
-   Launcher Action 必须变成 **打开开发模式 Smoke B**。
+   Launcher Action 必须变成 **打开开发模式 Smoke B**。reload 是真实 replacement：它创建 fresh
+   Page attempt 并重新应用该 generation 的 Manifest 初始 presentation。被拒绝的 reload 保留
+   current attempt 及其 transient user-resized size。
 6. 执行 **移除开发条目** 并确认。条目及其 Launcher Action 必须消失，已打开的插件
    Page 必须终止。结果必须说明 plugin data 与 Launcher collections 得到保留。
 7. 再次注册同一个 B 代 `dist/` 并打开它，然后关闭 **插件开发模式**。确认关闭后，
@@ -152,4 +154,6 @@ pnpm run check:plugin-development-mode
 ```
 
 该 gate 覆盖构建排除、契约、目录 corpus、Rust transactions、Resource/Runtime invalidation、
-前端 convergence、可访问性、双语消息与文档、固定视口视觉证据以及正式构建产物。
+前端 convergence、可访问性、双语消息与文档、presentation reset/retention 行为、视觉证据
+以及正式构建产物。Development entry 与已安装插件使用同一 work-area-aware native coordinator；
+author-selected 或 user-resized size 都不会跨 replacement、process restart 或 rediscovery 持久化。

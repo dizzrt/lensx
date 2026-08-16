@@ -34,8 +34,9 @@ import {
 import { LauncherHome } from './app/launcher/LauncherHome';
 import {
   inertLauncherSurfaceController,
-  type LauncherPresentationState,
   type LauncherSurfaceController,
+  type LauncherSurfaceTarget,
+  launcherSurfaceTargetKey,
 } from './app/launcher/surface';
 import { useLauncherActivation } from './app/launcher/useLauncherActivation';
 import {
@@ -129,6 +130,7 @@ const App = ({
   const { locale } = useAppLocale();
   const { themeMode } = useAppTheme();
   const [activePage, setActivePage] = useState<ActivePage>();
+  const [activePageAttemptId, setActivePageAttemptId] = useState<`page_attempt_${number}`>();
   const [query, setQuery] = useState('');
   const [selectedActionId, setSelectedActionId] = useState<string>();
   const [pendingActionId, setPendingActionId] = useState<string>();
@@ -142,7 +144,8 @@ const App = ({
   const pendingActionIdRef = useRef<string | undefined>(undefined);
   const pendingPinActionIdRef = useRef<string | undefined>(undefined);
   const shouldRestoreInputFocusRef = useRef(false);
-  const lastPresentationStateRef = useRef<LauncherPresentationState | undefined>(undefined);
+  const lastPresentationTargetKeyRef = useRef<string | undefined>(undefined);
+  const pageAttemptSequenceRef = useRef(0);
   const confirmedCollectionsRef = useRef<LauncherActionCollections>(EMPTY_LAUNCHER_ACTION_COLLECTIONS);
   const collectionsMutationRevisionRef = useRef(0);
   const collectionsMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -241,11 +244,25 @@ const App = ({
     : results[0]?.action_id;
   const selectedIndex = results.findIndex(({ action_id: actionId }) => actionId === effectiveSelectedActionId);
   const hasSearchQuery = normalizeLauncherActionSearchQuery(query, locale).tokens.length > 0;
-  const presentationState: LauncherPresentationState = activePage ? 'page' : hasSearchQuery ? 'search' : 'home';
+  const presentationState = activePage ? ('page' as const) : hasSearchQuery ? ('search' as const) : ('home' as const);
   const pageResolution: PageResolution | undefined = useMemo(() => {
     void pageRevision;
     return activePage ? navigationService.resolvePage(activePage) : undefined;
   }, [activePage, navigationService, pageRevision]);
+  const presentationTarget: LauncherSurfaceTarget = useMemo(() => {
+    if (!activePage) return hasSearchQuery ? { kind: 'search' } : { kind: 'home' };
+    if (pageResolution?.provider.kind === 'plugin' && pageResolution.page.presentation && activePageAttemptId) {
+      return {
+        kind: 'plugin_page',
+        owner_id: pageResolution.page.owner_id,
+        page_id: pageResolution.page.page_id,
+        page_attempt_id: activePageAttemptId,
+        initial_size: pageResolution.page.presentation.initial_size,
+        resizable: pageResolution.page.presentation.resizable,
+      };
+    }
+    return { kind: 'host_page' };
+  }, [activePage, activePageAttemptId, hasSearchQuery, pageResolution]);
   const pageContext = useMemo(
     () =>
       activePage && pageResolution
@@ -297,16 +314,17 @@ const App = ({
   }, [focusLauncherInput]);
 
   useEffect(() => {
-    if (lastPresentationStateRef.current === presentationState) {
+    const targetKey = launcherSurfaceTargetKey(presentationTarget);
+    if (lastPresentationTargetKeyRef.current === targetKey) {
       return;
     }
-    lastPresentationStateRef.current = presentationState;
-    void surfaceController.setPresentationState(presentationState).catch((error: unknown) => {
+    lastPresentationTargetKeyRef.current = targetKey;
+    void surfaceController.setPresentationState(presentationTarget).catch((error: unknown) => {
       if (import.meta.env.DEV) {
         console.error('Failed to resize the launcher presentation surface.', error);
       }
     });
-  }, [presentationState, surfaceController]);
+  }, [presentationTarget, surfaceController]);
 
   useEffect(
     () =>
@@ -314,6 +332,7 @@ const App = ({
         if (!page) {
           shouldRestoreInputFocusRef.current = true;
         }
+        setActivePageAttemptId(page ? (`page_attempt_${++pageAttemptSequenceRef.current}` as const) : undefined);
         setActivePage(page);
         setQuery('');
         setSelectedActionId(undefined);

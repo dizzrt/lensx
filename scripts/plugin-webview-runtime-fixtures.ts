@@ -12,7 +12,7 @@ const manifestBytes = (value: unknown): Uint8Array => bytes(`${JSON.stringify(va
 type FixtureKind = 'normal' | 'malicious';
 
 const manifest = (kind: FixtureKind) => ({
-  manifest_version: '0.3.0',
+  manifest_version: '0.4.0',
   plugin_id: `com.lensx.fixture.runtime.${kind}`,
   version: '1.0.0',
   display: {

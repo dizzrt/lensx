@@ -8,6 +8,20 @@ import { buildPluginProject, validatePluginProject } from './project.js';
 import type { PluginCliDiagnostic } from './types.js';
 
 const toPosix = (value: string): string => value.replaceAll('\\', '/');
+const pagePresentations = (
+  pages: readonly {
+    readonly id: string;
+    readonly presentation: {
+      readonly initial_size: { readonly width: number; readonly height: number };
+      readonly resizable: boolean;
+    };
+  }[],
+) =>
+  pages.map(({ id, presentation }) => ({
+    page_id: id,
+    initial_size: presentation.initial_size,
+    resizable: presentation.resizable,
+  }));
 const isWithin = (parent: string, child: string): boolean => {
   const path = relative(parent, child);
   return path === '' || (path !== '..' && !path.startsWith('../') && !isAbsolute(path));
@@ -137,6 +151,7 @@ export const packPluginProject = async (input: PackPluginProjectInput): Promise<
     plugin_id: validated.inspection.manifest.plugin_id,
     version: validated.inspection.manifest.version,
     runtime_kind: validated.inspection.manifest.runtime.kind,
+    page_presentations: pagePresentations(validated.inspection.manifest.contributes.pages),
     package_protocol: facts.packageFormatVersion,
     compatibility: validated.inspection.compatibility,
     file_count: facts.fileCount,
@@ -182,6 +197,7 @@ export const inspectPluginPackageFile = async (
       plugin_id: inspection.manifest.plugin_id,
       version: inspection.manifest.version,
       runtime_kind: inspection.manifest.runtime.kind,
+      page_presentations: pagePresentations(inspection.manifest.contributes.pages),
       package_protocol: inspection.facts.packageFormatVersion,
       compatibility: inspection.compatibility,
       file_count: inspection.facts.fileCount,

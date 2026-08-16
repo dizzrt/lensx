@@ -129,7 +129,7 @@ path MUST be the sole active payload pointer.
 When first registering a compatible package, the Host MUST use the normalized Manifest and package digest returned by the inspector, inject the committed installation path, `source=external`, and `enabled=true`, and keep the Runtime `inactive`. The current registration MUST NOT create a grant snapshot, permission state, signature, or trust. Manifest Publisher data, remote behavior, and installation confirmation MUST NOT change source, enabled state, provenance, or Host authority.
 
 #### Scenario: Install an open Web plugin
-- **WHEN** a compatible Manifest `0.2.0` plugin declares ordinary Pages and Actions and completes first installation
+- **WHEN** a compatible Manifest `0.4.0` plugin declares ordinary Pages and Actions and completes first installation
 - **THEN** the Manager record stores explicit installation facts and the Runtime remains `inactive`
 - **THEN** installation does not execute plugin code, create a grant, or review future Worker or network behavior
 
@@ -457,7 +457,7 @@ bounded degraded diagnostic.
 
 ### Requirement: Reinstallation after lifecycle removal must preserve data policy without restoring removed authority
 
-A later successful installation of the same identity MUST clear an old completed-cleanup record only after there is no pending cleanup conflict and both package commit and Manager registration succeed. Data left by `retain_data` MUST remain. Grants, diagnostics, enabled intent, or permission facts in old records, cleanup state, or retained data MUST NOT be restored. The new installation MUST use the current Manifest `0.2.0`, `enabled=true`, and an `inactive` Runtime.
+A later successful installation of the same identity MUST clear an old completed-cleanup record only after there is no pending cleanup conflict and both package commit and Manager registration succeed. Data left by `retain_data` MUST remain. Grants, diagnostics, enabled intent, or permission facts in old records, cleanup state, or retained data MUST NOT be restored. The new installation MUST use the current Manifest `0.4.0`, `enabled=true`, and an `inactive` Runtime.
 
 #### Scenario: Retained-data identity is reinstalled
 - **WHEN** a previous uninstall completed while retaining data and a new compatible `0.2.0` package installs successfully
@@ -465,7 +465,7 @@ A later successful installation of the same identity MUST clear an old completed
 - **THEN** old permission or grant facts do not enter the new record or Runtime
 
 ### Requirement: Installation MUST commit only Child-WebView-compatible registrations
-Preparation MUST classify the immutable package with the current Contract and MUST reject Manifest `0.2.x`, `runtime.kind: "iframe"` and other unsupported Runtime protocols before staging or registration publication. A committed registration MUST contain only normalized public WebView Runtime facts; native labels, bridge configuration, origin tokens, WebView handles and Tauri permissions MUST remain absent.
+Preparation MUST classify the immutable package with the current Contract and MUST reject Manifest `0.3.x` or older, `runtime.kind: "iframe"` and other unsupported Runtime protocols before staging or registration publication. A committed registration MUST contain only normalized public WebView Runtime facts; native labels, bridge configuration, origin tokens, WebView handles and Tauri permissions MUST remain absent.
 
 #### Scenario: User selects a current package
 - **WHEN** a valid `0.3.0` WebView `.lxp` passes all existing package and first-install checks
@@ -474,4 +474,3 @@ Preparation MUST classify the immutable package with the current Contract and MU
 #### Scenario: User selects a legacy iframe package
 - **WHEN** the archive is safe but its Manifest protocol is obsolete
 - **THEN** installation reports incompatible plugin without committing payload or registration authority
-

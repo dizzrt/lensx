@@ -29,4 +29,5 @@ export {
   type PageRegistryDiagnosticCode,
   type PageRegistryReplacementResult,
   type PageResolution,
+  type PluginPagePresentation,
 } from './types';

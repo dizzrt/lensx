@@ -27,7 +27,7 @@ uses public package roots and ordinary version ranges.
 
 ## Manifest and resources
 
-Open `manifest.json`. Keep `manifest_version` at `0.2.0`; use a namespaced
+Open `manifest.json`. Keep `manifest_version` at `0.4.0`; use a namespaced
 `plugin_id` and SemVer plugin version. Compatibility has separate half-open
 ranges for lensX and Host API. Publisher fields are unverified author text.
 

@@ -26,7 +26,7 @@ CLI 写入完整项目，但不执行 dependency install、Host launch、plugin 
 
 ## Manifest 与资源
 
-生成的 `manifest.json` 使用 Manifest `0.2.0`、独立 lensX/Host API compatibility range、未验证
+生成的 `manifest.json` 使用 Manifest `0.4.0`、独立 lensX/Host API compatibility range、未验证
 publisher text、无 permission 字段、一个 Page、一个指向 Page 的 Action，以及 `index.html`
 WebView entry。每个 Runtime/asset path 都必须存在于 build 后 `dist/`。
 

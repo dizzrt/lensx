@@ -88,7 +88,7 @@ const loadCases = (category: string): readonly FixtureCase[] =>
 const fixtureInput = (fixture: FixtureCase): unknown =>
   fixture.input ?? applyMutations(baseManifest, fixture.mutations ?? []);
 
-describe('plugin Manifest 0.2.0 shared contract fixtures', () => {
+describe('plugin Manifest 0.4.0 shared contract fixtures', () => {
   for (const category of ['valid', 'incompatible'] as const) {
     for (const fixture of loadCases(category)) {
       test(`${category}: ${fixture.name}`, () => {
@@ -147,6 +147,21 @@ test('Action keywords remain scoped to their owning Action', () => {
     'zh-CN': ['打开工作区', '打开文件夹'],
   });
   expect('default_keywords' in result.manifest.display).toBe(false);
+});
+
+test('Page presentation normalizes independently for explicit and omitted input', () => {
+  const result = evaluateManifest(baseManifest, defaultVersions);
+  if (!('manifest' in result)) {
+    throw new TypeError('Base fixture unexpectedly failed validation.');
+  }
+
+  expect(result.manifest.contributes.pages.map(({ presentation }) => presentation)).toEqual([
+    { initial_size: { width: 800, height: 600 }, resizable: true },
+    { initial_size: { width: 650, height: 600 }, resizable: false },
+  ]);
+  expect(JSON.stringify(result.manifest)).not.toMatch(
+    /monitor|position|constraint|native|handle|maximize|fullscreen|user_size/u,
+  );
 });
 
 test('normalization cannot be reached with an ordinary object or forged failure result', () => {

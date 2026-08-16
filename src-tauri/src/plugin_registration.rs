@@ -764,7 +764,23 @@ mod tests {
                 assert_eq!(manifest.publisher.author, "lensX Official");
                 assert_eq!(runtime, PluginRegistrationRuntimeStatus::Inactive);
                 assert_eq!(diagnostics.len(), 1);
-                assert_eq!(manifest.manifest_version, "0.3.0");
+                assert_eq!(manifest.manifest_version, "0.4.0");
+                assert_eq!(
+                    manifest.contributes.pages[0]
+                        .presentation
+                        .initial_size
+                        .width,
+                    800
+                );
+                assert!(manifest.contributes.pages[0].presentation.resizable);
+                assert_eq!(
+                    manifest.contributes.pages[1]
+                        .presentation
+                        .initial_size
+                        .width,
+                    650
+                );
+                assert!(!manifest.contributes.pages[1].presentation.resizable);
             }
             PluginRegistrationDetail::Quarantined { .. } => {
                 panic!("expected registered detail")

@@ -17,6 +17,39 @@ export interface NoDualRuntimeTextInput {
   readonly text: string;
 }
 
+export const auditCurrentManifestProtocol = (
+  path: string,
+  surface: string,
+  text: string,
+): NoDualRuntimeDiagnostic[] => {
+  const normalized = path.replaceAll('\\', '/');
+  if (!normalized.endsWith('/manifest.json') && normalized !== 'manifest.json') return [];
+  if (normalized.includes('/invalid/') || normalized.includes('/incompatible/')) return [];
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    Array.isArray(value) ||
+    (value as Record<string, unknown>).manifest_version === undefined ||
+    (value as Record<string, unknown>).manifest_version === '0.4.0'
+  ) {
+    return [];
+  }
+  return [
+    {
+      marker: `manifest_version ${JSON.stringify((value as Record<string, unknown>).manifest_version)}`,
+      path: normalized,
+      ruleId: 'legacy-manifest-protocol',
+      surface,
+    },
+  ];
+};
+
 const joined = (...parts: readonly string[]): string => parts.join('');
 
 export const NO_DUAL_RUNTIME_RULES: readonly NoDualRuntimeRule[] = Object.freeze([

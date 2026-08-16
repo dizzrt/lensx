@@ -54,10 +54,23 @@ authoring workflow 中调用 `lensx-plugin` bin，但不得从 `src/**` import `
 ## Manifest、Page 与 Action
 
 每个模板都有独立 plugin ID，以及包含一个 WebView Runtime entry、一个 Page 和一个指向该 Page 的
-Action 的 Contract-valid Manifest `0.3.0`。两者都不请求权限。Host 会把 Action 投影到共享 Launcher
+Action 的 Contract-valid Manifest `0.4.0`。两者都不请求权限。Host 会把 Action 投影到共享 Launcher
 Action Registry；激活 Action 会打开已投影 Page。随后 Host 会解析当前 registration entry 和
 resource generation。React 只使用该安全 identity 请求一个 native Child WebView presentation，native
 code 会独立解析 current document target。
+
+template Page 省略 `presentation`，因此规范化为固定 `650×600`。作者可为 Page 声明有界
+初始逻辑尺寸并允许用户调整：
+
+```json
+"presentation": {
+  "initial_size": { "width": 800, "height": 600 },
+  "resizable": true
+}
+```
+
+这是声明式元数据，不是 Runtime resize API。Host 会按当前 work area 拟合；hide/restore 保留
+当前 same-attempt size，真实 close/reopen 则重置为声明的初始尺寸。第一版不持久化用户尺寸。
 
 调整模板时，应保持 Page/Action ID 一致、确保 Action target 有效，并在 `dist/` 中包含每项 Manifest
 resource。增加权限属于独立的产品与安全决策；这些起步模板不是权限教程。

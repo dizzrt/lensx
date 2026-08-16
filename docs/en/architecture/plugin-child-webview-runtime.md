@@ -74,10 +74,18 @@ before changing Child presentation. Hide remains Child-first and native-parent
 second to prevent overlay leakage. If native parent hide fails, Rust restores
 and refocuses only the same compare-current Child; a failed rollback tears that
 attempt down, while a stale rollback is inert. Restore shows and focuses the
-native parent before the same Child. A plugin Page close submits `home`
-immediately, so the native Window can return from `650×600` to `650×320` while
+native parent before the same Child and preserves its current user-resized
+size. A plugin Page close submits fixed `home` immediately, so the native Window
+can return to `650×320` and non-resizable while
 Child teardown finishes asynchronously; resize never waits for a
 single-WebviewWindow conversion.
+
+Each normalized Page carries a bounded initial logical size and `resizable`
+flag. The Host owns the complete native Window transition and current-monitor
+constraints. Window and scale changes produce trusted slot revisions for the
+same Child WebView without reloading its document, Session, model, or Worker.
+The plugin observes its ordinary Web viewport but receives no native size,
+position, monitor, constraint, maximize, fullscreen, or Window-handle method.
 
 ## Security And Web Capabilities
 
@@ -96,7 +104,7 @@ provenance, and CI evidence never add Runtime authority.
 
 ## Development And CI
 
-External, development, and official plugins use Manifest `0.3.0`,
+External, development, and official plugins use Manifest `0.4.0`,
 `runtime.kind: "webview"`, and `@lensx/plugin-sdk/webview`. Templates and the
 CLI build only this path. Development reload stages the next generation before
 destroying the old current attempt; rejected staging leaves the current attempt
@@ -184,6 +192,6 @@ proof. Lifecycle generation changes revoke eligibility and evict stale entries.
 
 ## Legacy Migration
 
-Legacy Manifest `0.2.x` packages using the iframe Runtime are incompatible
+Manifest `0.3.x` and older packages, including legacy iframe packages, are incompatible
 migration inputs only. They are never executed, rewritten, or routed through a
 fallback. Rebuild with a current template and the public WebView SDK transport.

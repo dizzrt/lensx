@@ -43,12 +43,12 @@ requireMarkers('examples/plugins/development-mode-smoke/package.json', [
 requireMarkers('examples/plugins/development-mode-smoke/manifests/initial.json', [
   'dev.lensx.smoke.development-mode',
   '"version": "0.1.0"',
-  '"manifest_version": "0.3.0"',
+  '"manifest_version": "0.4.0"',
 ]);
 requireMarkers('examples/plugins/development-mode-smoke/manifests/reload.json', [
   'dev.lensx.smoke.development-mode',
   '"version": "0.2.0"',
-  '"manifest_version": "0.3.0"',
+  '"manifest_version": "0.4.0"',
 ]);
 requireMarkers('examples/plugins/development-mode-smoke/src/main.ts', [
   '@lensx/plugin-sdk/webview',

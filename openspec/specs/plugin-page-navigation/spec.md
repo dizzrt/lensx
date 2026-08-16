@@ -80,7 +80,7 @@ Plugin Page availability MUST derive from the current healthy Registration, enab
 The system MUST retain a Page provider only when snapshot and detail identities and revisions match. Action publication MUST exclude Actions whose target Page is currently unavailable.
 
 #### Scenario: Healthy permissionless Page is available
-- **WHEN** a current Manifest `0.2.0` Page belongs to a healthy, enabled, compatible Registration and Runtime prerequisites are available
+- **WHEN** a current Manifest `0.4.0` Page belongs to a healthy, enabled, compatible Registration and Runtime prerequisites are available
 - **THEN** the Page descriptor is available without a lensX grant
 - **THEN** ordinary Web behavior such as Worker or network use is not part of the Page-availability calculation
 

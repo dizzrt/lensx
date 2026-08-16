@@ -7,7 +7,7 @@ const manifest = JSON.parse(await readFile(resolve(dist, 'manifest.json'), 'utf8
 if (manifest.plugin_id !== 'dev.lensx.config-lens' || manifest.version !== '0.1.0') {
   throw new Error('e2e/manifest-identity: built Manifest drifted.');
 }
-if (manifest.manifest_version !== '0.3.0' || manifest.runtime?.kind !== 'webview') {
+if (manifest.manifest_version !== '0.4.0' || manifest.runtime?.kind !== 'webview') {
   throw new Error('e2e/runtime-protocol: built Manifest must use the public WebView protocol.');
 }
 const files = [];

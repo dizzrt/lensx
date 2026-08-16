@@ -39,7 +39,7 @@ const legacyProtocolDiagnostics = (input: unknown): PluginManifestDiagnostic[] =
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return [];
   const record = input as Record<string, unknown>;
   const diagnostics: PluginManifestDiagnostic[] = [];
-  if (typeof record.manifest_version === 'string' && /^0\.2\.[0-9]+$/u.test(record.manifest_version)) {
+  if (typeof record.manifest_version === 'string' && /^0\.[0-3]\.[0-9]+$/u.test(record.manifest_version)) {
     diagnostics.push(
       createDiagnostic('incompatible_protocol', '/manifest_version', 'The plugin Manifest protocol is incompatible.'),
     );
@@ -104,6 +104,9 @@ const schemaErrorCode = (error: ErrorObject): string => {
     case 'minLength':
     case 'minItems':
       return 'invalid_length';
+    case 'minimum':
+    case 'maximum':
+      return 'invalid_range';
     case 'required':
       return 'missing_field';
     default:
@@ -136,6 +139,19 @@ const normalizeManifest = (input: PluginManifestInput): NormalizedPluginManifest
       route: page.route.trim(),
       ...(page.parent_page_id === undefined ? {} : { parent_page_id: page.parent_page_id.trim() }),
       ...(page.icon === undefined ? {} : { icon: trimAsset(page.icon) }),
+      presentation:
+        page.presentation === undefined
+          ? {
+              initial_size: { width: 650, height: 600 },
+              resizable: false,
+            }
+          : {
+              initial_size: {
+                width: page.presentation.initial_size.width,
+                height: page.presentation.initial_size.height,
+              },
+              resizable: page.presentation.resizable,
+            },
     }),
   ) as [NormalizedPluginPage, ...NormalizedPluginPage[]];
 
@@ -159,7 +175,7 @@ const normalizeManifest = (input: PluginManifestInput): NormalizedPluginManifest
   );
 
   return {
-    manifest_version: '0.3.0',
+    manifest_version: '0.4.0',
     plugin_id: input.plugin_id.trim(),
     version: input.version.trim(),
     display: {

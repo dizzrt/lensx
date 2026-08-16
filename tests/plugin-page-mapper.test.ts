@@ -26,6 +26,7 @@ describe('Plugin Page mapper', () => {
           page_id: 'home',
           title: { 'en-US': 'Workspace Tools', 'zh-CN': '工作区工具' },
           route: '/',
+          presentation: { initial_size: { width: 800, height: 600 }, resizable: true },
           available: true,
         },
         {
@@ -34,12 +35,33 @@ describe('Plugin Page mapper', () => {
           title: { 'en-US': 'Open Project', 'zh-CN': '打开项目' },
           route: '/open-project',
           parent: { owner_id: 'com.acme.workspace', page_id: 'home' },
+          presentation: { initial_size: { width: 650, height: 600 }, resizable: false },
           available: true,
         },
       ],
     });
     expect(Object.isFrozen(batch)).toBe(true);
     expect(batch?.pages[1]).not.toHaveProperty('required_permission_ids');
+    expect(batch?.pages[0]?.presentation).not.toBe(detail.manifest.contributes.pages[0]?.presentation);
+  });
+
+  test('binds presentation to provider and Page identity without accepting route or action overrides', () => {
+    const mutated = structuredClone(detail);
+    const action = mutated.manifest.contributes.actions.at(0);
+    expect(action).toBeDefined();
+    if (!action) throw new TypeError('Expected one fixture Action.');
+    (mutated.manifest.contributes.actions as unknown as Array<Record<string, unknown>>)[0] = {
+      ...action,
+      target: { kind: 'page', page_id: 'open_project' },
+      presentation: { initial_size: { width: 4096, height: 4096 }, resizable: true },
+    };
+    (mutated.manifest.contributes.pages[1] as { route: string }).route = '/presentation/320/180/true';
+
+    const batch = mapPluginRegistrationToPageProviderBatch(mutated);
+    expect(batch?.pages[1]?.presentation).toEqual({
+      initial_size: { width: 650, height: 600 },
+      resizable: false,
+    });
   });
 
   test('marks a valid contributed Page available without Host grants', () => {

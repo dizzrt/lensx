@@ -107,8 +107,9 @@ reload action without displaying exception details. Event-handler and
 asynchronous errors require explicit error states and are outside this render
 boundary.
 
-The App Shell derives three presentation states from local `activePage` and
-normalized query state. All three share one top row and a non-interactive avatar
+The App Shell derives `home`, `search`, `host_page`, or identity-bound
+`plugin_page` surface targets from local `activePage`, the resolved provider,
+and normalized query state. All targets share one top row and a non-interactive avatar
 placeholder. `home` keeps the launcher input and renders Recent followed by
 Pinned from accepted Action collections; it never fills either row from
 registry order or simulated data. The localized `All` text beside Pinned is a
@@ -121,16 +122,20 @@ control when page content fails.
 
 ## Launcher Window Lifecycle
 
-The Tauri webview window with the stable `main` label is configured as a
-compact launcher surface. It has a fixed width of 650px, an initial height of
-320px, a minimum height of 180px, and a maximum height of 800px. The window is
-transparent, always on top, undecorated, non-resizable, and non-fullscreen.
+The Tauri Window with stable label `main` starts at `650×320` logical pixels,
+is transparent, always on top, undecorated, non-resizable, and non-fullscreen,
+and has a `320×180..4096×4096` hard envelope. Home, Search, and Host Pages are
+fixed and non-resizable at `650×320`, `650×480`, and `650×600` respectively.
 
-The Host maps App Shell presentation state to fixed logical heights through a
-typed Rust command: `home` uses 320px, `search` uses 480px, and `page` uses
-600px. This keeps the shared content region visible without measuring DOM
-content or changing height based on collection or search-result counts. The
-frontend cannot submit arbitrary dimensions.
+Manifest `0.4.0` gives every normalized plugin Page a bounded `presentation`.
+An omitted author value becomes fixed `650×600`; an explicit value supplies an
+initial logical size and may opt the user into native edge/corner resizing.
+React sends a strict tagged target with Page and Page-attempt identity. Rust
+revalidates it against current Registration, fits the initial size and
+constraints to the current monitor work area, and applies resize guard,
+constraints, size, and final resizability through one rollback-capable
+coordinator. No plugin message, DOM measurement, result count, or Runtime API
+can choose native Window presentation.
 
 Rust owns all native launcher window operations through one action boundary:
 
@@ -324,21 +329,14 @@ token; Plugin Pages use the generic provider icon until scoped resource
 resolution ships. Display strings are not copied into `ActivePage`, so locale
 and metadata changes resolve from current facts.
 
-The App Shell still uses one `home` / `search` / `page` presentation state in
-the existing main window. `lensx.core/settings` renders the trusted Settings
-surface. An available Plugin Page renders one Host-owned isolated iframe inside
-the existing page error boundary. The Host-private resolver cross-checks the
-current Page, Registration revision, Resource identity, isolated `entry_url`,
-and Registry route, then activates the exact native navigation lease before
-mounting. The iframe fixes `allow-scripts allow-same-origin`, `no-referrer`, and
-a Host-owned Permissions Policy; close, retry, invalidation, replacement, and
-App teardown remove it. Its load event means only `loaded`, not SDK/Session
-`ready`. After load, the Host-private Session binds current entry, plugin,
-version, Page, resource generation, and Runtime attempt to the real
-`contentWindow`; only an exact acknowledgement on the newly transferred Port
-produces Session `ready`. SDK `ready`, Host API transport, the open-Web CSP,
-the Host-private Dispatcher, and scoped storage are delivered. Manifest and
-Host API `0.2.0` expose no native clipboard or permission authority.
+`lensx.core/settings` renders the trusted Host Page surface. An available
+Plugin Page renders one Host-owned slot while Rust creates the current native
+Child WebView sibling. The Host-private resolver cross-checks Page,
+Registration revision, Resource identity, isolated `entry_url`, route,
+generation, native source, and attempt. The closed bridge and Session become
+ready only for that current Child WebView. Close, retry, invalidation,
+replacement, and App teardown revoke it. Manifest `0.4.0` and Host API `0.2.0`
+expose neither native Window methods nor Child WebView identity.
 
 Settings is rendered in the existing `main` Tauri window. It has first-level
 Preferences and Plugins sections. Preferences controls the supported

@@ -109,7 +109,7 @@ for (const fixture of ['normal', 'malicious'] as const) {
   }
   const protocol = object(evidence.protocol, `${fixture} protocol`);
   if (
-    protocol.manifest_version !== '0.3.0' ||
+    protocol.manifest_version !== '0.4.0' ||
     protocol.runtime_kind !== 'webview' ||
     protocol.bridge_contract_version !== '0.2.0' ||
     protocol.host_api_version !== '0.2.0'

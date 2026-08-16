@@ -122,6 +122,10 @@ describe('read-only plugin project validation', () => {
     const result = await validatePluginProject(project);
     expect(result.inspection.status).toBe('compatible');
     expect(result.inspection.manifest.plugin_id).toBe('com.acme.workspace');
+    expect(result.inspection.manifest.contributes.pages.map(({ presentation }) => presentation)).toEqual([
+      { initial_size: { width: 800, height: 600 }, resizable: true },
+      { initial_size: { width: 650, height: 600 }, resizable: false },
+    ]);
     expect(await bytesSnapshot(project)).toEqual(before);
     expect(await readdir(project)).not.toEqual(expect.arrayContaining(['artifacts']));
   });
@@ -134,6 +138,7 @@ describe('read-only plugin project validation', () => {
   });
 
   test.each([
+    ['Manifest 0.3', { manifest_version: '0.3.0' }, undefined],
     ['Manifest 0.2', { manifest_version: '0.2.0' }, undefined],
     ['iframe Runtime', { runtime: { ...baseManifest.runtime, kind: 'iframe' } }, undefined],
     [

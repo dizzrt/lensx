@@ -166,6 +166,7 @@ pub fn run() {
                 )?;
             }
             launcher_window::setup_launcher_window(app.handle());
+            launcher_surface::setup_launcher_surface(app.handle());
             Ok(())
         })
         .build(tauri::generate_context!())

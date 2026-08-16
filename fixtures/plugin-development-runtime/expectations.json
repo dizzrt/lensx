@@ -3,11 +3,11 @@
   "source_packages": {
     "normal": {
       "file": "fixtures/plugin-webview-runtime/normal/runtime-compatible.lxp",
-      "sha256": "a551c9602c139bbbb58a5a854786a45decf8a074aa2cc93bb9208962eb34bec0"
+      "sha256": "7e8970c476209fd52afdd50ac2d56348c3bd2e051946da4b3e2d29d8e82df808"
     },
     "malicious": {
       "file": "fixtures/plugin-webview-runtime/malicious/runtime-adversarial.lxp",
-      "sha256": "b5bcd2fa6b3ffc5874aad840a986d1e4317f9c2d7f45c30ce1aa339178c93512"
+      "sha256": "390abcd95f343033da60128aad2551db3b2d2351291902d22669613a5a9a2aba"
     }
   },
   "production_child_webview_evidence": {

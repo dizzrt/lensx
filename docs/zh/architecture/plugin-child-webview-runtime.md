@@ -63,9 +63,15 @@ hide/restore 才保留同一 attempt。真实 close 或 generation 变化会先 
 Launcher action 会先解析所需的 native Window 与 Host WebView target，再改变 Child
 presentation。hide 保持 Child-first、native-parent-second，避免 overlay 泄漏。如果 native parent
 hide 失败，Rust 只恢复并重新聚焦同一个 compare-current Child；rollback 失败会 teardown 该
-attempt，stale rollback 保持 inert。restore 会先 show/focus native parent，再恢复同一个 Child。
-plugin Page close 会立即提交 `home`，因此 Child teardown 异步完成期间 native Window 仍可从
-`650×600` 返回 `650×320`；resize 不等待 single-WebviewWindow conversion。
+attempt，stale rollback 保持 inert。restore 会先 show/focus native parent，再恢复同一个 Child，
+并保留当前用户调整后的尺寸。plugin Page close 会立即提交固定 `home`，因此 Child
+teardown 异步完成期间 native Window 仍会返回 `650×320` 且不可调整；resize 不等待
+single-WebviewWindow conversion。
+
+每个规范化 Page 都携带有界初始逻辑尺寸和 `resizable`。Host 拥有完整原生 Window
+转换与当前 monitor 约束。Window 和 scale 变化只为同一 Child WebView 生成可信 slot revision，
+不会重载 document、Session、model 或 Worker。插件只能观察普通 Web viewport，不会获得
+原生 size、position、monitor、constraint、maximize、fullscreen 或 Window handle method。
 
 ## 安全与 Web 能力
 
@@ -82,7 +88,7 @@ provenance 与 CI 证据都不会增加 Runtime authority。
 
 ## 开发与 CI
 
-external、development 与 official 插件都使用 Manifest `0.3.0`、`runtime.kind: "webview"` 与
+external、development 与 official 插件都使用 Manifest `0.4.0`、`runtime.kind: "webview"` 与
 `@lensx/plugin-sdk/webview`。template 与 CLI 只构建这一路径。Development reload 在销毁旧 current
 attempt 前 staging 下一 generation；被拒绝的 staging 不改变 current attempt。直接插件与 external
 插件使用相同的公共 Runtime、bridge/SDK、interaction 与 zero-residual teardown 边界；CI 不会赋予
@@ -158,5 +164,5 @@ proof 后使用 bounded metadata seal。lifecycle generation 变化会撤销 eli
 
 ## 旧协议迁移
 
-使用 iframe Runtime 的旧 Manifest `0.2.x` package 仅作为不兼容迁移输入。它们不会执行、重写或
+Manifest `0.3.x` 与更早 package（包括旧 iframe package）仅作为不兼容迁移输入。它们不会执行、重写或
 进入 fallback。请使用当前 template 与公共 WebView SDK transport 重新构建。

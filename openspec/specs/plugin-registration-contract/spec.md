@@ -39,7 +39,7 @@ lifecycle, signature, or provenance facts.
 
 ### Requirement: Registration wire payloads MUST use an independent explicit version
 
-Registration snapshot, detail, event, error, and request payloads MUST use an independent strict version `0.3.0` and MUST reject an old version, unknown field, missing field, wrong type, or cross-operation variant. The version MUST be independent of Manifest `0.2.0`, Host API `0.2.0`, package, Manager record, and application versions. Current payloads MUST NOT contain `granted_permission_ids`, permission state, reasons, risk, or grant-mutation facts.
+Registration snapshot, detail, event, error, and request payloads MUST use an independent strict version `0.3.0` and MUST reject an old version, unknown field, missing field, wrong type, or cross-operation variant. The version MUST be independent of Manifest `0.4.0`, Host API `0.2.0`, package, Manager record, and application versions. Current payloads MUST NOT contain `granted_permission_ids`, permission state, reasons, risk, or grant-mutation facts.
 
 #### Scenario: Current Registration payload is read
 - **WHEN** a trusted frontend adapter receives a complete `0.3.0` snapshot or detail

@@ -1,5 +1,4 @@
 use crate::{
-    launcher_surface::LauncherSurfaceMode,
     launcher_window::MAIN_WINDOW_LABEL,
     plugin_child_webview_adapter::{
         create_plugin_child_webview, create_plugin_child_webview_with_evidence,
@@ -14,8 +13,8 @@ use crate::{
         PluginChildWebviewSessionState, PluginChildWebviewWaitReadiness,
     },
     plugin_child_webview_slot::{
-        apply_slot_update, PluginChildWebviewPhysicalBounds, SlotWindowFacts,
-        UpdatePluginChildWebviewSlotRequest,
+        apply_slot_update, PluginChildWebviewPhysicalBounds, PluginChildWebviewSurfaceMode,
+        SlotWindowFacts, UpdatePluginChildWebviewSlotRequest,
     },
     plugin_manager::PluginManager,
     plugin_manifest::RuntimeKind,
@@ -46,7 +45,7 @@ pub(crate) struct PluginChildWebviewPresentationIdentity {
 pub(crate) struct CreatePluginChildWebviewPresentationRequest {
     contract_version: String,
     window_label: String,
-    surface_mode: LauncherSurfaceMode,
+    surface_mode: PluginChildWebviewSurfaceMode,
     scale_factor: f64,
     physical_bounds: PluginChildWebviewPhysicalBounds,
     presentation_revision: String,
@@ -216,7 +215,7 @@ fn create_plugin_child_webview_presentation_inner(
     let create_started = Instant::now();
     if request.contract_version != PLUGIN_CHILD_WEBVIEW_PRESENTATION_CONTRACT_VERSION
         || request.window_label != MAIN_WINDOW_LABEL
-        || request.surface_mode != LauncherSurfaceMode::Page
+        || request.surface_mode != PluginChildWebviewSurfaceMode::Page
     {
         return Err(PluginChildWebviewPresentationError::new(
             PluginChildWebviewPresentationErrorCode::InvalidRequest,
@@ -483,7 +482,7 @@ pub(crate) fn create_config_lens_evidence_presentation(
         CreatePluginChildWebviewPresentationRequest {
             contract_version: PLUGIN_CHILD_WEBVIEW_PRESENTATION_CONTRACT_VERSION.to_owned(),
             window_label: MAIN_WINDOW_LABEL.to_owned(),
-            surface_mode: LauncherSurfaceMode::Page,
+            surface_mode: PluginChildWebviewSurfaceMode::Page,
             scale_factor,
             physical_bounds: PluginChildWebviewPhysicalBounds {
                 x: 0.0,

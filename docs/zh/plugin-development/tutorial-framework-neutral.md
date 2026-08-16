@@ -23,7 +23,7 @@ pnpm install
 
 ## Manifest 与资源
 
-打开 `manifest.json`。保持 `manifest_version` 为 `0.2.0`，使用 namespaced `plugin_id` 与 SemVer
+打开 `manifest.json`。保持 `manifest_version` 为 `0.4.0`，使用 namespaced `plugin_id` 与 SemVer
 插件版本。compatibility 分别为 lensX 和 Host API 声明半开 range。publisher field 是未验证作者文本。
 
 starter 不包含 permission 字段。它贡献一个 Page、一个指向该 Page 的 Action，以及 launcher

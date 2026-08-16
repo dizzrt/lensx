@@ -116,8 +116,8 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
 - 私有 Page route、registration detail 与 provider bookkeeping 不得进入 `ActivePage` 或展示 props。
   Plugin Page 只能通过 Host-owned 隔离 Runtime 渲染；插件展示代码不得获得 Tauri bridge、Host DOM、
   其他插件 origin 或 Host 私有状态。
-- 根据规范化查询和扁平 `ActivePage` 状态推导 `home`、`search` 和 `page`；当前单层页面深度不
-  引入 router 或并行 Shell store。
+- 根据规范化查询、扁平 `ActivePage` 与当前可信 Page resolution 推导类型化
+  `home`、`search`、`host_page` 和 `plugin_page` surface target；不引入 router 或并行 Shell store。
 - 保持统一顶部行几何：`home` 和 `search` 渲染 launcher 输入，`page` 渲染由 ID 派生的页面上下文
   条，所有状态都渲染非交互 avatar 占位。不要恢复独立产品标题或介绍。
 - 在渲染共享页面上下文视图前解析页面 Owner 和打开页面的 Action 展示信息。视图不得包含 Owner ID
@@ -138,10 +138,15 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
   保持不可操作。
 - Launcher 必须保持一个连续统一的 surface 背景。静止状态的输入、页面上下文、集合空状态和 Action
   tile 不得形成常驻卡片；填充色只用于短暂的 hover、focus、selected 或 pending 状态。
-- 通过类型化 launcher surface adapter 发送这些呈现状态，由 Rust 选择固定的 320px、480px 或
-  600px 高度。组件不能根据 DOM 内容、集合长度或结果数量提交任意原生尺寸。
+- 通过类型化 launcher surface adapter 发送这些 tagged target。Home、Search 和 Host Page
+  分别固定为 `650×320`、`650×480` 和 `650×600`。plugin target 只能携带已校验 Manifest
+  初始逻辑尺寸、`resizable`、Page 和 Page-attempt 身份。组件与 plugin message 都不得把 DOM
+  内容、集合长度、结果数量或任意尺寸作为原生 Window 输入。
 - 仅在限定到 `main` 窗口的 capability 中授予 `core:window:allow-start-dragging`。不得为此交互授予
   位置设置、缩放、最大化或其他无关原生窗口权限。
+- 可调整 plugin 布局要在 flex chain 中使用 `min-height: 0`，由一个 content 区吸收 viewport
+  变化；基本控件位于语义化有界 footer，diagnostics 可滚动。`ResizeObserver` 只布局现有
+  editor，不重建 model、Worker 或 Runtime。
 
 ## Launcher Action 与集合
 

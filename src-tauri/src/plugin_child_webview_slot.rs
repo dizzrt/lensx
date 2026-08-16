@@ -1,5 +1,4 @@
 use crate::{
-    launcher_surface::LauncherSurfaceMode,
     launcher_window::MAIN_WINDOW_LABEL,
     plugin_child_webview_service::{
         PluginChildWebviewAttempt, PluginChildWebviewBounds, PluginChildWebviewRegistry,
@@ -11,6 +10,14 @@ use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 
 pub(crate) const PLUGIN_CHILD_WEBVIEW_SLOT_CONTRACT_VERSION: &str = "0.1.0";
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum PluginChildWebviewSurfaceMode {
+    Home,
+    Page,
+    Search,
+}
 
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -27,7 +34,7 @@ pub struct UpdatePluginChildWebviewSlotRequest {
     pub(crate) contract_version: String,
     pub(crate) attempt_id: String,
     pub(crate) window_label: String,
-    pub(crate) surface_mode: LauncherSurfaceMode,
+    pub(crate) surface_mode: PluginChildWebviewSurfaceMode,
     pub(crate) scale_factor: f64,
     pub(crate) physical_bounds: PluginChildWebviewPhysicalBounds,
     pub(crate) presentation_revision: String,
@@ -98,7 +105,7 @@ fn parse_request(
 ) -> Option<(PluginChildWebviewAttempt, u64, PluginChildWebviewBounds)> {
     if request.contract_version != PLUGIN_CHILD_WEBVIEW_SLOT_CONTRACT_VERSION
         || request.window_label != MAIN_WINDOW_LABEL
-        || request.surface_mode != LauncherSurfaceMode::Page
+        || request.surface_mode != PluginChildWebviewSurfaceMode::Page
         || !request.scale_factor.is_finite()
         || request.scale_factor <= 0.0
         || (request.scale_factor - window.scale_factor).abs() > f64::EPSILON
@@ -269,7 +276,7 @@ mod tests {
             contract_version: PLUGIN_CHILD_WEBVIEW_SLOT_CONTRACT_VERSION.to_owned(),
             attempt_id,
             window_label: MAIN_WINDOW_LABEL.to_owned(),
-            surface_mode: LauncherSurfaceMode::Page,
+            surface_mode: PluginChildWebviewSurfaceMode::Page,
             scale_factor: 2.0,
             physical_bounds: PluginChildWebviewPhysicalBounds {
                 x: 40.0,
@@ -360,7 +367,7 @@ mod tests {
             },
             {
                 let mut value = request(attempt.opaque_id(), "1");
-                value.surface_mode = LauncherSurfaceMode::Home;
+                value.surface_mode = PluginChildWebviewSurfaceMode::Home;
                 value
             },
             {

@@ -303,6 +303,14 @@ paths, top-level navigation denial, terminal cleanup, current `.lxp` fixtures,
 bounded macOS WKWebView evidence, ACL negatives, and workspace-private imports.
 Native load, bridge ready, and SDK ready remain separate evidence facts.
 
+Launcher presentation changes must additionally prove strict typed
+`home`/`search`/`host_page`/`plugin_page` targets, Manifest logical hard bounds,
+current-work-area fitting, fixed and opt-in resizable Pages, latest-wins Child
+slot revisions, same-attempt hide/restore retention, and actual-close reset.
+Evidence may contain only bounded logical/native/slot sizes, booleans, counts,
+revisions, and stable stages. It must not contain monitor coordinates, handles,
+paths, content, raw errors, or a persisted user size.
+
 The window-lifecycle gate specifically prevents the multi-WebView regression
 where post-creation Launcher resize, window events, native-dialog parenting, or
 `Cmd+W` hide use a single-`WebviewWindow` lookup. Its Rust and React composition
@@ -454,8 +462,10 @@ pnpm run check:official-config-lens-warm-format
 These gates run the member lifecycle and four-language malicious/golden corpora,
 checks dependency licenses and exact versions, builds the Monaco and language
 module Workers, verifies all package-owned chunks and budgets, compares the
-fixed 28-case bilingual light/dark visual matrix, and consumes bounded real
-macOS WKWebView evidence for one editable model, direct replacement, and undo.
+40-case bilingual light/dark visual matrix at primary `800×600`, hard-minimum,
+and larger user-resized viewports, and consumes bounded real macOS WKWebView
+evidence for one editable model, direct replacement, undo, resize retention,
+close-to-Home reset, and reopen at the Manifest initial size.
 Evidence and diagnostics must not include configuration content, URL, origin,
 path, nonce, Port, payload, stack, or raw errors.
 

@@ -34,7 +34,7 @@ Plugin
 ├── actions ───────────────▶ 目标 pages
 └── runtime
     ├── 可信 Host module
-    └── 隔离的外部 iframe
+    └── 隔离的外部 Child WebView
 ```
 
 归属和引用必须明确。插件、页面、action 和其他可引用资源使用的 ID 必须在全局范围内
@@ -64,7 +64,7 @@ Schema 入口是 `@lensx/plugin-contract/schema` 与
 `@lensx/plugin-contract/host-api-schema` 与
 `@lensx/plugin-contract/host-api.schema.json`。未声明的 deep import 不受支持。
 
-package 拥有作者可控的 `manifest_version: "0.2.0"` 协议，并将其实现为严格的 Draft
+package 拥有作者可控的 `manifest_version: "0.4.0"` 协议，并将其实现为严格的 Draft
 2020-12 JSON Schema。Schema 是 wire format 的结构真源，已提交的 `PluginManifestInput`
 由它确定性生成。package TypeScript 实现与明确的 Rust 模型读取相同的 package-owned valid、
 invalid、normalized 和 incompatible fixtures，从而保持 validity、compatibility、规范化输出
@@ -77,13 +77,13 @@ invalid、normalized 和 incompatible fixtures，从而保持 validity、compati
 
 | 字段 | 契约 |
 | --- | --- |
-| `manifest_version` | 必填，且必须精确等于 `0.2.0`。 |
+| `manifest_version` | 必填，且必须精确等于 `0.4.0`。 |
 | `plugin_id` 和 `version` | 必填的稳定命名空间插件 ID 和 SemVer 发布版本。 |
 | `display` | 必填的本地化 `name`；可选本地化 `description` 和包内 asset `icon`。 |
 | `publisher` | 必填的作者声明 `author`、HTTPS `homepage` 和 HTTPS `repository`；三者都不建立信任。 |
 | `compatibility` | 必填的 `lensx` 和 `host_api` SemVer 半开区间。 |
-| `runtime` | 必填 `kind: "iframe"` 和包内 HTML `entry`；它只是元数据，不会创建 iframe。 |
-| `contributes.pages` | 一个或多个具有唯一 ID 的 Page，包含本地化标题、内部 route，以及可选 parent/icon。 |
+| `runtime` | 必填 `kind: "webview"` 和包内 HTML `entry`；它不授予原生 authority。 |
+| `contributes.pages` | 一个或多个具有唯一 ID 的 Page，包含本地化标题、内部 route，以及可选 parent/icon 和有界 `presentation`。 |
 | `contributes.actions` | 可选的唯一 Action，包含本地化标题/描述、Action 自有的 `default_keywords`、可选 icon 和只指向 Page 的 target。 |
 | `contributes.launcher` | 可选的 `default_action_id`，引用一个已贡献 Action；它不实现排序或注册。 |
 
@@ -96,6 +96,11 @@ Page 和 Action ID 都是插件内本地 ID。Host 私有 Plugin Action 投影�
 且整个图必须无环。每个 Action target 必须是
 `{ "kind": "page", "page_id": "<local-page-id>" }`。Action 关键词始终归属于对应 Action，
 不会成为插件级别的共享别名。
+
+Page `presentation` 若存在，只能包含 `320..=4096` 的整数逻辑
+`initial_size.width`、`180..=4096` 的整数逻辑 `initial_size.height` 和布尔
+`resizable`。省略时规范化为 `650×600` 且 `resizable: false`。有效 work-area 约束、
+当前用户尺寸、monitor facts 与原生失败绝不进入 Manifest 或 Registration wire。
 
 ### 校验、规范化与兼容性
 
@@ -160,7 +165,7 @@ Host API error 使用稳定闭集 code 与有界安全英文 message，并与 SD
 与应用版本独立演进。兼容新增 method 需要 Host API minor 版本并通过 capability discovery 暴露；
 不兼容改形或删除需要 major 版本，且删除前必须先废弃。
 
-本次交付是可独立消费的语义契约，不是执行路径。它不注册 Tauri command，也不实现 iframe
+本次交付是可独立消费的语义契约，不是执行路径。它不注册 Tauri command，也不实现 Runtime
 transport、私有 RPC envelope、request ID、Dispatcher、Action/close 副作用、storage persistence、
 clipboard native 调用、permission decision 或 RPC resource limit。`system.open_external` 与外链权限
 明确不作为占位能力发布。
@@ -563,21 +568,18 @@ object、base 变更、form 与非可信 ancestor。production application docum
 一致。Manifest、publisher、source、query、request header 与 plugin-authored meta 都不能修改这两套
 profile。
 
-CSP、隔离 origin、iframe sandbox、Permissions Policy、native navigation 与 Runtime Session 是互补
-边界。CSP 控制 resource/document destination；per-generation origin 分离 DOM 与 storage；sandbox 和
-Permissions Policy 约束 frame capability；native lease 控制顶层与 descendant navigation；Session
-认证一个 current window 与专用 Port。这些边界不会通过 Host API 中介普通 Web 行为。
+CSP、隔离 origin/data store、native navigation、闭合 native bridge 与 Runtime Session 是互补边界。
+CSP 控制 resource/document destination；per-generation origin 分离 DOM 与 storage；native lease 控制
+top-level navigation；Session 认证一个 current Child WebView 与 source-bound bridge。这些边界
+不会通过 Host API 中介普通 Web 行为。
 
-Host 私有 controller 会拥有一个 Runtime attempt，并在全局最多创建一个 external-plugin iframe。
-独立的 10,000 ms resolution boundary 覆盖上一 terminal operation 的收敛、当前 Resource resolution 与
-native navigation activation；超时会 fail closed，且不会构造另一个 iframe。navigation lease 激活且
-`src` 提交后才启动 10,000 ms load deadline；bootstrap transfer 成功后，Session 才启动 5,000 ms
-handshake deadline。close、navigation、quiescence、disable、uninstall、replacement、
-相关 fact 变化、retry、timeout、Session failure、Host reload 与 App teardown 全部收敛到同一幂等
-terminal operation：先让工作 stale，再取消 timer/subscription，dispose Session/Port，unbind/remove
-iframe，compare-current 释放 navigation lease，最后丢弃引用。因此迟到 promise、load、acknowledgement、
-timer 与 Port event 无法影响新 attempt。不存在 preload、hidden pool、background Runtime、跨 Page
-复用、自动 retry 或持久化 Runtime state。
+Host 私有 controller 在全局拥有一个 Runtime attempt 和一个 external-plugin Child WebView。有界
+resolution、load 与 handshake deadline 会 fail closed，不会构造另一个 Child。close、navigation、
+quiescence、disable、uninstall、replacement、相关 fact 变化、retry、timeout、Session failure、
+Host reload 与 App teardown 收敛到同一幂等 compare-current terminal operation：让工作 stale、
+取消 timer/subscription、dispose Session/bridge、destroy Child、释放 navigation authority 并丢弃引用。
+迟到 promise、load、acknowledgement、timer 与 bridge event 无法影响新 attempt。不存在 preload、
+hidden pool、background Runtime、跨 Page 复用、自动 retry 或持久化 Runtime state。
 
 进程内 breaker 以 trusted entry identity 与 resource generation 为 key。60,000 ms 内第三次 qualifying
 load、handshake 或 unexpected-disconnect failure 会在 resolve、Child WebView 或 Session 创建前开启
@@ -641,6 +643,13 @@ fallback。
 Runtime resolver。surface projection 仍不会向插件暴露 route、entry ID、revision、origin fact、resource
 URL 或 native object。Host 私有 management capability 消费这些 facts，但不改变 surface projection；
 decision history 仍不属于本次交付。
+
+App Shell 把 Host 拥有的 `home`、`search` 和 `host_page` target 映射为固定不可调整
+尺寸。只有 `plugin_page` 携带 cloned 初始逻辑尺寸、`resizable`、Page 身份和进程内
+Page-attempt 身份。Rust coordinator 对照 current Registration 校验，应用当前 work area 边界，
+通过 rollback 串行执行原生 setter，并只为同一 attempt 在内存中保留用户尺寸。
+hide/restore 保留该 attempt；真实 close、replacement、reload、disable、retry 或 reopen 都会
+创建 fresh target 并重新应用 Manifest 初始尺寸。任何尺寸都不持久化。
 
 ## 已交付的公共 Plugin SDK 与 WebView Transport
 
@@ -784,7 +793,7 @@ wire frame 或 SDK dependency。持续 Runtime resource isolation、项目模板
 
 ## 已删除的 Host Permission 与 Native Clipboard Authority
 
-Host API `0.2.0` 删除 permission catalog 与 native clipboard method。Manifest `0.2.0`、Manager
+Host API `0.2.0` 删除 permission catalog 与 native clipboard method。Manifest `0.4.0`、Manager
 record format `2`、Registration `0.3.0`、installation `0.3.0` 与 replacement `0.2.0` 不携带
 request、grant、risk 或 permission fact。Rust permission state、grant command、AppKit clipboard
 provider、frontend service、prompt、Settings mutation 与 commit 后 grant 阶段均不在 production
@@ -991,9 +1000,9 @@ icon 解析与生命周期写操作仍是独立能力。最近使用与已
 
 ### 外部插件
 
-外部插件 UI 运行在已交付的隔离 iframe 中。已交付的私有 Runtime Session 会通过受控 Host bootstrap
-认证唯一专用 Port，公共 iframe SDK 会通过私有闭合 wire 消费它；production 只开放上文三个 Host 私有
-Dispatcher method。
+外部插件 UI 运行在已交付的隔离 Child WebView 中。私有 Runtime Session 通过受控 Host
+bootstrap 认证 source-bound native bridge，公共 WebView SDK 通过私有闭合 wire 消费它；
+production 只开放 Host 私有 Dispatcher method。
 外部插件不能直接访问：
 
 - 应用 React 状态或组件实例；
@@ -1031,7 +1040,7 @@ Host API 方法保持小型、类型化、版本化，并且可以独立测试�
 ## 加载与性能
 
 - 注册元数据时不加载未激活的外部 UI。
-- 仅在对应页面打开时创建 iframe。
+- 仅在对应页面打开时创建 Child WebView。
 - 页面关闭时释放监听器、待处理调用和运行时资源。
 - 在专门 spec 被接受之前，不把后台常驻行为和 sidecar 执行纳入初始运行时。
 - 对不支持或不兼容的能力返回可诊断错误。

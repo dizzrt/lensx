@@ -31,6 +31,12 @@ const surface = read('src-tauri/src/launcher_surface.rs');
 if (!surface.includes('.get_window(MAIN_WINDOW_LABEL)') || surface.includes('get_webview_window')) {
   fail('Launcher surface sizing does not resolve the complete native Window');
 }
+if (
+  !surface.includes('assert!(app.manage(LauncherSurfaceCoordinator::default()))') ||
+  surface.includes('debug_assert!(app.manage(LauncherSurfaceCoordinator::default()))')
+) {
+  fail('Launcher surface coordinator is not installed in release builds');
+}
 
 const presentation = read('src-tauri/src/plugin_child_webview_presentation.rs');
 if (presentation.includes('get_webview_window(MAIN_WINDOW_LABEL)')) {
@@ -89,12 +95,22 @@ if (!navigationTests.includes('returns Home and restores input focus before defe
 
 const surfaceAdapter = read('src/app/launcher/surface.ts');
 const surfaceTests = read('tests/launcher-surface-desktop-adapter.test.ts');
-for (const mode of ["'home'", "'search'", "'page'"]) {
+for (const mode of ["'home'", "'search'", "'host_page'", "'plugin_page'"]) {
   if (!surfaceAdapter.includes(mode) || !surfaceTests.includes(mode)) {
     fail(`typed Launcher surface boundary omits ${mode}`);
   }
 }
-for (const forbidden of ['windowLabel', 'width', 'height', '@tauri-apps/api/window']) {
+for (const required of [
+  'page_attempt_id',
+  'initial_size',
+  'resizable',
+  'Number.isInteger(value.initial_size.width)',
+  'Number.isInteger(value.initial_size.height)',
+  'hasExactKeys(value, PLUGIN_TARGET_KEYS)',
+]) {
+  if (!surfaceAdapter.includes(required)) fail(`Launcher plugin surface validation omits ${required}`);
+}
+for (const forbidden of ['windowLabel', '@tauri-apps/api/window']) {
   if (surfaceAdapter.includes(forbidden)) fail(`Launcher surface adapter exposes ${forbidden}`);
 }
 

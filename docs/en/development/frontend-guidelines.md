@@ -144,9 +144,9 @@ Shell layout and spacing in UnoCSS utilities.
   of `ActivePage` and presentation props. Render Plugin Pages only through the
   Host-owned isolated Runtime; never expose a Tauri bridge, Host DOM, another
   plugin origin, or private Host state to plugin presentation code.
-- Derive `home`, `search`, and `page` presentation from normalized query and
-  flat `ActivePage` state; do not introduce a router or parallel Shell store for
-  the current single-page depth.
+- Derive typed `home`, `search`, `host_page`, and `plugin_page` surface targets
+  from normalized query, flat `ActivePage`, and the current trusted Page
+  resolution; do not introduce a router or parallel Shell store.
 - Keep one shared top-row geometry: render the launcher input for `home` and
   `search`, the ID-derived page context bar for `page`, and the non-interactive
   avatar placeholder in every state. Do not restore a separate product title or
@@ -184,13 +184,20 @@ Shell layout and spacing in UnoCSS utilities.
   context, collection empty states, and Action tiles must not become persistent
   cards; reserve fill colors for transient hover, focus, selected, or pending
   states.
-- Send those presentation states through the typed launcher-surface adapter so
-  Rust selects the fixed 320px, 480px, or 600px height. Components must not
-  measure DOM content, collection length, or result count to submit arbitrary
-  native dimensions.
+- Send those tagged targets through the typed launcher-surface adapter. Home,
+  Search, and Host Pages remain fixed `650×320`, `650×480`, and `650×600`.
+  A plugin target may carry only validated Manifest initial logical size,
+  `resizable`, Page identity, and Page-attempt identity. Components and plugin
+  messages must not use DOM content, collection length, result count, or
+  arbitrary dimensions as native Window input.
 - Grant `core:window:allow-start-dragging` only in the capability scoped to the
   `main` window. Do not grant position, resize, maximize, or other unrelated
   native window permissions for this interaction.
+- For resizable plugin layouts, use `min-height: 0` through the flex chain and
+  let one content region absorb viewport changes. Keep essential controls in a
+  semantic bounded footer, keep diagnostics scrollable, and use
+  `ResizeObserver` only to lay out the existing editor rather than recreate its
+  model, Worker, or Runtime.
 
 ## Launcher Actions And Collections
 

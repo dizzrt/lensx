@@ -54,6 +54,11 @@ const executeInvocation = async (
       plugin_id: validated.inspection.manifest.plugin_id,
       version: validated.inspection.manifest.version,
       runtime_kind: validated.inspection.manifest.runtime.kind,
+      page_presentations: validated.inspection.manifest.contributes.pages.map(({ id, presentation }) => ({
+        page_id: id,
+        initial_size: presentation.initial_size,
+        resizable: presentation.resizable,
+      })),
       package_protocol: validated.inspection.facts.packageFormatVersion,
       compatibility: validated.inspection.compatibility,
       file_count: validated.inspection.facts.fileCount,

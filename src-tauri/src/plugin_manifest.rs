@@ -104,6 +104,21 @@ pub struct PageInput {
     pub route: String,
     pub parent_page_id: Option<String>,
     pub icon: Option<AssetInput>,
+    pub presentation: Option<PagePresentationInput>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PagePresentationInput {
+    pub initial_size: LogicalSizeInput,
+    pub resizable: bool,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LogicalSizeInput {
+    pub width: u32,
+    pub height: u32,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -232,6 +247,21 @@ pub struct NormalizedPluginPage {
     pub parent_page_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon: Option<NormalizedAsset>,
+    pub presentation: NormalizedPagePresentation,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct NormalizedPagePresentation {
+    pub initial_size: NormalizedLogicalSize,
+    pub resizable: bool,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct NormalizedLogicalSize {
+    pub width: u32,
+    pub height: u32,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
@@ -386,6 +416,9 @@ fn map_schema_diagnostics(value: &Value) -> Vec<PluginManifestDiagnostic> {
             ValidationErrorKind::MinLength { .. } | ValidationErrorKind::MinItems { .. } => {
                 diagnostics.push(diagnostic("invalid_length", path, message));
             }
+            ValidationErrorKind::Minimum { .. } | ValidationErrorKind::Maximum { .. } => {
+                diagnostics.push(diagnostic("invalid_range", path, message));
+            }
             _ => diagnostics.push(diagnostic("schema_validation", path, message)),
         }
     }
@@ -457,6 +490,22 @@ fn normalize_manifest(input: PluginManifestInput) -> NormalizedPluginManifest {
                     route: page.route.trim().to_owned(),
                     parent_page_id: page.parent_page_id.map(|value| value.trim().to_owned()),
                     icon: page.icon.map(normalize_asset),
+                    presentation: page.presentation.map_or_else(
+                        || NormalizedPagePresentation {
+                            initial_size: NormalizedLogicalSize {
+                                width: 650,
+                                height: 600,
+                            },
+                            resizable: false,
+                        },
+                        |presentation| NormalizedPagePresentation {
+                            initial_size: NormalizedLogicalSize {
+                                width: presentation.initial_size.width,
+                                height: presentation.initial_size.height,
+                            },
+                            resizable: presentation.resizable,
+                        },
+                    ),
                 })
                 .collect(),
             actions: input
@@ -846,7 +895,10 @@ fn legacy_protocol_diagnostics(value: &Value) -> Vec<PluginManifestDiagnostic> {
         .is_some_and(|version| {
             let mut parts = version.split('.');
             parts.next() == Some("0")
-                && parts.next() == Some("2")
+                && parts
+                    .next()
+                    .and_then(|minor| minor.parse::<u8>().ok())
+                    .is_some_and(|minor| minor <= 3)
                 && parts.next().is_some_and(|patch| {
                     !patch.is_empty() && patch.bytes().all(|byte| byte.is_ascii_digit())
                 })

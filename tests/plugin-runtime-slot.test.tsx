@@ -11,6 +11,10 @@ import {
   type PluginPageRuntimeResolver,
   PluginRuntimeSlot,
 } from '../src/app/plugins/runtime';
+import {
+  createLatestPluginChildWebviewSlotUpdateQueue,
+  type PluginChildWebviewSlotUpdate,
+} from '../src/app/plugins/runtime/pluginChildWebviewSlot';
 
 const activePage: ActivePage = {
   owner_id: 'com.acme.workspace',
@@ -62,9 +66,10 @@ const renderSlot = (options: {
   readonly resolve?: ReturnType<typeof rs.fn>;
   readonly subscribeInvalidation?: (listener: () => void) => () => void;
   readonly strict?: boolean;
+  readonly updateSlot?: ReturnType<typeof rs.fn>;
 }) => {
   const create = options.create ?? rs.fn(async () => ({ attemptId: 'attempt_0123456789abcdef' as const }));
-  const updateSlot = rs.fn(async () => undefined);
+  const updateSlot = options.updateSlot ?? rs.fn(async () => undefined);
   const readReadiness = rs.fn(async () => ({ status: 'ready' as const }));
   const waitReadiness = options.waitReadiness ?? rs.fn(async () => ({ status: 'ready' as const }));
   const setVisible = rs.fn(async () => undefined);
@@ -177,9 +182,63 @@ describe('PluginRuntimeSlot', () => {
         ),
       );
       expect(view.create).toHaveBeenCalledTimes(1);
+      const callsBeforeUnmount = view.updateSlot.mock.calls.length;
+      view.unmount();
+      fireEvent(window, new Event('resize'));
+      expect(view.updateSlot).toHaveBeenCalledTimes(callsBeforeUnmount);
     } finally {
       if (originalScale) Object.defineProperty(window, 'devicePixelRatio', originalScale);
     }
+  });
+
+  test('coalesces a resize burst while preserving the latest revision and serial order', async () => {
+    let releaseFirst: (() => void) | undefined;
+    const sent: bigint[] = [];
+    const send = rs.fn(async (update: PluginChildWebviewSlotUpdate) => {
+      sent.push(update.presentationRevision);
+      if (update.presentationRevision === 2n) {
+        await new Promise<void>((resolve) => {
+          releaseFirst = resolve;
+        });
+      }
+    });
+    const onFailure = rs.fn();
+    const queue = createLatestPluginChildWebviewSlotUpdateQueue(send, onFailure);
+    const update = (presentationRevision: bigint): PluginChildWebviewSlotUpdate => ({
+      attemptId: 'attempt_0123456789abcdef',
+      scaleFactor: 2,
+      physicalBounds: { x: 20, y: 40, width: 600, height: 400 },
+      presentationRevision,
+    });
+
+    queue.enqueue(update(2n));
+    queue.enqueue(update(3n));
+    queue.enqueue(update(4n));
+    await waitFor(() => expect(sent).toEqual([2n]));
+    releaseFirst?.();
+    await queue.drain();
+    expect(sent).toEqual([2n, 4n]);
+    expect(onFailure).not.toHaveBeenCalled();
+  });
+
+  test('fails a queued update once and makes later stale observations inert', async () => {
+    const onFailure = rs.fn();
+    const send = rs.fn(async () => {
+      throw new Error('private native failure');
+    });
+    const queue = createLatestPluginChildWebviewSlotUpdateQueue(send, onFailure);
+    const update: PluginChildWebviewSlotUpdate = {
+      attemptId: 'attempt_0123456789abcdef',
+      scaleFactor: 1,
+      physicalBounds: { x: 10, y: 20, width: 300, height: 200 },
+      presentationRevision: 2n,
+    };
+    queue.enqueue(update);
+    await queue.drain();
+    queue.enqueue({ ...update, presentationRevision: 3n });
+    await queue.drain();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(onFailure).toHaveBeenCalledTimes(1);
   });
 
   test('destroys the native view before exposing terminal Host feedback', async () => {

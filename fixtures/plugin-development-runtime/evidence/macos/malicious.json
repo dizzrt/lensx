@@ -5,14 +5,14 @@
   "engine": "wkwebview",
   "fixture": "malicious",
   "protocol": {
-    "manifest_version": "0.3.0",
+    "manifest_version": "0.4.0",
     "runtime_kind": "webview",
     "bridge_contract_version": "0.2.0",
     "host_api_version": "0.2.0"
   },
   "source_package": {
     "file": "fixtures/plugin-webview-runtime/malicious/runtime-adversarial.lxp",
-    "sha256": "b5bcd2fa6b3ffc5874aad840a986d1e4317f9c2d7f45c30ce1aa339178c93512"
+    "sha256": "390abcd95f343033da60128aad2551db3b2d2351291902d22669613a5a9a2aba"
   },
   "production_child_webview_evidence": {
     "acl": {

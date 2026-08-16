@@ -5,14 +5,14 @@
   "engine": "wkwebview",
   "fixture": "normal",
   "protocol": {
-    "manifest_version": "0.3.0",
+    "manifest_version": "0.4.0",
     "runtime_kind": "webview",
     "bridge_contract_version": "0.2.0",
     "host_api_version": "0.2.0"
   },
   "source_package": {
     "file": "fixtures/plugin-webview-runtime/normal/runtime-compatible.lxp",
-    "sha256": "a551c9602c139bbbb58a5a854786a45decf8a074aa2cc93bb9208962eb34bec0"
+    "sha256": "7e8970c476209fd52afdd50ac2d56348c3bd2e051946da4b3e2d29d8e82df808"
   },
   "production_child_webview_evidence": {
     "acl": {

@@ -63,13 +63,29 @@ the `lensx-plugin` bin from authoring workflows but must not import
 
 ## Manifest, Page, And Action
 
-Each template has a distinct plugin ID and a Contract-valid Manifest `0.3.0` with one
+Each template has a distinct plugin ID and a Contract-valid Manifest `0.4.0` with one
 WebView Runtime entry, one Page, and one Action targeting that Page. Both
 request no permissions. The Action is projected by the Host into the shared
 Launcher Action Registry; activating it opens the projected Page. The Host
 then resolves the current registered entry and resource generation. React only
 requests one native Child WebView presentation using that safe identity; native
 code independently resolves the current document target.
+
+Template Pages omit `presentation`, so normalization produces a fixed
+`650×600` Page. Authors may opt a Page into a bounded initial logical size and
+user resizing:
+
+```json
+"presentation": {
+  "initial_size": { "width": 800, "height": 600 },
+  "resizable": true
+}
+```
+
+This is declarative metadata, not a Runtime resize API. The Host fits it to the
+current work area; hide/restore retains the current same-attempt size, while a
+real close/reopen resets to the declared initial size. The first version never
+persists user size.
 
 When adapting a template, keep Page and Action IDs consistent, keep the Action
 target valid, and include every Manifest resource in `dist/`. Adding a

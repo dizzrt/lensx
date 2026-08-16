@@ -41,7 +41,7 @@ const evidenceFor = (fixture: Fixture): Record<string, unknown> => {
     engine: 'wkwebview',
     fixture,
     protocol: {
-      manifest_version: '0.3.0',
+      manifest_version: '0.4.0',
       runtime_kind: 'webview',
       bridge_contract_version: '0.2.0',
       host_api_version: '0.2.0',

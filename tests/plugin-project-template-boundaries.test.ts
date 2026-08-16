@@ -18,6 +18,7 @@ const fixtureNames = [
   'private-packer-import',
   'missing-lifecycle',
   'legacy-iframe-runtime',
+  'native-window-authority',
 ] as const;
 
 describe('plugin project template public boundary fixtures', () => {

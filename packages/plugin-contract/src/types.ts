@@ -7,7 +7,9 @@ import type {
   Launcher,
   LocalizedKeywords,
   LocalizedText,
+  LogicalSize,
   Page,
+  PagePresentation,
   PluginManifestInput,
   Publisher,
   Runtime,
@@ -72,12 +74,23 @@ export interface NormalizedRuntime extends Runtime {
   readonly entry: string;
 }
 
-export interface NormalizedPluginPage extends Omit<Page, 'title' | 'icon'> {
+export interface NormalizedLogicalSize extends LogicalSize {
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface NormalizedPagePresentation extends Omit<PagePresentation, 'initial_size'> {
+  readonly initial_size: NormalizedLogicalSize;
+  readonly resizable: boolean;
+}
+
+export interface NormalizedPluginPage extends Omit<Page, 'title' | 'icon' | 'presentation'> {
   readonly id: string;
   readonly title: NormalizedLocalizedText;
   readonly route: string;
   readonly parent_page_id?: string;
   readonly icon?: NormalizedAsset;
+  readonly presentation: NormalizedPagePresentation;
 }
 
 export interface NormalizedLocalizedKeywords extends Omit<LocalizedKeywords, 'en-US' | 'zh-CN'> {
@@ -110,7 +123,7 @@ export interface NormalizedContributes extends Omit<Contributes, 'pages' | 'acti
 
 export interface NormalizedPluginManifest
   extends Omit<PluginManifestInput, 'display' | 'publisher' | 'compatibility' | 'runtime' | 'contributes'> {
-  readonly manifest_version: '0.3.0';
+  readonly manifest_version: '0.4.0';
   readonly plugin_id: string;
   readonly version: string;
   readonly display: NormalizedPluginDisplay;

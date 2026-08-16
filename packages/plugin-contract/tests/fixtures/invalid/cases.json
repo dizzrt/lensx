@@ -1,5 +1,131 @@
 [
   {
+    "name": "presentation width must be an integer",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/pages/0/presentation/initial_size/width",
+        "value": 800.5
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "invalid_type",
+        "path": "/contributes/pages/0/presentation/initial_size/width"
+      }
+    ]
+  },
+  {
+    "name": "presentation height rejects null",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/pages/0/presentation/initial_size/height",
+        "value": null
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "invalid_type",
+        "path": "/contributes/pages/0/presentation/initial_size/height"
+      }
+    ]
+  },
+  {
+    "name": "presentation requires initial size",
+    "mutations": [
+      {
+        "op": "remove",
+        "path": "/contributes/pages/0/presentation/initial_size"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "missing_field",
+        "path": "/contributes/pages/0/presentation/initial_size"
+      }
+    ]
+  },
+  {
+    "name": "presentation requires resizable",
+    "mutations": [
+      {
+        "op": "remove",
+        "path": "/contributes/pages/0/presentation/resizable"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "missing_field",
+        "path": "/contributes/pages/0/presentation/resizable"
+      }
+    ]
+  },
+  {
+    "name": "presentation rejects unknown field",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/pages/0/presentation/remember_size",
+        "value": true
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "unknown_field",
+        "path": "/contributes/pages/0/presentation/remember_size"
+      }
+    ]
+  },
+  {
+    "name": "presentation rejects native monitor field",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/pages/0/presentation/monitor",
+        "value": "primary"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "unknown_field",
+        "path": "/contributes/pages/0/presentation/monitor"
+      }
+    ]
+  },
+  {
+    "name": "presentation width is below hard minimum",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/pages/0/presentation/initial_size/width",
+        "value": 319
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "invalid_range",
+        "path": "/contributes/pages/0/presentation/initial_size/width"
+      }
+    ]
+  },
+  {
+    "name": "presentation height is above declared maximum",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/pages/0/presentation/initial_size/height",
+        "value": 4097
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "invalid_range",
+        "path": "/contributes/pages/0/presentation/initial_size/height"
+      }
+    ]
+  },
+  {
     "name": "unknown top-level field",
     "mutations": [
       {
@@ -32,12 +158,12 @@
     ]
   },
   {
-    "name": "old Manifest version is rejected",
+    "name": "unsupported future Manifest version is rejected",
     "mutations": [
       {
         "op": "set",
         "path": "/manifest_version",
-        "value": "0.1.0"
+        "value": "0.5.0"
       }
     ],
     "expected_diagnostics": [

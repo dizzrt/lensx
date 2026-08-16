@@ -55,8 +55,14 @@ const validateLifecycleAttempt = (value: unknown, label: string): void => {
 
 const launcherLifecycleKeys = [
   'home_650x320',
-  'page_650x600',
+  'page_800x600',
+  'page_resizable',
+  'user_resize_1000x720',
+  'same_user_size_restored',
   'close_home_650x320_before_teardown',
+  'close_home_non_resizable',
+  'reopen_initial_800x600',
+  'user_size_not_persisted',
   'cmd_w_native_window_hidden',
   'cmd_w_process_alive',
   'focus_loss_native_window_hidden',
@@ -163,7 +169,12 @@ const committed = {
 };
 validateSources(committed);
 const launcherLifecyclePath = 'fixtures/official-config-lens/evidence/macos/launcher-lifecycle.json';
-validateLauncherLifecycle(readJson(launcherLifecyclePath), 'committed ConfigLens Launcher lifecycle');
+const runRequested = process.argv.includes('--run');
+const updateColdOpen = process.argv.includes('--update-cold-open');
+const updateLauncherLifecycle = process.argv.includes('--update-launcher-lifecycle');
+if (!updateLauncherLifecycle) {
+  validateLauncherLifecycle(readJson(launcherLifecyclePath), 'committed ConfigLens Launcher lifecycle');
+}
 
 const matrix = readJson('fixtures/plugin-child-webview-evidence-matrix/macos.json');
 if (matrix.evidence_version !== '0.1.0' || matrix.platform !== 'macos' || matrix.engine !== 'wkwebview') {
@@ -223,9 +234,6 @@ for (const index of ['docs/en/index.md', 'docs/zh/index.md']) {
 }
 
 const coldPath = 'fixtures/official-config-lens/evidence/macos/cold-open.json';
-const runRequested = process.argv.includes('--run');
-const updateColdOpen = process.argv.includes('--update-cold-open');
-const updateLauncherLifecycle = process.argv.includes('--update-launcher-lifecycle');
 if (updateColdOpen && !runRequested) {
   throw new Error('Child WebView macOS evidence failed: --update-cold-open requires --run.');
 }

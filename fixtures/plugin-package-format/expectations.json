@@ -6,7 +6,7 @@
     "expected": {
       "status": "compatible",
       "manifest": {
-        "manifest_version": "0.3.0",
+        "manifest_version": "0.4.0",
         "plugin_id": "com.acme.workspace",
         "version": "1.2.0",
         "display": {
@@ -54,6 +54,13 @@
               "icon": {
                 "kind": "asset",
                 "path": "assets/home.svg"
+              },
+              "presentation": {
+                "initial_size": {
+                  "width": 800,
+                  "height": 600
+                },
+                "resizable": true
               }
             },
             {
@@ -63,7 +70,14 @@
                 "zh-CN": "打开项目"
               },
               "route": "/open-project",
-              "parent_page_id": "home"
+              "parent_page_id": "home",
+              "presentation": {
+                "initial_size": {
+                  "width": 650,
+                  "height": 600
+                },
+                "resizable": false
+              }
             }
           ],
           "actions": [
@@ -104,20 +118,20 @@
       },
       "facts": {
         "packageFormatVersion": "0.1.0",
-        "compressedSize": 1091,
+        "compressedSize": 1132,
         "decompressedSize": 7680,
         "fileCount": 5,
         "files": [
           {
             "path": "manifest.json",
-            "size": 1334,
-            "sha256": "b54b156bc74ea275a25354818de1147afd898d3bb0cb678e2018f38d6478c4ad",
+            "size": 1410,
+            "sha256": "95bc28971de0417c79517fc844d35162e1bf3a87b4f8dc7b15e14def75bb1f5c",
             "checksumCovered": true
           },
           {
             "path": "checksums.json",
             "size": 525,
-            "sha256": "ad3fa34098bde30fb4c76c2e4a4ab814fe2d3c0dc45fde2a73c22fecf4afe547",
+            "sha256": "1a85565f0803337d108cfca8e3330438a2236d3b2ce920bfc3476f788c13fd8b",
             "checksumCovered": false
           },
           {
@@ -141,7 +155,7 @@
         ],
         "packageDigest": {
           "algorithm": "sha256",
-          "value": "e614019138a0f422fffe3d5c20f53038815410439ddcddc07caf2cb26a07fa73"
+          "value": "11b0bd015d1b4e9a919433f9626f33347222843629be50e155b49b5b4c7975d4"
         }
       },
       "diagnostics": []
@@ -154,7 +168,7 @@
     "expected": {
       "status": "compatible",
       "manifest": {
-        "manifest_version": "0.3.0",
+        "manifest_version": "0.4.0",
         "plugin_id": "com.acme.workspace",
         "version": "1.2.0",
         "display": {
@@ -202,6 +216,13 @@
               "icon": {
                 "kind": "asset",
                 "path": "assets/home.svg"
+              },
+              "presentation": {
+                "initial_size": {
+                  "width": 800,
+                  "height": 600
+                },
+                "resizable": true
               }
             },
             {
@@ -211,7 +232,14 @@
                 "zh-CN": "打开项目"
               },
               "route": "/open-project",
-              "parent_page_id": "home"
+              "parent_page_id": "home",
+              "presentation": {
+                "initial_size": {
+                  "width": 650,
+                  "height": 600
+                },
+                "resizable": false
+              }
             }
           ],
           "actions": [
@@ -252,20 +280,20 @@
       },
       "facts": {
         "packageFormatVersion": "0.1.0",
-        "compressedSize": 1091,
+        "compressedSize": 1132,
         "decompressedSize": 7680,
         "fileCount": 5,
         "files": [
           {
             "path": "manifest.json",
-            "size": 1334,
-            "sha256": "b54b156bc74ea275a25354818de1147afd898d3bb0cb678e2018f38d6478c4ad",
+            "size": 1410,
+            "sha256": "95bc28971de0417c79517fc844d35162e1bf3a87b4f8dc7b15e14def75bb1f5c",
             "checksumCovered": true
           },
           {
             "path": "checksums.json",
             "size": 525,
-            "sha256": "ad3fa34098bde30fb4c76c2e4a4ab814fe2d3c0dc45fde2a73c22fecf4afe547",
+            "sha256": "1a85565f0803337d108cfca8e3330438a2236d3b2ce920bfc3476f788c13fd8b",
             "checksumCovered": false
           },
           {
@@ -289,7 +317,7 @@
         ],
         "packageDigest": {
           "algorithm": "sha256",
-          "value": "e614019138a0f422fffe3d5c20f53038815410439ddcddc07caf2cb26a07fa73"
+          "value": "11b0bd015d1b4e9a919433f9626f33347222843629be50e155b49b5b4c7975d4"
         }
       },
       "diagnostics": []
@@ -302,7 +330,7 @@
     "expected": {
       "status": "incompatible",
       "manifest": {
-        "manifest_version": "0.3.0",
+        "manifest_version": "0.4.0",
         "plugin_id": "com.acme.workspace",
         "version": "1.2.0",
         "display": {
@@ -350,6 +378,13 @@
               "icon": {
                 "kind": "asset",
                 "path": "assets/home.svg"
+              },
+              "presentation": {
+                "initial_size": {
+                  "width": 800,
+                  "height": 600
+                },
+                "resizable": true
               }
             },
             {
@@ -359,7 +394,14 @@
                 "zh-CN": "打开项目"
               },
               "route": "/open-project",
-              "parent_page_id": "home"
+              "parent_page_id": "home",
+              "presentation": {
+                "initial_size": {
+                  "width": 650,
+                  "height": 600
+                },
+                "resizable": false
+              }
             }
           ],
           "actions": [
@@ -400,20 +442,20 @@
       },
       "facts": {
         "packageFormatVersion": "0.1.0",
-        "compressedSize": 1086,
+        "compressedSize": 1129,
         "decompressedSize": 7680,
         "fileCount": 5,
         "files": [
           {
             "path": "manifest.json",
-            "size": 1334,
-            "sha256": "2957c09a0db5ba84fa0d987cb0e6197a26304d7774ce5246b46eea11f2a6c913",
+            "size": 1410,
+            "sha256": "ebbd4929ecb44f41ca9b3dc6735d6a1cdd58efb3f6a3cc1941f4fb8c18273942",
             "checksumCovered": true
           },
           {
             "path": "checksums.json",
             "size": 525,
-            "sha256": "1e0b1350c4b64a31c5418547786afaaec2f2c3975c56b2106bff6244f28d20a4",
+            "sha256": "4f3c05878d2f71027ecdc77fed21a49e520a3b80e65a5ea493073580b1ff4703",
             "checksumCovered": false
           },
           {
@@ -437,7 +479,7 @@
         ],
         "packageDigest": {
           "algorithm": "sha256",
-          "value": "1056eed509a3cc5914914f9a3e78dfb2f2bb87d047fe450c36ca1cdb7c06ff02"
+          "value": "28b732e4e37c74c0e5691926ce9617f61e6865094fb3b63ef6e6c0428ca08ffd"
         }
       },
       "diagnostics": []
@@ -451,20 +493,20 @@
       "status": "incompatible",
       "facts": {
         "packageFormatVersion": "0.1.0",
-        "compressedSize": 1084,
+        "compressedSize": 1126,
         "decompressedSize": 7680,
         "fileCount": 5,
         "files": [
           {
             "path": "manifest.json",
-            "size": 1333,
-            "sha256": "c73c428ca67f266b31d658c38d6ba6cb4f7868db9ad370dcd1107bfee8df2f0a",
+            "size": 1409,
+            "sha256": "e3cfbf3c21f13b0727e8a42afbfa7728e2b557d40689e9d880dfc02cfc7782f4",
             "checksumCovered": true
           },
           {
             "path": "checksums.json",
             "size": 525,
-            "sha256": "0c958294fb59e1704c3a5b3078e7bc5b75cece34abb75c8505384bad3be671bf",
+            "sha256": "b33dee3e02bc612513b8af6f7fe91d59fe96b3b153c8ac2ebb64beec241d2d62",
             "checksumCovered": false
           },
           {
@@ -488,7 +530,7 @@
         ],
         "packageDigest": {
           "algorithm": "sha256",
-          "value": "bb90222ff44d5aad2ee27daa978b93b1e110e032e053bafb9649ac95eee0ed8c"
+          "value": "486557fa99ed764f2f716a6cfe3c7be6e9c3fccf70eb9e25f4faa5e660ab60ac"
         }
       },
       "diagnostics": [
@@ -500,6 +542,63 @@
         {
           "code": "manifest_incompatible",
           "path": "/runtime/kind",
+          "message": "The plugin Manifest protocol is incompatible."
+        }
+      ]
+    }
+  },
+  {
+    "name": "legacy-webview-manifest",
+    "category": "incompatible",
+    "file": "incompatible/legacy-webview-manifest.lxp",
+    "expected": {
+      "status": "incompatible",
+      "facts": {
+        "packageFormatVersion": "0.1.0",
+        "compressedSize": 1130,
+        "decompressedSize": 7680,
+        "fileCount": 5,
+        "files": [
+          {
+            "path": "manifest.json",
+            "size": 1410,
+            "sha256": "b00ce25f6dbf323df41674cb84d887ca014b6c865115dd2197c505dc6df042bb",
+            "checksumCovered": true
+          },
+          {
+            "path": "checksums.json",
+            "size": 525,
+            "sha256": "387b7ff8f96e47f633823fe4b04f58f4460c82694730ea8a679aa9df4b715a44",
+            "checksumCovered": false
+          },
+          {
+            "path": "assets/home.svg",
+            "size": 18,
+            "sha256": "8289355179e04b91e22fb941db5a2ea37c8e468fed25e45d2654022d58a43353",
+            "checksumCovered": true
+          },
+          {
+            "path": "assets/plugin-icon.svg",
+            "size": 6,
+            "sha256": "d4dc56669143034f31aa309635d4113d9ad76a02b1739da22c965ed2049be9e6",
+            "checksumCovered": true
+          },
+          {
+            "path": "dist/plugin.html",
+            "size": 36,
+            "sha256": "049ac6ed12934a00f4c12f2e97d71bceefa78e95378169ddc574c75f9bf01321",
+            "checksumCovered": true
+          }
+        ],
+        "packageDigest": {
+          "algorithm": "sha256",
+          "value": "3f5fd50de74715131e042b1b6d5cf04d0a899cf06133ebce09962fa3c158f986"
+        }
+      },
+      "diagnostics": [
+        {
+          "code": "manifest_incompatible",
+          "path": "/manifest_version",
           "message": "The plugin Manifest protocol is incompatible."
         }
       ]
@@ -585,6 +684,26 @@
         {
           "code": "manifest_invalid",
           "path": "/source",
+          "message": "The plugin Manifest is invalid."
+        }
+      ]
+    }
+  },
+  {
+    "name": "native-presentation-fields",
+    "category": "invalid",
+    "file": "invalid/native-presentation-fields.lxp",
+    "expected": {
+      "status": "invalid",
+      "diagnostics": [
+        {
+          "code": "manifest_invalid",
+          "path": "/contributes/pages/0/presentation/monitor",
+          "message": "The plugin Manifest is invalid."
+        },
+        {
+          "code": "manifest_invalid",
+          "path": "/contributes/pages/0/presentation/native_label",
           "message": "The plugin Manifest is invalid."
         }
       ]

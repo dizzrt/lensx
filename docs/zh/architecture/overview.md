@@ -84,7 +84,8 @@ locale，并比较完整叶子 key 集合。已确认的 locale 通过 Rust 偏�
 主题，并提供窗口重新加载操作，但不展示异常细节。事件处理器和异步错误需要显式错误状态，不属于此
 渲染错误边界的捕获范围。
 
-App Shell 根据本地 `activePage` 和规范化查询推导三种呈现状态。三种状态共享同一顶部行和非交互
+App Shell 根据本地 `activePage`、已解析 provider 和规范化查询推导 `home`、`search`、
+`host_page` 或绑定身份的 `plugin_page` surface target。所有 target 共享同一顶部行和非交互
 avatar 占位。`home` 保留 launcher 输入，并依次从已接受的 Action 集合渲染“最近使用”和“已固定”；
 它不会用 registry 顺序或模拟数据补齐。“已固定”旁的本地化“全部”只是非交互占位。`search` 保留
 同一输入，并在单一四列网格中显示最多八个真实启用的 Action 结果。`page` 用本地化的“所属方 / Action”
@@ -93,13 +94,15 @@ avatar 占位。`home` 保留 launcher 输入，并依次从已接受的 Action 
 
 ## Launcher 窗口生命周期
 
-Tauri 中带有稳定 `main` 标签的 webview 窗口被配置为紧凑的 launcher 承载面。窗口固定宽度为
-650px，初始高度为 320px、最小高度为 180px、最大高度为 800px。窗口透明、保持置顶、无系统边框、
-不可由用户调整大小且非全屏。
+Tauri 中带稳定 `main` 标签的 Window 以 `650×320` 逻辑像素启动，保持透明、置顶、
+无系统边框、不可调大小且非全屏，硬边界为 `320×180..4096×4096`。Home、Search 和
+Host Page 分别固定为 `650×320`、`650×480` 和 `650×600`，均不可调整。
 
-Host 通过类型化 Rust command 把 App Shell 呈现状态映射到固定逻辑高度：`home` 使用 320px、
-`search` 使用 480px、`page` 使用 600px。这样公共内容区保持可见，同时不会测量 DOM 内容或根据
-集合或搜索结果数量改变高度；前端也不能提交任意尺寸。
+Manifest `0.4.0` 为每个规范化 plugin Page 提供有界 `presentation`。省略时为固定
+`650×600`；显式值提供初始逻辑尺寸，并可允许用户通过系统边缘/角落调整。React
+只发送带 Page 和 Page-attempt 身份的严格 tagged target；Rust 会对照 current Registration
+复验，按当前 monitor work area 拟合尺寸和约束，并通过唯一可 rollback coordinator
+执行转换。plugin message、DOM 测量、结果数量或 Runtime API 都不能选择原生 Window 呈现。
 
 Rust 通过单一动作边界拥有全部 launcher 原生窗口操作：
 

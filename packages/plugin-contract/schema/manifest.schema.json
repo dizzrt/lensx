@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://lensx.app/schemas/plugin/manifest-0.3.0.schema.json",
-  "title": "lensX Plugin Manifest 0.3.0",
+  "$id": "https://lensx.app/schemas/plugin/manifest-0.4.0.schema.json",
+  "title": "lensX Plugin Manifest 0.4.0",
   "description": "Author-controlled static manifest input for an external lensX plugin.",
   "type": "object",
   "additionalProperties": false,
@@ -17,7 +17,7 @@
   ],
   "properties": {
     "manifest_version": {
-      "const": "0.3.0"
+      "const": "0.4.0"
     },
     "plugin_id": {
       "$ref": "#/$defs/pluginId"
@@ -197,6 +197,36 @@
         }
       }
     },
+    "logicalSize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 320,
+          "maximum": 4096
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 180,
+          "maximum": 4096
+        }
+      }
+    },
+    "pagePresentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["initial_size", "resizable"],
+      "properties": {
+        "initial_size": {
+          "$ref": "#/$defs/logicalSize"
+        },
+        "resizable": {
+          "type": "boolean"
+        }
+      }
+    },
     "page": {
       "type": "object",
       "additionalProperties": false,
@@ -216,6 +246,9 @@
         },
         "icon": {
           "$ref": "#/$defs/asset"
+        },
+        "presentation": {
+          "$ref": "#/$defs/pagePresentation"
         }
       }
     },

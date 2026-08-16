@@ -15,7 +15,7 @@ export type InternalRoute = string;
  * Author-controlled static manifest input for an external lensX plugin.
  */
 export interface PluginManifestInput {
-  manifest_version: '0.3.0';
+  manifest_version: '0.4.0';
   plugin_id: PluginId;
   version: Semver;
   display: Display;
@@ -68,6 +68,15 @@ export interface Page {
   route: InternalRoute;
   parent_page_id?: LocalId;
   icon?: Asset;
+  presentation?: PagePresentation;
+}
+export interface PagePresentation {
+  initial_size: LogicalSize;
+  resizable: boolean;
+}
+export interface LogicalSize {
+  width: number;
+  height: number;
 }
 export interface Action {
   id: LocalId;

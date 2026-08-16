@@ -8,7 +8,7 @@ Track these dimensions independently:
 | --- | --- | --- |
 | Contract/UI/Testkit packages | `0.2.0` | Public semantic contracts, UI, and test helpers. |
 | SDK package | `0.3.0` | Root semantic client plus the `/webview` production transport. |
-| Manifest protocol | `0.3.0` | Author input and normalized WebView Manifest wire contract. |
+| Manifest protocol | `0.4.0` | Author input and normalized WebView Manifest wire contract. |
 | Host API protocol | `0.2.0` | Semantic methods, results, events, errors, and context. |
 | Private bridge carrier | `0.2.0` | Closed Host/native-to-plugin transport frames; not a Host API. |
 | lensX application | `0.1.0` | Host compatibility range checked by the Manifest. |
@@ -41,7 +41,7 @@ Host API method errors are listed in [Host API](host-api.md#stable-errors).
 SDK lifecycle errors cover cancellation, timeout, transport failure,
 disconnection, disposal, invalid context, and incompatible Host API.
 
-Legacy Manifest `0.2.x` packages declaring `runtime.kind: "iframe"` are a
+Manifest `0.3.x` and older packages, including legacy iframe packages, are a
 migration-only incompatibility case. The Host and CLI do not rewrite them and
 there is no fallback Runtime; rebuild from a current template and migrate to
 `@lensx/plugin-sdk/webview`.

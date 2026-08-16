@@ -1,5 +1,22 @@
 [
   {
+    "name": "legacy 0.3 webview protocol is incompatible without alias",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/manifest_version",
+        "value": "0.3.0"
+      }
+    ],
+    "expected_status": "incompatible",
+    "expected_diagnostics": [
+      {
+        "code": "incompatible_protocol",
+        "path": "/manifest_version"
+      }
+    ]
+  },
+  {
     "name": "legacy 0.2 iframe protocol is incompatible without rewrite",
     "mutations": [
       {

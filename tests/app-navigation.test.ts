@@ -23,6 +23,10 @@ const pluginBatch = (available = true, title = 'Notes'): PageProviderBatch => ({
       page_id: 'home',
       title: { 'en-US': title },
       route: '/notes',
+      presentation: {
+        initial_size: { width: 650, height: 600 },
+        resizable: false,
+      },
       available,
     },
   ],

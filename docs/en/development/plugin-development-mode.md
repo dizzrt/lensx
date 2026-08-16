@@ -116,7 +116,7 @@ stops setup rather than exposing a partial initial projection.
 
 Errors are stable and pathless. `invalid` means the payload is incomplete or
 violates directory rules; `incompatible` means its declared ranges exclude the
-current Host or it uses the legacy Manifest `0.2.x`/iframe Runtime protocol;
+current Host or it uses Manifest `0.3.x` or an older/iframe Runtime protocol;
 `source_changed` means files changed during capture; `conflict`
 means the displayed revision is stale; `unsafe_state` means Host ownership
 could not be proven. `cleanup_pending` means authority changed successfully but
@@ -152,7 +152,9 @@ Use a fresh lensX process and keep its terminal open throughout this sequence.
    **Reload from directory**. The current entry must become version `0.2.0` and
    generation B. No permission/grant state may appear, and the refreshed page
    must use the same open isolated Runtime profile. The Launcher action must change to **Open development-mode smoke
-   B**.
+   B**. Reload is a real replacement: it creates a fresh Page attempt and
+   reapplies that generation's Manifest initial presentation. A rejected reload
+   leaves the current attempt and any transient user-resized size unchanged.
 6. Choose **Remove development entry** and confirm. The entry and its Launcher
    action must disappear, and any open plugin Page must terminate. The result
    must state that plugin data and Launcher collections were retained.
@@ -183,4 +185,7 @@ pnpm run check:plugin-development-mode
 
 The gate covers build exclusion, contracts, directory corpus, Rust transactions,
 Resource/Runtime invalidation, frontend convergence, accessibility, bilingual
-messages and docs, fixed-viewport visual evidence, and production artifacts.
+messages and docs, presentation reset/retention behavior, visual evidence, and
+production artifacts. Development entries use the same work-area-aware native
+coordinator as installed plugins; no author-selected or user-resized size is
+persisted across replacement, process restart, or rediscovery.

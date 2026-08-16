@@ -1,0 +1,17 @@
+{
+  "input": {
+    "kind": "framework-neutral",
+    "metadata": {
+      "dependencies": { "@lensx/plugin-sdk": "^0.3.0" },
+      "scripts": { "build": "rsbuild build", "typecheck": "tsc", "test": "rstest", "check": "pnpm test" }
+    },
+    "sources": {
+      "src/main.ts": "import { createPluginSdk } from '@lensx/plugin-sdk'; import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview'; createPluginSdk({ transport: createPluginWebviewTransport() }); window.__TAURI__.getCurrentWindow().setResizable(true);"
+    }
+  },
+  "expected": [
+    "template/native-window-authority: production source contains __TAURI__.",
+    "template/native-window-authority: production source contains getCurrentWindow.",
+    "template/native-window-authority: production source contains setResizable(."
+  ]
+}

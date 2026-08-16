@@ -64,9 +64,19 @@ export const auditPluginTemplateBoundary = (input: PluginTemplateBoundaryInput):
     'MessagePort',
     'window.parent',
     'parent.postMessage',
+    '__TAURI__',
+    'getCurrentWindow',
+    'setSize(',
+    'setResizable(',
+    'setPosition(',
+    'setFullscreen(',
   ]) {
     if (sourceGraph.includes(forbidden)) {
-      diagnostics.add(`template/legacy-runtime-reference: production source contains ${forbidden}.`);
+      const boundary =
+        forbidden.startsWith('set') || forbidden === '__TAURI__' || forbidden === 'getCurrentWindow'
+          ? 'native-window-authority'
+          : 'legacy-runtime-reference';
+      diagnostics.add(`template/${boundary}: production source contains ${forbidden}.`);
     }
   }
 

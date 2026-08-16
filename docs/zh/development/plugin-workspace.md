@@ -293,8 +293,9 @@ pnpm run check:plugin-developer-cli
 
 pack gate 会把真实 Contract、SDK 与 UI tarball 安装到隔离的 Rsbuild browser consumer，
 检查 package metadata 与 bundle module graph，并运行 browser Runtime smoke test。visual gate
-在 `650×600` 下覆盖 `en-US`/`zh-CN` 与 light/dark，包括语义结构、live region、键盘恢复、
-focus、computed token、长文本和截图。这些门禁不会实现或模拟 Host 安装与 iframe 执行。
+在 package fixture 固定的 `650×600` 下覆盖 `en-US`/`zh-CN` 与 light/dark，包括语义结构、live region、键盘恢复、
+focus、computed token、长文本和截图。这些门禁不会实现或模拟 Host 安装与 Child WebView 执行。
+plugin Page 可另行声明有界 Manifest `0.4.0` presentation 元数据；公共 UI package 不暴露原生 resize API。
 
 ## 直接插件 CI Member
 

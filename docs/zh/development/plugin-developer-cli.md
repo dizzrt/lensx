@@ -31,8 +31,8 @@ lensx-plugin inspect <file>
 scripts。构建必须生成自包含 `dist/manifest.json` 与全部引用资源。CLI 会拒绝递归 CLI build script、Host 私有
 import、Tauri import、未声明公共 import、symlink、特殊文件、不可移植/冲突 path，以及协议 size/count 违规。
 
-当前 authoring 仅支持 WebView：Manifest `0.3.0`、`runtime.kind: "webview"` 与
-`@lensx/plugin-sdk/webview`。Manifest `0.2.x`、iframe Runtime 或 SDK `/iframe` import 会返回稳定的
+当前 authoring 仅支持 WebView：Manifest `0.4.0`、`runtime.kind: "webview"` 与
+`@lensx/plugin-sdk/webview`。Manifest `0.3.x` 或更早版本、iframe Runtime 或 SDK `/iframe` import 会返回稳定的
 `CLI_LEGACY_IFRAME_RUNTIME` incompatible diagnostic 与迁移说明；CLI 绝不会改写旧项目。
 
 ## Create
@@ -42,7 +42,9 @@ package 名称、plugin ID 与对应 display/test placeholder，然后重新运�
 不安装依赖、不初始化 Git、不运行项目代码，也不覆盖非空目标。
 
 文件先写入唯一的同级 staging directory，完整验证后才用 atomic rename 提交。失败和中断会清理 staging。
-生成项目不请求权限，machine output 会报告 `runtime_kind: "webview"`。
+生成项目不请求权限，machine output 会报告 `runtime_kind: "webview"`。其 Page 省略
+`presentation`，因此规范化为固定 `650×600`。作者可显式声明精确的
+`presentation.initial_size` 和 `presentation.resizable`，但这仍是元数据，不会增加 Runtime resize method。
 
 ## Build 与 Validate
 
@@ -56,7 +58,9 @@ human 模式流式显示作者自有 build log；JSON 模式只进行有界捕�
 项目或 artifact directory。
 
 成功的 `build`、`validate`、`pack` 与 `inspect` machine result 都会报告
-`runtime_kind: "webview"`；legacy incompatible result 不暴露 partial Manifest identity 或 package facts。
+`runtime_kind: "webview"` 与有界 `page_presentations` summary；summary 只包含 Page ID、声明的初始
+逻辑尺寸和 `resizable`，不包含 monitor/work-area、有效 clamp、当前用户尺寸、native handle
+或转换错误。legacy incompatible result 不暴露 partial Manifest identity 或 package facts。
 
 ## Pack 与 Inspect
 

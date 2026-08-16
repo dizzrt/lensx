@@ -1,5 +1,8 @@
 use crate::{
-    launcher_surface::{set_launcher_surface_mode, LauncherSurfaceMode},
+    launcher_surface::{
+        apply_launcher_surface_target, setup_launcher_surface, LauncherLogicalSize,
+        LauncherSurfaceTarget,
+    },
     launcher_window::{
         dispatch_macos_menu_event, LauncherActivationReason, LauncherWindowAction,
         LauncherWindowActions, MACOS_CLOSE_WINDOW_MENU_ID, MAIN_WINDOW_LABEL,
@@ -40,7 +43,7 @@ use std::{
 };
 use tauri::{
     http::{header::CONTENT_TYPE, Response, StatusCode},
-    Manager, WebviewUrl, WebviewWindowBuilder, Wry,
+    LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder, Wry,
 };
 
 const HOST_SCHEME: &str = "lensx-runtime-harness";
@@ -235,8 +238,14 @@ struct RestoreSample {
 #[derive(Clone, Serialize)]
 struct LauncherLifecycleEvidence {
     home_650x320: bool,
-    page_650x600: bool,
+    page_800x600: bool,
+    page_resizable: bool,
+    user_resize_1000x720: bool,
+    same_user_size_restored: bool,
     close_home_650x320_before_teardown: bool,
+    close_home_non_resizable: bool,
+    reopen_initial_800x600: bool,
+    user_size_not_persisted: bool,
     cmd_w_native_window_hidden: bool,
     cmd_w_process_alive: bool,
     focus_loss_native_window_hidden: bool,
@@ -430,6 +439,7 @@ pub fn builder(input: ConfigLensColdOpenHarnessInput) -> Result<tauri::Builder<W
             assert!(service.attach_resource_authority(registration.resources.clone()));
             assert!(app.manage(registration.manager.clone()));
             assert!(app.manage(registration.resources.clone()));
+            setup_launcher_surface(app.handle());
             let collector = Arc::new(StageCollector::default());
             let guard =
                 attach_plugin_runtime_stage_observer(collector.clone()).ok_or_else(|| {
@@ -441,19 +451,46 @@ pub fn builder(input: ConfigLensColdOpenHarnessInput) -> Result<tauri::Builder<W
                 let _guard = guard;
                 let mut cold_samples = Vec::new();
                 let mut restore_samples = Vec::new();
-                let mut launcher_lifecycle = None;
-                for _ in 0..samples {
+                let mut launcher_lifecycle: Option<LauncherLifecycleEvidence> = None;
+                for sample_index in 0..samples {
                     if service.snapshot().is_some() {
                         eprintln!("ConfigLens cold-open harness failed: current_not_absent");
                         app_handle.exit(3);
                         return;
                     }
-                    if set_launcher_surface_mode(app_handle.clone(), LauncherSurfaceMode::Page)
-                        .is_err()
+                    if apply_launcher_surface_target(
+                        &app_handle,
+                        LauncherSurfaceTarget::PluginPage {
+                            owner_id: registration.plugin_id.clone(),
+                            page_id: "main".to_owned(),
+                            page_attempt_id: format!("page_attempt_{}", sample_index + 1),
+                            initial_size: LauncherLogicalSize {
+                                width: 800,
+                                height: 600,
+                            },
+                            resizable: true,
+                        },
+                    )
+                    .is_err()
                     {
                         eprintln!("ConfigLens cold-open harness failed: page_resize");
                         app_handle.exit(3);
                         return;
+                    }
+                    if sample_index > 0 {
+                        if let Some(evidence) = launcher_lifecycle.as_mut() {
+                            evidence.reopen_initial_800x600 = wait_for_launcher_logical_size(
+                                &app_handle,
+                                800.0,
+                                600.0,
+                                Duration::from_secs(1),
+                            );
+                            evidence.user_size_not_persisted = evidence.reopen_initial_800x600
+                                && app_handle
+                                    .get_window(MAIN_WINDOW_LABEL)
+                                    .and_then(|window| window.is_resizable().ok())
+                                    == Some(true);
+                        }
                     }
                     collector.reset();
                     let resolve_started = Instant::now();
@@ -566,7 +603,22 @@ pub fn builder(input: ConfigLensColdOpenHarnessInput) -> Result<tauri::Builder<W
                             });
                         }
                         if launcher_lifecycle.is_none() {
-                            let page_650x600 = launcher_has_logical_size(&app_handle, 650.0, 600.0);
+                            let page_800x600 = launcher_has_logical_size(&app_handle, 800.0, 600.0);
+                            let page_resizable = app_handle
+                                .get_window(MAIN_WINDOW_LABEL)
+                                .and_then(|window| window.is_resizable().ok())
+                                == Some(true);
+                            let user_resize_1000x720 = app_handle
+                                .get_window(MAIN_WINDOW_LABEL)
+                                .is_some_and(|window| {
+                                    window.set_size(LogicalSize::new(1000.0, 720.0)).is_ok()
+                                })
+                                && wait_for_launcher_logical_size(
+                                    &app_handle,
+                                    1000.0,
+                                    720.0,
+                                    Duration::from_secs(1),
+                                );
                             let before_restore = service.snapshot();
                             let editor_count = collector.count("editor");
                             let worker_count = collector.count("worker");
@@ -617,6 +669,8 @@ pub fn builder(input: ConfigLensColdOpenHarnessInput) -> Result<tauri::Builder<W
                                         && snapshot.state == PluginChildWebviewState::Visible
                                         && app_handle.get_webview(&source_label).is_some()
                                 });
+                            let same_user_size_restored =
+                                launcher_has_logical_size(&app_handle, 1000.0, 720.0);
                             let monaco_model_not_reloaded = collector.count("editor") == editor_count;
                             let worker_not_recreated = collector.count("worker") == worker_count;
                             let focus_loss_hidden = actions
@@ -645,9 +699,9 @@ pub fn builder(input: ConfigLensColdOpenHarnessInput) -> Result<tauri::Builder<W
                                     snapshot.state == PluginChildWebviewState::Visible
                                 });
                             let close_home_650x320_before_teardown =
-                                set_launcher_surface_mode(
-                                    app_handle.clone(),
-                                    LauncherSurfaceMode::Home,
+                                apply_launcher_surface_target(
+                                    &app_handle,
+                                    LauncherSurfaceTarget::Home,
                                 )
                                 .is_ok()
                                     && service.snapshot().is_some()
@@ -658,10 +712,20 @@ pub fn builder(input: ConfigLensColdOpenHarnessInput) -> Result<tauri::Builder<W
                                         Duration::from_secs(1),
                                     )
                                     && service.snapshot().is_some();
+                            let close_home_non_resizable = app_handle
+                                .get_window(MAIN_WINDOW_LABEL)
+                                .and_then(|window| window.is_resizable().ok())
+                                == Some(false);
                             pending_lifecycle = Some(LauncherLifecycleEvidence {
                                 home_650x320: home_size_before_page,
-                                page_650x600,
+                                page_800x600,
+                                page_resizable,
+                                user_resize_1000x720,
+                                same_user_size_restored,
                                 close_home_650x320_before_teardown,
+                                close_home_non_resizable,
+                                reopen_initial_800x600: false,
+                                user_size_not_persisted: false,
                                 cmd_w_native_window_hidden,
                                 cmd_w_process_alive,
                                 focus_loss_native_window_hidden: focus_loss_hidden,

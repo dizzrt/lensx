@@ -15,7 +15,11 @@ describe('ConfigLens Manifest', () => {
     const normalized = normalizePluginManifest(validation, { lensx: '0.1.0', host_api: '0.2.0' });
     expect(normalized.status).toBe('compatible');
     expect(normalized.manifest.plugin_id).toBe('dev.lensx.config-lens');
-    expect(normalized.manifest.manifest_version).toBe('0.3.0');
+    expect(normalized.manifest.manifest_version).toBe('0.4.0');
+    expect(normalized.manifest.contributes.pages[0]?.presentation).toEqual({
+      initial_size: { width: 800, height: 600 },
+      resizable: true,
+    });
     expect(normalized.manifest.runtime).toEqual({ kind: 'webview', entry: 'index.html' });
     expect(normalized.manifest.display.name).toEqual({ 'en-US': 'ConfigLens', 'zh-CN': 'ConfigLens' });
     expect(normalized.manifest.contributes.pages).toHaveLength(1);

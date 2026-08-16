@@ -90,7 +90,7 @@
         "kind": "registered",
         "entry_id": "entry_0000000000000001",
         "manifest": {
-          "manifest_version": "0.3.0",
+          "manifest_version": "0.4.0",
           "plugin_id": "com.acme.workspace",
           "version": "1.2.0",
           "display": {
@@ -135,6 +135,13 @@
                   "zh-CN": "工作区工具"
                 },
                 "route": "/",
+                "presentation": {
+                  "initial_size": {
+                    "width": 800,
+                    "height": 600
+                  },
+                  "resizable": true
+                },
                 "icon": {
                   "kind": "asset",
                   "path": "assets/home.svg"
@@ -147,7 +154,14 @@
                   "zh-CN": "打开项目"
                 },
                 "route": "/open-project",
-                "parent_page_id": "home"
+                "parent_page_id": "home",
+                "presentation": {
+                  "initial_size": {
+                    "width": 650,
+                    "height": 600
+                  },
+                  "resizable": false
+                }
               }
             ],
             "actions": [

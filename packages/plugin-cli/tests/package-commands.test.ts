@@ -92,6 +92,10 @@ describe('transactional plugin packing', () => {
       package_protocol: '0.1.0',
       output: 'artifacts/com.acme.workspace-1.2.0.lxp',
       package_digest: { algorithm: 'sha256', value: expect.stringMatching(/^[0-9a-f]{64}$/u) },
+      page_presentations: [
+        { page_id: 'home', initial_size: { width: 800, height: 600 }, resizable: true },
+        { page_id: 'open_project', initial_size: { width: 650, height: 600 }, resizable: false },
+      ],
     });
     expect(await readFile(resolve(project, 'build-count'), 'utf8')).toBe('1');
     expect((await inspectPluginPackage(await readFile(artifact))).status).toBe('compatible');
@@ -174,7 +178,15 @@ describe('read-only package inspection', () => {
     const before = await readdir(root);
     await expect(inspectPluginPackageFile(root, 'compatible.lxp')).resolves.toMatchObject({
       status: 'compatible',
-      result: { file: 'compatible.lxp', plugin_id: 'com.acme.workspace', runtime_kind: 'webview' },
+      result: {
+        file: 'compatible.lxp',
+        plugin_id: 'com.acme.workspace',
+        runtime_kind: 'webview',
+        page_presentations: [
+          { page_id: 'home', initial_size: { width: 800, height: 600 }, resizable: true },
+          { page_id: 'open_project', initial_size: { width: 650, height: 600 }, resizable: false },
+        ],
+      },
     });
     await expect(inspectPluginPackageFile(root, 'incompatible.lxp')).resolves.toMatchObject({ status: 'incompatible' });
     expect(await readdir(root)).toEqual(before);

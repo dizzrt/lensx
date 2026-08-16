@@ -53,28 +53,23 @@ const VisualFixture = () => {
   const messages = copy[locale];
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      const retry = document.querySelector<HTMLButtonElement>('.lensx-plugin-feedback__recovery');
-      retry?.focus();
-      requestAnimationFrame(() => {
-        const bodyStyle = getComputedStyle(document.body);
-        const retryStyle = retry === null ? undefined : getComputedStyle(retry);
-        const tokensValid = tokens.every((token) => bodyStyle.getPropertyValue(token).trim().length > 0);
-        const semanticsValid =
-          document.querySelectorAll('main').length === 1 &&
-          document.querySelectorAll('[role="status"]').length === 2 &&
-          document.querySelectorAll('[role="alert"]').length === 1;
-        const focusValid =
-          document.activeElement === retry &&
-          retryStyle !== undefined &&
-          retryStyle.outlineStyle !== 'none' &&
-          retryStyle.outlineWidth !== '0px';
-        document.body.dataset.visualCheck = tokensValid && semanticsValid && focusValid ? 'passed' : 'failed';
-        document.body.dataset.tokenCount = String(tokens.length);
-        document.body.dataset.backgroundToken = bodyStyle.getPropertyValue(tokens[0]).trim();
-      });
-    });
-    return () => cancelAnimationFrame(frame);
+    const retry = document.querySelector<HTMLButtonElement>('.lensx-plugin-feedback__recovery');
+    retry?.focus();
+    const bodyStyle = getComputedStyle(document.body);
+    const retryStyle = retry === null ? undefined : getComputedStyle(retry);
+    const tokensValid = tokens.every((token) => bodyStyle.getPropertyValue(token).trim().length > 0);
+    const semanticsValid =
+      document.querySelectorAll('main').length === 1 &&
+      document.querySelectorAll('[role="status"]').length === 2 &&
+      document.querySelectorAll('[role="alert"]').length === 1;
+    const focusValid =
+      document.activeElement === retry &&
+      retryStyle !== undefined &&
+      retryStyle.outlineStyle !== 'none' &&
+      retryStyle.outlineWidth !== '0px';
+    document.body.dataset.visualCheck = tokensValid && semanticsValid && focusValid ? 'passed' : 'failed';
+    document.body.dataset.tokenCount = String(tokens.length);
+    document.body.dataset.backgroundToken = bodyStyle.getPropertyValue(tokens[0]).trim();
   }, []);
 
   return (

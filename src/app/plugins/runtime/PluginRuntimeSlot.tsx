@@ -20,7 +20,7 @@ import {
   type PluginChildWebviewPresentationBinding,
   type PluginChildWebviewPresentationController,
 } from './pluginChildWebviewPresentation';
-import { physicalBoundsFromDomRect } from './pluginChildWebviewSlot';
+import { createLatestPluginChildWebviewSlotUpdateQueue, physicalBoundsFromDomRect } from './pluginChildWebviewSlot';
 import { recordPluginRuntimeStage } from './stageMetrics';
 import type { PluginPageRuntimeDescriptor, PluginPageRuntimeRequest, PluginPageRuntimeResolver } from './types';
 
@@ -210,7 +210,6 @@ export const PluginRuntimeSlot = ({
     const hostLoadingStarted = performance.now();
     let active = true;
     let revision = 1n;
-    let updateQueue = Promise.resolve();
     const geometry = () => {
       const scaleFactor = window.devicePixelRatio;
       return {
@@ -243,16 +242,24 @@ export const PluginRuntimeSlot = ({
         }
         binding.presentation = presentation;
         element.dataset.nativePresentation = 'created';
+        const updateQueue = createLatestPluginChildWebviewSlotUpdateQueue(
+          (update) =>
+            presentationController.updateSlot(
+              presentation,
+              update.scaleFactor,
+              update.physicalBounds,
+              update.presentationRevision,
+            ),
+          failPresentation,
+        );
         const syncBounds = () => {
           if (!active || binding.presentation !== presentation || !binding.attempt.isCurrent()) return;
-          revision += 1n;
-          const nextRevision = revision;
-          const next = geometry();
-          updateQueue = updateQueue
-            .then(() =>
-              presentationController.updateSlot(presentation, next.scaleFactor, next.physicalBounds, nextRevision),
-            )
-            .catch(failPresentation);
+          try {
+            revision += 1n;
+            updateQueue.enqueue({ attemptId: presentation.attemptId, ...geometry(), presentationRevision: revision });
+          } catch {
+            failPresentation();
+          }
         };
         const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(syncBounds);
         observer?.observe(element);
@@ -261,7 +268,7 @@ export const PluginRuntimeSlot = ({
           active = false;
           observer?.disconnect();
           window.removeEventListener('resize', syncBounds);
-          await updateQueue.catch(() => undefined);
+          await updateQueue.stop();
           await presentationController.setVisible(presentation, false).catch(() => undefined);
           await presentationController.destroy(presentation);
           if (binding.presentation === presentation) binding.presentation = undefined;

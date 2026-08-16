@@ -11,7 +11,7 @@ import {
   EMPTY_LAUNCHER_ACTION_COLLECTIONS,
   type LauncherActionCollectionsClient,
 } from '../src/app/launcher/collections';
-import type { LauncherSurfaceController } from '../src/app/launcher/surface';
+import type { LauncherSurfaceController, LauncherSurfaceTarget } from '../src/app/launcher/surface';
 import { AppNavigationService, HostPageCatalog } from '../src/app/navigation';
 import type { PluginRuntimeLifecycleService } from '../src/app/plugins/runtime';
 
@@ -160,18 +160,18 @@ describe('App Shell page navigation', () => {
     expect(screen.getByRole('region', { name: 'Recent' })).toBeInTheDocument();
   });
 
-  test('requests fixed presentation heights by state without resizing for result-count changes', async () => {
+  test('requests fixed tagged Host presentation targets without resizing for result-count changes', async () => {
     const navigationService = createNavigationService();
-    const setPresentationState = rs.fn(async (_state: 'home' | 'page' | 'search') => undefined);
+    const setPresentationState = rs.fn(async (_target: LauncherSurfaceTarget) => undefined);
     renderShell({
       navigationService,
       surfaceController: { setPresentationState },
     });
 
-    await waitFor(() => expect(setPresentationState).toHaveBeenLastCalledWith('home'));
+    await waitFor(() => expect(setPresentationState).toHaveBeenLastCalledWith({ kind: 'home' }));
     const input = screen.getByRole('combobox', { name: 'Launcher query' });
     fireEvent.change(input, { target: { value: 'settings' } });
-    await waitFor(() => expect(setPresentationState).toHaveBeenLastCalledWith('search'));
+    await waitFor(() => expect(setPresentationState).toHaveBeenLastCalledWith({ kind: 'search' }));
     const callsAfterEnteringSearch = setPresentationState.mock.calls.length;
 
     fireEvent.change(input, { target: { value: 'preferences settings' } });
@@ -179,11 +179,16 @@ describe('App Shell page navigation', () => {
     expect(setPresentationState).toHaveBeenCalledTimes(callsAfterEnteringSearch);
 
     fireEvent.keyDown(input, { key: 'Enter' });
-    await waitFor(() => expect(setPresentationState).toHaveBeenLastCalledWith('page'));
+    await waitFor(() => expect(setPresentationState).toHaveBeenLastCalledWith({ kind: 'host_page' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Close settings and return home' }));
-    await waitFor(() => expect(setPresentationState).toHaveBeenLastCalledWith('home'));
-    expect(setPresentationState.mock.calls.map(([state]) => state)).toEqual(['home', 'search', 'page', 'home']);
+    await waitFor(() => expect(setPresentationState).toHaveBeenLastCalledWith({ kind: 'home' }));
+    expect(setPresentationState.mock.calls.map(([target]) => target.kind)).toEqual([
+      'home',
+      'search',
+      'host_page',
+      'home',
+    ]);
   });
 
   test('keeps the current search and selection when page preflight fails', async () => {

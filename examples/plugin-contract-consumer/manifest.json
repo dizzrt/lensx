@@ -1,5 +1,5 @@
 {
-  "manifest_version": "0.3.0",
+  "manifest_version": "0.4.0",
   "plugin_id": "com.acme.workspace",
   "version": "1.2.0",
   "display": {
@@ -44,6 +44,13 @@
           "zh-CN": "工作区工具"
         },
         "route": "/",
+        "presentation": {
+          "initial_size": {
+            "width": 720,
+            "height": 540
+          },
+          "resizable": true
+        },
         "icon": {
           "kind": "asset",
           "path": "assets/home.svg"

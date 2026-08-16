@@ -164,6 +164,9 @@ try {
       'tools/plugin-package-format',
       'window.React',
       'window.Semi',
+      '__TAURI__',
+      'getCurrentWindow',
+      'setResizable',
     ]) {
       if (bundle.includes(forbidden)) throw new Error(`template/bundle-private-reference: ${forbidden}`);
     }

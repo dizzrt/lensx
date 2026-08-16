@@ -13,6 +13,11 @@ const update = process.argv.includes('--update');
 const locales = ['en-US', 'zh-CN'];
 const themes = ['light', 'dark'];
 const scenarios = ['empty', 'valid', 'invalid', 'limit', 'long', 'focus', 'recovery'];
+const profiles = [
+  { id: 'initial', width: 800, height: 600, scenarios },
+  { id: 'hard-min', width: 320, height: 180, scenarios: ['long'] },
+  { id: 'user-resized', width: 1200, height: 800, scenarios: ['invalid', 'focus'] },
+];
 
 const waitForExit = (child, timeout) =>
   new Promise((resolveExit) => {
@@ -39,21 +44,22 @@ const run = (command, arguments_, cwd, options = {}) => {
   return execution.stdout;
 };
 
-const decodeBitmap = async (png, name) => {
+const decodeBitmap = async (png, name, profile) => {
   const bitmap = resolve(captureRoot, `${name}.bmp`);
   run('sips', ['-s', 'format', 'bmp', png, '--out', bitmap], packageRoot);
   const bytes = await readFile(bitmap);
   const offset = bytes.readUInt32LE(10);
   const width = bytes.readInt32LE(18);
   const height = Math.abs(bytes.readInt32LE(22));
-  if (width !== 650 || height !== 600 || bytes.readUInt16LE(28) !== 24) throw new Error(`Unexpected bitmap: ${name}.`);
+  if (width !== profile.width || height !== profile.height || bytes.readUInt16LE(28) !== 24)
+    throw new Error(`Unexpected bitmap: ${name}.`);
   return bytes.subarray(offset);
 };
 
-const assertEquivalent = async (capture, baseline, name) => {
+const assertEquivalent = async (capture, baseline, name, profile) => {
   const [actual, expected] = await Promise.all([
-    decodeBitmap(capture, `actual-${name}`),
-    decodeBitmap(baseline, `expected-${name}`),
+    decodeBitmap(capture, `actual-${name}`, profile),
+    decodeBitmap(baseline, `expected-${name}`, profile),
   ]);
   if (actual.length !== expected.length) throw new Error(`Visual dimensions drifted: ${name}.`);
   let changed = 0;
@@ -86,60 +92,65 @@ try {
   const backgrounds = new Map();
   for (const locale of locales) {
     for (const theme of themes) {
-      for (const scenario of scenarios) {
-        const stem = `${locale}-${theme}-${scenario}`;
-        const capture = resolve(captureRoot, `${stem}.png`);
-        let execution;
-        let html = '';
-        for (let attempt = 1; attempt <= 3; attempt += 1) {
-          execution = spawnSync(
-            chromePath,
-            [
-              '--headless=new',
-              '--disable-background-networking',
-              '--disable-extensions',
-              '--disable-gpu',
-              '--hide-scrollbars',
-              '--no-default-browser-check',
-              '--no-first-run',
-              '--no-sandbox',
-              `--user-data-dir=${resolve(captureRoot, `chrome-${stem}-${attempt}`)}`,
-              '--virtual-time-budget=1000',
-              '--window-size=650,600',
-              `--screenshot=${capture}`,
-              '--dump-dom',
-              `${baseUrl}/?locale=${locale}&theme=${theme}&scenario=${scenario}`,
-            ],
-            { cwd: packageRoot, encoding: 'utf8', killSignal: 'SIGKILL', timeout: 10_000 },
-          );
-          html = execution.stdout;
+      for (const profile of profiles) {
+        for (const scenario of profile.scenarios) {
+          const stem =
+            profile.id === 'initial'
+              ? `${locale}-${theme}-${scenario}`
+              : `${locale}-${theme}-${profile.id}-${scenario}`;
+          const capture = resolve(captureRoot, `${stem}.png`);
+          let execution;
+          let html = '';
+          for (let attempt = 1; attempt <= 3; attempt += 1) {
+            execution = spawnSync(
+              chromePath,
+              [
+                '--headless=new',
+                '--disable-background-networking',
+                '--disable-extensions',
+                '--disable-gpu',
+                '--hide-scrollbars',
+                '--no-default-browser-check',
+                '--no-first-run',
+                '--no-sandbox',
+                `--user-data-dir=${resolve(captureRoot, `chrome-${stem}-${attempt}`)}`,
+                '--virtual-time-budget=1000',
+                `--window-size=${profile.width},${profile.height}`,
+                `--screenshot=${capture}`,
+                '--dump-dom',
+                `${baseUrl}/?locale=${locale}&theme=${theme}&scenario=${scenario}`,
+              ],
+              { cwd: packageRoot, encoding: 'utf8', killSignal: 'SIGKILL', timeout: 10_000 },
+            );
+            html = execution.stdout;
+            if (
+              html.includes('data-visual-check="passed"') &&
+              html.includes('data-layout-check="passed"') &&
+              html.includes(`data-scenario="${scenario}"`)
+            )
+              break;
+            Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+          }
           if (
-            html.includes('data-visual-check="passed"') &&
-            html.includes('data-layout-check="passed"') &&
-            html.includes(`data-scenario="${scenario}"`)
-          )
-            break;
-          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+            !html.includes('data-visual-check="passed"') ||
+            !html.includes('data-layout-check="passed"') ||
+            !html.includes(`data-scenario="${scenario}"`)
+          ) {
+            throw new Error(`Visual semantics failed: ${stem}.\n${html}\n${execution?.stderr ?? ''}`);
+          }
+          if (!html.includes(`lang="${locale}"`) || !html.includes(`color-scheme: ${theme}`)) {
+            throw new Error(`Visual locale/theme failed: ${stem}.`);
+          }
+          backgrounds.set(theme, /data-background-token="([^"]+)"/u.exec(html)?.[1]);
+          const baseline = resolve(baselineRoot, `${stem}.png`);
+          if (update) await writeFile(baseline, await readFile(capture));
+          else await assertEquivalent(capture, baseline, stem, profile);
         }
-        if (
-          !html.includes('data-visual-check="passed"') ||
-          !html.includes('data-layout-check="passed"') ||
-          !html.includes(`data-scenario="${scenario}"`)
-        ) {
-          throw new Error(`Visual semantics failed: ${stem}.\n${html}\n${execution?.stderr ?? ''}`);
-        }
-        if (!html.includes(`lang="${locale}"`) || !html.includes(`color-scheme: ${theme}`)) {
-          throw new Error(`Visual locale/theme failed: ${stem}.`);
-        }
-        backgrounds.set(theme, /data-background-token="([^"]+)"/u.exec(html)?.[1]);
-        const baseline = resolve(baselineRoot, `${stem}.png`);
-        if (update) await writeFile(baseline, await readFile(capture));
-        else await assertEquivalent(capture, baseline, stem);
       }
     }
   }
   if (backgrounds.get('light') === backgrounds.get('dark')) throw new Error('Light and dark backgrounds must differ.');
-  console.log(`${update ? 'Updated' : 'Verified'} 28 ConfigLens visual baselines.`);
+  console.log(`${update ? 'Updated' : 'Verified'} 40 ConfigLens visual baselines.`);
 } finally {
   preview.kill('SIGTERM');
   if (!(await waitForExit(preview, 2_000))) {

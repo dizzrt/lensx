@@ -58,9 +58,14 @@ initial HTML graph 使用更严格预算：直接引用 JavaScript 不超过 256
 adapter module。其余 drift 预算仍为：完整未压缩 `dist/` 24 MiB、全部 JavaScript 与压缩 `.lxp`
 分别 8 MiB、每个 Monaco/language chunk 4 MiB、每个 Worker entry 2 MiB。package gate 记录所有 Monaco/language/CSS/Worker
 chunk，并拒绝远程加载、source map、Host 私有 import、未审查依赖版本或
-预算漂移。固定 650 x 600、28 场景视觉矩阵覆盖英文和简体中文、light/dark、empty、
+预算漂移。初始 `800×600` 可调整 Page 的 28 场景主视觉矩阵覆盖英文和简体中文、light/dark、empty、
 有效格式化内容、invalid、limit、长文案、focus 和 recovery。macOS WKWebView
 证据还会验证单编辑器直接替换和一次操作 undo。
+
+额外 hard-minimum 与较大 user-resized 用例验证语义化 `content` + `footer` 布局。Monaco
+填满 `content`；language selector、status、Format、仅 JSON 的 Compact 与有界条件 diagnostics
+全部位于 `footer`。同 attempt hide/restore 保留当前尺寸、model、Worker、input 和 language；
+真实 close/reopen 重置为有效 `800×600`，不持久化用户尺寸。
 
 `first-interactive` 不是 render marker。它要求 current Monaco model、显式 initial layout、包内 editor
 Worker handshake，以及能够改变该 model 的 native keyboard input。document-local event 不带 payload，

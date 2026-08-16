@@ -157,48 +157,59 @@ export const ConfigLensPage = ({
 
   return (
     <main aria-label={messages.title} className="config-lens" onKeyDown={handleKeyDown}>
-      <EditorSurface
-        diagnostics={diagnostics}
-        input={input}
-        language={language}
-        messages={messages}
-        onInput={handleInput}
-        theme={context.theme}
-      />
-      <div className="config-lens__toolbar">
-        <div className="config-lens__language">
-          <span id="config-lens-language-label">{messages.language}</span>
-          <Select
-            aria-labelledby="config-lens-language-label"
-            optionList={LANGUAGE_IDS.map((value) => ({ label: languageLabel(value), value }))}
-            value={language}
-            onChange={handleLanguage}
-          />
+      <section className="config-lens__content">
+        <EditorSurface
+          diagnostics={diagnostics}
+          input={input}
+          language={language}
+          messages={messages}
+          onInput={handleInput}
+          theme={context.theme}
+        />
+      </section>
+      <footer className="config-lens__footer">
+        <div className="config-lens__footer-main">
+          <div className="config-lens__language">
+            <span id="config-lens-language-label">{messages.language}</span>
+            <Select
+              aria-labelledby="config-lens-language-label"
+              optionList={LANGUAGE_IDS.map((value) => ({ label: languageLabel(value), value }))}
+              value={language}
+              onChange={handleLanguage}
+            />
+          </div>
+          <div aria-live="polite" className="config-lens__status" role="status">
+            {status}
+          </div>
+          <div className="config-lens__toolbar">
+            <Button
+              disabled={empty || processing}
+              htmlType="button"
+              theme="solid"
+              onClick={() => void perform('format')}
+            >
+              {messages.format}
+            </Button>
+            <Button
+              disabled={empty || processing || language !== 'json'}
+              htmlType="button"
+              theme="outline"
+              onClick={() => void perform('compact')}
+            >
+              {messages.compact}
+            </Button>
+          </div>
         </div>
-        <Button disabled={empty || processing} htmlType="button" theme="solid" onClick={() => void perform('format')}>
-          {messages.format}
-        </Button>
-        <Button
-          disabled={empty || processing || language !== 'json'}
-          htmlType="button"
-          theme="outline"
-          onClick={() => void perform('compact')}
-        >
-          {messages.compact}
-        </Button>
-      </div>
-      <div aria-live="polite" className="config-lens__status" role="status">
-        {status}
-      </div>
-      {diagnostics.length > 0 ? (
-        <ul aria-label={messages.diagnosticSummary(diagnostics.length)} className="config-lens__diagnostics">
-          {diagnosticEntries.map(({ item, key }) => (
-            <li key={key}>
-              <strong>{item.code}</strong> {diagnosticMessage(messages, item)}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+        {diagnostics.length > 0 ? (
+          <ul aria-label={messages.diagnosticSummary(diagnostics.length)} className="config-lens__diagnostics">
+            {diagnosticEntries.map(({ item, key }) => (
+              <li key={key}>
+                <strong>{item.code}</strong> {diagnosticMessage(messages, item)}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </footer>
     </main>
   );
 };

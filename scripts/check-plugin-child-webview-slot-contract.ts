@@ -11,7 +11,7 @@ const library = read('src-tauri/src/lib.rs');
 
 for (const marker of [
   'window_label: String',
-  'surface_mode: LauncherSurfaceMode',
+  'surface_mode: PluginChildWebviewSurfaceMode',
   'scale_factor: f64',
   'physical_bounds: PluginChildWebviewPhysicalBounds',
   'presentation_revision: String',

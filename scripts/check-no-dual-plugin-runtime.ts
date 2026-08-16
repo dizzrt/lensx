@@ -6,6 +6,7 @@ import { extname, join, relative, resolve } from 'node:path';
 import { ContentChecksum, createDecompressStream } from '@structured-world/structured-zstd';
 
 import {
+  auditCurrentManifestProtocol,
   auditNoDualRuntimePath,
   auditNoDualRuntimeText,
   formatNoDualRuntimeDiagnostic,
@@ -76,6 +77,7 @@ const scanBytes = (diagnostics: NoDualRuntimeDiagnostic[], surface: string, path
       text: Buffer.from(bytes).toString('utf8'),
     }),
   );
+  diagnostics.push(...auditCurrentManifestProtocol(path, surface, Buffer.from(bytes).toString('utf8')));
 };
 
 const collectFiles = (directory: string): string[] => {
@@ -100,7 +102,7 @@ const scanWorkspaceFiles = (diagnostics: NoDualRuntimeDiagnostic[]): void => {
     ['scripts-and-generated-policy', join(rootDir, 'scripts')],
     ['public-packages-source-and-build', join(rootDir, 'packages')],
     ['templates-and-examples', join(rootDir, 'examples')],
-    ['official-plugin-source-and-build', join(rootDir, 'plugins', 'official')],
+    ['official-plugin-source-and-build', join(rootDir, 'plugins')],
     ['current-docs', join(rootDir, 'docs', 'en')],
     ['current-docs', join(rootDir, 'docs', 'zh')],
     ['generated-fixtures', join(rootDir, 'fixtures')],

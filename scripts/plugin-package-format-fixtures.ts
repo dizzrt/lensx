@@ -50,6 +50,17 @@ const buildFixtures = async (): Promise<FixtureOutput[]> => {
   legacyIframeManifest.manifest_version = '0.2.0';
   (legacyIframeManifest.runtime as Record<string, unknown>).kind = 'iframe';
   const legacyIframe = await rawPackage(payloadFiles(legacyIframeManifest));
+  const legacyWebviewManifest = structuredClone(baseManifest);
+  legacyWebviewManifest.manifest_version = '0.3.0';
+  const legacyWebview = await rawPackage(payloadFiles(legacyWebviewManifest));
+  const nativePresentationManifest = structuredClone(baseManifest) as {
+    contributes: { pages: Array<{ presentation?: Record<string, unknown> }> };
+  };
+  Object.assign(nativePresentationManifest.contributes.pages[0]?.presentation ?? {}, {
+    monitor: 'primary',
+    native_label: 'plugin-controlled',
+  });
+  const nativePresentation = await rawPackage(payloadFiles(nativePresentationManifest));
 
   const missingResourceFiles = payloadFiles().filter((file) => file.path !== 'dist/plugin.html');
   const hostFieldsManifest = {
@@ -91,6 +102,7 @@ const buildFixtures = async (): Promise<FixtureOutput[]> => {
     { name: 'reference-repeatable', category: 'reproducible', bytes: valid.bytes },
     { name: 'manifest-incompatible', category: 'incompatible', bytes: incompatible.bytes },
     { name: 'legacy-iframe-runtime', category: 'incompatible', bytes: legacyIframe },
+    { name: 'legacy-webview-manifest', category: 'incompatible', bytes: legacyWebview },
     { name: 'not-zstandard', category: 'invalid', bytes: Buffer.from('not a plugin package') },
     {
       name: 'trailing-bytes',
@@ -99,6 +111,7 @@ const buildFixtures = async (): Promise<FixtureOutput[]> => {
     },
     { name: 'missing-runtime-resource', category: 'invalid', bytes: await rawPackage(missingResourceFiles) },
     { name: 'host-private-fields', category: 'invalid', bytes: await rawPackage(hostFieldFiles) },
+    { name: 'native-presentation-fields', category: 'invalid', bytes: nativePresentation },
     {
       name: 'unsupported-package-version',
       category: 'invalid',

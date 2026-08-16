@@ -339,9 +339,11 @@ pnpm run check:plugin-developer-cli
 The pack gate installs real Contract, SDK, and UI tarballs into an isolated
 Rsbuild browser consumer, checks package metadata and the bundle module graph,
 and runs a browser Runtime smoke test. The visual gate covers `en-US`/`zh-CN`
-and light/dark at `650×600`, including semantic structure, live regions,
+and light/dark at the package fixture's fixed `650×600`, including semantic structure, live regions,
 keyboard recovery, focus, computed tokens, long text, and screenshots. These
-gates do not implement or simulate Host installation or iframe execution.
+gates do not implement or simulate Host installation or Child WebView
+execution. A plugin Page may separately declare bounded Manifest `0.4.0`
+presentation metadata; the public UI package exposes no native resize API.
 
 ## Direct Plugin CI Members
 

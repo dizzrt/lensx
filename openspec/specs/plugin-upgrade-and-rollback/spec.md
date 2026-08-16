@@ -37,7 +37,7 @@ Prepare, commit, and cancel MUST be exposed only to the trusted lensX root appli
 
 ### Requirement: Preparation MUST inspect one immutable local package without changing active state
 
-Prepare MUST read one `.lxp` through a Rust-owned pathless picker, reuse capped-read, package, Manifest, resource, checksum, digest, and compatibility checks, and verify that the candidate ID matches the current healthy registration. Only a compatible Manifest `0.2.0` candidate may enter staging. Prepare MUST NOT change the Manager, active payload, Registry, revision, event, or plugin data, and MUST return an opaque token, entry, current and candidate versions, and replacement classification without a permission diff.
+Prepare MUST read one `.lxp` through a Rust-owned pathless picker, reuse capped-read, package, Manifest, resource, checksum, digest, and compatibility checks, and verify that the candidate ID matches the current healthy registration. Only a compatible Manifest `0.4.0` candidate may enter staging. Prepare MUST NOT change the Manager, active payload, Registry, revision, event, or plugin data, and MUST return an opaque token, entry, current and candidate versions, and replacement classification without a permission diff.
 
 Picker cancellation MUST return the ordinary `cancelled` result without creating staging or mutation facts.
 
@@ -159,7 +159,7 @@ A replacement commit MUST preserve only Host-owned enabled intent, plugin-data o
 Compatibility MUST be recomputed from the candidate Manifest and current lensX and Host API versions, Runtime MUST publish as `inactive`, and replacement MUST preserve the independent `data/<plugin-key>` subtree unchanged.
 
 #### Scenario: Upgrade replaces a legacy permission plugin
-- **WHEN** a current legacy registration is explicitly replaced by a compatible Manifest `0.2.0` package
+- **WHEN** a current legacy registration is explicitly replaced by a compatible Manifest `0.4.0` package
 - **THEN** the new record contains no grants, the old Runtime, Session, and Port terminate, and the new generation begins from inactive current facts
 - **THEN** plugin-data policy and permitted Host-owned state continue according to identity rules
 
@@ -285,4 +285,3 @@ Preparation MAY classify an installed legacy registration or selected legacy pac
 #### Scenario: Replacement package uses iframe protocol
 - **WHEN** preparation inspects a legacy Manifest
 - **THEN** it returns incompatible before commit and leaves the current registration and Runtime unchanged
-

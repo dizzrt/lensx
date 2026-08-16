@@ -73,6 +73,13 @@ describe('Plugin Registration Contract fixtures', () => {
     if (parsedDetail.kind === 'registered') {
       expect(parsedDetail.enabled).toBe(true);
       expect(parsedDetail).not.toHaveProperty('granted_permission_ids');
+      expect(parsedDetail.manifest.contributes.pages.map(({ presentation }) => presentation)).toEqual([
+        { initial_size: { width: 800, height: 600 }, resizable: true },
+        { initial_size: { width: 650, height: 600 }, resizable: false },
+      ]);
+      expect(parsedDetail.manifest).not.toHaveProperty('source');
+      expect(parsedDetail.manifest).not.toHaveProperty('enabled');
+      expect(JSON.stringify(parsedDetail.manifest)).not.toMatch(/work_area|user_size|native_error/u);
     }
   });
 });

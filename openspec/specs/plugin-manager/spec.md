@@ -45,7 +45,7 @@ quarantine state, Runtime state, or Host authority through author input.
 
 ### Requirement: Registration facts MUST have explicit persistence lifetimes
 
-The Plugin Manager MUST continue to distinguish durable installed records, process-local development entries, derived Runtime state, diagnostics, and resource generations. The current record format MUST NOT store `granted_permission_ids`, permission decisions, permission reasons, or permission history. Manifest `0.1.0` and grant data in an old record format MUST NOT produce new Host authority. Recovery MUST place such records into a stable incompatible or quarantined state, preserve program and data for explicit management, and MUST NOT fabricate Manifest `0.2.0`.
+The Plugin Manager MUST continue to distinguish durable installed records, process-local development entries, derived Runtime state, diagnostics, and resource generations. The current record format MUST NOT store `granted_permission_ids`, permission decisions, permission reasons, or permission history. Manifest `0.1.0` and grant data in an old record format MUST NOT produce new Host authority. Recovery MUST place such records into a stable incompatible or quarantined state, preserve program and data for explicit management, and MUST NOT fabricate Manifest `0.4.0`.
 
 An installed record MUST persist the normalized Manifest, installation location, algorithm-tagged package digest, Host-controlled source, enabled intent, and recent bounded diagnostics. A development entry MUST use a distinct development-snapshot payload variant with `source=development`, remain process-local, and MUST NOT write, delete, or masquerade as a Plugin Manager Store record.
 

@@ -104,7 +104,7 @@ preparation token and current Host facts.
 #### Scenario: First installation requires confirmation
 
 - **WHEN** local installation preparation returns a compatible current
-  Manifest `0.2.0` candidate
+  Manifest `0.4.0` candidate
 - **THEN** the page displays bounded candidate and installation-trust facts and
   allows explicit cancel or confirmation
 - **THEN** durable commit uses only the opaque preparation token and creates no

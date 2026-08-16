@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, rs, test } from '@rstest/core';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { StrictMode } from 'react';
+import { type ComponentProps, StrictMode } from 'react';
 import validCases from '../fixtures/plugin-registration-contract/valid/cases.json';
 import App from '../src/App';
 import { AppProviders } from '../src/app/AppProviders';
@@ -17,6 +17,7 @@ import type {
   LauncherActivationSource,
 } from '../src/app/launcher/activation';
 import { EMPTY_LAUNCHER_ACTION_COLLECTIONS } from '../src/app/launcher/collections';
+import type { LauncherSurfaceController, LauncherSurfaceTarget } from '../src/app/launcher/surface';
 import { AppNavigationService, PageRegistry } from '../src/app/navigation';
 import {
   type PluginRegistrationDesktopAdapter,
@@ -155,7 +156,8 @@ const renderPluginComposition = (
     readonly activationSource?: TestLauncherActivationSource;
     readonly destroy?: ReturnType<typeof rs.fn>;
     readonly strictMode?: boolean;
-    readonly surfaceController?: { setPresentationState: ReturnType<typeof rs.fn> };
+    readonly renderPage?: ComponentProps<typeof App>['renderPage'];
+    readonly surfaceController?: LauncherSurfaceController;
   } = {},
 ) => {
   const pageRegistry = new PageRegistry([
@@ -192,6 +194,7 @@ const renderPluginComposition = (
         pluginChildWebviewPresentationController={pluginChildWebviewPresentationController}
         pluginRuntimeLifecycleService={pluginRuntimeLifecycleService}
         pluginRuntimeResolver={pluginRuntimeResolver}
+        renderPage={options.renderPage}
         surfaceController={options.surfaceController}
         surfaceProjectionService={projection}
       />
@@ -226,7 +229,8 @@ describe('Plugin Page navigation UI', () => {
 
   test('keeps one current Runtime across shortcut activation refresh and replaces it only after a real close', async () => {
     const activationSource = new TestLauncherActivationSource();
-    const view = renderPluginComposition({ activationSource });
+    const setPresentationState = rs.fn(async (_target: LauncherSurfaceTarget) => undefined);
+    const view = renderPluginComposition({ activationSource, surfaceController: { setPresentationState } });
     await waitFor(() => expect(view.actionService.registry.get(`${pluginId}.open_project`)).toBeDefined());
     await waitFor(() => expect(activationSource.listeners.size).toBe(1));
 
@@ -238,6 +242,15 @@ describe('Plugin Page navigation UI', () => {
       expect(current).not.toBeNull();
       return current;
     });
+    await waitFor(() =>
+      expect(setPresentationState).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          kind: 'plugin_page',
+          page_attempt_id: 'page_attempt_1',
+        }),
+      ),
+    );
+    const surfaceCallsBeforeRestore = setPresentationState.mock.calls.length;
 
     await act(async () => {
       activationSource.emit({ reason: 'global_shortcut' });
@@ -249,6 +262,7 @@ describe('Plugin Page navigation UI', () => {
     expect(view.pluginRuntimeResolver.resolve).toHaveBeenCalledTimes(1);
     expect(view.pluginChildWebviewPresentationController.create).toHaveBeenCalledTimes(1);
     expect(view.pluginChildWebviewPresentationController.destroy).not.toHaveBeenCalled();
+    expect(setPresentationState).toHaveBeenCalledTimes(surfaceCallsBeforeRestore);
     expect(document.body).not.toHaveTextContent('Loading the plugin page');
 
     fireEvent.click(screen.getByRole('button', { name: 'Close page and return home' }));
@@ -270,6 +284,69 @@ describe('Plugin Page navigation UI', () => {
     expect(reopenedSlot).not.toBe(slot);
     expect(view.pluginRuntimeResolver.resolve).toHaveBeenCalledTimes(2);
     expect(view.pluginChildWebviewPresentationController.create).toHaveBeenCalledTimes(2);
+    await waitFor(() =>
+      expect(setPresentationState).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          kind: 'plugin_page',
+          page_attempt_id: 'page_attempt_2',
+        }),
+      ),
+    );
+  });
+
+  test('applies independent custom and fixed plugin targets across A to B without inheritance', async () => {
+    const setPresentationState = rs.fn(async (_target: LauncherSurfaceTarget) => undefined);
+    const view = renderPluginComposition({
+      surfaceController: { setPresentationState },
+      renderPage: (page) => <div>{page.page_id}</div>,
+    });
+    await waitFor(() => expect(view.pageRegistry.lookup({ owner_id: pluginId, page_id: 'home' })).toBeDefined());
+
+    act(() => view.navigationService.openPage({ owner_id: pluginId, page_id: 'home' }, `${pluginId}.open_project`));
+    await waitFor(() =>
+      expect(setPresentationState).toHaveBeenLastCalledWith({
+        kind: 'plugin_page',
+        owner_id: pluginId,
+        page_id: 'home',
+        page_attempt_id: 'page_attempt_1',
+        initial_size: { width: 800, height: 600 },
+        resizable: true,
+      }),
+    );
+
+    act(() =>
+      view.navigationService.openPage({ owner_id: pluginId, page_id: 'open_project' }, `${pluginId}.open_project`),
+    );
+    await waitFor(() =>
+      expect(setPresentationState).toHaveBeenLastCalledWith({
+        kind: 'plugin_page',
+        owner_id: pluginId,
+        page_id: 'open_project',
+        page_attempt_id: 'page_attempt_2',
+        initial_size: { width: 650, height: 600 },
+        resizable: false,
+      }),
+    );
+  });
+
+  test('retains active App state when the native surface transition fails', async () => {
+    const consoleError = rs.spyOn(console, 'error').mockImplementation(() => undefined);
+    const setPresentationState = rs.fn(async (target: LauncherSurfaceTarget) => {
+      if (target.kind === 'plugin_page') throw new Error('private native transition detail');
+    });
+    const view = renderPluginComposition({
+      surfaceController: { setPresentationState },
+      renderPage: (page) => <div>Current page {page.page_id}</div>,
+    });
+    await waitFor(() => expect(view.pageRegistry.lookup({ owner_id: pluginId, page_id: 'home' })).toBeDefined());
+
+    act(() => view.navigationService.openPage({ owner_id: pluginId, page_id: 'home' }, `${pluginId}.open_project`));
+    expect(await screen.findByText('Current page home')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(setPresentationState).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'plugin_page' })),
+    );
+    expect(screen.getByRole('button', { name: 'Close page and return home' })).toBeInTheDocument();
+    consoleError.mockRestore();
   });
 
   test('navigates a projected Action to one native Runtime slot and resolves current metadata', async () => {
@@ -357,10 +434,10 @@ describe('Plugin Page navigation UI', () => {
           finishDestroy = resolve;
         }),
     );
-    const submittedModes: string[] = [];
+    const submittedTargets: LauncherSurfaceTarget[] = [];
     const surfaceController = {
-      setPresentationState: rs.fn(async (mode: string) => {
-        submittedModes.push(mode);
+      setPresentationState: rs.fn(async (target: LauncherSurfaceTarget) => {
+        submittedTargets.push(target);
       }),
     };
     const view = renderPluginComposition({ destroy, surfaceController });
@@ -369,14 +446,23 @@ describe('Plugin Page navigation UI', () => {
     act(() =>
       view.navigationService.openPage({ owner_id: pluginId, page_id: 'open_project' }, `${pluginId}.open_project`),
     );
-    await waitFor(() => expect(submittedModes).toContain('page'));
+    await waitFor(() =>
+      expect(submittedTargets).toContainEqual({
+        kind: 'plugin_page',
+        owner_id: pluginId,
+        page_id: 'open_project',
+        page_attempt_id: 'page_attempt_1',
+        initial_size: { width: 650, height: 600 },
+        resizable: false,
+      }),
+    );
     await waitFor(() => expect(view.pluginChildWebviewPresentationController.create).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole('button', { name: 'Close page and return home' }));
 
     await waitFor(() => expect(destroy).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }));
     expect(finishDestroy).toBeDefined();
-    await waitFor(() => expect(submittedModes.at(-1)).toBe('home'));
+    await waitFor(() => expect(submittedTargets.at(-1)).toEqual({ kind: 'home' }));
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Launcher query' })).toHaveFocus());
     expect(document.querySelector('[data-plugin-runtime-slot="true"]')).toBeNull();
 

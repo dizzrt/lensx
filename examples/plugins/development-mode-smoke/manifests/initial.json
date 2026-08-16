@@ -1,5 +1,5 @@
 {
-  "manifest_version": "0.3.0",
+  "manifest_version": "0.4.0",
   "plugin_id": "dev.lensx.smoke.development-mode",
   "version": "0.1.0",
   "display": {

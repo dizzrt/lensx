@@ -44,5 +44,27 @@
       }
     ],
     "expected_status": "compatible"
+  },
+  {
+    "name": "presentation hard minimum is accepted",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/pages/0/presentation/initial_size",
+        "value": { "width": 320, "height": 180 }
+      }
+    ],
+    "expected_status": "compatible"
+  },
+  {
+    "name": "presentation declared maximum is accepted",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/pages/0/presentation/initial_size",
+        "value": { "width": 4096, "height": 4096 }
+      }
+    ],
+    "expected_status": "compatible"
   }
 ]

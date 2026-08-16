@@ -30,6 +30,20 @@ export const replaceEditorContent = (editor: UndoableEditor, model: UndoableMode
   return true;
 };
 
+type ResizeObserverConstructor = new (
+  callback: ResizeObserverCallback,
+) => Pick<ResizeObserver, 'disconnect' | 'observe'>;
+
+export const observeMonacoLayout = (
+  element: Element,
+  layout: () => void,
+  Observer: ResizeObserverConstructor = ResizeObserver,
+) => {
+  const observer = new Observer(() => layout());
+  observer.observe(element);
+  return () => observer.disconnect();
+};
+
 export const MonacoSurface = ({ diagnostics, input, language, messages, onInput, theme }: EditorSurfaceProps) => {
   const inputHostRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<
@@ -88,12 +102,9 @@ export const MonacoSurface = ({ diagnostics, input, language, messages, onInput,
           });
         }
       });
-      const observer = new ResizeObserver(() => {
-        editor.layout();
-      });
-      observer.observe(inputHostRef.current);
+      const disconnectLayoutObserver = observeMonacoLayout(inputHostRef.current, () => editor.layout());
       const dispose = () => {
-        observer.disconnect();
+        disconnectLayoutObserver();
         editorNode?.removeEventListener('beforeinput', armNativeTextInput, true);
         editorNode?.removeEventListener('input', armNativeTextInput, true);
         keySubscription.dispose();

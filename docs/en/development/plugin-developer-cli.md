@@ -39,8 +39,8 @@ rejects recursive CLI build scripts, Host-private imports, Tauri imports,
 undeclared public imports, symlinks, special files, non-portable/colliding
 paths, and protocol size/count violations.
 
-Current authoring is WebView-only: Manifest `0.3.0`, `runtime.kind: "webview"`,
-and `@lensx/plugin-sdk/webview`. A Manifest `0.2.x`, iframe Runtime, or SDK
+Current authoring is WebView-only: Manifest `0.4.0`, `runtime.kind: "webview"`,
+and `@lensx/plugin-sdk/webview`. A Manifest `0.3.x` or older, iframe Runtime, or SDK
 `/iframe` import returns the stable `CLI_LEGACY_IFRAME_RUNTIME` incompatible
 diagnostic with migration guidance. The CLI never rewrites the old project.
 
@@ -55,7 +55,10 @@ initialize Git, run project code, or overwrite a non-empty target.
 Files are written to a unique sibling staging directory and committed with an
 atomic rename only after complete validation. Failure and interruption remove
 staging data. The generated project requests no permissions and reports
-`runtime_kind: "webview"` in machine output.
+`runtime_kind: "webview"` in machine output. Its Page omits `presentation`, so
+normalization gives it a fixed `650×600` initial surface. Authors may opt in with
+an exact `presentation.initial_size` and `presentation.resizable`; those values
+remain metadata and do not add a Runtime resize method.
 
 ## Build And Validate
 
@@ -73,8 +76,11 @@ performs canonical pack plus self-inspection entirely in memory. It keeps
 project or artifact directory.
 
 Successful `build`, `validate`, `pack`, and `inspect` machine results all report
-`runtime_kind: "webview"`; legacy incompatible results expose no partial
-Manifest identity or package facts.
+`runtime_kind: "webview"` plus a bounded `page_presentations` summary containing
+only Page ID, declared logical initial size, and `resizable`. It never reports
+monitor/work-area facts, effective clamps, current user size, native handles, or
+transition errors. Legacy incompatible results expose no partial Manifest
+identity or package facts.
 
 ## Pack And Inspect
 

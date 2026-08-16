@@ -6,7 +6,7 @@
       "file": "normal/runtime-compatible.lxp",
       "digest": {
         "algorithm": "sha256",
-        "value": "a551c9602c139bbbb58a5a854786a45decf8a074aa2cc93bb9208962eb34bec0"
+        "value": "7e8970c476209fd52afdd50ac2d56348c3bd2e051946da4b3e2d29d8e82df808"
       },
       "coverage": [
         "top_level_document",
@@ -18,7 +18,7 @@
       "expected": {
         "status": "compatible",
         "manifest": {
-          "manifest_version": "0.3.0",
+          "manifest_version": "0.4.0",
           "plugin_id": "com.lensx.fixture.runtime.normal",
           "version": "1.0.0",
           "display": {
@@ -58,7 +58,14 @@
                   "en-US": "Runtime fixture",
                   "zh-CN": "Runtime 夹具"
                 },
-                "route": "/"
+                "route": "/",
+                "presentation": {
+                  "initial_size": {
+                    "width": 650,
+                    "height": 600
+                  },
+                  "resizable": false
+                }
               },
               {
                 "id": "route_probe",
@@ -67,7 +74,14 @@
                   "zh-CN": "路由探测"
                 },
                 "route": "/route-probe",
-                "parent_page_id": "home"
+                "parent_page_id": "home",
+                "presentation": {
+                  "initial_size": {
+                    "width": 650,
+                    "height": 600
+                  },
+                  "resizable": false
+                }
               }
             ],
             "actions": [
@@ -102,20 +116,20 @@
         },
         "facts": {
           "packageFormatVersion": "0.1.0",
-          "compressedSize": 1374,
+          "compressedSize": 1378,
           "decompressedSize": 7680,
           "fileCount": 5,
           "files": [
             {
               "path": "manifest.json",
               "size": 1176,
-              "sha256": "d59d8c7450f6599e9599ee0795c36fee5360e5fc4c4db0c96ef3f1996beda705",
+              "sha256": "c5603e0dc1b2507a0f50ac671172c0450b0a1742f4a28f278e83032461b000a6",
               "checksumCovered": true
             },
             {
               "path": "checksums.json",
               "size": 516,
-              "sha256": "1373f3149f6d3f7f769627fa948dd244cb183ed19c9191cd8840abc1b93d45c3",
+              "sha256": "a56cbce23d109269b6aa494e6c83057ae28856463a2acaa07429feb3c3e74ae7",
               "checksumCovered": false
             },
             {
@@ -139,7 +153,7 @@
           ],
           "packageDigest": {
             "algorithm": "sha256",
-            "value": "a551c9602c139bbbb58a5a854786a45decf8a074aa2cc93bb9208962eb34bec0"
+            "value": "7e8970c476209fd52afdd50ac2d56348c3bd2e051946da4b3e2d29d8e82df808"
           }
         },
         "diagnostics": []
@@ -150,7 +164,7 @@
       "file": "malicious/runtime-adversarial.lxp",
       "digest": {
         "algorithm": "sha256",
-        "value": "b5bcd2fa6b3ffc5874aad840a986d1e4317f9c2d7f45c30ce1aa339178c93512"
+        "value": "390abcd95f343033da60128aad2551db3b2d2351291902d22669613a5a9a2aba"
       },
       "coverage": [
         "generic_tauri_envelopes",
@@ -163,7 +177,7 @@
       "expected": {
         "status": "compatible",
         "manifest": {
-          "manifest_version": "0.3.0",
+          "manifest_version": "0.4.0",
           "plugin_id": "com.lensx.fixture.runtime.malicious",
           "version": "1.0.0",
           "display": {
@@ -203,7 +217,14 @@
                   "en-US": "Runtime fixture",
                   "zh-CN": "Runtime 夹具"
                 },
-                "route": "/"
+                "route": "/",
+                "presentation": {
+                  "initial_size": {
+                    "width": 650,
+                    "height": 600
+                  },
+                  "resizable": false
+                }
               },
               {
                 "id": "route_probe",
@@ -212,7 +233,14 @@
                   "zh-CN": "路由探测"
                 },
                 "route": "/route-probe",
-                "parent_page_id": "home"
+                "parent_page_id": "home",
+                "presentation": {
+                  "initial_size": {
+                    "width": 650,
+                    "height": 600
+                  },
+                  "resizable": false
+                }
               }
             ],
             "actions": [
@@ -247,20 +275,20 @@
         },
         "facts": {
           "packageFormatVersion": "0.1.0",
-          "compressedSize": 1351,
+          "compressedSize": 1350,
           "decompressedSize": 6656,
           "fileCount": 4,
           "files": [
             {
               "path": "manifest.json",
               "size": 1185,
-              "sha256": "580773c89e30bd2ba9c258a4d382c505d111b1b814863ce5d562fe50e8395dc5",
+              "sha256": "2ddb0a336e2caf13d0c337d2b4e384076d7b4e948a607b03210f28459c023173",
               "checksumCovered": true
             },
             {
               "path": "checksums.json",
               "size": 404,
-              "sha256": "9821781666361bf6da72f5ba6258990cf21504afd607b5dc04a38c56297b5a90",
+              "sha256": "4f72384d802db1c964861f7a59f81bd0c766a13d184b7512734afe6b33d17a1f",
               "checksumCovered": false
             },
             {
@@ -278,7 +306,7 @@
           ],
           "packageDigest": {
             "algorithm": "sha256",
-            "value": "b5bcd2fa6b3ffc5874aad840a986d1e4317f9c2d7f45c30ce1aa339178c93512"
+            "value": "390abcd95f343033da60128aad2551db3b2d2351291902d22669613a5a9a2aba"
           }
         },
         "diagnostics": []

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
-import { validatePluginManifest } from '@lensx/plugin-contract';
+import { normalizePluginManifest, validatePluginManifest } from '@lensx/plugin-contract';
 import { afterEach, describe, expect, test } from '@rstest/core';
 
 import { createPluginProject } from '../src/create.ts';
@@ -53,7 +53,7 @@ describe('create plugin project', () => {
       }),
     });
     expect(manifest).toMatchObject({
-      manifest_version: '0.3.0',
+      manifest_version: '0.4.0',
       plugin_id: result.plugin_id,
       runtime: { kind: 'webview' },
       display: { name: { 'en-US': 'Example Plugin', 'zh-CN': 'Example Plugin' } },
@@ -68,7 +68,13 @@ describe('create plugin project', () => {
     expect(productionSources.join('\n')).not.toMatch(/plugin-sdk\/iframe|createPluginIframeTransport/u);
     expect(manifest).not.toHaveProperty('requested_permissions');
     expect(manifest.contributes.pages[0]).not.toHaveProperty('required_permissions');
-    expect(validatePluginManifest(manifest).status).toBe('valid');
+    const validation = validatePluginManifest(manifest);
+    expect(validation.status).toBe('valid');
+    if (validation.status !== 'valid') throw new TypeError('Generated Manifest should validate.');
+    expect(
+      normalizePluginManifest(validation, { lensx: '0.1.0', host_api: '0.2.0' }).manifest.contributes.pages[0],
+    ).toMatchObject({ presentation: { initial_size: { width: 650, height: 600 }, resizable: false } });
+    expect(manifest.contributes.pages[0]).not.toHaveProperty('presentation');
     expect(await readdir(target)).toEqual(expect.arrayContaining(['manifest.json', 'package.json', 'src', 'tests']));
     for (const forbidden of ['.git', 'node_modules', 'dist', 'artifacts']) {
       expect(await readdir(target)).not.toContain(forbidden);

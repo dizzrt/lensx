@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | Contract/UI/Testkit package | `0.2.0` | 公共 semantic contract、UI 与测试 helper。 |
 | SDK package | `0.3.0` | root semantic client 与 `/webview` production transport。 |
-| Manifest protocol | `0.3.0` | 作者输入与 normalized WebView Manifest wire contract。 |
+| Manifest protocol | `0.4.0` | 作者输入与 normalized WebView Manifest wire contract。 |
 | Host API protocol | `0.2.0` | Semantic method、result、event、error 与 context。 |
 | Private bridge carrier | `0.2.0` | closed Host/native-to-plugin transport frame；不是 Host API。 |
 | lensX application | `0.1.0` | Manifest 检查的 Host compatibility range。 |
@@ -34,7 +34,7 @@ operational failure、invalid、incompatible 与 success，不会把任意 child
 Host API method error 见 [Host API](host-api.md#稳定错误)。SDK lifecycle error 覆盖 cancellation、
 timeout、transport failure、disconnection、disposal、invalid context 与 incompatible Host API。
 
-声明 `runtime.kind: "iframe"` 的旧 Manifest `0.2.x` package 仅作为迁移期不兼容输入。
+Manifest `0.3.x` 与更早 package（包括旧 iframe package）仅作为迁移期不兼容输入。
 Host 与 CLI 不会改写它，也不存在 fallback Runtime；请从当前 template 重新构建并迁移到
 `@lensx/plugin-sdk/webview`。
 

@@ -29,7 +29,7 @@ installation, Host authority, or execution.
 
 ## Manifest and resources
 
-The generated `manifest.json` uses Manifest `0.2.0`, separate lensX/Host API
+The generated `manifest.json` uses Manifest `0.4.0`, separate lensX/Host API
 compatibility ranges, unverified publisher text, no permission fields, one
 Page, one Page-targeting Action, and `index.html` as the WebView entry. Every
 Runtime and asset path must exist under the built `dist/`.

@@ -262,7 +262,7 @@ try {
       manifest_version?: unknown;
       runtime?: { kind?: unknown };
     };
-    if (generatedManifest.manifest_version !== '0.3.0' || generatedManifest.runtime?.kind !== 'webview') {
+    if (generatedManifest.manifest_version !== '0.4.0' || generatedManifest.runtime?.kind !== 'webview') {
       throw new Error(`${template} generated a legacy Manifest.`);
     }
     const generatedSources = [

@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@rstest/core';
 
 import {
+  auditCurrentManifestProtocol,
   auditNoDualRuntimePath,
   auditNoDualRuntimeText,
   NO_DUAL_RUNTIME_RULES,
@@ -84,5 +85,29 @@ describe('no dual plugin Runtime drift policy', () => {
         text: `replace-plugin-iframe-runtime-with-child-webview ${oldCapability}`,
       }).map(({ ruleId }) => ruleId),
     ).toEqual(['legacy-runtime-capability']);
+  });
+
+  it('rejects legacy protocol authoring only from current manifest artifacts', () => {
+    expect(
+      auditCurrentManifestProtocol(
+        'examples/plugins/current/manifest.json',
+        'templates-and-examples',
+        JSON.stringify({ manifest_version: '0.3.0' }),
+      ).map(({ ruleId }) => ruleId),
+    ).toEqual(['legacy-manifest-protocol']);
+    expect(
+      auditCurrentManifestProtocol(
+        'fixtures/plugin-package-format/incompatible/manifest.json',
+        'generated-fixtures',
+        JSON.stringify({ manifest_version: '0.3.0' }),
+      ),
+    ).toEqual([]);
+    expect(
+      auditCurrentManifestProtocol(
+        'examples/plugins/current/manifest.json',
+        'templates-and-examples',
+        JSON.stringify({ manifest_version: '0.4.0' }),
+      ),
+    ).toEqual([]);
   });
 });

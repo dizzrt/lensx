@@ -122,25 +122,36 @@ const Harness = () => {
       ];
       const styles = getComputedStyle(document.body);
       const editor = document.querySelector<HTMLElement>('.visual-editor');
-      const toolbar = document.querySelector<HTMLElement>('.config-lens__toolbar');
+      const content = document.querySelector<HTMLElement>('.config-lens__content');
+      const footer = document.querySelector<HTMLElement>('.config-lens__footer');
       const editorRect = editor?.getBoundingClientRect();
-      const toolbarRect = toolbar?.getBoundingClientRect();
-      const editorBeforeControls =
+      const contentRect = content?.getBoundingClientRect();
+      const footerRect = footer?.getBoundingClientRect();
+      const contentFooterLayout =
         editor !== null &&
-        toolbar !== null &&
-        (editor.compareDocumentPosition(toolbar) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0 &&
+        content !== null &&
+        footer !== null &&
+        editor.parentElement === content &&
+        content.parentElement?.children.length === 2 &&
+        (content.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0 &&
         editorRect !== undefined &&
-        toolbarRect !== undefined &&
-        editorRect.bottom <= toolbarRect.top;
+        contentRect !== undefined &&
+        footerRect !== undefined &&
+        Math.abs(editorRect.width - contentRect.width) <= 1 &&
+        Math.abs(editorRect.height - contentRect.height) <= 1 &&
+        editorRect.bottom <= footerRect.top;
+      const viewportContained =
+        document.documentElement.scrollWidth <= window.innerWidth &&
+        document.documentElement.scrollHeight <= window.innerHeight;
       const noRepeatedHeading = document.querySelector('h1, .lensx-plugin-page__description') === null;
       const tokensComplete = tokens.every(
         (token) =>
           styles.getPropertyValue(`--lensx-plugin-color-${token}`).trim() !== '' ||
           styles.getPropertyValue(`--lensx-plugin-${token}`).trim() !== '',
       );
-      const complete = tokensComplete && editorBeforeControls && noRepeatedHeading;
+      const complete = tokensComplete && contentFooterLayout && viewportContained && noRepeatedHeading;
       root.dataset.visualCheck = complete ? 'passed' : 'failed';
-      root.dataset.layoutCheck = editorBeforeControls && noRepeatedHeading ? 'passed' : 'failed';
+      root.dataset.layoutCheck = contentFooterLayout && viewportContained && noRepeatedHeading ? 'passed' : 'failed';
       root.dataset.tokenCount = String(tokens.length);
       root.dataset.scenario = scenario;
       root.dataset.backgroundToken = styles.getPropertyValue('--lensx-plugin-color-background').trim();

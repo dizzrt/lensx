@@ -17,34 +17,61 @@ body {
 }
 
 .config-lens {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
   min-height: 0;
   padding: var(--lensx-plugin-space-page);
-  grid-template-rows: minmax(240px, 1fr) auto auto auto;
   gap: 10px;
   color: var(--lensx-plugin-color-text);
   background: var(--lensx-plugin-color-background);
 }
 
+.config-lens__content {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.config-lens__footer {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  max-height: 55%;
+  flex: 0 1 auto;
+  gap: 8px;
+}
+
+.config-lens__footer-main {
+  display: flex;
+  min-width: 0;
+  align-items: end;
+  gap: 10px;
+}
+
 .config-lens__toolbar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: end;
+  flex: 0 0 auto;
+  align-items: center;
   gap: 8px;
 }
 
 .config-lens__language {
-  display: grid;
+  display: flex;
   min-width: 132px;
-  gap: 4px;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 8px;
   color: var(--lensx-plugin-color-text-secondary);
   font-size: 12px;
 }
 
 .config-lens__status {
-  min-height: 20px;
+  min-width: 0;
+  min-height: 18px;
+  flex: 1 1 auto;
   padding-left: 10px;
   border-left: 3px solid var(--lensx-plugin-color-accent);
   color: var(--lensx-plugin-color-text-secondary);
@@ -53,7 +80,9 @@ body {
 
 .config-lens-editor {
   position: relative;
-  min-height: 240px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--lensx-plugin-color-border);
   border-radius: var(--lensx-plugin-radius-page);
@@ -66,6 +95,7 @@ body {
 }
 
 .config-lens__diagnostics {
+  min-height: 0;
   max-height: 96px;
   margin: 0;
   padding: 8px 8px 8px 28px;
@@ -81,12 +111,44 @@ body {
   outline-offset: 2px;
 }
 
-@media (max-width: 720px) {
-  .config-lens__toolbar {
-    align-items: stretch;
+@media (max-width: 520px), (max-height: 260px) {
+  .config-lens {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .config-lens__footer {
+    max-height: 65%;
+    gap: 4px;
+  }
+
+  .config-lens__footer-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 6px;
   }
 
   .config-lens__language {
-    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .config-lens__language .semi-select {
+    min-width: 72px;
+  }
+
+  .config-lens__status {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .config-lens__toolbar {
+    grid-column: 2;
+    grid-row: 1;
+    gap: 4px;
+  }
+
+  .config-lens__diagnostics {
+    max-height: 48px;
+    padding-block: 4px;
   }
 }

@@ -25,11 +25,20 @@ export interface PageProviderDescriptor {
   readonly display_name: LocalizedPageText;
 }
 
+export interface PluginPagePresentation {
+  readonly initial_size: {
+    readonly width: number;
+    readonly height: number;
+  };
+  readonly resizable: boolean;
+}
+
 export interface PageDescriptor extends HostPageTarget {
   readonly available: boolean;
   readonly parent?: HostPageTarget;
   readonly route: string;
   readonly title: LocalizedPageText;
+  readonly presentation?: PluginPagePresentation;
 }
 
 export interface PageProviderBatch {

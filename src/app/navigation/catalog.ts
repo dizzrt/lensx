@@ -8,6 +8,7 @@ import type {
   PageRegistryDiagnostic,
   PageRegistryReplacementResult,
   PageResolution,
+  PluginPagePresentation,
 } from './types';
 
 export const HOST_PAGE_OWNER_ID = 'lensx.core';
@@ -26,6 +27,15 @@ const cloneLocalizedText = (text: LocalizedPageText): LocalizedPageText =>
 const cloneTarget = (target: HostPageTarget): HostPageTarget =>
   Object.freeze({ owner_id: target.owner_id, page_id: target.page_id });
 
+const clonePresentation = (presentation: PluginPagePresentation): PluginPagePresentation =>
+  Object.freeze({
+    initial_size: Object.freeze({
+      width: presentation.initial_size.width,
+      height: presentation.initial_size.height,
+    }),
+    resizable: presentation.resizable,
+  });
+
 const cloneProvider = (provider: PageProviderDescriptor): PageProviderDescriptor =>
   Object.freeze({
     kind: provider.kind,
@@ -40,6 +50,7 @@ const clonePage = (page: PageDescriptor): PageDescriptor =>
     title: cloneLocalizedText(page.title),
     route: page.route,
     ...(page.parent ? { parent: cloneTarget(page.parent) } : {}),
+    ...(page.presentation ? { presentation: clonePresentation(page.presentation) } : {}),
     available: page.available,
   });
 
@@ -58,6 +69,51 @@ const isLocalizedText = (value: LocalizedPageText) =>
   typeof value['en-US'] === 'string' &&
   value['en-US'].trim().length > 0 &&
   (value['zh-CN'] === undefined || (typeof value['zh-CN'] === 'string' && value['zh-CN'].trim().length > 0));
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const validatePluginPresentation = (value: unknown, base: string): readonly PageRegistryDiagnostic[] => {
+  const diagnostics: PageRegistryDiagnostic[] = [];
+  if (!isRecord(value)) {
+    return [diagnostic('invalid_descriptor', base, 'Plugin Page presentation is required.')];
+  }
+
+  for (const key of Object.keys(value)) {
+    if (key !== 'initial_size' && key !== 'resizable') {
+      diagnostics.push(diagnostic('invalid_descriptor', `${base}/${key}`, 'Presentation field is not supported.'));
+    }
+  }
+  const initialSize = value.initial_size;
+  if (!isRecord(initialSize)) {
+    diagnostics.push(diagnostic('invalid_descriptor', `${base}/initial_size`, 'Initial size is invalid.'));
+  } else {
+    for (const key of Object.keys(initialSize)) {
+      if (key !== 'width' && key !== 'height') {
+        diagnostics.push(
+          diagnostic('invalid_descriptor', `${base}/initial_size/${key}`, 'Initial size field is not supported.'),
+        );
+      }
+    }
+    for (const dimension of ['width', 'height'] as const) {
+      const dimensionValue = initialSize[dimension];
+      const minimum = dimension === 'width' ? 320 : 180;
+      if (!Number.isInteger(dimensionValue) || Number(dimensionValue) < minimum || Number(dimensionValue) > 4096) {
+        diagnostics.push(
+          diagnostic(
+            'invalid_descriptor',
+            `${base}/initial_size/${dimension}`,
+            `Initial ${dimension} is outside the supported logical range.`,
+          ),
+        );
+      }
+    }
+  }
+  if (typeof value.resizable !== 'boolean') {
+    diagnostics.push(diagnostic('invalid_descriptor', `${base}/resizable`, 'Resizable must be boolean.'));
+  }
+  return diagnostics;
+};
 
 const validatePluginBatch = (providerOwner: string, batch: PageProviderBatch): readonly PageRegistryDiagnostic[] => {
   const diagnostics: PageRegistryDiagnostic[] = [];
@@ -94,6 +150,7 @@ const validatePluginBatch = (providerOwner: string, batch: PageProviderBatch): r
     ) {
       diagnostics.push(diagnostic('invalid_descriptor', base, 'Page descriptor is invalid.'));
     }
+    diagnostics.push(...validatePluginPresentation(page.presentation, `${base}/presentation`));
     if (
       page.parent &&
       (page.parent.owner_id !== providerOwner ||

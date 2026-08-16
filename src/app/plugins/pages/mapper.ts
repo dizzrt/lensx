@@ -1,10 +1,19 @@
-import type { LocalizedPageText, PageDescriptor, PageProviderBatch } from '../../navigation';
+import type { LocalizedPageText, PageDescriptor, PageProviderBatch, PluginPagePresentation } from '../../navigation';
 import type { RegisteredPluginRegistrationDetail } from '../registration/types';
 
 const cloneLocalizedText = (text: LocalizedPageText): LocalizedPageText =>
   Object.freeze({
     'en-US': text['en-US'],
     ...(text['zh-CN'] ? { 'zh-CN': text['zh-CN'] } : {}),
+  });
+
+const clonePresentation = (presentation: PluginPagePresentation): PluginPagePresentation =>
+  Object.freeze({
+    initial_size: Object.freeze({
+      width: presentation.initial_size.width,
+      height: presentation.initial_size.height,
+    }),
+    resizable: presentation.resizable,
   });
 
 export const mapPluginRegistrationToPageProviderBatch = (
@@ -22,6 +31,7 @@ export const mapPluginRegistrationToPageProviderBatch = (
         page_id: page.id,
         title: cloneLocalizedText(page.title),
         route: page.route,
+        presentation: clonePresentation(page.presentation),
         ...(page.parent_page_id
           ? {
               parent: Object.freeze({

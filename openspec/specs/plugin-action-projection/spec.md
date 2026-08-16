@@ -18,7 +18,7 @@ for Plugin Action projection. Only entries whose `kind` is `registered`, whose
 `compatibility.host_api` values are both `true`, and whose details belong to the
 same current revision MAY contribute Launcher Actions. Installation `source`,
 publisher declarations, remote behavior, and legacy permission claims MUST NOT
-bypass these eligibility conditions. Current Registration and Manifest `0.2.0`
+bypass these eligibility conditions. Current Registration and Manifest `0.4.0`
 facts contain no grant authority.
 
 #### Scenario: A healthy eligible plugin becomes a projection candidate

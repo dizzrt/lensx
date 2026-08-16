@@ -6,7 +6,7 @@
       "host_api": "0.2.0"
     },
     "input": {
-      "manifest_version": "0.3.0",
+      "manifest_version": "0.4.0",
       "plugin_id": "com.acme.minimal",
       "version": "1.0.0",
       "display": {
@@ -47,7 +47,7 @@
     },
     "expected_status": "compatible",
     "expected_normalized": {
-      "manifest_version": "0.3.0",
+      "manifest_version": "0.4.0",
       "plugin_id": "com.acme.minimal",
       "version": "1.0.0",
       "display": {
@@ -81,7 +81,14 @@
             "title": {
               "en-US": "Home"
             },
-            "route": "/"
+            "route": "/",
+            "presentation": {
+              "initial_size": {
+                "width": 650,
+                "height": 600
+              },
+              "resizable": false
+            }
           }
         ],
         "actions": []

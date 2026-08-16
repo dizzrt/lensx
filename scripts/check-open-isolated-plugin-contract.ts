@@ -14,8 +14,8 @@ const forbidText = (path: string, marker: string): void => {
 
 const manifestSchema = json('packages/plugin-contract/schema/manifest.schema.json');
 const hostApiSchema = json('packages/plugin-contract/schema/host-api.schema.json');
-if (manifestSchema.$id !== 'https://lensx.app/schemas/plugin/manifest-0.3.0.schema.json')
-  failures.push('Manifest Schema id is not 0.3.0.');
+if (manifestSchema.$id !== 'https://lensx.app/schemas/plugin/manifest-0.4.0.schema.json')
+  failures.push('Manifest Schema id is not 0.4.0.');
 if (hostApiSchema.$id !== 'https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json')
   failures.push('Host API Schema id is not 0.2.0.');
 
@@ -45,7 +45,40 @@ for (const path of [
   forbidText(path, 'permission_denied');
 }
 
-requireText('packages/plugin-contract/src/constants.ts', "PLUGIN_MANIFEST_VERSION = '0.3.0'");
+const publicRuntimeBoundaryFiles = [
+  'packages/plugin-contract/schema/host-api.schema.json',
+  'packages/plugin-contract/src/generated/plugin-host-api-input.ts',
+  'packages/plugin-contract/src/host-api-types.ts',
+  'packages/plugin-contract/src/host-api.ts',
+  'packages/plugin-sdk/src/client.ts',
+  'packages/plugin-sdk/src/context.ts',
+  'packages/plugin-sdk/src/index.ts',
+  'packages/plugin-sdk/src/types.ts',
+  'packages/plugin-sdk/src/webview.ts',
+  'packages/plugin-sdk/src/internal/transport-contract.ts',
+  'packages/plugin-sdk/src/internal/webview-bridge-contract.ts',
+  'packages/plugin-testkit/src/context.ts',
+  'packages/plugin-testkit/src/fake-transport.ts',
+  'packages/plugin-testkit/src/index.ts',
+];
+for (const path of publicRuntimeBoundaryFiles) {
+  for (const marker of [
+    'setSize',
+    'setResizable',
+    'getCurrentWindow',
+    'nativeHandle',
+    'native_handle',
+    'window_position',
+    'window_monitor',
+    'window_constraints',
+    'maximize_window',
+    'fullscreen_window',
+  ]) {
+    forbidText(path, marker);
+  }
+}
+
+requireText('packages/plugin-contract/src/constants.ts', "PLUGIN_MANIFEST_VERSION = '0.4.0'");
 requireText('packages/plugin-contract/src/constants.ts', "PLUGIN_HOST_API_VERSION = '0.2.0'");
 requireText('src-tauri/src/plugin_manifest.rs', 'PLUGIN_HOST_API_VERSION: &str = "0.2.0"');
 requireText('packages/plugin-sdk/src/constants.ts', "PLUGIN_SDK_VERSION = '0.3.0'");
@@ -70,7 +103,7 @@ for (const path of ['examples/plugin-contract-consumer/manifest.json']) {
   const compatibility = manifest.compatibility as
     | { host_api?: { min_version?: unknown; max_version_exclusive?: unknown } }
     | undefined;
-  if (manifest.manifest_version !== '0.3.0') failures.push(`${path}: Manifest version is not 0.3.0.`);
+  if (manifest.manifest_version !== '0.4.0') failures.push(`${path}: Manifest version is not 0.4.0.`);
   if (runtime?.kind !== 'webview') failures.push(`${path}: Runtime kind is not webview.`);
   if (compatibility?.host_api?.min_version !== '0.2.0' || compatibility.host_api.max_version_exclusive !== '0.3.0')
     failures.push(`${path}: Host API range is not [0.2.0, 0.3.0).`);
@@ -89,7 +122,7 @@ for (const path of [
     | { host_api?: { min_version?: unknown; max_version_exclusive?: unknown } }
     | undefined;
   const runtime = manifest.runtime as { kind?: unknown } | undefined;
-  if (manifest.manifest_version !== '0.3.0') failures.push(`${path}: Manifest version is not 0.3.0.`);
+  if (manifest.manifest_version !== '0.4.0') failures.push(`${path}: Manifest version is not 0.4.0.`);
   if (runtime?.kind !== 'webview') failures.push(`${path}: Runtime kind is not webview.`);
   if (compatibility?.host_api?.min_version !== '0.2.0' || compatibility.host_api.max_version_exclusive !== '0.3.0')
     failures.push(`${path}: Host API range is not [0.2.0, 0.3.0).`);
@@ -102,4 +135,4 @@ if (failures.length > 0) {
   for (const failure of failures) console.error(failure);
   process.exit(1);
 }
-console.log('Manifest Contract 0.3.0 and Host API 0.2.0 drift checks passed.');
+console.log('Manifest Contract 0.4.0 and Host API 0.2.0 drift checks passed.');

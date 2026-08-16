@@ -245,6 +245,12 @@ generation-bound resource、开放 Web 正向路径、top-level navigation deny�
 `.lxp` fixtures、有界 macOS WKWebView evidence、ACL negative matrix 与 workspace-private imports。
 native load、bridge ready 与 SDK ready 始终是相互独立的 evidence fact。
 
+Launcher presentation 变更还必须验证严格类型化的 `home`/`search`/`host_page`/`plugin_page`
+target、Manifest 逻辑硬边界、当前 work-area 拟合、fixed/opt-in resizable Page、latest-wins Child
+slot revision、same-attempt hide/restore retention 与 actual-close reset。证据只能包含有界
+logical/native/slot 尺寸、布尔、计数、revision 和稳定 stage，不得包含 monitor 坐标、handle、
+path、content、raw error 或持久化的用户尺寸。
+
 window-lifecycle 门禁专门阻止 multi-WebView regression：post-creation Launcher resize、window event、
 native-dialog parent 或 `Cmd+W` hide 不得使用 single-`WebviewWindow` lookup。其 Rust 与 React
 composition coverage 要求 resolve-before-mutation、Child-first/native-parent-second hide、native-hide
@@ -358,9 +364,10 @@ pnpm run check:official-config-lens-warm-format
 ```
 
 这些门禁运行成员 lifecycle 与四语言恶意/golden 语料，检查依赖许可证和准确版本，
-构建 Monaco 与 language module Worker，验证全部包内 chunk 和预算，对比固定双语
-light/dark 28 场景视觉矩阵，并消费单一可编辑 model、直接替换和 undo 的有界真实
-macOS WKWebView 证据。证据和诊断不得包含
+构建 Monaco 与 language module Worker，验证全部包内 chunk 和预算，对比主 `800×600`、
+hard-minimum 和较大 user-resized viewport 下的 40 场景双语 light/dark 视觉矩阵，并消费
+单一可编辑 model、直接替换、undo、resize retention、close-to-Home reset 与 reopen 使用
+Manifest 初始尺寸的有界真实 macOS WKWebView 证据。证据和诊断不得包含
 配置内容、URL、origin、path、nonce、Port、payload、stack 或 raw error。
 
 ## Plugin Scoped Storage 验证
