@@ -8,8 +8,8 @@ Host 私有生命周期控制、本地 package replacement、Host 私有 scoped 
 Runtime、进程内 Runtime Session、公共 SDK WebView transport、Host 私有 bridge adapter 与公共 Host API
 语义契约和预期的运行时扩展边界。原 permission core 与 native clipboard provider 已删除。公共
 Plugin Developer CLI 与项目模板、完整前台插件执行 lifecycle、Host 私有管理 surface，以及
-feature-gated Plugin Development Mode 也已交付。仓库还交付了独立官方插件 `.lxp` release
-流水线，以及 Host 会忽略的外部 audit sidecar。npm 发布、签名、Marketplace 分发、远程更新、
+feature-gated Plugin Development Mode 也已交付。仓库通过只读 macOS CI 验证直接插件，
+但不提供自动 release 流水线。npm 发布、签名、Marketplace 分发、远程更新、
 decision history 和用户主动 rollback history 当前尚未实现。稳定 spec 和源码共同决定已经交付的子集；
 外部作者应从[插件开发入口](../plugin-development/index.md)开始。
 
@@ -1053,7 +1053,7 @@ Action 激活、Page Registry/navigation、macOS 隔离 Child WebView Runtime、
 公共 SDK WebView transport/Host bridge adapter、公共 Host API 语义契约、Host 私有 RPC v1 validation boundary、
 Dispatcher、插件 scoped storage provider、open isolated Web Runtime 与 Plugin Management Settings 已交付。
 其他能力还包括公共项目模板与 CLI、feature-gated Plugin
-Development Mode、双语外部开发者文档与官方插件 release 流水线。其余每项能力——npm 发布、签名、Marketplace 分发、
+Development Mode、双语外部开发者文档与只读 LensX/Plugins CI。其余每项能力——自动版本或发布、npm 发布、签名、Marketplace 分发、
 远程/自动更新、decision 或用户主动 rollback history、后台 Runtime 或 executable/trusted sidecar——都需要独立的已接受
 规格和实现证据。本文定义架构方向和边界，不是发布检查清单。外部 package、API、教程和排障细节位于
 [canonical 插件开发参考](../plugin-development/index.md)。

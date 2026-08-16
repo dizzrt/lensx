@@ -13,9 +13,9 @@ extension boundary. The former permission core and native clipboard provider
 have been removed.
 The public Plugin Developer CLI and project templates, complete foreground
 plugin execution lifecycle, Host-private management surface,
-and feature-gated Plugin Development Mode are also shipped. The repository also
-ships an independent official-plugin `.lxp` release pipeline and external audit
-sidecar that the Host ignores. npm publication,
+and feature-gated Plugin Development Mode are also shipped. The repository
+validates direct plugins through read-only macOS CI but does not provide an
+automatic release pipeline. npm publication,
 signing, Marketplace distribution, remote updates, decision history, and
 user-initiated rollback history are not currently implemented. Stable specs
 and source code define the shipped subset; external authors should start from
@@ -1408,8 +1408,9 @@ transport/Host bridge adapter, public Host API semantic contract, and the
 Host-private RPC v1 validation boundary, Dispatcher, plugin-scoped storage
 provider, open isolated Web Runtime, Plugin Management Settings, public project
 templates and CLI, feature-gated
-Plugin Development Mode, and the bilingual external-developer documentation
-and the official-plugin release pipeline are delivered. Each remaining capability—npm publication, signing,
+Plugin Development Mode, the bilingual external-developer documentation, and
+read-only LensX/Plugins CI are delivered. Each remaining capability—automatic
+versioning or publication, npm publication, signing,
 Marketplace distribution, remote/automatic updates, decision or
 user-initiated rollback history, background Runtime, or executable/trusted sidecars—requires its
 own accepted specification and implementation evidence. This architectural

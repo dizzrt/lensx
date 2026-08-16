@@ -75,11 +75,13 @@ requireReachable('check:plugin-development-documentation', [
   'check:plugin-developer-cli',
   'check:open-isolated-plugin-runtime',
 ]);
-requireReachable('check:official-plugin-release-pipeline', [
-  'check:official-config-lens-plugin',
-  'check:official-plugin-release-dry-run',
-  'check:open-isolated-plugin-runtime',
-]);
+for (const requiredCiScript of ['ci:lensx', 'ci:plugins', 'check:ci-workflows']) {
+  if (scripts[requiredCiScript] === undefined) fail(`missing root CI script ${requiredCiScript}`);
+}
+for (const name of Object.keys(scripts)) {
+  if (/official-plugin-release|^(?:version|publish):official/u.test(name))
+    fail(`retired release script remains: ${name}`);
+}
 
 const rootCheck = scripts.check ?? '';
 if (!rootCheck.includes('node scripts/workspace-lifecycle.ts check')) {
@@ -100,5 +102,5 @@ for (const member of members) {
 }
 
 console.log(
-  'Plugin Runtime gate graph preserves resource, navigation, Session, RPC, Host API, development, official, open-isolated, and workspace lifecycle coverage.',
+  'Plugin Runtime gate graph preserves resource, navigation, Session, RPC, Host API, development, CI, open-isolated, and workspace lifecycle coverage.',
 );

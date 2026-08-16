@@ -763,23 +763,26 @@ React 模板额外依赖 Task 1.4。
 
 ## Milestone 7：落地官方插件并完成平台加固
 
-- [x] **Task 7.1：建立官方插件发布流水线**
+- [x] **Task 7.1：建立官方插件发布流水线（历史能力，现已退役）**
 
 **OpenSpec change**：[add-official-plugin-release-pipeline](openspec/changes/archive/2026-08-08-add-official-plugin-release-pipeline/)
 
-**目标**：让 `plugins/*` 可以独立版本、验证、构建和发布，而不绑定 lensX 应用版本。
+**退役 OpenSpec change**：[simplify-github-actions-to-project-and-plugin-ci](openspec/changes/archive/2026-08-16-simplify-github-actions-to-project-and-plugin-ci/)
+
+**历史目标**：曾让 `plugins/*` 可以独立版本、验证、构建和发布，而不绑定 lensX 应用版本。
+
+**当前状态**：自动版本 PR、candidate handoff、tag 与 GitHub Release workflow 已退役；当前由
+只读 macOS Plugins CI 验证全部直接插件，不提供自动发布能力。
 
 **范围**：
 
 - 每个官方插件拥有独立 package、Manifest、SemVer、CHANGELOG、测试和 CODEOWNERS。
-- 使用 path filter 和 changeset 触发单插件 release。
-- 发布前运行 Contract、SDK、包格式、权限、Runtime 和 E2E gate。
-- 产出与外部插件相同的 `.lxp`，不得由 Host 直接 import 源码。
-- 记录官方发布来源，但不自动授予权限。
+- 历史实现使用 path filter 与 Changesets 表达 release intent，并在发布前运行平台 gate。
+- 保留的当前边界是插件不得由 Host 直接 import 源码，CI 证据也不授予 Host authority。
 
 **依赖**：Task 3.1、Task 6.4、Task 6.6。
 
-**完成标准**：一个官方插件可单独发版且不触发桌面应用发布；产物可由普通安装器验证。
+**历史完成证据**保留在归档 change；它不表示当前仓库仍支持自动发布。
 
 - [x] **Task 7.2：交付首个无权限官方插件**
 
@@ -799,20 +802,20 @@ React 模板额外依赖 Task 1.4。
 - 只依赖公开 Contract、SDK、可选 UI 和 Testkit。
 - 使用包内 Monaco、editor Worker 和四语言 Worker；不依赖远程资源或 Host 私有模块。
 - 不申请系统权限，不 import 根应用 `src/app/**`，不持久化用户内容；隐藏 Launcher 后通过快捷键恢复会保留同一 Runtime 和临时输入，实际关闭 Page 后才丢弃临时输入。
-- 使用正式 CLI、包格式、普通安装器、隔离 Runtime 和独立官方发布候选完成 dogfood。
+- 使用正式 CLI、包格式、普通安装器、隔离 Runtime 和公共边界插件 CI 完成 dogfood。
 
 **依赖**：Task 4.4、Task 6.4、Task 7.1。
 
 **完成标准**：ConfigLens 的独立、可复现 `.lxp` 已通过普通安装、搜索、打开、SDK ready、
 包内 Monaco/Worker 与四语言 smoke、隐藏后快捷键恢复同一 Runtime 与临时输入、实际关闭后以新
 Runtime 重新打开、禁用、双版本升级和卸载；双语文档、28 个视觉基线、真实 macOS WKWebView
-证据、官方发布流水线和完整前端/Rust/OpenSpec 验证均通过。
+证据、公共边界 Plugins CI 和完整前端/Rust/OpenSpec 验证均通过。
 
 - [x] **Task 7.2.1：将插件 Runtime 迁移为 Child WebView**
 
 **OpenSpec change**：[replace-plugin-iframe-runtime-with-child-webview](openspec/changes/archive/2026-08-16-replace-plugin-iframe-runtime-with-child-webview/)
 
-**状态**：实现、public package consumer、ConfigLens official candidate、真实 WKWebView matrix、
+**状态**：实现、public package consumer、ConfigLens public-boundary plugin CI、真实 WKWebView matrix、
 双语文档镜像、完整验证与 stable spec 同步均已完成；change 已归档。
 
 **目标**：以同一 Launcher native window 中唯一 current Child WebView 替换旧 DOM container，

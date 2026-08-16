@@ -7,8 +7,8 @@ plugin workspace. Its package is `@lensx/official-config-lens`, its plugin ID is
 `dev.lensx.config-lens`, and its localized product name remains `ConfigLens`.
 It contributes one `main` Page and one `open` Action, using the same public
 Contract, SDK, UI, Testkit, CLI, local installation, isolated Runtime, and Host
-API boundaries as an external plugin. Repository ownership and official release
-assets confer no trust, permission, persistence, clipboard, or native authority.
+API boundaries as an external plugin. Repository ownership and CI evidence
+confer no trust, permission, persistence, clipboard, or native authority.
 
 ConfigLens is an ephemeral configuration workbench for JSON, YAML 1.2, TOML
 1.0, and XML 1.0. Input remains inside the current Page generation. Hiding and
@@ -28,7 +28,7 @@ WebSocket, browser storage, clipboard, Host persistence, or content logging.
 
 ## Reviewed Runtime Dependencies
 
-Runtime versions are exact and changes require a new review and Changeset.
+Runtime versions are exact and changes require a new review.
 
 | Dependency | Version | License | Role and review result |
 | --- | --- | --- | --- |
@@ -88,15 +88,16 @@ Debug builds may be slower, but they use the same Runtime and cleanup path.
 Actual close/reopen creates fresh SDK, model, editor, and Workers; only
 same-attempt hide/restore retains them.
 
-Run the focused gate from the repository root:
+Run the plugin CI entry and focused product evidence from the repository root:
 
 ```bash
-pnpm run check:official-config-lens-plugin
+pnpm run ci:plugins
+pnpm run check:official-config-lens-cold-open
+pnpm run check:official-config-lens-warm-format
 ```
 
-It composes package lifecycle and corpus tests, deterministic public CLI
-packing and inspection, release-candidate agreement, ordinary install/Runtime
-lifecycle checks, visual regression, bounded macOS WKWebView evidence, privacy
-scans, and documentation drift checks. The macOS evidence stores booleans and
-counts only; input, URL, origin, path, nonce, Port, payload, and raw errors are
-forbidden.
+Plugins CI builds required public dependencies and runs package lifecycle,
+built-output E2E, privacy/boundary checks, and the 28-case visual regression.
+The focused cold-open and warm-format gates retain bounded macOS WKWebView and
+product evidence. Evidence stores booleans and counts only; input, URL, origin,
+path, nonce, Port, payload, and raw errors are forbidden.

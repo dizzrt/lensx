@@ -296,15 +296,14 @@ pack gate 会把真实 Contract、SDK 与 UI tarball 安装到隔离的 Rsbuild 
 在 `650×600` 下覆盖 `en-US`/`zh-CN` 与 light/dark，包括语义结构、live region、键盘恢复、
 focus、computed token、长文本和截图。这些门禁不会实现或模拟 Host 安装与 iframe 执行。
 
-## 官方插件 Release Unit
+## 直接插件 CI Member
 
-每个直接 `plugins/*` member 仍是普通公共边界插件，同时独立拥有 private package
-version、Manifest version、CHANGELOG、测试、`test:e2e` 与明确 CODEOWNERS 条目。Host
-不得导入官方插件源码。Changesets 表达 release 意图；仓库发布 canonical `.lxp`，而不是 npm
-package。
+每个直接 `plugins/*` member 仍是普通公共边界插件，并拥有有意义的 lifecycle scripts 与
+`test:e2e`。Host 不得导入直接插件源码。Plugins CI 触发后，会先按拓扑顺序构建所需的公共
+workspace 依赖，再验证每个直接 member。
 
-路径规划、版本 PR、candidate gate、资产 schema、重试和非 authority release audit 边界见
-[官方插件发布流水线](official-plugin-release.md)。
+触发器、本地复现、clean 依赖准备、失败行为及明确不提供自动发布的边界见
+[持续集成](continuous-integration.md)。
 
 ## 根命令
 
@@ -330,7 +329,8 @@ pnpm run test:workspace-lifecycle
 pnpm run check:plugin-sdk
 pnpm run check:plugin-testkit
 pnpm run check:plugin-ui
-pnpm run check:official-plugin-release-pipeline
+pnpm run check:ci-workflows
+pnpm run ci:plugins
 ```
 
 ## 依赖方向

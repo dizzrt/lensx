@@ -343,17 +343,16 @@ and light/dark at `650×600`, including semantic structure, live regions,
 keyboard recovery, focus, computed tokens, long text, and screenshots. These
 gates do not implement or simulate Host installation or iframe execution.
 
-## Official Plugin Release Units
+## Direct Plugin CI Members
 
-Every direct `plugins/*` member remains a normal public-boundary
-plugin, but it also owns an independent private package version, Manifest
-version, CHANGELOG, tests, `test:e2e`, and explicit CODEOWNERS entry. The Host
-must not import official plugin source. Changesets expresses release intent;
-the repository publishes canonical `.lxp` assets rather than npm packages.
+Every direct `plugins/*` member remains a normal public-boundary plugin with
+meaningful lifecycle scripts and `test:e2e`. The Host must not import direct
+plugin source. A matching Plugins CI event validates every direct member after
+building its required public workspace dependencies in topological order.
 
-See [Official Plugin Release Pipeline](official-plugin-release.md) for path
-planning, version PRs, candidate gates, asset schemas, retries, and the
-non-authoritative release audit boundary.
+See [Continuous Integration](continuous-integration.md) for triggers, local
+reproduction, clean dependency preparation, failure behavior, and the explicit
+absence of automatic publishing.
 
 ## Root Commands
 
@@ -381,7 +380,8 @@ pnpm run test:workspace-lifecycle
 pnpm run check:plugin-sdk
 pnpm run check:plugin-testkit
 pnpm run check:plugin-ui
-pnpm run check:official-plugin-release-pipeline
+pnpm run check:ci-workflows
+pnpm run ci:plugins
 ```
 
 ## Dependency Direction

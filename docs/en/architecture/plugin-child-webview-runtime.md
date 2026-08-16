@@ -74,17 +74,17 @@ The page may use ordinary Web features such as package modules, Dedicated
 Workers, Fetch/HTTPS, WebSocket, WASM, and origin storage. These are browser
 capabilities, not Host grants. SharedWorker, ServiceWorker, detached execution,
 device access, and native APIs are not promised. Publisher, repository,
-provenance, and official release metadata never add Runtime authority.
+provenance, and CI evidence never add Runtime authority.
 
-## Development And Release
+## Development And CI
 
 External, development, and official plugins use Manifest `0.3.0`,
 `runtime.kind: "webview"`, and `@lensx/plugin-sdk/webview`. Templates and the
 CLI build only this path. Development reload stages the next generation before
 destroying the old current attempt; rejected staging leaves the current attempt
-unchanged. Official candidates pass the same local installation, native
-Runtime, bridge/SDK, interaction, and zero-residual teardown gates as external
-plugins.
+unchanged. Direct plugins use the same public Runtime, bridge/SDK, interaction,
+and zero-residual teardown boundaries as external plugins; CI does not grant a
+different Host path.
 
 Use these maintained commands:
 

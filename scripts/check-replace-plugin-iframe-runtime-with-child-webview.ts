@@ -12,8 +12,8 @@ const requiredStages = [
   'check:plugin-sdk',
   'check:plugin-ui',
   'check:plugin-testkit',
-  'check:official-config-lens-plugin',
-  'check:official-plugin-release-pipeline',
+  'ci:plugins',
+  'check:ci-workflows',
   'evidence:plugin-child-webview-macos',
   'check:plugin-contract-docs',
   'check:no-dual-plugin-runtime',
@@ -37,7 +37,7 @@ for (const marker of [
   `**OpenSpec change**：[replace-plugin-iframe-runtime-with-child-webview](${archivePath}/)`,
   '`pnpm run check:replace-plugin-iframe-runtime-with-child-webview`',
   'public package consumer',
-  'ConfigLens official candidate',
+  'ConfigLens public-boundary plugin CI',
   '真实 WKWebView matrix',
 ]) {
   if (!roadmap.includes(marker)) throw new Error(`Roadmap Child WebView migration omitted ${marker}.`);

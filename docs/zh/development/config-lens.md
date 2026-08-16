@@ -7,7 +7,7 @@ package 为 `@lensx/official-config-lens`，plugin ID 为
 `dev.lensx.config-lens`，本地化产品名始终为 `ConfigLens`。它只贡献一个
 `main` Page 和一个 `open` Action，并与外部插件使用相同的公共 Contract、
 SDK、UI、Testkit、CLI、本地安装、隔离 Runtime 和 Host API 边界。仓库归属
-和官方发布资产不会赋予信任、权限、持久化、剪贴板或原生能力。
+和 CI 证据不会赋予信任、权限、持久化、剪贴板或原生能力。
 
 ConfigLens 是支持 JSON、YAML 1.2、TOML 1.0 和 XML 1.0 的临时配置工作台。
 输入只保留在当前 Page generation。隐藏和恢复 Launcher 不会关闭该 Page：
@@ -23,7 +23,7 @@ Format 和 Compact 控件。插件不执行 fetch、WebSocket、浏览器存储�
 
 ## 已审查的 Runtime 依赖
 
-Runtime 依赖固定为准确版本，任何变更都必须重新审查并添加 Changeset。
+Runtime 依赖固定为准确版本，任何变更都必须重新审查。
 
 | 依赖 | 版本 | 许可证 | 用途与审查结果 |
 | --- | --- | --- | --- |
@@ -69,13 +69,15 @@ release-like macOS evidence 要求 p95 不超过 500 ms；Development snapshot e
 debug build 可能更慢，但仍使用相同 Runtime 与 cleanup path。真正 close/reopen 会创建 fresh SDK、model、
 editor 与 Worker；只有 same-attempt hide/restore 会保留它们。
 
-从仓库根目录运行聚焦门禁：
+从仓库根目录运行插件 CI 入口与聚焦产品证据：
 
 ```bash
-pnpm run check:official-config-lens-plugin
+pnpm run ci:plugins
+pnpm run check:official-config-lens-cold-open
+pnpm run check:official-config-lens-warm-format
 ```
 
-它组合 package lifecycle 与语料测试、确定性公共 CLI 打包与检查、release
-candidate 一致性、普通安装/Runtime lifecycle、视觉回归、有界 macOS
-WKWebView 证据、隐私扫描与文档 drift 检查。macOS 证据只保存布尔值和计数；
-禁止包含输入、URL、origin、path、nonce、Port、payload 或 raw error。
+Plugins CI 会构建所需公共依赖，并运行 package lifecycle、built-output E2E、
+隐私/边界检查与 28 场景视觉回归。聚焦 cold-open 与 warm-format gate 保留有界 macOS
+WKWebView 和产品证据。证据只保存布尔值和计数；禁止包含输入、URL、origin、path、
+nonce、Port、payload 或 raw error。

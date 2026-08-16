@@ -14,6 +14,23 @@ const locales = ['en-US', 'zh-CN'];
 const themes = ['light', 'dark'];
 const scenarios = ['empty', 'valid', 'invalid', 'limit', 'long', 'focus', 'recovery'];
 
+const waitForExit = (child, timeout) =>
+  new Promise((resolveExit) => {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      resolveExit(true);
+      return;
+    }
+    const timer = setTimeout(() => {
+      child.off('exit', onExit);
+      resolveExit(false);
+    }, timeout);
+    const onExit = () => {
+      clearTimeout(timer);
+      resolveExit(true);
+    };
+    child.once('exit', onExit);
+  });
+
 const run = (command, arguments_, cwd, options = {}) => {
   const execution = spawnSync(command, arguments_, { cwd, encoding: 'utf8', ...options });
   if (execution.error !== undefined) throw execution.error;
@@ -124,6 +141,10 @@ try {
   if (backgrounds.get('light') === backgrounds.get('dark')) throw new Error('Light and dark backgrounds must differ.');
   console.log(`${update ? 'Updated' : 'Verified'} 28 ConfigLens visual baselines.`);
 } finally {
-  preview.kill('SIGKILL');
+  preview.kill('SIGTERM');
+  if (!(await waitForExit(preview, 2_000))) {
+    preview.kill('SIGKILL');
+    await waitForExit(preview, 2_000);
+  }
   await rm(captureRoot, { recursive: true, force: true });
 }

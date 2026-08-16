@@ -17,7 +17,6 @@
 | Contract、SDK、Testkit、CLI | 已交付 | 公共 package 边界和真实 tarball 已验证。 |
 | 可选 Plugin UI | 已交付 | 插件自行拥有 React、React DOM、Semi Design 和 UI package。 |
 | 本地 `.lxp` 安装 | 已交付 | Settings 使用 canonical Host inspection 和 preparation 边界。 |
-| 官方 `.lxp` 发布流水线 | 已交付 | ConfigLens 是首个普通 consumer，并拥有独立 Changeset、candidate、audit record 与 release。 |
 | Development Mode | 条件可用 | 需要专用 build 和显式进程开关。 |
 | Host API | 条件可用 | catalog 条目不是 authority；以最新 session capabilities 为准。 |
 | npm 发布 | 尚未交付 | 仓库可以产出 tarball，但 package 尚未发布到 npm。 |
@@ -52,8 +51,8 @@ permission 或 Host policy 字段。CLI validation 证明作者控制的字节�
 `.lxp`。production 与 development source 共享同一开放隔离 Runtime、Session、deadline 与
 teardown 边界。
 
-仓库会验证公共 package tarball，并提供 GitHub Release 流水线；首个产品成员是
+仓库会验证公共 package tarball，并通过只读 Plugins CI 验证首个产品成员——
 不具特权的 ConfigLens 插件。ConfigLens 使用一个可编辑 Monaco model 显式处理 JSON、
 YAML、TOML 或 XML 格式化，Compact 仅支持 JSON，并提供一次操作 undo；参见
 [维护者参考](../development/config-lens.md)。公共 package 仍未进入 npm。不得虚构 package registry 命令、产品下载
-URL、自动 reload/update、签名、Marketplace 或 Host trust 能力。
+URL、自动 reload/update、自动发布、签名、Marketplace 或 Host trust 能力。

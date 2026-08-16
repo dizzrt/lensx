@@ -92,7 +92,7 @@ export const discoverWorkspaceMembers = (rootDir: string): WorkspaceMember[] => 
   return members.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 };
 
-const dependencyNames = (manifest: PackageManifest): Set<string> =>
+export const workspaceDependencyNames = (manifest: PackageManifest): Set<string> =>
   new Set(
     [manifest.dependencies, manifest.devDependencies, manifest.peerDependencies, manifest.optionalDependencies].flatMap(
       (section) => Object.keys(section ?? {}),
@@ -106,7 +106,7 @@ export const sortWorkspaceMembers = (members: readonly WorkspaceMember[]): Works
 
   for (const member of members) {
     const memberDependencies = new Set(
-      [...dependencyNames(member.manifest)].filter((dependency) => byName.has(dependency)),
+      [...workspaceDependencyNames(member.manifest)].filter((dependency) => byName.has(dependency)),
     );
     dependencies.set(member.name, memberDependencies);
     for (const dependency of memberDependencies) {

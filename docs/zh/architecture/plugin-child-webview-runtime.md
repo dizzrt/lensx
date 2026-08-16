@@ -65,15 +65,15 @@ Host DOM、其他插件与旧 generation 都不可用。top-level escape、popup
 页面可使用 package module、Dedicated Worker、Fetch/HTTPS、WebSocket、WASM 与 origin storage
 等普通 Web 能力；它们是 browser capability，不是 Host grant。SharedWorker、ServiceWorker、
 detached execution、device access 与 native API 不在承诺范围内。Publisher、repository、
-provenance 与 official release metadata 都不会增加 Runtime authority。
+provenance 与 CI 证据都不会增加 Runtime authority。
 
-## 开发与发布
+## 开发与 CI
 
 external、development 与 official 插件都使用 Manifest `0.3.0`、`runtime.kind: "webview"` 与
 `@lensx/plugin-sdk/webview`。template 与 CLI 只构建这一路径。Development reload 在销毁旧 current
-attempt 前 staging 下一 generation；被拒绝的 staging 不改变 current attempt。official candidate
-与 external 插件通过相同的 local installation、native Runtime、bridge/SDK、interaction 与
-zero-residual teardown gate。
+attempt 前 staging 下一 generation；被拒绝的 staging 不改变 current attempt。直接插件与 external
+插件使用相同的公共 Runtime、bridge/SDK、interaction 与 zero-residual teardown 边界；CI 不会赋予
+不同的 Host 路径。
 
 使用以下维护命令：
 

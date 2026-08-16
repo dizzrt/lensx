@@ -29,8 +29,8 @@ structure.
   run, adapt, isolate, package, and validate the maintained plugin starters.
 - [Plugin Developer CLI](development/plugin-developer-cli.md) — scaffold,
   build, validate, package, and inspect plugins through the public CLI.
-- [Official Plugin Release Pipeline](development/official-plugin-release.md) —
-  independent Changesets, candidate, audit, and least-privilege `.lxp` releases.
+- [Continuous Integration](development/continuous-integration.md) — read-only
+  macOS LensX and direct-plugin validation, local reproduction, and CI policy.
 - [ConfigLens Official Plugin](development/config-lens.md) — four-language,
   Worker-isolated configuration formatting and its dependency/evidence bounds.
 - [Plugin Development Mode](development/plugin-development-mode.md) — manually

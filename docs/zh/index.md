@@ -24,8 +24,8 @@
   仓库维护的插件起步项目。
 - [插件开发者 CLI](development/plugin-developer-cli.md) — 通过公共 CLI 创建、构建、校验、
   打包和检查插件。
-- [官方插件发布流水线](development/official-plugin-release.md) — 独立 Changesets、candidate、
-  audit 与最小权限 `.lxp` release。
+- [持续集成](development/continuous-integration.md) — 只读 macOS LensX 与直接插件验证、
+  本地复现及 CI 策略。
 - [ConfigLens 官方插件](development/config-lens.md) — 四语言、Worker 隔离的配置
   格式化及其依赖与证据边界。
 - [插件开发模式](development/plugin-development-mode.md) — 在专用 Host 构建中手动注册、

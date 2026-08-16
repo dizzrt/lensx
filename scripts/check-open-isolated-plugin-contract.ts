@@ -98,16 +98,6 @@ for (const path of [
     if (serialized.includes(marker)) failures.push(`${path}: contains removed field ${marker}.`);
 }
 
-const changeset = read('.changeset/open-isolated-plugin-runtime.md');
-for (const packageName of [
-  '@lensx/plugin-contract',
-  '@lensx/plugin-sdk',
-  '@lensx/plugin-testkit',
-  '@lensx/plugin-cli',
-  '@lensx/plugin-ui',
-])
-  if (!changeset.includes(`"${packageName}": minor`)) failures.push(`Changeset misses ${packageName}.`);
-
 if (failures.length > 0) {
   for (const failure of failures) console.error(failure);
   process.exit(1);

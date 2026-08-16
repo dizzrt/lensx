@@ -186,7 +186,6 @@ export const CAPABILITY_STATUS_CATALOG: readonly CapabilityStatusFact[] = Object
   { id: 'testkit-package', status: 'shipped' },
   { id: 'cli-package', status: 'shipped' },
   { id: 'local-installation', status: 'shipped' },
-  { id: 'official-release-pipeline', status: 'shipped' },
   { id: 'development-mode', status: 'conditional' },
   { id: 'host-api-session', status: 'conditional' },
   { id: 'npm-publication', status: 'not-delivered' },

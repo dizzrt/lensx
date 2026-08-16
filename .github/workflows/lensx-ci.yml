@@ -1,0 +1,52 @@
+name: LensX CI
+
+on:
+  pull_request:
+    paths-ignore:
+      - 'plugins/**'
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'plugins/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lensx-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: LensX frontend
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d
+        with:
+          version: 11.17.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run ci:lensx:frontend
+
+  rust:
+    name: LensX Rust
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d
+        with:
+          version: 11.17.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run ci:lensx:rust

@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 
 import { afterEach, beforeEach, expect, rs, test } from '@rstest/core';
 import { render, waitFor } from '@testing-library/react';
@@ -27,18 +26,9 @@ afterEach(() => {
   HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
 });
 
-test('official candidate opens through the ordinary Child WebView slot and closed Host boundary', async () => {
-  const pluginId = process.env.LENSX_OFFICIAL_CANDIDATE_PLUGIN_ID ?? 'dev.lensx.fixture.alpha';
-  const version = process.env.LENSX_OFFICIAL_CANDIDATE_VERSION ?? '1.0.0';
-  const candidatePath = process.env.LENSX_OFFICIAL_CANDIDATE_PATH;
-  const candidateDigest = process.env.LENSX_OFFICIAL_CANDIDATE_DIGEST;
-  if (candidatePath !== undefined || candidateDigest !== undefined) {
-    expect(candidatePath).toBeDefined();
-    expect(candidateDigest).toMatch(/^[0-9a-f]{64}$/u);
-    const candidateBytes = readFileSync(candidatePath as string);
-    expect(candidateBytes.length).toBeGreaterThan(0);
-    expect(createHash('sha256').update(candidateBytes).digest('hex')).toBe(candidateDigest);
-  }
+test('direct plugin opens through the ordinary Child WebView slot and closed Host boundary', async () => {
+  const pluginId = 'dev.lensx.fixture.alpha';
+  const version = '1.0.0';
   const activePage: ActivePage = {
     owner_id: pluginId,
     page_id: 'main',
@@ -58,7 +48,7 @@ test('official candidate opens through the ordinary Child WebView slot and close
   const encodedPluginId = Buffer.from(pluginId).toString('hex');
   const entryUrl = `${origin}/v1/0123456789abcdef0123456789abcdef/v1-${encodedPluginId}/${version}/index.html`;
   const descriptor: PluginPageRuntimeDescriptor = {
-    runtime_key: 'official-candidate-runtime',
+    runtime_key: 'direct-plugin-runtime',
     entry_url: entryUrl,
     host_fragment: '/',
     entry_id: 'entry_0123456789abcdef',
@@ -67,7 +57,7 @@ test('official candidate opens through the ordinary Child WebView slot and close
     page_id: 'main',
     expected_origin: origin,
     resource_generation: '0123456789abcdef0123456789abcdef',
-    runtime_attempt_key: 'official-candidate-attempt',
+    runtime_attempt_key: 'direct-plugin-attempt',
     registration_revision: '1',
   };
   const create = rs.fn(async () => ({ attemptId: 'attempt_0123456789abcdef' as const }));
@@ -117,20 +107,13 @@ test('official candidate opens through the ordinary Child WebView slot and close
 
 test('ordinary ConfigLens replacement terminates the old provider without gaining official authority', async () => {
   const pluginId = 'dev.lensx.config-lens';
-  const oldVersion = process.env.LENSX_OFFICIAL_CANDIDATE_VERSION ?? '0.1.0';
-  const nextVersion = process.env.LENSX_OFFICIAL_REPLACEMENT_VERSION ?? '0.1.1';
-  const oldBytes = process.env.LENSX_OFFICIAL_CANDIDATE_PATH
-    ? readFileSync(process.env.LENSX_OFFICIAL_CANDIDATE_PATH)
-    : Buffer.from('config-lens-old');
-  const nextBytes = process.env.LENSX_OFFICIAL_REPLACEMENT_PATH
-    ? readFileSync(process.env.LENSX_OFFICIAL_REPLACEMENT_PATH)
-    : Buffer.from('config-lens-next');
+  const oldVersion = '0.1.0';
+  const nextVersion = '0.1.1';
+  const oldBytes = Buffer.from('config-lens-old');
+  const nextBytes = Buffer.from('config-lens-next');
   expect(createHash('sha256').update(oldBytes).digest('hex')).not.toBe(
     createHash('sha256').update(nextBytes).digest('hex'),
   );
-  if (process.env.LENSX_OFFICIAL_REPLACEMENT_DIGEST !== undefined) {
-    expect(createHash('sha256').update(nextBytes).digest('hex')).toBe(process.env.LENSX_OFFICIAL_REPLACEMENT_DIGEST);
-  }
   const snapshot: PluginRegistrationSnapshot = {
     contract_version: '0.3.0',
     revision: '1',

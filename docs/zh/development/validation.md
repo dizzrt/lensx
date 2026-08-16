@@ -115,24 +115,19 @@ CLI `build` 与默认 `pack` 会执行项目代码；`validate`、`inspect` 和 
 绝不替代 Host 对不可信 package bytes 的复验。该门禁不代表 Development Mode/watch/reload 或
 signing/provenance 已交付；它们仍属于 roadmap Task 6.5 与 8.1。
 
-## 官方插件发布流水线验证
+## 持续集成验证
 
-修改 `plugins/*`、Changesets、CODEOWNERS、release planner、candidate/audit schema、
-官方 release workflow、installer/Runtime gate 或双语发布文档时必须运行：
+修改 `.github/workflows/`、CI 脚本、workspace discovery、直接插件 lifecycle 或双语 CI 文档时必须运行：
 
 ```bash
-pnpm run check:official-plugin-release-pipeline
+pnpm run check:ci-workflows
+pnpm exec rstest run tests/ci.test.ts tests/ci-workflow-policy.test.ts tests/workspace-lifecycle.test.ts
 ```
 
-该 gate 验证零/单/双 member 与非法 contract fixture、workspace/Host import 边界、确定性 base/head
-规划、显式 Changeset policy、metadata-only versioning、canonical candidate record、mock GitHub
-draft/幂等/冲突行为、固定 revision 的最小权限 workflow 与文档 drift。临时双插件 consumer 使用
-全局 pnpm store，只升版其中一个插件，以公共 CLI build 并重复 pack，对比 TypeScript/Rust facts，
-运行普通 install preparation 与 Runtime E2E harness，并证明另一个插件和根应用保持不变。它不会
-创建 public release。
-
-该 focused command 组合公共 CLI/package-format、本地安装、open isolated Runtime
-与 workspace gate。最终完成仍必须运行下文完整 frontend/shared 与 Rust 命令。
+策略 gate 要求目录中只有 `lensx-ci.yml` 与 `plugins-ci.yml`，并检查 macOS runner、只读权限、
+固定 action、文档定义的触发矩阵、维护的本地入口，以及不存在版本或发布 authority。聚焦测试覆盖
+直接插件发现、clean 公共依赖构建顺序、阻塞插件阶段、空 workspace 与失败传播。完整本地复现使用
+`pnpm run ci:lensx` 或 `pnpm run ci:plugins`。
 
 ## 插件开发模式验证
 
@@ -343,19 +338,19 @@ policy 回流时失败。canonical WKWebView harness 提供 package/Blob/Data Wo
 
 ## ConfigLens 官方插件验证
 
-修改 `plugins/config-lens`、已审查语言依赖、release 选择、package chunk、
+修改 `plugins/config-lens`、已审查语言依赖、package chunk、
 Runtime lifecycle、视觉证据或产品文档时，必须运行：
 
 ```bash
-pnpm run check:official-config-lens-plugin
+pnpm run ci:plugins
+pnpm run check:official-config-lens-cold-open
+pnpm run check:official-config-lens-warm-format
 ```
 
-该门禁运行成员 lifecycle 与四语言恶意/golden 语料，检查依赖许可证和准确版本，
+这些门禁运行成员 lifecycle 与四语言恶意/golden 语料，检查依赖许可证和准确版本，
 构建 Monaco 与 language module Worker，验证全部包内 chunk 和预算，对比固定双语
 light/dark 28 场景视觉矩阵，并消费单一可编辑 model、直接替换和 undo 的有界真实
-macOS WKWebView 证据。随后它使用公共 CLI
-执行 build、validate、inspect 和两次 pack，与 Rust inspector 和普通安装 preparation
-达成一致，再把同一 digest-fixed `.lxp` 传入 Host Runtime E2E。证据和诊断不得包含
+macOS WKWebView 证据。证据和诊断不得包含
 配置内容、URL、origin、path、nonce、Port、payload、stack 或 raw error。
 
 ## Plugin Scoped Storage 验证

@@ -106,7 +106,7 @@ const scanWorkspaceFiles = (diagnostics: NoDualRuntimeDiagnostic[]): void => {
     ['generated-fixtures', join(rootDir, 'fixtures')],
     ['active-change', changeRoot],
   ] as const;
-  const rootFiles = ['package.json', 'pnpm-lock.yaml', 'biome.json', '.github/workflows/official-plugin-candidate.yml'];
+  const rootFiles = ['package.json', 'pnpm-lock.yaml', 'biome.json', '.github/workflows/plugins-ci.yml'];
   const seen = new Set<string>();
   for (const [surface, directory] of surfaces) {
     for (const file of collectFiles(directory)) {
@@ -275,7 +275,7 @@ const main = async (): Promise<void> => {
     throw new Error(diagnostics.map(formatNoDualRuntimeDiagnostic).join('\n'));
   }
   console.log(
-    'No-dual-plugin-Runtime gate passed for production, tests, public tarballs, templates, official candidate, current docs/specs, fixtures, and generated artifacts.',
+    'No-dual-plugin-Runtime gate passed for production, tests, public tarballs, templates, direct plugins, current docs/specs, fixtures, and generated artifacts.',
   );
 };
 

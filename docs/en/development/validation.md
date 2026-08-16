@@ -144,29 +144,22 @@ revalidation of untrusted package bytes. This gate does not establish
 Development Mode/watch/reload or signing/provenance delivery, which remain
 roadmap Tasks 6.5 and 8.1.
 
-## Official Plugin Release Pipeline Validation
+## Continuous Integration Validation
 
-Changes to `plugins/*`, Changesets, CODEOWNERS, release planning,
-candidate/audit schemas, official release workflows, installer/Runtime gates,
-or the bilingual release documentation must run:
+Changes to `.github/workflows/`, CI scripts, workspace discovery, direct plugin
+lifecycle, or the bilingual CI documentation must run:
 
 ```bash
-pnpm run check:official-plugin-release-pipeline
+pnpm run check:ci-workflows
+pnpm exec rstest run tests/ci.test.ts tests/ci-workflow-policy.test.ts tests/workspace-lifecycle.test.ts
 ```
 
-The gate validates zero/one/two-member and invalid contract fixtures,
-workspace/Host import boundaries, deterministic base/head planning, explicit
-Changeset policy, metadata-only versioning, canonical candidate records, mock
-GitHub draft/idempotency/conflict behavior, pinned least-privilege workflows,
-and documentation drift. Its temporary two-plugin consumer uses the global
-pnpm store, versions only one plugin, builds and repeat-packs with the public
-CLI, compares TypeScript and Rust facts, runs ordinary install preparation and
-the Runtime E2E harness, and proves the other plugin and root app stay
-unchanged. It never creates a public release.
-
-This focused command composes the public CLI/package-format, local installation,
-open isolated Runtime and workspace gates. Final completion
-still requires the complete frontend/shared and Rust commands below.
+The policy gate requires exactly `lensx-ci.yml` and `plugins-ci.yml`, macOS
+runners, read-only permissions, pinned actions, the documented trigger matrix,
+the maintained local entry points, and no versioning or release authority. The
+focused tests cover direct-plugin discovery, clean public dependency build
+order, blocking plugin stages, empty workspaces, and failure propagation. Run
+`pnpm run ci:lensx` or `pnpm run ci:plugins` for complete local reproduction.
 
 ## Plugin Development Mode Validation
 
@@ -436,21 +429,20 @@ unsupported results for capabilities outside the current platform baseline.
 ## ConfigLens Official Plugin Validation
 
 Changes to `plugins/config-lens`, its reviewed language dependencies,
-release selection, package chunks, Runtime lifecycle, visual evidence, or
+package chunks, Runtime lifecycle, visual evidence, or
 product documentation must run:
 
 ```bash
-pnpm run check:official-config-lens-plugin
+pnpm run ci:plugins
+pnpm run check:official-config-lens-cold-open
+pnpm run check:official-config-lens-warm-format
 ```
 
-The gate runs the member lifecycle and four-language malicious/golden corpora,
+These gates run the member lifecycle and four-language malicious/golden corpora,
 checks dependency licenses and exact versions, builds the Monaco and language
 module Workers, verifies all package-owned chunks and budgets, compares the
 fixed 28-case bilingual light/dark visual matrix, and consumes bounded real
 macOS WKWebView evidence for one editable model, direct replacement, and undo.
-It then uses the public CLI to build, validate, inspect,
-and pack twice, agrees with the Rust inspector and ordinary installation
-preparation, and sends the same digest-fixed `.lxp` into the Host Runtime E2E.
 Evidence and diagnostics must not include configuration content, URL, origin,
 path, nonce, Port, payload, stack, or raw errors.
 
