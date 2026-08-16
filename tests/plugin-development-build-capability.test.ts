@@ -30,7 +30,10 @@ describe('Plugin Development Mode build capability', () => {
     expect(cargo).toContain('plugin-development-mode = []');
     expect(nativeComposition).toContain('#[cfg(feature = "plugin-development-mode")]');
     expect(nativeComposition).toContain('#[cfg(not(feature = "plugin-development-mode"))]');
-    expect(rootPackage).toContain('LENSX_PLUGIN_DEVELOPMENT_MODE=1 tauri dev --features plugin-development-mode');
+    expect(rootPackage).toContain('node scripts/dev-plugin-development-mode.mjs');
+    expect(readFileSync(new URL('../scripts/dev-plugin-development-mode.mjs', import.meta.url), 'utf8')).toContain(
+      "LENSX_PLUGIN_DEVELOPMENT_MODE: '1'",
+    );
     expect(buildConfig).toContain("'src/app/plugins/development/composition-disabled.ts'");
     expect(buildConfig).toContain("'src/app/plugins/development/composition-enabled.ts'");
     expect(productionComposition).toContain("from '@/app/plugins/development/composition'");

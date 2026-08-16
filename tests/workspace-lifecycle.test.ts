@@ -30,12 +30,12 @@ describe('workspace lifecycle aggregation', () => {
         `@lensx/example-plugin-framework-neutral (examples/plugins/framework-neutral):${lifecycle}`,
         `@lensx/plugin-ui (packages/plugin-ui):${lifecycle}`,
         `@lensx/example-plugin-react-semi (examples/plugins/react-semi):${lifecycle}`,
-        `@lensx/official-config-lens (plugins/official/config-lens):${lifecycle}`,
+        `@lensx/official-config-lens (plugins/config-lens):${lifecycle}`,
       ]);
     }
   });
 
-  test('runs the root application when member areas are empty', () => {
+  test('runs the root application when direct member areas are empty and ignores the legacy nested plugin path', () => {
     const invocations: string[] = [];
 
     runWorkspaceLifecycle({
@@ -73,12 +73,12 @@ describe('workspace lifecycle aggregation', () => {
         },
       }),
     ).toThrow(
-      '[workspace/lifecycle-failed] @fixture/failing-plugin (plugins/official/failing): script "test" exited with status 7.',
+      '[workspace/lifecycle-failed] @fixture/failing-plugin (plugins/failing): script "test" exited with status 7.',
     );
     expect(invocations).toEqual([
       'root application:app:test',
       '@fixture/base (packages/base):test',
-      '@fixture/failing-plugin (plugins/official/failing):test',
+      '@fixture/failing-plugin (plugins/failing):test',
     ]);
   });
 });

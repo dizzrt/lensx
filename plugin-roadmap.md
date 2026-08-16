@@ -64,7 +64,7 @@ Contract package；仓库验证不会执行 npm registry 发布操作。
                                 │ same public contract
                  ┌──────────────┴──────────────┐
                  ▼                             ▼
-        plugins/official/*              third-party repositories
+        plugins/*                       third-party repositories
         workspace development           released package dependencies
                  └──────────────┬──────────────┘
                                 ▼
@@ -143,7 +143,7 @@ Milestone 8  Trusted Distribution Ecosystem
 **范围**：
 
 - 保留当前根应用为 private package，第一阶段不强制迁移到 `apps/desktop`。
-- 增加 `packages/*`、`plugins/official/*` 和 `examples/plugins/*` workspace 边界。
+- 增加 `packages/*`、`plugins/*` 和 `examples/plugins/*` workspace 边界。
 - 定义公共 package、Host 私有代码和插件源码之间的依赖方向。
 - 禁止插件直接依赖根应用的 `src/app/**`、Tauri adapter 和内部样式入口。
 - 建立按 workspace 执行 build、typecheck、test 和 check 的根命令。
@@ -767,7 +767,7 @@ React 模板额外依赖 Task 1.4。
 
 **OpenSpec change**：[add-official-plugin-release-pipeline](openspec/changes/archive/2026-08-08-add-official-plugin-release-pipeline/)
 
-**目标**：让 `plugins/official/*` 可以独立版本、验证、构建和发布，而不绑定 lensX 应用版本。
+**目标**：让 `plugins/*` 可以独立版本、验证、构建和发布，而不绑定 lensX 应用版本。
 
 **范围**：
 
@@ -791,7 +791,7 @@ React 模板额外依赖 Task 1.4。
 
 **范围**：
 
-- 在 `plugins/official/config-lens` 实现 JSON、YAML 1.2、TOML 1.0 和 XML 1.0 校验与格式化，
+- 在 `plugins/config-lens` 实现 JSON、YAML 1.2、TOML 1.0 和 XML 1.0 校验与格式化，
   并仅为 JSON 提供压缩。
 - 只提供一个可编辑 Monaco model；Format 与 JSON-only Compact 直接执行一次可撤销的
   全文替换，不提供格式化结果比较或变更应用流程，也不根据内容检测或建议语言。

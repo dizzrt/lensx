@@ -8,13 +8,19 @@ Define the repository workspace topology, dependency boundaries, aggregate lifec
 
 ### Requirement: The repository must provide an explicit plugin-platform workspace topology
 
-The repository MUST keep the root lensX application as the private workspace root and MUST recognize direct child directories containing package manifests under `packages/*`, `plugins/official/*`, and `examples/plugins/*` as supported workspace members. This topology MUST NOT require moving the root application to `apps/desktop`, and it MUST NOT implicitly include packages in other locations or at deeper nesting levels.
+The repository MUST keep the root lensX application as the private workspace root and MUST recognize direct child directories containing package manifests under `packages/*`, `plugins/*`, and `examples/plugins/*` as supported workspace members. Every direct `plugins/*` member MUST be a product official plugin; non-official examples MUST remain under `examples/plugins/*`, and release fixtures MUST NOT enter product `plugins/*`. This topology MUST NOT require moving the root application to `apps/desktop`, and it MUST NOT implicitly include packages in other locations or at deeper nesting levels.
 
 #### Scenario: Recognize a member in a supported location
 
 - **WHEN** a package with a valid package manifest is a direct child of one of the three supported member patterns
 - **THEN** pnpm recognizes that package as a workspace member
 - **THEN** the root lensX application continues to operate as the private workspace root
+
+#### Scenario: Recognize a direct official plugin member
+
+- **WHEN** a product plugin package is located at `plugins/<slug>`
+- **THEN** workspace lifecycle and boundary checks classify it as an official plugin member
+- **THEN** that classification grants no Host import, Tauri, Runtime, permission, signature or trust exception
 
 #### Scenario: Empty member areas do not affect the root application
 
@@ -26,6 +32,12 @@ The repository MUST keep the root lensX application as the private workspace roo
 
 - **WHEN** a package is outside the supported member patterns or nested more deeply within them
 - **THEN** the pnpm workspace does not include it merely because it is inside the repository
+
+#### Scenario: Nested official directory is no longer a member area
+
+- **WHEN** a package is located under the legacy `plugins/official/<slug>` hierarchy
+- **THEN** the new workspace topology does not recognize it as a direct official plugin member
+- **THEN** maintainers MUST migrate the product plugin to `plugins/<slug>` instead of retaining both discovery rules
 
 ### Requirement: Workspace members must obey one-way public dependency boundaries
 

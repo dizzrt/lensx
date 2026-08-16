@@ -128,10 +128,14 @@ pub fn run() {
                 Arc::clone(&plugin_child_webview_service),
             );
             #[cfg(feature = "plugin-development-mode")]
-            plugin_development::setup_plugin_development_mode(
+            let plugin_development_startup =
+                plugin_development::PluginDevelopmentStartupConfig::from_environment()?;
+            #[cfg(feature = "plugin-development-mode")]
+            let plugin_development_state = plugin_development::setup_plugin_development_mode(
                 app.handle(),
                 Arc::clone(&plugin_manager),
-            );
+                plugin_development_startup.as_ref(),
+            )?;
             let plugin_installer =
                 plugin_installer::setup_plugin_installer(app.handle(), Arc::clone(&plugin_manager));
             let plugin_resource_service = plugin_resource_service::setup_plugin_resource_service(
@@ -145,9 +149,16 @@ pub fn run() {
             plugin_scoped_storage::setup_plugin_scoped_storage(
                 app.handle(),
                 Arc::clone(&plugin_installer),
-                plugin_manager,
+                Arc::clone(&plugin_manager),
             );
             plugin_lifecycle::setup_plugin_lifecycle(app.handle(), plugin_installer);
+            #[cfg(feature = "plugin-development-mode")]
+            if let Some(startup) = plugin_development_startup.as_ref() {
+                plugin_development::bootstrap_plugin_development_mode(
+                    &plugin_development_state,
+                    startup,
+                )?;
+            }
             launcher_window::setup_launcher_window(app.handle());
             Ok(())
         })

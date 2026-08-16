@@ -2,7 +2,7 @@
 
 ## Product And Boundary
 
-`plugins/official/config-lens` is the first product member of the official
+`plugins/config-lens` is the first product member of the official
 plugin workspace. Its package is `@lensx/official-config-lens`, its plugin ID is
 `dev.lensx.config-lens`, and its localized product name remains `ConfigLens`.
 It contributes one `main` Page and one `open` Action, using the same public

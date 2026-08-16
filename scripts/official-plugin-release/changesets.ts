@@ -147,7 +147,7 @@ export const validateChangesetPolicy = (
       diagnostics.push(
         diagnostic(
           'official-release/changeset-missing',
-          member?.relativePath ?? 'plugins/official',
+          member?.relativePath ?? 'plugins',
           'Release-relevant official plugin changes require a matching Changeset.',
         ),
       );

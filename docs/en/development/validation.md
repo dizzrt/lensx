@@ -111,7 +111,7 @@ roadmap Tasks 6.5 and 8.1.
 
 ## Official Plugin Release Pipeline Validation
 
-Changes to `plugins/official/*`, Changesets, CODEOWNERS, release planning,
+Changes to `plugins/*`, Changesets, CODEOWNERS, release planning,
 candidate/audit schemas, official release workflows, installer/Runtime gates,
 or the bilingual release documentation must run:
 
@@ -400,7 +400,7 @@ unsupported results for capabilities outside the current platform baseline.
 
 ## ConfigLens Official Plugin Validation
 
-Changes to `plugins/official/config-lens`, its reviewed language dependencies,
+Changes to `plugins/config-lens`, its reviewed language dependencies,
 release selection, package chunks, Runtime lifecycle, visual evidence, or
 product documentation must run:
 

@@ -68,7 +68,7 @@ export const validateOfficialPluginContract = (
   options: ValidateOfficialPluginContractOptions = {},
 ): OfficialPluginContractResult => {
   const root = resolve(rootDir);
-  const officialRoot = join(root, 'plugins', 'official');
+  const officialRoot = join(root, 'plugins');
   const diagnostics: OfficialReleaseDiagnostic[] = [];
   const members: OfficialPluginMember[] = [];
   const packageNames = new Map<string, string>();
@@ -90,7 +90,7 @@ export const validateOfficialPluginContract = (
   for (const entry of directories) {
     const slug = entry.name;
     const memberRoot = join(officialRoot, slug);
-    const relativePath = `plugins/official/${slug}`;
+    const relativePath = `plugins/${slug}`;
     const packagePath = join(memberRoot, 'package.json');
     const manifestPath = join(memberRoot, 'manifest.json');
     const packageValue = safeJson(root, packagePath, 'official-release/package-invalid', diagnostics);
@@ -271,8 +271,8 @@ export const validateOfficialPluginContract = (
   }
 
   for (const pattern of [...owners.keys()].sort()) {
-    if (!pattern.includes('plugins/official')) continue;
-    const match = /^\/plugins\/official\/([^/*?[\]]+)\/$/u.exec(pattern);
+    if (!pattern.startsWith('/plugins/')) continue;
+    const match = /^\/plugins\/([^/*?[\]]+)\/$/u.exec(pattern);
     if (match?.[1] === undefined) {
       diagnostics.push(
         diagnostic(
@@ -293,10 +293,7 @@ export const validateOfficialPluginContract = (
   }
 
   for (const boundary of checkWorkspaceBoundaries(root)) {
-    if (
-      boundary.file.startsWith('plugins/official/') ||
-      boundary.ruleId === 'workspace/host-official-plugin-source-import'
-    ) {
+    if (boundary.file.startsWith('plugins/') || boundary.ruleId === 'workspace/host-official-plugin-source-import') {
       diagnostics.push(
         diagnostic(`official-release/${boundary.ruleId.slice('workspace/'.length)}`, boundary.file, boundary.message),
       );

@@ -94,7 +94,7 @@ signing/provenance 已交付；它们仍属于 roadmap Task 6.5 与 8.1。
 
 ## 官方插件发布流水线验证
 
-修改 `plugins/official/*`、Changesets、CODEOWNERS、release planner、candidate/audit schema、
+修改 `plugins/*`、Changesets、CODEOWNERS、release planner、candidate/audit schema、
 官方 release workflow、installer/Runtime gate 或双语发布文档时必须运行：
 
 ```bash
@@ -320,7 +320,7 @@ policy 回流时失败。canonical WKWebView harness 提供 package/Blob/Data Wo
 
 ## ConfigLens 官方插件验证
 
-修改 `plugins/official/config-lens`、已审查语言依赖、release 选择、package chunk、
+修改 `plugins/config-lens`、已审查语言依赖、release 选择、package chunk、
 Runtime lifecycle、视觉证据或产品文档时，必须运行：
 
 ```bash

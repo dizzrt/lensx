@@ -7,7 +7,7 @@ plugin boundaries, Runtime lifecycle, and the evidence required for Task 7.2.
 ## Requirements
 ### Requirement: ConfigLens MUST be a normal public-boundary official plugin
 
-The system MUST provide the product named `ConfigLens` in both `en-US` and `zh-CN` as the independent package `@lensx/official-config-lens` under `plugins/official/config-lens`, with plugin identity `dev.lensx.config-lens`. Its Manifest MUST use Contract `0.3.0`, contribute exactly one WebView Page and one Launcher Action targeting that Page, and request no Host permission or unpublished native capability. The plugin MUST consume only public plugin package exports and ordinary browser dependencies, and the Host MUST NOT import its source or grant authority based on its official repository location.
+The system MUST provide the product named `ConfigLens` in both `en-US` and `zh-CN` as the independent package `@lensx/official-config-lens` under the canonical source location `plugins/config-lens`, with plugin identity `dev.lensx.config-lens`. Its Manifest MUST use Contract `0.3.0`, contribute exactly one WebView Page and one Launcher Action targeting that Page, and request no Host permission or unpublished native capability. The plugin MUST consume only public plugin package exports and ordinary browser dependencies, and the Host MUST NOT import its source or grant authority based on its official repository location.
 
 #### Scenario: User opens ConfigLens from the Launcher
 - **WHEN** the installed ConfigLens Action is found and activated
@@ -16,9 +16,14 @@ The system MUST provide the product named `ConfigLens` in both `en-US` and `zh-C
 - **THEN** the Child WebView retains an accessible work-area name without receiving Tauri, Host DOM, filesystem, native clipboard or another plugin's state
 
 #### Scenario: Official source attempts to bypass the public boundary
-- **WHEN** ConfigLens declares or imports Host-private source, Tauri, an unpublished Host API, a workspace-only deep path or another plugin's source
+- **WHEN** `plugins/config-lens` declares or imports Host-private source, Tauri, an unpublished Host API, a workspace-only deep path or another plugin's source
 - **THEN** workspace and official release boundary validation MUST reject the member
 - **THEN** no official-only import, Runtime, CSP, permission or installation exception may be added
+
+#### Scenario: Legacy nested path remains
+- **WHEN** ConfigLens source remains under the legacy `plugins/official/config-lens` path
+- **THEN** workspace, official release and focused ConfigLens gates MUST report path drift
+- **THEN** the system MUST NOT accept both the legacy path and `plugins/config-lens` as product members
 
 ### Requirement: ConfigLens MUST provide direct and reversible editor operations
 

@@ -34,7 +34,7 @@ await visit(resolve(root, 'src'));
 for (const file of sourceFiles) {
   const source = await readFile(file, 'utf8');
   if (
-    /@tauri-apps\/|src\/app\/|src-tauri\/|tools\/plugin-package-format|plugins\/official\/(?!config-lens)/u.test(source)
+    /@tauri-apps\/|src\/app\/|src-tauri\/|tools\/plugin-package-format|plugins\/(?!config-lens(?:\/|$))/u.test(source)
   ) {
     throw new Error(`boundary/private-import: ${file.slice(root.length + 1)}`);
   }

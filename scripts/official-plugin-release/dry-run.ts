@@ -31,7 +31,7 @@ const copyPublicPackages = (toolingRoot: string, fixtureRoot: string): void => {
 
 const copyPlugin = (toolingRoot: string, fixtureRoot: string, slug: string): void => {
   const source = join(toolingRoot, 'examples', 'plugins', 'framework-neutral');
-  const target = join(fixtureRoot, 'plugins', 'official', slug);
+  const target = join(fixtureRoot, 'plugins', slug);
   cpSync(source, target, {
     recursive: true,
     filter: (path) => !['artifacts', 'dist', 'node_modules'].includes(path.split('/').at(-1) ?? ''),
@@ -80,7 +80,7 @@ export const runOfficialPluginReleaseDryRun = (rootDir: string): OfficialPluginD
     mkdirSync(join(fixtureRoot, '.changeset'), { recursive: true });
     mkdirSync(join(fixtureRoot, '.github'), { recursive: true });
     mkdirSync(join(fixtureRoot, 'packages'), { recursive: true });
-    mkdirSync(join(fixtureRoot, 'plugins', 'official'), { recursive: true });
+    mkdirSync(join(fixtureRoot, 'plugins'), { recursive: true });
     writeJson(join(fixtureRoot, 'package.json'), {
       name: 'official-release-dry-run-host',
       version: '0.0.0',
@@ -90,7 +90,7 @@ export const runOfficialPluginReleaseDryRun = (rootDir: string): OfficialPluginD
     });
     writeFileSync(
       join(fixtureRoot, 'pnpm-workspace.yaml'),
-      'packages:\n  - packages/*\n  - plugins/official/*\n  - examples/plugins/*\nlinkWorkspacePackages: true\n',
+      'packages:\n  - packages/*\n  - plugins/*\n  - examples/plugins/*\nlinkWorkspacePackages: true\n',
     );
     writeJson(join(fixtureRoot, '.changeset', 'config.json'), {
       $schema: 'https://unpkg.com/@changesets/config@3.1.4/schema.json',
@@ -106,7 +106,7 @@ export const runOfficialPluginReleaseDryRun = (rootDir: string): OfficialPluginD
     });
     writeFileSync(
       join(fixtureRoot, '.github', 'CODEOWNERS'),
-      '/plugins/official/alpha/ @lensx/alpha-maintainers\n/plugins/official/beta/ @lensx/beta-maintainers\n',
+      '/plugins/alpha/ @lensx/alpha-maintainers\n/plugins/beta/ @lensx/beta-maintainers\n',
     );
     copyPlugin(toolingRoot, fixtureRoot, 'alpha');
     copyPlugin(toolingRoot, fixtureRoot, 'beta');
@@ -126,7 +126,7 @@ export const runOfficialPluginReleaseDryRun = (rootDir: string): OfficialPluginD
     );
     const plan = createOfficialPluginReleasePlan({
       baseCommit: 'a'.repeat(40),
-      changedPaths: ['plugins/official/alpha/src/main.ts', '.changeset/alpha-release.md'],
+      changedPaths: ['plugins/alpha/src/main.ts', '.changeset/alpha-release.md'],
       headCommit: 'b'.repeat(40),
       members: initial.members,
       rootDir: fixtureRoot,

@@ -2,7 +2,7 @@
 
 ## 产品与边界
 
-`plugins/official/config-lens` 是官方插件 workspace 的首个真实产品成员。
+`plugins/config-lens` 是官方插件 workspace 的首个真实产品成员。
 package 为 `@lensx/official-config-lens`，plugin ID 为
 `dev.lensx.config-lens`，本地化产品名始终为 `ConfigLens`。它只贡献一个
 `main` Page 和一个 `open` Action，并与外部插件使用相同的公共 Contract、

@@ -2,13 +2,18 @@
 
 ## Scope
 
-Plugin Development Mode is a Host-private workflow for manually testing a
-self-contained plugin `dist/` directory. It is available only in the dedicated
-feature-enabled development build, starts disabled on every lensX process, and
-does not persist registrations or the mode switch across restart.
+Plugin Development Mode is a Host-private workflow for testing self-contained
+plugin `dist/` directories. It is available only in a feature-enabled
+development build. The dedicated `pnpm run dev:plugin-development-mode`
+command is an explicit per-process opt-in: it starts the native mode enabled
+and discovers already-built repository plugins before the frontend loads.
+Other feature builds start disabled. No registration, snapshot, source scope,
+Runtime, or switch value persists across processes.
 
-It does not install a `.lxp`, sign or trust publisher claims, create Host authority,
-watch files, run a build, or automatically reload a plugin.
+It does not install a `.lxp`, sign or trust publisher claims, create extra Host
+authority, watch files, run a build, automatically reload a plugin, or open a
+Page. A discovered Action becomes visible in the Launcher, but only a later
+user action opens its production Child WebView Runtime.
 
 ## Canonical Smoke Plugin
 
@@ -34,7 +39,7 @@ The build output is self-contained and the Runtime imports only the public
 
 ## Start lensX
 
-Build the plugin first, then start the dedicated Host build:
+Build the repository plugins first, then start the dedicated Host build:
 
 ```bash
 lensx-plugin build
@@ -42,9 +47,25 @@ lensx-plugin validate
 pnpm run dev:plugin-development-mode
 ```
 
-In **Settings → Plugins**, enable **Plugin Development Mode** and choose
-**Register development directory**. Select the self-contained `dist/` root,
-not the project root. Cancelling the native folder picker has no side effect.
+The command defaults to direct members under `plugins/` and inspects only each
+existing `plugins/<member>/dist`. Hidden members and members without `dist/`
+are ignored. To use another root, pass exactly one override:
+
+```bash
+pnpm run dev:plugin-development-mode -- --plugins-root /absolute/plugin-projects
+```
+
+The custom root replaces the default; it is not scanned in addition to
+`plugins/`. Each non-hidden direct member is treated as a project container,
+and only its `dist/` child is a candidate. The wrapper normalizes the root and
+keeps it in a Host-private startup environment value; it never enters the
+frontend bundle, event payloads, Registration Contract, or plugin Runtime.
+
+In **Settings → Plugins**, **Plugin Development Mode** is already enabled.
+**Register development directory** remains available for an additional manual
+selection, including when the root is missing, empty, unreadable, or every
+candidate was skipped. Select the self-contained `dist/` root, not the project
+root. Cancelling the native folder picker has no side effect.
 While a Host-owned native picker is open, lensX keeps its parent window visible
 and suppresses shortcut/focus-loss hiding; normal hide-on-blur resumes as soon
 as the picker returns or is cancelled.
@@ -82,6 +103,17 @@ development registrations.
 
 ## Diagnostics
 
+Startup candidates use the same directory inspection and immutable snapshot
+preparation as manual registration. `invalid`, `incompatible`,
+`source_changed`, `unsafe`, and candidate-level read failures skip only that
+member; the terminal reports its portable member label, stable code, and the
+final loaded/skipped counts. Before any candidate commits, lensX checks IDs
+across the whole prepared batch and current builtin, external, quarantine, and
+development identities. Any duplicate is a startup-blocking `conflict`; lensX
+cleans all uncommitted snapshots and never shadows or replaces an entry. A
+Manager or cache coordination failure rolls back this bootstrap batch and
+stops setup rather than exposing a partial initial projection.
+
 Errors are stable and pathless. `invalid` means the payload is incomplete or
 violates directory rules; `incompatible` means its declared ranges exclude the
 current Host or it uses the legacy Manifest `0.2.x`/iframe Runtime protocol;
@@ -97,12 +129,12 @@ operation tokens, raw native errors, or private Manager facts.
 
 Use a fresh lensX process and keep its terminal open throughout this sequence.
 
-1. Build and validate generation A with the commands above, then run
-   `pnpm run dev:plugin-development-mode`.
-2. Press `Ctrl+Shift+Space`, run **Open settings**, open **Plugins**, enable
-   **Plugin Development Mode**, and register
-   `examples/plugins/development-mode-smoke/dist` in the native folder picker.
-   The entry must show version `0.1.0` and the text labels **Development**,
+1. Build and validate generation A with the commands above. Place it beneath a
+   direct custom-root member as `<root>/smoke/dist`, then run
+   `pnpm run dev:plugin-development-mode -- --plugins-root <root>`.
+2. Press `Ctrl+Shift+Space`, run **Open settings**, and open **Plugins**. The
+   **Plugin Development Mode** Switch must already be on, and the discovered
+   entry must show version `0.1.0` and the text labels **Development**,
    **Unpacked**, and **Unsigned**. Its publisher remains unverified author text,
    and no permission or grant facts are present.
 3. Open the Launcher again and run **Open development-mode smoke A**. The real
@@ -128,8 +160,10 @@ Use a fresh lensX process and keep its terminal open throughout this sequence.
    **Plugin Development Mode**. Confirm the shutdown. The Host must quiesce the
    live Page and remove every development entry before the UI reports the mode
    disabled.
-8. Stop and restart `pnpm run dev:plugin-development-mode`. The mode must start
-   disabled and no development entry may recover. Finally run
+8. Stop and restart `pnpm run dev:plugin-development-mode` with the same root.
+   The mode must start enabled and rediscover fresh registrations without
+   recovering the prior process's snapshot, Runtime, or registration state.
+   An ordinary build still starts without Development Mode. Finally run
    `pnpm run check:plugin-development-mode-boundaries` to verify that the normal
    production artifacts still exclude the feature.
 

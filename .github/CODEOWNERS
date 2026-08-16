@@ -1,4 +1,4 @@
-# Every real plugins/official/<slug> member must add one explicit directory owner.
+# Every real plugins/<slug> member must add one explicit directory owner.
 # Wildcards are intentionally rejected by the official-plugin release contract.
 
-/plugins/official/config-lens/ @dizzrt
+/plugins/config-lens/ @dizzrt

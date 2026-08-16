@@ -8,28 +8,28 @@ coupling them to the desktop application release or creating Host trust,
 permission, or signing authority.
 ## Requirements
 ### Requirement: Each official plugin must be an independent, constrained release unit
-The system MUST treat each direct workspace member under `plugins/official/` as an independent release unit. Each unit MUST have a unique package name, `private: true`, an independent SemVer, a source Manifest at its root, a `CHANGELOG.md`, real automated tests, `build`, `typecheck`, `test`, `check`, and `test:e2e` scripts, and an explicit CODEOWNERS entry that covers the whole directory. The source Manifest, built Manifest, package metadata, and inspected `.lxp` MUST have matching plugin identity and version. Official plugins MUST obey the same public dependency and import boundaries as external plugins and MUST NOT import Host or Tauri private source or another plugin's source merely because they reside in the official directory.
+The system MUST treat each direct workspace member under `plugins/` as an independent release unit. Each unit MUST have a unique package name, `private: true`, an independent SemVer, a source Manifest at its root, a `CHANGELOG.md`, real automated tests, `build`, `typecheck`, `test`, `check`, and `test:e2e` scripts, and an explicit CODEOWNERS entry covering its complete `/plugins/<slug>/` directory. The source Manifest, built Manifest, package metadata, and inspected `.lxp` MUST have matching plugin identity and version. Official plugins MUST obey the same public dependency and import boundaries as external plugins and MUST NOT import Host or Tauri private source or another plugin's source merely because they reside in the product `plugins/` directory.
 
 #### Scenario: A valid official plugin enters release validation
-- **WHEN** a direct child directory satisfies the package, Manifest, SemVer, CHANGELOG, test, script, CODEOWNERS, and public dependency constraints
+- **WHEN** a `plugins/<slug>` direct child satisfies the package, Manifest, SemVer, CHANGELOG, test, script, CODEOWNERS, and public dependency constraints
 - **THEN** the system recognizes it as an independent candidate and derives release identity from the validated Manifest identity and version
 - **THEN** other official plugins and the lensX desktop application version are not part of that candidate's version
 
 #### Scenario: The official directory cannot bypass external plugin boundaries
 - **WHEN** an official plugin depends on the Host root package, a Tauri API, a Host-private module, a workspace-only deep import, or another plugin's source
 - **THEN** the release contract gate MUST reject the candidate with a stable diagnostic
-- **THEN** the system MUST NOT add an import exception for the official directory or directly import the plugin from the Host
+- **THEN** the system MUST NOT add an import exception for `plugins/*` or directly import the plugin from the Host
 
 #### Scenario: Version or ownership metadata drifts
-- **WHEN** package, source Manifest, built Manifest, or inspected `.lxp` identity or version differs, or the CHANGELOG, real test, required script, or CODEOWNERS entry is missing
+- **WHEN** package, source Manifest, built Manifest, or inspected `.lxp` identity or version differs, or the CHANGELOG, real test, required script, or `/plugins/<slug>/` CODEOWNERS entry is missing
 - **THEN** the candidate MUST fail before a tag or public release is created
 - **THEN** the diagnostic MUST identify the plugin-relative path and drift category and MUST NOT disclose an absolute path or secret
 
 ### Requirement: Path impact and Changesets must control validation scope and release intent separately
-The system MUST compute a sorted, deduplicated, schema-validated official-plugin validation set from explicit base and head commits. A plugin-directory change MUST select that plugin. A shared trigger change in the public Contract, SDK, UI, Testkit, CLI, workspace, lockfile, package format, installation, permission, Runtime, or release infrastructure MUST select every existing official plugin. Unrelated paths MUST produce an explicit no-op. A release-relevant official-plugin change MUST have a valid Changeset that targets that plugin, while a shared-path change MUST NOT create an automatic version or release intent.
+The system MUST compute a sorted, deduplicated, schema-validated official-plugin validation set from explicit base and head commits. A `plugins/<slug>/**` change MUST select that plugin. A shared trigger change in the public Contract, SDK, UI, Testkit, CLI, workspace, lockfile, package format, installation, permission, Runtime, or release infrastructure MUST select every existing official plugin. Unrelated paths MUST produce an explicit no-op. A release-relevant official-plugin change MUST have a valid Changeset that targets that plugin, while a shared-path change MUST NOT create an automatic version or release intent.
 
 #### Scenario: A single-plugin change selects one release unit
-- **WHEN** a diff changes only one official plugin's release-relevant path and includes a valid Changeset for that plugin
+- **WHEN** a diff changes only one `plugins/<slug>` official plugin's release-relevant path and includes a valid Changeset for that plugin
 - **THEN** the PR gate MUST add only that plugin to plugin-local validation and the version plan
 - **THEN** other official plugins and the desktop application MUST NOT be versioned or added to the release plan
 
@@ -44,7 +44,7 @@ The system MUST compute a sorted, deduplicated, schema-validated official-plugin
 - **THEN** the version and publish workflows MUST NOT infer SemVer or continue publishing
 
 #### Scenario: The repository has no product official plugins
-- **WHEN** `plugins/official/` has no real member and there is no candidate Changeset
+- **WHEN** `plugins/` has no real direct member and there is no candidate Changeset
 - **THEN** member selection MUST return a stable successful no-op
 - **THEN** release-infrastructure changes MUST still validate committed fixtures and the dry-run but MUST NOT create a product release
 
@@ -163,10 +163,10 @@ Commands, JSON fields, tags, asset names, and diagnostic codes MUST remain local
 
 ### Requirement: The release pipeline MUST exercise ConfigLens as its first real product member
 
-Once `plugins/official/config-lens` exists, the system MUST discover it as a real independent release unit and MUST include it in path selection, Changeset planning, package lifecycle, canonical repeated packing, TypeScript and Rust inspection, ordinary installation preparation, isolated Runtime and plugin E2E validation. The real member path MUST supplement rather than replace zero-member and temporary two-member fixture coverage. Candidate and release processing MUST use the same external-plugin protocol and MUST NOT infer Host trust, permission, signing or native authority from the ConfigLens identity, repository path or audit sidecar.
+Once `plugins/config-lens` exists, the system MUST discover it as a real independent release unit and MUST include it in path selection, Changeset planning, package lifecycle, canonical repeated packing, TypeScript and Rust inspection, ordinary installation preparation, isolated Runtime and plugin E2E validation. The real member path MUST supplement rather than replace zero-member and temporary two-member fixture coverage. Candidate and release processing MUST use the same external-plugin protocol and MUST NOT infer Host trust, permission, signing or native authority from the ConfigLens identity, repository path or audit sidecar.
 
 #### Scenario: ConfigLens-only change selects the real member
-- **WHEN** a release-relevant diff changes only `plugins/official/config-lens/**` and contains a valid Changeset for `@lensx/official-config-lens`
+- **WHEN** a release-relevant diff changes only `plugins/config-lens/**` and contains a valid Changeset for `@lensx/official-config-lens`
 - **THEN** the PR plan selects ConfigLens for member-local validation and version intent without versioning the desktop application or an unrelated plugin
 - **THEN** its candidate runs every declared lifecycle including `test:e2e` before any write-authorized release job is reachable
 
@@ -177,7 +177,7 @@ Once `plugins/official/config-lens` exists, the system MUST discover it as a rea
 
 #### Scenario: Real candidate reaches ordinary installation and Runtime
 - **WHEN** two ConfigLens packs are byte-identical and both inspectors agree on identity, version, files and digest
-- **THEN** the same immutable `.lxp` passes ordinary local-install preparation, Action/Page projection, isolated iframe open, SDK ready, plugin E2E and deterministic close
+- **THEN** the same immutable `.lxp` passes ordinary local-install preparation, Action/Page projection, isolated Child WebView open, SDK ready, plugin E2E and deterministic close
 - **THEN** neither the installer nor Runtime consumes repository location, Changeset metadata or the release sidecar as authority
 
 #### Scenario: Real member or candidate drifts
@@ -186,7 +186,7 @@ Once `plugins/official/config-lens` exists, the system MUST discover it as a rea
 - **THEN** correction requires a fresh candidate and a rerun of the complete real-member gate
 
 ### Requirement: Task 7.1 completion must depend on repeatable independent-release evidence
-The system MUST use committed valid and invalid fixtures and a temporary two-plugin dry-run to prove single-plugin path selection, independent version bumps, canonical packing, ordinary install preparation, Runtime E2E, audit records, idempotency, and failure recovery. Fixtures MUST NOT reside in product `plugins/official/*`, be registered by the Host, or produce a public release. Task 7.1 may be marked complete only after the focused gate, frontend tests, formatting, static analysis, type checking and build, Rust formatting, tests and checks, and strict OpenSpec validation all succeed.
+The system MUST use committed valid and invalid fixtures and a temporary two-plugin dry-run to prove single-plugin path selection, independent version bumps, canonical packing, ordinary installation preparation, Runtime E2E, audit records, idempotency, and failure recovery. Fixtures MUST NOT reside in product `plugins/*`, be registered by the Host, or produce a public release. Task 7.1 may be marked complete only after the focused gate, frontend tests, formatting, static analysis, type checking and build, Rust formatting, tests and checks, and strict OpenSpec validation all succeed.
 
 #### Scenario: The dry-run releases only one simulated plugin
 - **WHEN** only one plugin path and Changeset change in a two-plugin fixture
@@ -208,4 +208,3 @@ Every official release candidate MUST use the current WebView Manifest/SDK proto
 #### Scenario: Candidate uses a legacy Runtime
 - **WHEN** inspection or smoke evidence finds iframe Manifest/SDK/runtime behavior
 - **THEN** publication fails before any GitHub Release asset is created
-

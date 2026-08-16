@@ -139,8 +139,8 @@ fn main() {
     let output = env::args()
         .find_map(|argument| argument.strip_prefix("--output=").map(PathBuf::from))
         .expect("ConfigLens WKWebView harness requires --output=<path>");
-    let dist = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../plugins/official/config-lens/wkwebview/dist");
+    let dist =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../plugins/config-lens/wkwebview/dist");
     let target = format!("{HARNESS_SCHEME}://localhost/index.html")
         .parse()
         .expect("static ConfigLens harness target should parse");

@@ -57,7 +57,7 @@ describe('workspace boundary checker', () => {
     );
 
     expect(diagnostics.map((item) => [item.file, item.specifier])).toEqual([
-      ['src/app/official.ts', '../../plugins/official/bad/src/index'],
+      ['src/app/official.ts', '../../plugins/bad/src/index'],
       ['src/app/official.ts', '@fixture/official-bad'],
     ]);
   });
@@ -98,7 +98,7 @@ describe('workspace boundary checker', () => {
 
     expect(privateImports.map((item) => item.file)).toEqual([
       'examples/plugins/bad/src/index.ts',
-      'plugins/official/bad/src/index.ts',
+      'plugins/bad/src/index.ts',
     ]);
     expect(privateImports.every((item) => item.specifier === '@/app/private')).toBe(true);
   });
@@ -109,7 +109,7 @@ describe('workspace boundary checker', () => {
 
     expect(packageFormatImports.map((item) => item.file)).toEqual([
       'examples/plugins/bad/src/index.ts',
-      'plugins/official/bad/src/index.ts',
+      'plugins/bad/src/index.ts',
     ]);
     expect(packageFormatImports.every((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport)).toBe(true);
   });
@@ -122,9 +122,9 @@ describe('workspace boundary checker', () => {
       'examples/plugins/bad/src/index.ts',
       'examples/plugins/bad/src/index.ts',
       'examples/plugins/bad/src/index.ts',
-      'plugins/official/bad/src/index.ts',
-      'plugins/official/bad/src/index.ts',
-      'plugins/official/bad/src/index.ts',
+      'plugins/bad/src/index.ts',
+      'plugins/bad/src/index.ts',
+      'plugins/bad/src/index.ts',
     ]);
     expect(
       registrationImports.every(
@@ -146,8 +146,8 @@ describe('workspace boundary checker', () => {
       'examples/plugins/bad/src/index.ts',
       'packages/public/src/index.ts',
       'packages/public/src/index.ts',
-      'plugins/official/bad/src/index.ts',
-      'plugins/official/bad/src/index.ts',
+      'plugins/bad/src/index.ts',
+      'plugins/bad/src/index.ts',
     ]);
     expect(developmentImports.every((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport)).toBe(true);
   });
@@ -159,8 +159,8 @@ describe('workspace boundary checker', () => {
     expect(installationImports.map((item) => item.file)).toEqual([
       'examples/plugins/bad/src/index.ts',
       'examples/plugins/bad/src/index.ts',
-      'plugins/official/bad/src/index.ts',
-      'plugins/official/bad/src/index.ts',
+      'plugins/bad/src/index.ts',
+      'plugins/bad/src/index.ts',
     ]);
     expect(
       installationImports.every(
@@ -182,9 +182,9 @@ describe('workspace boundary checker', () => {
       'packages/public/src/index.ts',
       'packages/public/src/index.ts',
       'packages/public/src/index.ts',
-      'plugins/official/bad/src/index.ts',
-      'plugins/official/bad/src/index.ts',
-      'plugins/official/bad/src/index.ts',
+      'plugins/bad/src/index.ts',
+      'plugins/bad/src/index.ts',
+      'plugins/bad/src/index.ts',
     ]);
     expect(
       resourceImports.every(
@@ -204,8 +204,8 @@ describe('workspace boundary checker', () => {
       'examples/plugins/bad/src/index.ts',
       'packages/public/src/index.ts',
       'packages/public/src/index.ts',
-      'plugins/official/bad/src/index.ts',
-      'plugins/official/bad/src/index.ts',
+      'plugins/bad/src/index.ts',
+      'plugins/bad/src/index.ts',
     ]);
     expect(rustResourceImports.every((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport)).toBe(true);
   });
@@ -261,7 +261,7 @@ describe('workspace boundary checker', () => {
 
     expect(tauriImports.map((item) => item.file)).toEqual([
       'examples/plugins/bad/src/index.ts',
-      'plugins/official/bad/src/index.ts',
+      'plugins/bad/src/index.ts',
     ]);
     expect(tauriImports.every((item) => item.specifier === '@tauri-apps/api/core')).toBe(true);
   });
@@ -274,7 +274,7 @@ describe('workspace boundary checker', () => {
 
     expect(runtimeImports.map((item) => item.file)).toEqual([
       'examples/plugins/bad/src/index.ts',
-      'plugins/official/bad/src/index.ts',
+      'plugins/bad/src/index.ts',
     ]);
     expect(runtimeImports.every((item) => item.specifier === '@lensx/plugin-cli')).toBe(true);
   });

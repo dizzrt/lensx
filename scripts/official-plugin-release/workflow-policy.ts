@@ -25,6 +25,9 @@ export const checkOfficialPluginWorkflowPolicy = (rootDir: string): void => {
       fail('workflow-action-unpinned', `${name} must pin every third-party action to a full revision.`);
     }
     if (/pull_request_target/u.test(source)) fail('workflow-event-unsafe', `${name} must not use pull_request_target.`);
+    if (!source.includes("- 'plugins/**'") || source.includes('plugins/official')) {
+      fail('workflow-path-filter', `${name} must use the direct plugins/** product-member trigger.`);
+    }
   }
 
   const pr = sources.get('official-plugin-pr.yml') ?? '';

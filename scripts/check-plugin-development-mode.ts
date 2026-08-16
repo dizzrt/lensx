@@ -8,6 +8,10 @@ const requireMarkers = (path: string, markers: readonly string[]) => {
   const source = read(path);
   for (const marker of markers) if (!source.includes(marker)) failures.push(`${path}: missing ${marker}`);
 };
+const rejectMarkers = (path: string, markers: readonly string[]) => {
+  const source = read(path);
+  for (const marker of markers) if (source.includes(marker)) failures.push(`${path}: forbidden ${marker}`);
+};
 
 for (const path of ['docs/en/development/plugin-development-mode.md', 'docs/zh/development/plugin-development-mode.md'])
   requireMarkers(path, [
@@ -17,6 +21,9 @@ for (const path of ['docs/en/development/plugin-development-mode.md', 'docs/zh/d
     'dist/',
     'cleanup_pending',
     'check:plugin-development-mode',
+    '--plugins-root',
+    'plugins/<member>/dist',
+    'loaded/skipped',
   ]);
 
 requireMarkers('docs/en/development/plugin-development-mode.md', ['focus-loss hiding']);
@@ -85,6 +92,7 @@ requireMarkers('scripts/verify-plugin-management-visual.mjs', [
   '600',
 ]);
 requireMarkers('package.json', [
+  'dev-plugin-development-mode.mjs',
   'build:plugin-development-smoke:initial',
   'build:plugin-development-smoke:reload',
   'validate:plugin-development-smoke',
@@ -94,6 +102,33 @@ requireMarkers('package.json', [
   'check:plugin-development-runtime-evidence',
   'run:plugin-development-runtime-harness',
 ]);
+requireMarkers('scripts/dev-plugin-development-mode.mjs', [
+  '--plugins-root',
+  'LENSX_PLUGIN_DEVELOPMENT_STARTUP_ROOT',
+  "LENSX_PLUGIN_DEVELOPMENT_MODE: '1'",
+]);
+for (const path of [
+  'pnpm-workspace.yaml',
+  'package.json',
+  '.github/CODEOWNERS',
+  '.github/workflows/official-plugin-pr.yml',
+  '.github/workflows/official-plugin-version.yml',
+  '.github/workflows/official-plugin-candidate.yml',
+  'docs/en/development/getting-started.md',
+  'docs/zh/development/getting-started.md',
+  'docs/en/development/plugin-workspace.md',
+  'docs/zh/development/plugin-workspace.md',
+  'docs/en/development/official-plugin-release.md',
+  'docs/zh/development/official-plugin-release.md',
+  'docs/en/development/config-lens.md',
+  'docs/zh/development/config-lens.md',
+  'docs/en/development/validation.md',
+  'docs/zh/development/validation.md',
+  'src-tauri/config-lens-wkwebview-harness.conf.json',
+  'src-tauri/examples/config_lens_wkwebview_harness.rs',
+]) {
+  rejectMarkers(path, ['plugins/official']);
+}
 
 if (failures.length > 0) {
   for (const failure of failures) console.error(failure);

@@ -28,7 +28,7 @@ visual gates are documented in [Plugin Project Templates](plugin-project-templat
 
 ```text
 packages/*
-plugins/official/*
+plugins/*
 examples/plugins/*
 ```
 
@@ -41,7 +41,7 @@ workspace member. The external Contract and SDK consumers at
 ordinary project data and are not workspace packages.
 
 The first official product member is
-`plugins/official/config-lens` (`@lensx/official-config-lens`,
+`plugins/config-lens` (`@lensx/official-config-lens`,
 `dev.lensx.config-lens`). It supports JSON, YAML 1.2, TOML 1.0, and XML 1.0
 through one editable Monaco model and package-owned language Workers. Format
 replaces the editor content as one undoable operation, and Compact is JSON-only.
@@ -345,7 +345,7 @@ gates do not implement or simulate Host installation or iframe execution.
 
 ## Official Plugin Release Units
 
-Every direct `plugins/official/*` member remains a normal public-boundary
+Every direct `plugins/*` member remains a normal public-boundary
 plugin, but it also owns an independent private package version, Manifest
 version, CHANGELOG, tests, `test:e2e`, and explicit CODEOWNERS entry. The Host
 must not import official plugin source. Changesets expresses release intent;
@@ -391,7 +391,7 @@ The allowed repository dependency direction is:
 ```text
 root Host              -> packages/* public exports
 packages/*             -> lower-level packages/* public exports
-plugins/official/*     -> packages/* public exports
+plugins/*              -> packages/* public exports
 examples/plugins/*     -> packages/* public exports
 ```
 

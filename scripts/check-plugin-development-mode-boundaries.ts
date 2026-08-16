@@ -9,6 +9,7 @@ const developmentMarkers = [
   'reload_plugin_development_entry',
   'remove_plugin_development_entry',
 ] as const;
+const nativeDevelopmentMarkers = [...developmentMarkers, 'LENSX_PLUGIN_DEVELOPMENT_STARTUP_ROOT'] as const;
 const sourceExtensions = new Set(['.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx']);
 
 const filesUnder = (directory: string, sourceOnly = false): string[] => {
@@ -25,7 +26,7 @@ const filesUnder = (directory: string, sourceOnly = false): string[] => {
   return files;
 };
 
-const publicRoots = [join(root, 'packages'), join(root, 'plugins', 'official'), join(root, 'examples', 'plugins')];
+const publicRoots = [join(root, 'packages'), join(root, 'plugins'), join(root, 'examples', 'plugins')];
 for (const file of publicRoots.flatMap((directory) => filesUnder(directory, true))) {
   const source = readFileSync(file, 'utf8');
   const leaked = developmentMarkers.find((marker) => source.includes(marker));
@@ -56,7 +57,7 @@ const nativeArtifact = join(
 if (!existsSync(nativeArtifact))
   throw new Error('Production native artifact is missing; run cargo build --release first.');
 const nativeBytes = readFileSync(nativeArtifact);
-for (const marker of developmentMarkers) {
+for (const marker of nativeDevelopmentMarkers) {
   if (nativeBytes.includes(Buffer.from(marker))) {
     throw new Error(`Production native artifact contains development command ${JSON.stringify(marker)}.`);
   }

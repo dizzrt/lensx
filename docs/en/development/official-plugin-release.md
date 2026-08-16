@@ -3,9 +3,9 @@
 ## Scope And Current Status
 
 The repository ships the maintenance pipeline that independently validates,
-versions, builds, and publishes `plugins/official/*` members as canonical
+versions, builds, and publishes `plugins/*` members as canonical
 `.lxp` assets. ConfigLens is the first product member, so the real matrix now
-validates `plugins/official/config-lens` in addition to committed zero-, one-,
+validates `plugins/config-lens` in addition to committed zero-, one-,
 and two-member fixtures. Public Contract, SDK, UI, Testkit, and CLI packages
 still are not published to npm.
 
@@ -18,7 +18,7 @@ undelivered.
 
 ## Directory And Ownership Contract
 
-Each direct `plugins/official/<slug>` workspace member is one release unit and
+Each direct `plugins/<slug>` workspace member is one release unit and
 must provide:
 
 - a unique package name, `private: true`, independent SemVer,
@@ -27,7 +27,7 @@ must provide:
   `package.json`, plus a matching `dist/manifest.json` after build;
 - `CHANGELOG.md`, at least one executable test, and meaningful `build`,
   `typecheck`, `test`, `check`, and `test:e2e` scripts;
-- one exact `/plugins/official/<slug>/ <owners...>` entry in
+- one exact `/plugins/<slug>/ <owners...>` entry in
   `.github/CODEOWNERS`.
 
 Wildcard, duplicate, empty, conflicting, or unknown official-plugin owner
@@ -35,7 +35,7 @@ entries fail closed. Official plugins may consume only public Contract, SDK,
 UI, Testkit, CLI authoring commands, and ordinary frontend dependencies. They
 cannot import the private Host, Tauri, workspace deep paths, another plugin's
 source, or Host-side copies of their own source. The Host consumes installed
-registrations instead of importing `plugins/official/*`.
+registrations instead of importing `plugins/*`.
 
 ## Changesets And Version Intent
 
@@ -142,7 +142,7 @@ and can be safely retried after the cause is fixed. Different plugin matrix
 entries are independent failure domains.
 
 The committed dry-run uses two temporary plugins outside
-`plugins/official/*`; it bumps, builds, packs, inspects, prepares, exercises,
+the repository product `plugins/*`; it bumps, builds, packs, inspects, prepares, exercises,
 and plans only one while proving the other plugin and root application remain
 unchanged. Fixtures are never registered with the product Host or sent to the
 GitHub Release API.

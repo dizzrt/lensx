@@ -123,7 +123,7 @@
         "title": "Plugin Development Mode",
         "description": "Loads an unpacked, unsigned dist directory for this process only. It does not install, automatically run, or grant native Host access to the plugin.",
         "toggle": "Enable Plugin Development Mode for this process",
-        "processLocal": "Disabled again when lensX restarts.",
+        "processLocal": "Process-local: the dedicated development command starts enabled, ordinary starts remain disabled, and turning it off lasts for this process.",
         "register": "Register development directory",
         "reload": "Reload from directory",
         "remove": "Remove development entry",

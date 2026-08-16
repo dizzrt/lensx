@@ -41,16 +41,16 @@ const createContractFixture = (
 ): string => {
   const root = mkdtempSync(join(tmpdir(), 'lensx-official-contract-'));
   mkdirSync(join(root, '.github'), { recursive: true });
-  mkdirSync(join(root, 'plugins', 'official'), { recursive: true });
+  mkdirSync(join(root, 'plugins'), { recursive: true });
   writeJson(join(root, 'package.json'), { name: 'fixture-host', private: true });
   writeFileSync(
     join(root, 'pnpm-workspace.yaml'),
-    'packages:\n  - packages/*\n  - plugins/official/*\n  - examples/plugins/*\nlinkWorkspacePackages: true\n',
+    'packages:\n  - packages/*\n  - plugins/*\n  - examples/plugins/*\nlinkWorkspacePackages: true\n',
   );
   const ownerLines: string[] = [];
   for (const slug of plugins) {
     const mutation = mutations[slug] ?? {};
-    const directory = join(root, 'plugins', 'official', slug);
+    const directory = join(root, 'plugins', slug);
     mkdirSync(join(directory, 'tests'), { recursive: true });
     const metadata: Record<string, unknown> = {
       name: `@fixture/${slug}`,
@@ -79,7 +79,7 @@ const createContractFixture = (
     if (!mutation.omitChangelog) writeFileSync(join(directory, 'CHANGELOG.md'), '# Changelog\n');
     if (!mutation.omitTest)
       writeFileSync(join(directory, 'tests', 'plugin.test.ts'), "test('fixture', () => undefined);\n");
-    ownerLines.push(`/plugins/official/${slug}/ @lensx/${slug}-maintainers`);
+    ownerLines.push(`/plugins/${slug}/ @lensx/${slug}-maintainers`);
   }
   const explicit = Object.values(mutations).find((value) => value.codeowners !== undefined)?.codeowners;
   writeFileSync(join(root, '.github', 'CODEOWNERS'), explicit ?? `${ownerLines.join('\n')}\n`);
@@ -180,15 +180,15 @@ describe('official plugin release contract', () => {
     ['missing-test', { omitTest: true }, 'test-missing'],
     ['missing-changelog', { omitChangelog: true }, 'changelog-missing'],
     ['missing-owner', { codeowners: '' }, 'codeowner-missing'],
-    ['wildcard-owner', { codeowners: '/plugins/official/* @lensx/all\n' }, 'codeowner-pattern-invalid'],
+    ['wildcard-owner', { codeowners: '/plugins/* @lensx/all\n' }, 'codeowner-pattern-invalid'],
     [
       'duplicate-owner',
-      { codeowners: '/plugins/official/alpha/ @lensx/one\n/plugins/official/alpha/ @lensx/two\n' },
+      { codeowners: '/plugins/alpha/ @lensx/one\n/plugins/alpha/ @lensx/two\n' },
       'codeowner-conflict',
     ],
     [
       'unknown-owner',
-      { codeowners: '/plugins/official/alpha/ @lensx/one\n/plugins/official/ghost/ @lensx/ghost\n' },
+      { codeowners: '/plugins/alpha/ @lensx/one\n/plugins/ghost/ @lensx/ghost\n' },
       'codeowner-unknown-plugin',
     ],
     [
@@ -213,7 +213,7 @@ describe('official plugin path and Changeset planner', () => {
     const root = join(import.meta.dirname, '..');
     const plan = createOfficialPluginReleasePlan({
       baseCommit: 'a'.repeat(40),
-      changedPaths: ['plugins/official/config-lens/src/App.tsx'],
+      changedPaths: ['plugins/config-lens/src/App.tsx'],
       headCommit: 'b'.repeat(40),
       members: validateOfficialPluginContract(root).members,
       rootDir: root,
@@ -236,7 +236,7 @@ describe('official plugin path and Changeset planner', () => {
       const members = validateOfficialPluginContract(root).members;
       const input = {
         baseCommit: 'a'.repeat(40),
-        changedPaths: ['plugins/official/alpha/src/main.ts', 'plugins/official/alpha/src/main.ts'],
+        changedPaths: ['plugins/alpha/src/main.ts', 'plugins/alpha/src/main.ts'],
         headCommit: 'b'.repeat(40),
         members,
         rootDir: root,
@@ -246,7 +246,7 @@ describe('official plugin path and Changeset planner', () => {
       expect(first).toEqual(second);
       expect(first.validate.map((entry) => entry.slug)).toEqual(['alpha']);
       expect(first.release.map((entry) => [entry.slug, entry.bump])).toEqual([['alpha', 'patch']]);
-      expect(first.changed_paths).toEqual(['plugins/official/alpha/src/main.ts']);
+      expect(first.changed_paths).toEqual(['plugins/alpha/src/main.ts']);
     });
   });
 
@@ -258,7 +258,7 @@ describe('official plugin path and Changeset planner', () => {
     await withFixture(root, () => {
       const plan = createOfficialPluginReleasePlan({
         baseCommit: 'a'.repeat(40),
-        changedPaths: ['plugins/official/alpha/src/main.ts'],
+        changedPaths: ['plugins/alpha/src/main.ts'],
         headCommit: 'b'.repeat(40),
         members: validateOfficialPluginContract(root).members,
         rootDir: root,
@@ -310,7 +310,7 @@ describe('official plugin path and Changeset planner', () => {
       expect(() =>
         createOfficialPluginReleasePlan({
           baseCommit: 'a'.repeat(40),
-          changedPaths: ['plugins/official/alpha/src/main.ts'],
+          changedPaths: ['plugins/alpha/src/main.ts'],
           headCommit: 'b'.repeat(40),
           members,
           rootDir: root,
@@ -320,7 +320,7 @@ describe('official plugin path and Changeset planner', () => {
       expect(() =>
         createOfficialPluginReleasePlan({
           baseCommit: 'a'.repeat(40),
-          changedPaths: ['plugins/official/alpha/src/main.ts'],
+          changedPaths: ['plugins/alpha/src/main.ts'],
           headCommit: 'b'.repeat(40),
           members,
           rootDir: root,

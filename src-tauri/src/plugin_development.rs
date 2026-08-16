@@ -14,11 +14,129 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::{
+    collections::BTreeSet,
+    ffi::OsString,
+    fmt, fs,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, MutexGuard},
+};
 use tauri::{AppHandle, Manager, Runtime, State};
 use tauri_plugin_dialog::DialogExt;
 
 pub const PLUGIN_DEVELOPMENT_CONTRACT_VERSION: &str = "0.1.0";
+pub const PLUGIN_DEVELOPMENT_STARTUP_ROOT_ENV: &str = "LENSX_PLUGIN_DEVELOPMENT_STARTUP_ROOT";
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PluginDevelopmentStartupConfig {
+    root: PathBuf,
+}
+
+impl PluginDevelopmentStartupConfig {
+    pub fn from_environment() -> Result<Option<Self>, PluginDevelopmentBootstrapError> {
+        Self::from_value(std::env::var_os(PLUGIN_DEVELOPMENT_STARTUP_ROOT_ENV))
+    }
+
+    fn from_value(
+        value: Option<OsString>,
+    ) -> Result<Option<Self>, PluginDevelopmentBootstrapError> {
+        let Some(value) = value else {
+            return Ok(None);
+        };
+        let root = PathBuf::from(value);
+        if !root.is_absolute() || root.as_os_str().is_empty() {
+            return Err(PluginDevelopmentBootstrapError::new(
+                PluginDevelopmentBootstrapErrorCode::InvalidConfig,
+            ));
+        }
+        Ok(Some(Self { root }))
+    }
+
+    fn root(&self) -> &Path {
+        &self.root
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PluginDevelopmentBootstrapErrorCode {
+    InvalidConfig,
+    Conflict,
+    Infrastructure,
+    AlreadyStarted,
+}
+
+impl PluginDevelopmentBootstrapErrorCode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::InvalidConfig => "invalid_config",
+            Self::Conflict => "conflict",
+            Self::Infrastructure => "infrastructure",
+            Self::AlreadyStarted => "already_started",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PluginDevelopmentBootstrapError {
+    code: PluginDevelopmentBootstrapErrorCode,
+}
+
+impl PluginDevelopmentBootstrapError {
+    fn new(code: PluginDevelopmentBootstrapErrorCode) -> Self {
+        Self { code }
+    }
+}
+
+impl fmt::Display for PluginDevelopmentBootstrapError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "[plugin-development-bootstrap/{}] Plugin development bootstrap failed.",
+            self.code.as_str()
+        )
+    }
+}
+
+impl std::error::Error for PluginDevelopmentBootstrapError {}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PluginDevelopmentBootstrapDiagnosticCode {
+    InvalidMember,
+    RootUnavailable,
+    Invalid,
+    Incompatible,
+    SourceChanged,
+    Unsafe,
+    Unavailable,
+}
+
+impl PluginDevelopmentBootstrapDiagnosticCode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::InvalidMember => "invalid_member",
+            Self::RootUnavailable => "root_unavailable",
+            Self::Invalid => "invalid",
+            Self::Incompatible => "incompatible",
+            Self::SourceChanged => "source_changed",
+            Self::Unsafe => "unsafe",
+            Self::Unavailable => "unavailable",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct PluginDevelopmentBootstrapDiagnostic {
+    member: String,
+    code: PluginDevelopmentBootstrapDiagnosticCode,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct PluginDevelopmentBootstrapSummary {
+    loaded: usize,
+    skipped: usize,
+    loaded_members: Vec<String>,
+    diagnostics: Vec<PluginDevelopmentBootstrapDiagnostic>,
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -174,6 +292,7 @@ struct PluginDevelopmentCoordinator {
 pub struct PluginDevelopmentModeState {
     enabled: Mutex<bool>,
     operation: Mutex<()>,
+    bootstrap_started: Mutex<bool>,
     coordinator: Option<PluginDevelopmentCoordinator>,
 }
 
@@ -182,6 +301,7 @@ impl Default for PluginDevelopmentModeState {
         Self {
             enabled: Mutex::new(false),
             operation: Mutex::new(()),
+            bootstrap_started: Mutex::new(false),
             coordinator: None,
         }
     }
@@ -198,6 +318,20 @@ impl PluginDevelopmentModeState {
         self.operation
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn begin_bootstrap(&self) -> Result<(), PluginDevelopmentBootstrapError> {
+        let mut started = self
+            .bootstrap_started
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if *started {
+            return Err(PluginDevelopmentBootstrapError::new(
+                PluginDevelopmentBootstrapErrorCode::AlreadyStarted,
+            ));
+        }
+        *started = true;
+        Ok(())
     }
 
     fn coordinator(
@@ -314,7 +448,304 @@ fn development_facts(
     .map_err(|failure| map_manager_failure(failure, operation))
 }
 
+struct PreparedDevelopmentCandidate {
+    member: String,
+    source_directory: PathBuf,
+    snapshot: PublishedDevelopmentSnapshot,
+}
+
+fn portable_member_label(value: &OsString) -> Option<String> {
+    let value = value.to_str()?;
+    let normalized = value.to_ascii_lowercase();
+    let stem = normalized.split('.').next().unwrap_or_default();
+    let reserved = matches!(
+        stem,
+        "con"
+            | "prn"
+            | "aux"
+            | "nul"
+            | "com1"
+            | "com2"
+            | "com3"
+            | "com4"
+            | "com5"
+            | "com6"
+            | "com7"
+            | "com8"
+            | "com9"
+            | "lpt1"
+            | "lpt2"
+            | "lpt3"
+            | "lpt4"
+            | "lpt5"
+            | "lpt6"
+            | "lpt7"
+            | "lpt8"
+            | "lpt9"
+    );
+    (!value.is_empty()
+        && value.len() <= 128
+        && !value.starts_with('.')
+        && !value.ends_with(['.', ' '])
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        && !reserved)
+        .then_some(value.to_owned())
+}
+
+fn bootstrap_diagnostic_code(
+    failure: &DevelopmentSnapshotFailure,
+) -> PluginDevelopmentBootstrapDiagnosticCode {
+    match failure {
+        DevelopmentSnapshotFailure::Invalid => PluginDevelopmentBootstrapDiagnosticCode::Invalid,
+        DevelopmentSnapshotFailure::Incompatible => {
+            PluginDevelopmentBootstrapDiagnosticCode::Incompatible
+        }
+        DevelopmentSnapshotFailure::SourceChanged => {
+            PluginDevelopmentBootstrapDiagnosticCode::SourceChanged
+        }
+        DevelopmentSnapshotFailure::Unsafe => PluginDevelopmentBootstrapDiagnosticCode::Unsafe,
+        DevelopmentSnapshotFailure::Unavailable | DevelopmentSnapshotFailure::Internal => {
+            PluginDevelopmentBootstrapDiagnosticCode::Unavailable
+        }
+    }
+}
+
+fn report_bootstrap_summary(summary: &PluginDevelopmentBootstrapSummary) {
+    for member in &summary.loaded_members {
+        eprintln!(
+            "[lensx/plugin-development-bootstrap] member={} status=loaded",
+            member
+        );
+    }
+    for diagnostic in &summary.diagnostics {
+        eprintln!(
+            "[lensx/plugin-development-bootstrap] member={} status=skipped code={}",
+            diagnostic.member,
+            diagnostic.code.as_str()
+        );
+    }
+    eprintln!(
+        "[lensx/plugin-development-bootstrap] loaded={} skipped={}",
+        summary.loaded, summary.skipped
+    );
+}
+
 impl PluginDevelopmentCoordinator {
+    fn prepare_startup_candidates(
+        &self,
+        root: &Path,
+        summary: &mut PluginDevelopmentBootstrapSummary,
+    ) -> Result<Vec<PreparedDevelopmentCandidate>, PluginDevelopmentBootstrapError> {
+        let entries = match fs::read_dir(root) {
+            Ok(entries) => entries,
+            Err(_) => {
+                summary
+                    .diagnostics
+                    .push(PluginDevelopmentBootstrapDiagnostic {
+                        member: "root".to_owned(),
+                        code: PluginDevelopmentBootstrapDiagnosticCode::RootUnavailable,
+                    });
+                return Ok(Vec::new());
+            }
+        };
+        let mut discovered = Vec::new();
+        for entry in entries {
+            let Ok(entry) = entry else {
+                summary.skipped += 1;
+                summary
+                    .diagnostics
+                    .push(PluginDevelopmentBootstrapDiagnostic {
+                        member: "unreadable".to_owned(),
+                        code: PluginDevelopmentBootstrapDiagnosticCode::Unavailable,
+                    });
+                continue;
+            };
+            let raw_label = entry.file_name();
+            if raw_label.to_string_lossy().starts_with('.') {
+                continue;
+            }
+            let Some(member) = portable_member_label(&raw_label) else {
+                summary.skipped += 1;
+                summary
+                    .diagnostics
+                    .push(PluginDevelopmentBootstrapDiagnostic {
+                        member: "invalid".to_owned(),
+                        code: PluginDevelopmentBootstrapDiagnosticCode::InvalidMember,
+                    });
+                continue;
+            };
+            let file_type = match entry.file_type() {
+                Ok(file_type) => file_type,
+                Err(_) => {
+                    summary.skipped += 1;
+                    summary
+                        .diagnostics
+                        .push(PluginDevelopmentBootstrapDiagnostic {
+                            member,
+                            code: PluginDevelopmentBootstrapDiagnosticCode::Unavailable,
+                        });
+                    continue;
+                }
+            };
+            if !file_type.is_dir() || file_type.is_symlink() {
+                continue;
+            }
+            let dist = entry.path().join("dist");
+            let metadata = match fs::symlink_metadata(&dist) {
+                Ok(metadata) => metadata,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(_) => {
+                    summary.skipped += 1;
+                    summary
+                        .diagnostics
+                        .push(PluginDevelopmentBootstrapDiagnostic {
+                            member,
+                            code: PluginDevelopmentBootstrapDiagnosticCode::Unavailable,
+                        });
+                    continue;
+                }
+            };
+            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                summary.skipped += 1;
+                summary
+                    .diagnostics
+                    .push(PluginDevelopmentBootstrapDiagnostic {
+                        member,
+                        code: PluginDevelopmentBootstrapDiagnosticCode::Unsafe,
+                    });
+                continue;
+            }
+            discovered.push((member, dist));
+        }
+        discovered.sort_by(|left, right| left.0.cmp(&right.0));
+
+        let mut prepared = Vec::new();
+        for (member, source_directory) in discovered {
+            match self
+                .snapshots
+                .publish_from_source(&source_directory, &self.manager.host_versions())
+            {
+                Ok(snapshot) => prepared.push(PreparedDevelopmentCandidate {
+                    member,
+                    source_directory,
+                    snapshot,
+                }),
+                Err(failure) => {
+                    summary.skipped += 1;
+                    summary
+                        .diagnostics
+                        .push(PluginDevelopmentBootstrapDiagnostic {
+                            member,
+                            code: bootstrap_diagnostic_code(&failure),
+                        });
+                }
+            }
+        }
+        Ok(prepared)
+    }
+
+    fn discard_candidates(&self, candidates: &[PreparedDevelopmentCandidate]) {
+        for candidate in candidates {
+            self.snapshots.discard_uncommitted(&candidate.snapshot.root);
+        }
+    }
+
+    fn preflight_startup_candidates(
+        &self,
+        candidates: &[PreparedDevelopmentCandidate],
+    ) -> Result<(), PluginDevelopmentBootstrapError> {
+        let mut plugin_ids = BTreeSet::new();
+        for candidate in candidates {
+            let plugin_id = &candidate.snapshot.manifest.plugin_id;
+            if !plugin_ids.insert(plugin_id.clone()) || self.manager.has_plugin_identity(plugin_id)
+            {
+                self.discard_candidates(candidates);
+                return Err(PluginDevelopmentBootstrapError::new(
+                    PluginDevelopmentBootstrapErrorCode::Conflict,
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn rollback_startup_candidates(
+        &self,
+        candidates: &[PreparedDevelopmentCandidate],
+        committed_entry_ids: &[String],
+    ) {
+        for entry_id in committed_entry_ids.iter().rev() {
+            let revision = self.manager.registration_revision();
+            let _ = self.manager.remove_development_entry(entry_id, &revision);
+        }
+        self.discard_candidates(candidates);
+    }
+
+    fn commit_startup_candidates(
+        &self,
+        candidates: &[PreparedDevelopmentCandidate],
+        summary: &mut PluginDevelopmentBootstrapSummary,
+    ) -> Result<(), PluginDevelopmentBootstrapError> {
+        let mut committed_entry_ids = Vec::new();
+        for candidate in candidates {
+            let operation = PluginDevelopmentOperation::Register;
+            let facts = match development_facts(
+                &candidate.snapshot,
+                candidate.source_directory.clone(),
+                true,
+                operation,
+            ) {
+                Ok(facts) => facts,
+                Err(_) => {
+                    self.rollback_startup_candidates(candidates, &committed_entry_ids);
+                    return Err(PluginDevelopmentBootstrapError::new(
+                        PluginDevelopmentBootstrapErrorCode::Infrastructure,
+                    ));
+                }
+            };
+            let registration = crate::plugin_manager::PluginRegistration {
+                manifest: candidate.snapshot.manifest.clone(),
+                facts: facts.clone(),
+                compatibility: candidate.snapshot.compatibility.clone(),
+                runtime: crate::plugin_manager::PluginRuntimeState::Inactive,
+            };
+            let entry_id = healthy_entry_id(&registration);
+            if let Err(failure) = self
+                .manager
+                .register_development(candidate.snapshot.manifest.clone(), facts)
+            {
+                self.rollback_startup_candidates(candidates, &committed_entry_ids);
+                let code = if failure.code() == PluginManagerDiagnosticCode::DuplicateIdentity {
+                    PluginDevelopmentBootstrapErrorCode::Conflict
+                } else {
+                    PluginDevelopmentBootstrapErrorCode::Infrastructure
+                };
+                return Err(PluginDevelopmentBootstrapError::new(code));
+            }
+            committed_entry_ids.push(entry_id);
+            summary.loaded_members.push(candidate.member.clone());
+        }
+        summary.loaded = summary.loaded_members.len();
+        Ok(())
+    }
+
+    fn bootstrap(
+        &self,
+        root: &Path,
+    ) -> Result<PluginDevelopmentBootstrapSummary, PluginDevelopmentBootstrapError> {
+        let mut summary = PluginDevelopmentBootstrapSummary::default();
+        let candidates = self.prepare_startup_candidates(root, &mut summary)?;
+        self.preflight_startup_candidates(&candidates)?;
+        self.commit_startup_candidates(&candidates, &mut summary)?;
+        summary.diagnostics.sort_by(|left, right| {
+            left.member
+                .cmp(&right.member)
+                .then_with(|| left.code.as_str().cmp(right.code.as_str()))
+        });
+        Ok(summary)
+    }
+
     fn register(
         &self,
         emitter: &impl PluginRegistrationEventEmitter,
@@ -632,7 +1063,8 @@ pub fn remove_plugin_development_entry<R: Runtime>(
 pub fn setup_plugin_development_mode<R: Runtime>(
     app: &AppHandle<R>,
     manager: Arc<PluginManager>,
-) -> Arc<PluginDevelopmentModeState> {
+    startup: Option<&PluginDevelopmentStartupConfig>,
+) -> Result<Arc<PluginDevelopmentModeState>, PluginDevelopmentBootstrapError> {
     let coordinator = app
         .path()
         .app_cache_dir()
@@ -642,9 +1074,15 @@ pub fn setup_plugin_development_mode<R: Runtime>(
             manager,
             snapshots: Arc::new(snapshots),
         });
+    if startup.is_some() && coordinator.is_none() {
+        return Err(PluginDevelopmentBootstrapError::new(
+            PluginDevelopmentBootstrapErrorCode::Infrastructure,
+        ));
+    }
     let state = Arc::new(PluginDevelopmentModeState {
-        enabled: Mutex::new(false),
+        enabled: Mutex::new(startup.is_some()),
         operation: Mutex::new(()),
+        bootstrap_started: Mutex::new(false),
         coordinator,
     });
     let managed = app.manage(Arc::clone(&state));
@@ -652,14 +1090,33 @@ pub fn setup_plugin_development_mode<R: Runtime>(
         managed,
         "Plugin Development Mode state should only be managed once"
     );
-    state
+    Ok(state)
+}
+
+pub fn bootstrap_plugin_development_mode(
+    state: &Arc<PluginDevelopmentModeState>,
+    startup: &PluginDevelopmentStartupConfig,
+) -> Result<PluginDevelopmentBootstrapSummary, PluginDevelopmentBootstrapError> {
+    let _operation = state.lock_operation();
+    state.begin_bootstrap()?;
+    if !state.is_enabled() {
+        return Err(PluginDevelopmentBootstrapError::new(
+            PluginDevelopmentBootstrapErrorCode::Infrastructure,
+        ));
+    }
+    let coordinator = state.coordinator.as_ref().ok_or_else(|| {
+        PluginDevelopmentBootstrapError::new(PluginDevelopmentBootstrapErrorCode::Infrastructure)
+    })?;
+    let summary = coordinator.bootstrap(startup.root())?;
+    report_bootstrap_summary(&summary);
+    Ok(summary)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        plugin_manager::current_plugin_host_versions,
+        plugin_manager::{current_plugin_host_versions, PackageDigest, PluginSource},
         plugin_registration::PluginRegistrationChangedEvent,
     };
     use serde_json::json;
@@ -696,6 +1153,30 @@ mod tests {
             fs::write(source.join("assets/home.svg"), b"<svg/>").unwrap();
             source
         }
+
+        fn candidate(&self, member: &str, plugin_id: &str) -> PathBuf {
+            let source = self.0.join("plugins").join(member).join("dist");
+            fs::create_dir_all(source.join("dist")).unwrap();
+            fs::create_dir_all(source.join("assets")).unwrap();
+            let mut manifest: serde_json::Value = serde_json::from_slice(include_bytes!(
+                "../../packages/plugin-contract/tests/fixtures/base.json"
+            ))
+            .unwrap();
+            manifest["plugin_id"] = json!(plugin_id);
+            fs::write(
+                source.join("manifest.json"),
+                serde_json::to_vec(&manifest).unwrap(),
+            )
+            .unwrap();
+            fs::write(source.join("dist/plugin.html"), b"<!doctype html>").unwrap();
+            fs::write(source.join("assets/plugin-icon.svg"), b"<svg/>").unwrap();
+            fs::write(source.join("assets/home.svg"), b"<svg/>").unwrap();
+            source
+        }
+
+        fn plugins_root(&self) -> PathBuf {
+            self.0.join("plugins")
+        }
     }
 
     impl Drop for TestDirectory {
@@ -725,6 +1206,247 @@ mod tests {
         let snapshots =
             Arc::new(DevelopmentSnapshotStore::initialize(directory.0.join("cache")).unwrap());
         PluginDevelopmentCoordinator { manager, snapshots }
+    }
+
+    fn startup_state(directory: &TestDirectory, enabled: bool) -> Arc<PluginDevelopmentModeState> {
+        Arc::new(PluginDevelopmentModeState {
+            enabled: Mutex::new(enabled),
+            operation: Mutex::new(()),
+            bootstrap_started: Mutex::new(false),
+            coordinator: Some(coordinator(directory)),
+        })
+    }
+
+    #[test]
+    fn startup_config_is_absolute_optional_and_pathless_on_error() {
+        assert_eq!(PluginDevelopmentStartupConfig::from_value(None), Ok(None));
+        let absolute = std::env::temp_dir().join("lensx plugins");
+        assert_eq!(
+            PluginDevelopmentStartupConfig::from_value(Some(absolute.clone().into_os_string()))
+                .unwrap()
+                .unwrap()
+                .root(),
+            absolute
+        );
+        let error = PluginDevelopmentStartupConfig::from_value(Some(OsString::from("relative")))
+            .unwrap_err();
+        assert_eq!(
+            error.code,
+            PluginDevelopmentBootstrapErrorCode::InvalidConfig
+        );
+        assert!(!error.to_string().contains("relative"));
+    }
+
+    #[test]
+    fn bootstrap_discovers_sorted_direct_dist_members_and_keeps_runtime_inactive() {
+        let directory = TestDirectory::new("bootstrap-discovery");
+        directory.candidate("zeta", "com.acme.zeta");
+        directory.candidate("alpha", "com.acme.alpha");
+        directory.candidate(".hidden", "com.acme.hidden");
+        fs::create_dir_all(directory.plugins_root().join("unbuilt")).unwrap();
+        fs::write(directory.plugins_root().join("README.md"), b"ignored").unwrap();
+        let coordinator = coordinator(&directory);
+
+        let summary = coordinator.bootstrap(&directory.plugins_root()).unwrap();
+        assert_eq!(summary.loaded, 2);
+        assert_eq!(summary.skipped, 0);
+        assert_eq!(summary.loaded_members, ["alpha", "zeta"]);
+        assert_eq!(coordinator.snapshots.current_snapshot_count(), 2);
+        let snapshot = coordinator.manager.read_registration_snapshot();
+        assert_eq!(snapshot.entries.len(), 2);
+        for plugin_id in ["com.acme.alpha", "com.acme.zeta"] {
+            let registration = coordinator.manager.registration(plugin_id).unwrap();
+            assert_eq!(registration.facts.source, PluginSource::Development);
+            assert!(registration.facts.enabled);
+            assert_eq!(
+                registration.runtime,
+                crate::plugin_manager::PluginRuntimeState::Inactive
+            );
+        }
+        assert!(coordinator
+            .manager
+            .registration("com.acme.hidden")
+            .is_none());
+    }
+
+    #[test]
+    fn bootstrap_skips_invalid_candidates_and_unavailable_roots_with_bounded_diagnostics() {
+        let directory = TestDirectory::new("bootstrap-skips");
+        directory.candidate("valid", "com.acme.valid");
+        let invalid = directory.candidate("invalid", "com.acme.invalid");
+        fs::write(invalid.join("manifest.json"), b"not-json").unwrap();
+        let incompatible = directory.candidate("incompatible", "com.acme.incompatible");
+        let mut incompatible_manifest: serde_json::Value =
+            serde_json::from_slice(&fs::read(incompatible.join("manifest.json")).unwrap()).unwrap();
+        incompatible_manifest["compatibility"]["lensx"]["min_version"] = json!("9.0.0");
+        incompatible_manifest["compatibility"]["lensx"]["max_version_exclusive"] = json!("10.0.0");
+        incompatible_manifest["compatibility"]["host_api"]["min_version"] = json!("9.0.0");
+        incompatible_manifest["compatibility"]["host_api"]["max_version_exclusive"] =
+            json!("10.0.0");
+        fs::write(
+            incompatible.join("manifest.json"),
+            serde_json::to_vec(&incompatible_manifest).unwrap(),
+        )
+        .unwrap();
+        directory.candidate("not portable", "com.acme.nonportable");
+        let coordinator = coordinator(&directory);
+
+        let summary = coordinator.bootstrap(&directory.plugins_root()).unwrap();
+        assert_eq!(summary.loaded, 1);
+        assert_eq!(summary.skipped, 3);
+        assert_eq!(summary.loaded_members, ["valid"]);
+        assert_eq!(
+            summary.diagnostics,
+            [
+                PluginDevelopmentBootstrapDiagnostic {
+                    member: "incompatible".to_owned(),
+                    code: PluginDevelopmentBootstrapDiagnosticCode::Incompatible,
+                },
+                PluginDevelopmentBootstrapDiagnostic {
+                    member: "invalid".to_owned(),
+                    code: PluginDevelopmentBootstrapDiagnosticCode::Invalid,
+                },
+                PluginDevelopmentBootstrapDiagnostic {
+                    member: "invalid".to_owned(),
+                    code: PluginDevelopmentBootstrapDiagnosticCode::InvalidMember,
+                },
+            ]
+        );
+
+        let missing = coordinator.bootstrap(&directory.0.join("missing")).unwrap();
+        assert_eq!(missing.loaded, 0);
+        assert_eq!(missing.skipped, 0);
+        assert_eq!(
+            missing.diagnostics[0].code,
+            PluginDevelopmentBootstrapDiagnosticCode::RootUnavailable
+        );
+        let serialized = format!("{missing:?}");
+        assert!(!serialized.contains(directory.0.to_string_lossy().as_ref()));
+
+        let file_root = directory.0.join("not-a-directory");
+        fs::write(&file_root, b"bounded").unwrap();
+        let unreadable = coordinator.bootstrap(&file_root).unwrap();
+        assert_eq!(
+            unreadable.diagnostics[0].code,
+            PluginDevelopmentBootstrapDiagnosticCode::RootUnavailable
+        );
+        assert_eq!(
+            bootstrap_diagnostic_code(&DevelopmentSnapshotFailure::SourceChanged),
+            PluginDevelopmentBootstrapDiagnosticCode::SourceChanged
+        );
+    }
+
+    #[test]
+    fn bootstrap_preflight_rejects_batch_and_installed_identity_conflicts_atomically() {
+        let duplicate_directory = TestDirectory::new("bootstrap-duplicate");
+        duplicate_directory.candidate("alpha", "com.acme.duplicate");
+        duplicate_directory.candidate("beta", "com.acme.duplicate");
+        let duplicate = coordinator(&duplicate_directory);
+        let error = duplicate
+            .bootstrap(&duplicate_directory.plugins_root())
+            .unwrap_err();
+        assert_eq!(error.code, PluginDevelopmentBootstrapErrorCode::Conflict);
+        assert!(duplicate
+            .manager
+            .read_registration_snapshot()
+            .entries
+            .is_empty());
+        assert_eq!(duplicate.snapshots.current_snapshot_count(), 0);
+
+        let installed_directory = TestDirectory::new("bootstrap-installed-conflict");
+        installed_directory.candidate("candidate", "com.acme.installed");
+        let installed = coordinator(&installed_directory);
+        let mut prepared_summary = PluginDevelopmentBootstrapSummary::default();
+        let prepared = installed
+            .prepare_startup_candidates(&installed_directory.plugins_root(), &mut prepared_summary)
+            .unwrap();
+        let manifest = prepared[0].snapshot.manifest.clone();
+        let installed_payload = installed_directory.0.join("installed");
+        fs::create_dir_all(&installed_payload).unwrap();
+        installed
+            .manager
+            .register(
+                manifest,
+                PluginRegistrationFacts::new(
+                    installed_payload.to_string_lossy(),
+                    PackageDigest {
+                        algorithm: "sha256".to_owned(),
+                        value: "ab".repeat(32),
+                    },
+                    PluginSource::External,
+                    true,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let error = installed
+            .preflight_startup_candidates(&prepared)
+            .unwrap_err();
+        assert_eq!(error.code, PluginDevelopmentBootstrapErrorCode::Conflict);
+        assert!(installed
+            .manager
+            .registration("com.acme.installed")
+            .is_some());
+        assert_eq!(installed.snapshots.current_snapshot_count(), 0);
+    }
+
+    #[test]
+    fn bootstrap_commit_failure_rolls_back_only_the_current_batch() {
+        let directory = TestDirectory::new("bootstrap-rollback");
+        directory.candidate("alpha", "com.acme.alpha");
+        directory.candidate("beta", "com.acme.beta");
+        let coordinator = coordinator(&directory);
+        let mut summary = PluginDevelopmentBootstrapSummary::default();
+        let prepared = coordinator
+            .prepare_startup_candidates(&directory.plugins_root(), &mut summary)
+            .unwrap();
+        coordinator.preflight_startup_candidates(&prepared).unwrap();
+
+        let racer = directory.candidate("racer", "com.acme.beta");
+        coordinator
+            .register(&TestEmitter::default(), racer)
+            .unwrap();
+        let error = coordinator
+            .commit_startup_candidates(&prepared, &mut summary)
+            .unwrap_err();
+        assert_eq!(error.code, PluginDevelopmentBootstrapErrorCode::Conflict);
+        assert!(coordinator.manager.registration("com.acme.alpha").is_none());
+        assert!(coordinator.manager.registration("com.acme.beta").is_some());
+        assert_eq!(coordinator.snapshots.current_snapshot_count(), 1);
+    }
+
+    #[test]
+    fn auto_enabled_state_bootstraps_once_and_disable_does_not_reenable_it() {
+        let directory = TestDirectory::new("bootstrap-once");
+        directory.candidate("alpha", "com.acme.alpha");
+        let state = startup_state(&directory, true);
+        let startup = PluginDevelopmentStartupConfig {
+            root: directory.plugins_root(),
+        };
+        let summary = bootstrap_plugin_development_mode(&state, &startup).unwrap();
+        assert_eq!(summary.loaded, 1);
+        assert!(state.is_enabled());
+        let emitter = TestEmitter::default();
+        state
+            .update(false, || {
+                state.coordinator.as_ref().unwrap().quiesce(&emitter)
+            })
+            .unwrap();
+        assert!(!state.is_enabled());
+        let error = bootstrap_plugin_development_mode(&state, &startup).unwrap_err();
+        assert_eq!(
+            error.code,
+            PluginDevelopmentBootstrapErrorCode::AlreadyStarted
+        );
+        assert!(!state.is_enabled());
+        assert!(state
+            .coordinator
+            .as_ref()
+            .unwrap()
+            .manager
+            .read_registration_snapshot()
+            .entries
+            .is_empty());
     }
 
     #[test]

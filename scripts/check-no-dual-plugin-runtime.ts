@@ -236,7 +236,7 @@ const scanCurrentPluginArchives = async (diagnostics: NoDualRuntimeDiagnostic[],
     }
   }
 
-  const officialRoot = join(rootDir, 'plugins', 'official', 'config-lens');
+  const officialRoot = join(rootDir, 'plugins', 'config-lens');
   run('pnpm', ['--dir', officialRoot, 'run', 'build']);
   const candidate = join(temporary, 'official-config-lens-candidate.lxp');
   run('node', [

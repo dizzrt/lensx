@@ -2,12 +2,15 @@
 
 ## 范围
 
-插件开发模式是用于手动测试自包含插件 `dist/` 目录的 Host-private 工作流。
-它只存在于专用的 feature-enabled 开发构建中，每个 lensX 进程启动时默认关闭，
-且注册与模式开关都不会跨重启持久化。
+插件开发模式是测试自包含插件 `dist/` 目录的 Host-private 工作流。它只存在于
+feature-enabled 开发构建中。专用 `pnpm run dev:plugin-development-mode` 命令是
+显式的当前进程 opt-in：它会在前端装载前开启原生模式，并发现已经构建的仓库插件。
+其他 feature build 仍默认关闭。registration、snapshot、source scope、Runtime 与
+开关值都不会跨进程持久化。
 
-它不会安装 `.lxp`、签名或信任 Publisher 声明、授予权限、监听文件、执行构建，
-也不会自动重新加载插件。
+它不会安装 `.lxp`、签名或信任 Publisher 声明、增加 Host authority、监听文件、
+执行构建、自动重新加载插件或打开 Page。发现到的 Action 会出现在 Launcher 中，
+但只有用户后续执行该 Action 才会打开 production Child WebView Runtime。
 
 ## 标准 Smoke 插件
 
@@ -31,7 +34,7 @@ native picker 应选择 `examples/plugins/development-mode-smoke/dist` 的绝对
 
 ## 启动 lensX
 
-先构建插件，再启动专用 Host 构建：
+先构建仓库插件，再启动专用 Host 构建：
 
 ```bash
 lensx-plugin build
@@ -39,8 +42,22 @@ lensx-plugin validate
 pnpm run dev:plugin-development-mode
 ```
 
-在 **设置 → 插件** 中启用 **插件开发模式**，然后选择 **注册开发目录**。
-应选择自包含的 `dist/` 根目录，而不是项目根目录。取消 native 文件夹选择器不会产生副作用。
+该命令默认检查 `plugins/` 下的直接成员，并只检查现有的
+`plugins/<member>/dist`。隐藏成员以及缺少 `dist/` 的成员会被忽略。若要使用其他
+root，只能传入一个覆盖参数：
+
+```bash
+pnpm run dev:plugin-development-mode -- --plugins-root /absolute/plugin-projects
+```
+
+custom root 会替代默认 root，不会与 `plugins/` 同时扫描。每个非隐藏直接成员都被视为
+project container，只有它的 `dist/` 子目录会成为 candidate。包装器会规范化该 root，
+并只通过 Host-private startup environment 传递；该值不会进入 frontend bundle、event
+payload、Registration Contract 或 plugin Runtime。
+
+在 **设置 → 插件** 中，**插件开发模式** 已经开启。即使 root 缺失、为空、不可读，
+或所有 candidate 都被跳过，仍可通过 **注册开发目录** 进行额外的手动选择。应选择
+自包含的 `dist/` 根目录，而不是项目根目录。取消 native 文件夹选择器不会产生副作用。
 Host-owned native picker 打开期间，lensX 会保持其父窗口可见，并暂时抑制快捷键或失焦隐藏；
 picker 返回选择结果或被取消后，正常的失焦隐藏行为会立即恢复。
 
@@ -69,6 +86,14 @@ authority；插件数据与 Launcher collections 会保留。正式安装包、q
 
 ## 诊断
 
+启动 candidate 使用与手动注册相同的目录检查和不可变 snapshot prepare。
+`invalid`、`incompatible`、`source_changed`、`unsafe` 与 candidate 级读取失败只会跳过
+对应 member；terminal 只报告其可移植 member label、稳定错误码及最终 loaded/skipped
+计数。在提交任何 candidate 前，lensX 会对整个 prepared batch 以及当前 builtin、external、
+quarantine 和 development identities 统一检查 ID。任一重复都会产生阻断启动的
+`conflict`；lensX 会清理全部未提交 snapshot，绝不 shadow 或替换现有 entry。Manager
+或 cache 协调失败会回滚本次 bootstrap batch 并终止 setup，避免前端看到部分初始投影。
+
 错误稳定且不包含路径。`invalid` 表示 payload 不完整或违反目录规则；`incompatible`
 表示声明范围排除了当前 Host，或使用旧 Manifest `0.2.x`/iframe Runtime 协议；
 `source_changed` 表示捕获期间文件发生变化；`conflict`
@@ -82,11 +107,11 @@ raw native errors 或 private Manager facts。
 
 使用一个全新的 lensX 进程，并在整个流程中保持其 terminal 运行。
 
-1. 使用上面的命令构建并校验 A 代版本，然后运行
-   `pnpm run dev:plugin-development-mode`。
-2. 按 `Ctrl+Shift+Space`，执行 **打开设置**，进入 **插件**，启用
-   **插件开发模式**，然后在 native folder picker 中注册
-   `examples/plugins/development-mode-smoke/dist`。条目必须显示 `0.1.0`，以及
+1. 使用上面的命令构建并校验 A 代版本，把它放到 custom root 的直接成员
+   `<root>/smoke/dist` 下，然后运行
+   `pnpm run dev:plugin-development-mode -- --plugins-root <root>`。
+2. 按 `Ctrl+Shift+Space`，执行 **打开设置**，进入 **插件**。**插件开发模式** Switch
+   必须已经开启，发现到的条目必须显示 `0.1.0`，以及
    **Development**、**Unpacked**、**Unsigned** 文本标签。Publisher 必须仍是
    未验证的作者文本，并且不存在 permission 或 grant facts。
 3. 再次打开 Launcher，执行 **打开开发模式 Smoke A**。真实插件 WebView 必须显示
@@ -109,8 +134,9 @@ raw native errors 或 private Manager facts。
 7. 再次注册同一个 B 代 `dist/` 并打开它，然后关闭 **插件开发模式**。确认关闭后，
    Host 必须先 quiesce 正在运行的 Page 并移除所有 development entries，UI 才能报告
    mode 已关闭。
-8. 停止并重新运行 `pnpm run dev:plugin-development-mode`。模式必须默认关闭，且不能恢复
-   任何 development entry。最后运行 `pnpm run check:plugin-development-mode-boundaries`，
+8. 使用相同 root 停止并重新运行 `pnpm run dev:plugin-development-mode`。模式必须开启并
+   重新发现全新的 registrations，但不能恢复上一进程的 snapshot、Runtime 或 registration
+   状态；普通构建仍不得启用开发模式。最后运行 `pnpm run check:plugin-development-mode-boundaries`，
    验证普通 production artifacts 仍然排除该能力。
 
 如需真实验证 unsafe-directory 拒绝路径，可先构建 A 代版本，再在其 `dist/` 内加入一个

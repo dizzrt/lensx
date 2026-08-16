@@ -10,13 +10,14 @@ boundaries.
 ### Requirement: Development Mode MUST require build capability and explicit per-process opt-in
 
 The system MUST expose development controls only when both the native and
-frontend builds explicitly include the Plugin Development Mode capability. Even
-when the build includes that capability, Development Mode MUST start disabled
-in every application process and MUST be enabled only by an explicit user
-action in trusted Host settings. Native commands MUST independently check the
-build capability and the current process-local switch; frontend visibility
-MUST NOT establish authority. Production builds MUST NOT register development
-Tauri commands, managed state, or frontend operation entry points.
+frontend builds explicitly include the Plugin Development Mode capability. An
+explicit per-process opt-in MUST come from a user action in trusted Host
+settings or from the dedicated `pnpm run dev:plugin-development-mode` startup
+command. The dedicated command MUST enable the native state before the frontend
+reads the capability. Native commands MUST independently check the build
+capability and the current process-local switch; frontend visibility MUST NOT
+establish authority. Production builds MUST NOT register development Tauri
+commands, managed state, or frontend operation entry points.
 
 #### Scenario: User enables Development Mode in a capable build
 
@@ -28,13 +29,24 @@ Tauri commands, managed state, or frontend operation entry points.
 - **THEN** enabling the mode does not register a plugin, read a directory,
   create Host authority, or create a Runtime
 
-#### Scenario: Application restarts
+#### Scenario: Dedicated development command starts
 
-- **WHEN** an application process that previously enabled Development Mode
-  exits and restarts
-- **THEN** Development Mode is disabled in the new process
-- **THEN** the previous switch, directory capability, development registration,
-  snapshot, scope, and Runtime state are not recovered
+- **WHEN** a developer runs the dedicated `pnpm run dev:plugin-development-mode`
+  command
+- **THEN** the new process treats the command as an explicit opt-in and reports
+  Development Mode enabled in its first capability snapshot and Settings render
+- **THEN** that opt-in alone does not execute a Launcher Action, open a plugin
+  Page, create a Runtime, or create a Child WebView
+
+#### Scenario: User disables an auto-enabled process
+
+- **WHEN** the user disables Development Mode in a process started by the
+  dedicated command
+- **THEN** the Host completes the existing quiesce flow, sets the process-local
+  switch to disabled, and does not re-enable it because startup configuration
+  remains present
+- **THEN** a later dedicated startup creates a new opt-in without recovering the
+  prior process's registration, snapshot, scope, or Runtime
 
 #### Scenario: Production artifacts are checked
 
@@ -47,16 +59,18 @@ Tauri commands, managed state, or frontend operation entry points.
 
 ### Requirement: Development registration MUST accept only one explicitly selected self-contained dist directory
 
-The registration operation MUST obtain one user-authorized directory through a
-Host-owned native folder picker and MUST treat its root as a self-contained
-`dist/`. The Host MUST read only regular files without following symlinks and
-MUST check portable paths, case collisions, file-count, per-file and total-size
-limits, `manifest.json`, Manifest semantics, current compatibility, and the
-completeness of every referenced resource. The Host MUST NOT search parent
-directories, read project metadata, execute a build script, accept a remote URL,
-or treat a frontend-supplied path as authority.
+The interactive registration operation MUST obtain one user-authorized
+directory through a Host-owned native folder picker and MUST treat its root as a
+self-contained `dist/`. The interactive operation and the dedicated startup's
+Host-owned bootstrap discovery MUST remain independent. For picker and
+bootstrap input alike, the Host MUST read only regular files without following
+symlinks and MUST check portable paths, case collisions, file-count, per-file
+and total-size limits, `manifest.json`, Manifest semantics, current
+compatibility, and the completeness of every referenced resource. The Host MUST
+NOT search a candidate `dist/` parent, read project metadata, execute a build
+script, accept a remote URL, or treat a frontend-supplied path as authority.
 
-#### Scenario: Register a valid compatible dist
+#### Scenario: Register a valid compatible dist interactively
 
 - **WHEN** the explicitly selected directory contains a valid compatible
   Manifest, self-contained Runtime and resources, and only bounded regular
@@ -75,10 +89,10 @@ or treat a frontend-supplied path as authority.
 
 #### Scenario: Directory contains unsafe or incomplete content
 
-- **WHEN** the directory lacks `manifest.json` or a referenced resource,
+- **WHEN** a picker or bootstrap candidate lacks `manifest.json` or a referenced resource,
   contains a link, special file, absolute or colliding path, exceeds a limit,
   contains an invalid Manifest, or is incompatible with the current Host
-- **THEN** the Host rejects the entire request with a stable bounded invalid or
+- **THEN** the Host rejects that candidate with a stable bounded invalid or
   incompatible diagnostic
 - **THEN** untrusted paths, raw I/O errors, file bytes, and partial Manifest
   facts do not leave the native boundary
@@ -91,6 +105,74 @@ or treat a frontend-supplied path as authority.
 - **THEN** the Host returns a retryable bounded `source_changed` or unsafe
   result and publishes no mixed generation
 - **THEN** any existing development registration and Runtime remain current
+
+### Requirement: Dedicated development startup MUST discover and register repository plugin builds without opening them
+
+The dedicated `pnpm run dev:plugin-development-mode` command MUST use the
+repository `plugins/` directory as its default startup root and MUST support one
+optional `--plugins-root <path>` override. The Host MUST inspect only non-hidden
+direct child directories of that root in deterministic order and MUST treat
+only an existing `<member>/dist` as a candidate. A member without `dist/` MUST
+be treated as not yet built and ignored. Each successful candidate MUST be
+published as a process-local, enabled, `source=development`, Runtime-inactive
+immutable snapshot registration. Bootstrap MUST NOT execute a Launcher Action,
+open a Page, create a Runtime, build, install, watch, or reload a plugin.
+
+#### Scenario: Default repository plugins are ready
+
+- **WHEN** `plugins/*/dist` contains one or more valid compatible self-contained
+  candidates whose plugin IDs are globally unique across current Registration
+- **THEN** dedicated startup registers all valid candidates before the initial
+  frontend projection and reports the Settings switch enabled
+- **THEN** the Launcher may project their Actions, but no plugin Page or Child
+  WebView opens before a user explicitly executes an Action
+
+#### Scenario: Custom plugin root is supplied
+
+- **WHEN** a developer supplies `--plugins-root <path>` to the dedicated command
+- **THEN** the Host uses only direct-member `dist/` directories beneath the
+  normalized custom root for this process and does not also scan the default root
+- **THEN** the root, source directories, and snapshots do not enter the frontend,
+  events, Registration Contract, or plugin Runtime
+
+#### Scenario: Root or member has no built dist
+
+- **WHEN** the startup root is missing, empty, unreadable, or a direct member has
+  no `dist/`
+- **THEN** the application still starts with Development Mode enabled and emits
+  a stable bounded summary for an undiscoverable root or ignores the unbuilt member
+- **THEN** the Host does not guess another directory or run a build, and the user
+  may still use the interactive native picker
+
+#### Scenario: A candidate is invalid but IDs do not conflict
+
+- **WHEN** one candidate produces an invalid, incompatible, source-changed,
+  unsafe, or candidate-level read diagnostic while another candidate validates
+- **THEN** the Host cleans and skips the failed candidate, reports its stable
+  member label and code plus loaded/skipped counts, and registers the other valid
+  candidates
+- **THEN** the diagnostic discloses no absolute path, file content, raw native
+  error, or partial authority fact
+
+#### Scenario: Candidate IDs conflict
+
+- **WHEN** two validated bootstrap candidates use the same plugin ID or a
+  candidate ID belongs to a current builtin, external, quarantine, or
+  development identity
+- **THEN** the Host cleans all uncommitted candidates and blocks the dedicated
+  startup with a stable conflict before exposing a bootstrap registration
+- **THEN** the Host does not shadow, replace, upgrade, disable, or remove an
+  existing identity
+
+#### Scenario: Bootstrap infrastructure cannot initialize or commit safely
+
+- **WHEN** the development cache, snapshot coordinator, or Plugin Manager cannot
+  initialize, or a system-level commit failure cannot converge safely after ID
+  preflight
+- **THEN** the Host rolls back authority committed by this batch, cleans
+  snapshots provably owned by the batch, and fails application startup
+- **THEN** the UI does not present an enabled mode whose authority cannot be
+  registered or revoked safely
 
 ### Requirement: Host MUST publish only an immutable validated development snapshot
 
@@ -294,4 +376,3 @@ Development registration and manual reload MUST use the same Manifest `0.3.0`, C
 - **WHEN** a new immutable snapshot and generation commit atomically
 - **THEN** old Child WebView teardown completes and a fresh attempt/WebView loads the new generation
 - **THEN** uncommitted reload failure leaves the current WebView unchanged
-

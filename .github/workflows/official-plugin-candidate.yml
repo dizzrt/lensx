@@ -10,7 +10,7 @@ on:
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - 'packages/plugin-*/**'
-      - 'plugins/official/**'
+      - 'plugins/**'
       - 'scripts/official-plugin-release.ts'
       - 'scripts/official-plugin-release/**'
       - 'src/app/plugins/**'

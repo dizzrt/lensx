@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.dizzrt.lensx.config-lens-wkwebview-harness",
   "build": {
-    "frontendDist": "../plugins/official/config-lens/wkwebview/dist"
+    "frontendDist": "../plugins/config-lens/wkwebview/dist"
   },
   "app": {
     "windows": [],

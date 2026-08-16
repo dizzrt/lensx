@@ -42,6 +42,14 @@ export const checkOfficialPluginReleaseDocs = (rootDir: string): void => {
   const configZhPath = 'docs/zh/development/config-lens.md';
   const en = read(root, enPath);
   const zh = read(root, zhPath);
+  for (const [path, source] of [
+    [enPath, en],
+    [zhPath, zh],
+    [configEnPath, read(root, configEnPath)],
+    [configZhPath, read(root, configZhPath)],
+  ] as const) {
+    if (source.includes('plugins/official')) fail('docs-legacy-plugin-path', path);
+  }
   if (!en.startsWith('# Official Plugin Release Pipeline\n')) fail('docs-title-drift', enPath);
   if (!zh.startsWith('# 官方插件发布流水线\n')) fail('docs-title-drift', zhPath);
   for (const marker of [
@@ -52,7 +60,7 @@ export const checkOfficialPluginReleaseDocs = (rootDir: string): void => {
     'pnpm run check:official-plugin-release-pipeline',
     'pnpm run version:official-plugins',
     'official-plugin-release',
-    'plugins/official/*',
+    'plugins/*',
     'schema version `1`',
   ]) {
     if (!en.includes(marker) || !zh.includes(marker)) fail('docs-machine-interface-drift', marker);

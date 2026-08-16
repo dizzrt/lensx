@@ -23,7 +23,7 @@ permission method。
 
 ```text
 packages/*
-plugins/official/*
+plugins/*
 examples/plugins/*
 ```
 
@@ -33,7 +33,7 @@ examples/plugins/*
 `examples/plugin-testkit-consumer` 与 `examples/plugin-ui-consumer` 中的外部消费示例仍是普通项目
 数据，不是 workspace package。
 
-首个官方产品成员是 `plugins/official/config-lens`
+首个官方产品成员是 `plugins/config-lens`
 （`@lensx/official-config-lens`、`dev.lensx.config-lens`）。它通过一个可编辑
 Monaco model 和包内 language Worker 支持 JSON、YAML 1.2、TOML 1.0 与 XML 1.0；
 Format 以一次可撤销操作直接替换编辑器内容，Compact 仅支持 JSON。官方仓库位置
@@ -298,7 +298,7 @@ focus、computed token、长文本和截图。这些门禁不会实现或模拟 
 
 ## 官方插件 Release Unit
 
-每个直接 `plugins/official/*` member 仍是普通公共边界插件，同时独立拥有 private package
+每个直接 `plugins/*` member 仍是普通公共边界插件，同时独立拥有 private package
 version、Manifest version、CHANGELOG、测试、`test:e2e` 与明确 CODEOWNERS 条目。Host
 不得导入官方插件源码。Changesets 表达 release 意图；仓库发布 canonical `.lxp`，而不是 npm
 package。
@@ -340,7 +340,7 @@ pnpm run check:official-plugin-release-pipeline
 ```text
 root Host              -> packages/* 公共 exports
 packages/*             -> 更底层 packages/* 公共 exports
-plugins/official/*     -> packages/* 公共 exports
+plugins/*              -> packages/* 公共 exports
 examples/plugins/*     -> packages/* 公共 exports
 ```
 

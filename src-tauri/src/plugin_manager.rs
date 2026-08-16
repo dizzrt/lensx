@@ -543,6 +543,19 @@ impl PluginManager {
         self.lock_snapshot().quarantined.get(key).cloned()
     }
 
+    #[cfg(feature = "plugin-development-mode")]
+    pub(crate) fn has_plugin_identity(&self, plugin_id: &str) -> bool {
+        let snapshot = self.lock_snapshot();
+        snapshot.healthy.contains_key(plugin_id)
+            || snapshot
+                .quarantined
+                .contains_key(&plugin_record_key(plugin_id))
+            || snapshot
+                .quarantined
+                .values()
+                .any(|stub| stub.plugin_id.as_deref() == Some(plugin_id))
+    }
+
     pub fn registration_revision(&self) -> String {
         self.lock_snapshot().revision.to_string()
     }

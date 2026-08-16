@@ -35,13 +35,17 @@ const manifestFor = (pluginId: string, actionTitle = 'Open Project'): Normalized
   },
 });
 
-const summaryFor = (pluginId: string, entryId: string): PluginRegistrationSummary => ({
+const summaryFor = (
+  pluginId: string,
+  entryId: string,
+  source: Extract<PluginRegistrationSummary, { kind: 'registered' }>['source'] = 'external',
+): PluginRegistrationSummary => ({
   kind: 'registered',
   entry_id: entryId,
   plugin_id: pluginId,
   version: '1.0.0',
   display: structuredClone(baseDetail.manifest.display),
-  source: 'external',
+  source,
   enabled: true,
   compatibility: { lensx: true, host_api: true },
   runtime: { kind: 'inactive' },
@@ -135,14 +139,16 @@ const hostPage = {
 } as const;
 
 describe('Plugin surface projection coordinator', () => {
-  test('reads one current detail and commits Page-before-Action, then removes Action-before-Page', async () => {
+  test('projects an initial development registration without dispatching its Action or opening its Page', async () => {
     const pluginId = 'com.acme.surface';
     const entryId = 'entry_0000000000000041';
-    const summary = summaryFor(pluginId, entryId);
+    const summary = summaryFor(pluginId, entryId, 'development');
     const adapter = new ControlledAdapter(snapshotFor('1', [summary]), async () => detailFor('1', entryId, pluginId));
     const actionRegistry = new LauncherActionRegistry();
     const pageRegistry = new PageRegistry([hostPage]);
     const navigationService = new AppNavigationService(pageRegistry);
+    const navigationHandler = rs.fn();
+    navigationService.registerHandler(navigationHandler);
     const operations: string[] = [];
     const projection = createPluginSurfaceProjectionService({
       registrationAdapter: adapter,
@@ -165,6 +171,8 @@ describe('Plugin surface projection coordinator', () => {
     expect(operations.slice(0, 2)).toEqual([`page:${pluginId}:2`, `action:${pluginId}:1`]);
     expect(actionRegistry.get(`${pluginId}.open_project`)).toBeDefined();
     expect(pageRegistry.lookup({ owner_id: pluginId, page_id: 'open_project' })?.page.available).toBe(true);
+    expect(navigationHandler).not.toHaveBeenCalled();
+    expect(navigationService.isActivePage({ owner_id: pluginId, page_id: 'open_project' })).toBe(false);
 
     operations.length = 0;
     adapter.publish(snapshotFor('2'));

@@ -66,7 +66,7 @@ pnpm exec tauri build
 - `src-tauri/` — Rust and Tauri desktop source and configuration.
 - `packages/plugin-contract` — public Manifest Contract package.
 - `packages/*` — other public workspace packages when a package manifest is present.
-- `plugins/official/*` — official plugin workspace packages when present.
+- `plugins/*` — official plugin workspace packages when present.
 - `examples/plugins/*` — example plugin workspace packages when present.
 - `examples/plugin-contract-consumer` — non-workspace external tarball consumer example.
 - `public/` and `static/` — frontend assets and HTML input.

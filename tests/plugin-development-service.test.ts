@@ -32,8 +32,8 @@ const snapshot = (revision = '1'): PluginRegistrationSnapshot => ({
   ],
 });
 
-const projection = (operations: string[]): PluginSurfaceProjectionService => {
-  let current = snapshot();
+const projection = (operations: string[], startsEmpty = false): PluginSurfaceProjectionService => {
+  let current: PluginRegistrationSnapshot = startsEmpty ? { ...snapshot('0'), entries: [] } : snapshot();
   return {
     currentSnapshot: () => current,
     readRegistrationDetail: async () => {
@@ -140,6 +140,24 @@ describe('Plugin development desktop adapter', () => {
 });
 
 describe('Plugin development service', () => {
+  test('uses the first native auto-enabled capability snapshot without calling setMode', async () => {
+    const readCapability = rs.fn(async () => capability);
+    const setMode = rs.fn(adapter().setMode);
+    const register = rs.fn(adapter().register);
+    const service = createPluginDevelopmentService({
+      adapter: adapter({ readCapability, register, setMode }),
+      surfaceProjection: projection([], true),
+      buildSupported: true,
+    });
+
+    await service.initialize();
+    expect(service.current()).toEqual({ visible: true, enabled: true });
+    expect(readCapability).toHaveBeenCalledTimes(1);
+    expect(setMode).not.toHaveBeenCalled();
+    await service.register();
+    expect(register).toHaveBeenCalledTimes(1);
+  });
+
   test('fails closed across build/native gates and never invokes native in a production build', async () => {
     const readCapability = rs.fn(async () => capability);
     const service = createPluginDevelopmentService({

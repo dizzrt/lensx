@@ -2,10 +2,10 @@
 
 ## 范围与当前状态
 
-仓库已经交付维护流水线，可将 `plugins/official/*` 成员作为独立 release unit 完成
+仓库已经交付维护流水线，可将 `plugins/*` 成员作为独立 release unit 完成
 校验、升版、构建和 canonical `.lxp` 发布。ConfigLens 是首个真实产品成员，因此真实
 member matrix 除已提交的零、单、双成员 fixture 外，还会验证
-`plugins/official/config-lens`。公共 Contract、SDK、UI、Testkit 与 CLI package 仍未
+`plugins/config-lens`。公共 Contract、SDK、UI、Testkit 与 CLI package 仍未
 发布到 npm。
 
 官方仓库目录或 GitHub Release 不是 Host authority。普通本地安装器仍把下载字节分类为
@@ -15,7 +15,7 @@ member matrix 除已提交的零、单、双成员 fixture 外，还会验证
 
 ## 目录与所有权契约
 
-每个直接 `plugins/official/<slug>` workspace member 是一个 release unit，必须包含：
+每个直接 `plugins/<slug>` workspace member 是一个 release unit，必须包含：
 
 - 唯一 package name、`private: true`、独立 SemVer、
   `packageManager: "pnpm@11.17.0"`、Node `>=24 <25` 与 pnpm `>=11 <12`；
@@ -24,12 +24,12 @@ member matrix 除已提交的零、单、双成员 fixture 外，还会验证
 - `CHANGELOG.md`、至少一个可执行测试，以及有效的 `build`、`typecheck`、`test`、
   `check` 和 `test:e2e` scripts；
 - `.github/CODEOWNERS` 中一条精确的
-  `/plugins/official/<slug>/ <owners...>` 记录。
+  `/plugins/<slug>/ <owners...>` 记录。
 
 通配、重复、空、冲突或指向未知官方插件的 owner 记录都会 fail closed。官方插件只能
 消费公共 Contract、SDK、UI、Testkit、CLI authoring command 与普通前端依赖，不能导入
 private Host、Tauri、workspace deep path、其他插件源码，Host 也不能直接导入自己的
-`plugins/official/*` 源码。Host 只消费安装后的 registration。
+`plugins/*` 源码。Host 只消费安装后的 registration。
 
 ## Changesets 与版本意图
 
@@ -114,7 +114,7 @@ job 不安装依赖也不执行插件代码；它复验完整 handoff、创建 d
 asset 不会覆盖，tag 不会移动，已发布历史不会删除或回退。不完整 draft 对外不可见，修复原因后
 可以安全重试。不同插件 matrix entry 是独立失败域。
 
-committed dry-run 使用位于 `plugins/official/*` 之外的两个临时插件，只对其中一个执行 bump、
+committed dry-run 使用位于仓库产品 `plugins/*` 之外的两个临时插件，只对其中一个执行 bump、
 build、pack、inspect、prepare、Runtime exercise 与 release plan，并证明另一个插件和根应用
 保持不变。fixture 不会注册到产品 Host，也不会调用 GitHub Release API。
 

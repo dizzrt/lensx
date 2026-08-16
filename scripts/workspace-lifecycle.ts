@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const SUPPORTED_WORKSPACE_PATTERNS = ['packages/*', 'plugins/official/*', 'examples/plugins/*'] as const;
+export const SUPPORTED_WORKSPACE_PATTERNS = ['packages/*', 'plugins/*', 'examples/plugins/*'] as const;
 
 export const REQUIRED_LIFECYCLE_SCRIPTS = ['build', 'typecheck', 'test', 'check'] as const;
 
@@ -35,7 +35,7 @@ export type LifecycleCommandRunner = (cwd: string, script: string, label: string
 
 const WORKSPACE_KIND_BY_PARENT: Record<string, WorkspaceMemberKind> = {
   packages: 'public-package',
-  'plugins/official': 'official-plugin',
+  plugins: 'official-plugin',
   'examples/plugins': 'example-plugin',
 };
 
