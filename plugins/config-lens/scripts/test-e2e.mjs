@@ -24,6 +24,15 @@ if (files.some((file) => file.endsWith('.map'))) throw new Error('e2e/sourcemap:
 const scripts = files.filter((file) => file.endsWith('.js'));
 const source = (await Promise.all(scripts.map((file) => readFile(file, 'utf8')))).join('\n');
 const html = await readFile(resolve(dist, 'index.html'), 'utf8');
+const startupShell = html.match(/<section\b[^>]*\bid=["']config-lens-startup["'][^>]*>[\s\S]*?<\/section>/u)?.[0];
+if (
+  startupShell === undefined ||
+  !startupShell.includes('aria-busy="true"') ||
+  !startupShell.includes('config-lens-startup-retry') ||
+  /<strong\b|role=["']progressbar["']|config-lens-startup__progress/u.test(startupShell)
+) {
+  throw new Error('e2e/startup-shell: normal startup must stay visually empty while retaining recovery.');
+}
 if (/(?:src|href)=["']https?:\/\//u.test(html) || /(?:import\s*\(|new Worker\s*\()\s*["']https?:\/\//u.test(source)) {
   throw new Error('e2e/remote-load: build attempts to load a remote script or Worker.');
 }

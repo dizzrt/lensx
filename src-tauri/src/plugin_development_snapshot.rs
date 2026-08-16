@@ -207,6 +207,14 @@ impl DevelopmentSnapshotStore {
                 .is_compatible_with_identity(identity)
     }
 
+    pub(crate) fn owns_current_snapshot_location(&self, snapshot: &Path, identity: &str) -> bool {
+        self.is_current_snapshot(snapshot)
+            && identity.len() == 64
+            && identity
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    }
+
     fn ensure_layout(&self) -> Result<(), DevelopmentSnapshotFailure> {
         let session = self.session_root();
         fs::create_dir_all(session.join(STAGING_DIRECTORY))

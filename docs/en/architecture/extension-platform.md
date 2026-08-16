@@ -557,6 +557,19 @@ scope. Repeated resolution is idempotent. Disable/re-enable, replacement,
 logical uninstall, incompatible or quarantine state, and restart permanently
 invalidate prior scopes; unrelated global revision changes do not.
 
+The service also owns a process-local verified byte cache bounded to 32 MiB and
+256 entries. Its key is the exact entry, installed-package digest or Development
+snapshot identity, Resource generation, and normalized path. Values contain
+only immutable `Arc<[u8]>`, fixed MIME, and bounded length. A miss retains the
+complete canonicalize/link/regular-file/size/opened-identity/read/final-current
+proof before publication. A hit still performs pre/post scope, Manager,
+payload-ownership, generation, current-attempt/source, and file-identity checks.
+Development snapshots receive one complete tree proof and then a bounded
+metadata seal; additions, removals, links, inode/mtime/size/readonly changes,
+reload, retirement, or cleanup invalidate it. Generation revocation removes
+stale cache eligibility before payload cleanup. Same-generation close/reopen
+may reuse package bytes but never Session, authority, Worker, model, or content.
+
 Every request rechecks the scope and current Manager facts. URL plugin key and
 version fields are derived cross-checks, not authority. The native URL is
 `lensx-plugin://<scope>.runtime.localhost/v1/<scope>/<plugin-key>/<version>/<path>`;
@@ -595,10 +608,10 @@ partial bytes, or existence detail.
 Run `pnpm run check:plugin-resource-service` for the shared Rust/TypeScript
 fixtures, desktop adapter, workspace boundary, Manager generation, Installer
 ownership regressions, and protocol/path/MIME/lifecycle/race/oracle/platform URL
-tests. This service does not create an iframe, execute plugin code, establish
+tests. This service does not create a Child WebView, execute plugin code, establish
 Runtime Sessions or Host API transport. It enforces the
-document policy selected by the Host-private security profile; the iframe
-container and downstream Runtime Session consume its validated `entry_url`.
+document policy selected by the Host-private security profile; the Child WebView
+adapter and downstream Runtime Session consume its validated `entry_url`.
 
 ## Shipped macOS Isolated Plugin Runtime Origin Prerequisite
 
@@ -636,8 +649,8 @@ Run:
 pnpm run check:isolated-plugin-runtime-origin
 ```
 
-This is the macOS-only origin prerequisite consumed by the production iframe
-container described below. It does not itself create the iframe or deliver a
+This is the macOS-only origin prerequisite consumed by the production Child
+WebView described below. It does not itself create the WebView or deliver a
 Runtime Session, Host API, permissions, or select the CSP profile. Parser coverage for
 translated URL shapes is not Windows or Linux Runtime support. The container
 may consume only a validated isolated `entry_url`; it has no shared-origin,

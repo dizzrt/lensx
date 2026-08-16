@@ -25,6 +25,11 @@ Host 与插件 document 是 native sibling。正确性不假设 WebKit 将它们
 replacement、upgrade、development reload、retry、disconnect、fatal bridge failure、Host reload、
 app teardown 与 process exit 都进入同一 compare-current terminal path。
 
+presentation 使用绑定 opaque current attempt 的一次 Host-private async readiness wait。它会在 bridge
+ready、closed failure、timeout、destroy、replacement 或 app teardown 时 exactly-once settle。React
+不再按固定间隔 polling；snapshot read 仅保留为 diagnostic，unmount 或 replacement 后的 late
+completion 不能显示或复活 WebView。
+
 公共 WebView SDK transport 会等待插件 document 的 load event，并跨过一个 task boundary 后才
 发现 bridge 和报告 ready。这样由 native `Finished` load event 权威地推进到 `Loaded`，避免
 module 或 React 提前启动并与该事件形成竞态。
@@ -79,7 +84,9 @@ pnpm run check:open-isolated-plugin-runtime
 ```
 
 `evidence:` 命令会打开临时 macOS WKWebView harness window。普通 `check:` 命令验证已提交的
-bounded evidence，适合 non-interactive aggregate validation。
+bounded evidence，适合 non-interactive aggregate validation。普通 evidence run 不会改写 positive
+record。审查新鲜且通过的结果后，维护者才显式运行
+`node --experimental-strip-types scripts/plugin-child-webview-macos-evidence.ts --run --update-cold-open`。
 
 ## 性能预算与 Evidence Schema
 
@@ -87,15 +94,19 @@ cold create 与 same-attempt restore 分开测量；ConfigLens warm format 也�
 
 | 测量项 | 维护预算 | 方法 |
 | --- | ---: | --- |
-| Child WebView cold create p95 | 1000 ms | 五次 automated cold open；分别记录 resolve、create、navigation、load、bridge、SDK、bundle、editor、Worker 与 first-interactive stage。 |
-| First interactive p95 | 2000 ms | 端到端 cold-open stage clock。 |
-| Same-attempt hide/restore | 250 ms | native hide/show 调用并校验 current document，且不 reload。 |
-| Terminal destroy | 1000 ms | 从 close 到 native WebView registry 中不再存在。 |
+| Release-like Host loading 到 bridge ready p95 | 250 ms | 至少二十次 fresh open，经过普通 registration、Resource Service、presentation、bridge 与 SDK path。 |
+| Release-like first interactive p95 | 500 ms | 至少二十次 fresh open；只有 current Monaco model/layout、包内 editor Worker 与 native keyboard input 都确认后才结束。 |
+| Development snapshot first interactive p95 | 1000 ms | 至少二十次 fresh Development generation open，复用相同 product Runtime path。 |
+| Same-attempt hide/restore p95 | 100 ms | 至少四十次 native hide/show/focus sample，并确认 attempt、document、Session、model 与 Worker 不变。 |
 | ConfigLens warm small-JSON format p95 | 100 ms | 对维护的四 case corpus 采集四十次 action-to-model-update sample。 |
-| Host heartbeat p95 gap | 50 ms | plugin startup 或工作期间运行 16 ms Host timer。 |
+| Host heartbeat p95 gap | 50 ms | plugin startup 或工作期间运行 Host timer。 |
 
-已提交 matrix 使用 schema version `0.1.0`、platform `macos`、engine `wkwebview`、boolean
-positive/negative outcome、bounded stage summary 与显式 privacy flag。evidence 不记录 user content、
+closed stage catalog 为 `resolve`、`create`、`navigation`、`load`、`bridge`、`sdk`、`ui_bundle`、
+`editor`、`worker`、`host_loading`、`first_interactive` 与 `restore`。每层只报告 monotonic
+duration；evidence 不比较或导出跨层 absolute timestamp。已提交 cold-open summary 使用 schema
+version `0.2.0`，分为 `release_like`、`development_snapshot` 与 `same_attempt_restore` profile，
+保存 nearest-rank p50/p95/max、sample count、bounded asset size、Host heartbeat、terminal cleanup
+与显式 privacy flag。evidence 不记录 user content、
 raw payload/error、complete URL、origin、path、nonce、native label、data-store identifier 或
 Host-private token。memory/resource release 通过 registry absence、destroyed WebView、inert late
 callback、terminated Worker/connection 与零残留 bridge/resource authority 证明；不测量或假设
@@ -103,8 +114,9 @@ process separation。
 
 ## 故障排查
 
-1. Host 一直停留在 loading 时，区分 native load、bridge ready 与 SDK Context ready；不要把它们
-   当作同一个 timeout。
+1. Host 一直停留在 loading 时，区分 native load、bridge ready 与 SDK Context ready；按负责 stage
+   排查而不是视为一个 timeout。`load` 偏高指向 Resource proof 或 native loading；`ui_bundle`/`worker`
+   偏高指向插件 bootstrap。
 2. 内容隐藏或错位时，运行 slot/bounds gate，并校验 scale factor、presentation revision 与 Host
    overlay 顺序。
 3. Web 能力失败时，使用 browser feature detection 并检查插件 CSP；不要增加 Host permission 或
@@ -113,6 +125,13 @@ process separation。
    callback。
 5. evidence 变化时重跑真实 macOS matrix 并审查 bounded result。不得手改 positive boolean 来绕过
    失败 harness。
+
+Resource Service 保留 process-local、32 MiB/256-entry 的 verified byte cache，key 包含 entry、
+installed/development payload variant、resource generation 与 normalized path。miss 只有在完整
+path/file/read 与 final-currentness proof 后才 publish；hit 仍检查 scope、Manager projection、payload
+ownership、generation、current attempt/source 与前后 identity。Development snapshot 在首次完整 tree
+proof 后使用 bounded metadata seal。lifecycle generation 变化会撤销 eligibility 并淘汰 stale entry。
+`Cache-Control: no-store` 保持不变：browser cache 不是 authority。
 
 ## 旧协议迁移
 

@@ -10,11 +10,12 @@ use crate::plugin_child_webview_rpc::{
     PluginChildWebviewRpcIngressResult, PluginChildWebviewRpcSession,
 };
 use crate::plugin_host_api_validation::validate_host_api_result;
+use crate::plugin_runtime_stage::{record_plugin_runtime_stage, PluginRuntimeStage};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
-    sync::{Arc, Mutex, MutexGuard, OnceLock},
-    time::Instant,
+    sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock},
+    time::{Duration, Instant},
 };
 use tauri::{AppHandle, Manager, Runtime};
 use url::Url;
@@ -130,6 +131,13 @@ pub(crate) enum PluginChildWebviewSessionErrorCode {
     RuntimeHandshakeTimeout,
     RuntimeSessionDisconnected,
     RuntimeUnavailable,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum PluginChildWebviewWaitReadiness {
+    Ready,
+    Failed(PluginChildWebviewSessionErrorCode),
+    StaleAttempt,
 }
 
 impl PluginChildWebviewSessionErrorCode {
@@ -304,6 +312,10 @@ struct CurrentEntry<H> {
     rpc: PluginChildWebviewRpcSession,
     data_store_identifier: [u8; 16],
     resource_authority_active: bool,
+    load_started_at_ms: Option<u64>,
+    loaded_at_ms: Option<u64>,
+    bridge_ready_at_ms: Option<u64>,
+    navigation_recorded: bool,
 }
 
 struct RegistryState<H> {
@@ -393,6 +405,7 @@ impl<H> Default for RegistryState<H> {
 
 pub(crate) struct PluginChildWebviewRegistry<H: PluginChildWebviewNativeHandle> {
     state: Mutex<RegistryState<H>>,
+    readiness_changed: Condvar,
     resource_authority: Mutex<Option<Arc<dyn PluginChildWebviewResourceAuthority>>>,
     ready_dispatcher: Mutex<Option<Arc<dyn PluginChildWebviewReadyDispatcher>>>,
     rpc_dispatcher: Mutex<Option<Arc<dyn PluginChildWebviewRpcDispatcher>>>,
@@ -467,6 +480,7 @@ impl<H: PluginChildWebviewNativeHandle> Default for PluginChildWebviewRegistry<H
     fn default() -> Self {
         Self {
             state: Mutex::new(RegistryState::default()),
+            readiness_changed: Condvar::new(),
             resource_authority: Mutex::new(None),
             ready_dispatcher: Mutex::new(None),
             rpc_dispatcher: Mutex::new(None),
@@ -548,6 +562,10 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
             rpc: PluginChildWebviewRpcSession::default(),
             data_store_identifier,
             resource_authority_active: false,
+            load_started_at_ms: None,
+            loaded_at_ms: None,
+            bridge_ready_at_ms: None,
+            navigation_recorded: false,
         });
         Some(attempt)
     }
@@ -582,6 +600,10 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
             rpc: PluginChildWebviewRpcSession::default(),
             data_store_identifier,
             resource_authority_active: false,
+            load_started_at_ms: None,
+            loaded_at_ms: None,
+            bridge_ready_at_ms: None,
+            navigation_recorded: false,
         });
         Some(attempt)
     }
@@ -606,12 +628,14 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
                 return false;
             }
         }
-        if !current.session.begin_loading(monotonic_now_ms()) {
+        let now_ms = monotonic_now_ms();
+        if !current.session.begin_loading(now_ms) {
             if let Some(resource_authority) = resource_authority {
                 resource_authority.revoke(&current.attempt.opaque_id());
             }
             return false;
         }
+        current.load_started_at_ms = Some(now_ms);
         current.resource_authority_active = resource_authority.is_some();
         true
     }
@@ -657,6 +681,7 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
                     let _ = handle.destroy();
                     return false;
                 }
+                current.load_started_at_ms = Some(now_ms);
                 current.resource_authority_active = resource_authority.is_some();
             } else if matches!(
                 current.session.state,
@@ -689,13 +714,28 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
         now_ms: u64,
     ) -> bool {
         let mut state = self.lock_state();
-        state
+        let changed = state
             .current
             .as_mut()
             .filter(|current| {
                 current.attempt == attempt && current.source_label == actual_source_label
             })
-            .is_some_and(|current| current.session.native_loaded(now_ms))
+            .and_then(|current| {
+                let started = current.load_started_at_ms?;
+                current.session.native_loaded(now_ms).then(|| {
+                    current.loaded_at_ms = Some(now_ms);
+                    now_ms.saturating_sub(started)
+                })
+            });
+        drop(state);
+        if let Some(duration_ms) = changed {
+            record_plugin_runtime_stage(
+                PluginRuntimeStage::Load,
+                Duration::from_millis(duration_ms),
+            );
+            self.readiness_changed.notify_all();
+        }
+        changed.is_some()
     }
 
     pub(crate) fn apply_slot_update(
@@ -836,6 +876,8 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
             handle.destroy().map_err(|_| ())?;
         }
         state.current = None;
+        drop(state);
+        self.readiness_changed.notify_all();
         Ok(true)
     }
 
@@ -919,6 +961,10 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
         if !current.session.bridge_ready(now_ms) {
             return PluginChildWebviewReadyResult::SessionUnavailable;
         }
+        let bridge_duration_ms = current
+            .loaded_at_ms
+            .map(|loaded| now_ms.saturating_sub(loaded));
+        current.bridge_ready_at_ms = Some(now_ms);
         let facts = PluginChildWebviewReadyFacts {
             attempt,
             source_label: current.source_label.clone(),
@@ -940,11 +986,21 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
                 current.attempt == attempt && current.source_label == actual_source_label
             })
             .is_some_and(|current| current.rpc.connect());
-        if connected {
+        let result = if connected {
             PluginChildWebviewReadyResult::Accepted
         } else {
             PluginChildWebviewReadyResult::SessionUnavailable
+        };
+        if result == PluginChildWebviewReadyResult::Accepted {
+            if let Some(duration_ms) = bridge_duration_ms {
+                record_plugin_runtime_stage(
+                    PluginRuntimeStage::Bridge,
+                    Duration::from_millis(duration_ms),
+                );
+            }
         }
+        self.readiness_changed.notify_all();
+        result
     }
 
     pub(crate) fn accept_rpc_ingress(
@@ -1097,13 +1153,27 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
         succeeded: bool,
     ) -> bool {
         let mut state = self.lock_state();
-        state
+        let duration_ms = state
             .current
             .as_mut()
             .filter(|current| {
                 current.attempt == attempt && current.source_label == actual_source_label
             })
-            .is_some_and(|current| current.session.sdk_ready_after_context(method, succeeded))
+            .and_then(|current| {
+                let started = current.bridge_ready_at_ms?;
+                current
+                    .session
+                    .sdk_ready_after_context(method, succeeded)
+                    .then(|| monotonic_now_ms().saturating_sub(started))
+            });
+        drop(state);
+        if let Some(duration_ms) = duration_ms {
+            record_plugin_runtime_stage(
+                PluginRuntimeStage::Sdk,
+                Duration::from_millis(duration_ms),
+            );
+        }
+        duration_ms.is_some()
     }
 
     pub(crate) fn disconnect_current(
@@ -1127,6 +1197,7 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
         self.apply_rpc_effects(context, effects);
         if changed {
             self.revoke_current_resource_authority(attempt);
+            self.readiness_changed.notify_all();
         }
         changed
     }
@@ -1151,7 +1222,72 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
         };
         self.apply_rpc_effects(context, effects);
         self.revoke_current_resource_authority(attempt);
+        self.readiness_changed.notify_all();
         Some(error)
+    }
+
+    pub(crate) fn wait_presentation_readiness(
+        &self,
+        attempt: PluginChildWebviewAttempt,
+    ) -> PluginChildWebviewWaitReadiness {
+        loop {
+            let state = self.lock_state();
+            let Some(current) = state
+                .current
+                .as_ref()
+                .filter(|current| current.attempt == attempt)
+            else {
+                return PluginChildWebviewWaitReadiness::StaleAttempt;
+            };
+            match current.session.state {
+                PluginChildWebviewSessionState::BridgeReady
+                | PluginChildWebviewSessionState::SdkReady => {
+                    return PluginChildWebviewWaitReadiness::Ready;
+                }
+                PluginChildWebviewSessionState::Disconnected => {
+                    return PluginChildWebviewWaitReadiness::Failed(
+                        current
+                            .session
+                            .error
+                            .unwrap_or(PluginChildWebviewSessionErrorCode::RuntimeUnavailable),
+                    );
+                }
+                PluginChildWebviewSessionState::Disposed => {
+                    return PluginChildWebviewWaitReadiness::Failed(
+                        PluginChildWebviewSessionErrorCode::RuntimeUnavailable,
+                    );
+                }
+                PluginChildWebviewSessionState::Creating
+                | PluginChildWebviewSessionState::Loading
+                | PluginChildWebviewSessionState::Loaded => {}
+            }
+            let deadline = current
+                .session
+                .load_deadline_at_ms
+                .or(current.session.ready_deadline_at_ms);
+            if let Some(deadline) = deadline {
+                let now = monotonic_now_ms();
+                if now >= deadline {
+                    drop(state);
+                    let error = self
+                        .expire_session_deadline(attempt, now)
+                        .unwrap_or(PluginChildWebviewSessionErrorCode::RuntimeUnavailable);
+                    return PluginChildWebviewWaitReadiness::Failed(error);
+                }
+                let wait = Duration::from_millis(deadline - now);
+                let (state, _) = self
+                    .readiness_changed
+                    .wait_timeout(state, wait)
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                drop(state);
+            } else {
+                let state = self
+                    .readiness_changed
+                    .wait(state)
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                drop(state);
+            }
+        }
     }
 
     pub(crate) fn expire_current_session_deadline(
@@ -1273,9 +1409,28 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewCurrentSource
     for PluginChildWebviewRegistry<H>
 {
     fn is_current_source(&self, attempt_id: &str, source_label: &str) -> bool {
-        self.lock_state().current.as_ref().is_some_and(|current| {
+        let mut state = self.lock_state();
+        let Some(current) = state.current.as_mut().filter(|current| {
             current.attempt.opaque_id() == attempt_id && current.source_label == source_label
-        })
+        }) else {
+            return false;
+        };
+        let navigation_duration_ms = if !current.navigation_recorded {
+            current.navigation_recorded = true;
+            current
+                .load_started_at_ms
+                .map(|started| monotonic_now_ms().saturating_sub(started))
+        } else {
+            None
+        };
+        drop(state);
+        if let Some(duration_ms) = navigation_duration_ms {
+            record_plugin_runtime_stage(
+                PluginRuntimeStage::Navigation,
+                Duration::from_millis(duration_ms),
+            );
+        }
+        true
     }
 }
 
@@ -2686,6 +2841,70 @@ mod tests {
         assert_ne!(
             second_facts.data_store_identifier,
             third_facts.data_store_identifier
+        );
+    }
+
+    #[test]
+    fn presentation_readiness_wait_settles_once_for_ready_failure_and_stale_attempts() {
+        let ready_service = PluginChildWebviewRegistry::<FakeHandle>::default();
+        let ready_attempt = ready_service
+            .reserve_current(identity("plugin-a", 1), "fake-child")
+            .expect("ready reservation succeeds");
+        assert!(ready_service.attach_current(ready_attempt, FakeHandle::default()));
+        assert!(ready_service.attach_ready_dispatcher(Arc::new(FakeReadyDispatcher::default())));
+        let creation = ready_service
+            .creation_facts(ready_attempt)
+            .expect("ready creation facts exist");
+        assert!(ready_service.mark_native_loaded(ready_attempt, "fake-child"));
+        assert_eq!(
+            ready_service.accept_ready_ingress(
+                ready_attempt,
+                "fake-child",
+                &ready_body(&creation.freshness),
+            ),
+            PluginChildWebviewReadyResult::Accepted
+        );
+        assert_eq!(
+            ready_service.wait_presentation_readiness(ready_attempt),
+            PluginChildWebviewWaitReadiness::Ready
+        );
+
+        let failure_service = Arc::new(PluginChildWebviewRegistry::<FakeHandle>::default());
+        let failure_attempt = failure_service
+            .reserve_current(identity("plugin-b", 2), "failed-child")
+            .expect("failure reservation succeeds");
+        assert!(failure_service.attach_current(
+            failure_attempt,
+            FakeHandle {
+                source_label: Some("failed-child"),
+                ..FakeHandle::default()
+            },
+        ));
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let waiter = Arc::clone(&failure_service);
+        std::thread::spawn(move || {
+            sender
+                .send(waiter.wait_presentation_readiness(failure_attempt))
+                .expect("wait result should be received");
+        });
+        assert!(failure_service.disconnect_current(
+            failure_attempt,
+            PluginChildWebviewSessionErrorCode::RuntimeSessionDisconnected,
+        ));
+        assert_eq!(
+            receiver
+                .recv_timeout(Duration::from_secs(1))
+                .expect("failure wait should settle"),
+            PluginChildWebviewWaitReadiness::Failed(
+                PluginChildWebviewSessionErrorCode::RuntimeSessionDisconnected,
+            )
+        );
+        assert!(failure_service
+            .compare_current_teardown(failure_attempt)
+            .expect("failure teardown succeeds"));
+        assert_eq!(
+            failure_service.wait_presentation_readiness(failure_attempt),
+            PluginChildWebviewWaitReadiness::StaleAttempt
         );
     }
 

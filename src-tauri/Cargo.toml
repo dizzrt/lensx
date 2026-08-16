@@ -21,6 +21,7 @@ plugin-child-webview-spike = []
 plugin-child-webview-acl-harness = []
 plugin-child-webview-slot-harness = []
 plugin-child-webview-web-capability-harness = []
+config-lens-cold-open-harness = ["plugin-development-mode"]
 
 [[example]]
 name = "plugin_child_webview_spike"
@@ -41,6 +42,11 @@ required-features = ["plugin-child-webview-slot-harness"]
 name = "plugin_child_webview_web_capability_harness"
 path = "examples/plugin_child_webview_web_capability_harness.rs"
 required-features = ["plugin-child-webview-web-capability-harness"]
+
+[[example]]
+name = "config_lens_cold_open_harness"
+path = "examples/config_lens_cold_open_harness.rs"
+required-features = ["config-lens-cold-open-harness"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

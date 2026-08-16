@@ -11,7 +11,14 @@ const moduleInventoryPlugin = {
       done: {
         tap(
           name: string,
-          callback: (stats: { compilation: { modules: Iterable<{ identifier(): string }> } }) => void,
+          callback: (stats: {
+            compilation: {
+              chunkGraph: {
+                getModuleChunks(module: { identifier(): string }): Iterable<{ files: Iterable<string> }>;
+              };
+              modules: Iterable<{ identifier(): string }>;
+            };
+          }) => void,
         ): void;
       };
     };
@@ -19,6 +26,22 @@ const moduleInventoryPlugin = {
     compiler.hooks.done.tap('ConfigLensModuleInventory', (stats) => {
       const modules = [...stats.compilation.modules].map((module) => module.identifier()).sort();
       writeFileSync(resolve(import.meta.dirname, 'dist/modules.json'), `${JSON.stringify(modules, null, 2)}\n`, 'utf8');
+      const chunkModules: Record<string, string[]> = {};
+      for (const module of stats.compilation.modules) {
+        for (const chunk of stats.compilation.chunkGraph.getModuleChunks(module)) {
+          for (const file of chunk.files) {
+            const modules = chunkModules[file] ?? [];
+            modules.push(module.identifier());
+            chunkModules[file] = modules;
+          }
+        }
+      }
+      for (const identifiers of Object.values(chunkModules)) identifiers.sort();
+      writeFileSync(
+        resolve(import.meta.dirname, 'dist/chunk-modules.json'),
+        `${JSON.stringify(chunkModules, null, 2)}\n`,
+        'utf8',
+      );
     });
   },
 };

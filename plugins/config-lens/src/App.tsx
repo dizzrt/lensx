@@ -1,4 +1,4 @@
-import type { PluginSdkTransport } from '@lensx/plugin-sdk';
+import type { PluginRuntimeContext, PluginSdkClient, PluginSdkTransport } from '@lensx/plugin-sdk';
 import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview';
 import { PluginFeedback, PluginUiProvider } from '@lensx/plugin-ui';
 import { useEffect, useRef, useState } from 'react';
@@ -15,21 +15,47 @@ const fallbackContext = Object.freeze({
 
 export interface AppProps {
   readonly createTransport?: () => PluginSdkTransport;
+  readonly initialRuntime?: ConfigLensInitialRuntime;
+  readonly onRetry?: () => void;
 }
 
-export const App = ({ createTransport = createPluginWebviewTransport }: AppProps) => {
-  const [state, setState] = useState<ConfigLensRuntimeState>({ kind: 'loading' });
+export interface ConfigLensInitialRuntime {
+  readonly client: PluginSdkClient;
+  readonly context: PluginRuntimeContext;
+}
+
+export const App = ({ createTransport = createPluginWebviewTransport, initialRuntime, onRetry }: AppProps) => {
+  const [state, setState] = useState<ConfigLensRuntimeState>(() =>
+    initialRuntime === undefined ? { kind: 'loading' } : { kind: 'ready', context: initialRuntime.context },
+  );
   const runtimeRef = useRef<ReturnType<typeof createConfigLensRuntime>>(undefined);
   const errorRegionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (initialRuntime !== undefined) {
+      let active = true;
+      const unsubscribeState = initialRuntime.client.subscribeState((clientState) => {
+        if (active && clientState === 'disconnected') {
+          setState({ kind: 'error', context: initialRuntime.context });
+        }
+      });
+      const unsubscribeContext = initialRuntime.client.subscribe('runtime.context_changed', ({ payload }) => {
+        if (active) setState({ kind: 'ready', context: payload });
+      });
+      return () => {
+        active = false;
+        unsubscribeContext();
+        unsubscribeState();
+        void initialRuntime.client.dispose().catch(() => undefined);
+      };
+    }
     const runtime = createConfigLensRuntime(createTransport, setState);
     runtimeRef.current = runtime;
     return () => {
       runtimeRef.current = undefined;
       void runtime.dispose();
     };
-  }, [createTransport]);
+  }, [createTransport, initialRuntime]);
 
   useEffect(() => {
     if (state.kind === 'error') errorRegionRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
@@ -46,7 +72,7 @@ export const App = ({ createTransport = createPluginWebviewTransport }: AppProps
           <PluginFeedback
             description={messages.sdkError}
             kind="error"
-            onRecovery={() => void runtimeRef.current?.retry()}
+            onRecovery={() => (onRetry === undefined ? void runtimeRef.current?.retry() : onRetry())}
           />
         </div>
       ) : null}

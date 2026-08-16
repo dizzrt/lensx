@@ -65,7 +65,6 @@ pub struct PluginInstallerDiagnostic {
     pub message: &'static str,
 }
 
-#[derive(Debug)]
 pub struct PluginInstaller {
     root: Option<PathBuf>,
     manager: Arc<PluginManager>,
@@ -76,8 +75,19 @@ pub struct PluginInstaller {
     blocked_plugin_keys: Mutex<HashSet<String>>,
     preparation: Mutex<Option<PluginPreparation>>,
     pending_replacement_cleanup: Mutex<HashSet<PathBuf>>,
+    resource_eligibility_revoker: Mutex<Option<Arc<dyn Fn(&str) + Send + Sync>>>,
     #[cfg(test)]
     cleanup_fault: Mutex<bool>,
+}
+
+impl std::fmt::Debug for PluginInstaller {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PluginInstaller")
+            .field("root", &self.root)
+            .field("manager", &self.manager)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Debug)]
@@ -187,6 +197,7 @@ impl PluginInstaller {
             blocked_plugin_keys: Mutex::new(HashSet::new()),
             preparation: Mutex::new(None),
             pending_replacement_cleanup: Mutex::new(HashSet::new()),
+            resource_eligibility_revoker: Mutex::new(None),
             #[cfg(test)]
             cleanup_fault: Mutex::new(false),
         });
@@ -221,6 +232,27 @@ impl PluginInstaller {
         (self.current_availability() == InstallerAvailability::Available)
             .then(|| self.root.as_ref().map(|root| root.join(PACKAGES_DIRECTORY)))
             .flatten()
+    }
+
+    pub(crate) fn attach_resource_eligibility_revoker(
+        &self,
+        revoker: Arc<dyn Fn(&str) + Send + Sync>,
+    ) {
+        *self
+            .resource_eligibility_revoker
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(revoker);
+    }
+
+    fn revoke_resource_eligibility(&self, entry_id: &str) {
+        if let Some(revoker) = self
+            .resource_eligibility_revoker
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .as_ref()
+        {
+            revoker(entry_id);
+        }
     }
 
     pub fn prepare_replacement_source(
@@ -622,6 +654,7 @@ impl PluginInstaller {
                 return Err(map_manager_replacement_error(error));
             }
         };
+        self.revoke_resource_eligibility(&request.entry_id);
         let cleanup = if !self.replacement_cleanup_fault()
             && remove_tree_no_follow(&old_path).is_ok()
             && sync_directory(&plugin_directory).is_ok()
@@ -668,9 +701,14 @@ impl PluginInstaller {
             .map_err(map_commit_boundary_error)?;
         self.ensure_recovered_locked()
             .map_err(|_| PluginLifecycleStorageError::Unavailable)?;
-        self.manager
+        let result = self
+            .manager
             .set_enabled_entry(entry_id, expected_revision, enabled)
-            .map_err(map_manager_lifecycle_error)
+            .map_err(map_manager_lifecycle_error)?;
+        if result.1.is_some() {
+            self.revoke_resource_eligibility(entry_id);
+        }
+        Ok(result)
     }
 
     pub(crate) fn uninstall(
@@ -759,6 +797,7 @@ impl PluginInstaller {
                 return Err(map_manager_lifecycle_error(error));
             }
         };
+        self.revoke_resource_eligibility(entry_id);
         let revision = removal.change.revision.clone();
         let plugin_id = removal.entry.plugin_id().map(str::to_owned);
         let cleanup_result = self.complete_cleanup(&mut record, &packages_root, &data_root);
@@ -2891,6 +2930,15 @@ mod tests {
             panic!("expected prepared replacement");
         };
         assert_eq!(classification, PluginReplacementClassification::Upgrade);
+        let revoked_before_cleanup = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let revoked_before_cleanup_in_hook = Arc::clone(&revoked_before_cleanup);
+        let old_path_in_hook = old_path.clone();
+        let entry_id_in_hook = request.entry_id.clone();
+        installer.attach_resource_eligibility_revoker(Arc::new(move |entry_id| {
+            assert_eq!(entry_id, entry_id_in_hook);
+            assert!(old_path_in_hook.exists());
+            revoked_before_cleanup_in_hook.store(true, Ordering::SeqCst);
+        }));
         let emitter = FakeEmitter::default();
         let committed = installer
             .commit_replacement(
@@ -2917,6 +2965,7 @@ mod tests {
         assert_eq!(registration.manifest.version, manifest.version);
         assert!(registration.facts.enabled);
         assert_eq!(registration.facts.source, PluginSource::External);
+        assert!(revoked_before_cleanup.load(Ordering::SeqCst));
         assert!(!old_path.exists());
         assert_eq!(
             fs::read(data_path.join("state.json")).expect("data should remain"),
@@ -2984,9 +3033,15 @@ mod tests {
 
         installer.set_cleanup_fault(false);
         let entry_id = installed_entry_id(&manager, &manifest.plugin_id);
+        let revocations = Arc::new(AtomicU64::new(0));
+        let revocations_in_hook = Arc::clone(&revocations);
+        installer.attach_resource_eligibility_revoker(Arc::new(move |_| {
+            revocations_in_hook.fetch_add(1, Ordering::SeqCst);
+        }));
         installer
             .set_enabled(&entry_id, "2", false)
             .expect("next trusted operation should retry orphan cleanup");
+        assert_eq!(revocations.load(Ordering::SeqCst), 1);
         assert!(!old_path.exists());
         assert_eq!(manager.registration_revision(), "3");
         assert_eq!(
@@ -3071,6 +3126,11 @@ mod tests {
             .join(&plugin_key);
         fs::create_dir_all(&data).expect("data subtree should be created on demand");
         fs::write(data.join("preserved.json"), b"preserve").expect("data should exist");
+        let revocations = Arc::new(AtomicU64::new(0));
+        let revocations_in_hook = Arc::clone(&revocations);
+        installer.attach_resource_eligibility_revoker(Arc::new(move |_| {
+            revocations_in_hook.fetch_add(1, Ordering::SeqCst);
+        }));
 
         let removed = installer
             .uninstall(&entry_id, "1", CleanupDataPolicy::RetainData)
@@ -3080,6 +3140,7 @@ mod tests {
         assert_eq!(removed.revision, "2");
         assert_eq!(removed.plugin_id.as_deref(), Some(plugin_id));
         assert!(removed.change.is_some());
+        assert_eq!(revocations.load(Ordering::SeqCst), 1);
         assert!(manager.registration(plugin_id).is_none());
         assert_eq!(fs::read(data.join("preserved.json")).unwrap(), b"preserve");
         assert!(installer
@@ -3093,6 +3154,7 @@ mod tests {
         assert!(!repeated.changed);
         assert!(!repeated.cleanup_pending);
         assert_eq!(manager.registration_revision(), "2");
+        assert_eq!(revocations.load(Ordering::SeqCst), 1);
 
         installer
             .install_bytes(&valid_package(), &FakeEmitter::default())

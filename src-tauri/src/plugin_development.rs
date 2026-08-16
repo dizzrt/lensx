@@ -287,6 +287,7 @@ impl PluginDevelopmentResult {
 struct PluginDevelopmentCoordinator {
     manager: Arc<PluginManager>,
     snapshots: Arc<DevelopmentSnapshotStore>,
+    resource_eligibility_revoker: Mutex<Option<Arc<dyn Fn(&str) + Send + Sync>>>,
 }
 
 pub struct PluginDevelopmentModeState {
@@ -359,6 +360,18 @@ impl PluginDevelopmentModeState {
         self.coordinator
             .as_ref()
             .map(|coordinator| Arc::clone(&coordinator.snapshots))
+    }
+
+    pub(crate) fn attach_resource_eligibility_revoker(
+        &self,
+        revoker: Arc<dyn Fn(&str) + Send + Sync>,
+    ) {
+        if let Some(coordinator) = &self.coordinator {
+            *coordinator
+                .resource_eligibility_revoker
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(revoker);
+        }
     }
 
     fn update(
@@ -533,6 +546,17 @@ fn report_bootstrap_summary(summary: &PluginDevelopmentBootstrapSummary) {
 }
 
 impl PluginDevelopmentCoordinator {
+    fn revoke_resource_eligibility(&self, entry_id: &str) {
+        if let Some(revoker) = self
+            .resource_eligibility_revoker
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .as_ref()
+        {
+            revoker(entry_id);
+        }
+    }
+
     fn prepare_startup_candidates(
         &self,
         root: &Path,
@@ -845,6 +869,7 @@ impl PluginDevelopmentCoordinator {
             }
         };
         let _ = emit_plugin_registration_changed(emitter, &replacement.change);
+        self.revoke_resource_eligibility(&request.entry_id);
         let cleanup = if self.snapshots.retire(&old_root) {
             PluginDevelopmentCleanupStatus::Complete
         } else {
@@ -899,6 +924,7 @@ impl PluginDevelopmentCoordinator {
             .remove_development_entry(&request.entry_id, &request.expected_revision)
             .map_err(|failure| map_manager_failure(failure, operation))?;
         let _ = emit_plugin_registration_changed(emitter, &removal.change);
+        self.revoke_resource_eligibility(&request.entry_id);
         let cleanup = if self.snapshots.retire(&snapshot_root) {
             PluginDevelopmentCleanupStatus::Complete
         } else {
@@ -1073,6 +1099,7 @@ pub fn setup_plugin_development_mode<R: Runtime>(
         .map(|snapshots| PluginDevelopmentCoordinator {
             manager,
             snapshots: Arc::new(snapshots),
+            resource_eligibility_revoker: Mutex::new(None),
         });
     if startup.is_some() && coordinator.is_none() {
         return Err(PluginDevelopmentBootstrapError::new(
@@ -1205,7 +1232,11 @@ mod tests {
         );
         let snapshots =
             Arc::new(DevelopmentSnapshotStore::initialize(directory.0.join("cache")).unwrap());
-        PluginDevelopmentCoordinator { manager, snapshots }
+        PluginDevelopmentCoordinator {
+            manager,
+            snapshots,
+            resource_eligibility_revoker: Mutex::new(None),
+        }
     }
 
     fn startup_state(directory: &TestDirectory, enabled: bool) -> Arc<PluginDevelopmentModeState> {
@@ -1550,6 +1581,11 @@ mod tests {
         let source = directory.source();
         let coordinator = coordinator(&directory);
         let emitter = TestEmitter::default();
+        let revocations = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let revocations_in_hook = Arc::clone(&revocations);
+        *coordinator.resource_eligibility_revoker.lock().unwrap() = Some(Arc::new(move |_| {
+            revocations_in_hook.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }));
 
         let PluginDevelopmentResult::Registered {
             entry_id, revision, ..
@@ -1578,6 +1614,7 @@ mod tests {
         assert_eq!(revision, "2");
         assert_eq!(cleanup, PluginDevelopmentCleanupStatus::Complete);
         assert_eq!(coordinator.snapshots.current_snapshot_count(), 1);
+        assert_eq!(revocations.load(std::sync::atomic::Ordering::SeqCst), 1);
 
         let stale = coordinator.reload(
             &emitter,
@@ -1595,6 +1632,7 @@ mod tests {
             })
         ));
         assert_eq!(coordinator.snapshots.current_snapshot_count(), 1);
+        assert_eq!(revocations.load(std::sync::atomic::Ordering::SeqCst), 1);
 
         let PluginDevelopmentResult::Removed {
             revision, cleanup, ..
@@ -1614,6 +1652,7 @@ mod tests {
         assert_eq!(revision, "3");
         assert_eq!(cleanup, PluginDevelopmentCleanupStatus::Complete);
         assert_eq!(coordinator.snapshots.current_snapshot_count(), 0);
+        assert_eq!(revocations.load(std::sync::atomic::Ordering::SeqCst), 2);
         assert!(coordinator
             .manager
             .read_registration_snapshot()

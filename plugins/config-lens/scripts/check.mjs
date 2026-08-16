@@ -51,12 +51,12 @@ for (const file of sourceFiles) {
     throw new Error(`runtime/private-native-bridge: ${file.slice(root.length + 1)}`);
   }
 }
-const appSource = await readFile(resolve(root, 'src/App.tsx'), 'utf8');
+const appSource = await readFile(resolve(root, 'src/main.tsx'), 'utf8');
 if (
   !appSource.includes("import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview';") ||
-  !appSource.includes('createTransport = createPluginWebviewTransport')
+  !appSource.includes('createPluginSdk({ transport: createPluginWebviewTransport() })')
 ) {
-  throw new Error('runtime/public-webview-entry: ConfigLens must use the public SDK WebView transport by default.');
+  throw new Error('runtime/public-webview-entry: bootstrap must create the public SDK WebView transport before UI.');
 }
 const controllerSource = await readFile(resolve(root, 'src/language/controller.ts'), 'utf8');
 const workerSource = await readFile(resolve(root, 'src/language/language.worker.ts'), 'utf8');
@@ -104,15 +104,32 @@ try {
     throw new Error('bundle/chunk-budget: an individual Monaco or language chunk exceeds 4 MiB.');
   }
   const initialHtml = await readFile(resolve(dist, 'index.html'), 'utf8');
-  const initialScripts = [...initialHtml.matchAll(/<script[^>]+src=["']\.\/([^"']+)["']/gu)].map((match) =>
-    resolve(dist, match[1]),
+  const initialScriptNames = [...initialHtml.matchAll(/<script[^>]+src=["']\.\/([^"']+)["']/gu)].map(
+    (match) => match[1],
   );
+  const initialStyleNames = [...initialHtml.matchAll(/<link[^>]+href=["']\.\/([^"']+\.css)["']/gu)].map(
+    (match) => match[1],
+  );
+  const initialScripts = initialScriptNames.map((name) => resolve(dist, name));
+  const initialStyles = initialStyleNames.map((name) => resolve(dist, name));
   const initialBytes = facts
     .filter(({ file }) => initialScripts.includes(file))
     .reduce((sum, { size }) => sum + size, 0);
-  if (initialScripts.length === 0 || initialBytes > 1024 * 1024) {
+  const initialCssBytes = facts
+    .filter(({ file }) => initialStyles.includes(file))
+    .reduce((sum, { size }) => sum + size, 0);
+  if (initialScripts.length === 0 || initialBytes > 256 * 1024) {
     throw new Error(`bundle/initial-script-budget: ${initialBytes}`);
   }
+  if (initialStyles.length === 0 || initialCssBytes > 64 * 1024) {
+    throw new Error(`bundle/initial-css-budget: ${initialCssBytes}`);
+  }
+  const chunkModules = JSON.parse(await readFile(resolve(dist, 'chunk-modules.json'), 'utf8'));
+  const initialModules = [...initialScriptNames, ...initialStyleNames].flatMap((name) => chunkModules[name] ?? []);
+  const forbiddenInitialModule =
+    /node_modules\/(?:react(?:-dom)?|@douyinfe\/semi|@lensx\/plugin-ui|monaco-editor)|src\/language\/adapters/u;
+  const forbidden = initialModules.find((identifier) => forbiddenInitialModule.test(identifier));
+  if (forbidden !== undefined) throw new Error(`bundle/initial-heavy-module: ${forbidden}`);
 } catch (error) {
   if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
 }

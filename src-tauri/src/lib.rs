@@ -4,6 +4,9 @@ pub mod launcher_surface;
 pub mod launcher_window;
 use std::sync::Arc;
 use tauri::Manager;
+#[cfg(feature = "config-lens-cold-open-harness")]
+#[doc(hidden)]
+pub mod config_lens_cold_open_harness;
 pub(crate) mod frame_aware_navigation_policy;
 #[cfg(target_os = "macos")]
 pub(crate) mod frame_aware_navigation_setup;
@@ -38,6 +41,7 @@ pub mod plugin_resource_contract;
 pub mod plugin_resource_service;
 pub(crate) mod plugin_resource_url;
 pub(crate) mod plugin_runtime_security_policy;
+pub(crate) mod plugin_runtime_stage;
 pub mod plugin_scoped_storage;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -76,6 +80,7 @@ pub fn run() {
         plugin_child_webview_host_dispatcher::emit_plugin_child_webview_host_event,
         plugin_child_webview_presentation::create_plugin_child_webview_presentation,
         plugin_child_webview_presentation::read_plugin_child_webview_presentation,
+        plugin_child_webview_presentation::wait_plugin_child_webview_presentation,
         plugin_child_webview_presentation::set_plugin_child_webview_presentation_visibility,
         plugin_child_webview_presentation::destroy_plugin_child_webview_presentation,
         plugin_child_webview_slot::update_plugin_child_webview_slot
@@ -112,6 +117,7 @@ pub fn run() {
         plugin_child_webview_host_dispatcher::emit_plugin_child_webview_host_event,
         plugin_child_webview_presentation::create_plugin_child_webview_presentation,
         plugin_child_webview_presentation::read_plugin_child_webview_presentation,
+        plugin_child_webview_presentation::wait_plugin_child_webview_presentation,
         plugin_child_webview_presentation::set_plugin_child_webview_presentation_visibility,
         plugin_child_webview_presentation::destroy_plugin_child_webview_presentation,
         plugin_child_webview_slot::update_plugin_child_webview_slot

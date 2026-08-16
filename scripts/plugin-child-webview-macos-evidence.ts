@@ -1,7 +1,15 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+import {
+  assertConfigLensColdOpenEvidencePrivacy,
+  type ConfigLensColdOpenEvidence,
+  type ConfigLensColdOpenSample,
+  summarizeConfigLensColdOpenSamples,
+  validateConfigLensColdOpenEvidence,
+} from './config-lens-cold-open-metrics.ts';
 
 const root = join(import.meta.dirname, '..');
 const readText = (path: string): string => readFileSync(join(root, path), 'utf8');
@@ -184,14 +192,33 @@ for (const index of ['docs/en/index.md', 'docs/zh/index.md']) {
   }
 }
 
-const cold = readJson('fixtures/official-config-lens/evidence/macos/cold-open.json');
-const stages = record(cold.stage_ms, 'cold stage timings');
-for (const stage of ['resolve', 'create', 'navigation', 'load', 'bridge', 'sdk', 'bundle', 'editor', 'worker']) {
-  boundedNumber(record(stages[stage], `${stage} stage`).p95, 2000, `${stage} stage p95`);
+const coldPath = 'fixtures/official-config-lens/evidence/macos/cold-open.json';
+const runRequested = process.argv.includes('--run');
+const updateColdOpen = process.argv.includes('--update-cold-open');
+if (updateColdOpen && !runRequested) {
+  throw new Error('Child WebView macOS evidence failed: --update-cold-open requires --run.');
 }
-boundedNumber(record(stages.create, 'create stage').p95, 1000, 'cold create p95');
-boundedNumber(record(cold.first_interactive_ms, 'first interactive').p95, 2000, 'first interactive p95');
-boundedNumber(record(cold.host_heartbeat, 'Host heartbeat').p95_gap_ms, 50, 'Host heartbeat p95');
+const validateColdBudgets = (cold: ConfigLensColdOpenEvidence): void => {
+  boundedNumber(cold.profiles.release_like.stage_ms.host_loading.p95, 250, 'release-like Host loading p95');
+  boundedNumber(cold.profiles.release_like.stage_ms.first_interactive.p95, 500, 'release-like first interactive p95');
+  boundedNumber(
+    cold.profiles.development_snapshot.stage_ms.first_interactive.p95,
+    1000,
+    'Development snapshot first interactive p95',
+  );
+  boundedNumber(cold.profiles.same_attempt_restore.stage_ms.restore.p95, 100, 'same-attempt restore p95');
+  boundedNumber(cold.host_heartbeat.p95_gap_ms, 50, 'Host heartbeat p95');
+};
+
+const committedColdSource = readText(coldPath);
+if (!updateColdOpen) {
+  assertConfigLensColdOpenEvidencePrivacy(committedColdSource);
+  const committedCold = JSON.parse(committedColdSource) as unknown;
+  if (!validateConfigLensColdOpenEvidence(committedCold)) {
+    throw new Error('Child WebView macOS evidence failed: committed cold-open schema is invalid.');
+  }
+  validateColdBudgets(committedCold);
+}
 const configLens = readJson('fixtures/official-config-lens/evidence/macos/config-lens.json');
 boundedNumber(record(configLens.warm_format, 'warm format').p95_action_to_model_update_ms, 100, 'warm format p95');
 const configChecks = record(configLens.checks, 'ConfigLens checks');
@@ -208,7 +235,7 @@ for (const check of [
   }
 }
 
-if (process.argv.includes('--run')) {
+if (runRequested) {
   const temporaryRoot = mkdtempSync(join(tmpdir(), 'lensx-child-webview-macos-evidence-'));
   try {
     const harnesses = [
@@ -242,6 +269,106 @@ if (process.argv.includes('--run')) {
       actual[key] = JSON.parse(readFileSync(output, 'utf8')) as Record<string, unknown>;
     }
     validateSources(actual);
+
+    const packagePath = join(temporaryRoot, 'config-lens.lxp');
+    const pack = spawnSync(
+      process.execPath,
+      [
+        'packages/plugin-cli/dist/src/bin.js',
+        'pack',
+        '--project',
+        'plugins/config-lens',
+        '--output',
+        packagePath,
+        '--no-build',
+        '--json',
+      ],
+      { cwd: root, encoding: 'utf8' },
+    );
+    if (pack.status !== 0) {
+      throw new Error('Child WebView macOS evidence failed: public CLI could not pack the ConfigLens candidate.');
+    }
+
+    interface RawColdHarness {
+      readonly evidence_version: '0.1.0';
+      readonly profile: 'release_like' | 'development_snapshot';
+      readonly cold_samples: ConfigLensColdOpenSample[];
+      readonly restore_samples: { restore_ms: number }[];
+      readonly heartbeat_gaps_ms: number[];
+      readonly production_components: Record<string, boolean>;
+    }
+    const runColdProfile = (profile: RawColdHarness['profile']): RawColdHarness => {
+      const output = join(temporaryRoot, `${profile}.json`);
+      const profileRoot = join(temporaryRoot, profile);
+      const arguments_ = [
+        'run',
+        '--manifest-path',
+        'src-tauri/Cargo.toml',
+        '--example',
+        'config_lens_cold_open_harness',
+        '--features',
+        'config-lens-cold-open-harness',
+      ];
+      if (profile === 'release_like') arguments_.push('--release');
+      arguments_.push(
+        '--',
+        '--profile',
+        profile,
+        '--candidate',
+        join(root, 'plugins/config-lens/dist'),
+        '--root',
+        profileRoot,
+        '--output',
+        output,
+        '--samples',
+        '20',
+      );
+      const result = spawnSync('cargo', arguments_, { cwd: root, encoding: 'utf8' });
+      if (result.status !== 0) {
+        throw new Error(`Child WebView macOS evidence failed: ${profile} product-path producer failed.`);
+      }
+      return JSON.parse(readFileSync(output, 'utf8')) as RawColdHarness;
+    };
+    const release = runColdProfile('release_like');
+    const development = runColdProfile('development_snapshot');
+    if (
+      release.evidence_version !== '0.1.0' ||
+      development.evidence_version !== '0.1.0' ||
+      release.profile !== 'release_like' ||
+      development.profile !== 'development_snapshot' ||
+      Object.values(release.production_components).some((value) => value !== true) ||
+      Object.values(development.production_components).some((value) => value !== true)
+    ) {
+      throw new Error('Child WebView macOS evidence failed: product-path producer identity drifted.');
+    }
+    const distRoot = join(root, 'plugins/config-lens/dist');
+    const files = (directory: string): string[] =>
+      readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+        const path = join(directory, entry.name);
+        return entry.isDirectory() ? files(path) : [path];
+      });
+    const html = readFileSync(join(distRoot, 'index.html'), 'utf8');
+    const referenced = [...html.matchAll(/(?:src|href)="\.\/([^"]+)"/gu)].map((match) => match[1] as string);
+    const sizeFor = (suffix: string): number =>
+      referenced
+        .filter((path) => path.endsWith(suffix))
+        .reduce((total, path) => total + statSync(join(distRoot, path)).size, 0);
+    const freshCold = summarizeConfigLensColdOpenSamples({
+      release_like: release.cold_samples,
+      development_snapshot: development.cold_samples,
+      same_attempt_restore: release.restore_samples,
+      heartbeat_gaps_ms: [...release.heartbeat_gaps_ms, ...development.heartbeat_gaps_ms],
+      asset_sizes: {
+        dist_bytes: files(distRoot).reduce((total, path) => total + statSync(path).size, 0),
+        html_referenced_css_bytes: sizeFor('.css'),
+        html_referenced_javascript_bytes: sizeFor('.js'),
+        package_bytes: statSync(packagePath).size,
+      },
+    });
+    validateColdBudgets(freshCold);
+    const freshSource = `${JSON.stringify(freshCold, null, 2)}\n`;
+    assertConfigLensColdOpenEvidencePrivacy(freshSource);
+    if (updateColdOpen) writeFileSync(join(root, coldPath), freshSource);
   } finally {
     rmSync(temporaryRoot, { recursive: true, force: true });
   }
@@ -249,6 +376,6 @@ if (process.argv.includes('--run')) {
 
 console.log(
   `Child WebView macOS positive, negative, lifecycle, performance, and privacy evidence ${
-    process.argv.includes('--run') ? 'reran successfully' : 'is complete'
+    runRequested ? `reran successfully${updateColdOpen ? ' and explicitly updated' : ''}` : 'is complete'
   }.`,
 );

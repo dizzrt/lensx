@@ -6,10 +6,11 @@ import {
   type PluginChildWebviewSlotController,
 } from './pluginChildWebviewSlot';
 
-export const PLUGIN_CHILD_WEBVIEW_PRESENTATION_CONTRACT_VERSION = '0.1.0' as const;
+export const PLUGIN_CHILD_WEBVIEW_PRESENTATION_CONTRACT_VERSION = '0.2.0' as const;
 export const CREATE_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND = 'create_plugin_child_webview_presentation' as const;
 export const DESTROY_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND = 'destroy_plugin_child_webview_presentation' as const;
 export const READ_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND = 'read_plugin_child_webview_presentation' as const;
+export const WAIT_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND = 'wait_plugin_child_webview_presentation' as const;
 export const SET_PLUGIN_CHILD_WEBVIEW_PRESENTATION_VISIBILITY_COMMAND =
   'set_plugin_child_webview_presentation_visibility' as const;
 
@@ -55,6 +56,9 @@ export interface PluginChildWebviewPresentationController {
   readonly readReadiness: (
     binding: PluginChildWebviewPresentationBinding,
   ) => Promise<PluginChildWebviewPresentationReadiness>;
+  readonly waitReadiness: (
+    binding: PluginChildWebviewPresentationBinding,
+  ) => Promise<Exclude<PluginChildWebviewPresentationReadiness, { readonly status: 'loading' }>>;
   readonly setVisible: (binding: PluginChildWebviewPresentationBinding, visible: boolean) => Promise<void>;
   readonly destroy: (binding: PluginChildWebviewPresentationBinding) => Promise<boolean>;
 }
@@ -79,6 +83,29 @@ const exactRecord = (value: unknown, keys: readonly string[]): Record<string, un
     return undefined;
   }
   return value as Record<string, unknown>;
+};
+
+const parseTerminalReadiness = (
+  response: Record<string, unknown> | undefined,
+): Exclude<PluginChildWebviewPresentationReadiness, { readonly status: 'loading' }> => {
+  if (response?.contract_version !== PLUGIN_CHILD_WEBVIEW_PRESENTATION_CONTRACT_VERSION) {
+    throw new TypeError('Plugin Child WebView presentation readiness response is invalid.');
+  }
+  if (response.readiness === 'ready' && response.failure_code === null) return { status: 'ready' };
+  if (
+    response.readiness === 'failed' &&
+    typeof response.failure_code === 'string' &&
+    FAILURE_CODES.has(response.failure_code)
+  ) {
+    return {
+      status: 'failed',
+      failureCode: response.failure_code as Extract<
+        PluginChildWebviewPresentationReadiness,
+        { status: 'failed' }
+      >['failureCode'],
+    };
+  }
+  throw new TypeError('Plugin Child WebView presentation readiness response is invalid.');
 };
 
 export const createPluginChildWebviewPresentationController = (
@@ -169,6 +196,18 @@ export const createPluginChildWebviewPresentationController = (
         };
       }
       throw new TypeError('Plugin Child WebView presentation readiness response is invalid.');
+    },
+    async waitReadiness(binding: PluginChildWebviewPresentationBinding) {
+      const response = exactRecord(
+        await invokeCommand(WAIT_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND, {
+          request: {
+            contract_version: PLUGIN_CHILD_WEBVIEW_PRESENTATION_CONTRACT_VERSION,
+            attempt_id: binding.attemptId,
+          },
+        }),
+        ['contract_version', 'readiness', 'failure_code'],
+      );
+      return parseTerminalReadiness(response);
     },
     async setVisible(binding: PluginChildWebviewPresentationBinding, visible: boolean) {
       const response = exactRecord(

@@ -17,17 +17,23 @@ use crate::{
         PluginResourceUrl,
     },
     plugin_runtime_security_policy::current_plugin_runtime_document_csp,
+    plugin_runtime_stage::{record_plugin_runtime_stage, PluginRuntimeStage},
 };
+#[cfg(feature = "plugin-development-mode")]
+use std::time::{Duration, UNIX_EPOCH};
 use std::{
     collections::HashMap,
     fs::{self, File},
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::{Arc, Mutex, MutexGuard},
+    time::Instant,
 };
 use tauri::{http, AppHandle, Manager, Runtime, State};
 
 const MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_VERIFIED_CACHE_BYTES: usize = 32 * 1024 * 1024;
+const MAX_VERIFIED_CACHE_ENTRIES: usize = 256;
 const MAX_SCOPE_ATTEMPTS: usize = 8;
 const NOT_FOUND_BODY: &[u8] = b"Plugin resource unavailable.";
 const METHOD_NOT_ALLOWED_BODY: &[u8] = b"Plugin resource method unavailable.";
@@ -47,10 +53,149 @@ struct RuntimeResourceAuthority {
     binding: ScopeBinding,
 }
 
+#[cfg(feature = "plugin-development-mode")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DevelopmentPayloadSealEntry {
+    path: String,
+    kind: u8,
+    length: u64,
+    modified: Option<Duration>,
+    readonly: bool,
+    #[cfg(unix)]
+    device: u64,
+    #[cfg(unix)]
+    inode: u64,
+}
+
+#[cfg(feature = "plugin-development-mode")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DevelopmentPayloadSeal(Vec<DevelopmentPayloadSealEntry>);
+
 #[derive(Default)]
 struct ScopeState {
     by_entry: HashMap<String, ScopeBinding>,
     by_scope: HashMap<String, ScopeBinding>,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+enum VerifiedPluginResourcePayloadVariant {
+    Installed(String),
+    #[cfg(feature = "plugin-development-mode")]
+    Development(String),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct VerifiedPluginResourceCacheKey {
+    entry_id: String,
+    payload_variant: VerifiedPluginResourcePayloadVariant,
+    resource_generation: u64,
+    normalized_path: String,
+}
+
+#[derive(Clone)]
+struct VerifiedPluginResourceCacheValue {
+    bytes: Arc<[u8]>,
+    mime: &'static str,
+    bounded_length: usize,
+}
+
+struct VerifiedPluginResourceCacheEntry {
+    value: VerifiedPluginResourceCacheValue,
+    last_used: u64,
+}
+
+#[derive(Default)]
+struct VerifiedPluginResourceByteCache {
+    entries: HashMap<VerifiedPluginResourceCacheKey, VerifiedPluginResourceCacheEntry>,
+    total_bytes: usize,
+    clock: u64,
+}
+
+impl VerifiedPluginResourceByteCache {
+    fn get(
+        &mut self,
+        key: &VerifiedPluginResourceCacheKey,
+    ) -> Option<VerifiedPluginResourceCacheValue> {
+        self.clock = self.clock.wrapping_add(1);
+        let entry = self.entries.get_mut(key)?;
+        entry.last_used = self.clock;
+        Some(entry.value.clone())
+    }
+
+    fn insert(
+        &mut self,
+        key: VerifiedPluginResourceCacheKey,
+        value: VerifiedPluginResourceCacheValue,
+    ) {
+        if value.bounded_length > MAX_VERIFIED_CACHE_BYTES {
+            return;
+        }
+        if let Some(previous) = self.entries.remove(&key) {
+            self.total_bytes = self
+                .total_bytes
+                .saturating_sub(previous.value.bounded_length);
+        }
+        while self.entries.len() >= MAX_VERIFIED_CACHE_ENTRIES
+            || self.total_bytes.saturating_add(value.bounded_length) > MAX_VERIFIED_CACHE_BYTES
+        {
+            let Some(oldest) = self
+                .entries
+                .iter()
+                .min_by_key(|(_, entry)| entry.last_used)
+                .map(|(key, _)| key.clone())
+            else {
+                return;
+            };
+            if let Some(evicted) = self.entries.remove(&oldest) {
+                self.total_bytes = self
+                    .total_bytes
+                    .saturating_sub(evicted.value.bounded_length);
+            }
+        }
+        self.clock = self.clock.wrapping_add(1);
+        self.total_bytes = self.total_bytes.saturating_add(value.bounded_length);
+        self.entries.insert(
+            key,
+            VerifiedPluginResourceCacheEntry {
+                value,
+                last_used: self.clock,
+            },
+        );
+    }
+
+    fn evict_entry_generation(&mut self, entry_id: &str, resource_generation: u64) {
+        let keys = self
+            .entries
+            .keys()
+            .filter(|key| {
+                key.entry_id == entry_id && key.resource_generation == resource_generation
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        for key in keys {
+            if let Some(evicted) = self.entries.remove(&key) {
+                self.total_bytes = self
+                    .total_bytes
+                    .saturating_sub(evicted.value.bounded_length);
+            }
+        }
+    }
+
+    fn evict_entry(&mut self, entry_id: &str) {
+        let keys = self
+            .entries
+            .keys()
+            .filter(|key| key.entry_id == entry_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        for key in keys {
+            if let Some(evicted) = self.entries.remove(&key) {
+                self.total_bytes = self
+                    .total_bytes
+                    .saturating_sub(evicted.value.bounded_length);
+            }
+        }
+    }
 }
 
 pub struct PluginResourceService {
@@ -58,11 +203,75 @@ pub struct PluginResourceService {
     packages_root: Option<PathBuf>,
     html_csp: &'static str,
     scopes: Mutex<ScopeState>,
+    verified_byte_cache: Mutex<VerifiedPluginResourceByteCache>,
     runtime_authority: Mutex<Option<RuntimeResourceAuthority>>,
     #[cfg(feature = "plugin-development-mode")]
     development_snapshots: Mutex<Option<Arc<DevelopmentSnapshotStore>>>,
+    #[cfg(feature = "plugin-development-mode")]
+    development_payload_proofs: Mutex<HashMap<(PathBuf, String), DevelopmentPayloadSeal>>,
     #[cfg(test)]
     read_hook: Mutex<Option<Arc<dyn Fn(ResourceReadHookPoint, &Path) + Send + Sync>>>,
+}
+
+#[cfg(feature = "plugin-development-mode")]
+fn development_payload_seal(root: &Path) -> Result<DevelopmentPayloadSeal, ()> {
+    fn visit(
+        root: &Path,
+        directory: &Path,
+        entries: &mut Vec<DevelopmentPayloadSealEntry>,
+    ) -> Result<(), ()> {
+        #[cfg(unix)]
+        use std::os::unix::fs::MetadataExt;
+
+        let mut children = fs::read_dir(directory)
+            .map_err(|_| ())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| ())?;
+        children.sort_by_key(|entry| entry.file_name());
+        for child in children {
+            if entries.len() >= 4096 {
+                return Err(());
+            }
+            let path = child.path();
+            let metadata = fs::symlink_metadata(&path).map_err(|_| ())?;
+            let file_type = metadata.file_type();
+            let kind = if file_type.is_dir() {
+                1
+            } else if file_type.is_file() {
+                2
+            } else {
+                return Err(());
+            };
+            let relative = path.strip_prefix(root).map_err(|_| ())?;
+            let relative = relative.to_str().ok_or(())?.replace('\\', "/");
+            entries.push(DevelopmentPayloadSealEntry {
+                path: relative,
+                kind,
+                length: metadata.len(),
+                modified: metadata
+                    .modified()
+                    .ok()
+                    .and_then(|value| value.duration_since(UNIX_EPOCH).ok()),
+                readonly: metadata.permissions().readonly(),
+                #[cfg(unix)]
+                device: metadata.dev(),
+                #[cfg(unix)]
+                inode: metadata.ino(),
+            });
+            if file_type.is_dir() {
+                visit(root, &path, entries)?;
+            }
+        }
+        Ok(())
+    }
+
+    let metadata = fs::symlink_metadata(root).map_err(|_| ())?;
+    if !metadata.file_type().is_dir() {
+        return Err(());
+    }
+    let mut entries = Vec::new();
+    visit(root, root, &mut entries)?;
+    Ok(DevelopmentPayloadSeal(entries))
 }
 
 impl PluginResourceService {
@@ -96,9 +305,12 @@ impl PluginResourceService {
             packages_root,
             html_csp,
             scopes: Mutex::new(ScopeState::default()),
+            verified_byte_cache: Mutex::new(VerifiedPluginResourceByteCache::default()),
             runtime_authority: Mutex::new(None),
             #[cfg(feature = "plugin-development-mode")]
             development_snapshots: Mutex::new(None),
+            #[cfg(feature = "plugin-development-mode")]
+            development_payload_proofs: Mutex::new(HashMap::new()),
             #[cfg(test)]
             read_hook: Mutex::new(None),
         })
@@ -114,10 +326,46 @@ impl PluginResourceService {
             .map_err(map_projection_error)?;
         let payload_root = self.prove_eligible_payload(&projection)?;
         let entry_path = &projection.registration.manifest.runtime.entry;
-        mime_for_path(entry_path)
+        let mime = mime_for_path(entry_path)
             .ok_or_else(|| PluginResourceError::new(PluginResourceErrorCode::UnsafeState))?;
-        read_resource_file(&payload_root, entry_path, self.test_hook())
+        let cache_key = verified_cache_key(&projection, entry_path)
             .map_err(|_| PluginResourceError::new(PluginResourceErrorCode::UnsafeState))?;
+        let cache_hit = self
+            .verified_byte_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(&cache_key)
+            .is_some_and(|value| value.mime == mime && value.bounded_length == value.bytes.len());
+        if !cache_hit {
+            let bytes = read_resource_file(&payload_root, entry_path, self.test_hook())
+                .map_err(|_| PluginResourceError::new(PluginResourceErrorCode::UnsafeState))?;
+            let current = self
+                .manager
+                .read_resource_projection(&projection.entry_id, None)
+                .map_err(map_projection_error)?;
+            if current.resource_generation != projection.resource_generation
+                || current.record_key != projection.record_key
+                || self.prove_eligible_payload(&current)? != payload_root
+                || verified_cache_key(&current, entry_path)
+                    .map_err(|_| PluginResourceError::new(PluginResourceErrorCode::UnsafeState))?
+                    != cache_key
+            {
+                return Err(PluginResourceError::new(
+                    PluginResourceErrorCode::UnsafeState,
+                ));
+            }
+            self.verified_byte_cache
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .insert(
+                    cache_key,
+                    VerifiedPluginResourceCacheValue {
+                        bounded_length: bytes.len(),
+                        bytes: Arc::from(bytes),
+                        mime,
+                    },
+                );
+        }
 
         let mut scopes = self.lock_scopes();
         if let Some(existing) = scopes.by_entry.get(&projection.entry_id).cloned() {
@@ -134,6 +382,7 @@ impl PluginResourceService {
             }
             scopes.by_entry.remove(&projection.entry_id);
             scopes.by_scope.remove(&existing.scope);
+            self.evict_verified_generation(&existing.entry_id, existing.resource_generation);
         }
 
         let scope = generate_scope(&scopes)?;
@@ -234,24 +483,61 @@ impl PluginResourceService {
             self.revoke_binding(&binding);
             return Err(ProtocolFailure::Unavailable);
         }
+        let resource_load_started = Instant::now();
         let payload_root = self
             .prove_eligible_payload(&projection)
             .map_err(|_| ProtocolFailure::Unavailable)?;
         let mime = mime_for_path(&parsed.resource_path).ok_or(ProtocolFailure::Unavailable)?;
-        let bytes = read_resource_file(&payload_root, &parsed.resource_path, self.test_hook())?;
+        let cache_key = verified_cache_key(&projection, &parsed.resource_path)?;
+        let cached = self
+            .verified_byte_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(&cache_key)
+            .filter(|value| value.mime == mime && value.bounded_length == value.bytes.len());
+        let cache_hit = cached.is_some();
+        let verified_bytes = match cached {
+            Some(value) => value,
+            None => {
+                let bytes =
+                    read_resource_file(&payload_root, &parsed.resource_path, self.test_hook())?;
+                VerifiedPluginResourceCacheValue {
+                    bounded_length: bytes.len(),
+                    bytes: Arc::from(bytes),
+                    mime,
+                }
+            }
+        };
+        let current = self
+            .manager
+            .read_resource_projection(&binding.entry_id, None)
+            .map_err(|_| ProtocolFailure::Unavailable)?;
+        let current_payload_root = self
+            .prove_eligible_payload(&current)
+            .map_err(|_| ProtocolFailure::Unavailable)?;
+        if current.resource_generation != binding.resource_generation
+            || current.record_key != projection.record_key
+            || current.registration.manifest.version != projection.registration.manifest.version
+            || current_payload_root != payload_root
+            || verified_cache_key(&current, &parsed.resource_path)? != cache_key
+        {
+            self.evict_verified_generation(&binding.entry_id, binding.resource_generation);
+            self.revoke_binding(&binding);
+            return Err(ProtocolFailure::Unavailable);
+        }
         if let Some(webview_label) = webview_label {
             if !self.source_is_current(webview_label, &binding) {
                 return Err(ProtocolFailure::Unavailable);
             }
-            let current = self
-                .manager
-                .read_resource_projection(&binding.entry_id, None)
-                .map_err(|_| ProtocolFailure::Unavailable)?;
-            if current.resource_generation != binding.resource_generation {
-                self.revoke_binding(&binding);
-                return Err(ProtocolFailure::Unavailable);
-            }
         }
+        if !cache_hit {
+            self.verified_byte_cache
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .insert(cache_key, verified_bytes.clone());
+        }
+        let bytes = verified_bytes.bytes.as_ref().to_vec();
+        record_plugin_runtime_stage(PluginRuntimeStage::Load, resource_load_started.elapsed());
         Ok((mime, bytes))
     }
 
@@ -311,6 +597,33 @@ impl PluginResourceService {
         }
     }
 
+    pub(crate) fn revoke_entry_eligibility(&self, entry_id: &str) {
+        {
+            let mut authority = self.lock_runtime_authority();
+            if authority
+                .as_ref()
+                .is_some_and(|authority| authority.binding.entry_id == entry_id)
+            {
+                authority.take();
+            }
+        }
+        {
+            let mut scopes = self.lock_scopes();
+            if let Some(binding) = scopes.by_entry.remove(entry_id) {
+                scopes.by_scope.remove(&binding.scope);
+            }
+        }
+        self.verified_byte_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .evict_entry(entry_id);
+        #[cfg(feature = "plugin-development-mode")]
+        self.development_payload_proofs
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clear();
+    }
+
     fn source_is_current(&self, webview_label: &str, binding: &ScopeBinding) -> bool {
         self.lock_runtime_authority()
             .as_ref()
@@ -339,17 +652,43 @@ impl PluginResourceService {
                 .development_snapshots
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            return snapshots
+            let store = snapshots
                 .as_ref()
-                .filter(|store| {
-                    store.owns_current_snapshot(
-                        snapshot_root,
-                        snapshot_identity,
-                        &self.manager.host_versions(),
-                    )
-                })
-                .map(|_| snapshot_root.to_path_buf())
-                .ok_or_else(|| PluginResourceError::new(PluginResourceErrorCode::UnsafeState));
+                .ok_or_else(|| PluginResourceError::new(PluginResourceErrorCode::UnsafeState))?;
+            let key = (snapshot_root.to_path_buf(), snapshot_identity.to_owned());
+            let current_seal = development_payload_seal(snapshot_root)
+                .map_err(|_| PluginResourceError::new(PluginResourceErrorCode::UnsafeState))?;
+            let cached = self
+                .development_payload_proofs
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .get(&key)
+                .is_some_and(|seal| seal == &current_seal);
+            if cached && store.owns_current_snapshot_location(snapshot_root, snapshot_identity) {
+                return Ok(snapshot_root.to_path_buf());
+            }
+            if !store.owns_current_snapshot(
+                snapshot_root,
+                snapshot_identity,
+                &self.manager.host_versions(),
+            ) {
+                self.development_payload_proofs
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .remove(&key);
+                return Err(PluginResourceError::new(
+                    PluginResourceErrorCode::UnsafeState,
+                ));
+            }
+            let mut proofs = self
+                .development_payload_proofs
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if proofs.len() >= 32 {
+                proofs.clear();
+            }
+            proofs.insert(key, current_seal);
+            return Ok(snapshot_root.to_path_buf());
         }
         let packages_root = self
             .packages_root
@@ -375,6 +714,11 @@ impl PluginResourceService {
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = snapshots;
     }
 
+    #[cfg(feature = "config-lens-cold-open-harness")]
+    pub(crate) fn evidence_runtime_authority_absent(&self) -> bool {
+        self.lock_runtime_authority().is_none()
+    }
+
     fn revoke_binding(&self, binding: &ScopeBinding) {
         {
             let mut authority = self.lock_runtime_authority();
@@ -394,6 +738,13 @@ impl PluginResourceService {
         {
             scopes.by_entry.remove(&binding.entry_id);
         }
+    }
+
+    fn evict_verified_generation(&self, entry_id: &str, resource_generation: u64) {
+        self.verified_byte_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .evict_entry_generation(entry_id, resource_generation);
     }
 
     fn lock_scopes(&self) -> MutexGuard<'_, ScopeState> {
@@ -460,6 +811,49 @@ fn resource_entry(
         version: projection.registration.manifest.version.clone(),
         entry_url,
     }
+}
+
+fn verified_cache_key(
+    projection: &PluginManagerResourceProjection,
+    normalized_path: &str,
+) -> Result<VerifiedPluginResourceCacheKey, ProtocolFailure> {
+    if !is_portable_resource_path(normalized_path) {
+        return Err(ProtocolFailure::Unavailable);
+    }
+    #[cfg(feature = "plugin-development-mode")]
+    let payload_variant = if let Some((_, snapshot_identity, _)) =
+        projection.registration.facts.development_payload()
+    {
+        VerifiedPluginResourcePayloadVariant::Development(snapshot_identity.to_owned())
+    } else {
+        let (_, digest) = projection
+            .registration
+            .facts
+            .installed_payload()
+            .ok_or(ProtocolFailure::Unavailable)?;
+        VerifiedPluginResourcePayloadVariant::Installed(format!(
+            "{}:{}",
+            digest.algorithm, digest.value
+        ))
+    };
+    #[cfg(not(feature = "plugin-development-mode"))]
+    let payload_variant = {
+        let (_, digest) = projection
+            .registration
+            .facts
+            .installed_payload()
+            .ok_or(ProtocolFailure::Unavailable)?;
+        VerifiedPluginResourcePayloadVariant::Installed(format!(
+            "{}:{}",
+            digest.algorithm, digest.value
+        ))
+    };
+    Ok(VerifiedPluginResourceCacheKey {
+        entry_id: projection.entry_id.clone(),
+        payload_variant,
+        resource_generation: projection.resource_generation,
+        normalized_path: normalized_path.to_owned(),
+    })
 }
 
 fn map_projection_error(error: PluginManagerResourceProjectionError) -> PluginResourceError {
@@ -712,11 +1106,24 @@ pub fn setup_plugin_resource_service<R: Runtime>(
     installer: Arc<PluginInstaller>,
 ) -> Arc<PluginResourceService> {
     let service = PluginResourceService::initialize(manager, installer.managed_packages_root());
+    let weak_service = Arc::downgrade(&service);
+    installer.attach_resource_eligibility_revoker(Arc::new(move |entry_id| {
+        if let Some(service) = weak_service.upgrade() {
+            service.revoke_entry_eligibility(entry_id);
+        }
+    }));
     #[cfg(feature = "plugin-development-mode")]
-    service.attach_development_snapshots(
+    if let Some(state) =
         app.try_state::<Arc<crate::plugin_development::PluginDevelopmentModeState>>()
-            .and_then(|state| state.snapshot_store()),
-    );
+    {
+        service.attach_development_snapshots(state.snapshot_store());
+        let weak_service = Arc::downgrade(&service);
+        state.attach_resource_eligibility_revoker(Arc::new(move |entry_id| {
+            if let Some(service) = weak_service.upgrade() {
+                service.revoke_entry_eligibility(entry_id);
+            }
+        }));
+    }
     let managed = app.manage(Arc::clone(&service));
     debug_assert!(
         managed,
@@ -1447,7 +1854,10 @@ mod tests {
             })));
         let response = fixture.service.handle_request_from_source(
             "plugin-child-a",
-            request(http::Method::GET, &entry.entry_url),
+            request(
+                http::Method::GET,
+                &resource_url(&entry.entry_url, "dist/plugin.js"),
+            ),
         );
         fixture.service.set_read_hook(None);
         assert!(changed.load(std::sync::atomic::Ordering::SeqCst));
@@ -1463,6 +1873,136 @@ mod tests {
                 .status(),
             http::StatusCode::NOT_FOUND
         );
+    }
+
+    #[test]
+    fn verified_bytes_hit_across_fresh_attempts_without_reusing_runtime_authority() {
+        let fixture = fixture("verified-cache-hit");
+        let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let reads_in_hook = Arc::clone(&reads);
+        fixture
+            .service
+            .set_read_hook(Some(Arc::new(move |point, target| {
+                if point == ResourceReadHookPoint::BeforeOpen && target.ends_with("plugin.js") {
+                    reads_in_hook.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                }
+            })));
+        let first = activate_source(&fixture, "attempt_0000000000000001", "plugin-child-a");
+        let script = resource_url(&first.entry_url, "dist/plugin.js");
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source("plugin-child-a", request(http::Method::GET, &script))
+                .status(),
+            http::StatusCode::OK
+        );
+        assert_eq!(reads.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(fixture
+            .service
+            .revoke_runtime_source("attempt_0000000000000001"));
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source("plugin-child-a", request(http::Method::GET, &script))
+                .status(),
+            http::StatusCode::NOT_FOUND
+        );
+
+        let second = activate_source(&fixture, "attempt_0000000000000002", "plugin-child-b");
+        assert_ne!(first.entry_url, second.entry_url);
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source(
+                    "plugin-child-b",
+                    request(
+                        http::Method::GET,
+                        &resource_url(&second.entry_url, "dist/plugin.js"),
+                    ),
+                )
+                .status(),
+            http::StatusCode::OK
+        );
+        assert_eq!(reads.load(std::sync::atomic::Ordering::SeqCst), 1);
+        fixture.service.set_read_hook(None);
+    }
+
+    #[test]
+    fn active_entry_revocation_clears_scope_authority_and_all_cached_generations() {
+        let fixture = fixture("active-entry-revocation");
+        let entry = activate_source(&fixture, "attempt_0000000000000001", "plugin-child-a");
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source(
+                    "plugin-child-a",
+                    request(http::Method::GET, &entry.entry_url),
+                )
+                .status(),
+            http::StatusCode::OK
+        );
+        assert!(!fixture
+            .service
+            .verified_byte_cache
+            .lock()
+            .unwrap()
+            .entries
+            .is_empty());
+
+        fixture.service.revoke_entry_eligibility(&fixture.entry_id);
+
+        assert!(fixture.service.lock_runtime_authority().is_none());
+        assert!(fixture.service.lock_scopes().by_entry.is_empty());
+        assert!(fixture.service.lock_scopes().by_scope.is_empty());
+        assert!(fixture
+            .service
+            .verified_byte_cache
+            .lock()
+            .unwrap()
+            .entries
+            .is_empty());
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source(
+                    "plugin-child-a",
+                    request(http::Method::GET, &entry.entry_url),
+                )
+                .status(),
+            http::StatusCode::NOT_FOUND
+        );
+    }
+
+    #[test]
+    fn verified_byte_cache_enforces_variant_generation_entry_and_capacity_bounds() {
+        let mut cache = VerifiedPluginResourceByteCache::default();
+        let key = |index: usize, variant: &str, generation: u64| VerifiedPluginResourceCacheKey {
+            entry_id: format!("entry-{index}"),
+            payload_variant: VerifiedPluginResourcePayloadVariant::Installed(variant.to_owned()),
+            resource_generation: generation,
+            normalized_path: "dist/plugin.js".to_owned(),
+        };
+        let value = |length: usize| VerifiedPluginResourceCacheValue {
+            bytes: Arc::from(vec![0_u8; length]),
+            mime: "text/javascript; charset=utf-8",
+            bounded_length: length,
+        };
+        cache.insert(key(0, "sha256:a", 1), value(1));
+        assert!(cache.get(&key(0, "sha256:a", 1)).is_some());
+        assert!(cache.get(&key(0, "sha256:b", 1)).is_none());
+        assert!(cache.get(&key(0, "sha256:a", 2)).is_none());
+        assert!(cache.get(&key(1, "sha256:a", 1)).is_none());
+
+        for index in 1..=MAX_VERIFIED_CACHE_ENTRIES {
+            cache.insert(key(index, "sha256:a", 1), value(1));
+        }
+        assert_eq!(cache.entries.len(), MAX_VERIFIED_CACHE_ENTRIES);
+        assert!(cache.total_bytes <= MAX_VERIFIED_CACHE_BYTES);
+
+        cache.insert(key(999, "sha256:a", 1), value(20 * 1024 * 1024));
+        cache.insert(key(1000, "sha256:a", 1), value(20 * 1024 * 1024));
+        assert!(cache.entries.len() <= MAX_VERIFIED_CACHE_ENTRIES);
+        assert!(cache.total_bytes <= MAX_VERIFIED_CACHE_BYTES);
     }
 
     #[test]

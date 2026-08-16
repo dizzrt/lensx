@@ -410,6 +410,16 @@ payload tree，以及 regular 且非 link 的 Runtime entry。每个 `(entry_id,
 disable/re-enable、replacement、逻辑 uninstall、incompatible/quarantine 状态与重启会永久撤销旧
 scope；无关的全局 revision 变化不会撤销它。
 
+Service 还拥有 process-local verified byte cache，上限为 32 MiB 与 256 entries。key 是精确 entry、
+installed-package digest 或 Development snapshot identity、Resource generation 与 normalized path；
+value 只包含 immutable `Arc<[u8]>`、fixed MIME 与 bounded length。miss 在 publish 前保留完整
+canonicalize/link/regular-file/size/opened-identity/read/final-current proof；hit 仍执行前后 scope、
+Manager、payload ownership、generation、current-attempt/source 与 file-identity 检查。Development
+snapshot 先执行一次完整 tree proof，再使用 bounded metadata seal；增删文件、link、inode/mtime/size/
+readonly 变化、reload、retirement 或 cleanup 都会使它失效。generation revocation 会在 payload cleanup
+前移除 stale cache eligibility。同 generation close/reopen 只能复用 package bytes，不能复用 Session、
+authority、Worker、model 或 content。
+
 每个 request 都重新检查 scope 与当前 Manager facts。URL 中的 plugin key 和 version 来自 Host，
 只用于交叉校验，不是 authority。native URL 为
 `lensx-plugin://<scope>.runtime.localhost/v1/<scope>/<plugin-key>/<version>/<path>`；受支持的 translated
@@ -436,9 +446,9 @@ digest、record key、absolute path、raw I/O、stack、partial bytes 或存在�
 
 运行 `pnpm run check:plugin-resource-service` 可验证 Rust/TypeScript 共享 fixture、desktop adapter、
 workspace boundary、Manager generation、Installer ownership 回归，以及 protocol/path/MIME/lifecycle/
-race/oracle/platform URL 测试。该 service 本身不创建 iframe、不执行插件代码、不建立 Runtime Session
-或 Host API transport，也不授予权限。它会强制执行由 Host 私有安全 profile 选择的 document policy；
-iframe container 与下游 Runtime Session 会消费它校验后的 `entry_url`。
+race/oracle/platform URL 测试。该 service 本身不创建 Child WebView、不执行插件代码、不建立 Runtime
+Session 或 Host API transport，也不授予权限。它会强制执行由 Host 私有安全 profile 选择的 document
+policy；Child WebView adapter 与下游 Runtime Session 会消费它校验后的 `entry_url`。
 
 ## 已交付的 macOS 隔离 Plugin Runtime Origin 前置能力
 
@@ -468,7 +478,7 @@ invoke secret。
 pnpm run check:isolated-plugin-runtime-origin
 ```
 
-这是下文 production iframe container 所消费的 macOS-only origin 前置能力。它本身不创建 iframe，
+这是下文 production Child WebView 所消费的 macOS-only origin 前置能力。它本身不创建 WebView，
 也不交付 Runtime Session、Host API、permissions 或选择 CSP profile。translated URL 形态的 parser coverage
 不代表 Windows 或 Linux Runtime 支持。container 只能消费经过验证的 isolated `entry_url`；没有
 shared-origin、opaque classic-only 或 wildcard/null CORS fallback。

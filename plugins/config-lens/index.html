@@ -6,6 +6,21 @@
     <title>ConfigLens</title>
   </head>
   <body>
-    <div id="root"></div>
+    <section
+      aria-busy="true"
+      aria-label="ConfigLens"
+      class="config-lens-startup"
+      data-state="loading"
+      id="config-lens-startup"
+    >
+      <button
+        aria-label="ConfigLens"
+        class="config-lens-startup__retry"
+        hidden
+        id="config-lens-startup-retry"
+        type="button"
+      >↻</button>
+    </section>
+    <div hidden id="root"></div>
   </body>
 </html>

@@ -7,6 +7,7 @@ import {
   READ_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND,
   SET_PLUGIN_CHILD_WEBVIEW_PRESENTATION_VISIBILITY_COMMAND,
   UPDATE_PLUGIN_CHILD_WEBVIEW_SLOT_COMMAND,
+  WAIT_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND,
 } from '../src/app/plugins/runtime';
 
 describe('Plugin Child WebView presentation contract', () => {
@@ -15,27 +16,30 @@ describe('Plugin Child WebView presentation contract', () => {
     const controller = createPluginChildWebviewPresentationController(async (command, args) => {
       calls.push({ command, args });
       if (command === CREATE_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND) {
-        return { contract_version: '0.1.0', attempt_id: 'attempt_0123456789abcdef' };
+        return { contract_version: '0.2.0', attempt_id: 'attempt_0123456789abcdef' };
       }
       if (command === UPDATE_PLUGIN_CHILD_WEBVIEW_SLOT_COMMAND) {
         return { contract_version: '0.1.0', accepted_revision: '2' };
       }
       if (command === READ_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND) {
         return {
-          contract_version: '0.1.0',
+          contract_version: '0.2.0',
           attempt_id: 'attempt_0123456789abcdef',
           readiness: 'ready',
           failure_code: null,
         };
       }
+      if (command === WAIT_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND) {
+        return { contract_version: '0.2.0', readiness: 'ready', failure_code: null };
+      }
       if (command === SET_PLUGIN_CHILD_WEBVIEW_PRESENTATION_VISIBILITY_COMMAND) {
         return {
-          contract_version: '0.1.0',
+          contract_version: '0.2.0',
           attempt_id: 'attempt_0123456789abcdef',
           visible: true,
         };
       }
-      return { contract_version: '0.1.0', destroyed: true };
+      return { contract_version: '0.2.0', destroyed: true };
     });
     const binding = await controller.create({
       identity: {
@@ -51,6 +55,7 @@ describe('Plugin Child WebView presentation contract', () => {
     });
     await controller.updateSlot(binding, 2, { x: 44, y: 84, width: 620, height: 420 }, 2n);
     await expect(controller.readReadiness(binding)).resolves.toEqual({ status: 'ready' });
+    await expect(controller.waitReadiness(binding)).resolves.toEqual({ status: 'ready' });
     await controller.setVisible(binding, true);
     await expect(controller.destroy(binding)).resolves.toBe(true);
 
@@ -58,12 +63,13 @@ describe('Plugin Child WebView presentation contract', () => {
       CREATE_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND,
       UPDATE_PLUGIN_CHILD_WEBVIEW_SLOT_COMMAND,
       READ_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND,
+      WAIT_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND,
       SET_PLUGIN_CHILD_WEBVIEW_PRESENTATION_VISIBILITY_COMMAND,
       DESTROY_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND,
     ]);
     expect(calls[0]?.args).toEqual({
       request: {
-        contract_version: '0.1.0',
+        contract_version: '0.2.0',
         window_label: 'main',
         surface_mode: 'page',
         scale_factor: 2,
@@ -85,7 +91,7 @@ describe('Plugin Child WebView presentation contract', () => {
 
   test('rejects malformed create responses and makes destroy failure bounded', async () => {
     const malformed = createPluginChildWebviewPresentationController(async () => ({
-      contract_version: '0.1.0',
+      contract_version: '0.2.0',
       attempt_id: 'forged',
     }));
     await expect(

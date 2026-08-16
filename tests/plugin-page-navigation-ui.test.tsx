@@ -169,6 +169,7 @@ const renderPluginComposition = (
     create: rs.fn(async () => ({ attemptId: 'attempt_0123456789abcdef' as const })),
     updateSlot: rs.fn(async () => undefined),
     readReadiness: rs.fn(async () => ({ status: 'ready' as const })),
+    waitReadiness: rs.fn(async () => ({ status: 'ready' as const })),
     setVisible: rs.fn(async () => undefined),
     destroy: rs.fn(async () => true),
   };

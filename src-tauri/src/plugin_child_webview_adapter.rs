@@ -119,6 +119,32 @@ fn plugin_child_webview_bridge_bootstrap(freshness: &str) -> Option<String> {
     })
 }
 
+const PLUGIN_CHILD_WEBVIEW_EVIDENCE_BOOTSTRAP: &str = r#"
+(() => {
+  'use strict';
+  const rawPost = globalThis.ipc && typeof globalThis.ipc.postMessage === 'function'
+    ? globalThis.ipc.postMessage.bind(globalThis.ipc)
+    : undefined;
+  const stages = new Set(['ui_bundle', 'editor', 'worker', 'first_interactive']);
+  const report = (stage, duration_ms) => {
+    if (rawPost === undefined || !stages.has(stage) || typeof duration_ms !== 'number'
+      || !Number.isFinite(duration_ms) || duration_ms < 0 || duration_ms > 60000) return;
+    rawPost(JSON.stringify({
+      contract_version: '0.1.0',
+      type: 'lensx.plugin_evidence.stage',
+      stage,
+      duration_ms
+    }));
+  };
+  Object.defineProperty(globalThis, '__LENSX_PLUGIN_EVIDENCE_STAGE__', {
+    value: Object.freeze(report),
+    enumerable: false,
+    configurable: false,
+    writable: false
+  });
+})();
+"#;
+
 fn valid_bridge_freshness(value: &str) -> bool {
     value.len() == 32
         && value
@@ -260,18 +286,57 @@ pub(crate) trait PluginChildWebviewLifecycleIngress: Send + Sync + 'static {
     fn native_loaded(&self, attempt_id: &str, actual_source_label: &str);
 }
 
+pub(crate) trait PluginChildWebviewEvidenceIngress: Send + Sync + 'static {
+    fn observe(&self, actual_source_label: &str, stage: &str, duration: Duration);
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PluginChildWebviewEvidenceStage {
+    contract_version: String,
+    r#type: String,
+    stage: String,
+    duration_ms: f64,
+}
+
 #[allow(dead_code)] // Product creation wiring follows after the bridge/session state is complete.
 pub(crate) fn apply_plugin_child_webview_bridge_ingress<R: Runtime>(
     builder: WebviewBuilder<R>,
     attempt_id: String,
     freshness: &str,
     ingress: Arc<dyn PluginChildWebviewBridgeIngress>,
+    evidence: Option<Arc<dyn PluginChildWebviewEvidenceIngress>>,
 ) -> Option<WebviewBuilder<R>> {
-    let bootstrap = plugin_child_webview_bridge_bootstrap(freshness)?;
+    let mut bootstrap = plugin_child_webview_bridge_bootstrap(freshness)?;
+    if evidence.is_some() {
+        bootstrap.push_str(PLUGIN_CHILD_WEBVIEW_EVIDENCE_BOOTSTRAP);
+    }
     Some(
         builder
             .initialization_script(bootstrap)
             .isolated_ipc_handler(move |actual_source_label, request| {
+                if let Some(evidence) = evidence.as_ref() {
+                    if let Ok(observation) =
+                        serde_json::from_str::<PluginChildWebviewEvidenceStage>(request.body())
+                    {
+                        if observation.contract_version == "0.1.0"
+                            && observation.r#type == "lensx.plugin_evidence.stage"
+                            && matches!(
+                                observation.stage.as_str(),
+                                "ui_bundle" | "editor" | "worker" | "first_interactive"
+                            )
+                            && observation.duration_ms.is_finite()
+                            && (0.0..=60_000.0).contains(&observation.duration_ms)
+                        {
+                            evidence.observe(
+                                &actual_source_label,
+                                &observation.stage,
+                                Duration::from_secs_f64(observation.duration_ms / 1000.0),
+                            );
+                            return;
+                        }
+                    }
+                }
                 ingress.receive(&attempt_id, &actual_source_label, request.body());
             }),
     )
@@ -308,6 +373,26 @@ pub(crate) fn create_plugin_child_webview<R: Runtime>(
     bridge_ingress: Arc<dyn PluginChildWebviewBridgeIngress>,
     lifecycle_ingress: Arc<dyn PluginChildWebviewLifecycleIngress>,
 ) -> Result<PluginChildWebviewHandle<R>, PluginChildWebviewAdapterError> {
+    create_plugin_child_webview_with_evidence(
+        app,
+        parent_label,
+        input,
+        current_source,
+        bridge_ingress,
+        lifecycle_ingress,
+        None,
+    )
+}
+
+pub(crate) fn create_plugin_child_webview_with_evidence<R: Runtime>(
+    app: &AppHandle<R>,
+    parent_label: &str,
+    input: PluginChildWebviewProductInput,
+    current_source: Arc<dyn PluginChildWebviewCurrentSource>,
+    bridge_ingress: Arc<dyn PluginChildWebviewBridgeIngress>,
+    lifecycle_ingress: Arc<dyn PluginChildWebviewLifecycleIngress>,
+    evidence: Option<Arc<dyn PluginChildWebviewEvidenceIngress>>,
+) -> Result<PluginChildWebviewHandle<R>, PluginChildWebviewAdapterError> {
     let parent = app
         .get_webview_window(parent_label)
         .ok_or_else(|| PluginChildWebviewAdapterError::new("parent_unavailable"))?;
@@ -328,6 +413,7 @@ pub(crate) fn create_plugin_child_webview<R: Runtime>(
         input.attempt_id.clone(),
         &input.freshness,
         bridge_ingress,
+        evidence,
     )
     .ok_or_else(|| PluginChildWebviewAdapterError::new("invalid_bridge_freshness"))?;
     let builder = apply_plugin_child_webview_load_ingress(
@@ -657,7 +743,7 @@ fn is_bridge_ready(value: &serde_json::Value) -> bool {
 }
 
 #[cfg(target_os = "macos")]
-fn send_native_text_input<R: Runtime>(
+pub(crate) fn send_native_text_input<R: Runtime>(
     webview: &Webview<R>,
 ) -> Result<(), PluginChildWebviewAdapterError> {
     use objc2::{msg_send, sel};

@@ -21,6 +21,7 @@ import {
   type PluginChildWebviewPresentationController,
 } from './pluginChildWebviewPresentation';
 import { physicalBoundsFromDomRect } from './pluginChildWebviewSlot';
+import { recordPluginRuntimeStage } from './stageMetrics';
 import type { PluginPageRuntimeDescriptor, PluginPageRuntimeRequest, PluginPageRuntimeResolver } from './types';
 
 export type PluginRuntimeSlotState =
@@ -124,6 +125,7 @@ export const PluginRuntimeSlot = ({
   );
 
   useEffect(() => {
+    const resolveStarted = performance.now();
     let cancelled = false;
     let lifecycleAttempt: PluginRuntimeAttempt | undefined;
     dispatch({ type: 'resolve' });
@@ -149,6 +151,7 @@ export const PluginRuntimeSlot = ({
         if (!validDescriptor(descriptor, activePage.owner_id, activePage.page_id)) {
           throw new TypeError('Invalid Host-private Plugin Runtime descriptor.');
         }
+        recordPluginRuntimeStage('resolve', performance.now() - resolveStarted);
         if (!runtimeAttempt.bindTrustedIdentity(descriptor.entry_id, descriptor.resource_generation)) {
           await runtimeAttempt.fail('runtime_crash_loop');
           return;
@@ -204,6 +207,7 @@ export const PluginRuntimeSlot = ({
       return;
     }
     let setupCancelled = false;
+    const hostLoadingStarted = performance.now();
     let active = true;
     let revision = 1n;
     let updateQueue = Promise.resolve();
@@ -220,6 +224,7 @@ export const PluginRuntimeSlot = ({
     void Promise.resolve()
       .then(async () => {
         const initial = geometry();
+        const createStarted = performance.now();
         const presentation = await presentationController.create({
           identity: {
             entryId: binding.descriptor.entry_id,
@@ -231,23 +236,13 @@ export const PluginRuntimeSlot = ({
           ...initial,
           presentationRevision: revision,
         });
+        recordPluginRuntimeStage('create', performance.now() - createStarted);
         if (setupCancelled || !binding.attempt.isCurrent() || activeBindingRef.current !== binding) {
           await presentationController.destroy(presentation);
           return;
         }
         binding.presentation = presentation;
         element.dataset.nativePresentation = 'created';
-        let pollTimer: ReturnType<typeof setTimeout> | undefined;
-        let resolvePoll: (() => void) | undefined;
-        const waitForNextRead = () =>
-          new Promise<void>((resolve) => {
-            resolvePoll = resolve;
-            pollTimer = setTimeout(() => {
-              pollTimer = undefined;
-              resolvePoll = undefined;
-              resolve();
-            }, 25);
-          });
         const syncBounds = () => {
           if (!active || binding.presentation !== presentation || !binding.attempt.isCurrent()) return;
           revision += 1n;
@@ -264,10 +259,6 @@ export const PluginRuntimeSlot = ({
         window.addEventListener('resize', syncBounds);
         binding.attempt.bindPresentation(async () => {
           active = false;
-          if (pollTimer !== undefined) clearTimeout(pollTimer);
-          pollTimer = undefined;
-          resolvePoll?.();
-          resolvePoll = undefined;
           observer?.disconnect();
           window.removeEventListener('resize', syncBounds);
           await updateQueue.catch(() => undefined);
@@ -275,23 +266,18 @@ export const PluginRuntimeSlot = ({
           await presentationController.destroy(presentation);
           if (binding.presentation === presentation) binding.presentation = undefined;
         });
-        while (active && binding.attempt.isCurrent()) {
-          const readiness = await presentationController.readReadiness(presentation);
-          if (readiness.status === 'loading') {
-            await waitForNextRead();
-            continue;
-          }
-          if (readiness.status === 'failed') {
-            await binding.attempt.fail(readiness.failureCode);
-            return;
-          }
-          await presentationController.setVisible(presentation, true);
-          if (active && binding.attempt.isCurrent()) {
-            binding.attempt.markReady();
-            element.dataset.nativePresentation = 'visible';
-            dispatch({ type: 'ready', descriptor: binding.descriptor });
-          }
+        const readiness = await presentationController.waitReadiness(presentation);
+        if (readiness.status === 'failed') {
+          if (active && binding.attempt.isCurrent()) await binding.attempt.fail(readiness.failureCode);
           return;
+        }
+        if (!active || !binding.attempt.isCurrent() || activeBindingRef.current !== binding) return;
+        await presentationController.setVisible(presentation, true);
+        if (active && binding.attempt.isCurrent() && activeBindingRef.current === binding) {
+          binding.attempt.markReady();
+          recordPluginRuntimeStage('host_loading', performance.now() - hostLoadingStarted);
+          element.dataset.nativePresentation = 'visible';
+          dispatch({ type: 'ready', descriptor: binding.descriptor });
         }
       })
       .catch(failPresentation);

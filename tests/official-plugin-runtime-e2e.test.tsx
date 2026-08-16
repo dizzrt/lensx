@@ -77,6 +77,7 @@ test('official candidate opens through the ordinary Child WebView slot and close
     create,
     updateSlot: rs.fn(async () => undefined),
     readReadiness: rs.fn(async () => ({ status: 'ready' as const })),
+    waitReadiness: rs.fn(async () => ({ status: 'ready' as const })),
     setVisible,
     destroy,
   };

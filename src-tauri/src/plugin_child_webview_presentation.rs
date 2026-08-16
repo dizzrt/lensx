@@ -2,14 +2,16 @@ use crate::{
     launcher_surface::LauncherSurfaceMode,
     launcher_window::MAIN_WINDOW_LABEL,
     plugin_child_webview_adapter::{
-        create_plugin_child_webview, PluginChildWebviewBounds as PluginChildWebviewAdapterBounds,
+        create_plugin_child_webview, create_plugin_child_webview_with_evidence,
+        PluginChildWebviewBounds as PluginChildWebviewAdapterBounds,
         PluginChildWebviewBridgeIngress, PluginChildWebviewCurrentSource,
-        PluginChildWebviewLifecycleIngress, PluginChildWebviewProductInput,
+        PluginChildWebviewEvidenceIngress, PluginChildWebviewLifecycleIngress,
+        PluginChildWebviewProductInput,
     },
     plugin_child_webview_service::{
         PluginChildWebviewAttempt, PluginChildWebviewIdentity,
         PluginChildWebviewPresentationResult, PluginChildWebviewService,
-        PluginChildWebviewSessionState,
+        PluginChildWebviewSessionState, PluginChildWebviewWaitReadiness,
     },
     plugin_child_webview_slot::{
         apply_slot_update, PluginChildWebviewPhysicalBounds, SlotWindowFacts,
@@ -21,12 +23,13 @@ use crate::{
         ResolvePluginResourceEntryRequest, PLUGIN_RESOURCE_CONTRACT_VERSION,
     },
     plugin_resource_service::PluginResourceService,
+    plugin_runtime_stage::{record_plugin_runtime_stage, PluginRuntimeStage},
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 use tauri::{AppHandle, Manager, State, Wry};
 
-pub(crate) const PLUGIN_CHILD_WEBVIEW_PRESENTATION_CONTRACT_VERSION: &str = "0.1.0";
+pub(crate) const PLUGIN_CHILD_WEBVIEW_PRESENTATION_CONTRACT_VERSION: &str = "0.2.0";
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -66,6 +69,13 @@ pub(crate) struct ReadPluginChildWebviewPresentationRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub(crate) struct WaitPluginChildWebviewPresentationRequest {
+    contract_version: String,
+    attempt_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SetPluginChildWebviewPresentationVisibilityRequest {
     contract_version: String,
     attempt_id: String,
@@ -99,6 +109,14 @@ pub(crate) enum PluginChildWebviewPresentationReadiness {
 pub(crate) struct ReadPluginChildWebviewPresentationResponse {
     contract_version: &'static str,
     attempt_id: String,
+    readiness: PluginChildWebviewPresentationReadiness,
+    failure_code: Option<&'static str>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct WaitPluginChildWebviewPresentationResponse {
+    contract_version: &'static str,
     readiness: PluginChildWebviewPresentationReadiness,
     failure_code: Option<&'static str>,
 }
@@ -187,14 +205,15 @@ fn teardown_failed_creation(
     let _ = service.compare_current_teardown(attempt);
 }
 
-#[tauri::command]
-pub(crate) fn create_plugin_child_webview_presentation(
-    app: AppHandle,
-    manager: State<'_, Arc<PluginManager>>,
-    resources: State<'_, Arc<PluginResourceService>>,
-    service: State<'_, Arc<PluginChildWebviewService<Wry>>>,
+fn create_plugin_child_webview_presentation_inner(
+    app: &AppHandle,
+    manager: &PluginManager,
+    resources: &PluginResourceService,
+    service: &Arc<PluginChildWebviewService<Wry>>,
     request: CreatePluginChildWebviewPresentationRequest,
+    evidence: Option<Arc<dyn PluginChildWebviewEvidenceIngress>>,
 ) -> Result<CreatePluginChildWebviewPresentationResponse, PluginChildWebviewPresentationError> {
+    let create_started = Instant::now();
     if request.contract_version != PLUGIN_CHILD_WEBVIEW_PRESENTATION_CONTRACT_VERSION
         || request.window_label != MAIN_WINDOW_LABEL
         || request.surface_mode != LauncherSurfaceMode::Page
@@ -277,7 +296,7 @@ pub(crate) fn create_plugin_child_webview_presentation(
             PluginChildWebviewPresentationErrorCode::Unavailable,
         )
     })?;
-    let service = service.inner().clone();
+    let service = Arc::clone(service);
     let attempt = service
         .reserve_current_with_derived_label(identity)
         .ok_or_else(|| {
@@ -357,27 +376,40 @@ pub(crate) fn create_plugin_child_webview_presentation(
     let current_source: Arc<dyn PluginChildWebviewCurrentSource> = service.clone();
     let bridge_ingress: Arc<dyn PluginChildWebviewBridgeIngress> = service.clone();
     let lifecycle_ingress: Arc<dyn PluginChildWebviewLifecycleIngress> = service.clone();
-    let handle = create_plugin_child_webview(
-        &app,
-        MAIN_WINDOW_LABEL,
-        PluginChildWebviewProductInput {
-            attempt_id: attempt.opaque_id(),
-            source_label: facts.source_label,
-            exact_entry: facts.entry_url,
-            host_route: facts.host_route,
-            freshness: facts.freshness,
-            data_store_identifier: facts.data_store_identifier,
-            bounds: PluginChildWebviewAdapterBounds {
-                x: bounds.x,
-                y: bounds.y,
-                width: bounds.width,
-                height: bounds.height,
-            },
+    let product_input = PluginChildWebviewProductInput {
+        attempt_id: attempt.opaque_id(),
+        source_label: facts.source_label,
+        exact_entry: facts.entry_url,
+        host_route: facts.host_route,
+        freshness: facts.freshness,
+        data_store_identifier: facts.data_store_identifier,
+        bounds: PluginChildWebviewAdapterBounds {
+            x: bounds.x,
+            y: bounds.y,
+            width: bounds.width,
+            height: bounds.height,
         },
-        current_source,
-        bridge_ingress,
-        lifecycle_ingress,
-    )
+    };
+    let handle = if let Some(evidence) = evidence {
+        create_plugin_child_webview_with_evidence(
+            app,
+            MAIN_WINDOW_LABEL,
+            product_input,
+            current_source,
+            bridge_ingress,
+            lifecycle_ingress,
+            Some(evidence),
+        )
+    } else {
+        create_plugin_child_webview(
+            app,
+            MAIN_WINDOW_LABEL,
+            product_input,
+            current_source,
+            bridge_ingress,
+            lifecycle_ingress,
+        )
+    }
     .map_err(|_| {
         teardown_failed_creation(&service, attempt);
         PluginChildWebviewPresentationError::new(
@@ -390,9 +422,90 @@ pub(crate) fn create_plugin_child_webview_presentation(
             PluginChildWebviewPresentationErrorCode::NativeCreateFailed,
         ));
     }
+    record_plugin_runtime_stage(PluginRuntimeStage::Create, create_started.elapsed());
     Ok(CreatePluginChildWebviewPresentationResponse {
         contract_version: PLUGIN_CHILD_WEBVIEW_PRESENTATION_CONTRACT_VERSION,
         attempt_id: attempt.opaque_id(),
+    })
+}
+
+#[tauri::command]
+pub(crate) fn create_plugin_child_webview_presentation(
+    app: AppHandle,
+    manager: State<'_, Arc<PluginManager>>,
+    resources: State<'_, Arc<PluginResourceService>>,
+    service: State<'_, Arc<PluginChildWebviewService<Wry>>>,
+    request: CreatePluginChildWebviewPresentationRequest,
+) -> Result<CreatePluginChildWebviewPresentationResponse, PluginChildWebviewPresentationError> {
+    create_plugin_child_webview_presentation_inner(
+        &app,
+        manager.inner(),
+        resources.inner(),
+        service.inner(),
+        request,
+        None,
+    )
+}
+
+#[cfg(feature = "config-lens-cold-open-harness")]
+pub(crate) fn create_config_lens_evidence_presentation(
+    app: &AppHandle,
+    manager: &Arc<PluginManager>,
+    resources: &Arc<PluginResourceService>,
+    service: &Arc<PluginChildWebviewService<Wry>>,
+    entry_id: String,
+    plugin_id: String,
+    version: String,
+    page_id: String,
+    expected_revision: String,
+    evidence: Arc<dyn PluginChildWebviewEvidenceIngress>,
+) -> Result<PluginChildWebviewAttempt, PluginChildWebviewPresentationError> {
+    let window = app.get_webview_window(MAIN_WINDOW_LABEL).ok_or_else(|| {
+        PluginChildWebviewPresentationError::new(
+            PluginChildWebviewPresentationErrorCode::InvalidRequest,
+        )
+    })?;
+    let scale_factor = window.scale_factor().map_err(|_| {
+        PluginChildWebviewPresentationError::new(
+            PluginChildWebviewPresentationErrorCode::InvalidRequest,
+        )
+    })?;
+    let size = window.inner_size().map_err(|_| {
+        PluginChildWebviewPresentationError::new(
+            PluginChildWebviewPresentationErrorCode::InvalidRequest,
+        )
+    })?;
+    let response = create_plugin_child_webview_presentation_inner(
+        app,
+        manager,
+        resources,
+        service,
+        CreatePluginChildWebviewPresentationRequest {
+            contract_version: PLUGIN_CHILD_WEBVIEW_PRESENTATION_CONTRACT_VERSION.to_owned(),
+            window_label: MAIN_WINDOW_LABEL.to_owned(),
+            surface_mode: LauncherSurfaceMode::Page,
+            scale_factor,
+            physical_bounds: PluginChildWebviewPhysicalBounds {
+                x: 0.0,
+                y: 0.0,
+                width: f64::from(size.width),
+                height: f64::from(size.height),
+            },
+            presentation_revision: "1".to_owned(),
+            identity: PluginChildWebviewPresentationIdentity {
+                entry_id,
+                plugin_id,
+                version,
+                page_id,
+                expected_revision,
+            },
+        },
+        Some(evidence),
+    )?;
+    PluginChildWebviewAttempt::from_opaque_id(&response.attempt_id).ok_or_else(|| {
+        PluginChildWebviewPresentationError::new(
+            PluginChildWebviewPresentationErrorCode::NativeCreateFailed,
+        )
     })
 }
 
@@ -453,6 +566,42 @@ pub(crate) fn read_plugin_child_webview_presentation(
         readiness,
         failure_code,
     })
+}
+
+#[tauri::command]
+pub(crate) async fn wait_plugin_child_webview_presentation(
+    service: State<'_, Arc<PluginChildWebviewService<Wry>>>,
+    request: WaitPluginChildWebviewPresentationRequest,
+) -> Result<WaitPluginChildWebviewPresentationResponse, PluginChildWebviewPresentationError> {
+    let attempt = parse_attempt(&request.contract_version, &request.attempt_id)?;
+    let service = service.inner().clone();
+    let readiness =
+        tauri::async_runtime::spawn_blocking(move || service.wait_presentation_readiness(attempt))
+            .await
+            .map_err(|_| {
+                PluginChildWebviewPresentationError::new(
+                    PluginChildWebviewPresentationErrorCode::Unavailable,
+                )
+            })?;
+    match readiness {
+        PluginChildWebviewWaitReadiness::Ready => Ok(WaitPluginChildWebviewPresentationResponse {
+            contract_version: PLUGIN_CHILD_WEBVIEW_PRESENTATION_CONTRACT_VERSION,
+            readiness: PluginChildWebviewPresentationReadiness::Ready,
+            failure_code: None,
+        }),
+        PluginChildWebviewWaitReadiness::Failed(error) => {
+            Ok(WaitPluginChildWebviewPresentationResponse {
+                contract_version: PLUGIN_CHILD_WEBVIEW_PRESENTATION_CONTRACT_VERSION,
+                readiness: PluginChildWebviewPresentationReadiness::Failed,
+                failure_code: Some(error.as_str()),
+            })
+        }
+        PluginChildWebviewWaitReadiness::StaleAttempt => {
+            Err(PluginChildWebviewPresentationError::new(
+                PluginChildWebviewPresentationErrorCode::StaleAttempt,
+            ))
+        }
+    }
 }
 
 #[tauri::command]

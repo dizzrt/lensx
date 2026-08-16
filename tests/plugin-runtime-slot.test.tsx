@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, rs, test } from '@rstest/core';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 
 import { AppProviders } from '../src/app/AppProviders';
 import type { ActivePage, PageResolution } from '../src/app/navigation';
@@ -57,19 +58,22 @@ const renderSlot = (options: {
   readonly destroy?: ReturnType<typeof rs.fn>;
   readonly locale?: 'en-US' | 'zh-CN';
   readonly isCurrent?: ReturnType<typeof rs.fn>;
-  readonly readReadiness?: ReturnType<typeof rs.fn>;
+  readonly waitReadiness?: ReturnType<typeof rs.fn>;
   readonly resolve?: ReturnType<typeof rs.fn>;
   readonly subscribeInvalidation?: (listener: () => void) => () => void;
+  readonly strict?: boolean;
 }) => {
   const create = options.create ?? rs.fn(async () => ({ attemptId: 'attempt_0123456789abcdef' as const }));
   const updateSlot = rs.fn(async () => undefined);
-  const readReadiness = options.readReadiness ?? rs.fn(async () => ({ status: 'ready' as const }));
+  const readReadiness = rs.fn(async () => ({ status: 'ready' as const }));
+  const waitReadiness = options.waitReadiness ?? rs.fn(async () => ({ status: 'ready' as const }));
   const setVisible = rs.fn(async () => undefined);
   const destroy = options.destroy ?? rs.fn(async () => true);
   const presentationController: PluginChildWebviewPresentationController = {
     create,
     updateSlot,
     readReadiness,
+    waitReadiness,
     setVisible,
     destroy,
   };
@@ -78,7 +82,7 @@ const renderSlot = (options: {
     ...(options.isCurrent ? { isCurrent: options.isCurrent } : {}),
     ...(options.subscribeInvalidation ? { subscribeInvalidation: options.subscribeInvalidation } : {}),
   };
-  const view = render(
+  const content = (
     <AppProviders initialLocale={options.locale}>
       <PluginRuntimeSlot
         activePage={activePage}
@@ -88,9 +92,10 @@ const renderSlot = (options: {
         presentationController={presentationController}
         resolver={resolver}
       />
-    </AppProviders>,
+    </AppProviders>
   );
-  return { ...view, create, destroy, readReadiness, resolver, setVisible, updateSlot };
+  const view = render(options.strict ? <StrictMode>{content}</StrictMode> : content);
+  return { ...view, create, destroy, resolver, setVisible, updateSlot, waitReadiness };
 };
 
 describe('PluginRuntimeSlot', () => {
@@ -121,13 +126,13 @@ describe('PluginRuntimeSlot', () => {
 
   test('keeps the native view hidden behind loading until current Session ready', async () => {
     let publishReady: ((value: { status: 'ready' }) => void) | undefined;
-    const readReadiness = rs.fn(
+    const waitReadiness = rs.fn(
       () =>
         new Promise<{ status: 'ready' }>((resolve) => {
           publishReady = resolve;
         }),
     );
-    const view = renderSlot({ readReadiness });
+    const view = renderSlot({ waitReadiness });
     await waitFor(() => expect(view.create).toHaveBeenCalledTimes(1));
     expect(screen.getByRole('status')).toHaveTextContent('Loading the plugin page…');
     expect(view.setVisible).not.toHaveBeenCalled();
@@ -135,6 +140,25 @@ describe('PluginRuntimeSlot', () => {
     await waitFor(() => expect(view.setVisible).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }, true));
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(document.querySelector('[data-runtime-state="ready"]')).not.toBeNull();
+  });
+
+  test('ignores a late readiness completion after StrictMode unmount and tears down every created attempt', async () => {
+    const completions: Array<(value: { status: 'ready' }) => void> = [];
+    const waitReadiness = rs.fn(
+      () =>
+        new Promise<{ status: 'ready' }>((resolve) => {
+          completions.push(resolve);
+        }),
+    );
+    const view = renderSlot({ strict: true, waitReadiness });
+    await waitFor(() => expect(view.create.mock.calls.length).toBeGreaterThan(0));
+    view.unmount();
+    await act(async () => {
+      for (const complete of completions) complete({ status: 'ready' });
+      await Promise.resolve();
+    });
+    expect(view.setVisible.mock.calls).not.toContainEqual([{ attemptId: 'attempt_0123456789abcdef' }, true]);
+    await waitFor(() => expect(view.destroy.mock.calls.length).toBe(view.create.mock.calls.length));
   });
 
   test('recomputes physical bounds and scale on the same current presentation', async () => {
@@ -168,7 +192,7 @@ describe('PluginRuntimeSlot', () => {
     );
     const view = renderSlot({
       destroy,
-      readReadiness: rs.fn(async () => ({ status: 'failed' as const, failureCode: 'runtime_load_timeout' as const })),
+      waitReadiness: rs.fn(async () => ({ status: 'failed' as const, failureCode: 'runtime_load_timeout' as const })),
     });
     await waitFor(() => expect(destroy).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -201,12 +225,12 @@ describe('PluginRuntimeSlot', () => {
       sequence += 1;
       return { attemptId: `attempt_${sequence.toString(16).padStart(16, '0')}` as `attempt_${string}` };
     });
-    const readReadiness = rs.fn(async () =>
+    const waitReadiness = rs.fn(async () =>
       sequence === 1
         ? { status: 'failed' as const, failureCode: 'runtime_session_disconnected' as const }
         : { status: 'ready' as const },
     );
-    const view = renderSlot({ create, readReadiness });
+    const view = renderSlot({ create, waitReadiness });
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(view.create).toHaveBeenCalledTimes(2));

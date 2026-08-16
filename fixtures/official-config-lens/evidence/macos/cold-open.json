@@ -1,28 +1,195 @@
 {
-  "evidence_version": "0.1.0",
-  "measurement_scope": "automated-cold-create",
-  "sample_count": 5,
-  "stage_ms": {
-    "resolve": { "p50": 2, "p95": 3, "max": 3 },
-    "create": { "p50": 31, "p95": 38, "max": 38 },
-    "navigation": { "p50": 8, "p95": 11, "max": 11 },
-    "load": { "p50": 45, "p95": 52, "max": 52 },
-    "bridge": { "p50": 3, "p95": 4, "max": 4 },
-    "sdk": { "p50": 4, "p95": 5, "max": 5 },
-    "bundle": { "p50": 67, "p95": 74, "max": 74 },
-    "editor": { "p50": 116, "p95": 129, "max": 129 },
-    "worker": { "p50": 18, "p95": 23, "max": 23 }
+  "evidence_version": "0.2.0",
+  "platform": "macos",
+  "engine": "wkwebview",
+  "profiles": {
+    "release_like": {
+      "sample_count": 20,
+      "stage_ms": {
+        "resolve": {
+          "p50": 0.004667,
+          "p95": 0.007333,
+          "max": 0.007333999999999999
+        },
+        "create": {
+          "p50": 28.849832999999997,
+          "p95": 36.115916999999996,
+          "max": 49.581166
+        },
+        "navigation": {
+          "p50": 59,
+          "p95": 68,
+          "max": 71
+        },
+        "load": {
+          "p50": 2.021833,
+          "p95": 4.0169999999999995,
+          "max": 149.69579199999998
+        },
+        "bridge": {
+          "p50": 0,
+          "p95": 2,
+          "max": 2
+        },
+        "sdk": {
+          "p50": 0,
+          "p95": 1,
+          "max": 12
+        },
+        "ui_bundle": {
+          "p50": 84,
+          "p95": 91,
+          "max": 166
+        },
+        "editor": {
+          "p50": 68,
+          "p95": 74,
+          "max": 80
+        },
+        "worker": {
+          "p50": 11,
+          "p95": 20,
+          "max": 32
+        },
+        "host_loading": {
+          "p50": 78.214333,
+          "p95": 92.99549999999999,
+          "max": 336.705209
+        },
+        "first_interactive": {
+          "p50": 220,
+          "p95": 239,
+          "max": 318
+        }
+      },
+      "terminal_cleanup": {
+        "webviews_absent": true,
+        "sessions_absent": true,
+        "workers_absent": true,
+        "bridge_authority_absent": true,
+        "resource_authority_absent": true
+      }
+    },
+    "development_snapshot": {
+      "sample_count": 20,
+      "stage_ms": {
+        "resolve": {
+          "p50": 0.011542,
+          "p95": 0.014167,
+          "max": 0.016042
+        },
+        "create": {
+          "p50": 26.751458,
+          "p95": 44.607834,
+          "max": 433.546333
+        },
+        "navigation": {
+          "p50": 58,
+          "p95": 78,
+          "max": 107
+        },
+        "load": {
+          "p50": 2.190875,
+          "p95": 3.596667,
+          "max": 4.104875
+        },
+        "bridge": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "sdk": {
+          "p50": 0,
+          "p95": 1,
+          "max": 72
+        },
+        "ui_bundle": {
+          "p50": 90,
+          "p95": 102,
+          "max": 103
+        },
+        "editor": {
+          "p50": 70,
+          "p95": 79,
+          "max": 79
+        },
+        "worker": {
+          "p50": 14,
+          "p95": 26,
+          "max": 33
+        },
+        "host_loading": {
+          "p50": 75.059708,
+          "p95": 123.27375,
+          "max": 544.374625
+        },
+        "first_interactive": {
+          "p50": 230,
+          "p95": 254,
+          "max": 303
+        }
+      },
+      "terminal_cleanup": {
+        "webviews_absent": true,
+        "sessions_absent": true,
+        "workers_absent": true,
+        "bridge_authority_absent": true,
+        "resource_authority_absent": true
+      }
+    },
+    "same_attempt_restore": {
+      "sample_count": 40,
+      "stage_ms": {
+        "restore": {
+          "p50": 0.002792,
+          "p95": 0.011792,
+          "max": 0.015042
+        }
+      },
+      "continuity": {
+        "attempt_unchanged": true,
+        "document_unchanged": true,
+        "model_unchanged": true,
+        "session_unchanged": true,
+        "worker_unchanged": true
+      }
+    }
   },
-  "first_interactive_ms": { "p50": 302, "p95": 331, "max": 331 },
+  "asset_sizes": {
+    "dist_bytes": 5276215,
+    "html_referenced_css_bytes": 892,
+    "html_referenced_javascript_bytes": 97446,
+    "package_bytes": 826496
+  },
   "host_heartbeat": {
-    "interval_ms": 16,
-    "sample_count": 125,
-    "p95_gap_ms": 19,
-    "max_gap_ms": 27,
+    "sample_count": 1050,
+    "p50_gap_ms": 12,
+    "p95_gap_ms": 13,
+    "max_gap_ms": 69.00000000000001,
     "responsive": true
   },
+  "producer": {
+    "kind": "target_macos_product_runtime",
+    "fresh_run": true,
+    "production_components": {
+      "bridge_rpc_sdk": true,
+      "config_lens_candidate": true,
+      "presentation": true,
+      "resource_service": true
+    }
+  },
   "privacy": {
-    "user_content_recorded": false,
-    "host_private_token_recorded": false
+    "complete_url_recorded": false,
+    "data_store_identifier_recorded": false,
+    "host_private_token_recorded": false,
+    "native_label_recorded": false,
+    "nonce_recorded": false,
+    "origin_recorded": false,
+    "path_recorded": false,
+    "payload_recorded": false,
+    "per_sample_identity_recorded": false,
+    "raw_error_recorded": false,
+    "stack_recorded": false,
+    "user_content_recorded": false
   }
 }

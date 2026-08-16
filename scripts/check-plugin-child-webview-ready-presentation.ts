@@ -29,6 +29,7 @@ if (!show.includes('PluginChildWebviewPresentationResult::NotReady')) {
 const presentation = read('src-tauri/src/plugin_child_webview_presentation.rs');
 for (const required of [
   'read_plugin_child_webview_presentation',
+  'wait_plugin_child_webview_presentation',
   'expire_current_session_deadline',
   'set_plugin_child_webview_presentation_visibility',
   'service.show_current(attempt)',
@@ -38,7 +39,7 @@ for (const required of [
 }
 
 const slot = read('src/app/plugins/runtime/PluginRuntimeSlot.tsx');
-const readIndex = slot.indexOf('presentationController.readReadiness');
+const readIndex = slot.indexOf('presentationController.waitReadiness');
 const showIndex = slot.indexOf('presentationController.setVisible(presentation, true)');
 const readyIndex = slot.indexOf("dispatch({ type: 'ready'");
 if (readIndex < 0 || showIndex < readIndex || readyIndex < showIndex) {
