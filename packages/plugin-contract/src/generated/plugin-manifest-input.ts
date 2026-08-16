@@ -15,7 +15,7 @@ export type InternalRoute = string;
  * Author-controlled static manifest input for an external lensX plugin.
  */
 export interface PluginManifestInput {
-  manifest_version: '0.2.0';
+  manifest_version: '0.3.0';
   plugin_id: PluginId;
   version: Semver;
   display: Display;
@@ -51,7 +51,7 @@ export interface VersionRange {
   max_version_exclusive: Semver;
 }
 export interface Runtime {
-  kind: 'iframe';
+  kind: 'webview';
   entry: PackageHtmlPath;
 }
 export interface Contributes {

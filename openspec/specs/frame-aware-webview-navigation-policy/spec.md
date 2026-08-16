@@ -6,9 +6,7 @@ Define the macOS WKWebView Host boundary that classifies document navigation by
 frame before commit, enforces disjoint Host and plugin-document allowlists,
 keeps trusted Tauri initialization out of descendant frames, and fails closed
 for popups, downloads, stale targets, and unsafe platform input.
-
 ## Requirements
-
 ### Requirement: Every document navigation MUST be classified by frame before commit
 
 On macOS WKWebView, the system MUST classify every document-navigation attempt
@@ -119,114 +117,6 @@ or a stored but unverified main-frame-only flag MUST NOT count as isolation.
   rather than bypassing the gate through DOM cleanup, author scripts, or
   removal of a negative case
 
-### Requirement: Active plugin target MUST be exact, Host-private, and lifecycle-bound
-
-The system MUST retain at most one process-local immutable active plugin
-navigation target and MUST atomically activate, replace, and dispose it through
-a monotonic epoch lease. The target MUST be constructed from later trusted Host
-facts and MUST NOT come from the Manifest, a plugin message, or an author URL.
-Public Page or Action descriptors, Launcher snapshots, public plugin packages,
-events, and diagnostics MUST NOT expose the target URL, scope, entry ID,
-revision, digest, installation path, or a Host object.
-
-#### Scenario: Activate the first trusted target
-
-- **WHEN** the Host activates the exact target for a verified Runtime document
-- **THEN** the policy atomically stores the target and returns a new opaque
-  current lease
-- **THEN** only a descendant document navigation that exactly matches that
-  target can be allowed
-
-#### Scenario: Replace the current target
-
-- **WHEN** the Host replaces the active target for a new Page, entry, revision,
-  resource URL, or retry attempt
-- **THEN** the policy atomically invalidates the old lease and target and
-  activates the new target
-- **THEN** the old URL cannot regain navigation authorization after replacement
-
-#### Scenario: Ignore a late disposal
-
-- **WHEN** an old Page or attempt submits disposal after a replacement
-- **THEN** the compare-current lease check preserves the new target
-- **THEN** late cleanup cannot clear or modify current navigation authority
-
-#### Scenario: Dispose the current target
-
-- **WHEN** the current lease is explicitly disposed
-- **THEN** the policy clears the active plugin target and returns to the
-  descendant-deny idle state
-- **THEN** the target is not persisted and is not recovered after process
-  restart
-
-### Requirement: Descendant navigation MUST match one canonical document target exactly
-
-The policy MUST structurally normalize isolated-origin native custom-protocol
-URLs and their supported platform-translated forms, then exactly compare the
-scheme class, origin scope, path scope, plugin key, version, resource path, and
-Host-derived fragment. The origin scope and path scope MUST match. A supported
-translated form MUST preserve the same origin key rather than collapsing it to
-a shared host. The policy MUST reject the old shared
-`lensx-plugin://localhost` and `lensx-plugin.localhost` targets, queries,
-userinfo, ports, different or extra fragments, root-relative or absolute
-escapes, backslashes, percent- or double-encoding ambiguity, Unicode, punycode,
-or uppercase scopes, a different origin, scope, plugin, version, or generation,
-Host or external origins, and `file:`, `javascript:`, `data:`, `blob:`, or
-external-application schemes. Normalization MUST NOT repair, rewrite, or fall
-back from a rejected input to an allowed target.
-
-If WKWebView prevents `file:`, no-op `javascript:`, or a same-document `blob:`
-target from becoming a document navigation before `WKNavigationDelegate`, real
-evidence MAY record the bounded result `blocked_by_webview`, but it MUST also
-prove that the original document remains, no new-window, download, or external
-handoff occurred, and the navigation callback count was not falsely increased.
-That result MUST NOT be recorded as a policy `deny`; policy normalization MUST
-still reject the target if a later platform version reports it.
-
-#### Scenario: Allow the exact active plugin document
-
-- **WHEN** a descendant frame requests the exact current isolated-origin entry
-  document and exact Host-derived fragment from the active lease
-- **THEN** the policy allows the document navigation
-- **THEN** the decision grants no other document, origin, scope, generation,
-  fragment, or browser capability
-
-#### Scenario: Reject a cross-plugin or stale target
-
-- **WHEN** a descendant requests another plugin, origin, scope, version, or
-  generation, an old lease, or the entry document from before replacement
-- **THEN** the policy rejects the navigation before commit
-- **THEN** a Resource Service URL cannot become the current Page document merely
-  because it was once valid or has a similar path
-
-#### Scenario: Reject a shared-host target
-
-- **WHEN** a descendant requests the old shared native or translated host, or a
-  translated adapter loses the isolated origin key
-- **THEN** normalization denies the target and does not fall back to path-only
-  comparison
-- **THEN** the downstream Runtime cannot activate `allow-same-origin` on a
-  shared browser origin
-
-#### Scenario: Reject an encoded navigation bypass
-
-- **WHEN** a target uses a query, userinfo, default or explicit port,
-  backslash, percent or double encoding, case collision, Unicode or punycode
-  scope, extra fragment, or dangerous scheme to resemble the current entry
-- **THEN** normalization denies rather than decoding, repairing, or joining the
-  input into an allowed target
-- **THEN** the bounded diagnostic does not echo the raw target, origin, or scope
-
-#### Scenario: Load package subresources through the existing service
-
-- **WHEN** an allowed plugin document requests CSS, JavaScript, an image, font,
-  JSON, or Wasm from the current isolated origin and scope
-- **THEN** the navigation policy does not treat that subresource as a new
-  document authorization
-- **THEN** the Plugin Resource Service independently validates the origin and
-  scope, generation, path, MIME type, payload ownership, and lifecycle without
-  this capability relaxing its contract or CORS behavior
-
 ### Requirement: New windows, popups, and downloads MUST fail closed independently
 
 The Host WebView MUST install new-window and popup denial and download denial
@@ -319,23 +209,15 @@ scope.
   native dependency patch rather than bypassing the gate through a DOM hook,
   removal of a negative case, or a broader allowlist
 
-### Requirement: The prerequisite MUST leave plugin Runtime and product presentation unchanged
+### Requirement: Trusted Host navigation policy MUST contain no plugin document exception
+The Host main WebView policy MUST classify and protect its own top-level and descendant navigations, but MUST NOT issue or honor a descendant plugin target lease. Plugin documents MUST be loaded only as the top-level document of the current Child WebView under `plugin-child-webview-runtime`; Tauri initialization MUST remain limited to the trusted Host main frame.
 
-This capability MUST deliver only the frame-aware native policy, main-frame-only
-initialization enforcement, Host-private target lease, URL normalization,
-new-window and download denial, dependency integration, tests, and maintained
-documentation. The production policy MUST be installed with no active plugin
-target and MUST remain idle. It MUST NOT create an iframe, execute plugin code,
-change `App.tsx` plugin Page composition, replace the Runtime-unavailable
-placeholder, alter Page close, focus, locale, or theme behavior, or deliver a
-Session, Host API, permissions, complete CSP, or child WebView.
+#### Scenario: Host descendant requests a plugin document
+- **WHEN** any Host main-WebView descendant attempts to navigate to a plugin resource origin
+- **THEN** the navigation is rejected before commit without consulting a current plugin lease
+- **THEN** no iframe compatibility path or Tauri initialization is created
 
-#### Scenario: Prerequisite completes before iframe Runtime
+#### Scenario: Current Child WebView starts
+- **WHEN** the Runtime controller creates a current Child WebView
+- **THEN** its top-level policy is installed by the Child WebView Runtime rather than the Host descendant-frame policy
 
-- **WHEN** this capability passes all validation before
-  `add-isolated-plugin-iframe-runtime` is implemented
-- **THEN** the user still sees the bilingual, theme-compatible Host-owned plugin
-  Page placeholder
-- **THEN** Home, Search, Host Pages, Page context, shared close, focus
-  restoration, and product UI remain unchanged, with no plugin HTML or
-  JavaScript execution

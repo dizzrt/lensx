@@ -1,5 +1,5 @@
 {
-  "manifest_version": "0.2.0",
+  "manifest_version": "0.3.0",
   "plugin_id": "dev.lensx.config-lens",
   "version": "0.1.0",
   "display": {
@@ -28,7 +28,7 @@
     }
   },
   "runtime": {
-    "kind": "iframe",
+    "kind": "webview",
     "entry": "index.html"
   },
   "contributes": {

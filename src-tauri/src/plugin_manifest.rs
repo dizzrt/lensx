@@ -85,7 +85,7 @@ pub struct RuntimeInput {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RuntimeKind {
-    Iframe,
+    Webview,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -835,10 +835,60 @@ fn validate_semantics(
     (diagnostics, compatibility)
 }
 
+fn legacy_protocol_diagnostics(value: &Value) -> Vec<PluginManifestDiagnostic> {
+    let Some(object) = value.as_object() else {
+        return Vec::new();
+    };
+    let mut diagnostics = Vec::new();
+    if object
+        .get("manifest_version")
+        .and_then(Value::as_str)
+        .is_some_and(|version| {
+            let mut parts = version.split('.');
+            parts.next() == Some("0")
+                && parts.next() == Some("2")
+                && parts.next().is_some_and(|patch| {
+                    !patch.is_empty() && patch.bytes().all(|byte| byte.is_ascii_digit())
+                })
+                && parts.next().is_none()
+        })
+    {
+        diagnostics.push(diagnostic(
+            "incompatible_protocol",
+            "/manifest_version",
+            "The plugin Manifest protocol is incompatible.",
+        ));
+    }
+    if object
+        .get("runtime")
+        .and_then(Value::as_object)
+        .and_then(|runtime| runtime.get("kind"))
+        .and_then(Value::as_str)
+        == Some("iframe")
+    {
+        diagnostics.push(diagnostic(
+            "incompatible_protocol",
+            "/runtime/kind",
+            "The plugin Runtime protocol is incompatible.",
+        ));
+    }
+    sort_diagnostics(&mut diagnostics);
+    diagnostics
+}
+
 pub fn validate_plugin_manifest(
     value: &Value,
     current_versions: &PluginHostVersions,
 ) -> PluginManifestValidationResult {
+    let incompatible_diagnostics = legacy_protocol_diagnostics(value);
+    if !incompatible_diagnostics.is_empty() {
+        return PluginManifestValidationResult {
+            status: PluginManifestValidationStatus::Incompatible,
+            manifest: None,
+            compatibility: None,
+            diagnostics: incompatible_diagnostics,
+        };
+    }
     let schema_diagnostics = map_schema_diagnostics(value);
     if !schema_diagnostics.is_empty() {
         return PluginManifestValidationResult {

@@ -46,6 +46,10 @@ const buildFixtures = async (): Promise<FixtureOutput[]> => {
     max_version_exclusive: '0.3.0',
   };
   const incompatible = await packPluginPackage(payloadFiles(incompatibleManifest));
+  const legacyIframeManifest = structuredClone(baseManifest);
+  legacyIframeManifest.manifest_version = '0.2.0';
+  (legacyIframeManifest.runtime as Record<string, unknown>).kind = 'iframe';
+  const legacyIframe = await rawPackage(payloadFiles(legacyIframeManifest));
 
   const missingResourceFiles = payloadFiles().filter((file) => file.path !== 'dist/plugin.html');
   const hostFieldsManifest = {
@@ -86,6 +90,7 @@ const buildFixtures = async (): Promise<FixtureOutput[]> => {
     { name: 'complete-compatible', category: 'valid', bytes: valid.bytes },
     { name: 'reference-repeatable', category: 'reproducible', bytes: valid.bytes },
     { name: 'manifest-incompatible', category: 'incompatible', bytes: incompatible.bytes },
+    { name: 'legacy-iframe-runtime', category: 'incompatible', bytes: legacyIframe },
     { name: 'not-zstandard', category: 'invalid', bytes: Buffer.from('not a plugin package') },
     {
       name: 'trailing-bytes',

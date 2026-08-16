@@ -11,12 +11,12 @@ SDK、UI、Testkit、CLI、本地安装、隔离 Runtime 和 Host API 边界。�
 
 ConfigLens 是支持 JSON、YAML 1.2、TOML 1.0 和 XML 1.0 的临时配置工作台。
 输入只保留在当前 Page generation。隐藏和恢复 Launcher 不会关闭该 Page：
-activation 会刷新当前插件事实；只要相关执行身份仍然有效，就保留同一 iframe、
+activation 会刷新当前插件事实；只要相关执行身份仍然有效，就保留同一 Child WebView、
 Runtime Session、model、Worker 和内存输入。这种连续性不使用浏览器或 Host
 持久化。只有真正关闭、禁用、替换、重新加载、卸载或以其他方式 teardown Page
 时，输入才会丢弃。Page 只包含一个可编辑 Monaco model；四种语言的格式化会直接
 替换其中内容，Compact 仅支持 JSON。每次成功操作都是一次可撤销的编辑器 edit，
-失败时保持当前内容，语言始终由用户显式选择。Host Page chrome 提供可见的 ConfigLens 身份，因此 iframe
+失败时保持当前内容，语言始终由用户显式选择。Host Page chrome 提供可见的 ConfigLens 身份，因此插件 document
 工作区不重复主标题或副标题。可编辑 Monaco 表面位于最前，随后是显式语言选择器以及
 Format 和 Compact 控件。插件不执行 fetch、WebSocket、浏览器存储、剪贴板、Host
 持久化或内容日志。

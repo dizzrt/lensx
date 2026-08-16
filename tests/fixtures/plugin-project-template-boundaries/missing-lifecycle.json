@@ -2,7 +2,9 @@
   "input": {
     "kind": "react-semi",
     "metadata": { "scripts": { "build": "x", "typecheck": "x", "test": "x" } },
-    "sources": {}
+    "sources": {
+      "src/runtime.ts": "import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview'; createPluginWebviewTransport();"
+    }
   },
   "expected": ["template/lifecycle-missing: missing check script."]
 }

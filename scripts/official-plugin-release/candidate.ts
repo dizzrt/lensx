@@ -21,12 +21,35 @@ export interface OfficialPluginReleaseRecord {
   readonly plugin_id: string;
   readonly release_tag: string;
   readonly repository: string;
+  readonly runtime_evidence: OfficialPluginRuntimeEvidence;
   readonly schema_version: typeof OFFICIAL_RELEASE_SCHEMA_VERSION;
   readonly source_commit: string;
   readonly source_ref: string;
   readonly version: string;
   readonly workflow_run_url: string;
 }
+
+export interface OfficialPluginRuntimeEvidence {
+  readonly protocol: 'webview';
+  readonly installation_committed: true;
+  readonly native_loaded: true;
+  readonly bridge_ready: true;
+  readonly sdk_ready: true;
+  readonly representative_interaction: true;
+  readonly closed: true;
+  readonly zero_residual: true;
+}
+
+const VERIFIED_WEBVIEW_RUNTIME_EVIDENCE: OfficialPluginRuntimeEvidence = Object.freeze({
+  protocol: 'webview',
+  installation_committed: true,
+  native_loaded: true,
+  bridge_ready: true,
+  sdk_ready: true,
+  representative_interaction: true,
+  closed: true,
+  zero_residual: true,
+});
 
 export interface OfficialPluginCandidateManifest {
   readonly artifact: ReleaseArtifactFact;
@@ -64,11 +87,16 @@ export const assertCandidateInspectionAgreement = ({
   if (
     typescript.plugin_id !== pluginId ||
     typescript.version !== version ||
+    typescript.runtime_kind !== 'webview' ||
     (typescript.package_digest as { value?: unknown } | undefined)?.value !== digest ||
     rust.plugin_id !== pluginId ||
     rust.version !== version ||
+    rust.runtime_kind !== 'webview' ||
     rust.digest !== digest ||
-    rust.installer_prepared !== true
+    rust.installer_prepared !== true ||
+    rust.installation_committed !== true ||
+    rust.registration_count !== 1 ||
+    rust.inspection_cleanup_completed !== true
   ) {
     throw new Error('[official-release/inspection-drift] TypeScript, Rust, installation, and metadata facts disagree.');
   }
@@ -111,6 +139,31 @@ const basenameSafe = (value: string): boolean =>
   value !== '.' &&
   value !== '..';
 
+const isVerifiedWebviewRuntimeEvidence = (value: unknown): value is OfficialPluginRuntimeEvidence => {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const evidence = value as Record<string, unknown>;
+  return (
+    exactKeys(evidence, [
+      'protocol',
+      'installation_committed',
+      'native_loaded',
+      'bridge_ready',
+      'sdk_ready',
+      'representative_interaction',
+      'closed',
+      'zero_residual',
+    ]) &&
+    evidence.protocol === 'webview' &&
+    evidence.installation_committed === true &&
+    evidence.native_loaded === true &&
+    evidence.bridge_ready === true &&
+    evidence.sdk_ready === true &&
+    evidence.representative_interaction === true &&
+    evidence.closed === true &&
+    evidence.zero_residual === true
+  );
+};
+
 export const validateReleaseRecord = (value: unknown): value is OfficialPluginReleaseRecord => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
@@ -120,6 +173,7 @@ export const validateReleaseRecord = (value: unknown): value is OfficialPluginRe
       'plugin_id',
       'release_tag',
       'repository',
+      'runtime_evidence',
       'schema_version',
       'source_commit',
       'source_ref',
@@ -140,7 +194,8 @@ export const validateReleaseRecord = (value: unknown): value is OfficialPluginRe
     !/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/actions\/runs\/[1-9]\d*$/u.test(
       record.workflow_run_url,
     ) ||
-    record.release_tag !== `official/${record.plugin_id}/v${record.version}`
+    record.release_tag !== `official/${record.plugin_id}/v${record.version}` ||
+    !isVerifiedWebviewRuntimeEvidence(record.runtime_evidence)
   ) {
     return false;
   }
@@ -325,7 +380,7 @@ export const buildOfficialPluginCandidate = (
         'rstest',
         'run',
         'tests/official-plugin-runtime-e2e.test.tsx',
-        'tests/plugin-runtime-frame.test.tsx',
+        'tests/plugin-runtime-slot.test.tsx',
         'tests/plugin-lifecycle-service.test.ts',
         'tests/plugin-replacement-service.test.ts',
       ],
@@ -347,6 +402,7 @@ export const buildOfficialPluginCandidate = (
       plugin_id: input.member.pluginId,
       release_tag: `official/${input.member.pluginId}/v${input.member.version}`,
       repository: input.repository,
+      runtime_evidence: VERIFIED_WEBVIEW_RUNTIME_EVIDENCE,
       schema_version: OFFICIAL_RELEASE_SCHEMA_VERSION,
       source_commit: input.sourceCommit,
       source_ref: input.sourceRef,

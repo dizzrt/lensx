@@ -1,6 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
 
-import type { PluginRuntimeSessionIdentity } from '../runtime/session-contract';
 import {
   parsePluginScopedStorageBoundaryError,
   parsePluginScopedStorageBoundaryResult,
@@ -42,7 +41,7 @@ export const createPluginScopedStorageProviderFactory = (
       identity,
       isCurrent,
     }: {
-      readonly identity: PluginRuntimeSessionIdentity;
+      readonly identity: PluginScopedStorageIdentity;
       readonly isCurrent: () => boolean;
     }) {
       let disposed = false;

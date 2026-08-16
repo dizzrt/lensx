@@ -30,16 +30,13 @@ const metadata = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as
 const focusedGate = metadata.scripts?.['check:plugin-rpc-validation'] ?? '';
 for (const fragment of [
   'plugin-rpc-validation.test.ts',
-  'plugin-runtime-transport-adapter.test.ts',
-  'plugin-sdk-transport-integration.test.ts',
+  'plugin-sdk-transport-contract.test.ts',
+  'plugin-child-webview-host-dispatcher.test.ts',
   'plugin-host-api-dispatcher.test.ts',
   'plugin-scoped-storage-contract.test.ts',
-  'plugin-runtime-session-service.test.ts',
-  'plugin-runtime-session-evidence.test.ts',
   'workspace-boundaries.test.ts',
   'packages/plugin-contract run test:pack',
   'packages/plugin-sdk run test:pack',
-  'check:plugin-runtime-session-evidence',
 ]) {
   if (!focusedGate.includes(fragment)) fail(`the focused gate omitted ${fragment}`);
 }
@@ -56,9 +53,9 @@ for (const packageName of ['plugin-contract', 'plugin-sdk', 'plugin-ui', 'plugin
   }
 }
 
-const frame = readFileSync(join(root, 'src/app/plugins/runtime/PluginRuntimeFrame.tsx'), 'utf8');
-if (!frame.includes('onDiagnostic: observePluginRpcDiagnostic')) {
-  fail('the production Runtime composition omitted the safe diagnostic sink');
+const nativeRpc = readFileSync(join(root, 'src-tauri/src/plugin_child_webview_rpc.rs'), 'utf8');
+if (!nativeRpc.includes('PluginChildWebviewRpcDiagnostic')) {
+  fail('the production Child WebView RPC path omitted bounded diagnostics');
 }
 
 console.log('Checked immutable plugin RPC policy, focused gate composition, dependencies, and private exports.');

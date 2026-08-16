@@ -1,4 +1,5 @@
 import {
+  type IncompatiblePluginManifestValidationResult,
   type InvalidPluginManifestValidationResult,
   normalizePluginManifest,
   type PluginHostVersions,
@@ -9,7 +10,10 @@ import {
 export const parsePluginManifest = (
   input: unknown,
   currentVersions: PluginHostVersions,
-): InvalidPluginManifestValidationResult | PluginManifestNormalizationResult => {
+):
+  | InvalidPluginManifestValidationResult
+  | IncompatiblePluginManifestValidationResult
+  | PluginManifestNormalizationResult => {
   const validation = validatePluginManifest(input);
-  return validation.status === 'invalid' ? validation : normalizePluginManifest(validation, currentVersions);
+  return validation.status === 'valid' ? normalizePluginManifest(validation, currentVersions) : validation;
 };

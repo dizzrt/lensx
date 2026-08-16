@@ -1,0 +1,120 @@
+# Plugin Child WebView Runtime
+
+## 已交付的 Surface Ownership
+
+Launcher 在同一 native window 中保留一个可信 Host WebView，以及至多一个 current plugin
+Child WebView。React 拥有 Page chrome、loading、retry、error、Settings 与测量后的内容 slot；
+Rust 拥有 native create、bounds、visibility、focus、navigation、bridge ingress、resource
+authority 与 destroy。插件不能提交 native bounds，也不能获取 Tauri object。
+
+```mermaid
+flowchart LR
+  A["React Host WebView<br/>chrome 与 slot intent"] -->|"已校验的 physical bounds<br/>和 presentation revision"| B["Rust presentation 与<br/>Child WebView service"]
+  B --> C["唯一 current Child WebView<br/>plugin document"]
+  D["Resource service<br/>generation-bound package bytes"] --> C
+  C -->|"closed bridge frame<br/>native source identity"| E["Host API dispatcher"]
+  B -->|"先 hide 或 destroy"| A
+```
+
+Host 与插件 document 是 native sibling。正确性不假设 WebKit 将它们分配到不同 OS process。
+
+## Session 与 Lifecycle
+
+同一 attempt 将 native load、bridge ready 与 SDK Context ready 作为不同状态推进。所有 current
+检查通过前，Child WebView 保持隐藏，由 Host 展示反馈。close、切换 Page、disable、uninstall、
+replacement、upgrade、development reload、retry、disconnect、fatal bridge failure、Host reload、
+app teardown 与 process exit 都进入同一 compare-current terminal path。
+
+公共 WebView SDK transport 会等待插件 document 的 load event，并跨过一个 task boundary 后才
+发现 bridge 和报告 ready。这样由 native `Finished` load event 权威地推进到 `Loaded`，避免
+module 或 React 提前启动并与该事件形成竞态。
+
+```mermaid
+stateDiagram-v2
+  [*] --> Creating
+  Creating --> Loaded: exact document finished
+  Loaded --> BridgeReady: current source and freshness
+  BridgeReady --> SDKReady: runtime.get_context succeeds
+  SDKReady --> Hidden: Launcher hide
+  Hidden --> SDKReady: same-attempt restore
+  Creating --> Terminal: timeout or failure
+  Loaded --> Terminal: timeout or failure
+  BridgeReady --> Terminal: context failure
+  SDKReady --> Terminal: close or invalidation
+  Hidden --> Terminal: close or invalidation
+  Terminal --> [*]: revoke then destroy
+```
+
+只有 plugin、Page、entry、version、resource generation 与 native source 仍为 current 时，
+hide/restore 才保留同一 attempt。真实 close 或 generation 变化会先 destroy，再 fresh reopen。
+不存在 hidden Runtime、preload pool、background Page 或第二个 current plugin WebView。
+
+## 安全与 Web 能力
+
+每个 generation 都有隔离的 origin、data-store identity、resource scope、native label 与 opaque
+attempt。native ingress 提供 source identity；插件 frame 不能选择它。document 只获得冻结的
+lensX bridge carrier。generic Tauri core/plugin/app command、global event、window/WebView 控制、
+Host DOM、其他插件与旧 generation 都不可用。top-level escape、popup/new-window 与 download
+全部拒绝。
+
+页面可使用 package module、Dedicated Worker、Fetch/HTTPS、WebSocket、WASM 与 origin storage
+等普通 Web 能力；它们是 browser capability，不是 Host grant。SharedWorker、ServiceWorker、
+detached execution、device access 与 native API 不在承诺范围内。Publisher、repository、
+provenance 与 official release metadata 都不会增加 Runtime authority。
+
+## 开发与发布
+
+external、development 与 official 插件都使用 Manifest `0.3.0`、`runtime.kind: "webview"` 与
+`@lensx/plugin-sdk/webview`。template 与 CLI 只构建这一路径。Development reload 在销毁旧 current
+attempt 前 staging 下一 generation；被拒绝的 staging 不改变 current attempt。official candidate
+与 external 插件通过相同的 local installation、native Runtime、bridge/SDK、interaction 与
+zero-residual teardown gate。
+
+使用以下维护命令：
+
+```bash
+pnpm run check:plugin-child-webview-macos-evidence
+pnpm run evidence:plugin-child-webview-macos
+pnpm run check:open-isolated-plugin-runtime
+```
+
+`evidence:` 命令会打开临时 macOS WKWebView harness window。普通 `check:` 命令验证已提交的
+bounded evidence，适合 non-interactive aggregate validation。
+
+## 性能预算与 Evidence Schema
+
+cold create 与 same-attempt restore 分开测量；ConfigLens warm format 也与 container startup 独立。
+
+| 测量项 | 维护预算 | 方法 |
+| --- | ---: | --- |
+| Child WebView cold create p95 | 1000 ms | 五次 automated cold open；分别记录 resolve、create、navigation、load、bridge、SDK、bundle、editor、Worker 与 first-interactive stage。 |
+| First interactive p95 | 2000 ms | 端到端 cold-open stage clock。 |
+| Same-attempt hide/restore | 250 ms | native hide/show 调用并校验 current document，且不 reload。 |
+| Terminal destroy | 1000 ms | 从 close 到 native WebView registry 中不再存在。 |
+| ConfigLens warm small-JSON format p95 | 100 ms | 对维护的四 case corpus 采集四十次 action-to-model-update sample。 |
+| Host heartbeat p95 gap | 50 ms | plugin startup 或工作期间运行 16 ms Host timer。 |
+
+已提交 matrix 使用 schema version `0.1.0`、platform `macos`、engine `wkwebview`、boolean
+positive/negative outcome、bounded stage summary 与显式 privacy flag。evidence 不记录 user content、
+raw payload/error、complete URL、origin、path、nonce、native label、data-store identifier 或
+Host-private token。memory/resource release 通过 registry absence、destroyed WebView、inert late
+callback、terminated Worker/connection 与零残留 bridge/resource authority 证明；不测量或假设
+process separation。
+
+## 故障排查
+
+1. Host 一直停留在 loading 时，区分 native load、bridge ready 与 SDK Context ready；不要把它们
+   当作同一个 timeout。
+2. 内容隐藏或错位时，运行 slot/bounds gate，并校验 scale factor、presentation revision 与 Host
+   overlay 顺序。
+3. Web 能力失败时，使用 browser feature detection 并检查插件 CSP；不要增加 Host permission 或
+   native fallback。
+4. reload 或 replacement 失败时，验证 teardown 前的 staging，并确认旧 generation 不能发送 late
+   callback。
+5. evidence 变化时重跑真实 macOS matrix 并审查 bounded result。不得手改 positive boolean 来绕过
+   失败 harness。
+
+## 旧协议迁移
+
+使用 iframe Runtime 的旧 Manifest `0.2.x` package 仅作为不兼容迁移输入。它们不会执行、重写或
+进入 fallback。请使用当前 template 与公共 WebView SDK transport 重新构建。

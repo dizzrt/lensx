@@ -22,7 +22,6 @@ import {
   type PluginScopedStorageProviderFactory,
   type PluginScopedStorageRequest,
 } from '../storage';
-import type { PluginRuntimeSessionIdentity } from './session-contract';
 import {
   createPluginRuntimeTransportPostResponseOutcome,
   type PluginRuntimeTransportHandler,
@@ -75,12 +74,20 @@ export interface PluginHostApiDispatcherDependencies {
 }
 
 export interface CreatePluginHostApiDispatcherBindingInput {
-  readonly identity: PluginRuntimeSessionIdentity;
+  readonly identity: PluginHostApiAuthorityIdentity;
   readonly isCurrent: () => boolean;
+}
+
+export interface PluginHostApiAuthorityIdentity {
+  readonly entry_id: string;
+  readonly plugin_id: string;
+  readonly version: string;
+  readonly page_id: string;
 }
 
 export interface PluginHostApiDispatcherBinding {
   readonly handler: PluginRuntimeTransportHandler;
+  readonly execute: (request: HostApiRequest, signal: AbortSignal) => ReturnType<PluginRuntimeTransportHandler>;
   readonly attachEmitter: (emit: (event: HostApiEvent) => boolean) => () => void;
   readonly dispose: () => void;
 }
@@ -197,7 +204,7 @@ export const createPluginHostApiDispatcherFactory = (
       const unsubscribeContext = dependencies.context.subscribe(publishContext);
       const unsubscribeStorage = storage?.subscribeAvailability(publishContext) ?? (() => undefined);
 
-      const handler: PluginRuntimeTransportHandler = async ({ request: requestInput, signal }) => {
+      const execute: PluginHostApiDispatcherBinding['execute'] = async (requestInput, signal) => {
         const unavailable = isAvailable(disposed, isCurrent, signal);
         if (unavailable) return unavailable;
 
@@ -273,9 +280,11 @@ export const createPluginHostApiDispatcherFactory = (
           return errors.internal;
         }
       };
+      const handler: PluginRuntimeTransportHandler = ({ request, signal }) => execute(request, signal);
 
       const binding: PluginHostApiDispatcherBinding = Object.freeze({
         handler,
+        execute,
         attachEmitter(nextEmitter: (event: HostApiEvent) => boolean) {
           if (disposed || emitterAttached) throw new TypeError('Plugin Host API emitter is unavailable.');
           emitterAttached = true;
@@ -305,6 +314,7 @@ export const unavailablePluginHostApiDispatcherFactory: PluginHostApiDispatcherF
     let disposed = false;
     return Object.freeze({
       handler: () => (disposed ? errors.cancelled : errors.unavailable),
+      execute: () => (disposed ? errors.cancelled : errors.unavailable),
       attachEmitter: () => () => undefined,
       dispose: () => {
         disposed = true;

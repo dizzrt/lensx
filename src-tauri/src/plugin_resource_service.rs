@@ -33,11 +33,18 @@ const NOT_FOUND_BODY: &[u8] = b"Plugin resource unavailable.";
 const METHOD_NOT_ALLOWED_BODY: &[u8] = b"Plugin resource method unavailable.";
 const INTERNAL_BODY: &[u8] = b"Plugin resource request failed.";
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct ScopeBinding {
     scope: String,
     entry_id: String,
     resource_generation: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct RuntimeResourceAuthority {
+    attempt_id: String,
+    webview_label: String,
+    binding: ScopeBinding,
 }
 
 #[derive(Default)]
@@ -51,6 +58,7 @@ pub struct PluginResourceService {
     packages_root: Option<PathBuf>,
     html_csp: &'static str,
     scopes: Mutex<ScopeState>,
+    runtime_authority: Mutex<Option<RuntimeResourceAuthority>>,
     #[cfg(feature = "plugin-development-mode")]
     development_snapshots: Mutex<Option<Arc<DevelopmentSnapshotStore>>>,
     #[cfg(test)]
@@ -88,6 +96,7 @@ impl PluginResourceService {
             packages_root,
             html_csp,
             scopes: Mutex::new(ScopeState::default()),
+            runtime_authority: Mutex::new(None),
             #[cfg(feature = "plugin-development-mode")]
             development_snapshots: Mutex::new(None),
             #[cfg(test)]
@@ -149,6 +158,22 @@ impl PluginResourceService {
     }
 
     pub fn handle_request(&self, request: http::Request<Vec<u8>>) -> http::Response<Vec<u8>> {
+        self.handle_request_with_source(None, request)
+    }
+
+    pub(crate) fn handle_request_from_source(
+        &self,
+        webview_label: &str,
+        request: http::Request<Vec<u8>>,
+    ) -> http::Response<Vec<u8>> {
+        self.handle_request_with_source(Some(webview_label), request)
+    }
+
+    fn handle_request_with_source(
+        &self,
+        webview_label: Option<&str>,
+        request: http::Request<Vec<u8>>,
+    ) -> http::Response<Vec<u8>> {
         if request.method() != http::Method::GET && request.method() != http::Method::HEAD {
             return fixed_error(
                 http::StatusCode::METHOD_NOT_ALLOWED,
@@ -159,7 +184,7 @@ impl PluginResourceService {
         if has_unsupported_read_headers(request.headers()) {
             return fixed_error(http::StatusCode::NOT_FOUND, NOT_FOUND_BODY, false);
         }
-        match self.read_request(&request) {
+        match self.read_request(webview_label, &request) {
             Ok((mime, bytes)) => success_response(
                 request.method() == http::Method::HEAD,
                 mime,
@@ -179,6 +204,7 @@ impl PluginResourceService {
 
     fn read_request(
         &self,
+        webview_label: Option<&str>,
         request: &http::Request<Vec<u8>>,
     ) -> Result<(&'static str, Vec<u8>), ProtocolFailure> {
         let parsed = parse_resource_uri(request.uri()).ok_or(ProtocolFailure::Unavailable)?;
@@ -188,6 +214,11 @@ impl PluginResourceService {
             .get(&parsed.origin_scope)
             .cloned()
             .ok_or(ProtocolFailure::Unavailable)?;
+        if let Some(webview_label) = webview_label {
+            if !self.source_is_current(webview_label, &binding) {
+                return Err(ProtocolFailure::Unavailable);
+            }
+        }
         let projection = self
             .manager
             .read_resource_projection(&binding.entry_id, None)
@@ -208,7 +239,84 @@ impl PluginResourceService {
             .map_err(|_| ProtocolFailure::Unavailable)?;
         let mime = mime_for_path(&parsed.resource_path).ok_or(ProtocolFailure::Unavailable)?;
         let bytes = read_resource_file(&payload_root, &parsed.resource_path, self.test_hook())?;
+        if let Some(webview_label) = webview_label {
+            if !self.source_is_current(webview_label, &binding) {
+                return Err(ProtocolFailure::Unavailable);
+            }
+            let current = self
+                .manager
+                .read_resource_projection(&binding.entry_id, None)
+                .map_err(|_| ProtocolFailure::Unavailable)?;
+            if current.resource_generation != binding.resource_generation {
+                self.revoke_binding(&binding);
+                return Err(ProtocolFailure::Unavailable);
+            }
+        }
         Ok((mime, bytes))
+    }
+
+    pub(crate) fn activate_runtime_source(
+        &self,
+        attempt_id: &str,
+        webview_label: &str,
+        entry_id: &str,
+        resource_generation: u64,
+    ) -> bool {
+        if attempt_id.is_empty()
+            || webview_label.is_empty()
+            || entry_id.is_empty()
+            || resource_generation == 0
+        {
+            return false;
+        }
+        let binding = self.lock_scopes().by_entry.get(entry_id).cloned();
+        let Some(binding) = binding.filter(|binding| {
+            binding.resource_generation == resource_generation
+                && self
+                    .manager
+                    .read_resource_projection(entry_id, None)
+                    .is_ok_and(|projection| projection.resource_generation == resource_generation)
+        }) else {
+            return false;
+        };
+        let mut authority = self.lock_runtime_authority();
+        if authority.is_some() {
+            return false;
+        }
+        *authority = Some(RuntimeResourceAuthority {
+            attempt_id: attempt_id.to_owned(),
+            webview_label: webview_label.to_owned(),
+            binding,
+        });
+        true
+    }
+
+    pub(crate) fn revoke_runtime_source(&self, attempt_id: &str) -> bool {
+        let revoked = {
+            let mut authority = self.lock_runtime_authority();
+            if authority
+                .as_ref()
+                .is_some_and(|authority| authority.attempt_id == attempt_id)
+            {
+                authority.take()
+            } else {
+                None
+            }
+        };
+        if let Some(authority) = revoked {
+            self.revoke_binding(&authority.binding);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn source_is_current(&self, webview_label: &str, binding: &ScopeBinding) -> bool {
+        self.lock_runtime_authority()
+            .as_ref()
+            .is_some_and(|authority| {
+                authority.webview_label == webview_label && authority.binding == *binding
+            })
     }
 
     fn prove_eligible_payload(
@@ -268,6 +376,15 @@ impl PluginResourceService {
     }
 
     fn revoke_binding(&self, binding: &ScopeBinding) {
+        {
+            let mut authority = self.lock_runtime_authority();
+            if authority
+                .as_ref()
+                .is_some_and(|authority| authority.binding == *binding)
+            {
+                authority.take();
+            }
+        }
         let mut scopes = self.lock_scopes();
         scopes.by_scope.remove(&binding.scope);
         if scopes
@@ -281,6 +398,12 @@ impl PluginResourceService {
 
     fn lock_scopes(&self) -> MutexGuard<'_, ScopeState> {
         self.scopes
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn lock_runtime_authority(&self) -> MutexGuard<'_, Option<RuntimeResourceAuthority>> {
+        self.runtime_authority
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
@@ -304,6 +427,24 @@ impl PluginResourceService {
             .read_hook
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = hook;
+    }
+}
+
+impl crate::plugin_child_webview_service::PluginChildWebviewResourceAuthority
+    for PluginResourceService
+{
+    fn activate(
+        &self,
+        attempt_id: &str,
+        webview_label: &str,
+        entry_id: &str,
+        resource_generation: u64,
+    ) -> bool {
+        self.activate_runtime_source(attempt_id, webview_label, entry_id, resource_generation)
+    }
+
+    fn revoke(&self, attempt_id: &str) -> bool {
+        self.revoke_runtime_source(attempt_id)
     }
 }
 
@@ -589,6 +730,7 @@ pub fn handle_plugin_resource_protocol<R: Runtime>(
     request: http::Request<Vec<u8>>,
     responder: tauri::UriSchemeResponder,
 ) {
+    let webview_label = context.webview_label().to_owned();
     let Some(service) = context
         .app_handle()
         .try_state::<Arc<PluginResourceService>>()
@@ -601,7 +743,9 @@ pub fn handle_plugin_resource_protocol<R: Runtime>(
         ));
         return;
     };
-    std::thread::spawn(move || responder.respond(service.handle_request(request)));
+    std::thread::spawn(move || {
+        responder.respond(service.handle_request_from_source(&webview_label, request))
+    });
 }
 
 #[cfg(test)]
@@ -757,6 +901,25 @@ mod tests {
                 expected_revision: fixture.manager.registration_revision(),
             })
             .expect("entry should resolve")
+    }
+
+    fn activate_source(
+        fixture: &Fixture,
+        attempt_id: &str,
+        webview_label: &str,
+    ) -> PluginResourceEntry {
+        let entry = resolve(fixture);
+        let projection = fixture
+            .manager
+            .read_resource_projection(&fixture.entry_id, None)
+            .expect("resource projection should remain current");
+        assert!(fixture.service.activate_runtime_source(
+            attempt_id,
+            webview_label,
+            &fixture.entry_id,
+            projection.resource_generation,
+        ));
+        entry
     }
 
     fn resource_url(entry_url: &str, path: &str) -> String {
@@ -1199,6 +1362,104 @@ mod tests {
             fixture
                 .service
                 .handle_request(request(http::Method::GET, &fifth.entry_url))
+                .status(),
+            http::StatusCode::NOT_FOUND
+        );
+    }
+
+    #[test]
+    fn actual_child_webview_source_is_required_and_revoked_before_reuse() {
+        let fixture = fixture("child-source-authority");
+        let first = activate_source(&fixture, "attempt_0000000000000001", "plugin-child-a");
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source("main", request(http::Method::GET, &first.entry_url),)
+                .status(),
+            http::StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source(
+                    "plugin-child-b",
+                    request(http::Method::GET, &first.entry_url),
+                )
+                .status(),
+            http::StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source(
+                    "plugin-child-a",
+                    request(http::Method::GET, &first.entry_url),
+                )
+                .status(),
+            http::StatusCode::OK
+        );
+        assert!(fixture
+            .service
+            .revoke_runtime_source("attempt_0000000000000001"));
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source(
+                    "plugin-child-a",
+                    request(http::Method::GET, &first.entry_url),
+                )
+                .status(),
+            http::StatusCode::NOT_FOUND
+        );
+
+        let second = activate_source(&fixture, "attempt_0000000000000002", "plugin-child-b");
+        assert_ne!(first.entry_url, second.entry_url);
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source(
+                    "plugin-child-b",
+                    request(http::Method::GET, &second.entry_url),
+                )
+                .status(),
+            http::StatusCode::OK
+        );
+    }
+
+    #[test]
+    fn generation_change_during_read_discards_late_bytes_and_revokes_cache() {
+        let fixture = fixture("child-generation-race");
+        let entry = activate_source(&fixture, "attempt_0000000000000001", "plugin-child-a");
+        let manager = Arc::clone(&fixture.manager);
+        let plugin_id = fixture.plugin_id.clone();
+        let changed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let changed_in_hook = Arc::clone(&changed);
+        fixture
+            .service
+            .set_read_hook(Some(Arc::new(move |point, _target| {
+                if point == ResourceReadHookPoint::BeforeFinalValidation
+                    && !changed_in_hook.swap(true, std::sync::atomic::Ordering::SeqCst)
+                {
+                    manager
+                        .set_enabled(&plugin_id, false)
+                        .expect("generation change should commit");
+                }
+            })));
+        let response = fixture.service.handle_request_from_source(
+            "plugin-child-a",
+            request(http::Method::GET, &entry.entry_url),
+        );
+        fixture.service.set_read_hook(None);
+        assert!(changed.load(std::sync::atomic::Ordering::SeqCst));
+        assert_eq!(response.status(), http::StatusCode::NOT_FOUND);
+        assert!(!String::from_utf8_lossy(response.body()).contains("plugin.js"));
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source(
+                    "plugin-child-a",
+                    request(http::Method::GET, &entry.entry_url),
+                )
                 .status(),
             http::StatusCode::NOT_FOUND
         );

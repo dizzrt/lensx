@@ -24,7 +24,7 @@
       "**",
       "!!packages/plugin-contract/src/generated/plugin-host-api-validators.ts",
       "!!fixtures/plugin-package-format/expectations.json",
-      "!!fixtures/plugin-iframe-runtime/expectations.json",
+      "!!fixtures/plugin-webview-runtime/expectations.json",
       "!!fixtures/frame-aware-webview-navigation/documents",
       "!!vendor/frame-aware-navigation"
     ]

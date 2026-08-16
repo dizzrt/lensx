@@ -56,43 +56,37 @@ const VisualFixture = () => {
   const messages = copy[locale];
 
   useEffect(() => {
-    const firstFrame = window.requestAnimationFrame(() => {
-      const retryButton = document.querySelector<HTMLButtonElement>('.lensx-plugin-feedback__recovery');
-      retryButton?.focus();
-      window.requestAnimationFrame(() => {
-        const bodyStyle = window.getComputedStyle(document.body);
-        const page = document.querySelector<HTMLElement>('.lensx-plugin-page');
-        const feedback = document.querySelector<HTMLElement>('.lensx-plugin-feedback');
-        const retryStyle = retryButton === null ? undefined : window.getComputedStyle(retryButton);
-        const tokenValues = Object.fromEntries(
-          publicTokens.map((token) => [token, bodyStyle.getPropertyValue(token).trim()]),
-        );
-        const semanticsValid =
-          document.querySelectorAll('main').length === 1 &&
-          document.querySelectorAll('h1').length === 1 &&
-          document.querySelectorAll('[role="status"]').length === 2 &&
-          document.querySelectorAll('[role="alert"]').length === 1 &&
-          document.querySelector('[aria-busy="true"][aria-live="polite"]') !== null &&
-          document.querySelector('[role="alert"][aria-live="assertive"]') !== null;
-        const stylesValid =
-          page !== null &&
-          feedback !== null &&
-          window.getComputedStyle(page).paddingTop === '24px' &&
-          window.getComputedStyle(feedback).borderTopStyle === 'solid' &&
-          window.getComputedStyle(feedback).borderRadius === '12px' &&
-          retryStyle !== undefined &&
-          retryStyle.outlineStyle !== 'none' &&
-          retryStyle.outlineWidth !== '0px';
-        const tokensValid = Object.values(tokenValues).every((value) => value.length > 0);
+    const retryButton = document.querySelector<HTMLButtonElement>('.lensx-plugin-feedback__recovery');
+    retryButton?.focus();
+    const bodyStyle = window.getComputedStyle(document.body);
+    const page = document.querySelector<HTMLElement>('.lensx-plugin-page');
+    const feedback = document.querySelector<HTMLElement>('.lensx-plugin-feedback');
+    const retryStyle = retryButton === null ? undefined : window.getComputedStyle(retryButton);
+    const tokenValues = Object.fromEntries(
+      publicTokens.map((token) => [token, bodyStyle.getPropertyValue(token).trim()]),
+    );
+    const semanticsValid =
+      document.querySelectorAll('main').length === 1 &&
+      document.querySelectorAll('h1').length === 1 &&
+      document.querySelectorAll('[role="status"]').length === 2 &&
+      document.querySelectorAll('[role="alert"]').length === 1 &&
+      document.querySelector('[aria-busy="true"][aria-live="polite"]') !== null &&
+      document.querySelector('[role="alert"][aria-live="assertive"]') !== null;
+    const stylesValid =
+      page !== null &&
+      feedback !== null &&
+      window.getComputedStyle(page).paddingTop === '24px' &&
+      window.getComputedStyle(feedback).borderTopStyle === 'solid' &&
+      window.getComputedStyle(feedback).borderRadius === '12px' &&
+      retryStyle !== undefined &&
+      retryStyle.outlineStyle !== 'none' &&
+      retryStyle.outlineWidth !== '0px';
+    const tokensValid = Object.values(tokenValues).every((value) => value.length > 0);
 
-        document.body.dataset.visualCheck = semanticsValid && stylesValid && tokensValid ? 'passed' : 'failed';
-        document.body.dataset.backgroundToken = tokenValues['--lensx-plugin-color-background'];
-        document.body.dataset.focusOutline = retryStyle?.outline ?? '';
-        document.body.dataset.tokenCount = String(Object.keys(tokenValues).length);
-      });
-    });
-
-    return () => window.cancelAnimationFrame(firstFrame);
+    document.body.dataset.visualCheck = semanticsValid && stylesValid && tokensValid ? 'passed' : 'failed';
+    document.body.dataset.backgroundToken = tokenValues['--lensx-plugin-color-background'];
+    document.body.dataset.focusOutline = retryStyle?.outline ?? '';
+    document.body.dataset.tokenCount = String(Object.keys(tokenValues).length);
   }, []);
 
   return (

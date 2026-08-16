@@ -667,32 +667,10 @@ fn main() {
         FrameAwareNavigationPolicy::new(&app_target)
             .expect("static harness App target should be valid"),
     );
-    let replaced_target = plugin_target.replace(&selected.document, "replaced-document.html");
-    let replaced_lease = navigation_policy
-        .activate_plugin_target(&replaced_target, None)
-        .expect("replacement preflight target should be valid");
-    let current_lease = navigation_policy
-        .activate_plugin_target(&plugin_target, None)
-        .expect("selected preflight target should be valid");
-    assert!(
-        !navigation_policy.dispose_plugin_target(replaced_lease),
-        "late disposal must not clear the replacement"
-    );
-    assert!(matches!(
-        navigation_policy.decide(PolicyFrame::Descendant, &plugin_target),
-        PolicyDecision::Allow(_)
-    ));
-    assert!(
-        navigation_policy.dispose_plugin_target(current_lease),
-        "current lease must dispose"
-    );
     assert!(matches!(
         navigation_policy.decide(PolicyFrame::Descendant, &plugin_target),
         PolicyDecision::Deny(_)
     ));
-    let _active_plugin_target = navigation_policy
-        .activate_plugin_target(&plugin_target, None)
-        .expect("static harness plugin target should be valid");
     let callback_policy = Arc::clone(&navigation_policy);
 
     tauri::Builder::default()

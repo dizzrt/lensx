@@ -92,9 +92,14 @@ For each unreleased member on `main`, a read-only build job runs package
 lifecycle scripts and public `lensx-plugin build`, `validate`, repeated
 `pack --no-build`, and `inspect`. Both packs must be byte-identical. The same
 immutable `.lxp` then passes the Rust inspector, ordinary local-install
-preparation, sandbox iframe open, Runtime Session/SDK-ready, Page/Action open,
+preparation, Child WebView open, bridge/SDK ready, Page/Action open,
 close/teardown, and the plugin's own `test:e2e`. A failure requires a new
 candidate; old bytes are never reused.
+
+Release validation consumes the same real macOS Child WebView evidence matrix
+as external and development plugins. It checks generic Tauri denial, source and
+generation binding, navigation/popup/download denial, and zero-residual
+teardown; official provenance cannot select another Runtime or add authority.
 
 ConfigLens additionally runs its four-language corpus, Monaco/package-owned
 Worker closure, 28-case visual matrix, direct single-editor replacement and

@@ -1,143 +1,171 @@
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
-const root = join(import.meta.dirname, '..');
+const root = resolve(import.meta.dirname, '..');
+const read = (relative: string): string => readFileSync(join(root, relative), 'utf8');
+const json = (relative: string): Record<string, unknown> => JSON.parse(read(relative)) as Record<string, unknown>;
 const fail = (message: string): never => {
-  throw new Error(`Plugin Development Runtime evidence failed: ${message}`);
+  throw new Error(`Development Child WebView evidence failed: ${message}`);
 };
-const readJson = (relative: string): unknown => JSON.parse(readFileSync(join(root, relative), 'utf8'));
-const record = (value: unknown, label: string): Record<string, unknown> => {
+const object = (value: unknown, label: string): Record<string, unknown> => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) fail(`${label} must be an object`);
   return value as Record<string, unknown>;
 };
-const exactKeys = (value: Record<string, unknown>, expected: readonly string[], label: string): void => {
-  const actual = Object.keys(value).sort();
-  const keys = [...expected].sort();
-  if (JSON.stringify(actual) !== JSON.stringify(keys)) fail(`${label} keys drifted`);
-};
 
-const expectations = record(
-  readJson('fixtures/plugin-development-runtime/expectations.json'),
-  'development fixture expectations',
+const acl = json('fixtures/plugin-child-webview-acl/evidence/macos.json');
+const aclProfiles = acl.profiles;
+if (acl.corpus_version !== 'native-host-escape-v1' || !Array.isArray(aclProfiles) || aclProfiles.length !== 3) {
+  fail('production ACL source-parity evidence drifted');
+}
+const developmentAclProfile = aclProfiles.find(
+  (profile) =>
+    typeof profile === 'object' && profile !== null && !Array.isArray(profile) && profile.source === 'development',
 );
-if (expectations.fixture_version !== '0.1.0') fail('fixture version drifted');
-const sourcePackages = record(expectations.source_packages, 'source packages');
-for (const kind of ['normal', 'malicious'] as const) {
-  const source = record(sourcePackages[kind], `${kind} source package`);
-  if (typeof source.file !== 'string' || typeof source.sha256 !== 'string') fail(`${kind} source facts drifted`);
-  const digest = createHash('sha256')
-    .update(readFileSync(join(root, source.file)))
-    .digest('hex');
-  if (digest !== source.sha256) fail(`${kind} source package digest drifted`);
-}
-const transitions = record(expectations.development_transitions, 'development transitions');
+const developmentAcl = object(developmentAclProfile, 'development ACL profile');
+const authority = object(developmentAcl.authority, 'development ACL authority');
 if (
-  JSON.stringify(transitions.normal) !==
-    JSON.stringify(['register', 'open', 'reload', 'manifest_version_advance', 'remove']) ||
-  JSON.stringify(transitions.malicious) !==
-    JSON.stringify(['register', 'open', 'reload', 'malicious_policy_matrix', 'remove'])
+  authority.created !== true ||
+  authority.destroyed !== true ||
+  authority.tauri_globals_absent !== true ||
+  authority.tauri_core_handler_hits !== 0 ||
+  authority.tauri_plugin_handler_hits !== 0 ||
+  authority.app_command_handler_hits !== 0 ||
+  authority.global_event_handler_hits !== 0 ||
+  authority.lensx_bridge_ready_hits !== 1
 ) {
-  fail('development transition matrix drifted');
+  fail('production ACL evidence no longer proves closed Host authority');
 }
-const manifestVersionAdvance = record(expectations.manifest_version_advance, 'manifest version advance');
-if (manifestVersionAdvance.plugin_id_unchanged !== true || manifestVersionAdvance.version !== '1.1.0') {
-  fail('manifest version advance fixture drifted');
+const slot = json('fixtures/plugin-child-webview-slot/evidence/macos.json');
+for (const key of [
+  'created',
+  'retina_bounds_scale_correct',
+  'resize_converged',
+  'host_overlay_visible_after_child_hidden',
+  'keyboard_focus_reached_plugin_input',
+  'keyboard_input_observed',
+  'ime_composition_observed',
+  'destroyed',
+]) {
+  if (slot[key] !== true) fail(`production slot evidence failed ${key}`);
+}
+const webCapabilities = json('fixtures/plugin-child-webview-web-capabilities/evidence/macos.json');
+if (
+  webCapabilities.created !== true ||
+  webCapabilities.distinct_origins !== true ||
+  webCapabilities.distinct_data_store_identifiers !== true ||
+  webCapabilities.cross_plugin_storage_denied !== true ||
+  webCapabilities.old_generation_storage_denied !== true
+) {
+  fail('production Web capability evidence drifted');
+}
+for (const generation of ['first_generation', 'second_generation']) {
+  const facts = object(webCapabilities[generation], generation);
+  for (const [key, value] of Object.entries(facts)) {
+    if (key !== 'phase' && value !== true) fail(`${generation} failed ${key}`);
+  }
 }
 
-const commonChecks = [
-  'fresh_runtime_handshake',
-  'host_api_boundary_shared',
-  'old_port_inert',
-  'policy_profile_shared',
+const requiredCommonChecks = [
   'register_source_development',
+  'production_runtime_path_shared',
+  'child_webview_registry_shared',
+  'resource_generation_binding_shared',
+  'isolated_data_store_binding_shared',
+  'top_level_navigation_policy_shared',
+  'closed_bridge_and_session_shared',
+  'rpc_and_host_api_boundary_shared',
+  'terminal_teardown_shared',
+  'committed_reload_fresh_attempt',
+  'committed_reload_old_attempt_destroyed_before_projection',
+  'rejected_staging_current_attempt_unchanged',
   'registration_removed',
-  'reload_old_scope_revoked',
-  'reload_revision_advanced',
-  'reload_scope_changed',
-  'remove_scope_revoked',
 ] as const;
-const fixtureChecks = {
-  normal: [...commonChecks, 'manifest_version_advanced'],
-  malicious: [...commonChecks, 'malicious_browser_attempts_rejected', 'malicious_privileged_handler_zero_hits'],
-} as const;
 const forbiddenEvidenceKey =
   /^(?:url|origin|nonce|token|payload|path|stack|exception|source_directory|snapshot_identity)$/iu;
-const visitEvidence = (value: unknown, label: string): void => {
+const visit = (value: unknown, label: string): void => {
   if (Array.isArray(value)) {
     value.forEach((item, index) => {
-      visitEvidence(item, `${label}/${index}`);
+      visit(item, `${label}/${index}`);
     });
     return;
   }
   if (typeof value !== 'object' || value === null) return;
-  for (const [key, item] of Object.entries(value)) {
-    if (forbiddenEvidenceKey.test(key)) fail(`${label} contains forbidden field ${key}`);
-    visitEvidence(item, `${label}/${key}`);
+  for (const [key, child] of Object.entries(value)) {
+    if (forbiddenEvidenceKey.test(key)) fail(`${label} contains forbidden key ${key}`);
+    visit(child, `${label}/${key}`);
   }
 };
-
-const sharedProfile = record(expectations.shared_runtime_profile, 'shared Runtime profile');
-for (const kind of ['normal', 'malicious'] as const) {
-  const development = record(
-    readJson(`fixtures/plugin-development-runtime/evidence/macos/${kind}.json`),
-    `${kind} development evidence`,
-  );
-  const external = record(
-    readJson(`fixtures/plugin-runtime-session/evidence/macos/${kind}.json`),
-    `${kind} external evidence`,
-  );
-  visitEvidence(development, `${kind} development evidence`);
+for (const fixture of ['normal', 'malicious'] as const) {
+  const evidence = json(`fixtures/plugin-development-runtime/evidence/macos/${fixture}.json`);
+  visit(evidence, fixture);
   if (
-    development.evidence_version !== '0.1.0' ||
-    development.os !== 'macos' ||
-    development.engine !== 'wkwebview' ||
-    development.fixture !== kind
+    evidence.evidence_version !== '0.3.0' ||
+    evidence.evidence_kind !== 'composed_automated_gate' ||
+    evidence.platform !== 'macos' ||
+    evidence.engine !== 'wkwebview' ||
+    evidence.fixture !== fixture
   ) {
-    fail(`${kind} evidence identity drifted`);
+    fail(`${fixture} evidence identity drifted`);
   }
-  for (const key of ['sandbox', 'permissions_policy', 'referrer_policy'] as const) {
-    if (development[key] !== sharedProfile[key] || development[key] !== external[key]) {
-      fail(`${kind} ${key} differs between development and external Runtime`);
-    }
+  const protocol = object(evidence.protocol, `${fixture} protocol`);
+  if (
+    protocol.manifest_version !== '0.3.0' ||
+    protocol.runtime_kind !== 'webview' ||
+    protocol.bridge_contract_version !== '0.2.0' ||
+    protocol.host_api_version !== '0.2.0'
+  ) {
+    fail(`${fixture} protocol drifted`);
   }
-  for (const key of [
-    'plugin_csp_native_get_head_verified',
-    'plugin_csp_translated_get_head_verified',
-    'resource_service_path_verified',
-    'tauri_bootstrap_absent',
-    'session_contract_version',
-    'transport_contract_version',
-    'host_api_dispatcher_version',
-    'worker_teardown_observed',
-  ] as const) {
-    if (development[key] !== external[key]) fail(`${kind} ${key} parity drifted`);
-  }
-  if (JSON.stringify(development.csp_checks) !== JSON.stringify(external.csp_checks)) {
-    fail(`${kind} CSP matrix differs between development and external Runtime`);
-  }
-  const checks = record(development.development_checks, `${kind} development checks`);
-  exactKeys(checks, fixtureChecks[kind], `${kind} development checks`);
-  if (Object.values(checks).some((passed) => passed !== true)) fail(`${kind} contains a failed development check`);
-  if (development.privileged_handler_hits !== 0) fail(`${kind} reached the privileged harness handler`);
+  const checks = object(evidence.development_checks, `${fixture} checks`);
+  for (const check of requiredCommonChecks) if (checks[check] !== true) fail(`${fixture} failed ${check}`);
+  const fixtureChecks =
+    fixture === 'normal'
+      ? ['manifest_version_advanced']
+      : ['malicious_generic_tauri_zero_hits', 'malicious_navigation_escape_rejected'];
+  for (const check of fixtureChecks) if (checks[check] !== true) fail(`${fixture} failed ${check}`);
+  if (Object.values(checks).some((value) => value !== true)) fail(`${fixture} contains a failed check`);
 }
 
-const lifecycleEvidence = record(
-  readJson('fixtures/plugin-runtime-security-lifecycle/evidence/macos/runtime-security-lifecycle.json'),
-  'Runtime lifecycle evidence',
+const resolver = read('src/app/plugins/runtime/resolver.ts');
+if (resolver.includes('PluginSource') || resolver.includes('entry.source')) {
+  fail('production Runtime resolver branches on plugin source provenance');
+}
+const childService = read('src-tauri/src/plugin_child_webview_service.rs');
+if (childService.includes('PluginSource')) fail('native Child WebView service branches on plugin source provenance');
+const resolverTests = read('tests/plugin-runtime-resolver.test.ts');
+if (!resolverTests.includes('same production descriptor path for external and development registrations')) {
+  fail('source-neutral production Runtime regression is missing');
+}
+const developmentService = read('src/app/plugins/development/service.ts');
+const nativeReload = developmentService.indexOf('const result = await adapter.reload');
+const oldAttemptTeardown = developmentService.indexOf(
+  'await surfaceProjection.quiesceProvider(entry.plugin_id)',
+  nativeReload,
 );
-const lifecycleChecks = record(lifecycleEvidence.checks, 'Runtime lifecycle checks');
-if (lifecycleChecks.source_independent_deadline_breaker_profile !== true) {
-  fail('external/development deadline and breaker profile parity is not proven');
+const nextProjection = developmentService.indexOf(
+  'await converge(result.revision, result.plugin_id)',
+  oldAttemptTeardown,
+);
+if (nativeReload < 0 || oldAttemptTeardown < nativeReload || nextProjection < oldAttemptTeardown) {
+  fail('committed reload does not teardown the old attempt before new projection');
+}
+const developmentTests = read('tests/plugin-development-service.test.ts');
+for (const marker of [
+  'stages reload before quiescing the old Child WebView',
+  'leaves the current Child WebView untouched after failed staging',
+]) {
+  if (!developmentTests.includes(marker)) fail(`frontend reload regression is missing ${marker}`);
+}
+const nativeDevelopment = read('src-tauri/src/plugin_development.rs');
+if (!nativeDevelopment.includes('rejected_legacy_reload_keeps_the_current_snapshot_and_registration')) {
+  fail('native rejected-staging currentness regression is missing');
+}
+const smoke = read('examples/plugins/development-mode-smoke/src/main.ts');
+if (!smoke.includes('@lensx/plugin-sdk/webview') || !smoke.includes('createPluginWebviewTransport')) {
+  fail('Development Mode smoke does not use the public WebView transport');
+}
+for (const legacy of ['@lensx/plugin-sdk/iframe', 'createPluginIframeTransport', 'MessageChannel']) {
+  if (smoke.includes(legacy)) fail(`Development Mode smoke retains ${legacy}`);
 }
 
-const cargo = readFileSync(join(root, 'src-tauri/Cargo.toml'), 'utf8');
-const library = readFileSync(join(root, 'src-tauri/src/lib.rs'), 'utf8');
-if (!cargo.includes('plugin-development-runtime-harness = ["plugin-development-mode"]')) {
-  fail('harness-only Cargo feature drifted');
-}
-if (!library.includes('pub mod plugin_development_runtime_harness;')) {
-  fail('harness façade composition drifted');
-}
-
-console.log('Checked canonical Plugin Development Runtime fixtures and bounded macOS WKWebView evidence.');
+console.log('Checked source-neutral Development Mode Child WebView, reload atomicity, and bounded macOS evidence.');

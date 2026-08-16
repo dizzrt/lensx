@@ -5,9 +5,7 @@
 Define the stable, bounded, and independently validatable public semantic
 contract for Host API `0.2.0` without claiming delivery of transport, dispatch,
 permissions, or Host-side effects.
-
 ## Requirements
-
 ### Requirement: Host API v1 MUST expose one closed, versioned semantic catalog
 
 The public Host API MUST expose an independently versioned `0.2.0` closed semantic catalog containing only the current methods, requests, results, events, and bounded errors for `actions.open`, `runtime.get_context`, plugin-scoped storage, and `ui.close`. The catalog MUST NOT contain `clipboard.read`, `clipboard.write`, Host API permission types, permission-requirement mappings, or any Tauri or native executor. Unknown or removed methods MUST fail closed through the Contract and Dispatcher.
@@ -320,3 +318,15 @@ or claim that the Milestone 5 Runtime call chain has been delivered.
   independently validated
 - **THEN** a plugin still cannot issue or execute a real Host API request
   through the public SDK
+
+### Requirement: Host API semantic values MUST remain independent of native WebView transport
+The public Host API version and method/result/event semantics MUST remain unchanged by the container migration. Runtime Context, capabilities, requests, results, errors and events MUST NOT contain Child WebView label/handle, bounds, bridge objects, private frames, Session nonce, origin token, Tauri/Wry types or process facts. No method may be added solely to resize, focus, navigate or configure the native view.
+
+#### Scenario: Public Contract declarations are inspected
+- **WHEN** release validation compares Host API `0.2.x` before and after migration
+- **THEN** semantic shapes and capability discovery remain stable while native implementation facts stay private
+
+#### Scenario: Plugin requests WebView control
+- **WHEN** a plugin constructs an unknown native-view method or extra trusted fields
+- **THEN** Contract validation rejects it before transport or Dispatcher side effects
+

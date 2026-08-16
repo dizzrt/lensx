@@ -6,7 +6,7 @@
     "expected": {
       "status": "compatible",
       "manifest": {
-        "manifest_version": "0.2.0",
+        "manifest_version": "0.3.0",
         "plugin_id": "com.acme.workspace",
         "version": "1.2.0",
         "display": {
@@ -39,7 +39,7 @@
           }
         },
         "runtime": {
-          "kind": "iframe",
+          "kind": "webview",
           "entry": "dist/plugin.html"
         },
         "contributes": {
@@ -104,20 +104,20 @@
       },
       "facts": {
         "packageFormatVersion": "0.1.0",
-        "compressedSize": 1084,
+        "compressedSize": 1091,
         "decompressedSize": 7680,
         "fileCount": 5,
         "files": [
           {
             "path": "manifest.json",
-            "size": 1333,
-            "sha256": "c73c428ca67f266b31d658c38d6ba6cb4f7868db9ad370dcd1107bfee8df2f0a",
+            "size": 1334,
+            "sha256": "b54b156bc74ea275a25354818de1147afd898d3bb0cb678e2018f38d6478c4ad",
             "checksumCovered": true
           },
           {
             "path": "checksums.json",
             "size": 525,
-            "sha256": "0c958294fb59e1704c3a5b3078e7bc5b75cece34abb75c8505384bad3be671bf",
+            "sha256": "ad3fa34098bde30fb4c76c2e4a4ab814fe2d3c0dc45fde2a73c22fecf4afe547",
             "checksumCovered": false
           },
           {
@@ -141,7 +141,7 @@
         ],
         "packageDigest": {
           "algorithm": "sha256",
-          "value": "bb90222ff44d5aad2ee27daa978b93b1e110e032e053bafb9649ac95eee0ed8c"
+          "value": "e614019138a0f422fffe3d5c20f53038815410439ddcddc07caf2cb26a07fa73"
         }
       },
       "diagnostics": []
@@ -154,7 +154,7 @@
     "expected": {
       "status": "compatible",
       "manifest": {
-        "manifest_version": "0.2.0",
+        "manifest_version": "0.3.0",
         "plugin_id": "com.acme.workspace",
         "version": "1.2.0",
         "display": {
@@ -187,7 +187,7 @@
           }
         },
         "runtime": {
-          "kind": "iframe",
+          "kind": "webview",
           "entry": "dist/plugin.html"
         },
         "contributes": {
@@ -252,20 +252,20 @@
       },
       "facts": {
         "packageFormatVersion": "0.1.0",
-        "compressedSize": 1084,
+        "compressedSize": 1091,
         "decompressedSize": 7680,
         "fileCount": 5,
         "files": [
           {
             "path": "manifest.json",
-            "size": 1333,
-            "sha256": "c73c428ca67f266b31d658c38d6ba6cb4f7868db9ad370dcd1107bfee8df2f0a",
+            "size": 1334,
+            "sha256": "b54b156bc74ea275a25354818de1147afd898d3bb0cb678e2018f38d6478c4ad",
             "checksumCovered": true
           },
           {
             "path": "checksums.json",
             "size": 525,
-            "sha256": "0c958294fb59e1704c3a5b3078e7bc5b75cece34abb75c8505384bad3be671bf",
+            "sha256": "ad3fa34098bde30fb4c76c2e4a4ab814fe2d3c0dc45fde2a73c22fecf4afe547",
             "checksumCovered": false
           },
           {
@@ -289,7 +289,7 @@
         ],
         "packageDigest": {
           "algorithm": "sha256",
-          "value": "bb90222ff44d5aad2ee27daa978b93b1e110e032e053bafb9649ac95eee0ed8c"
+          "value": "e614019138a0f422fffe3d5c20f53038815410439ddcddc07caf2cb26a07fa73"
         }
       },
       "diagnostics": []
@@ -302,7 +302,7 @@
     "expected": {
       "status": "incompatible",
       "manifest": {
-        "manifest_version": "0.2.0",
+        "manifest_version": "0.3.0",
         "plugin_id": "com.acme.workspace",
         "version": "1.2.0",
         "display": {
@@ -335,7 +335,7 @@
           }
         },
         "runtime": {
-          "kind": "iframe",
+          "kind": "webview",
           "entry": "dist/plugin.html"
         },
         "contributes": {
@@ -400,20 +400,20 @@
       },
       "facts": {
         "packageFormatVersion": "0.1.0",
-        "compressedSize": 1081,
+        "compressedSize": 1086,
         "decompressedSize": 7680,
         "fileCount": 5,
         "files": [
           {
             "path": "manifest.json",
-            "size": 1333,
-            "sha256": "795dc724f393830d8d48e7e5de4fea6533ec642fa2afdbf672075b963eb21ec7",
+            "size": 1334,
+            "sha256": "2957c09a0db5ba84fa0d987cb0e6197a26304d7774ce5246b46eea11f2a6c913",
             "checksumCovered": true
           },
           {
             "path": "checksums.json",
             "size": 525,
-            "sha256": "dd24c37d5bd4afe67a8d037a40e0a17a976d08191a0f11a59c42c48cdcca7b51",
+            "sha256": "1e0b1350c4b64a31c5418547786afaaec2f2c3975c56b2106bff6244f28d20a4",
             "checksumCovered": false
           },
           {
@@ -437,10 +437,72 @@
         ],
         "packageDigest": {
           "algorithm": "sha256",
-          "value": "44da6e839bdd48f4efc5e9dcf699b0a398b5a74bb09f2d22f02862f51abb2f66"
+          "value": "1056eed509a3cc5914914f9a3e78dfb2f2bb87d047fe450c36ca1cdb7c06ff02"
         }
       },
       "diagnostics": []
+    }
+  },
+  {
+    "name": "legacy-iframe-runtime",
+    "category": "incompatible",
+    "file": "incompatible/legacy-iframe-runtime.lxp",
+    "expected": {
+      "status": "incompatible",
+      "facts": {
+        "packageFormatVersion": "0.1.0",
+        "compressedSize": 1084,
+        "decompressedSize": 7680,
+        "fileCount": 5,
+        "files": [
+          {
+            "path": "manifest.json",
+            "size": 1333,
+            "sha256": "c73c428ca67f266b31d658c38d6ba6cb4f7868db9ad370dcd1107bfee8df2f0a",
+            "checksumCovered": true
+          },
+          {
+            "path": "checksums.json",
+            "size": 525,
+            "sha256": "0c958294fb59e1704c3a5b3078e7bc5b75cece34abb75c8505384bad3be671bf",
+            "checksumCovered": false
+          },
+          {
+            "path": "assets/home.svg",
+            "size": 18,
+            "sha256": "8289355179e04b91e22fb941db5a2ea37c8e468fed25e45d2654022d58a43353",
+            "checksumCovered": true
+          },
+          {
+            "path": "assets/plugin-icon.svg",
+            "size": 6,
+            "sha256": "d4dc56669143034f31aa309635d4113d9ad76a02b1739da22c965ed2049be9e6",
+            "checksumCovered": true
+          },
+          {
+            "path": "dist/plugin.html",
+            "size": 36,
+            "sha256": "049ac6ed12934a00f4c12f2e97d71bceefa78e95378169ddc574c75f9bf01321",
+            "checksumCovered": true
+          }
+        ],
+        "packageDigest": {
+          "algorithm": "sha256",
+          "value": "bb90222ff44d5aad2ee27daa978b93b1e110e032e053bafb9649ac95eee0ed8c"
+        }
+      },
+      "diagnostics": [
+        {
+          "code": "manifest_incompatible",
+          "path": "/manifest_version",
+          "message": "The plugin Manifest protocol is incompatible."
+        },
+        {
+          "code": "manifest_incompatible",
+          "path": "/runtime/kind",
+          "message": "The plugin Manifest protocol is incompatible."
+        }
+      ]
     }
   },
   {

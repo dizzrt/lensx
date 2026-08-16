@@ -9,7 +9,7 @@ members. They are the canonical project-owned sources for the matching
 - `examples/plugins/framework-neutral` uses TypeScript and browser DOM APIs. It
   is the smallest choice when a plugin does not need React or Semi Design.
 - `examples/plugins/react-semi` owns React, React DOM, Semi Design, and
-  `@lensx/plugin-ui` in its iframe document. Choose it for component-based UI,
+  `@lensx/plugin-ui` in its Child WebView document. Choose it for component-based UI,
   shared plugin semantic tokens, and Semi controls.
 
 Both templates use the same public Contract and SDK boundaries as an external
@@ -49,7 +49,7 @@ Supported plugin imports are limited to the declared public exports:
 ```text
 @lensx/plugin-contract
 @lensx/plugin-sdk
-@lensx/plugin-sdk/iframe
+@lensx/plugin-sdk/webview
 @lensx/plugin-testkit        # tests only
 @lensx/plugin-ui             # React template only
 @lensx/plugin-ui/styles.css  # React template only
@@ -63,12 +63,13 @@ the `lensx-plugin` bin from authoring workflows but must not import
 
 ## Manifest, Page, And Action
 
-Each template has a distinct plugin ID and a Contract-valid Manifest with one
-iframe Runtime entry, one Page, and one Action targeting that Page. Both
+Each template has a distinct plugin ID and a Contract-valid Manifest `0.3.0` with one
+WebView Runtime entry, one Page, and one Action targeting that Page. Both
 request no permissions. The Action is projected by the Host into the shared
 Launcher Action Registry; activating it opens the projected Page. The Host
-then resolves the current registered entry and resource generation before
-constructing an isolated custom-protocol iframe URL.
+then resolves the current registered entry and resource generation. React only
+requests one native Child WebView presentation using that safe identity; native
+code independently resolves the current document target.
 
 When adapting a template, keep Page and Action IDs consistent, keep the Action
 target valid, and include every Manifest resource in `dist/`. Adding a
@@ -78,8 +79,8 @@ permission tutorials.
 ## Runtime Lifecycle
 
 The plugin creates an explicit SDK client with
-`createPluginIframeTransport()`. Initialization begins in a loading state and
-becomes ready only after the private Host Session handshake and
+`createPluginWebviewTransport()`. Initialization begins in a loading state and
+becomes ready only after the Host-installed closed bridge handshake and
 `runtime.get_context` response complete. A context-change event replaces the
 complete locale/theme/capability snapshot.
 
@@ -145,7 +146,7 @@ permissions, and Host-owned facts before Runtime startup.
 
 The production-component smoke uses the packed Manifest through current
 Registration, Page/Action projection, resource resolution, Runtime resolver,
-Session, public iframe transport, RPC adapter, and Dispatcher. It is not a
+public WebView transport, closed Child WebView bridge, and Host dispatcher. It is not a
 complete desktop GUI E2E. The React visual gate separately checks English and
 Simplified Chinese, light and dark themes, long text, focus, semantic states,
 computed public tokens, and fixed-viewport screenshots.

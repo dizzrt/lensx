@@ -3,9 +3,7 @@
 ## Purpose
 
 Define the current open Web execution baseline for installed plugins while preserving strict separation from Host-native authority, other plugins, and obsolete Runtime generations.
-
 ## Requirements
-
 ### Requirement: Installation must be the sole current trust decision for plugin behavior
 
 The system MUST interpret installing, replacing, or development-registering a plugin as the user's decision to allow that plugin to run inside its own isolated Web Runtime. It MUST NOT create lensX permission requests, grants, or per-capability authorization interactions for Workers, network access, remote resources, `blob:`, `data:`, WASM, or browser origin storage. Trusted Host installation UI MUST explain that lensX isolates the Host and other plugins but does not review, endorse, or continuously monitor how a plugin processes data the user deliberately gives it.
@@ -75,3 +73,22 @@ The system MUST verify the open Web success path, Host and cross-plugin negative
 - **WHEN** the target WebView cannot prove that an open context cannot reach the Host or other plugins, or cannot reclaim a Dedicated Worker and old authority when the page terminates
 - **THEN** the open Runtime capability remains incomplete
 - **THEN** the implementation does not use a shared origin, Tauri exposure, ignored residual context, or removal of negative tests as a fallback
+
+### Requirement: Open Web baseline MUST execute in a top-level Child WebView context
+Dedicated Worker, package/remote HTTPS resources, WSS/HTTPS connections, Blob/Data, WASM and browser origin storage MUST be tested as ordinary Web capabilities of the current top-level Child WebView, without permission prompts. None MUST grant Host DOM, general Tauri, native command, another plugin, old generation or persistent background authority. Official, development and community sources MUST share this exact boundary.
+
+#### Scenario: Plugin uses ordinary Web capabilities
+- **WHEN** a current Child WebView uses each supported Web baseline category
+- **THEN** supported behavior succeeds without lensX grants while Host-native negative paths remain blocked
+
+#### Scenario: Source metadata changes
+- **WHEN** the same package is labeled official, local, development or community
+- **THEN** its Child WebView and bridge authority remain identical
+
+### Requirement: Open execution MUST not rely on OS process separation
+Isolation claims MUST derive from current WebView identity, origin/data store, resource source binding, navigation, bridge ACL and terminal lifecycle. Tests and documentation MUST NOT claim that one Child WebView always receives a distinct WebContent process.
+
+#### Scenario: WebKit reuses a content process
+- **WHEN** platform diagnostics show process reuse
+- **THEN** security acceptance remains based on enforced logical boundaries and must still pass all escape tests
+

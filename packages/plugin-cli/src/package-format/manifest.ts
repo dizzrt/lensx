@@ -33,6 +33,7 @@ export const validatePackageManifest = (
   currentVersions: PluginHostVersions = DEFAULT_PLUGIN_HOST_VERSIONS,
 ):
   | { readonly normalized: PluginManifestNormalizationResult; readonly diagnostics: readonly [] }
+  | { readonly incompatible: true; readonly diagnostics: readonly PluginPackageDiagnostic[] }
   | { readonly diagnostics: readonly PluginPackageDiagnostic[] } => {
   let input: unknown;
   try {
@@ -41,7 +42,15 @@ export const validatePackageManifest = (
     return { diagnostics: [packageDiagnostic('manifest_invalid', PLUGIN_PACKAGE_MANIFEST_PATH)] };
   }
   const validation = validatePluginManifest(input);
-  if (validation.status === 'invalid') {
+  if (validation.status === 'incompatible') {
+    return {
+      incompatible: true,
+      diagnostics: validation.diagnostics.map((diagnostic) =>
+        packageDiagnostic('manifest_incompatible', diagnostic.path),
+      ),
+    };
+  }
+  if (validation.status !== 'valid') {
     return {
       diagnostics: validation.diagnostics.map((diagnostic) => packageDiagnostic('manifest_invalid', diagnostic.path)),
     };

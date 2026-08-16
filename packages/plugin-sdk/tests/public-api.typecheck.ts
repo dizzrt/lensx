@@ -4,6 +4,7 @@ import {
   type PluginSdkCancellationSignal,
   type PluginSdkTransport,
 } from '../src/index.js';
+import { createPluginWebviewTransport } from '../src/webview.js';
 
 declare const transport: PluginSdkTransport;
 declare const nativeSignal: AbortSignal;
@@ -15,6 +16,10 @@ const structuralSignal: PluginSdkCancellationSignal = {
 };
 
 const client = createPluginSdk({ transport });
+const webviewTransport: PluginSdkTransport = createPluginWebviewTransport();
+void webviewTransport;
+// @ts-expect-error The zero-configuration production factory accepts no bridge or Host adapter.
+createPluginWebviewTransport({ bridge: {} });
 declare const hostError: HostApiError;
 void hostError.code;
 void client.initialize({ signal: structuralSignal });

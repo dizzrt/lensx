@@ -1,5 +1,5 @@
 import type { PluginSdkTransport } from '@lensx/plugin-sdk';
-import { createPluginIframeTransport } from '@lensx/plugin-sdk/iframe';
+import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview';
 import { PluginFeedback, PluginUiProvider } from '@lensx/plugin-ui';
 import { useEffect, useRef, useState } from 'react';
 import { ConfigLensPage } from './ConfigLensPage.js';
@@ -17,7 +17,7 @@ export interface AppProps {
   readonly createTransport?: () => PluginSdkTransport;
 }
 
-export const App = ({ createTransport = createPluginIframeTransport }: AppProps) => {
+export const App = ({ createTransport = createPluginWebviewTransport }: AppProps) => {
   const [state, setState] = useState<ConfigLensRuntimeState>({ kind: 'loading' });
   const runtimeRef = useRef<ReturnType<typeof createConfigLensRuntime>>(undefined);
   const errorRegionRef = useRef<HTMLDivElement>(null);

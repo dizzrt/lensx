@@ -136,4 +136,27 @@ describe('language protocol and generation controller', () => {
     await expect(second).resolves.toMatchObject({ status: 'valid', output: 'value: 1\n' });
     controller.dispose();
   });
+
+  test('reuses one ready Worker for sequential warm operations and terminates it on dispose', async () => {
+    const workers: FakeWorker[] = [];
+    const controller = createLanguageController(() => {
+      const worker = new FakeWorker();
+      workers.push(worker);
+      return worker;
+    });
+    for (const output of ['{\n  "value": 1\n}\n', '{"value":1}']) {
+      const operation = controller.run('json', output.includes('\n') ? 'format' : 'compact', '{"value":1}');
+      const request = workers[0]?.request as { requestId: number };
+      workers[0]?.onmessage?.(
+        new MessageEvent('message', {
+          data: { requestId: request.requestId, status: 'valid', diagnostics: [], output },
+        }),
+      );
+      await expect(operation).resolves.toMatchObject({ status: 'valid', output });
+    }
+    expect(workers).toHaveLength(1);
+    expect(workers[0]?.terminated).toBe(false);
+    controller.dispose();
+    expect(workers[0]?.terminated).toBe(true);
+  });
 });

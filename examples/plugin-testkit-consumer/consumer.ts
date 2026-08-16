@@ -13,8 +13,8 @@ import {
 } from '@lensx/plugin-testkit';
 
 const manifestValidation = validatePluginManifest(createPluginManifestFixture());
-if (manifestValidation.status === 'invalid') {
-  throw new Error('The Testkit Manifest fixture is invalid.');
+if (manifestValidation.status !== 'valid') {
+  throw new Error('The Testkit Manifest fixture is not current.');
 }
 const manifest = normalizePluginManifest(manifestValidation, {
   host_api: PLUGIN_HOST_API_VERSION,
@@ -63,6 +63,9 @@ if (validatePluginRuntimeContext(invalidContext).status !== 'invalid') {
   throw new Error('The Testkit invalid Context fixture was unexpectedly accepted.');
 }
 const snapshot = transport.observation;
+for (const privateFact of ['bridge', 'sourceLabel', 'nativeHandle', 'resourceGeneration', 'entryUrl']) {
+  if (privateFact in snapshot) throw new Error(`The semantic Testkit exposed private fact ${privateFact}.`);
+}
 await client.dispose();
 
 export const exampleResult = [

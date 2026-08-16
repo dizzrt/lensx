@@ -33,10 +33,9 @@ export interface PluginPageRuntimeRequest {
   readonly attempt: number;
 }
 
-/** Host-private facts consumed only by the iframe container. */
+/** Host-private facts consumed only by the Child WebView presentation path. */
 export interface PluginPageRuntimeDescriptor {
   readonly runtime_key: string;
-  readonly iframe_src: string;
   readonly entry_url: string;
   readonly host_fragment: string;
   readonly entry_id: string;
@@ -53,16 +52,4 @@ export interface PluginPageRuntimeResolver {
   resolve: (request: PluginPageRuntimeRequest) => Promise<PluginPageRuntimeDescriptor>;
   isCurrent?: (request: PluginPageRuntimeRequest, descriptor: PluginPageRuntimeDescriptor) => Promise<boolean>;
   subscribeInvalidation?: (listener: () => void) => () => void;
-}
-
-export interface PluginRuntimeNavigationLease {
-  readonly lease_id: string;
-}
-
-export interface PluginRuntimeNavigationAdapter {
-  activate: (target: {
-    readonly entry_url: string;
-    readonly host_fragment: string;
-  }) => Promise<PluginRuntimeNavigationLease>;
-  dispose: (lease: PluginRuntimeNavigationLease) => Promise<boolean>;
 }

@@ -17,18 +17,36 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [features]
 default = []
 plugin-development-mode = []
-plugin-development-runtime-harness = ["plugin-development-mode"]
+plugin-child-webview-spike = []
+plugin-child-webview-acl-harness = []
+plugin-child-webview-slot-harness = []
+plugin-child-webview-web-capability-harness = []
 
 [[example]]
-name = "plugin_development_runtime_harness"
-path = "examples/plugin_development_runtime_harness.rs"
-required-features = ["plugin-development-runtime-harness"]
+name = "plugin_child_webview_spike"
+path = "examples/plugin_child_webview_spike.rs"
+required-features = ["plugin-child-webview-spike"]
+
+[[example]]
+name = "plugin_child_webview_acl_harness"
+path = "examples/plugin_child_webview_acl_harness.rs"
+required-features = ["plugin-child-webview-acl-harness"]
+
+[[example]]
+name = "plugin_child_webview_slot_harness"
+path = "examples/plugin_child_webview_slot_harness.rs"
+required-features = ["plugin-child-webview-slot-harness"]
+
+[[example]]
+name = "plugin_child_webview_web_capability_harness"
+path = "examples/plugin_child_webview_web_capability_harness.rs"
+required-features = ["plugin-child-webview-web-capability-harness"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["macos-private-api"] }
+tauri = { version = "2", features = ["macos-private-api", "unstable"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
@@ -45,7 +63,9 @@ getrandom = "=0.3.4"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = { version = "=0.6.4" }
-objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSString", "NSThread"] }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSResponder", "NSWindow"] }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSData", "NSDictionary", "NSError", "NSJSONSerialization", "NSObject", "NSString", "NSThread"] }
+objc2-web-kit = { version = "=0.3.2", default-features = false, features = ["block2", "WKContentWorld", "WKFrameInfo", "WKWebView"] }
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }

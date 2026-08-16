@@ -43,7 +43,7 @@ describe('Host-private plugin scoped storage contract', () => {
     for (const file of [
       'packages/plugin-contract/src/index.ts',
       'packages/plugin-sdk/src/index.ts',
-      'packages/plugin-sdk/src/iframe.ts',
+      'packages/plugin-sdk/src/webview.ts',
       'packages/plugin-testkit/src/index.ts',
     ]) {
       const source = readFileSync(join(import.meta.dirname, '..', file), 'utf8');

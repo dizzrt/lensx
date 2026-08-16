@@ -6,7 +6,7 @@ import { validatePathCollection } from '../packages/plugin-cli/dist/src/package-
 
 interface CorpusCase {
   readonly name: string;
-  readonly manifest: 'compatible' | 'incompatible' | 'invalid';
+  readonly manifest: 'compatible' | 'incompatible' | 'invalid' | 'legacy_manifest' | 'legacy_iframe';
   readonly paths: readonly string[];
   readonly virtual_file_count?: number;
   readonly virtual_file_size?: number;
@@ -38,11 +38,16 @@ for (const fixture of corpus) {
       compatibility.host_api.min_version = '0.0.1';
       compatibility.host_api.max_version_exclusive = '0.1.0';
     }
+    if (fixture.manifest === 'legacy_manifest') manifest.manifest_version = '0.2.0';
+    if (fixture.manifest === 'legacy_iframe') {
+      (manifest.runtime as Record<string, unknown>).kind = 'iframe';
+    }
     const bytes =
       fixture.manifest === 'invalid' ? Buffer.from('{', 'utf8') : Buffer.from(JSON.stringify(manifest), 'utf8');
     const files = fixture.paths.map((path) => ({ path, size: 1, sha256: '00', checksumCovered: false }));
     const result = validatePackageManifest(bytes, files);
     if ('normalized' in result) actual = result.normalized.status;
+    else if ('incompatible' in result && result.incompatible) actual = 'incompatible';
   }
   if (actual !== fixture.expected) {
     throw new Error(`${fixture.name}: CLI payload result ${actual} does not match ${fixture.expected}.`);

@@ -7,6 +7,7 @@
     "wry": "0.55.1"
   },
   "patched_files": [
+    "tauri/src/manager/webview.rs",
     "tauri/src/webview/mod.rs",
     "tauri/src/webview/webview_window.rs",
     "tauri-runtime/src/webview.rs",
@@ -20,7 +21,7 @@
   "files": [
     {
       "path": "README.md",
-      "sha256": "c8be9be5d7d0aedc9f6bdfda381f6efd7d3f7931e3a24a6f564ed047ebd7b5a3"
+      "sha256": "71c871fb8165a0236767cda8b85cbc108b957aa027460d5471e7ab8009bca1f7"
     },
     {
       "path": "tauri-runtime-wry/Cargo.lock",
@@ -148,7 +149,7 @@
     },
     {
       "path": "tauri-runtime/src/webview.rs",
-      "sha256": "9639ec21724dc79500226f802ea26993cab9fe758fc1f75124eab68af6d8c75a"
+      "sha256": "50b0c81aebe38491e0361aa123edeffa29d7b41eaa6c249b6436390ad03d1dda"
     },
     {
       "path": "tauri-runtime/src/window.rs",
@@ -524,7 +525,7 @@
     },
     {
       "path": "tauri/src/manager/webview.rs",
-      "sha256": "24d3d51920ccd56db5c44db73c0deca09cba4a0811921a2f66b78e6213789f51"
+      "sha256": "a565ee3cebcc464b5e5931b9e6d81c761eb87ba4b8fb116ea59fb742ae72ab27"
     },
     {
       "path": "tauri/src/manager/window.rs",
@@ -684,7 +685,7 @@
     },
     {
       "path": "tauri/src/webview/mod.rs",
-      "sha256": "9c7d8dea0c2f3b08735d992bf102d1c0b47df2688a78ec5718ef492431411516"
+      "sha256": "1d926a09a9f9892139541daa4ff1237f8f1d066c3eb592eee83055e5bb90c19b"
     },
     {
       "path": "tauri/src/webview/plugin.rs",

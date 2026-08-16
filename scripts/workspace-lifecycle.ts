@@ -12,6 +12,7 @@ export type WorkspaceMemberKind = 'public-package' | 'official-plugin' | 'exampl
 
 export interface PackageManifest {
   name?: string;
+  version?: string;
   private?: boolean;
   exports?: string | Record<string, unknown>;
   scripts?: Record<string, string>;

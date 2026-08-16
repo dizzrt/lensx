@@ -131,19 +131,16 @@ export const createPluginDevelopmentService = ({
             operation: 'reload',
             message: 'Plugin development state changed before the operation completed.',
           });
-        await surfaceProjection.quiesceProvider(entry.plugin_id);
-        let result: PluginDevelopmentResult;
-        try {
-          result = await adapter.reload({
-            contract_version: PLUGIN_DEVELOPMENT_CONTRACT_VERSION,
-            entry_id: entryId,
-            expected_revision: expectedRevision,
-          });
-        } catch (error) {
-          await restore(expectedRevision, entry.plugin_id);
-          throw error;
-        }
+        const result = await adapter.reload({
+          contract_version: PLUGIN_DEVELOPMENT_CONTRACT_VERSION,
+          entry_id: entryId,
+          expected_revision: expectedRevision,
+        });
         if (result.status !== 'reloaded') throw new TypeError('Unexpected reload result.');
+        // Native staging/commit happens before presentation teardown so a rejected
+        // staging attempt leaves the current Child WebView untouched. A committed
+        // revision still quiesces the old attempt before the new one is projected.
+        await surfaceProjection.quiesceProvider(entry.plugin_id);
         await converge(result.revision, result.plugin_id);
         publish({
           ...view,

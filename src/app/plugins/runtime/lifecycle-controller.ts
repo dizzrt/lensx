@@ -126,9 +126,7 @@ export interface PluginRuntimeAttempt {
   readonly isCurrent: () => boolean;
   readonly bindCancellable: (cancel: () => void) => void;
   readonly bindSubscription: (unsubscribe: () => void) => void;
-  readonly bindSession: (dispose: () => void) => void;
-  readonly bindIframe: (unbind: () => void) => void;
-  readonly bindNavigationLease: (release: () => void | Promise<void>) => void;
+  readonly bindPresentation: (release: () => void | Promise<void>) => void;
   readonly bindTrustedIdentity: (entryId: string, generation: string) => boolean;
   readonly startResolutionDeadline: () => void;
   readonly completeResolution: () => void;
@@ -203,9 +201,7 @@ export const createPluginRuntimeLifecycleService = (
       let cancelHealthy: (() => void) | undefined;
       const cancellables: Array<() => void> = [];
       const subscriptions: Array<() => void> = [];
-      let disposeSession: (() => void) | undefined;
-      let unbindIframe: (() => void) | undefined;
-      let releaseLease: (() => void | Promise<void>) | undefined;
+      let releasePresentation: (() => void | Promise<void>) | undefined;
 
       const isCurrent = () => phase === 'active' && current === attempt;
       const clearLoadTimer = () => {
@@ -228,18 +224,13 @@ export const createPluginRuntimeLifecycleService = (
           cancelHealthy = undefined;
           for (const cancel of cancellables.splice(0)) cancel();
           for (const unsubscribe of subscriptions.splice(0)) unsubscribe();
-          disposeSession?.();
-          disposeSession = undefined;
-          unbindIframe?.();
-          unbindIframe = undefined;
-          const release = releaseLease;
-          releaseLease = undefined;
-          if (release) {
+          const presentation = releasePresentation;
+          releasePresentation = undefined;
+          if (presentation) {
             try {
-              await release();
+              await presentation();
             } catch {
-              // Native lease release is compare-current and best effort. A
-              // rejected adapter must not poison every later terminal queue.
+              // Native presentation teardown is compare-current and best effort.
             }
           }
           breakerIdentity = undefined;
@@ -260,16 +251,8 @@ export const createPluginRuntimeLifecycleService = (
           if (isCurrent()) subscriptions.push(unsubscribe);
           else unsubscribe();
         },
-        bindSession(disposeSessionBinding: () => void) {
-          if (isCurrent()) disposeSession = disposeSessionBinding;
-          else disposeSessionBinding();
-        },
-        bindIframe(unbind: () => void) {
-          if (isCurrent()) unbindIframe = unbind;
-          else unbind();
-        },
-        bindNavigationLease(release: () => void | Promise<void>) {
-          if (isCurrent()) releaseLease = release;
+        bindPresentation(release: () => void | Promise<void>) {
+          if (isCurrent()) releasePresentation = release;
           else void release();
         },
         bindTrustedIdentity(entryId: string, generation: string) {
@@ -298,8 +281,8 @@ export const createPluginRuntimeLifecycleService = (
         async fail(code: PluginRuntimeFailureCode) {
           if (!isCurrent()) return;
           const opened = breakerIdentity ? breaker.recordFailure(breakerIdentity, code) : false;
-          input.onFailure(opened ? 'runtime_crash_loop' : code);
           await terminate('failure');
+          input.onFailure(opened ? 'runtime_crash_loop' : code);
         },
         terminate,
       });

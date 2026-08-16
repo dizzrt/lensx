@@ -36,10 +36,10 @@ if (existsSync(legacyCore) && readdirSync(legacyCore).length > 0) {
 }
 for (const caller of [
   'scripts/plugin-package-format-fixtures.ts',
-  'scripts/plugin-iframe-runtime-fixtures.ts',
+  'scripts/plugin-webview-runtime-fixtures.ts',
   'scripts/check-plugin-project-template-package.ts',
   'tests/plugin-project-template-production.test.ts',
-  'tests/plugin-iframe-runtime-fixtures.test.ts',
+  'tests/plugin-webview-runtime-fixtures.test.ts',
 ]) {
   const source = readFileSync(join(rootDir, caller), 'utf8');
   if (source.includes('packages/plugin-cli/src/') || /from\s+['"][^'"]*tools\/plugin-package-format/gu.test(source)) {

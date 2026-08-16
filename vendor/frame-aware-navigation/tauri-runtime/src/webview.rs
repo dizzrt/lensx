@@ -17,7 +17,7 @@ use url::Url;
 
 use std::{
   borrow::Cow,
-  collections::HashMap,
+  collections::{HashMap, HashSet},
   hash::{Hash, Hasher},
   path::PathBuf,
   sync::Arc,
@@ -223,6 +223,9 @@ pub struct PendingWebview<T: UserEvent, R: Runtime<T>> {
   /// How to handle IPC calls on the webview.
   pub ipc_handler: Option<WebviewIpcHandler<T, R>>,
 
+  /// When present, only these application URI scheme protocols are registered on the webview.
+  pub restricted_uri_scheme_protocols: Option<HashSet<String>>,
+
   /// A handler to decide if incoming url is allowed to navigate.
   pub navigation_handler: Option<Box<NavigationHandler>>,
 
@@ -267,6 +270,7 @@ impl<T: UserEvent, R: Runtime<T>> PendingWebview<T, R> {
         uri_scheme_protocols: Default::default(),
         label,
         ipc_handler: None,
+        restricted_uri_scheme_protocols: None,
         navigation_handler: None,
         #[cfg(target_os = "macos")]
         navigation_handler_with_frame: None,

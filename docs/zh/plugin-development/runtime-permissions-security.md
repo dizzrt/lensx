@@ -2,21 +2,22 @@
 
 ## Runtime 生命周期
 
-每个 eligible plugin Page 都在一个使用 scoped plugin origin 的隔离 iframe 中运行。Host
-创建私有 Session、传递 SDK transport、等待 ready，并拥有 deadline、retry、breaker、
-navigation lease 与最终 teardown。close、navigation、disable、uninstall、replacement、
-development reload、disconnect、Host reload 和 app unmount 会让旧 iframe、Worker、连接、
-Blob URL、timer、listener、Session 与 port 失效。
+每个 eligible plugin Page 都在 Launcher 唯一 current native Child WebView 中运行，并使用
+generation-scoped origin 与 data store。Host 创建 WebView 和私有 bridge Session，分别等待
+native load、bridge ready 与 `runtime.get_context`，并拥有 deadline、retry、breaker、
+navigation、presentation 与最终 teardown。close、navigation、disable、uninstall、replacement、
+development reload、disconnect、Host reload 和 app unmount 会销毁旧 WebView，并让其 Worker、
+连接、timer、listener、bridge、Session 与 resource authority 失效。
 
 暂时隐藏和恢复 Launcher 窗口不等于关闭 Page 或 teardown Runtime。每次恢复时的
 activation 都会刷新并重新验证当前 Registration 与 Resource 事实。如果当前插件的
 entry、Page、version、origin、resource generation 和 Runtime attempt 没有改变，Host
-会保留同一 iframe、navigation lease、Session 与 Page 内存。全局 Registration revision
+会保留同一 Child WebView、Session 与 Page 内存。全局 Registration revision
 只是 invalidation 提示；其他插件的无关变化不会替换当前 Runtime。
 
 ## Context replacement
 
-每个 iframe attempt 只初始化一次 SDK。`runtime.get_context` 与后续 Context event 提供完整
+每个 Child WebView attempt 只初始化一次 SDK。`runtime.get_context` 与后续 Context event 提供完整
 Host API 状态：版本、locale、theme 和当前非特权 method capabilities。一次状态变更中替换整个
 Context。Worker/network 支持不是 Host API method，也不会出现在 capability 列表中。
 
@@ -41,9 +42,13 @@ generation 的 URL、port、cursor 或浏览器状态复用为 Host authority。
 ## 安全边界
 
 开放 Web 基线不会暴露 Host DOM、Tauri globals/IPC、Rust command、文件系统、Shell、进程、
-原生剪贴板、另一个插件 origin 或旧 generation。Host 保留精确可信 ancestor、隔离 origin 与
-generation、scoped resource path、`nosniff`、`no-store`、无 Host CORS authority、iframe
-sandbox、referrer policy、设备限制、bounded RPC、deadline、breaker 与确定性 teardown。
+原生剪贴板、另一个插件 origin 或旧 generation。Host 将主 WebView 与插件 WebView 保持为
+native sibling，派生精确 origin/generation/source binding，限制 resource path，只允许 closed
+lensX bridge carrier，约束 RPC，并拥有确定性 teardown。Publisher、仓库位置、provenance 与
+release metadata 都不会改变该 authority。
 
 因此安装是关于代码在该隔离 Web Runtime 中运行的信任决定。lensX 不审查、批准或持续监控插件
 如何使用用户交给它的数据，也不对普通 Web 行为逐项授权。
+
+Host/native ownership、lifecycle 顺序、evidence budget 与维护者排障参见
+[Plugin Child WebView Runtime](../architecture/plugin-child-webview-runtime.md)。

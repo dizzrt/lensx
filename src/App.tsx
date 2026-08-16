@@ -60,14 +60,13 @@ import {
   createPluginHostApiDispatcherFactory,
   createPluginPageRuntimeResolver,
   createPluginRuntimeLifecycleService,
-  createPluginRuntimeSessionService,
-  desktopPluginRuntimeNavigationAdapter,
+  desktopPluginChildWebviewPresentationController,
+  type PluginChildWebviewPresentationController,
   type PluginHostApiDispatcherFactory,
   type PluginPageRuntimeResolver,
-  PluginRuntimeFrame,
   type PluginRuntimeLifecycleService,
-  type PluginRuntimeNavigationAdapter,
-  type PluginRuntimeSessionService,
+  PluginRuntimeSlot,
+  startPluginChildWebviewHostDispatcherDesktopAdapter,
 } from './app/plugins/runtime';
 import { desktopPluginScopedStorageProviderFactory } from './app/plugins/storage';
 import type { PluginSurfaceProjectionService } from './app/plugins/surfaces';
@@ -80,11 +79,11 @@ export interface AppProps {
   collectionsClient?: LauncherActionCollectionsClient;
   navigationService?: AppNavigationService;
   preferencesClient?: AppPreferencesClient;
-  pluginRuntimeNavigationAdapter?: PluginRuntimeNavigationAdapter;
+  pluginChildWebviewPresentationController?: PluginChildWebviewPresentationController;
   pluginRuntimeLifecycleService?: PluginRuntimeLifecycleService;
   pluginRuntimeResolver?: PluginPageRuntimeResolver;
-  pluginRuntimeSessionService?: PluginRuntimeSessionService;
   pluginHostApiDispatcherFactory?: PluginHostApiDispatcherFactory;
+  enablePluginChildWebviewHostDispatcher?: boolean;
   pluginManagementService?: PluginManagementService;
   renderPage?: (activePage: ActivePage) => ReactNode;
   surfaceProjectionService?: PluginSurfaceProjectionService;
@@ -114,11 +113,11 @@ const App = ({
   collectionsClient = desktopLauncherActionCollectionsClient,
   navigationService = productionAppNavigationService,
   preferencesClient = desktopAppPreferencesClient,
-  pluginRuntimeNavigationAdapter = desktopPluginRuntimeNavigationAdapter,
+  pluginChildWebviewPresentationController = desktopPluginChildWebviewPresentationController,
   pluginRuntimeLifecycleService,
   pluginRuntimeResolver,
-  pluginRuntimeSessionService,
   pluginHostApiDispatcherFactory,
+  enablePluginChildWebviewHostDispatcher = false,
   pluginManagementService = inertPluginManagementService,
   renderPage,
   startupPreferencesErrorCode,
@@ -167,10 +166,6 @@ const App = ({
         : undefined),
     [pluginRuntimeResolver, surfaceProjectionService],
   );
-  const effectivePluginRuntimeSessionService = useMemo(
-    () => pluginRuntimeSessionService ?? createPluginRuntimeSessionService(),
-    [pluginRuntimeSessionService],
-  );
   const effectivePluginRuntimeLifecycleService = useMemo(
     () => pluginRuntimeLifecycleService ?? createPluginRuntimeLifecycleService(),
     [pluginRuntimeLifecycleService],
@@ -190,6 +185,22 @@ const App = ({
   );
   const effectivePluginHostApiDispatcherFactory =
     pluginHostApiDispatcherFactory ?? productionPluginHostApiDispatcherFactory;
+
+  useEffect(() => {
+    if (!enablePluginChildWebviewHostDispatcher) return;
+    let disposed = false;
+    let detach: (() => void) | undefined;
+    void startPluginChildWebviewHostDispatcherDesktopAdapter(effectivePluginHostApiDispatcherFactory).then(
+      (nextDetach) => {
+        if (disposed) nextDetach();
+        else detach = nextDetach;
+      },
+    );
+    return () => {
+      disposed = true;
+      detach?.();
+    };
+  }, [effectivePluginHostApiDispatcherFactory, enablePluginChildWebviewHostDispatcher]);
 
   useEffect(() => {
     pluginHostApiContextSource.update({ locale, theme: themeMode });
@@ -622,15 +633,13 @@ const App = ({
                   activePage.page_id === 'settings' ? (
                   <SettingsPage managementService={pluginManagementService} preferencesClient={preferencesClient} />
                 ) : pageResolution?.provider.kind === 'plugin' && pageContext && effectivePluginRuntimeResolver ? (
-                  <PluginRuntimeFrame
+                  <PluginRuntimeSlot
                     activePage={activePage}
-                    hostApiDispatcherFactory={effectivePluginHostApiDispatcherFactory}
                     lifecycleService={effectivePluginRuntimeLifecycleService}
-                    navigationAdapter={pluginRuntimeNavigationAdapter}
                     pageResolution={pageResolution}
                     pageTitle={pageContext.page_title}
+                    presentationController={pluginChildWebviewPresentationController}
                     resolver={effectivePluginRuntimeResolver}
-                    sessionService={effectivePluginRuntimeSessionService}
                   />
                 ) : null}
               </PageErrorBoundary>

@@ -5,7 +5,9 @@
       "dependencies": { "@lensx/plugin-sdk": "^0.1.0" },
       "scripts": { "build": "rsbuild build", "typecheck": "tsc", "test": "rstest", "check": "pnpm test" }
     },
-    "sources": { "src/main.ts": "import { createPluginSdk } from '@lensx/plugin-sdk';" }
+    "sources": {
+      "src/main.ts": "import { createPluginSdk } from '@lensx/plugin-sdk'; import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview'; createPluginSdk({ transport: createPluginWebviewTransport() });"
+    }
   },
   "expected": []
 }

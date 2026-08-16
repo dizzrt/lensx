@@ -17,6 +17,7 @@ const fixtureNames = [
   'tauri-import',
   'private-packer-import',
   'missing-lifecycle',
+  'legacy-iframe-runtime',
 ] as const;
 
 describe('plugin project template public boundary fixtures', () => {

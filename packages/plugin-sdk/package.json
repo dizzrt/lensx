@@ -1,6 +1,6 @@
 {
   "name": "@lensx/plugin-sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Framework-neutral lensX plugin SDK lifecycle foundation.",
   "keywords": [
     "lensx",
@@ -29,9 +29,9 @@
       "types": "./dist/src/index.d.ts",
       "import": "./dist/src/index.js"
     },
-    "./iframe": {
-      "types": "./dist/src/iframe.d.ts",
-      "import": "./dist/src/iframe.js"
+    "./webview": {
+      "types": "./dist/src/webview.d.ts",
+      "import": "./dist/src/webview.js"
     }
   },
   "main": "./dist/src/index.js",

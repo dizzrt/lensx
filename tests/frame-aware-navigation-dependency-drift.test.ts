@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { appendFileSync, copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from '@rstest/core';
 
@@ -39,5 +41,40 @@ describe('macOS frame-aware navigation dependency patch', () => {
     expect(readme).toContain('Apache-2.0/MIT');
     expect(readme).toContain('No Windows or Linux adapter is included.');
     expect(readme).toContain('audited upstream release');
+  });
+
+  test('fails closed when a future dependency update has not been reviewed', () => {
+    const temporaryRoot = mkdtempSync(join(tmpdir(), 'lensx-frame-aware-drift-'));
+    const temporaryScript = join(temporaryRoot, 'scripts/frame-aware-navigation-dependency-drift.ts');
+
+    try {
+      mkdirSync(join(temporaryRoot, 'scripts'), { recursive: true });
+      copyFileSync(join(rootDir, 'scripts/frame-aware-navigation-dependency-drift.ts'), temporaryScript);
+      cpSync(join(rootDir, 'vendor/frame-aware-navigation'), join(temporaryRoot, 'vendor/frame-aware-navigation'), {
+        recursive: true,
+      });
+
+      const baseline = spawnSync(process.execPath, ['--experimental-strip-types', temporaryScript], {
+        cwd: temporaryRoot,
+        encoding: 'utf8',
+      });
+      expect(baseline.status).toBe(0);
+      expect(baseline.stdout).toContain('Checked 255 vendored frame-aware dependency files.');
+
+      appendFileSync(
+        join(temporaryRoot, 'vendor/frame-aware-navigation/tauri-runtime/src/webview.rs'),
+        '\n// simulated unreviewed dependency update\n',
+      );
+      const drifted = spawnSync(process.execPath, ['--experimental-strip-types', temporaryScript], {
+        cwd: temporaryRoot,
+        encoding: 'utf8',
+      });
+      expect(drifted.status).not.toBe(0);
+      expect(`${drifted.stdout}\n${drifted.stderr}`).toContain(
+        'Vendored frame-aware dependency drift detected. Review the exact diff',
+      );
+    } finally {
+      rmSync(temporaryRoot, { recursive: true, force: true });
+    }
   });
 });

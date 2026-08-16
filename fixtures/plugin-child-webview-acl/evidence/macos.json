@@ -1,0 +1,71 @@
+{
+  "corpus_version": "native-host-escape-v1",
+  "profiles": [
+    {
+      "source": "official",
+      "publisher": "lensX Official",
+      "repository": "https://github.com/lensx-dev/lensx",
+      "provenance": "trusted-publisher-attestation",
+      "release_metadata": "verified-release-sidecar",
+      "authority": {
+        "created": true,
+        "tauri_globals_absent": true,
+        "tauri_core_handler_hits": 0,
+        "tauri_plugin_handler_hits": 0,
+        "app_command_handler_hits": 0,
+        "global_event_handler_hits": 0,
+        "window_authority_unchanged": true,
+        "webview_authority_unchanged": true,
+        "rejected_tauri_envelopes": 6,
+        "lensx_bridge_ready_hits": 1,
+        "native_source_identity_mismatch_hits": 0,
+        "malformed_carriers_rejected": 3,
+        "destroyed": true
+      }
+    },
+    {
+      "source": "external",
+      "publisher": "Community Publisher",
+      "repository": "https://example.com/community/plugin",
+      "provenance": "community-package",
+      "release_metadata": "none",
+      "authority": {
+        "created": true,
+        "tauri_globals_absent": true,
+        "tauri_core_handler_hits": 0,
+        "tauri_plugin_handler_hits": 0,
+        "app_command_handler_hits": 0,
+        "global_event_handler_hits": 0,
+        "window_authority_unchanged": true,
+        "webview_authority_unchanged": true,
+        "rejected_tauri_envelopes": 6,
+        "lensx_bridge_ready_hits": 1,
+        "native_source_identity_mismatch_hits": 0,
+        "malformed_carriers_rejected": 3,
+        "destroyed": true
+      }
+    },
+    {
+      "source": "development",
+      "publisher": "Local Developer",
+      "repository": "https://example.com/local/plugin",
+      "provenance": "local-development-directory",
+      "release_metadata": "unreleased",
+      "authority": {
+        "created": true,
+        "tauri_globals_absent": true,
+        "tauri_core_handler_hits": 0,
+        "tauri_plugin_handler_hits": 0,
+        "app_command_handler_hits": 0,
+        "global_event_handler_hits": 0,
+        "window_authority_unchanged": true,
+        "webview_authority_unchanged": true,
+        "rejected_tauri_envelopes": 6,
+        "lensx_bridge_ready_hits": 1,
+        "native_source_identity_mismatch_hits": 0,
+        "malformed_carriers_rejected": 3,
+        "destroyed": true
+      }
+    }
+  ]
+}

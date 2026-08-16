@@ -55,6 +55,9 @@ export const validatePackedPackage = ({ declarationSources, files, metadata, run
     if (!Object.hasOwn(dependencies, packageName)) {
       diagnostics.push(`Runtime import ${specifier} is not declared in dependencies.`);
     }
+    if (specifier !== '@lensx/plugin-contract' && specifier !== '@lensx/plugin-sdk') {
+      diagnostics.push(`The semantic Testkit must not import a container-specific entry: ${specifier}.`);
+    }
   }
 
   const declarations = declarationSources.join('\n');
@@ -71,6 +74,14 @@ export const validatePackedPackage = ({ declarationSources, files, metadata, run
     'requestId',
     'nonce',
     'pluginIdentity',
+    'PluginChildWebview',
+    'PluginWebviewBridge',
+    '__LENSX_PLUGIN_WEBVIEW_BRIDGE__',
+    'bridge_contract_version',
+    'source_label',
+    'native_handle',
+    'data_store_identifier',
+    'entry_url',
     '@rstest/',
     'vitest',
   ]) {

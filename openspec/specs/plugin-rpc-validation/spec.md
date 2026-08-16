@@ -3,9 +3,7 @@
 ## Purpose
 
 Define bounded, fail-closed validation and resource controls for plugin Runtime Session RPC while preserving public Contract semantics and Host-private authority.
-
 ## Requirements
-
 ### Requirement: The Host MUST enforce one immutable RPC v1 budget before recursive Contract validation
 
 The Host MUST apply one Host-private, frozen RPC v1 policy to every value received from or sent to a plugin Runtime Session. The policy MUST allow at most 5,242,880 bytes of canonical JSON-compatible cost per private frame, a semantic payload nesting depth of 32, a total private-frame depth of 36, and 16,384 visited values and object keys. The private wire MUST remain single-request: one frame MUST contain at most one request, and a batch or array envelope MUST NOT be accepted.
@@ -143,3 +141,15 @@ The focused gate MUST be `pnpm run check:plugin-rpc-validation`. The change MUST
 - **WHEN** an RPC policy becomes plugin-configurable, a private validator or diagnostic becomes publicly importable, or the change adds batch, streaming, persistent diagnostics, frequency isolation, plugin suspension, CPU or memory control
 - **THEN** the focused boundary gate fails
 - **THEN** the out-of-scope behavior requires its own explicit capability change
+
+### Requirement: RPC validation MUST accept frames only from the current WebView bridge binding
+The existing closed RPC budgets, validators, cancellation, deadline, exactly-once and egress rules MUST execute only after native bridge ingress proves the actual current Child WebView Session. Carrier decoding MUST treat input as `unknown`; a malformed, oversized, stale or wrong-source frame MUST NOT reach Dispatcher or reveal expected identity. Valid responses and events MUST be encoded and delivered only to the same current WebView.
+
+#### Scenario: Current request passes carrier validation
+- **WHEN** the current source sends a bounded frame containing a Contract-valid request
+- **THEN** the existing RPC and semantic validators execute before Dispatcher and the result returns to that source only
+
+#### Scenario: Wrong source sends a valid-shaped request
+- **WHEN** a destroyed or unrelated WebView submits a frame within all structural budgets
+- **THEN** source validation rejects it before in-flight state or a Host handler is created
+

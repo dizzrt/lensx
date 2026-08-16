@@ -5,27 +5,23 @@ import { LauncherActionDispatcher, LauncherActionRegistry } from '../src/app/lau
 import {
   createMutablePluginHostApiContextSource,
   createPluginHostApiDispatcherFactory,
+  type PluginHostApiAuthorityIdentity,
   type PluginHostApiDispatcherBinding,
-  type PluginRuntimeSessionIdentity,
   type PluginRuntimeTransportHandlerResult,
 } from '../src/app/plugins/runtime';
 import { createPluginScopedStorageProviderFactory } from '../src/app/plugins/storage';
 
-const identity: PluginRuntimeSessionIdentity = Object.freeze({
+const identity: PluginHostApiAuthorityIdentity = Object.freeze({
   entry_id: 'entry_0123456789abcdef',
   plugin_id: 'com.acme.workspace',
   version: '1.2.3',
   page_id: 'home',
-  expected_origin: 'https://lensx-plugin.0123456789abcdef0123456789abcdef.runtime.localhost',
-  resource_generation: '0123456789abcdef0123456789abcdef',
-  runtime_attempt_key: 'attempt-1',
-  registration_revision: '7',
 });
 
 const requestInput = (
   binding: PluginHostApiDispatcherBinding,
   request: unknown,
-  options?: { readonly signal?: AbortSignal; readonly injectedIdentity?: PluginRuntimeSessionIdentity },
+  options?: { readonly signal?: AbortSignal; readonly injectedIdentity?: PluginHostApiAuthorityIdentity },
 ) =>
   binding.handler({
     identity: options?.injectedIdentity ?? identity,

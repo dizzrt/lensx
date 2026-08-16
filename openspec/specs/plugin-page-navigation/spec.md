@@ -6,9 +6,7 @@ Define how trusted Host services project registered plugin Pages into a unified
 Page Registry, coordinate Page and Action publication, navigate through the
 existing single-window application surface, and fail closed without loading or
 executing plugin Runtime code.
-
 ## Requirements
-
 ### Requirement: Plugin Pages must project into stable Host-owned descriptors
 
 The system MUST project normalized Manifest Pages from current, validated Plugin
@@ -213,36 +211,6 @@ opening Action icon, a Manifest asset path, or Publisher identity.
 - **THEN** the system closes the active Page and returns Home instead of
   displaying a raw owner ID, route, or stale author text
 
-### Requirement: Runtime-free Plugin Pages must use the existing single-window surface
-
-Until the isolated iframe Runtime ships, the system MUST render a Host-owned
-placeholder for an available Plugin Page in the existing Tauri main window's
-`page` presentation. The placeholder MUST use application i18n, Semi Design,
-the existing light and dark theme, and `PageErrorBoundary`; MUST display the
-resolved Page title and a non-misleading Runtime-unavailable explanation; and
-MUST retain the shared context close button. It MUST NOT load a Manifest route,
-Runtime entry, package asset, iframe, or plugin code, and MUST NOT provide an
-installation, permission, management, or retry action.
-
-#### Scenario: Display a Runtime-free Plugin Page
-
-- **WHEN** navigation to an available Plugin Page succeeds before iframe Runtime
-  is implemented
-- **THEN** the App Shell enters the existing `page` presentation and displays a
-  localized Host-owned placeholder
-- **THEN** the Page is not Host Settings and executes no plugin resource or code
-- **THEN** English, Simplified Chinese, light, and dark compositions use the
-  existing application providers
-
-#### Scenario: Close a Plugin Page manually
-
-- **WHEN** the user closes a Plugin Page through the accessible shared-context
-  close button
-- **THEN** the App Shell returns to the `home` presentation, clears query and
-  selection state, and restores Launcher input focus
-- **THEN** closing matches Host Settings behavior and creates no window history
-  or Router stack
-
 ### Requirement: Active Plugin Pages must close when their descriptor becomes unavailable
 
 The system MUST revalidate the current active Plugin Page after Page Registry
@@ -269,20 +237,14 @@ with the same identity.
   presentation
 - **THEN** the system creates no second Page state or navigation history entry
 
-### Requirement: Plugin Page navigation delivery must not claim Runtime or lifecycle capabilities
+### Requirement: External Plugin Page presentation MUST declare a Host-owned native slot
+When the current descriptor resolves to an executable external Page, React MUST render Host chrome plus a non-authoritative `PluginRuntimeSlot` whose revisioned physical bounds and visibility are sent to the private presentation controller. The Page layer MUST NOT create an iframe, receive a Child WebView handle or let plugin content control title, close, layout, route identity or Host navigation.
 
-This capability MUST deliver only Host-private Page projection and Registry,
-production Action coordination, framework-neutral navigation, presentation
-resolution, a Host placeholder, invalidation, tests, and maintained
-documentation. It MUST NOT install, enable, disable, uninstall, or execute a
-plugin, and MUST NOT create a safe resource URL, iframe, Runtime session, Host
-API transport, native authority decision, or plugin management UI.
+#### Scenario: External Page is selected
+- **WHEN** a current Page descriptor and Runtime facts are available
+- **THEN** Host shows loading chrome and declares the slot while Rust creates the Child WebView
+- **THEN** plugin content becomes visible only after current load and Session readiness
 
-#### Scenario: Only Task 2.4 is complete
-
-- **WHEN** the Plugin Page navigation change passes all validation while later
-  Runtime and lifecycle Tasks remain unimplemented
-- **THEN** users can navigate through a published Plugin Action to a preflighted
-  Host-owned placeholder and close it safely
-- **THEN** no plugin HTML, JavaScript, resource, RPC, or privileged capability
-  executes because of that navigation
+#### Scenario: Descriptor becomes unavailable
+- **WHEN** current Registration removes or disables the Page
+- **THEN** navigation closes the Page and terminally destroys its Child WebView before returning focus

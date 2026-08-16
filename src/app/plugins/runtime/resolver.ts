@@ -6,7 +6,6 @@ import {
   isValidIsolatedPluginRuntimeEntryUrl,
   pluginRuntimeFragmentFromRoute,
   pluginRuntimeGenerationFromEntryUrl,
-  pluginRuntimeIframeSrc,
   pluginRuntimeOriginFromEntryUrl,
 } from './helpers';
 import {
@@ -162,7 +161,6 @@ export const createPluginPageRuntimeResolver = ({
         resourceGeneration,
         request.attempt,
       ].join('\u0001'),
-      iframe_src: pluginRuntimeIframeSrc(resolved.entry_url, hostFragment),
       entry_url: resolved.entry_url,
       host_fragment: hostFragment,
       entry_id: entry.entry_id,

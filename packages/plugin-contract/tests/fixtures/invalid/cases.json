@@ -96,6 +96,58 @@
     ]
   },
   {
+    "name": "author native WebView label is rejected",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/runtime/native_label",
+        "value": "plugin-controlled"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "unknown_field",
+        "path": "/runtime/native_label"
+      }
+    ]
+  },
+  {
+    "name": "author native bridge configuration is rejected",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/runtime/bridge",
+        "value": {
+          "command": "plugin_controlled"
+        }
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "unknown_field",
+        "path": "/runtime/bridge"
+      }
+    ]
+  },
+  {
+    "name": "author WebView options are rejected",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/runtime/webview_options",
+        "value": {
+          "incognito": false
+        }
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "unknown_field",
+        "path": "/runtime/webview_options"
+      }
+    ]
+  },
+  {
     "name": "Host-owned source is rejected",
     "mutations": [
       {

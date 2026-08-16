@@ -45,7 +45,7 @@ export const createPluginManifestFixture = (): PluginManifestInput => ({
   },
   runtime: {
     entry: 'dist/plugin.html',
-    kind: 'iframe',
+    kind: 'webview',
   },
   version: '0.1.0',
 });

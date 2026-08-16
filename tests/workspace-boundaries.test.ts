@@ -80,10 +80,12 @@ describe('workspace boundary checker', () => {
       );
       for (const packageName of packageNames) {
         const version = metadata.dependencies?.[packageName] ?? metadata.devDependencies?.[packageName];
-        expect(version).toMatch(/^\^0\.2\.0$/u);
-        expect(realpathSync(resolve(templateRoot, 'node_modules', packageName))).toBe(
-          resolve(repositoryRoot, 'packages', packageName.replace('@lensx/plugin-', 'plugin-')),
-        );
+        const packageRoot = resolve(repositoryRoot, 'packages', packageName.replace('@lensx/plugin-', 'plugin-'));
+        const packageMetadata = JSON.parse(readFileSync(resolve(packageRoot, 'package.json'), 'utf8')) as {
+          version: string;
+        };
+        expect(version).toBe(`^${packageMetadata.version}`);
+        expect(realpathSync(resolve(templateRoot, 'node_modules', packageName))).toBe(packageRoot);
       }
     }
   });
@@ -208,10 +210,11 @@ describe('workspace boundary checker', () => {
     expect(rustResourceImports.every((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport)).toBe(true);
   });
 
-  test('rejects Host-private Runtime resolver, iframe policy, navigation adapter, and native lease boundary', () => {
+  test('rejects Host-private Runtime resolver, Child WebView presentation, and native authority boundary', () => {
     const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
     const runtimeImports = diagnostics.filter(
-      (item) => item.specifier.includes('/plugins/runtime') || item.specifier.includes('plugin_runtime_navigation.rs'),
+      (item) =>
+        item.specifier.includes('/plugins/runtime') || item.specifier.includes('plugin_child_webview_presentation.rs'),
     );
 
     expect(runtimeImports).toHaveLength(21);
@@ -224,13 +227,13 @@ describe('workspace boundary checker', () => {
     ).toBe(true);
   });
 
-  test('rejects isolated-origin parser and real WebView harness internals for every plugin consumer kind', () => {
+  test('rejects isolated-origin parser and native Child WebView internals for every plugin consumer kind', () => {
     const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
     const isolatedOriginImports = diagnostics.filter(
       (item) =>
         item.specifier.includes('plugin_resource_url') ||
-        item.specifier.includes('plugin_iframe_runtime_harness') ||
-        item.specifier.includes('plugin_runtime_session_harness'),
+        item.specifier.includes('plugin_child_webview_adapter') ||
+        item.specifier.includes('plugin_child_webview_service'),
     );
 
     expect(isolatedOriginImports).toHaveLength(9);

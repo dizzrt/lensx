@@ -26,7 +26,7 @@ const productionSources = [
   'src/app/plugins/lifecycle/production.ts',
   'src/app/plugins/management/service.ts',
   'src/app/plugins/runtime/host-api-dispatcher.ts',
-  'src/app/plugins/runtime/session-contract.ts',
+  'src-tauri/src/plugin_child_webview_service.rs',
   'src/app/plugins/runtime/resolver.ts',
   'src/app/pages/PluginManagementSettings.tsx',
 ];
@@ -66,12 +66,11 @@ for (const requiredStage of [
   'check:plugin-host-api-dispatcher',
   'check:plugin-registration-contract',
   'check:local-plugin-installation',
-  'check:plugin-iframe-runtime-fixtures',
   'check:plugin-resource-service',
-  'check:plugin-runtime-session-evidence',
+  'check:plugin-child-webview-runtime',
+  'check:plugin-child-webview-session',
   'check:plugin-rpc-validation',
   'check:plugin-development-runtime-evidence',
-  'check:plugin-runtime-security-lifecycle',
 ]) {
   if (!focusedGate.includes(requiredStage)) fail(`focused gate composition omitted ${requiredStage}`);
 }
@@ -103,24 +102,19 @@ const hostConfig = read('src-tauri/tauri.conf.json');
 if (!hostConfig.includes("default-src 'self'; script-src 'self'")) fail('Host main CSP drifted');
 if (hostConfig.includes("worker-src 'self' https:")) fail('Plugin CSP leaked into the Host main document');
 
-const fixtureGenerator = read('scripts/plugin-iframe-runtime-fixtures.ts');
+const fixtureGenerator = read('scripts/plugin-webview-runtime-fixtures.ts');
 for (const proof of [
-  'package_worker_allowed',
-  'blob_worker_allowed',
-  'data_worker_allowed',
-  'fetch_allowed',
-  'fetch_connection_churn',
-  'worker_message_burst',
-  'websocket_constructed',
-  'wasm_allowed',
-  'indexeddb_roundtrip',
-  'author_csp_can_narrow',
-  'remote_module_allowed',
-  'bounded_unsupported_evidence',
+  'top_level_document',
+  'public_webview_bridge',
+  'dedicated_worker',
+  'origin_storage',
+  'generic_tauri_envelopes',
+  'native_command_escape',
+  'malformed_bridge_carrier',
 ]) {
   if (!fixtureGenerator.includes(proof)) fail(`canonical open-Web fixture is missing ${proof}`);
 }
 
 console.log(
-  'Checked open Web policy, removed permission authority, public boundaries, and canonical fixture coverage.',
+  'Checked open Web policy, removed permission authority, public boundaries, and canonical Child WebView fixture coverage.',
 );

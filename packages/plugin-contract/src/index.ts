@@ -32,6 +32,7 @@ export type {
   ValidHostApiValidationResult,
 } from './host-api-types.js';
 export type {
+  IncompatiblePluginManifestValidationResult,
   InvalidPluginManifestValidationResult,
   ManifestLocale,
   NormalizedPluginManifest,

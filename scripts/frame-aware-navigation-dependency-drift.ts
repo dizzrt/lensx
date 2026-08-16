@@ -15,6 +15,7 @@ const packages = Object.freeze({
 });
 
 const patchedFiles = Object.freeze([
+  'tauri/src/manager/webview.rs',
   'tauri/src/webview/mod.rs',
   'tauri/src/webview/webview_window.rs',
   'tauri-runtime/src/webview.rs',

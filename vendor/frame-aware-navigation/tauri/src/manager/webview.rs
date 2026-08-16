@@ -127,6 +127,7 @@ impl<R: Runtime> WebviewManager<R> {
     manager: &M,
   ) -> crate::Result<PendingWebview<EventLoopMessage, R>> {
     let app_manager = manager.manager();
+    let isolated_ipc = pending.ipc_handler.is_some();
 
     let plugin_init_scripts = app_manager
       .plugins
@@ -163,8 +164,9 @@ impl<R: Runtime> WebviewManager<R> {
       }
     }
 
-    all_initialization_scripts.push(main_frame_script(
-      r"
+    if !isolated_ipc {
+      all_initialization_scripts.push(main_frame_script(
+        r"
         Object.defineProperty(window, 'isTauri', {
           value: true,
         });
@@ -177,11 +179,13 @@ impl<R: Runtime> WebviewManager<R> {
           })
         }
       "
-      .to_owned(),
-    ));
-    all_initialization_scripts.push(main_frame_script(self.invoke_initialization_script.clone()));
-    all_initialization_scripts.push(main_frame_script(format!(
-      r#"
+        .to_owned(),
+      ));
+      all_initialization_scripts.push(main_frame_script(
+        self.invoke_initialization_script.clone(),
+      ));
+      all_initialization_scripts.push(main_frame_script(format!(
+        r#"
           Object.defineProperty(window.__TAURI_INTERNALS__, 'metadata', {{
             value: {{
               currentWindow: {{ label: {current_window_label} }},
@@ -189,33 +193,38 @@ impl<R: Runtime> WebviewManager<R> {
             }}
           }})
         "#,
-      current_window_label = serde_json::to_string(window_label)?,
-      current_webview_label = serde_json::to_string(&label)?,
-    )));
-    all_initialization_scripts.push(main_frame_script(self.initialization_script(
-      app_manager,
-      &ipc_init.into_string(),
-      &pattern_init.into_string(),
-      use_https_scheme,
-    )?));
+        current_window_label = serde_json::to_string(window_label)?,
+        current_webview_label = serde_json::to_string(&label)?,
+      )));
+      all_initialization_scripts.push(main_frame_script(self.initialization_script(
+        app_manager,
+        &ipc_init.into_string(),
+        &pattern_init.into_string(),
+        use_https_scheme,
+      )?));
 
-    all_initialization_scripts.extend(plugin_init_scripts);
-
-    #[cfg(feature = "isolation")]
-    if let crate::Pattern::Isolation { schema, .. } = &*app_manager.pattern {
-      all_initialization_scripts.push(main_frame_script(
-        IsolationJavascript {
-          isolation_src: &crate::pattern::format_real_schema(schema, use_https_scheme),
-          style: tauri_utils::pattern::isolation::IFRAME_STYLE,
-        }
-        .render_default(&Default::default())?
-        .into_string(),
-      ));
+      all_initialization_scripts.extend(plugin_init_scripts);
     }
 
-    if let Some(plugin_global_api_scripts) = &*app_manager.plugin_global_api_scripts {
-      for &script in plugin_global_api_scripts.iter() {
-        all_initialization_scripts.push(main_frame_script(script.to_owned()));
+    #[cfg(feature = "isolation")]
+    if !isolated_ipc {
+      if let crate::Pattern::Isolation { schema, .. } = &*app_manager.pattern {
+        all_initialization_scripts.push(main_frame_script(
+          IsolationJavascript {
+            isolation_src: &crate::pattern::format_real_schema(schema, use_https_scheme),
+            style: tauri_utils::pattern::isolation::IFRAME_STYLE,
+          }
+          .render_default(&Default::default())?
+          .into_string(),
+        ));
+      }
+    }
+
+    if !isolated_ipc {
+      if let Some(plugin_global_api_scripts) = &*app_manager.plugin_global_api_scripts {
+        for &script in plugin_global_api_scripts.iter() {
+          all_initialization_scripts.push(main_frame_script(script.to_owned()));
+        }
       }
     }
 
@@ -228,6 +237,13 @@ impl<R: Runtime> WebviewManager<R> {
     let mut registered_scheme_protocols = Vec::new();
 
     for (uri_scheme, protocol) in &*self.uri_scheme_protocols.lock().unwrap() {
+      if pending
+        .restricted_uri_scheme_protocols
+        .as_ref()
+        .is_some_and(|protocols| !protocols.contains(uri_scheme))
+      {
+        continue;
+      }
       registered_scheme_protocols.push(uri_scheme.clone());
       let protocol = protocol.clone();
       let app_handle = manager.app_handle().clone();
@@ -264,7 +280,7 @@ impl<R: Runtime> WebviewManager<R> {
       "null".into()
     };
 
-    if !registered_scheme_protocols.contains(&"tauri".into()) {
+    if !isolated_ipc && !registered_scheme_protocols.contains(&"tauri".into()) {
       let web_resource_request_handler = pending.web_resource_request_handler.take();
       let protocol = crate::protocol::tauri::get(
         manager.manager_owned(),
@@ -277,7 +293,7 @@ impl<R: Runtime> WebviewManager<R> {
       registered_scheme_protocols.push("tauri".into());
     }
 
-    if !registered_scheme_protocols.contains(&"ipc".into()) {
+    if !isolated_ipc && !registered_scheme_protocols.contains(&"ipc".into()) {
       let protocol = crate::ipc::protocol::get(manager.manager_owned());
       pending.register_uri_scheme_protocol("ipc", move |webview_id, request, responder| {
         protocol(webview_id, request, UriSchemeResponder(responder))
@@ -334,7 +350,7 @@ impl<R: Runtime> WebviewManager<R> {
     }
 
     #[cfg(feature = "protocol-asset")]
-    if !registered_scheme_protocols.contains(&"asset".into()) {
+    if !isolated_ipc && !registered_scheme_protocols.contains(&"asset".into()) {
       let asset_scope = app_manager
         .state()
         .get::<crate::Scopes>()
@@ -347,24 +363,26 @@ impl<R: Runtime> WebviewManager<R> {
     }
 
     #[cfg(feature = "isolation")]
-    if let crate::Pattern::Isolation {
-      assets,
-      schema,
-      key: _,
-      crypto_keys,
-    } = &*app_manager.pattern
-    {
-      let protocol = crate::protocol::isolation::get(
-        manager.manager_owned(),
+    if !isolated_ipc {
+      if let crate::Pattern::Isolation {
+        assets,
         schema,
-        assets.clone(),
-        *crypto_keys.aes_gcm().raw(),
-        window_origin,
-        use_https_scheme,
-      );
-      pending.register_uri_scheme_protocol(schema, move |webview_id, request, responder| {
-        protocol(webview_id, request, UriSchemeResponder(responder))
-      });
+        key: _,
+        crypto_keys,
+      } = &*app_manager.pattern
+      {
+        let protocol = crate::protocol::isolation::get(
+          manager.manager_owned(),
+          schema,
+          assets.clone(),
+          *crypto_keys.aes_gcm().raw(),
+          window_origin,
+          use_https_scheme,
+        );
+        pending.register_uri_scheme_protocol(schema, move |webview_id, request, responder| {
+          protocol(webview_id, request, UriSchemeResponder(responder))
+        });
+      }
     }
 
     Ok(pending)
@@ -527,9 +545,11 @@ impl<R: Runtime> WebviewManager<R> {
     let label = pending.label.clone();
     pending = self.prepare_pending_webview(pending, &label, window_label, manager)?;
 
-    pending.ipc_handler = Some(crate::ipc::protocol::message_handler(
-      manager.manager_owned(),
-    ));
+    if pending.ipc_handler.is_none() {
+      pending.ipc_handler = Some(crate::ipc::protocol::message_handler(
+        manager.manager_owned(),
+      ));
+    }
 
     // in `windows`, we need to force a data_directory
     // but we do respect user-specification

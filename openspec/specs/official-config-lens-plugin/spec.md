@@ -4,18 +4,16 @@
 
 Define ConfigLens product behavior, language-processing invariants, public
 plugin boundaries, Runtime lifecycle, and the evidence required for Task 7.2.
-
 ## Requirements
-
 ### Requirement: ConfigLens MUST be a normal public-boundary official plugin
 
-The system MUST provide the product named `ConfigLens` in both `en-US` and `zh-CN` as the independent package `@lensx/official-config-lens` under `plugins/official/config-lens`, with plugin identity `dev.lensx.config-lens`. Its Manifest MUST use Contract `0.2.0`, contribute exactly one iframe Page and one Launcher Action targeting that Page, and request no Host permission or unpublished native capability. The plugin MUST consume only public plugin package exports and ordinary browser dependencies, and the Host MUST NOT import its source or grant authority based on its official repository location.
+The system MUST provide the product named `ConfigLens` in both `en-US` and `zh-CN` as the independent package `@lensx/official-config-lens` under `plugins/official/config-lens`, with plugin identity `dev.lensx.config-lens`. Its Manifest MUST use Contract `0.3.0`, contribute exactly one WebView Page and one Launcher Action targeting that Page, and request no Host permission or unpublished native capability. The plugin MUST consume only public plugin package exports and ordinary browser dependencies, and the Host MUST NOT import its source or grant authority based on its official repository location.
 
 #### Scenario: User opens ConfigLens from the Launcher
 - **WHEN** the installed ConfigLens Action is found and activated
-- **THEN** the Host opens its contributed Page through the ordinary Registration, Resource, isolated iframe Runtime and Session path
-- **THEN** the Host Page chrome presents the brand `ConfigLens` in the current supported locale while the iframe work area does not repeat a visible main title or subtitle
-- **THEN** the iframe retains an accessible work-area name without receiving Tauri, Host DOM, filesystem, native clipboard or another plugin's state
+- **THEN** the Host opens its contributed Page through the ordinary Registration, Resource, isolated Child WebView Runtime and Session path
+- **THEN** the Host Page chrome presents the brand `ConfigLens` in the current supported locale while the plugin work area does not repeat a visible main title or subtitle
+- **THEN** the Child WebView retains an accessible work-area name without receiving Tauri, Host DOM, filesystem, native clipboard or another plugin's state
 
 #### Scenario: Official source attempts to bypass the public boundary
 - **WHEN** ConfigLens declares or imports Host-private source, Tauri, an unpublished Host API, a workspace-only deep path or another plugin's source
@@ -177,3 +175,27 @@ The same canonical ConfigLens `.lxp` bytes MUST pass plugin unit, integration, t
 - **WHEN** one supported language, fidelity invariant, Worker boundary, installation step, search/open/hide/restore/close/disable/upgrade/uninstall path or final validation command fails or remains unverified
 - **THEN** Task 7.2 remains incomplete and ConfigLens MUST NOT be described as a fully delivered four-language official plugin
 - **THEN** after correction, the failed command and the complete final validation set MUST run again without reusing an invalid candidate
+
+### Requirement: ConfigLens MUST consume the same Child WebView Runtime as external plugins
+ConfigLens Manifest, SDK initialization, package candidate, installation and Page execution MUST use the public `0.3.0` WebView contract, `@lensx/plugin-sdk/webview` and the production Child WebView service. Repository location, Publisher and official release metadata MUST NOT select a privileged bridge, direct Host import, alternate WebView configuration or retained iframe path.
+
+#### Scenario: Immutable ConfigLens candidate opens
+- **WHEN** the released `.lxp` is installed and opened through the normal Launcher flow
+- **THEN** it reaches SDK ready and editing through the same source-bound bridge as an external plugin
+
+#### Scenario: Official source requests native authority
+- **WHEN** ConfigLens attempts an undeclared Tauri or Host command
+- **THEN** the same Runtime boundary rejects it with zero privileged side effect
+
+### Requirement: ConfigLens performance evidence MUST separate container startup from editor operations
+Real macOS evidence MUST record bounded cold Runtime stages separately from warm editor/Worker operations and Host responsiveness. After SDK and Worker readiness, explicit formatting of the maintained small JSON fixture MUST complete within the checked millisecond-scale budget of 100 ms at p95 in the reference harness; timeout, crash and retry MUST remain recoverable. No gate may attribute a one-to-two-second Worker or bundle delay to iframe removal without stage evidence.
+
+#### Scenario: Warm small JSON is formatted
+- **WHEN** the ready ConfigLens editor explicitly formats the reference small JSON corpus repeatedly
+- **THEN** p95 action-to-model-update latency is at most 100 ms and Host heartbeat remains responsive
+- **THEN** measurement records sizes and stage durations but not user content
+
+#### Scenario: Cold open is slow
+- **WHEN** total first-interactive time exceeds its maintained cold budget
+- **THEN** evidence identifies resolve, WebView creation, navigation, bridge, SDK, bundle, editor and Worker stages separately
+- **THEN** the change remains incomplete until the responsible stage is fixed or the accepted budget is explicitly revised

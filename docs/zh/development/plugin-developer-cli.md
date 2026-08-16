@@ -31,6 +31,10 @@ lensx-plugin inspect <file>
 scripts。构建必须生成自包含 `dist/manifest.json` 与全部引用资源。CLI 会拒绝递归 CLI build script、Host 私有
 import、Tauri import、未声明公共 import、symlink、特殊文件、不可移植/冲突 path，以及协议 size/count 违规。
 
+当前 authoring 仅支持 WebView：Manifest `0.3.0`、`runtime.kind: "webview"` 与
+`@lensx/plugin-sdk/webview`。Manifest `0.2.x`、iframe Runtime 或 SDK `/iframe` import 会返回稳定的
+`CLI_LEGACY_IFRAME_RUNTIME` incompatible diagnostic 与迁移说明；CLI 绝不会改写旧项目。
+
 ## Create
 
 `create` 打包两个 canonical `examples/plugins/*` 项目的 byte-checked snapshot。它只替换经过验证的项目名称、
@@ -38,17 +42,21 @@ package 名称、plugin ID 与对应 display/test placeholder，然后重新运�
 不安装依赖、不初始化 Git、不运行项目代码，也不覆盖非空目标。
 
 文件先写入唯一的同级 staging directory，完整验证后才用 atomic rename 提交。失败和中断会清理 staging。
-生成项目不请求权限。
+生成项目不请求权限，machine output 会报告 `runtime_kind: "webview"`。
 
 ## Build 与 Validate
 
-`build` 在执行项目代码前验证 package metadata，并通过参数数组而非 shell command composition 启动 `pnpm`。
+`build` 在执行项目代码前验证 package metadata、imports 与已有 author Manifest，并通过参数数组而非 shell
+command composition 启动 `pnpm`。
 human 模式流式显示作者自有 build log；JSON 模式只进行有界捕获，因此 child output 不会污染单一 JSON document。
 非零退出、signal 或缺失/空 `dist/manifest.json` 都属于 operational failure。
 
 `validate` 永不运行 build。它验证 metadata/imports，不跟随 link 地遍历既有 `dist/`，检查 Manifest 与资源，
 并完全在内存中执行 canonical pack 与 self-inspection。它区分 `compatible`、`incompatible`、`invalid`，且不修改
 项目或 artifact directory。
+
+成功的 `build`、`validate`、`pack` 与 `inspect` machine result 都会报告
+`runtime_kind: "webview"`；legacy incompatible result 不暴露 partial Manifest identity 或 package facts。
 
 ## Pack 与 Inspect
 

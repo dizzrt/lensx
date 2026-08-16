@@ -14,8 +14,8 @@ const forbidText = (path: string, marker: string): void => {
 
 const manifestSchema = json('packages/plugin-contract/schema/manifest.schema.json');
 const hostApiSchema = json('packages/plugin-contract/schema/host-api.schema.json');
-if (manifestSchema.$id !== 'https://lensx.app/schemas/plugin/manifest-0.2.0.schema.json')
-  failures.push('Manifest Schema id is not 0.2.0.');
+if (manifestSchema.$id !== 'https://lensx.app/schemas/plugin/manifest-0.3.0.schema.json')
+  failures.push('Manifest Schema id is not 0.3.0.');
 if (hostApiSchema.$id !== 'https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json')
   failures.push('Host API Schema id is not 0.2.0.');
 
@@ -45,25 +45,38 @@ for (const path of [
   forbidText(path, 'permission_denied');
 }
 
-requireText('packages/plugin-contract/src/constants.ts', "PLUGIN_MANIFEST_VERSION = '0.2.0'");
+requireText('packages/plugin-contract/src/constants.ts', "PLUGIN_MANIFEST_VERSION = '0.3.0'");
 requireText('packages/plugin-contract/src/constants.ts', "PLUGIN_HOST_API_VERSION = '0.2.0'");
 requireText('src-tauri/src/plugin_manifest.rs', 'PLUGIN_HOST_API_VERSION: &str = "0.2.0"');
-requireText('packages/plugin-sdk/src/constants.ts', "PLUGIN_SDK_VERSION = '0.2.0'");
+requireText('packages/plugin-sdk/src/constants.ts', "PLUGIN_SDK_VERSION = '0.3.0'");
 requireText('packages/plugin-sdk/src/constants.ts', '<0.3.0');
 requireText('packages/plugin-sdk/src/semver.ts', "parseSemVer('0.3.0')");
 
 for (const path of [
   'packages/plugin-contract/package.json',
-  'packages/plugin-sdk/package.json',
   'packages/plugin-testkit/package.json',
   'packages/plugin-cli/package.json',
   'packages/plugin-ui/package.json',
 ]) {
   if (json(path).version !== '0.2.0') failures.push(`${path}: package version is not 0.2.0.`);
 }
+if (json('packages/plugin-sdk/package.json').version !== '0.3.0') {
+  failures.push('packages/plugin-sdk/package.json: package version is not 0.3.0.');
+}
+
+for (const path of ['examples/plugin-contract-consumer/manifest.json']) {
+  const manifest = json(path);
+  const runtime = manifest.runtime as { kind?: unknown } | undefined;
+  const compatibility = manifest.compatibility as
+    | { host_api?: { min_version?: unknown; max_version_exclusive?: unknown } }
+    | undefined;
+  if (manifest.manifest_version !== '0.3.0') failures.push(`${path}: Manifest version is not 0.3.0.`);
+  if (runtime?.kind !== 'webview') failures.push(`${path}: Runtime kind is not webview.`);
+  if (compatibility?.host_api?.min_version !== '0.2.0' || compatibility.host_api.max_version_exclusive !== '0.3.0')
+    failures.push(`${path}: Host API range is not [0.2.0, 0.3.0).`);
+}
 
 for (const path of [
-  'examples/plugin-contract-consumer/manifest.json',
   'examples/plugins/framework-neutral/manifest.json',
   'examples/plugins/react-semi/manifest.json',
   'examples/plugins/development-mode-smoke/manifests/initial.json',
@@ -75,7 +88,9 @@ for (const path of [
   const compatibility = manifest.compatibility as
     | { host_api?: { min_version?: unknown; max_version_exclusive?: unknown } }
     | undefined;
-  if (manifest.manifest_version !== '0.2.0') failures.push(`${path}: Manifest version is not 0.2.0.`);
+  const runtime = manifest.runtime as { kind?: unknown } | undefined;
+  if (manifest.manifest_version !== '0.3.0') failures.push(`${path}: Manifest version is not 0.3.0.`);
+  if (runtime?.kind !== 'webview') failures.push(`${path}: Runtime kind is not webview.`);
   if (compatibility?.host_api?.min_version !== '0.2.0' || compatibility.host_api.max_version_exclusive !== '0.3.0')
     failures.push(`${path}: Host API range is not [0.2.0, 0.3.0).`);
   const serialized = JSON.stringify(manifest);
@@ -97,4 +112,4 @@ if (failures.length > 0) {
   for (const failure of failures) console.error(failure);
   process.exit(1);
 }
-console.log('Open isolated plugin Contract 0.2.0 drift checks passed.');
+console.log('Manifest Contract 0.3.0 and Host API 0.2.0 drift checks passed.');

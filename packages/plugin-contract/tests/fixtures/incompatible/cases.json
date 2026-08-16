@@ -1,5 +1,48 @@
 [
   {
+    "name": "legacy 0.2 iframe protocol is incompatible without rewrite",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/manifest_version",
+        "value": "0.2.0"
+      },
+      {
+        "op": "set",
+        "path": "/runtime/kind",
+        "value": "iframe"
+      }
+    ],
+    "expected_status": "incompatible",
+    "expected_diagnostics": [
+      {
+        "code": "incompatible_protocol",
+        "path": "/manifest_version"
+      },
+      {
+        "code": "incompatible_protocol",
+        "path": "/runtime/kind"
+      }
+    ]
+  },
+  {
+    "name": "iframe Runtime kind is incompatible without fallback",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/runtime/kind",
+        "value": "iframe"
+      }
+    ],
+    "expected_status": "incompatible",
+    "expected_diagnostics": [
+      {
+        "code": "incompatible_protocol",
+        "path": "/runtime/kind"
+      }
+    ]
+  },
+  {
     "name": "lensX is below the supported range",
     "mutations": [
       {

@@ -31,7 +31,7 @@ installation, Host authority, or execution.
 
 The generated `manifest.json` uses Manifest `0.2.0`, separate lensX/Host API
 compatibility ranges, unverified publisher text, no permission fields, one
-Page, one Page-targeting Action, and `index.html` as the iframe entry. Every
+Page, one Page-targeting Action, and `index.html` as the WebView entry. Every
 Runtime and asset path must exist under the built `dist/`.
 
 Worker/network behavior needs no Manifest declaration. Host policy fields,

@@ -12,6 +12,9 @@ structure.
   Contract package plus the architectural direction for plugins and isolation.
 - [Plugin Package Format](architecture/plugin-package-format.md) — shipped `.lxp`
   canonical `tar.zst` profile, inspection boundaries, limits, and validation.
+- [Plugin Child WebView Runtime](architecture/plugin-child-webview-runtime.md) —
+  shipped Host/native ownership, isolation, lifecycle, evidence, budgets, and
+  troubleshooting.
 
 ## Development
 

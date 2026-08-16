@@ -16,10 +16,10 @@ interface PackageMetadata {
 }
 
 describe('Plugin SDK public package boundary', () => {
-  test('declares only root and iframe exports, one workspace Runtime dependency, and meaningful lifecycle scripts', () => {
+  test('declares only root and WebView exports, one workspace Runtime dependency, and meaningful lifecycle scripts', () => {
     const metadata = readJson<PackageMetadata>(resolve(packageRoot, 'package.json'));
 
-    expect(Object.keys(metadata.exports ?? {})).toEqual(['.', './iframe']);
+    expect(Object.keys(metadata.exports ?? {})).toEqual(['.', './webview']);
     expect(metadata.files).toEqual(['dist', 'LICENSE', 'README.md']);
     expect(metadata.dependencies).toEqual({ '@lensx/plugin-contract': 'workspace:*' });
     for (const script of ['build', 'typecheck', 'test', 'check', 'test:pack']) {
@@ -68,14 +68,14 @@ describe('Plugin SDK public package boundary', () => {
       dependencies: { '@lensx/plugin-contract': '0.2.0' },
       exports: {
         '.': { import: './dist/src/index.js', types: './dist/src/index.d.ts' },
-        './iframe': { import: './dist/src/iframe.js', types: './dist/src/iframe.d.ts' },
+        './webview': { import: './dist/src/webview.js', types: './dist/src/webview.d.ts' },
       },
     };
     const files = [
-      'dist/src/iframe.d.ts',
-      'dist/src/iframe.js',
       'dist/src/index.d.ts',
       'dist/src/index.js',
+      'dist/src/webview.d.ts',
+      'dist/src/webview.js',
       'package.json',
     ];
     expect(validatePackedPackage({ declarationSources: ['export {};'], files, metadata, runtimeImports: [] })).toEqual(

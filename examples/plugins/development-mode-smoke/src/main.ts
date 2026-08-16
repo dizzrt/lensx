@@ -1,5 +1,5 @@
-import { createPluginSdk, type PluginRuntimeContext } from '@lensx/plugin-sdk';
-import { createPluginIframeTransport } from '@lensx/plugin-sdk/iframe';
+import { createPluginSdk, type PluginRuntimeContext, type PluginSdkClient } from '@lensx/plugin-sdk';
+import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview';
 
 import './styles.css';
 
@@ -63,17 +63,40 @@ const renderReady = (context: PluginRuntimeContext): void => {
   root.append(main);
 };
 
-const client = createPluginSdk({ transport: createPluginIframeTransport() });
-let unsubscribeContext: (() => void) | undefined;
+let activeAttempt: { readonly client: PluginSdkClient; unsubscribeContext?: () => void } | undefined;
+let attemptGeneration = 0;
+const safelyDispose = async (client: PluginSdkClient): Promise<void> => {
+  try {
+    await client.dispose();
+  } catch {
+    // Teardown is best effort after the attempt has already been made inert.
+  }
+};
 
 const connect = async (): Promise<void> => {
+  const generation = ++attemptGeneration;
+  const previous = activeAttempt;
+  activeAttempt = undefined;
+  previous?.unsubscribeContext?.();
+  if (previous) await safelyDispose(previous.client);
+  const client = createPluginSdk({ transport: createPluginWebviewTransport() });
+  const attempt = { client, unsubscribeContext: undefined as (() => void) | undefined };
+  activeAttempt = attempt;
   renderLoading();
   try {
     const context = await client.initialize();
+    if (generation !== attemptGeneration || activeAttempt !== attempt) {
+      await safelyDispose(client);
+      return;
+    }
     renderReady(context);
-    unsubscribeContext?.();
-    unsubscribeContext = client.subscribe('runtime.context_changed', ({ payload }) => renderReady(payload));
+    attempt.unsubscribeContext = client.subscribe('runtime.context_changed', ({ payload }) => {
+      if (generation === attemptGeneration && activeAttempt === attempt) renderReady(payload);
+    });
   } catch {
+    if (generation !== attemptGeneration || activeAttempt !== attempt) return;
+    activeAttempt = undefined;
+    await safelyDispose(client);
     root.replaceChildren();
     const alert = document.createElement('section');
     alert.setAttribute('role', 'alert');
@@ -90,9 +113,11 @@ const connect = async (): Promise<void> => {
 };
 
 const dispose = (): void => {
-  unsubscribeContext?.();
-  unsubscribeContext = undefined;
-  void client.dispose();
+  attemptGeneration += 1;
+  const attempt = activeAttempt;
+  activeAttempt = undefined;
+  attempt?.unsubscribeContext?.();
+  if (attempt) void safelyDispose(attempt.client);
 };
 
 window.addEventListener('pagehide', dispose, { once: true });

@@ -40,6 +40,7 @@ describe('create plugin project', () => {
       template,
       plugin_id: `com.example.${template.replace('-', '_')}`,
       package_name: 'example-plugin',
+      runtime_kind: 'webview',
     });
     expect(metadata).toMatchObject({
       name: 'example-plugin',
@@ -52,9 +53,19 @@ describe('create plugin project', () => {
       }),
     });
     expect(manifest).toMatchObject({
+      manifest_version: '0.3.0',
       plugin_id: result.plugin_id,
+      runtime: { kind: 'webview' },
       display: { name: { 'en-US': 'Example Plugin', 'zh-CN': 'Example Plugin' } },
     });
+    const productionSources = await Promise.all(
+      (await readdir(resolve(target, 'src')))
+        .filter((name) => /\.[jt]sx?$/u.test(name))
+        .map((name) => readFile(resolve(target, 'src', name), 'utf8')),
+    );
+    expect(productionSources.join('\n')).toContain("from '@lensx/plugin-sdk/webview'");
+    expect(productionSources.join('\n')).toContain('createPluginWebviewTransport');
+    expect(productionSources.join('\n')).not.toMatch(/plugin-sdk\/iframe|createPluginIframeTransport/u);
     expect(manifest).not.toHaveProperty('requested_permissions');
     expect(manifest.contributes.pages[0]).not.toHaveProperty('required_permissions');
     expect(validatePluginManifest(manifest).status).toBe('valid');

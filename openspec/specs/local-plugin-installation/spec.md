@@ -6,9 +6,7 @@ Define the trusted first-install lifecycle for a local compatible `.lxp`,
 including native selection, bounded inspection and extraction, Host-owned
 storage, atomic registration, conservative recovery, a private command
 contract, and the minimal settings entry point.
-
 ## Requirements
-
 ### Requirement: Users must select `.lxp` packages through a trusted local installation entry point
 
 The system MUST provide a Host-owned entry point for installing a plugin from a
@@ -465,3 +463,15 @@ A later successful installation of the same identity MUST clear an old completed
 - **WHEN** a previous uninstall completed while retaining data and a new compatible `0.2.0` package installs successfully
 - **THEN** the new record points to the new canonical payload and retained data remains
 - **THEN** old permission or grant facts do not enter the new record or Runtime
+
+### Requirement: Installation MUST commit only Child-WebView-compatible registrations
+Preparation MUST classify the immutable package with the current Contract and MUST reject Manifest `0.2.x`, `runtime.kind: "iframe"` and other unsupported Runtime protocols before staging or registration publication. A committed registration MUST contain only normalized public WebView Runtime facts; native labels, bridge configuration, origin tokens, WebView handles and Tauri permissions MUST remain absent.
+
+#### Scenario: User selects a current package
+- **WHEN** a valid `0.3.0` WebView `.lxp` passes all existing package and first-install checks
+- **THEN** installation may atomically commit a registration consumable by the Child WebView Runtime
+
+#### Scenario: User selects a legacy iframe package
+- **WHEN** the archive is safe but its Manifest protocol is obsolete
+- **THEN** installation reports incompatible plugin without committing payload or registration authority
+

@@ -20,17 +20,17 @@
       "closeLabel": "Close settings and return home",
       "closePluginLabel": "Close page and return home",
       "hostOwner": "lensX",
-      "pluginRuntimeResolving": "Preparing the isolated plugin runtime…",
+      "pluginRuntimeResolving": "Preparing the plugin page…",
       "pluginRuntimeLoading": "Loading the plugin page…",
       "pluginRuntimeFrameTitle": "{{title}} plugin runtime",
       "pluginRuntimeFailureTitle": "This plugin page could not be loaded",
       "pluginRuntimeFailure": {
         "loadTimeout": "The plugin page did not finish loading in time. Retry to start a fresh runtime.",
-        "handshakeTimeout": "The plugin runtime did not complete its secure handshake in time. Retry to start again.",
-        "disconnected": "The plugin runtime disconnected unexpectedly. Retry to start a fresh runtime.",
-        "securityPolicy": "The plugin runtime was stopped by the application security policy.",
+        "handshakeTimeout": "The plugin page did not become ready in time. Retry to start again.",
+        "disconnected": "The plugin page disconnected unexpectedly. Retry to start a fresh runtime.",
+        "securityPolicy": "The plugin page was stopped by the application security policy.",
         "crashLoop": "This plugin has failed repeatedly. Wait briefly, then retry manually.",
-        "unavailable": "The isolated runtime is unavailable. Retry to resolve the current plugin version."
+        "unavailable": "The plugin page is unavailable. Retry to resolve the current plugin version."
       },
       "pluginRuntimeRetry": "Retry",
       "errorTitle": "This page could not be displayed",

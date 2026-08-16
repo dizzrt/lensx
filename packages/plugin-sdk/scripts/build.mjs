@@ -17,4 +17,5 @@ if (result.status !== 0) {
   process.exitCode = result.status ?? 1;
 } else {
   await rm(resolve(packageRoot, 'dist/src/internal/transport-contract.d.ts'), { force: true });
+  await rm(resolve(packageRoot, 'dist/src/internal/webview-bridge-contract.d.ts'), { force: true });
 }

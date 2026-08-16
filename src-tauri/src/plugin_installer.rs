@@ -347,7 +347,8 @@ impl PluginInstaller {
                     PluginReplacementOperation::Inspect,
                 ));
             }
-            PackageInspectionResult::Incompatible { .. } => {
+            PackageInspectionResult::Incompatible { .. }
+            | PackageInspectionResult::IncompatibleProtocol { .. } => {
                 return Err(replacement_error(
                     PluginReplacementErrorCode::Incompatible,
                     PluginReplacementOperation::Inspect,
@@ -857,7 +858,8 @@ impl PluginInstaller {
                 )
                 .with_package_diagnostics(&diagnostics));
             }
-            PackageInspectionResult::Incompatible { .. } => {
+            PackageInspectionResult::Incompatible { .. }
+            | PackageInspectionResult::IncompatibleProtocol { .. } => {
                 return Err(installation_error(
                     LocalPluginInstallationErrorCode::Incompatible,
                     LocalPluginInstallationOperation::Prepare,
@@ -2740,6 +2742,10 @@ mod tests {
                 fixture("incompatible/manifest-incompatible.lxp"),
                 PluginReplacementErrorCode::Incompatible,
             ),
+            (
+                fixture("incompatible/legacy-iframe-runtime.lxp"),
+                PluginReplacementErrorCode::Incompatible,
+            ),
         ];
         for (index, (candidate, expected)) in candidates.into_iter().enumerate() {
             let (_directory, manager, installer) = setup(&format!("replacement-reject-{index}"));
@@ -2783,6 +2789,69 @@ mod tests {
             .expect_err("cross-plugin candidate should fail");
         assert_eq!(error.code, PluginReplacementErrorCode::IdentityMismatch);
         assert_eq!(manager.registration_revision(), "1");
+    }
+
+    #[test]
+    fn replacement_commit_rejects_a_legacy_iframe_payload_swap_before_registration() {
+        let (_directory, manager, installer) = setup("replacement-legacy-swap");
+        let PackageInspectionResult::Compatible { manifest, .. } =
+            inspect_plugin_package(&valid_package(), &versions())
+        else {
+            panic!("fixture should be compatible");
+        };
+        seed_replacement_target(
+            &manager,
+            &installer,
+            &manifest.plugin_id,
+            "0.0.1",
+            &"a".repeat(64),
+            Vec::new(),
+        );
+        let request = replacement_request(&manager, &manifest.plugin_id);
+        let PluginReplacementResult::Prepared {
+            preparation_token, ..
+        } = installer
+            .prepare_replacement_bytes(&valid_package(), &request)
+            .expect("replacement should prepare")
+        else {
+            panic!("expected prepared replacement")
+        };
+        let legacy_iframe = fs::read(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../fixtures/plugin-package-format/incompatible/legacy-iframe-runtime.lxp"),
+        )
+        .expect("legacy iframe fixture should exist");
+        {
+            let mut slot = installer
+                .preparation
+                .lock()
+                .expect("preparation should be writable");
+            let Some(PluginPreparation::Replacement(prepared)) = slot.as_mut() else {
+                panic!("replacement preparation should exist")
+            };
+            prepared.bytes = legacy_iframe;
+        }
+        let error = installer
+            .commit_replacement(
+                &CommitPluginReplacementRequest {
+                    contract_version: PLUGIN_REPLACEMENT_CONTRACT_VERSION.to_owned(),
+                    preparation_token,
+                    entry_id: request.entry_id,
+                    expected_revision: request.expected_revision,
+                },
+                &FakeEmitter::default(),
+            )
+            .expect_err("legacy iframe swap must fail at commit revalidation");
+        assert_eq!(error.code, PluginReplacementErrorCode::UnsafeState);
+        assert_eq!(manager.registration_revision(), "1");
+        assert_eq!(
+            manager
+                .registration(&manifest.plugin_id)
+                .expect("original registration should remain")
+                .manifest
+                .version,
+            "0.0.1"
+        );
     }
 
     #[test]
@@ -2985,7 +3054,8 @@ mod tests {
     }
 
     #[test]
-    fn uninstall_retain_data_is_idempotent_and_reinstall_clears_completed_evidence() {
+    fn uninstall_retain_data_is_idempotent_and_reinstall_commits_only_a_fresh_webview_registration()
+    {
         let (_directory, manager, installer) = setup("uninstall-retain");
         installer
             .install_bytes(&valid_package(), &FakeEmitter::default())
@@ -3030,6 +3100,10 @@ mod tests {
         let registration = manager
             .registration(plugin_id)
             .expect("new registration should exist");
+        assert_eq!(
+            registration.manifest.runtime.kind,
+            crate::plugin_manifest::RuntimeKind::Webview
+        );
         assert!(registration.facts.enabled);
         assert!(registration.facts.diagnostics.is_empty());
         assert_eq!(fs::read(data.join("preserved.json")).unwrap(), b"preserve");
@@ -3194,6 +3268,18 @@ mod tests {
             installer
                 .install_bytes(&incompatible, &emitter)
                 .expect_err("incompatible package should fail")
+                .code,
+            LocalPluginInstallationErrorCode::Incompatible
+        );
+        let legacy_iframe = fs::read(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../fixtures/plugin-package-format/incompatible/legacy-iframe-runtime.lxp"),
+        )
+        .expect("legacy iframe fixture should exist");
+        assert_eq!(
+            installer
+                .install_bytes(&legacy_iframe, &emitter)
+                .expect_err("legacy iframe package should fail before staging")
                 .code,
             LocalPluginInstallationErrorCode::Incompatible
         );
@@ -3858,9 +3944,9 @@ mod tests {
         };
         let incompatible = fs::read(
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../fixtures/plugin-package-format/incompatible/manifest-incompatible.lxp"),
+                .join("../fixtures/plugin-package-format/incompatible/legacy-iframe-runtime.lxp"),
         )
-        .expect("incompatible fixture should exist");
+        .expect("legacy iframe fixture should exist");
         {
             let mut slot = installer
                 .preparation

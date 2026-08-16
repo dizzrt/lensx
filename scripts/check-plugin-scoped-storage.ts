@@ -64,7 +64,7 @@ for (const method of ['storage.delete', 'storage.get', 'storage.get_quota', 'sto
 for (const publicFile of [
   'packages/plugin-contract/src/index.ts',
   'packages/plugin-sdk/src/index.ts',
-  'packages/plugin-sdk/src/iframe.ts',
+  'packages/plugin-sdk/src/webview.ts',
   'packages/plugin-testkit/src/index.ts',
 ]) {
   const source = read(publicFile);

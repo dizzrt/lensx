@@ -36,18 +36,29 @@ requireMarkers('examples/plugins/development-mode-smoke/package.json', [
 requireMarkers('examples/plugins/development-mode-smoke/manifests/initial.json', [
   'dev.lensx.smoke.development-mode',
   '"version": "0.1.0"',
-  '"manifest_version": "0.2.0"',
+  '"manifest_version": "0.3.0"',
 ]);
 requireMarkers('examples/plugins/development-mode-smoke/manifests/reload.json', [
   'dev.lensx.smoke.development-mode',
   '"version": "0.2.0"',
-  '"manifest_version": "0.2.0"',
+  '"manifest_version": "0.3.0"',
 ]);
 requireMarkers('examples/plugins/development-mode-smoke/src/main.ts', [
-  '@lensx/plugin-sdk/iframe',
+  '@lensx/plugin-sdk/webview',
+  'createPluginWebviewTransport',
   '__LENSX_PLUGIN_DEVELOPMENT_SMOKE_PHASE__',
   "context.capabilities.join(', ')",
 ]);
+const developmentSmoke = read('examples/plugins/development-mode-smoke/src/main.ts');
+for (const forbidden of [
+  '@lensx/plugin-sdk/iframe',
+  'createPluginIframeTransport',
+  'MessageChannel',
+  'parent.postMessage',
+]) {
+  if (developmentSmoke.includes(forbidden))
+    failures.push(`development smoke retains legacy Runtime marker ${forbidden}`);
+}
 
 requireMarkers('docs/en/architecture/extension-platform.md', [
   'Shipped Host-Private Plugin Development Mode',

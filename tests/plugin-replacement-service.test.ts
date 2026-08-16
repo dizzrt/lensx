@@ -142,6 +142,41 @@ describe('plugin replacement service', () => {
     }
   });
 
+  test('never reuses old Session authority across a rejected protocol replacement', async () => {
+    let activeAttempt: string | undefined = 'webview-attempt-old';
+    const operations: string[] = [];
+    const { surface, adapter } = setup(
+      {
+        quiesceProvider: async () => {
+          operations.push(`destroy:${activeAttempt}`);
+          activeAttempt = undefined;
+        },
+        reconcileRevision: async (revision) => {
+          expect(activeAttempt).toBeUndefined();
+          activeAttempt = 'webview-attempt-recovered';
+          operations.push(`reconcile:${revision}:${activeAttempt}`);
+        },
+      },
+      {
+        commit: async () => {
+          expect(activeAttempt).toBeUndefined();
+          operations.push('reject:incompatible-protocol');
+          throw new Error('incompatible');
+        },
+      },
+    );
+    const service = createPluginReplacementService({ replacementAdapter: adapter, surfaceProjection: surface });
+
+    await expect(service.replace({ entry_id: entryId, expected_revision: '7' })).rejects.toThrow('incompatible');
+    expect(operations).toEqual([
+      'destroy:webview-attempt-old',
+      'reject:incompatible-protocol',
+      'reconcile:7:webview-attempt-recovered',
+    ]);
+    expect(activeAttempt).toBe('webview-attempt-recovered');
+    expect(adapter.cancel).toHaveBeenCalledTimes(1);
+  });
+
   test('reports committed revision when post-commit convergence fails and keeps the new record', async () => {
     const { surface, adapter } = setup({
       reconcileRevision: async () => {

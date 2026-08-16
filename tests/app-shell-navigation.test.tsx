@@ -13,6 +13,7 @@ import {
 } from '../src/app/launcher/collections';
 import type { LauncherSurfaceController } from '../src/app/launcher/surface';
 import { AppNavigationService, HostPageCatalog } from '../src/app/navigation';
+import type { PluginRuntimeLifecycleService } from '../src/app/plugins/runtime';
 
 const inertActivationSource = {
   subscribe: async () => () => undefined,
@@ -68,6 +69,7 @@ const renderShell = ({
   initialLocale = 'en-US',
   initialThemeMode = 'light',
   surfaceController,
+  pluginRuntimeLifecycleService,
   collectionsClient = {
     read: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
     recordUse: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
@@ -80,6 +82,7 @@ const renderShell = ({
   initialLocale?: 'en-US' | 'zh-CN';
   initialThemeMode?: 'light' | 'dark';
   surfaceController?: LauncherSurfaceController;
+  pluginRuntimeLifecycleService?: PluginRuntimeLifecycleService;
   collectionsClient?: LauncherActionCollectionsClient;
 }) =>
   render(
@@ -89,6 +92,7 @@ const renderShell = ({
         activationSource={inertActivationSource}
         collectionsClient={collectionsClient}
         navigationService={navigationService}
+        pluginRuntimeLifecycleService={pluginRuntimeLifecycleService}
         renderPage={renderPage}
         surfaceController={surfaceController}
       />
@@ -96,6 +100,25 @@ const renderShell = ({
   );
 
 describe('App Shell page navigation', () => {
+  test('routes Host reload and root teardown through the Runtime terminal coordinator', async () => {
+    const terminateCurrent = rs.fn(async () => undefined);
+    const lifecycleService: PluginRuntimeLifecycleService = {
+      start: rs.fn(async () => undefined),
+      terminateCurrent,
+      dispose: rs.fn(async () => undefined),
+    };
+    const view = renderShell({
+      navigationService: createNavigationService(),
+      pluginRuntimeLifecycleService: lifecycleService,
+    });
+    fireEvent(window, new Event('beforeunload'));
+    fireEvent(window, new Event('pagehide'));
+    expect(terminateCurrent).toHaveBeenNthCalledWith(1, 'host_reload');
+    expect(terminateCurrent).toHaveBeenNthCalledWith(2, 'host_reload');
+    view.unmount();
+    expect(terminateCurrent).toHaveBeenNthCalledWith(3, 'app_teardown');
+  });
+
   test('derives home, search, and page states and restores focus after closing the page', async () => {
     const navigationService = createNavigationService();
     renderShell({ navigationService });

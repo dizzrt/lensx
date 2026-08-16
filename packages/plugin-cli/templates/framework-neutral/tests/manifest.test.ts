@@ -17,7 +17,7 @@ describe('framework-neutral template Manifest', () => {
     expect(normalized.status).toBe('compatible');
     expect(normalized.manifest.plugin_id).toBe('dev.lensx.template.framework-neutral');
     expect(normalized.manifest).not.toHaveProperty('requested_permissions');
-    expect(normalized.manifest.runtime).toEqual({ kind: 'iframe', entry: 'index.html' });
+    expect(normalized.manifest.runtime).toEqual({ kind: 'webview', entry: 'index.html' });
     expect(normalized.manifest.contributes.pages).toEqual([expect.objectContaining({ id: 'main', route: '/' })]);
     expect(normalized.manifest.contributes.pages[0]).not.toHaveProperty('required_permissions');
     expect(normalized.manifest.contributes.actions[0]?.target).toEqual({ kind: 'page', page_id: 'main' });

@@ -293,7 +293,7 @@ dropping an existing one.
 
 Plugin management and explicit permission decisions are delivered through the
 trusted Settings surface. Safe plugin icon resolution remains a separate
-capability. Scoped resources, lifecycle writes, the isolated iframe Runtime,
+capability. Scoped resources, lifecycle writes, the isolated Child WebView Runtime,
 and its private Session are delivered separately and do not change Action
 collection semantics.
 Production Plugin Actions now appear only while their projected target Page is
@@ -434,9 +434,9 @@ current plugin identity/version/entry and opaque URL, and every custom-protocol
 request revalidates its process-local scope against the current Manager
 generation and Installer-owned payload. Neither React presentation props nor
 public plugin packages receive installation paths, digests, record keys, or a
-general file reader. The macOS iframe Runtime consumes this resource-read
+general file reader. The macOS Child WebView Runtime consumes this resource-read
 foundation through Host-private adapters. Its shipped process-local Session
-authenticates a dedicated Port and compares relevant current facts without
+authenticates a source-bound bridge and compares relevant current facts without
 treating unrelated Registration revision changes as identity changes. Session
 state is not persisted and does not change Registration's `inactive` read
 model; public SDK transport, Host API, and complete CSP remain separate work.

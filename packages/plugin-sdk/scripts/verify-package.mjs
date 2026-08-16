@@ -140,7 +140,7 @@ try {
     ],
     consumerRoot,
   ).trim();
-  if (runtimeOutput !== '0.2.0:0.2.0:ready:en-US') {
+  if (runtimeOutput !== '0.3.0:0.2.0:ready:en-US') {
     throw new Error(`Unexpected external consumer output: ${runtimeOutput}`);
   }
   const deepImport = spawnSync(
@@ -215,11 +215,14 @@ try {
   });
   try {
     let ready = false;
-    for (let attempt = 0; attempt < 50; attempt += 1) {
+    for (let attempt = 0; attempt < 150; attempt += 1) {
       const probe = spawnSync('curl', ['--fail', '--silent', previewUrl], { encoding: 'utf8' });
       if (probe.status === 0) {
         ready = true;
         break;
+      }
+      if (preview.exitCode !== null) {
+        throw new Error(`The Plugin SDK browser consumer preview exited before readiness: ${preview.exitCode}.`);
       }
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
     }
@@ -250,7 +253,8 @@ try {
 
   for (const specifier of [
     '@lensx/plugin-sdk/dist/src/internal/transport-contract.js',
-    '@lensx/plugin-sdk/src/iframe.js',
+    '@lensx/plugin-sdk/dist/src/internal/webview-bridge-contract.js',
+    '@lensx/plugin-sdk/src/internal/webview-bridge-contract.js',
   ]) {
     const privateImport = spawnSync(
       'node',

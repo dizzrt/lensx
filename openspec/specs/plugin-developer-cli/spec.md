@@ -5,9 +5,7 @@
 Define the public plugin developer CLI command surface, project lifecycle,
 canonical packaging and inspection behavior, deterministic diagnostics, Host
 content-classification agreement, and isolated external-consumer validation.
-
 ## Requirements
-
 ### Requirement: Public Plugin Developer CLI MUST expose a bounded and portable command surface
 
 The system MUST provide an independently packageable public
@@ -320,3 +318,15 @@ Host-private source, a fixture generator, or an absolute path.
   absolute path
 - **THEN** the package gate fails
 - **THEN** the tarball cannot be treated as a publishable Task 6.4 artifact
+
+### Requirement: CLI MUST generate and validate the current WebView protocol only
+`create` MUST generate the maintained Manifest `0.3.0` and SDK `/webview` lifecycle. `validate`, `build`, `pack` and `inspect` MUST share current Contract/package classification, reject legacy iframe authoring with a stable incompatible diagnostic, and MUST NOT rewrite old projects or execute plugin code during inspection.
+
+#### Scenario: New project completes the CLI loop
+- **WHEN** an external user runs create, build, validate, pack and inspect
+- **THEN** every step agrees on the WebView Runtime and produces a canonical installable package
+
+#### Scenario: Legacy project is validated
+- **WHEN** the project contains Manifest `0.2.x`, `runtime.kind: "iframe"` or SDK `/iframe`
+- **THEN** CLI fails with bounded migration guidance and performs no automatic edit
+

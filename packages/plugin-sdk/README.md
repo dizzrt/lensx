@@ -7,14 +7,14 @@ Runtime Context shape and validation come from `@lensx/plugin-contract`; its
 capabilities are sorted current Host API method IDs, not grants. Host API error
 types remain distinct from SDK lifecycle errors.
 
-Use the root entry for the client and semantic types. An isolated browser
-plugin uses the official zero-configuration iframe entry:
+Use the root entry for the client and semantic types. A plugin Child WebView
+uses the official zero-configuration WebView entry:
 
 ```ts
 import { createPluginSdk } from '@lensx/plugin-sdk';
-import { createPluginIframeTransport } from '@lensx/plugin-sdk/iframe';
+import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview';
 
-const sdk = createPluginSdk({ transport: createPluginIframeTransport() });
+const sdk = createPluginSdk({ transport: createPluginWebviewTransport() });
 const context = await sdk.initialize();
 
 if (context.capabilities.includes('ui.close')) {
@@ -27,10 +27,10 @@ sdk.subscribe('runtime.context_changed', ({ payload }) => {
 });
 ```
 
-The iframe entry consumes the Host-authenticated dedicated Port. It does not
-accept identity, origin, nonce, Port, wire codec, or Host executor
-configuration. The private request IDs and frames are not public API or
-supported deep imports.
+The WebView entry discovers only the current document's Host-installed closed
+bridge. It does not accept identity, origin, label, handle, bridge adapter,
+wire codec, Tauri command, or Host executor configuration. The private request
+IDs and frames are not public API or supported deep imports.
 
 The production Host-private Dispatcher currently advertises and implements
 `runtime.get_context`, `ui.close`, and `actions.open`. Storage and clipboard

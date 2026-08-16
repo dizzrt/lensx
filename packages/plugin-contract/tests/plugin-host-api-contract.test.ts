@@ -65,7 +65,7 @@ describe('Host API 0.2.0 shared fixtures', () => {
 
 test('catalog is closed, sorted, immutable, independently versioned, and non-privileged', () => {
   expect(PLUGIN_HOST_API_VERSION).toBe('0.2.0');
-  expect(PLUGIN_MANIFEST_VERSION).toBe('0.2.0');
+  expect(PLUGIN_MANIFEST_VERSION).toBe('0.3.0');
   expect(HOST_API_METHOD_CATALOG).toHaveLength(8);
   expect(HOST_API_METHOD_CATALOG.map(({ method }) => method)).toEqual(
     [...HOST_API_METHOD_CATALOG.map(({ method }) => method)].sort(),

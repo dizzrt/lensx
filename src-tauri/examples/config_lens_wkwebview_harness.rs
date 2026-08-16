@@ -26,6 +26,20 @@ struct HarnessChecks {
     launcher_responsive_during_worker_work: bool,
     teardown_completed: bool,
     bounded_content_free_record: bool,
+    warm_small_json_p95_budget: bool,
+    warm_format_host_heartbeat: bool,
+    warm_format_lexical_correctness: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WarmFormatEvidence {
+    budget_ms: u16,
+    sample_count: u16,
+    corpus_case_count: u8,
+    max_input_bytes: u32,
+    p95_action_to_model_update_ms: f64,
+    host_heartbeat_ticks: u32,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -35,6 +49,7 @@ struct HarnessEvidence {
     platform: String,
     valid_language_count: u8,
     malicious_fail_closed_count: u8,
+    warm_format: WarmFormatEvidence,
     checks: HarnessChecks,
 }
 
@@ -53,6 +68,17 @@ fn config_lens_wkwebview_harness_record(
         || evidence.platform != "macos-wkwebview"
         || evidence.valid_language_count != 4
         || evidence.malicious_fail_closed_count != 4
+        || evidence.warm_format.budget_ms != 100
+        || evidence.warm_format.sample_count != 40
+        || evidence.warm_format.corpus_case_count != 4
+        || evidence.warm_format.max_input_bytes == 0
+        || !evidence
+            .warm_format
+            .p95_action_to_model_update_ms
+            .is_finite()
+        || evidence.warm_format.p95_action_to_model_update_ms < 0.0
+        || evidence.warm_format.p95_action_to_model_update_ms > 100.0
+        || evidence.warm_format.host_heartbeat_ticks == 0
         || [
             checks.exact_limits_observed,
             checks.diagnostic_limit_observed,
@@ -66,6 +92,9 @@ fn config_lens_wkwebview_harness_record(
             checks.launcher_responsive_during_worker_work,
             checks.teardown_completed,
             checks.bounded_content_free_record,
+            checks.warm_small_json_p95_budget,
+            checks.warm_format_host_heartbeat,
+            checks.warm_format_lexical_correctness,
         ]
         .into_iter()
         .any(|passed| !passed)

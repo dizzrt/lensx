@@ -30,3 +30,11 @@ void hostNavigationLeak;
 // @ts-expect-error Recovery belongs only to the discriminated error state.
 const invalidLoadingRecovery: PluginFeedbackProps = { kind: 'loading', onRecovery: () => undefined };
 void invalidLoadingRecovery;
+
+// @ts-expect-error Native Child WebView control is deliberately outside document-local UI props.
+const nativeWebviewLeak: PluginPageProps = { children: content, nativeWebview: {}, title: 'Title' };
+void nativeWebviewLeak;
+
+// @ts-expect-error Private bridge control is deliberately outside document-local UI props.
+const bridgeLeak: PluginUiProviderProps = { bridge: {}, children: content, context };
+void bridgeLeak;

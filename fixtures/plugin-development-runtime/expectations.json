@@ -1,26 +1,27 @@
 {
-  "fixture_version": "0.1.0",
+  "fixture_version": "0.3.0",
   "source_packages": {
     "normal": {
-      "file": "fixtures/plugin-iframe-runtime/normal/runtime-compatible.lxp",
-      "sha256": "5b51ccd655796841c65c6769e27ded202743552c4f05c8ff50d9110de5890d8d"
+      "file": "fixtures/plugin-webview-runtime/normal/runtime-compatible.lxp",
+      "sha256": "a551c9602c139bbbb58a5a854786a45decf8a074aa2cc93bb9208962eb34bec0"
     },
     "malicious": {
-      "file": "fixtures/plugin-iframe-runtime/malicious/runtime-adversarial.lxp",
-      "sha256": "c1e586233c1ac5c512069ab4ed534451883ea89047cb1151fb345d0b41b2d48f"
+      "file": "fixtures/plugin-webview-runtime/malicious/runtime-adversarial.lxp",
+      "sha256": "b5bcd2fa6b3ffc5874aad840a986d1e4317f9c2d7f45c30ce1aa339178c93512"
     }
   },
-  "development_transitions": {
-    "normal": ["register", "open", "reload", "manifest_version_advance", "remove"],
-    "malicious": ["register", "open", "reload", "malicious_policy_matrix", "remove"]
-  },
-  "manifest_version_advance": {
-    "plugin_id_unchanged": true,
-    "version": "1.1.0"
-  },
-  "shared_runtime_profile": {
-    "sandbox": "allow-scripts allow-same-origin",
-    "permissions_policy": "camera 'none'; microphone 'none'; geolocation 'none'; fullscreen 'none'; clipboard-read 'none'; clipboard-write 'none'; display-capture 'none'; payment 'none'; usb 'none'; serial 'none'; hid 'none'; bluetooth 'none'; screen-wake-lock 'none'",
-    "referrer_policy": "no-referrer"
+  "production_child_webview_evidence": {
+    "acl": {
+      "file": "fixtures/plugin-child-webview-acl/evidence/macos.json",
+      "sha256": "28fe107fb5125ec26b7f557de3391e1495c5b2bc9c384d322b373c853c81a346"
+    },
+    "slot": {
+      "file": "fixtures/plugin-child-webview-slot/evidence/macos.json",
+      "sha256": "cf173c78cd1531fcec084ae51cd8ef9f626bfd584c7a7c27bb23f42bdd1e394d"
+    },
+    "web_capabilities": {
+      "file": "fixtures/plugin-child-webview-web-capabilities/evidence/macos.json",
+      "sha256": "57ab58720ae740410e625c0f797a8e3707b62e5e77751c522ae12732188b0e56"
+    }
   }
 }

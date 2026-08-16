@@ -13,7 +13,7 @@
     "check": "pnpm run typecheck && pnpm run test && node scripts/check.mjs"
   },
   "dependencies": {
-    "@lensx/plugin-sdk": "^0.2.0"
+    "@lensx/plugin-sdk": "^0.3.0"
   },
   "devDependencies": {
     "@lensx/plugin-contract": "^0.2.0",

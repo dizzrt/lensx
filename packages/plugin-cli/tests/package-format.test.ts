@@ -49,7 +49,7 @@ describe('plugin CLI internal package format', () => {
     const result = await inspectPluginPackage(packed.bytes);
 
     expect(result.status).toBe('compatible');
-    if (result.status === 'invalid') throw new Error('expected a valid package');
+    if (result.status !== 'compatible') throw new Error('expected a compatible package');
     expect(result.facts.packageFormatVersion).toBe(PLUGIN_PACKAGE_FORMAT_VERSION);
     expect(result.facts.packageDigest).toEqual(packed.digest);
     expect(result.facts.files.map((file) => file.path)).toEqual([

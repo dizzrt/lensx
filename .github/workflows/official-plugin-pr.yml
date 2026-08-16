@@ -28,7 +28,7 @@ jobs:
   plan:
     permissions:
       contents: read
-    runs-on: ubuntu-24.04
+    runs-on: macos-15
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
     steps:

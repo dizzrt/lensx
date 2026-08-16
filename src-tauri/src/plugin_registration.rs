@@ -764,7 +764,7 @@ mod tests {
                 assert_eq!(manifest.publisher.author, "lensX Official");
                 assert_eq!(runtime, PluginRegistrationRuntimeStatus::Inactive);
                 assert_eq!(diagnostics.len(), 1);
-                assert_eq!(manifest.manifest_version, "0.2.0");
+                assert_eq!(manifest.manifest_version, "0.3.0");
             }
             PluginRegistrationDetail::Quarantined { .. } => {
                 panic!("expected registered detail")

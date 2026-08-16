@@ -6,9 +6,7 @@ Define the Host-private browser-origin boundary that gives every current plugin
 resource generation a distinct process-local origin, preserves module loading
 without relaxed CORS, partitions browser state from the Host and other
 generations, and proves those guarantees on the supported macOS WKWebView.
-
 ## Requirements
-
 ### Requirement: Every current resource generation MUST receive a distinct browser origin
 
 The system MUST use an operating-system CSPRNG to generate at least 128 bits of
@@ -172,37 +170,15 @@ Manifest, public packages, plugin messages, or bounded diagnostics.
   Resource adapter, navigation target, or WebView harness internals
 - **THEN** this capability adds no public Runtime, Session, or Host API export
 
-### Requirement: Delivery MUST use real macOS WKWebView evidence and preserve the Runtime-free product state
+### Requirement: Every isolated origin MUST be bound to one actual current Child WebView
+The Host MUST derive a distinct origin and data-store identity for every current resource generation before Child WebView creation. Resource and navigation access MUST additionally match the actual current WebView label/handle and Runtime attempt; the origin alone MUST NOT authorize a Host WebView, remote document, old WebView or another plugin. The public plugin surface MUST NOT reveal origin tokens or data-store identifiers.
 
-Delivery MUST verify canonical normal and malicious `.lxp` packages in a real
-macOS WKWebView, including isolated-origin serialization, the module graph,
-storage partitioning, absence of parent, `frameElement`, and Tauri access,
-host/path mismatch, cross-plugin and old-generation resource and navigation
-rejection, lifecycle revocation, and no-CORS behavior. Evidence MUST record
-bounded macOS, WKWebView engine and version, Tauri and Wry revision, and bundle
-shape, and MUST NOT record a raw URL, scope or origin token, invoke key,
-payload, local path, or storage value. DOM simulation, unit tests, and
-dependency source inspection MUST NOT replace real evidence. This capability
-MUST leave the production policy idle, preserve the Plugin Page placeholder and
-all UI, locale, theme, and focus behavior, and MUST NOT claim Windows or Linux
-support.
+#### Scenario: Current Child WebView loads its module graph
+- **WHEN** the actual current Child WebView requests the exact entry and same-generation package resources
+- **THEN** the isolated origin supports the representative module and Worker graph without CORS relaxation
+- **THEN** Host DOM, Tauri authority and another generation remain unreachable
 
-#### Scenario: Dedicated macOS gate passes
+#### Scenario: An old WebView reuses a current origin URL
+- **WHEN** a destroyed or replaced WebView requests a syntactically current resource URL
+- **THEN** source binding rejects the request without revealing whether the scope exists
 
-- **WHEN** `check:isolated-plugin-runtime-origin` executes the complete matrix in
-  the target macOS WKWebView
-- **THEN** all module, origin, storage, parent, Tauri, resource, navigation, and
-  lifecycle assertions pass and the evidence conforms to its bounded schema
-- **THEN** the downstream iframe Runtime can consume the entry URL contract,
-  while this capability itself neither creates an iframe nor executes
-  production plugin UI
-
-#### Scenario: Any security invariant cannot be proven
-
-- **WHEN** the target WebView cannot form an isolated non-opaque origin, cannot
-  load the module graph, exposes parent, Tauri, or storage state, or keeps an
-  old or cross target accessible
-- **THEN** the capability remains incomplete and the existing Host-owned
-  placeholder continues to display
-- **THEN** the team must first update the origin or platform design rather than
-  removing a negative case, relaxing CORS, or misreporting blocked evidence

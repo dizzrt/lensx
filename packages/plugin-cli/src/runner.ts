@@ -53,6 +53,7 @@ const executeInvocation = async (
       project: validated.project.callerPath,
       plugin_id: validated.inspection.manifest.plugin_id,
       version: validated.inspection.manifest.version,
+      runtime_kind: validated.inspection.manifest.runtime.kind,
       package_protocol: validated.inspection.facts.packageFormatVersion,
       compatibility: validated.inspection.compatibility,
       file_count: validated.inspection.facts.fileCount,

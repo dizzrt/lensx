@@ -6,9 +6,7 @@ Define the Host-private, Session-scoped Host API v1 Dispatcher that exposes
 only currently implemented capabilities through an authenticated Runtime Port,
 while preserving trusted identity, currentness, cancellation, lifecycle, and
 public Contract boundaries.
-
 ## Requirements
-
 ### Requirement: Production Host MUST route requests through a closed Dispatcher bound to a trusted Session
 
 The production Host MUST route Host API `0.2.0` requests through a closed Dispatcher bound to the current trusted Runtime Session identity. The Dispatcher MUST compose only base navigation and Context, plugin-scoped storage, and other current non-privileged providers. It MUST NOT compose a permission service, grant source, native clipboard provider, arbitrary Tauri command, or mediation for ordinary Web network or Worker behavior. Every request MUST still pass strict Contract validation, identity and currentness checks, cancellation, deadline, and bounded response validation.
@@ -205,11 +203,11 @@ or effect MUST be dropped and MUST NOT affect a replacement Session.
 
 ### Requirement: Delivery MUST prove real production wiring without absorbing later capabilities
 
-Production `PluginRuntimeFrame` MUST install a real Session-scoped Dispatcher
+Production `PluginRuntimeSlot` MUST install a real Session-scoped Dispatcher
 for a current ready lease instead of a fixed unavailable handler. Tests MUST
 retain explicit fake or unavailable binding injection. Delivery MUST cover
 Dispatcher unit tests, Navigation and Action regressions, all five scoped
-storage methods, real SDK and MessageChannel round trips, concurrency,
+storage methods, real SDK and native bridge round trips, concurrency,
 cancellation, replacement, cleanup, malicious or stale identity, complete
 Context events, response-before-close ordering, persistent storage restart,
 bounded diagnostics, and target macOS WKWebView evidence. It MUST prove that
@@ -228,7 +226,7 @@ permission UI, general RPC quotas, templates, CLI, or development mode.
 - **WHEN** an external plugin uses only the public Contract and SDK tarballs to
   initialize and call every Host API `0.2.0` method on a real Runtime Session
 - **THEN** Context, Page close, same-plugin Action, and scoped persistent
-  storage complete through the authenticated Port and current Host providers
+  storage complete through the authenticated current bridge and Host providers
 - **THEN** the plugin cannot import Host-private modules, private wire types,
   Tauri, storage paths, cursor codecs, authority coordinators, or executors
 
@@ -240,3 +238,14 @@ permission UI, general RPC quotas, templates, CLI, or development mode.
   effect or capability projection
 - **THEN** focused and WebView evidence does not describe the removed method as
   permission-denied, grantable, or delivered
+
+### Requirement: Dispatcher authority MUST derive only from the current Child WebView Session
+Production dispatch MUST accept a request only after native source binding and RPC validation identify the current Child WebView Session. Dispatcher MUST continue to derive plugin/Page/capability/storage namespace from trusted Session facts and MUST receive no plugin-provided WebView label, native handle, origin token, bridge object or Tauri command.
+
+#### Scenario: Current WebView calls a supported method
+- **WHEN** a validated bridge request reaches Dispatcher from the current ready Session
+- **THEN** existing Host API semantics execute for that Session only
+
+#### Scenario: Old WebView calls a valid method
+- **WHEN** a replaced or destroyed source sends an otherwise valid request
+- **THEN** request is rejected before provider invocation with zero side effect

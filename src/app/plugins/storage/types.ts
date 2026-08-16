@@ -1,7 +1,5 @@
 import type { HostApiRequest, HostApiResult } from '@lensx/plugin-contract';
 
-import type { PluginRuntimeSessionIdentity } from '../runtime/session-contract';
-
 export const PLUGIN_SCOPED_STORAGE_CONTRACT_VERSION = '0.1.0' as const;
 export const PLUGIN_SCOPED_STORAGE_COMMAND = 'plugin_scoped_storage' as const;
 
@@ -78,7 +76,7 @@ export interface PluginScopedStorageProviderBinding {
 
 export interface PluginScopedStorageProviderFactory {
   readonly create: (input: {
-    readonly identity: PluginRuntimeSessionIdentity;
+    readonly identity: PluginScopedStorageIdentity;
     readonly isCurrent: () => boolean;
   }) => PluginScopedStorageProviderBinding;
 }

@@ -13,11 +13,19 @@ const isWithin = (parent: string, child: string): boolean => {
   return path === '' || (path !== '..' && !path.startsWith('../') && !isAbsolute(path));
 };
 
-const mapPackageDiagnostics = (diagnostics: readonly PluginPackageDiagnostic[]): readonly PluginCliDiagnostic[] =>
+const mapPackageDiagnostics = (
+  diagnostics: readonly PluginPackageDiagnostic[],
+  incompatible = false,
+): readonly PluginCliDiagnostic[] =>
   diagnostics.map((item) =>
-    cliDiagnostic(`CLI_PACKAGE_${item.code.toUpperCase()}`, item.path, 'payload_invalid', {
-      package_code: item.code,
-    }),
+    item.code === 'manifest_incompatible'
+      ? cliDiagnostic('CLI_LEGACY_IFRAME_RUNTIME', item.path, 'legacy_runtime_incompatible')
+      : cliDiagnostic(
+          `CLI_PACKAGE_${item.code.toUpperCase()}`,
+          item.path,
+          incompatible ? 'package_incompatible' : 'payload_invalid',
+          { package_code: item.code },
+        ),
   );
 
 const validateOutputTarget = async (output: string, dist: string): Promise<boolean> => {
@@ -128,6 +136,7 @@ export const packPluginProject = async (input: PackPluginProjectInput): Promise<
     summary_version: '1',
     plugin_id: validated.inspection.manifest.plugin_id,
     version: validated.inspection.manifest.version,
+    runtime_kind: validated.inspection.manifest.runtime.kind,
     package_protocol: facts.packageFormatVersion,
     compatibility: validated.inspection.compatibility,
     file_count: facts.fileCount,
@@ -163,12 +172,16 @@ export const inspectPluginPackageFile = async (
   if (inspection.status === 'invalid') {
     throw new PluginCliCommandError('invalid', mapPackageDiagnostics(inspection.diagnostics));
   }
+  if (!('manifest' in inspection)) {
+    throw new PluginCliCommandError('incompatible', mapPackageDiagnostics(inspection.diagnostics, true));
+  }
   return {
     status: inspection.status,
     result: {
       file: callerFile,
       plugin_id: inspection.manifest.plugin_id,
       version: inspection.manifest.version,
+      runtime_kind: inspection.manifest.runtime.kind,
       package_protocol: inspection.facts.packageFormatVersion,
       compatibility: inspection.compatibility,
       file_count: inspection.facts.fileCount,

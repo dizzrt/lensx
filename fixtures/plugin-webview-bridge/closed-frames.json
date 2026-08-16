@@ -1,0 +1,109 @@
+{
+  "corpus_version": "0.1.0",
+  "carrier_version": "0.2.0",
+  "valid": [
+    {
+      "contract_version": "0.2.0",
+      "type": "lensx.plugin_bridge.ready",
+      "freshness": "0123456789abcdef0123456789abcdef"
+    },
+    {
+      "contract_version": "0.2.0",
+      "type": "lensx.plugin_bridge.request",
+      "request_id": "request_0000000000000001",
+      "request": { "method": "ui.close", "params": {} }
+    },
+    {
+      "contract_version": "0.2.0",
+      "type": "lensx.plugin_bridge.response",
+      "request_id": "request_0000000000000001",
+      "result": { "method": "ui.close", "result": { "accepted": true } }
+    },
+    {
+      "contract_version": "0.2.0",
+      "type": "lensx.plugin_bridge.response",
+      "request_id": "request_0000000000000001",
+      "error": { "code": "unavailable", "message": "The Host API is unavailable." }
+    },
+    {
+      "contract_version": "0.2.0",
+      "type": "lensx.plugin_bridge.event",
+      "event": {
+        "event": "runtime.context_changed",
+        "payload": { "capabilities": [], "hostApiVersion": "0.2.0", "locale": "en-US", "theme": "light" }
+      }
+    },
+    {
+      "contract_version": "0.2.0",
+      "type": "lensx.plugin_bridge.cancel",
+      "request_id": "request_0000000000000001"
+    },
+    {
+      "contract_version": "0.2.0",
+      "type": "lensx.plugin_bridge.disconnect"
+    }
+  ],
+  "invalid": [
+    {
+      "contract_version": "0.1.0",
+      "type": "lensx.plugin_bridge.disconnect"
+    },
+    {
+      "contract_version": "0.2.0",
+      "type": "lensx.plugin_transport.disconnect"
+    },
+    {
+      "contract_version": "0.2.0",
+      "type": "lensx.plugin_bridge.ready",
+      "freshness": "short"
+    },
+    {
+      "contract_version": "0.2.0",
+      "type": "lensx.plugin_bridge.ready",
+      "freshness": "0123456789abcdef0123456789abcdef",
+      "plugin_id": "com.forged.plugin"
+    },
+    {
+      "contract_version": "0.2.0",
+      "type": "lensx.plugin_bridge.request",
+      "request_id": "request_unbounded",
+      "request": { "method": "ui.close", "params": {} }
+    },
+    {
+      "contract_version": "0.2.0",
+      "type": "lensx.plugin_bridge.request",
+      "request_id": "request_0000000000000001",
+      "request": { "method": "ui.close", "params": {} },
+      "webview_label": "forged"
+    },
+    {
+      "contract_version": "0.2.0",
+      "type": "lensx.plugin_bridge.request",
+      "request_id": "request_0000000000000001",
+      "request": { "method": "ui.close", "params": {}, "tauri_command": "forged" }
+    },
+    {
+      "contract_version": "0.2.0",
+      "type": "lensx.plugin_bridge.response",
+      "request_id": "request_0000000000000001",
+      "result": { "method": "ui.close", "result": { "accepted": true } },
+      "path": "/private/plugin"
+    },
+    {
+      "contract_version": "0.2.0",
+      "type": "lensx.plugin_bridge.response",
+      "request_id": "request_0000000000000001",
+      "error": { "code": "transport_failure", "message": "Wrong layer." }
+    },
+    {
+      "contract_version": "0.2.0",
+      "type": "lensx.plugin_bridge.event",
+      "event": { "event": "unknown", "payload": {} }
+    },
+    {
+      "contract_version": "0.2.0",
+      "type": "lensx.plugin_bridge.disconnect",
+      "host_object": "forged"
+    }
+  ]
+}

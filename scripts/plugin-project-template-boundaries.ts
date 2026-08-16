@@ -43,10 +43,30 @@ export const auditPluginTemplateBoundary = (input: PluginTemplateBoundaryInput):
         diagnostics.add(`template/private-packer-import: ${file} imports ${specifier}.`);
       }
       if (/^@lensx\/(?:plugin-contract|plugin-sdk|plugin-testkit|plugin-ui)\/.+/u.test(specifier)) {
-        if (specifier !== '@lensx/plugin-sdk/iframe' && specifier !== '@lensx/plugin-ui/styles.css') {
+        if (specifier !== '@lensx/plugin-sdk/webview' && specifier !== '@lensx/plugin-ui/styles.css') {
           diagnostics.add(`template/non-public-import: ${file} imports unexported ${specifier}.`);
         }
       }
+    }
+  }
+
+  const sourceGraph = Object.values(input.sources).join('\n');
+  if (
+    !sourceGraph.includes("from '@lensx/plugin-sdk/webview'") ||
+    !sourceGraph.includes('createPluginWebviewTransport')
+  ) {
+    diagnostics.add('template/webview-transport-missing: production source must use the public WebView transport.');
+  }
+  for (const forbidden of [
+    '@lensx/plugin-sdk/iframe',
+    'createPluginIframeTransport',
+    'MessageChannel',
+    'MessagePort',
+    'window.parent',
+    'parent.postMessage',
+  ]) {
+    if (sourceGraph.includes(forbidden)) {
+      diagnostics.add(`template/legacy-runtime-reference: production source contains ${forbidden}.`);
     }
   }
 

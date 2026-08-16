@@ -2,7 +2,10 @@
   "input": {
     "kind": "react-semi",
     "metadata": { "scripts": { "build": "x", "typecheck": "x", "test": "x", "check": "x" } },
-    "sources": { "src/main.ts": "import x from '@lensx/plugin-sdk/dist/private.js';" }
+    "sources": {
+      "src/main.ts": "import x from '@lensx/plugin-sdk/dist/private.js';",
+      "src/runtime.ts": "import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview'; createPluginWebviewTransport();"
+    }
   },
   "expected": ["template/non-public-import: src/main.ts imports unexported @lensx/plugin-sdk/dist/private.js."]
 }

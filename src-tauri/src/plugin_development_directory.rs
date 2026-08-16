@@ -23,6 +23,7 @@ const MANIFEST_PATH: &str = "manifest.json";
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DevelopmentDirectoryDiagnosticCode {
+    Incompatible,
     Invalid,
     SourceChanged,
     Unsafe,
@@ -69,6 +70,9 @@ pub struct ValidatedDevelopmentPayload {
 #[derive(Clone, Debug, PartialEq)]
 pub enum DevelopmentDirectoryInspection {
     Invalid {
+        diagnostics: Vec<DevelopmentDirectoryDiagnostic>,
+    },
+    IncompatibleProtocol {
         diagnostics: Vec<DevelopmentDirectoryDiagnostic>,
     },
     Compatible(ValidatedDevelopmentPayload),
@@ -346,6 +350,21 @@ pub fn inspect_development_directory(
                     .collect(),
             }
         }
+        UnpackedPayloadValidation::IncompatibleProtocol(diagnostics) => {
+            DevelopmentDirectoryInspection::IncompatibleProtocol {
+                diagnostics: diagnostics
+                    .into_iter()
+                    .take(32)
+                    .map(|diagnostic| {
+                        DevelopmentDirectoryDiagnostic::new(
+                            DevelopmentDirectoryDiagnosticCode::Incompatible,
+                            diagnostic.code,
+                            Some(diagnostic.path),
+                        )
+                    })
+                    .collect(),
+            }
+        }
         UnpackedPayloadValidation::Valid {
             status,
             manifest,
@@ -466,6 +485,12 @@ mod tests {
                     manifest["compatibility"]["host_api"]["max_version_exclusive"] =
                         Value::String("0.1.0".to_owned());
                 }
+                if fixture.manifest == "legacy_manifest" {
+                    manifest["manifest_version"] = Value::String("0.2.0".to_owned());
+                }
+                if fixture.manifest == "legacy_iframe" {
+                    manifest["runtime"]["kind"] = Value::String("iframe".to_owned());
+                }
                 let manifest_bytes = if fixture.manifest == "invalid" {
                     b"{".to_vec()
                 } else {
@@ -487,6 +512,7 @@ mod tests {
                     &current_plugin_host_versions("0.1.0"),
                 ) {
                     UnpackedPayloadValidation::Invalid(_) => "invalid",
+                    UnpackedPayloadValidation::IncompatibleProtocol(_) => "incompatible",
                     UnpackedPayloadValidation::Valid { status, .. }
                         if status == PluginManifestValidationStatus::Compatible =>
                     {
@@ -496,6 +522,58 @@ mod tests {
                 }
             };
             assert_eq!(actual, fixture.expected, "corpus case {}", fixture.name);
+        }
+    }
+
+    #[test]
+    fn classifies_legacy_manifest_and_iframe_runtime_as_bounded_incompatible_protocol() {
+        for (name, pointer, mutate) in [
+            (
+                "legacy-manifest",
+                "/manifest_version",
+                (|manifest: &mut Value| {
+                    manifest["manifest_version"] = Value::String("0.2.0".to_owned());
+                }) as fn(&mut Value),
+            ),
+            (
+                "legacy-iframe",
+                "/runtime/kind",
+                (|manifest: &mut Value| {
+                    manifest["runtime"]["kind"] = Value::String("iframe".to_owned());
+                }) as fn(&mut Value),
+            ),
+        ] {
+            let directory = TestDirectory::new(name);
+            directory.write_valid_payload();
+            let mut manifest: Value =
+                serde_json::from_slice(&fs::read(directory.0.join("manifest.json")).unwrap())
+                    .unwrap();
+            mutate(&mut manifest);
+            fs::write(
+                directory.0.join("manifest.json"),
+                serde_json::to_vec(&manifest).unwrap(),
+            )
+            .unwrap();
+
+            let DevelopmentDirectoryInspection::IncompatibleProtocol { diagnostics } =
+                inspect_development_directory(
+                    &directory.0,
+                    &NativeDevelopmentFileSystem,
+                    &current_plugin_host_versions("0.1.0"),
+                )
+            else {
+                panic!("legacy development payload must be protocol-incompatible")
+            };
+            assert!(!diagnostics.is_empty() && diagnostics.len() <= 32);
+            assert!(diagnostics.iter().all(|diagnostic| {
+                diagnostic.code == DevelopmentDirectoryDiagnosticCode::Incompatible
+                    && diagnostic.reason == "manifest_incompatible"
+            }));
+            assert!(diagnostics
+                .iter()
+                .any(|diagnostic| { diagnostic.path.as_deref() == Some(pointer) }));
+            let encoded = serde_json::to_string(&diagnostics).unwrap();
+            assert!(!encoded.contains(directory.0.to_string_lossy().as_ref()));
         }
     }
 

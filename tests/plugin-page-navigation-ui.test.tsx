@@ -1,4 +1,4 @@
-import { describe, expect, rs, test } from '@rstest/core';
+import { afterEach, beforeEach, describe, expect, rs, test } from '@rstest/core';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { StrictMode } from 'react';
 import validCases from '../fixtures/plugin-registration-contract/valid/cases.json';
@@ -25,8 +25,8 @@ import {
 } from '../src/app/plugins/registration';
 import {
   createPluginRuntimeLifecycleService,
+  type PluginChildWebviewPresentationController,
   type PluginPageRuntimeDescriptor,
-  type PluginRuntimeSessionService,
 } from '../src/app/plugins/runtime';
 import { createPluginSurfaceProjectionService } from '../src/app/plugins/surfaces';
 import { useAppTheme } from '../src/app/theme';
@@ -101,8 +101,6 @@ const runtimeDescriptor: PluginPageRuntimeDescriptor = Object.freeze({
   entry_url:
     'lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost/v1/0123456789abcdef0123456789abcdef/v1-636f6d2e6578616d706c652e776f726b7370616365/1.2.3/index.html',
   host_fragment: '/open-project',
-  iframe_src:
-    'lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost/v1/0123456789abcdef0123456789abcdef/v1-636f6d2e6578616d706c652e776f726b7370616365/1.2.3/index.html#/open-project',
   entry_id: detail.entry_id,
   plugin_id: pluginId,
   version: detail.manifest.version,
@@ -111,6 +109,17 @@ const runtimeDescriptor: PluginPageRuntimeDescriptor = Object.freeze({
   resource_generation: '0123456789abcdef0123456789abcdef',
   runtime_attempt_key: 'attempt-1',
   registration_revision: '1',
+});
+
+const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+
+beforeEach(() => {
+  HTMLElement.prototype.getBoundingClientRect = () =>
+    ({ left: 10, top: 20, right: 410, bottom: 320, width: 400, height: 300 }) as DOMRect;
+});
+
+afterEach(() => {
+  HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
 });
 
 const TestProviderControls = () => {
@@ -156,21 +165,13 @@ const renderPluginComposition = (
     navigationService,
   });
   const pluginRuntimeResolver = { resolve: rs.fn(async () => runtimeDescriptor) };
-  const pluginRuntimeNavigationAdapter = {
-    activate: rs.fn(async () => ({ lease_id: '0000000000000001' })),
-    dispose: rs.fn(async () => true),
+  const pluginChildWebviewPresentationController: PluginChildWebviewPresentationController = {
+    create: rs.fn(async () => ({ attemptId: 'attempt_0123456789abcdef' as const })),
+    updateSlot: rs.fn(async () => undefined),
+    readReadiness: rs.fn(async () => ({ status: 'ready' as const })),
+    setVisible: rs.fn(async () => undefined),
+    destroy: rs.fn(async () => true),
   };
-  const pluginRuntimeSessionService = {
-    start: rs.fn(({ identity }) => ({
-      snapshot: () => ({ state: 'awaiting_handshake' as const, identity }),
-      subscribe: () => () => undefined,
-      disconnect: () => undefined,
-      dispose: () => undefined,
-    })),
-    current: () => undefined,
-    disconnect: () => undefined,
-    dispose: () => undefined,
-  } as unknown as PluginRuntimeSessionService;
   const pluginRuntimeLifecycleService = createPluginRuntimeLifecycleService();
   const activationSource = options.activationSource ?? new TestLauncherActivationSource();
   void projection.initialize();
@@ -182,10 +183,9 @@ const renderPluginComposition = (
         activationSource={activationSource}
         collectionsClient={collectionsClient}
         navigationService={navigationService}
+        pluginChildWebviewPresentationController={pluginChildWebviewPresentationController}
         pluginRuntimeLifecycleService={pluginRuntimeLifecycleService}
-        pluginRuntimeNavigationAdapter={pluginRuntimeNavigationAdapter}
         pluginRuntimeResolver={pluginRuntimeResolver}
-        pluginRuntimeSessionService={pluginRuntimeSessionService}
         surfaceProjectionService={projection}
       />
     </AppProviders>
@@ -196,24 +196,24 @@ const renderPluginComposition = (
     activationSource,
     navigationService,
     pageRegistry,
-    pluginRuntimeNavigationAdapter,
+    pluginChildWebviewPresentationController,
     pluginRuntimeResolver,
-    pluginRuntimeSessionService,
     projection,
   };
 };
 
 describe('Plugin Page navigation UI', () => {
   test('opens the isolated Runtime after the StrictMode setup-cleanup-setup replay', async () => {
-    const { actionService, navigationService, pluginRuntimeNavigationAdapter } = renderPluginComposition({
+    const { actionService, navigationService, pluginChildWebviewPresentationController } = renderPluginComposition({
       strictMode: true,
     });
     await waitFor(() => expect(actionService.registry.get(`${pluginId}.open_project`)).toBeDefined());
 
     act(() => navigationService.openPage({ owner_id: pluginId, page_id: 'open_project' }, `${pluginId}.open_project`));
 
-    await waitFor(() => expect(document.querySelectorAll('iframe')).toHaveLength(1));
-    expect(pluginRuntimeNavigationAdapter.activate).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(document.querySelectorAll('[data-plugin-runtime-slot="true"]')).toHaveLength(1));
+    expect(document.querySelector('iframe')).toBeNull();
+    await waitFor(() => expect(pluginChildWebviewPresentationController.create).toHaveBeenCalledTimes(1));
   });
 
   test('keeps one current Runtime across shortcut activation refresh and replaces it only after a real close', async () => {
@@ -225,11 +225,11 @@ describe('Plugin Page navigation UI', () => {
     act(() =>
       view.navigationService.openPage({ owner_id: pluginId, page_id: 'open_project' }, `${pluginId}.open_project`),
     );
-    const iframe = (await waitFor(() => expect(document.querySelector('iframe')).not.toBeNull()).then(() =>
-      document.querySelector('iframe'),
-    )) as HTMLIFrameElement;
-    fireEvent.load(iframe);
-    expect(view.pluginRuntimeSessionService.start).toHaveBeenCalledTimes(1);
+    const slot = await waitFor(() => {
+      const current = document.querySelector('[data-plugin-runtime-slot="true"]');
+      expect(current).not.toBeNull();
+      return current;
+    });
 
     await act(async () => {
       activationSource.emit({ reason: 'global_shortcut' });
@@ -237,34 +237,35 @@ describe('Plugin Page navigation UI', () => {
       await Promise.resolve();
     });
 
-    expect(document.querySelector('iframe')).toBe(iframe);
+    await waitFor(() => expect(document.querySelector('[data-plugin-runtime-slot="true"]')).toBe(slot));
     expect(view.pluginRuntimeResolver.resolve).toHaveBeenCalledTimes(1);
-    expect(view.pluginRuntimeNavigationAdapter.activate).toHaveBeenCalledTimes(1);
-    expect(view.pluginRuntimeNavigationAdapter.dispose).not.toHaveBeenCalled();
-    expect(view.pluginRuntimeSessionService.start).toHaveBeenCalledTimes(1);
+    expect(view.pluginChildWebviewPresentationController.create).toHaveBeenCalledTimes(1);
+    expect(view.pluginChildWebviewPresentationController.destroy).not.toHaveBeenCalled();
     expect(document.body).not.toHaveTextContent('Loading the plugin page');
 
     fireEvent.click(screen.getByRole('button', { name: 'Close page and return home' }));
-    await waitFor(() => expect(document.querySelector('iframe')).toBeNull());
+    await waitFor(() => expect(document.querySelector('[data-plugin-runtime-slot="true"]')).toBeNull());
     await waitFor(() =>
-      expect(view.pluginRuntimeNavigationAdapter.dispose).toHaveBeenCalledWith({ lease_id: '0000000000000001' }),
+      expect(view.pluginChildWebviewPresentationController.destroy).toHaveBeenCalledWith({
+        attemptId: 'attempt_0123456789abcdef',
+      }),
     );
 
     act(() =>
       view.navigationService.openPage({ owner_id: pluginId, page_id: 'open_project' }, `${pluginId}.open_project`),
     );
-    const reopenedIframe = await waitFor(() => {
-      const current = document.querySelector('iframe');
+    const reopenedSlot = await waitFor(() => {
+      const current = document.querySelector('[data-plugin-runtime-slot="true"]');
       expect(current).not.toBeNull();
       return current;
     });
-    expect(reopenedIframe).not.toBe(iframe);
+    expect(reopenedSlot).not.toBe(slot);
     expect(view.pluginRuntimeResolver.resolve).toHaveBeenCalledTimes(2);
-    expect(view.pluginRuntimeNavigationAdapter.activate).toHaveBeenCalledTimes(2);
+    expect(view.pluginChildWebviewPresentationController.create).toHaveBeenCalledTimes(2);
   });
 
-  test('navigates a projected Action to one isolated Runtime iframe and resolves current metadata', async () => {
-    const { actionService, pageRegistry, pluginRuntimeNavigationAdapter, pluginRuntimeResolver } =
+  test('navigates a projected Action to one native Runtime slot and resolves current metadata', async () => {
+    const { actionService, pageRegistry, pluginChildWebviewPresentationController, pluginRuntimeResolver } =
       renderPluginComposition();
     const input = screen.getByRole('combobox', { name: 'Launcher query' });
     await waitFor(() => expect(actionService.registry.get(`${pluginId}.open_project`)).toBeDefined());
@@ -273,20 +274,28 @@ describe('Plugin Page navigation UI', () => {
     const option = await screen.findByRole('option', { name: /Launch Workspace/u });
     fireEvent.click(option);
 
-    await waitFor(() => expect(document.querySelectorAll('iframe')).toHaveLength(1));
-    const iframe = document.querySelector('iframe');
-    expect(iframe).toHaveAttribute('src', runtimeDescriptor.iframe_src);
-    expect(iframe).toHaveAttribute('title', 'Open Project plugin runtime');
+    await waitFor(() => expect(document.querySelectorAll('[data-plugin-runtime-slot="true"]')).toHaveLength(1));
+    expect(document.querySelector('iframe')).toBeNull();
     expect(pluginRuntimeResolver.resolve).toHaveBeenCalledWith(
       expect.objectContaining({ attempt: 0, activePage: expect.objectContaining({ owner_id: pluginId }) }),
     );
-    expect(pluginRuntimeNavigationAdapter.activate).toHaveBeenCalledWith({
-      entry_url: runtimeDescriptor.entry_url,
-      host_fragment: runtimeDescriptor.host_fragment,
-    });
+    await waitFor(() =>
+      expect(pluginChildWebviewPresentationController.create).toHaveBeenCalledWith({
+        identity: {
+          entryId: runtimeDescriptor.entry_id,
+          pluginId: runtimeDescriptor.plugin_id,
+          version: runtimeDescriptor.version,
+          pageId: runtimeDescriptor.page_id,
+          expectedRevision: runtimeDescriptor.registration_revision,
+        },
+        scaleFactor: window.devicePixelRatio,
+        physicalBounds: { x: 10, y: 20, width: 400, height: 300 },
+        presentationRevision: 1n,
+      }),
+    );
     const context = screen.getByRole('region', { name: 'Workspace Tools: Launch Workspace' });
     expect(context.querySelector('[data-owner-icon-token]')).toHaveAttribute('data-owner-icon-token', 'owner-fallback');
-    expect(document.querySelectorAll('iframe')).toHaveLength(1);
+    expect(document.querySelectorAll('[data-plugin-runtime-slot="true"]')).toHaveLength(1);
 
     act(() => {
       actionService.registry.replaceProviderBatch(pluginId, []);
@@ -295,7 +304,10 @@ describe('Plugin Page navigation UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Chinese' }));
     expect(await screen.findByRole('region', { name: '工作区工具: 打开项目' })).toBeInTheDocument();
-    expect(document.querySelector('iframe')).toHaveAttribute('title', '打开项目插件运行时');
+    expect(document.querySelector('[data-plugin-runtime-slot="true"]')?.parentElement).toHaveAttribute(
+      'aria-label',
+      '打开项目',
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Dark' }));
     expect(document.body).toHaveAttribute('theme-mode', 'dark');
 
@@ -305,8 +317,11 @@ describe('Plugin Page navigation UI', () => {
     const restoredInput = await screen.findByRole('combobox', { name: '启动器查询' });
     await waitFor(() => expect(restoredInput).toHaveFocus());
     await waitFor(() =>
-      expect(pluginRuntimeNavigationAdapter.dispose).toHaveBeenCalledWith({ lease_id: '0000000000000001' }),
+      expect(pluginChildWebviewPresentationController.destroy).toHaveBeenCalledWith({
+        attemptId: 'attempt_0123456789abcdef',
+      }),
     );
+    expect(document.querySelector('[data-plugin-runtime-slot="true"]')).toBeNull();
     expect(document.querySelector('iframe')).toBeNull();
   });
 

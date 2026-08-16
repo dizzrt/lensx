@@ -148,7 +148,6 @@ describe('Host-private Plugin Page Runtime resolver', () => {
     expect(descriptor).toMatchObject({
       entry_url: entry.entry_url,
       host_fragment: '/route-probe',
-      iframe_src: `${entry.entry_url}#/route-probe`,
       entry_id: entry.entry_id,
       plugin_id: entry.plugin_id,
       version: entry.version,
@@ -160,6 +159,18 @@ describe('Host-private Plugin Page Runtime resolver', () => {
     expect(Object.isFrozen(descriptor)).toBe(true);
     expect(pageResolution.page).not.toHaveProperty('entry_id');
     expect(activePage).not.toHaveProperty('entry_url');
+  });
+
+  test('uses the same production descriptor path for external and development registrations', async () => {
+    const external = await harness(snapshot()).resolver.resolve({ activePage, pageResolution, attempt: 0 });
+    const developmentEntry = { ...registeredEntry, source: 'development' as const };
+    const development = await harness(snapshot({ entries: [developmentEntry] })).resolver.resolve({
+      activePage,
+      pageResolution,
+      attempt: 0,
+    });
+
+    expect(development).toEqual(external);
   });
 
   test.each([
@@ -175,7 +186,7 @@ describe('Host-private Plugin Page Runtime resolver', () => {
     ['missing entry', snapshot({ entries: [] })],
     ['disabled entry', snapshot({ entries: [{ ...registeredEntry, enabled: false }] })],
     [
-      'incompatible entry',
+      'legacy or protocol-incompatible entry before execution',
       snapshot({
         entries: [
           {

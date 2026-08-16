@@ -169,9 +169,6 @@ impl PluginDevelopmentResult {
 struct PluginDevelopmentCoordinator {
     manager: Arc<PluginManager>,
     snapshots: Arc<DevelopmentSnapshotStore>,
-    #[cfg(target_os = "macos")]
-    navigation_policy:
-        Option<Arc<crate::frame_aware_navigation_policy::FrameAwareNavigationPolicy>>,
 }
 
 pub struct PluginDevelopmentModeState {
@@ -318,15 +315,6 @@ fn development_facts(
 }
 
 impl PluginDevelopmentCoordinator {
-    fn revoke_runtime_navigation(&self, record_key: &str) {
-        #[cfg(target_os = "macos")]
-        if let Some(policy) = &self.navigation_policy {
-            let _ = policy.revoke_plugin_target(record_key);
-        }
-        #[cfg(not(target_os = "macos"))]
-        let _ = record_key;
-    }
-
     fn register(
         &self,
         emitter: &impl PluginRegistrationEventEmitter,
@@ -374,7 +362,6 @@ impl PluginDevelopmentCoordinator {
             .resolve_lifecycle_entry(&request.entry_id, &request.expected_revision)
             .map_err(|failure| map_manager_failure(failure, operation))?;
         let PluginManagerLifecycleEntry::Healthy {
-            record_key,
             registration: current,
             ..
         } = current
@@ -402,7 +389,6 @@ impl PluginDevelopmentCoordinator {
             ));
         }
         let old_root = old_root.to_path_buf();
-        let record_key = record_key.clone();
         let source_directory = source_directory.to_path_buf();
         let snapshot = self
             .snapshots
@@ -427,7 +413,6 @@ impl PluginDevelopmentCoordinator {
                 return Err(map_manager_failure(failure, operation));
             }
         };
-        self.revoke_runtime_navigation(&record_key);
         let _ = emit_plugin_registration_changed(emitter, &replacement.change);
         let cleanup = if self.snapshots.retire(&old_root) {
             PluginDevelopmentCleanupStatus::Complete
@@ -454,12 +439,7 @@ impl PluginDevelopmentCoordinator {
             .manager
             .resolve_lifecycle_entry(&request.entry_id, &request.expected_revision)
             .map_err(|failure| map_manager_failure(failure, operation))?;
-        let PluginManagerLifecycleEntry::Healthy {
-            record_key,
-            registration,
-            ..
-        } = &current
-        else {
+        let PluginManagerLifecycleEntry::Healthy { registration, .. } = &current else {
             return Err(PluginDevelopmentError::new(
                 PluginDevelopmentErrorCode::Conflict,
                 operation,
@@ -483,12 +463,10 @@ impl PluginDevelopmentCoordinator {
             ));
         }
         let snapshot_root = snapshot_root.to_path_buf();
-        let record_key = record_key.clone();
         let removal = self
             .manager
             .remove_development_entry(&request.entry_id, &request.expected_revision)
             .map_err(|failure| map_manager_failure(failure, operation))?;
-        self.revoke_runtime_navigation(&record_key);
         let _ = emit_plugin_registration_changed(emitter, &removal.change);
         let cleanup = if self.snapshots.retire(&snapshot_root) {
             PluginDevelopmentCleanupStatus::Complete
@@ -663,11 +641,6 @@ pub fn setup_plugin_development_mode<R: Runtime>(
         .map(|snapshots| PluginDevelopmentCoordinator {
             manager,
             snapshots: Arc::new(snapshots),
-            #[cfg(target_os = "macos")]
-            navigation_policy: app
-                .try_state::<Arc<crate::frame_aware_navigation_policy::FrameAwareNavigationPolicy>>(
-                )
-                .map(|policy| Arc::clone(policy.inner())),
         });
     let state = Arc::new(PluginDevelopmentModeState {
         enabled: Mutex::new(false),
@@ -751,12 +724,7 @@ mod tests {
         );
         let snapshots =
             Arc::new(DevelopmentSnapshotStore::initialize(directory.0.join("cache")).unwrap());
-        PluginDevelopmentCoordinator {
-            manager,
-            snapshots,
-            #[cfg(target_os = "macos")]
-            navigation_policy: None,
-        }
+        PluginDevelopmentCoordinator { manager, snapshots }
     }
 
     #[test]
@@ -930,6 +898,57 @@ mod tests {
             .entries
             .is_empty());
         assert_eq!(*emitter.0.lock().unwrap(), ["1", "2", "3"]);
+    }
+
+    #[test]
+    fn rejected_legacy_reload_keeps_the_current_snapshot_and_registration() {
+        let directory = TestDirectory::new("legacy-reload");
+        let source = directory.source();
+        let coordinator = coordinator(&directory);
+        let emitter = TestEmitter::default();
+
+        let PluginDevelopmentResult::Registered { entry_id, .. } =
+            coordinator.register(&emitter, source.clone()).unwrap()
+        else {
+            panic!("register should publish a development entry")
+        };
+        let before = coordinator
+            .manager
+            .registration("com.acme.workspace")
+            .expect("current registration");
+        let mut legacy: serde_json::Value =
+            serde_json::from_slice(&fs::read(source.join("manifest.json")).unwrap()).unwrap();
+        legacy["manifest_version"] = serde_json::Value::String("0.2.0".to_owned());
+        legacy["runtime"]["kind"] = serde_json::Value::String("iframe".to_owned());
+        fs::write(
+            source.join("manifest.json"),
+            serde_json::to_vec(&legacy).unwrap(),
+        )
+        .unwrap();
+
+        let rejected = coordinator.reload(
+            &emitter,
+            PluginDevelopmentEntryRequest {
+                contract_version: PLUGIN_DEVELOPMENT_CONTRACT_VERSION.to_owned(),
+                entry_id,
+                expected_revision: "1".to_owned(),
+            },
+        );
+        assert!(matches!(
+            rejected,
+            Err(PluginDevelopmentError {
+                code: PluginDevelopmentErrorCode::Incompatible,
+                ..
+            })
+        ));
+        assert_eq!(coordinator.manager.registration_revision(), "1");
+        assert_eq!(coordinator.snapshots.current_snapshot_count(), 1);
+        let after = coordinator
+            .manager
+            .registration("com.acme.workspace")
+            .expect("current registration remains");
+        assert_eq!(after, before);
+        assert_eq!(*emitter.0.lock().unwrap(), ["1"]);
     }
 
     #[test]

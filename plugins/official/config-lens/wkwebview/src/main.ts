@@ -16,6 +16,18 @@ interface EvidenceChecks {
   readonly launcher_responsive_during_worker_work: boolean;
   readonly teardown_completed: boolean;
   readonly bounded_content_free_record: boolean;
+  readonly warm_small_json_p95_budget: boolean;
+  readonly warm_format_host_heartbeat: boolean;
+  readonly warm_format_lexical_correctness: boolean;
+}
+
+interface WarmFormatEvidence {
+  readonly budget_ms: 100;
+  readonly sample_count: 40;
+  readonly corpus_case_count: 4;
+  readonly max_input_bytes: number;
+  readonly p95_action_to_model_update_ms: number;
+  readonly host_heartbeat_ticks: number;
 }
 
 interface Evidence {
@@ -23,6 +35,7 @@ interface Evidence {
   readonly platform: 'macos-wkwebview';
   readonly valid_language_count: number;
   readonly malicious_fail_closed_count: number;
+  readonly warm_format: WarmFormatEvidence;
   readonly checks: EvidenceChecks;
 }
 
@@ -34,6 +47,11 @@ const internals = (globalThis as typeof globalThis & { __TAURI_INTERNALS__?: Tau
 
 const recordFailure = async () => {
   await internals?.invoke('config_lens_wkwebview_harness_fail', { phase: 'evidence_record' });
+};
+
+const percentile95 = (values: readonly number[]): number => {
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)] ?? 0;
 };
 
 const run = async (): Promise<void> => {
@@ -102,6 +120,37 @@ const run = async (): Promise<void> => {
     await model.undo();
     directReplaceAndUndo = replaced && model.getValue() === originalEditorContent;
   }
+  const smallJsonCorpus = [
+    '{"name":"ConfigLens","enabled":true}',
+    '{"large":900719925474099312345,"negativeZero":-0}',
+    '{"escaped":"\\u0041","items":[3,2,1]}',
+    '{"duplicate":1,"duplicate":2,"nested":{"value":null}}',
+  ] as const;
+  const warmup = await controller.run('json', 'format', smallJsonCorpus[0]);
+  if (warmup.status !== 'valid' || warmup.output === undefined) throw new Error('warmup_failed');
+  model.setValue(smallJsonCorpus[0]);
+  model.pushEditOperations([], [{ range: model.getFullModelRange(), text: warmup.output }], () => null);
+  let warmHeartbeatTicks = 0;
+  const warmHeartbeat = setInterval(() => {
+    warmHeartbeatTicks += 1;
+  }, 0);
+  const warmDurations: number[] = [];
+  let warmLexicalCorrectness = true;
+  for (let index = 0; index < 40; index += 1) {
+    const source = smallJsonCorpus[index % smallJsonCorpus.length] ?? smallJsonCorpus[0];
+    model.setValue(source);
+    const started = performance.now();
+    const result = await controller.run('json', 'format', source);
+    if (result.status !== 'valid' || result.output === undefined) {
+      warmLexicalCorrectness = false;
+      continue;
+    }
+    model.pushEditOperations([], [{ range: model.getFullModelRange(), text: result.output }], () => null);
+    warmDurations.push(performance.now() - started);
+    warmLexicalCorrectness &&= model.getValue().replace(/\s/gu, '') === source.replace(/\s/gu, '');
+  }
+  clearInterval(warmHeartbeat);
+  const warmP95 = Math.round(percentile95(warmDurations) * 1_000) / 1_000;
   const explicitEditorWorker = new Worker(new URL('../../src/editor/editor.worker.ts', import.meta.url), {
     name: 'config-lens-evidence-editor',
     type: 'module',
@@ -126,6 +175,14 @@ const run = async (): Promise<void> => {
     valid_language_count: serial.filter(({ output, status }) => status === 'valid' && output !== undefined).length,
     malicious_fail_closed_count: malicious.filter(({ output, status }) => status !== 'valid' && output === undefined)
       .length,
+    warm_format: {
+      budget_ms: 100,
+      sample_count: 40,
+      corpus_case_count: smallJsonCorpus.length,
+      max_input_bytes: Math.max(...smallJsonCorpus.map((source) => new TextEncoder().encode(source).byteLength)),
+      p95_action_to_model_update_ms: warmP95,
+      host_heartbeat_ticks: warmHeartbeatTicks,
+    },
     checks: {
       exact_limits_observed:
         preflightInput(1, 'a'.repeat(MAX_INPUT_BYTES + 1))?.status === 'limit' &&
@@ -148,6 +205,9 @@ const run = async (): Promise<void> => {
       launcher_responsive_during_worker_work: animationTicks > 0,
       teardown_completed: fakeTerminated,
       bounded_content_free_record: true,
+      warm_small_json_p95_budget: warmDurations.length === 40 && warmP95 <= 100,
+      warm_format_host_heartbeat: warmHeartbeatTicks > 0,
+      warm_format_lexical_correctness: warmLexicalCorrectness,
     },
   };
   await internals.invoke('config_lens_wkwebview_harness_record', { evidence });

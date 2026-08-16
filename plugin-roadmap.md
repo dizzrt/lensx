@@ -17,12 +17,10 @@
 
 当前仓库已经实现：
 
-- `@lensx/plugin-contract@0.1.0` 公共 workspace package，以及三个受限公共入口；
-- `@lensx/plugin-sdk@0.1.0` 框架无关公共 package 与受限根入口；
-- 可选的 `@lensx/plugin-ui@0.1.0` React/Semi Design 公共 package、样式入口与十个语义 token；
-- `@lensx/plugin-testkit@0.1.0` 的 Manifest、Runtime context、SDK lifecycle 和 Host API 测试工具；
-- `@lensx/plugin-cli@0.1.0` 的 create、build、validate、pack 与 inspect authoring workflow；
-- `manifest_version: "0.1.0"` 的严格外部插件 Manifest Schema；
+- `@lensx/plugin-contract@0.2.0`、`@lensx/plugin-ui@0.2.0`、
+  `@lensx/plugin-testkit@0.2.0` 与 `@lensx/plugin-cli@0.2.0` 公共 workspace package；
+- `@lensx/plugin-sdk@0.3.0` 框架无关公共 package、受限根入口与 `/webview` production transport；
+- `manifest_version: "0.3.0"`、`runtime.kind: "webview"` 的严格外部插件 Manifest Schema；
 - Schema 驱动的 `PluginManifestInput`、两阶段 TypeScript API 与独立 Rust 校验；
 - valid、invalid、normalized、incompatible 共享 fixtures、真实 tarball 消费验证和契约 drift gate；
 - Host 私有的持久化 Plugin Manager、逐插件原子记录、兼容性重算与 quarantine 恢复；
@@ -32,14 +30,12 @@
   以及同 identity 本地包的两阶段单 active replacement；
 - Host-owned Launcher Action descriptor、Registry、Dispatcher、搜索与集合能力；
 - Host 私有的 Plugin Page Registry、Registration revision 驱动的 Action/Page surface projection、
-  grant snapshot 预检、统一页面导航、scoped Resource Service、per-generation isolated origin、
-  frame-aware exact navigation lease、仅在 active Page 存在的 Host-owned iframe Runtime、Host 私有
-  Runtime Session，以及 Runtime CSP/deadline/统一清理/进程内熔断；
-- 公共 SDK iframe transport、认证 Port 上的 Host adapter，以及 Host 私有的 session-scoped Host API
-  Dispatcher；当前 provider 覆盖 base、scoped storage 与 macOS text clipboard，实际 authority 由最新
-  session capabilities、Manifest request 和 Host grant 共同决定；
-- Host 设置页面中的插件安装、列表、详情、enable/disable、replacement、卸载、清除数据、权限披露、
-  grant 与 revoke 交互，并保持 typed service、双语、主题、键盘与焦点边界；
+  统一页面导航、scoped Resource Service、per-generation isolated origin/data store，以及仅在 active
+  Page 存在的单 current Child WebView、closed bridge Session、deadline、统一清理与进程内熔断；
+- 公共 SDK WebView transport、actual native source 绑定的 Host adapter，以及 Host 私有的
+  session-scoped Host API Dispatcher；普通 Web 能力不进入 Host grant 模型；
+- Host 设置页面中的插件安装、列表、详情、enable/disable、replacement、卸载与清除数据，并保持
+  typed service、双语、主题、键盘与焦点边界；
 - framework-neutral 与 React/Semi 两种正式项目模板，以及仓库外真实 tarball consumer 验证；
 - 显式开启、process-local、manual-reload 的 Plugin Development Mode；正式构建不包含该入口；
 - English canonical 与简体中文同路径镜像的插件开发 hub、两条完整教程、公共 package、工具/安装、
@@ -92,7 +88,8 @@ Contract package；仓库验证不会执行 npm registry 发布操作。
 
 - Plugin Manager、安装目录、注册状态、授权、包校验和 Runtime session 属于 Host。
 - Rust 负责持久化、受信任路径、系统能力、权限决策和稳定 Tauri command 边界。
-- React 负责插件管理界面、iframe 容器、页面交互和可见诊断。
+- React 负责插件管理界面、Host-owned Runtime slot、页面交互和可见诊断；Rust 拥有 native
+  Child WebView 的 create/bounds/focus/navigation/bridge/destroy。
 - 插件不能 import `src/app/**`、直接调用 Tauri、读取 React Context 或持有 Host executor。
 - 必须访问私有 React/Tauri 对象的功能属于 `lensx.core` Host 模块，不属于可发布插件。
 
@@ -102,7 +99,7 @@ Contract package；仓库验证不会执行 npm registry 发布操作。
 - `plugin-sdk` 必须保持框架无关；`plugin-ui` 是可选能力，不能成为运行插件的前提。
 - Monorepo 内部可以使用 `workspace:*`，发布产物必须转换为明确的 SemVer 依赖。
 - Manifest 的 Publisher 字段不建立信任；来源、签名、授权和生命周期由 Host 注入。
-- 注册元数据时不加载插件 UI；只有打开 Page 时才创建 iframe，关闭后必须销毁。
+- 注册元数据时不加载插件 UI；只有打开 Page 时才创建 Child WebView，关闭后必须销毁。
 - 插件只通过小型、类型化、版本化并经过权限检查的 Host API 使用 lensX 能力。
 - 第一阶段只支持本地包和开发目录；远程 Catalog 不得阻塞本地闭环。
 - 每个 Task 独立创建 OpenSpec change，并使用本文给出的 change 名。
@@ -811,6 +808,20 @@ React 模板额外依赖 Task 1.4。
 Runtime 重新打开、禁用、双版本升级和卸载；双语文档、28 个视觉基线、真实 macOS WKWebView
 证据、官方发布流水线和完整前端/Rust/OpenSpec 验证均通过。
 
+- [x] **Task 7.2.1：将插件 Runtime 迁移为 Child WebView**
+
+**OpenSpec change**：[replace-plugin-iframe-runtime-with-child-webview](openspec/changes/archive/2026-08-16-replace-plugin-iframe-runtime-with-child-webview/)
+
+**状态**：实现、public package consumer、ConfigLens official candidate、真实 WKWebView matrix、
+双语文档镜像、完整验证与 stable spec 同步均已完成；change 已归档。
+
+**目标**：以同一 Launcher native window 中唯一 current Child WebView 替换旧 DOM container，
+同时保持开放 Web、封闭 Host、source/generation-bound bridge、精确 lifecycle 与 public-boundary
+official dogfood。
+
+**完成标准**：`pnpm run check:replace-plugin-iframe-runtime-with-child-webview` 与 strict OpenSpec validation
+均通过，归档任务 9.1–9.9 全部完成，且 stable specs 已同步。
+
 - [ ] **Task 7.3：交付首个权限型官方插件**
 
 **OpenSpec change**：待重新规划（原 `add-official-clipboard-tools-plugin` 依赖的 clipboard permission contract 已由 `adopt-open-isolated-plugin-runtime` 删除）
@@ -994,7 +1005,7 @@ Runtime 重新打开、禁用、双版本升级和卸载；双语文档、28 个
 
 - 本地 `.lxp` 可以安装、注册、搜索、打开、关闭、禁用和卸载。
 - 重启后插件状态可恢复。
-- 插件资源、iframe 和 session 具备基本隔离。
+- 插件资源、Child WebView 和 Session 具备基本隔离。
 - Host API 仍可能只具备 Runtime 基础握手，不承诺系统能力。
 
 ### Plugin Developer Preview
@@ -1006,7 +1017,7 @@ Runtime 重新打开、禁用、双版本升级和卸载；双语文档、28 个
 用户管理、正式项目模板、Development Mode 与双语开发文档。
 
 - 内外部开发者可以消费 Contract、SDK、可选 UI、Testkit 和正式项目模板。
-- 本地插件可以通过公共 SDK、真实 iframe transport 和 Host API 完成受控执行。
+- 本地插件可以通过公共 SDK、真实 WebView transport 和 Host API 完成受控执行。
 - 开发者可以使用公共 CLI、开发模式和双语文档完成创建、验证、打包与本地安装。
 
 ### Plugin Platform Beta

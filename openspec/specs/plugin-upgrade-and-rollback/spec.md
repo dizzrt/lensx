@@ -6,9 +6,7 @@ Define safe Host-private replacement of one installed local plugin package with
 another compatible package of the same identity while preserving a single
 active registration, recovering from pre-commit failures, and retaining no
 user-selectable rollback history.
-
 ## Requirements
-
 ### Requirement: Plugin replacement MUST use a private two-stage Host contract
 
 Replacement MUST use an independent Host-private contract `0.2.0` with prepare and token, commit, and cancel stages for the current healthy identity. Payloads MUST be strict, versioned, and bounded and contain no permission diff, grant selection, permission reason, or post-commit authority. The version MUST be independent of Manifest, Host API, installation, Registration, Manager record, and application versions.
@@ -276,3 +274,15 @@ digest, and legacy permission claims as independent facts.
 - **WHEN** candidate Manifest Publisher text claims an official or verified identity
 - **THEN** replacement retains the current Host-owned local external source policy and applies the same package, identity, compatibility, and cleanup checks
 - **THEN** the claim creates no signature status, trusted provenance, grant, or lifecycle exception
+
+### Requirement: Replacement MUST NOT bridge legacy iframe and current WebView authority
+Preparation MAY classify an installed legacy registration or selected legacy package for user feedback, but commit MUST publish only a current WebView-compatible registration. Runtime quiescence MUST destroy the old container and authority before replacement publication. Host MUST NOT run an iframe compatibility adapter, reuse a MessagePort Session or silently rewrite package bytes; rollback history MUST NOT retain executable old Runtime authority.
+
+#### Scenario: Current WebView plugin replaces another current version
+- **WHEN** preparation and commit succeed
+- **THEN** old Child WebView teardown completes and the next open derives a fresh generation, attempt, WebView and Session
+
+#### Scenario: Replacement package uses iframe protocol
+- **WHEN** preparation inspects a legacy Manifest
+- **THEN** it returns incompatible before commit and leaves the current registration and Runtime unchanged
+

@@ -89,9 +89,5 @@ mod tests {
         let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
             .expect("Tauri config should be valid JSON");
         assert_eq!(config["app"]["security"]["csp"], HOST_DOCUMENT_CSP);
-        let harness: serde_json::Value =
-            serde_json::from_str(include_str!("../plugin-runtime-host-csp-harness.conf.json"))
-                .expect("Host CSP harness config should be valid JSON");
-        assert_eq!(harness["app"]["security"]["csp"], HOST_DOCUMENT_CSP);
     }
 }

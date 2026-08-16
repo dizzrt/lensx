@@ -1,4 +1,4 @@
-import { createPluginIframeTransport } from '@lensx/plugin-sdk/iframe';
+import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview';
 
 import { createFrameworkNeutralRuntime } from './runtime.js';
 import './styles.css';
@@ -9,7 +9,7 @@ if (root === null) throw new Error('Missing plugin application root.');
 
 let runtime: ReturnType<typeof createFrameworkNeutralRuntime>;
 runtime = createFrameworkNeutralRuntime({
-  createTransport: createPluginIframeTransport,
+  createTransport: createPluginWebviewTransport,
   render: (state) => renderFrameworkNeutralView(root, state, () => void runtime.retry()),
 });
 

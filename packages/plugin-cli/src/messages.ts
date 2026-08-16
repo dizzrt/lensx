@@ -11,6 +11,8 @@ export const EN_US_MESSAGES = {
   build_failed: 'The project build failed.',
   build_output_missing: 'The build did not produce dist/manifest.json.',
   payload_invalid: 'The plugin build output is invalid.',
+  legacy_runtime_incompatible:
+    'This project uses the retired iframe Runtime. Migrate its Manifest to 0.3.0 and its SDK transport to @lensx/plugin-sdk/webview.',
   package_incompatible: 'The plugin package is valid but incompatible with this Host version.',
   pack_output_invalid: 'The package output path is unsafe.',
   pack_write_failed: 'The package could not be committed atomically.',
@@ -41,6 +43,8 @@ export const ZH_CN_MESSAGES: Record<keyof typeof EN_US_MESSAGES, string> = {
   build_failed: '项目构建失败。',
   build_output_missing: '构建没有生成 dist/manifest.json。',
   payload_invalid: '插件构建产物无效。',
+  legacy_runtime_incompatible:
+    '该项目使用了已停用的 iframe Runtime。请将 Manifest 迁移到 0.3.0，并将 SDK transport 迁移到 @lensx/plugin-sdk/webview。',
   package_incompatible: '插件包有效，但与当前 Host 版本不兼容。',
   pack_output_invalid: 'package 输出路径不安全。',
   pack_write_failed: '无法原子提交插件包。',

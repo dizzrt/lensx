@@ -7,6 +7,9 @@ const manifest = JSON.parse(await readFile(resolve(dist, 'manifest.json'), 'utf8
 if (manifest.plugin_id !== 'dev.lensx.config-lens' || manifest.version !== '0.1.0') {
   throw new Error('e2e/manifest-identity: built Manifest drifted.');
 }
+if (manifest.manifest_version !== '0.3.0' || manifest.runtime?.kind !== 'webview') {
+  throw new Error('e2e/runtime-protocol: built Manifest must use the public WebView protocol.');
+}
 const files = [];
 const visit = async (directory) => {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -26,6 +29,9 @@ if (/(?:src|href)=["']https?:\/\//u.test(html) || /(?:import\s*\(|new Worker\s*\
 }
 if (/src\/app\/|src-tauri\/|tools\/plugin-package-format|@tauri-apps\//u.test(source)) {
   throw new Error('e2e/private-boundary: bundle contains Host-private references.');
+}
+if (/@lensx\/plugin-sdk\/iframe|createPluginIframeTransport/u.test(source)) {
+  throw new Error('e2e/legacy-runtime: bundle contains the removed iframe authoring path.');
 }
 if (!/language\.worker|config-lens-language/u.test(source) || !/editor\.worker|config-lens-editor/u.test(source)) {
   throw new Error('e2e/worker-closure: package-owned Worker entry facts are missing.');

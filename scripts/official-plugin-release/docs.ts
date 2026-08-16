@@ -147,6 +147,7 @@ export const checkOfficialPluginReleaseDocs = (rootDir: string): void => {
     'source_commit',
     'source_ref',
     'workflow_run_url',
+    'runtime_evidence',
   ]) {
     if (!candidate.includes(field)) fail('docs-schema-drift', field);
   }

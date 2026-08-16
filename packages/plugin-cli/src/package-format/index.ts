@@ -45,6 +45,17 @@ export const inspectPluginPackage = async (
     return { status: 'invalid', diagnostics: sortPackageDiagnostics(checksumDiagnostics) };
   }
   const manifest = validatePackageManifest(archive.manifestBytes, archive.files, currentVersions);
+  const facts = {
+    packageFormatVersion: PLUGIN_PACKAGE_FORMAT_VERSION,
+    compressedSize: packageBytes.byteLength,
+    decompressedSize: archive.decompressedSize,
+    fileCount: archive.files.length,
+    files: archive.files,
+    packageDigest: { algorithm: 'sha256' as const, value: sha256Hex(packageBytes) },
+  };
+  if ('incompatible' in manifest) {
+    return { status: 'incompatible', facts, diagnostics: sortPackageDiagnostics(manifest.diagnostics) };
+  }
   if (!('normalized' in manifest)) {
     return { status: 'invalid', diagnostics: sortPackageDiagnostics(manifest.diagnostics) };
   }
@@ -52,14 +63,7 @@ export const inspectPluginPackage = async (
     status: manifest.normalized.status,
     manifest: manifest.normalized.manifest,
     compatibility: manifest.normalized.compatibility,
-    facts: {
-      packageFormatVersion: PLUGIN_PACKAGE_FORMAT_VERSION,
-      compressedSize: packageBytes.byteLength,
-      decompressedSize: archive.decompressedSize,
-      fileCount: archive.files.length,
-      files: archive.files,
-      packageDigest: { algorithm: 'sha256', value: sha256Hex(packageBytes) },
-    },
+    facts,
     diagnostics: [],
   };
 };

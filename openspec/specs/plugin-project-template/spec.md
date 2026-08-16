@@ -5,9 +5,7 @@
 Define the two formal plugin project templates, their shared public platform
 boundaries, runnable examples, validation gates, and production-boundary
 evidence.
-
 ## Requirements
-
 ### Requirement: The system MUST provide two formal plugin project templates that share public platform boundaries
 
 Within the supported example-plugin workspace, the system MUST provide one
@@ -48,9 +46,9 @@ Runtime, CSP, permission, Host API, or workspace dependency rules.
 ### Requirement: Each template MUST contain a complete, minimal, permissionless runnable plugin
 
 Each template MUST contain a Manifest accepted by the real Contract, one Page,
-one Action targeting that Page, one package-local iframe Runtime entry, and all
+one Action targeting that Page, one package-local WebView Runtime entry, and all
 build resources referenced by the Manifest. The examples MUST use Manifest
-`0.2.0` without legacy permission fields, MUST NOT call an unpublished native
+`0.3.0` without legacy permission fields, MUST NOT call an unpublished native
 Host API, and MUST NOT claim trusted origin through
 publisher text or an official repository location. The build output MUST be a
 self-contained package payload that does not depend on remote scripts, inline
@@ -83,7 +81,7 @@ scripts, `eval`, an external network, a Host bundle, or repository source code.
 
 ### Requirement: Template Runtime MUST demonstrate the real SDK lifecycle and Runtime context adaptation
 
-Both templates MUST use the official `@lensx/plugin-sdk/iframe` transport and
+Both templates MUST use the official `@lensx/plugin-sdk/webview` transport and
 an instantiated SDK client, MUST wait for and validate the real Runtime context
 before becoming ready, and MUST handle complete context replacement. The
 templates MUST use `en-US` as the default copy and provide semantically aligned
@@ -235,8 +233,8 @@ public `pack` CLI before Task 6.4.
 
 The template gate MUST use actual built and inspected template payloads to cover
 the current Host's package acceptance, Registration, Page and Action projection,
-resource and Runtime resolution, Runtime Session, public SDK iframe transport,
-Host transport adapter, RPC validation, Dispatcher `runtime.get_context`, and
+resource and Runtime resolution, Runtime Session, public SDK WebView transport,
+Host native bridge adapter, RPC validation, Dispatcher `runtime.get_context`, and
 terminal cleanup. This smoke test MUST NOT inject `FakePluginSdkTransport` or
 treat author-side Testkit as the production Host. Existing macOS WKWebView CSP,
 custom-protocol, and isolation evidence MUST remain the target-browser security
@@ -246,10 +244,10 @@ prerequisites; this smoke test does not need to establish a second GUI runner.
 
 - **WHEN** the Host test boundary accepts a compatible framework-neutral
   template package and opens its contributed Action and Page
-- **THEN** the current iframe transport and Runtime Session complete one
+- **THEN** the current WebView transport and Runtime Session complete one
   authenticated connection, and the SDK obtains a Contract-valid Runtime
   context through the Dispatcher
-- **THEN** after close, the current Session, Port, pending requests,
+- **THEN** after close, the current Session, bridge endpoints, pending requests,
   subscriptions, Runtime attempt, and Page resources all enter the existing
   terminal cleanup
 
@@ -331,3 +329,14 @@ validation set.
   genuinely unaffected
 - **THEN** roadmap Task 6.3 is marked complete only after that validation and the
   bilingual documentation are complete
+
+### Requirement: Maintained templates MUST author and execute only the WebView Runtime
+Framework-neutral and React/Semi templates MUST emit Manifest `0.3.0` with `runtime.kind: "webview"`, import `@lensx/plugin-sdk/webview`, initialize one SDK client through `createPluginWebviewTransport`, and dispose it with the Page lifecycle. They MUST contain no iframe bootstrap, parent messaging, MessagePort, Tauri, Host source import or native configuration.
+
+#### Scenario: Either template is generated and packed
+- **WHEN** an external consumer builds, tests, validates and packs a fresh template
+- **THEN** the canonical `.lxp` is accepted by the current Host and opens through the Child WebView path
+
+#### Scenario: Generated project is run outside lensX
+- **WHEN** its page is loaded without the Host bridge
+- **THEN** SDK initialization fails safely without probing legacy or native fallbacks

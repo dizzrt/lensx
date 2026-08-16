@@ -6,7 +6,7 @@
 package。workspace 为公共 package 和插件建立开发拓扑、lifecycle 聚合及依赖检查，并包含
 可发布的 `@lensx/plugin-contract`、`@lensx/plugin-sdk`、`@lensx/plugin-testkit`、可选
 `@lensx/plugin-ui` 与 Node 作者工具 package `@lensx/plugin-cli`，但仓库验证不会执行 registry 发布操作。
-Host 已能安装/注册并打开受支持的本地插件，SDK 也提供认证 iframe transport；production Host 私有
+Host 已能安装/注册并打开受支持的本地插件，SDK 也提供 source-bound WebView transport；production Host 私有
 Dispatcher 已实现 `runtime.get_context`、`ui.close`、`actions.open` 与五个 plugin-scoped `storage.*` method。
 Contract package 独立交付完整八方法 Host API 语义 catalog 与 validator，不包含 native clipboard 或
 permission method。
@@ -87,7 +87,7 @@ TypeScript/Rust 共享 fixtures，打出真实 Contract/SDK/Testkit tarball 并�
 ## Plugin Developer CLI 与 Package Core
 
 `packages/plugin-cli` 提供公共 `@lensx/plugin-cli` package 和 `lensx-plugin` executable，支持
-`create`、`build`、`validate`、`pack` 与 `inspect`。它是 Node 作者工具，不是 iframe Runtime
+`create`、`build`、`validate`、`pack` 与 `inspect`。它是 Node 作者工具，不是 Runtime container
 dependency。插件 package script 可以调用其 bin，但插件 `src/**` 不得 import CLI 或未声明 deep path。
 
 该 package 持有 package protocol 的唯一 TypeScript 实现：protocol constants、portable path、
@@ -122,12 +122,12 @@ pnpm run check:plugin-developer-cli
 ## Plugin SDK Package
 
 `packages/plugin-sdk` 持有框架无关的 SDK client lifecycle、经过校验的 Runtime context、版本
-兼容、稳定 SDK error、取消/超时行为、语义 transport interface 与官方 iframe transport。受支持的
+兼容、稳定 SDK error、取消/超时行为、语义 transport interface 与官方 WebView transport。受支持的
 import 是：
 
 ```text
 @lensx/plugin-sdk
-@lensx/plugin-sdk/iframe
+@lensx/plugin-sdk/webview
 ```
 
 package 只有一个直接 Runtime 依赖 `@lensx/plugin-contract`，并从该 package 导入
@@ -139,9 +139,9 @@ package 只有一个直接 Runtime 依赖 `@lensx/plugin-contract`，并从该 p
 
 ```ts
 import { createPluginSdk } from '@lensx/plugin-sdk';
-import { createPluginIframeTransport } from '@lensx/plugin-sdk/iframe';
+import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview';
 
-const client = createPluginSdk({ transport: createPluginIframeTransport() });
+const client = createPluginSdk({ transport: createPluginWebviewTransport() });
 const context = await client.initialize();
 if (context.capabilities.includes('ui.close')) {
   await client.request({ method: 'ui.close', params: {} });

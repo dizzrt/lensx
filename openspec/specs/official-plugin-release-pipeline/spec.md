@@ -6,9 +6,7 @@ Define the independent, least-privilege pipeline for validating, versioning,
 building, auditing, and publishing official plugin `.lxp` releases without
 coupling them to the desktop application release or creating Host trust,
 permission, or signing authority.
-
 ## Requirements
-
 ### Requirement: Each official plugin must be an independent, constrained release unit
 The system MUST treat each direct workspace member under `plugins/official/` as an independent release unit. Each unit MUST have a unique package name, `private: true`, an independent SemVer, a source Manifest at its root, a `CHANGELOG.md`, real automated tests, `build`, `typecheck`, `test`, `check`, and `test:e2e` scripts, and an explicit CODEOWNERS entry that covers the whole directory. The source Manifest, built Manifest, package metadata, and inspected `.lxp` MUST have matching plugin identity and version. Official plugins MUST obey the same public dependency and import boundaries as external plugins and MUST NOT import Host or Tauri private source or another plugin's source merely because they reside in the official directory.
 
@@ -199,3 +197,15 @@ The system MUST use committed valid and invalid fixtures and a temporary two-plu
 - **WHEN** the focused gate, complete frontend or Rust validation, strict OpenSpec validation, or any required fixture scenario fails
 - **THEN** Task 7.1 MUST remain incomplete and the Roadmap MUST NOT claim that the official release pipeline is delivered
 - **THEN** after a fix, the failed command and the complete final validation set MUST run again
+
+### Requirement: Official candidates MUST pass the production Child WebView lifecycle gate
+Every official release candidate MUST use the current WebView Manifest/SDK protocol and pass installation, open, native load, bridge ready, SDK ready, representative interaction, close and terminal-destroy evidence through the production Host. The gate MUST reject iframe exports, legacy Manifests, privileged official-only Runtime branches and candidates that leave a Child WebView or bridge alive.
+
+#### Scenario: Candidate is eligible for publication
+- **WHEN** its digest-fixed `.lxp` passes package, public-consumer and real Child WebView lifecycle validation
+- **THEN** release jobs may publish the exact verified bytes and audit sidecars without executing code under release authority
+
+#### Scenario: Candidate uses a legacy Runtime
+- **WHEN** inspection or smoke evidence finds iframe Manifest/SDK/runtime behavior
+- **THEN** publication fails before any GitHub Release asset is created
+

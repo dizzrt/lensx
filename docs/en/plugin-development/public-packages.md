@@ -2,20 +2,20 @@
 
 ## Package matrix
 
-Every package is currently version `0.2.0`. The listed entries are the complete
-supported package exports; any other path is private even if a file happens to
-exist in a tarball.
+`@lensx/plugin-sdk` is currently version `0.3.0`; the other packages remain at
+`0.2.0`. The listed entries are the complete supported package exports; any
+other path is private even if a file happens to exist in a tarball.
 
 | Package | Public entries | Role |
 | --- | --- | --- |
 | `@lensx/plugin-contract` | root, Manifest Schema, Host API Schema | Author input, normalized types, versions, catalogs, and pure validators. |
-| `@lensx/plugin-sdk` | root, `./iframe` | Framework-neutral client lifecycle and the iframe transport constructor. |
+| `@lensx/plugin-sdk` | root, `./webview` | Framework-neutral client lifecycle and the Child WebView transport constructor. |
 | `@lensx/plugin-ui` | root, `./styles.css` | Optional React/Semi provider, page, feedback, public styles, and tokens. |
 | `@lensx/plugin-testkit` | root | Contract fixtures, context fixtures, fake semantic transport, cancellation, and deferred helpers. |
 | `@lensx/plugin-cli` | root plus `lensx-plugin` bin | Portable authoring commands; not a Runtime API. |
 
 <!-- lensx-public-package {"name":"@lensx/plugin-contract","version":"0.2.0","exports":[".","./schema","./manifest.schema.json","./host-api-schema","./host-api.schema.json"]} -->
-<!-- lensx-public-package {"name":"@lensx/plugin-sdk","version":"0.2.0","exports":[".","./iframe"]} -->
+<!-- lensx-public-package {"name":"@lensx/plugin-sdk","version":"0.3.0","exports":[".","./webview"]} -->
 <!-- lensx-public-package {"name":"@lensx/plugin-ui","version":"0.2.0","exports":[".","./styles.css"]} -->
 <!-- lensx-public-package {"name":"@lensx/plugin-testkit","version":"0.2.0","exports":["."]} -->
 <!-- lensx-public-package {"name":"@lensx/plugin-cli","version":"0.2.0","exports":["."]} -->
@@ -29,7 +29,7 @@ The smallest framework-neutral Runtime dependencies are
 `@lensx/plugin-contract` and `@lensx/plugin-sdk`; add
 `@lensx/plugin-testkit` only for tests. A React/Semi plugin additionally owns
 `react`, `react-dom`, `@douyinfe/semi-ui`, and `@lensx/plugin-ui`. The Host does
-not lend its React or Semi instances to a plugin iframe.
+not lend its React or Semi instances to a plugin Child WebView.
 
 The Contract is safe in authoring and Runtime code. The SDK depends on the
 Contract. Testkit depends on the public Contract and SDK roots. Plugin UI has
@@ -52,7 +52,8 @@ plugin.
 ## Non-goals
 
 - Testkit is not a Host, WebView-isolation boundary, or source-security simulator.
-- Plugin UI is not shared Host React and does not cross the iframe boundary.
+- Plugin UI is document-local; it does not cross or control the native Child
+  WebView boundary and exposes no private bridge facts.
 - Contract acceptance is not installation, registration, session readiness,
   provider availability, or authorization.
 - CLI acceptance is not Host acceptance; installation reinspects the same

@@ -121,26 +121,27 @@ pnpm run check:plugin-development-mode
 ```
 
 该 gate 组合 strict boundary parsing、共享 CLI/Host payload corpus、feature-enabled Rust transaction
-tests、正式构建产物排除、前端 convergence 与可访问性、双语 schema/docs drift，以及 650×600 视觉矩阵。
-它应与现有 management、Runtime、Resource、Registration、CLI 及完整 frontend/Rust gates 顺序运行。
+tests、正式构建产物排除、Child WebView convergence 与可访问性、双语 schema/docs drift，以及
+650×600 视觉矩阵。全局 workspace boundaries 仍由完整 workspace 与本 change 最终 gate 覆盖，
+因此不相关的 official-plugin 迁移不会阻塞本 focused workflow。它应与现有 management、Runtime、
+Resource、Registration、CLI 及完整 frontend/Rust gates 顺序运行。
 最终真实 smoke 使用 `pnpm run dev:plugin-development-mode`；普通构建必须继续排除 development commands 与 UI。
 
-focused gate 还会读取 normal 与 malicious development registration 的有界 canonical macOS
-WKWebView 证据。harness 解出与 external Session 证据相同的维护中 Runtime payload，注册
-process-local development snapshot，打开页面，强制 fresh reload 并推进 Manifest version，然后移除注册。
-它会将 CSP、sandbox、Permissions Policy、Session、
-transport、Host API、deadline 与 breaker 事实同 external Runtime profile 比较。仅在 macOS 上审阅
-harness 或 Runtime 边界变更后刷新这些证据：
+focused gate 还会读取 normal 与 malicious development registration 的有界组合证据。它会固定
+维护中的 macOS Child WebView ACL、native slot 与开放 Web capability 证据，再与 source-neutral
+正式 resolver 检查及 Development Mode transaction tests 组合。transaction matrix 覆盖 register、
+commit 后创建 fresh attempt、新 generation 投影前销毁旧 attempt、staging 被拒绝时 current attempt
+保持不变，以及 remove。Task 8 另行维护完整真实 macOS 端到端矩阵。审阅这些正式边界或
+Development Mode transaction 变更后刷新组合证据：
 
 ```bash
-pnpm run build:plugin-runtime-security-lifecycle-harness
 pnpm run refresh:plugin-development-runtime-evidence:normal
 pnpm run refresh:plugin-development-runtime-evidence:malicious
 pnpm run check:plugin-development-runtime-evidence
 ```
 
-证据文件只能包含有界平台标签、相对资源名、布尔值和计数器；不得记录 source directory、scoped URL、
-origin、nonce、Port、token、payload value 或 raw error。
+证据文件只能包含有界协议/平台标签、相对 fixture 引用、digest 与布尔值；不得记录 source directory、
+scoped URL、origin、freshness value、token、payload value 或 raw error。
 
 ## Plugin Resource Service 验证
 
@@ -210,70 +211,52 @@ raw URL、scope、identity、invoke key 或 payload、bootstrap source 或本机
 审查精确 diff 与 license，再用 `pnpm run generate:frame-aware-navigation-dependency-drift` 更新
 integrity record。这些 generator 不替代 focused gate 或完整 frontend/Rust validation 集合。
 
-## 隔离 Plugin iframe Runtime 验证
+## 隔离 Plugin Child WebView Runtime 验证
 
-修改 Runtime resolver、iframe policy/container、Host navigation adapter、Plugin Page composition 或
+修改 Runtime resolver、native container、slot presentation、resource binding、navigation policy 或
 lifecycle cleanup 时，必须运行：
 
 ```bash
-pnpm run check:plugin-iframe-runtime
+pnpm run check:plugin-child-webview-runtime
 ```
 
-该门禁组合 resolver 与 React state/cancellation tests、精确 sandbox/Permissions Policy/referrer 断言、
-native lease activation 与 compare-current disposal、Page/lifecycle/replacement/resource 回归、workspace
-私有 import、canonical 真实 `.lxp` fixture、有边界的 macOS WKWebView evidence，以及 origin/navigation
-两项前置 gate。evidence 必须继续证明 ES Module graph、route fragment、storage partition、parent/frame/
-Tauri absence、zero privileged hit，以及恶意 navigation/capability rejection。
+该门禁组合 React slot/state tests、物理 bounds revision、compare-current native lifecycle、
+generation-bound resource、开放 Web 正向路径、top-level navigation deny、terminal cleanup、current
+`.lxp` fixtures、有界 macOS WKWebView evidence、ACL negative matrix 与 workspace-private imports。
+native load、bridge ready 与 SDK ready 始终是相互独立的 evidence fact。
 
-该门禁只证明 iframe `loaded`，绝不证明 Runtime Session 或 SDK `ready`。它不验证 message bridge、
-Host API、完整 CSP、通用 timeout/crash recovery 或 Windows/Linux Runtime。
-应在完整 frontend/Rust validation 集合前运行，但不能替代它们。
+## Plugin Child WebView Session 验证
 
-## Plugin Runtime Session 验证
-
-修改 Host 私有 Session contract/parser/service、nonce 或 MessageChannel adapter、Runtime descriptor/
-currentness、iframe ref/bootstrap、canonical Session fixture、evidence schema 或 workspace/package
-boundary 时，必须运行：
+修改私有 bridge bootstrap、source identity、readiness state、strict RPC frame、Host dispatcher、
+cancellation 或 cleanup 时，必须运行：
 
 ```bash
-pnpm run check:plugin-runtime-session
+pnpm run check:plugin-child-webview-session
 ```
 
-该门禁组合 strict parser/state-machine tests、resolver/detail 收敛、相关与无关 invalidation、React
-iframe lifecycle、Registration/Page/lifecycle/replacement/resource 回归、canonical 真实 `.lxp` drift
-检查、公共 tarball consumer，以及完整 iframe/origin/navigation 前置 gate。专用 macOS
-`plugin_runtime_session_harness` 会在 WKWebView 中复用 production Resource Service、隔离 origin 的真实
-package path、sandbox、Permissions Policy 与 frame-aware navigation policy。
-
-已提交的有界 evidence 必须对 normal、malicious 与 replacement fixture 证明 exact target window/origin、
-MessagePort transfer、cryptographic single-use nonce、ready/disconnect/dispose、retry 与同版本 replacement
-后 old Port 失效、无关 Registration 变化稳定，以及 privileged Tauri handler zero-hit。evidence 不得包含
-URL、origin/resource token、nonce、Port 内容、entry/plugin/Page identity、本机路径、raw payload 或
-private error。
-
-这是 macOS-only delivery gate，不建立 Windows 或 Linux Runtime Session 支持。它单独只证明私有认证
-Session 与 Port lease；不会单独证明 SDK iframe transport、Host API method、
-完整 CSP、通用 handshake timeout/crash recovery 或 background Runtime。focused gate 只补充
-完整 frontend/Rust validation 集合，绝不能替代它们。
+该门禁证明 source-bound ready admission、current attempt/generation/nonce 校验、bounded request、
+乱序 settle、event delivery、disconnect/dispose、stale replacement rejection 与零通用 Tauri authority。
+已提交 evidence 必须保持有界，且不得包含完整 URL、resource token、nonce、payload、identity、本机路径或
+private error。该 focused macOS gate 只补充完整 frontend/Rust validation 集合，绝不能替代它们。
 
 ## Plugin SDK Transport 验证
 
-修改 typed SDK request/event API、私有 transport codec、iframe entry、Host Port adapter、Runtime
-Session lease handoff、transport fixture、package export 或目标 WebView evidence 时，必须运行：
+修改 typed SDK request/event API、私有 transport codec、WebView entry、Host bridge adapter、Runtime
+Session handoff、transport fixture、package export 或目标 WebView evidence 时，必须运行：
 
 ```bash
 pnpm run check:plugin-sdk-transport
 ```
 
 该门禁检查 plugin/Host codec 的确定性 drift、strict `unknown` parsing、request/result 配对、安全 error、
-并发乱序 response、取消、timeout、event、disconnect/dispose、stale Page/Port 隔离与 production
+并发乱序 response、取消、timeout、event、disconnect/dispose、stale Page/source-WebView 隔离与 production
 Session-binding boundary。它打包真实 Contract/SDK tarball，保留 no-DOM ES2022 root consumer，在隔离 browser
-consumer 中构建并运行声明的 iframe entry，拒绝私有 deep import，并运行真实 MessageChannel
-SDK/Host-adapter fixture。
+consumer 中构建并运行声明的 WebView entry，拒绝私有 deep import，并运行 source-bound SDK/Host bridge
+fixture。
 
-有界 macOS WKWebView evidence 还覆盖 exact parent/origin/Port、single-use nonce、transport
+有界 macOS WKWebView evidence 还覆盖 exact source WebView、single-use nonce、transport
 result/error/event round-trip、乱序 response、取消、replacement/close cleanup、pending termination 与
-privileged handler zero-hit。evidence 不含 URL、nonce、Port 内容、payload、token、identity、path
+privileged handler zero-hit。evidence 不含 URL、nonce、bridge 内容、payload、token、identity、path
 或 private error。该门禁证明公共 transport 与 Host adapter；独立 Dispatcher 与 scoped-storage 门禁证明
 当前 production provider。两者都不独立证明完整 RPC v1 policy 或 Windows/Linux Runtime transport。
 

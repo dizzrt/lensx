@@ -4,7 +4,15 @@ import { resolve } from 'node:path';
 import type { PluginManifestInput } from '@lensx/plugin-contract';
 import { afterEach, describe, expect, test } from '@rstest/core';
 import { inspectPluginPackageFile, packPluginProject } from '../src/package-commands.ts';
-import { inspectPluginPackage, PLUGIN_PACKAGE_LIMITS, packPluginPackage } from '../src/package-format/index.ts';
+import {
+  buildCanonicalChecksums,
+  compressCanonicalTar,
+  createCanonicalTar,
+  inspectPluginPackage,
+  PLUGIN_PACKAGE_CHECKSUMS_PATH,
+  PLUGIN_PACKAGE_LIMITS,
+  packPluginPackage,
+} from '../src/package-format/index.ts';
 
 const roots: string[] = [];
 const baseManifest = JSON.parse(
@@ -80,6 +88,7 @@ describe('transactional plugin packing', () => {
       summary_version: '1',
       plugin_id: 'com.acme.workspace',
       version: '1.2.0',
+      runtime_kind: 'webview',
       package_protocol: '0.1.0',
       output: 'artifacts/com.acme.workspace-1.2.0.lxp',
       package_digest: { algorithm: 'sha256', value: expect.stringMatching(/^[0-9a-f]{64}$/u) },
@@ -135,6 +144,22 @@ describe('transactional plugin packing', () => {
     });
     expect(await readdir(project)).not.toContain('artifacts');
   });
+
+  test('rejects legacy iframe authoring without building or committing an artifact', async () => {
+    const legacy = {
+      ...structuredClone(baseManifest),
+      manifest_version: '0.2.0',
+      runtime: { ...baseManifest.runtime, kind: 'iframe' },
+    };
+    const project = await writeProject();
+    await writeDist(project, legacy);
+    await writeFile(resolve(project, 'manifest.json'), `${JSON.stringify(legacy)}\n`);
+    await expect(packPluginProject({ cwd: project, noBuild: false, json: true })).rejects.toMatchObject({
+      status: 'incompatible',
+      diagnostics: expect.arrayContaining([expect.objectContaining({ code: 'CLI_LEGACY_IFRAME_RUNTIME' })]),
+    });
+    expect(await readdir(project)).not.toEqual(expect.arrayContaining(['artifacts', 'build-count']));
+  });
 });
 
 describe('read-only package inspection', () => {
@@ -149,7 +174,7 @@ describe('read-only package inspection', () => {
     const before = await readdir(root);
     await expect(inspectPluginPackageFile(root, 'compatible.lxp')).resolves.toMatchObject({
       status: 'compatible',
-      result: { file: 'compatible.lxp', plugin_id: 'com.acme.workspace' },
+      result: { file: 'compatible.lxp', plugin_id: 'com.acme.workspace', runtime_kind: 'webview' },
     });
     await expect(inspectPluginPackageFile(root, 'incompatible.lxp')).resolves.toMatchObject({ status: 'incompatible' });
     expect(await readdir(root)).toEqual(before);
@@ -168,5 +193,27 @@ describe('read-only package inspection', () => {
       status: 'invalid',
       diagnostics: [expect.objectContaining({ code: 'CLI_PACKAGE_COMPRESSED_SIZE_EXCEEDED' })],
     });
+  });
+
+  test('classifies a legacy iframe package with bounded migration guidance and no partial facts', async () => {
+    const root = await makeRoot();
+    const legacy = {
+      ...structuredClone(baseManifest),
+      manifest_version: '0.2.0',
+      runtime: { ...baseManifest.runtime, kind: 'iframe' },
+    };
+    const files = payloadFiles(legacy);
+    const bytes = await compressCanonicalTar(
+      createCanonicalTar([
+        ...files,
+        { path: PLUGIN_PACKAGE_CHECKSUMS_PATH, bytes: buildCanonicalChecksums(files).bytes },
+      ]),
+    );
+    await writeFile(resolve(root, 'legacy.lxp'), bytes);
+    await expect(inspectPluginPackageFile(root, 'legacy.lxp')).rejects.toMatchObject({
+      status: 'incompatible',
+      diagnostics: expect.arrayContaining([expect.objectContaining({ code: 'CLI_LEGACY_IFRAME_RUNTIME' })]),
+    });
+    expect(await readdir(root)).toEqual(['legacy.lxp']);
   });
 });

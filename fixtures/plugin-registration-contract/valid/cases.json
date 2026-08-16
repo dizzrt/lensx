@@ -90,7 +90,7 @@
         "kind": "registered",
         "entry_id": "entry_0000000000000001",
         "manifest": {
-          "manifest_version": "0.2.0",
+          "manifest_version": "0.3.0",
           "plugin_id": "com.acme.workspace",
           "version": "1.2.0",
           "display": {
@@ -123,7 +123,7 @@
             }
           },
           "runtime": {
-            "kind": "iframe",
+            "kind": "webview",
             "entry": "dist/plugin.html"
           },
           "contributes": {

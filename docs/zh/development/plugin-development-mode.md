@@ -27,7 +27,7 @@ pnpm run validate:plugin-development-smoke
 
 native picker 应选择 `examples/plugins/development-mode-smoke/dist` 的绝对路径，
 而不是插件项目根目录。该构建产物是自包含的，Runtime 只导入公共
-`@lensx/plugin-sdk` iframe 边界。
+`@lensx/plugin-sdk/webview` 边界。
 
 ## 启动 lensX
 
@@ -56,8 +56,12 @@ Plugin Manager、Resource 与 Runtime authority 只引用该快照；作者目�
 快照树 identity 使用内部 `sha256-development-tree-v1` domain，它不是 `.lxp` package digest。
 
 修改源码后，再次运行插件构建与验证，然后选择 **从目录重新加载**。每次成功的手动
-reload 都会创建全新 generation，即使字节完全相同。它会终止旧的 Resource 与 Runtime
-authority，并发布新的 current registration。它不会创建 permission 或 grant 状态。
+reload 都会创建全新 generation，即使字节完全相同。native staging 会先校验并发布替换
+registration；staging 被拒绝时，current Child WebView 与 Session 完全不受影响。commit
+成功后，lensX 会先销毁旧 Child WebView attempt，再投影新 generation。开发插件与正式
+安装插件共用同一 Child WebView registry、origin/resource binding、顶层 navigation、
+private bridge、Session、RPC、Host API 与 terminal teardown。source provenance 不增加
+Host authority，reload 也不会创建 permission 或 grant 状态。
 
 **移除开发条目** 与关闭模式会移除进程内 development registrations，并终止其当前
 authority；插件数据与 Launcher collections 会保留。正式安装包、quarantine records 与
@@ -66,7 +70,8 @@ authority；插件数据与 Launcher collections 会保留。正式安装包、q
 ## 诊断
 
 错误稳定且不包含路径。`invalid` 表示 payload 不完整或违反目录规则；`incompatible`
-表示声明范围排除了当前 Host；`source_changed` 表示捕获期间文件发生变化；`conflict`
+表示声明范围排除了当前 Host，或使用旧 Manifest `0.2.x`/iframe Runtime 协议；
+`source_changed` 表示捕获期间文件发生变化；`conflict`
 表示界面 revision 已过期；`unsafe_state` 表示无法证明 Host ownership；`cleanup_pending`
 表示 authority 已成功变更，但旧缓存仍需重试清理或等待进程退出时清理。
 

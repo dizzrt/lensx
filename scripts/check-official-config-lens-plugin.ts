@@ -41,6 +41,7 @@ if (member === undefined || contract.members.length !== 1) {
 run('pnpm', ['--dir', member.rootDir, 'run', 'visual']);
 run('pnpm', ['--dir', member.rootDir, 'exec', 'rsbuild', 'build', '-c', 'wkwebview/rsbuild.config.ts']);
 run('node', ['--experimental-strip-types', 'scripts/check-official-config-lens-wkwebview-evidence.ts']);
+run('pnpm', ['run', 'check:official-config-lens-cold-open']);
 run('cargo', ['check', '--manifest-path', 'src-tauri/Cargo.toml', '--example', 'config_lens_wkwebview_harness']);
 run('pnpm', ['--dir', 'packages/plugin-cli', 'run', 'build']);
 run('node', ['--experimental-strip-types', 'scripts/official-plugin-release.ts', 'docs']);

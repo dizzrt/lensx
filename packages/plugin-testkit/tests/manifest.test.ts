@@ -16,7 +16,7 @@ describe('Plugin Manifest fixtures', () => {
 
     expect(first.manifest_version).toBe(PLUGIN_MANIFEST_VERSION);
     expect(validation.status).toBe('valid');
-    if (validation.status === 'invalid') {
+    if (validation.status !== 'valid') {
       throw new Error('The baseline Testkit Manifest must be valid.');
     }
     expect(normalizePluginManifest(validation, { host_api: PLUGIN_HOST_API_VERSION, lensx: '0.1.0' })).toMatchObject({

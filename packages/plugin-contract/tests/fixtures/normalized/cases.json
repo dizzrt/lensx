@@ -6,7 +6,7 @@
       "host_api": "0.2.0"
     },
     "input": {
-      "manifest_version": "0.2.0",
+      "manifest_version": "0.3.0",
       "plugin_id": "com.acme.minimal",
       "version": "1.0.0",
       "display": {
@@ -30,7 +30,7 @@
         }
       },
       "runtime": {
-        "kind": "iframe",
+        "kind": "webview",
         "entry": "dist/plugin.html"
       },
       "contributes": {
@@ -47,7 +47,7 @@
     },
     "expected_status": "compatible",
     "expected_normalized": {
-      "manifest_version": "0.2.0",
+      "manifest_version": "0.3.0",
       "plugin_id": "com.acme.minimal",
       "version": "1.0.0",
       "display": {
@@ -71,7 +71,7 @@
         }
       },
       "runtime": {
-        "kind": "iframe",
+        "kind": "webview",
         "entry": "dist/plugin.html"
       },
       "contributes": {

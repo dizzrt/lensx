@@ -28,8 +28,8 @@ const runtimeContext: PluginRuntimeContextInput = {
   theme: 'light',
 };
 const validation = validatePluginManifest(manifestInput);
-if (validation.status === 'invalid') {
-  throw new TypeError(`Example Manifest is invalid: ${JSON.stringify(validation.diagnostics)}`);
+if (validation.status !== 'valid') {
+  throw new TypeError(`Example Manifest is not current: ${JSON.stringify(validation.diagnostics)}`);
 }
 
 const result = normalizePluginManifest(validation, {
@@ -37,7 +37,7 @@ const result = normalizePluginManifest(validation, {
   host_api: PLUGIN_HOST_API_VERSION,
 });
 if (
-  PLUGIN_MANIFEST_VERSION !== '0.2.0' ||
+  PLUGIN_MANIFEST_VERSION !== '0.3.0' ||
   result.status !== 'compatible' ||
   manifestSchema.$id !== rawManifestSchema.$id ||
   hostApiSchema.$id !== rawHostApiSchema.$id ||
@@ -49,7 +49,7 @@ if (
   validateHostApiEvent({ event: 'runtime.context_changed', payload: runtimeContext }).status !== 'valid' ||
   validateHostApiError({ code: 'unavailable', message: 'The capability is unavailable.' }).status !== 'valid'
 ) {
-  throw new TypeError('Packed Contract package did not expose a coherent 0.2.0 contract.');
+  throw new TypeError('Packed Contract package did not expose a coherent Manifest 0.3.0 / Host API 0.2.0 contract.');
 }
 
 export const exampleResult = `${result.manifest.plugin_id}:${result.status}`;

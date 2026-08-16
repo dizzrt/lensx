@@ -7,157 +7,33 @@ external Plugin Page iframe to trusted identity and current resource facts
 through an exact-origin, single-use MessagePort handshake, while keeping public
 SDK transport, Host APIs, native authority, and complete Runtime lifecycle in
 their own capability boundaries.
-
 ## Requirements
-
 ### Requirement: Host MUST derive every Runtime Session identity from current trusted facts
+The Host MUST establish a private Session only for the actual current, enabled and compatible Child WebView. Identity MUST derive from current Page, Registration, resource descriptor, plugin/version/Page/entry, isolated origin, generation, Runtime attempt and native WebView label/handle. No Manifest field, bridge payload, public UI value or plugin-provided identity MUST select or replace those facts.
 
-The system MUST establish a Host-private Runtime Session only for the current,
-available, enabled, and compatible external Plugin Page iframe. Session identity
-MUST derive from the current Page resolution, Registration summary and detail,
-Resource and Runtime descriptor, and actual iframe browsing context. It MUST
-bind at least the opaque entry, plugin ID, version, Page ID, current resource
-generation and origin, Runtime attempt, and real `contentWindow`. A Session
-MUST NOT accept identity, source, version, Page, entry, generation, authority,
-or Host lifecycle facts self-reported by a Manifest, plugin message, or public
-UI payload.
-
-#### Scenario: Current iframe establishes a trusted identity
-
-- **WHEN** the current Page, Registration detail, Resource descriptor, Runtime
-  attempt, and iframe browsing context converge on the same enabled compatible
-  plugin
-- **THEN** the Host creates a read-only Session identity and binds the real
-  window and origin to the current entry, plugin, version, Page, generation,
-  and attempt
-- **THEN** the identity contains no installation path, package digest, resource
-  scope token, Tauri object, Host executor, or author-controlled trust fact
+#### Scenario: Current Child WebView establishes a Session
+- **WHEN** current trusted facts and the actual native source converge on one Runtime attempt
+- **THEN** Host creates a read-only Session identity without exposing path, digest, scope, label, handle, origin token or native object
 
 #### Scenario: Plugin self-reports another identity
-
-- **WHEN** an iframe bootstrap acknowledgement or later message contains a
-  `plugin_id`, entry, version, Page, authority, or another self-reported identity
-  field
-- **THEN** the Host does not use those fields to establish or replace Session
-  identity and rejects fields outside the exact private contract
-- **THEN** copying another plugin's textual identity cannot obtain that
-  plugin's Session, resources, or Host authority
+- **WHEN** a bridge frame contains identity, source, Page, generation or authority fields
+- **THEN** exact validation rejects it and no Session authority changes
 
 #### Scenario: Legacy permission facts are presented
-
-- **WHEN** a legacy Manifest, Registration payload, or plugin message contains
-  permission requests or grant fields
-- **THEN** the current Contract or Registration boundary rejects or isolates
-  those facts before Session identity is created
-- **THEN** enabled, external, official, development, or Publisher text creates
-  no native Host authority
-
-### Requirement: Host MUST bootstrap one authenticated MessagePort with exact target and single-use nonce
-
-After the iframe reports load completion, the Host MUST use cryptographically
-secure randomness to create an at-least-128-bit single-use nonce and a new
-`MessageChannel` for that Runtime attempt. The Host MUST send a versioned
-bootstrap and transfer the child Port only to the recorded `contentWindow`,
-using the exact `targetOrigin` derived from the current isolated `entry_url`.
-The Session MUST enter `ready` only after the Host Port receives the first exact
-ready acknowledgement for a supported version carrying the same nonce.
-Authenticated Session communication MUST use the dedicated Port and MUST NOT
-fall back to a long-lived shared window message bus.
-
-#### Scenario: Normal bootstrap succeeds
-
-- **WHEN** the current iframe loads at the exact isolated origin, receives this
-  bootstrap and transferred Port, and returns a valid single-use nonce
-  acknowledgement on that Port
-- **THEN** the Host changes the Session to `ready`, clears the reusable nonce
-  representation, and retains the only authenticated Host Port lease
-- **THEN** the bootstrap and acknowledgement expose no trusted identity, entry
-  ID, grants, Registration revision, resource token, or Host object
-
-#### Scenario: Wrong window or origin attempts to establish a Session
-
-- **WHEN** another window, Host frame, plugin, old generation, or mismatched
-  origin sends a window message with the same shape or attempts to receive the
-  bootstrap
-- **THEN** the Host transfers no current Port and creates, replaces, or promotes
-  no Session
-- **THEN** rejection echoes no expected window, origin, nonce, identity, or
-  private error
-
-#### Scenario: Nonce is replayed or acknowledgement is malformed
-
-- **WHEN** an acknowledgement omits fields, adds fields, uses an unsupported
-  version, has a wrong, expired, or repeated nonce, or does not arrive from the
-  transferred Port for this attempt
-- **THEN** the Session fails closed, the Host closes its controllable Ports, and
-  the Session does not enter `ready`
-- **THEN** a late acknowledgement cannot revive a disconnected or disposed
-  Session
+- **WHEN** a legacy Manifest, Registration payload or plugin message contains permission requests or grant fields
+- **THEN** the current Contract or Registration boundary rejects or isolates those facts before Session identity is created
+- **THEN** enabled, external, official, development or Publisher text creates no native Host authority
 
 ### Requirement: Session lifecycle MUST distinguish loaded, Session ready, SDK ready, disconnect, and disposal
+Native finished-load MUST establish only `loaded`. A single-use current bridge-ready handshake MUST establish Session ready only after actual source, attempt, generation, private carrier version and freshness match. Successful validated `runtime.get_context` MUST establish SDK ready. Disconnect or disposal MUST terminate the Session and MUST NOT be reversed by a late native callback.
 
-Iframe `loaded` MUST continue to mean only browser load completion and MUST NOT
-mean that the Session or SDK is ready. A Host-private Session MUST use at least
-`awaiting_handshake`, `ready`, `disconnected`, and `disposed`: only the first
-valid acknowledgement can transition `awaiting_handshake` to `ready`; an
-invalid acknowledgement, `messageerror`, Host reload, handshake deadline,
-unexpected Port failure, or loss of trusted identity MUST terminate the current
-Session; and disposal MUST be idempotent and clean up the Session's nonce,
-Ports, message handlers, subscribers, deadline and window/Port leases.
-`disconnected` and `disposed` MUST be terminal, and the system MUST NOT
-automatically reauthenticate or reuse an old Port. A 5,000 millisecond
-handshake deadline MUST start only after the bootstrap is successfully posted,
-and a matching first acknowledgement or terminal cleanup MUST clear only that
-Session's deadline. The Session MUST participate in the owning Runtime
-attempt's unified terminal cleanup, and every late acknowledgement, timer or
-Port event MUST compare the owning attempt before publishing state.
+#### Scenario: Normal lifecycle reaches SDK ready
+- **WHEN** the current Child WebView loads, completes bridge ready and obtains a valid Runtime Context
+- **THEN** each state transition occurs once in order and only SDK ready enables public Host API operations
 
-#### Scenario: Iframe loaded without a valid acknowledgement
-
-- **WHEN** the iframe has fired its load event but has not passed this attempt's
-  nonce and Port acknowledgement
-- **THEN** the existing container still reports only `loaded`, and the Session
-  remains `awaiting_handshake` until acknowledgement, failure or its 5 second
-  deadline
-- **THEN** UI, logs, state, and documentation do not call it Session ready, SDK
-  ready, or Host API available
-
-#### Scenario: Session authentication completes before deadline
-
-- **WHEN** an awaiting Session receives its only valid acknowledgement before
-  the 5,000 millisecond deadline
-- **THEN** the Session clears its deadline and enters `ready` without creating
-  an SDK Runtime context, RPC method, or Host API capability
-- **THEN** that cleared timer cannot later disconnect or fail the Session
-
-#### Scenario: Session handshake expires
-
-- **WHEN** the current Session does not receive its exact acknowledgement within
-  5,000 milliseconds after bootstrap
-- **THEN** it reports bounded `runtime_handshake_timeout`, closes both
-  controllable Ports, clears nonce/listeners/deadline, and requests the owning
-  Runtime's terminal cleanup
-- **THEN** a late or replayed acknowledgement cannot enter `ready`, publish a
-  lease, or affect a later Runtime attempt
-
-#### Scenario: Host reload or Port error
-
-- **WHEN** the Host JavaScript realm reloads, the Port emits `messageerror`, an
-  unexpected ready Port disconnects, or the current Session can no longer prove
-  its identity
-- **THEN** the old Session reaches terminal disconnect or disposal and the
-  owning Runtime terminates without automatically reconnecting
-- **THEN** a new realm cannot restore the old nonce, Port, deadline or listener,
-  and a new document must establish a new Session from current facts
-
-#### Scenario: Repeated cleanup or late event
-
-- **WHEN** close, retry, invalidation, timeout, Host teardown and App teardown
-  race to dispose, then an old acknowledgement, timer or Port event arrives
-- **THEN** resources are safely cleaned up once and the Session remains
-  terminal
-- **THEN** the late event changes no current iframe, Session, Runtime attempt or
-  Registration state
+#### Scenario: Loaded WebView sends a stale ready
+- **WHEN** ready belongs to an old attempt, wrong source or consumed freshness value
+- **THEN** Session fails closed and cannot reach ready
 
 ### Requirement: Relevant current-fact changes MUST revoke only the affected Session
 
@@ -300,34 +176,14 @@ support.
 - **THEN** the system does not degrade to a wildcard origin, long-lived shared
   window message bus, bearer identity alone, or removal of a negative case
 
-### Requirement: Task 4.3 MUST leave SDK transport, Host API, permission decisions, and complete lifecycle unimplemented
+### Requirement: Host MUST bootstrap one source-authenticated native bridge Session
+Before loading the plugin document, Host MUST install the minimal versioned bridge for that Child WebView and create at least 128 bits of unpredictable, single-use attempt freshness. Host MUST accept ready only from the native callback of the actual current WebView and exact freshness value. The bridge MUST NOT fall back to `window.parent`, `postMessage`, `MessageChannel`, a global event bus or a plugin-selected Tauri command.
 
-This capability MUST deliver only Host-private Session identity and
-currentness, single-use bootstrap and ready acknowledgement, an authenticated
-Port lease, Session-owned disconnect and disposal, security tests, real WebView
-evidence, and maintained documentation. It MUST NOT define public SDK iframe
-transport, JSON-RPC or request IDs, Host API method, result, event, or error
-Schemas, native authority or UI, privileged dispatch, plugin storage,
-complete CSP, general handshake timeout, crash loop or automatic recovery,
-background Runtime, sidecar, management UI, or Windows or Linux Runtime.
+#### Scenario: Exact current bridge becomes ready
+- **WHEN** the actual current WebView returns the exact supported ready frame once
+- **THEN** Host consumes freshness, marks the Session ready and retains only the current bridge binding
 
-#### Scenario: Task 4.3 completes independently
+#### Scenario: Ready is replayed or forged
+- **WHEN** any source repeats freshness or submits malformed, old or mismatched ready data
+- **THEN** no Session is created, replaced or revived and rejection remains non-oracular
 
-- **WHEN** the focused gate, documentation, and complete validation for this
-  change pass while Task 4.4 and Milestone 5 remain undelivered
-- **THEN** the current external Plugin Page iframe can establish a trusted
-  Host-private Session, and the Host consistently rejects forged or stale
-  sources
-- **THEN** the plugin still cannot call a real Host API through the public SDK,
-  obtain native Host authority, run background work, or claim complete CSP
-  or lifecycle delivery
-
-#### Scenario: Locale or theme changes during the Session lifecycle
-
-- **WHEN** the current application locale or light or dark theme changes while
-  the Session is awaiting, ready, or disconnected
-- **THEN** the existing Host Page and iframe presentation retains its current
-  localization and theme behavior, and the Session injects or duplicates no
-  new user-visible copy or styles
-- **THEN** the locale or theme change itself creates no capability, changes no
-  trusted identity, and does not rename iframe `loaded` as ready

@@ -6,9 +6,7 @@ Define the Host-private, explicitly enabled workflow for registering and
 manually reloading an unpacked plugin development directory without weakening
 the production Registration, Resource, Runtime, Session, or Host-authority
 boundaries.
-
 ## Requirements
-
 ### Requirement: Development Mode MUST require build capability and explicit per-process opt-in
 
 The system MUST expose development controls only when both the native and
@@ -253,28 +251,6 @@ pinned collections, production packages, or another plugin's content.
 - **THEN** any failure is shown as a bounded partial or convergence diagnostic,
   and the frontend does not prematurely claim all authority was revoked
 
-### Requirement: Development execution MUST use the exact formal Runtime and permission boundaries
-
-Development execution MUST use the same open isolated Web Runtime, iframe sandbox, origin, Resource Service, Session and SDK, Host API `0.2.0`, deadline, breaker, single-iframe, and teardown boundaries as an installed source. A development source MUST NOT receive Tauri, Host-private command, shared-origin, persistent-background, or management authority, and MUST NOT use a lensX permission or grant path because that path has been removed. Ordinary Worker, network, remote-resource, Blob, Data, and WASM behavior MUST match installed and official sources.
-
-Public Contract, SDK, UI, Testkit, CLI, and plugin code MUST NOT gain an import or API for the Development coordinator, source path, snapshot, native command, or Manager internals.
-
-#### Scenario: Development plugin uses Monaco-style Worker
-- **WHEN** the current development snapshot page creates a Dedicated Worker and performs ordinary network activity
-- **THEN** the WebView follows the same open Runtime baseline as an installed plugin
-- **THEN** development provenance does not relax Host or cross-plugin isolation or lifecycle boundaries
-
-#### Scenario: Development code attempts Host bypass
-- **WHEN** a development plugin attempts Tauri, a private command, Host DOM, another plugin origin, or persistent background execution
-- **THEN** the formal isolation boundary blocks the attempt
-- **THEN** the local source path and explicit mode opt-in create no exception
-
-#### Scenario: Public package boundaries are checked
-
-- **WHEN** workspace-boundary and real-tarball-consumer gates inspect Contract, SDK, UI, Testkit, CLI, and official and example plugins
-- **THEN** they neither import nor package Host-private Development Mode source, commands, paths, snapshots, or Manager internals
-- **THEN** Plugin Developer CLI continues to claim content validation only, not Host installation, Development Mode, source, or authorization success
-
 ### Requirement: Delivery MUST prove safe directory handling, atomic reload, production exclusion, and real Runtime teardown
 
 Delivery MUST combine Rust directory, snapshot, Manager, and Resource tests;
@@ -306,3 +282,16 @@ authority from the old generation.
 - **THEN** validation MUST NOT replace missing evidence by directly reading the
   author directory, relaxing Runtime policy, hiding failures, removing negative
   cases, or checking source text alone
+
+### Requirement: Development execution MUST use the production Child WebView path
+Development registration and manual reload MUST use the same Manifest `0.3.0`, Child WebView registry, origin/resource binding, navigation, bridge, Session, RPC, Host API and teardown boundaries as installed plugins. Development source MUST grant no alternate Tauri command, bridge, bounds, CSP or Host authority.
+
+#### Scenario: Development Page opens
+- **WHEN** an opted-in validated development snapshot becomes current
+- **THEN** it runs through the production Child WebView service without a dev-only Runtime
+
+#### Scenario: Manual reload commits
+- **WHEN** a new immutable snapshot and generation commit atomically
+- **THEN** old Child WebView teardown completes and a fresh attempt/WebView loads the new generation
+- **THEN** uncommitted reload failure leaves the current WebView unchanged
+

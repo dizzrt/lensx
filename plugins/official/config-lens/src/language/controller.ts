@@ -46,11 +46,17 @@ export const createLanguageController = (
   let activeRequestId: number | undefined;
   let disposed = false;
 
-  const terminateCurrent = (result?: LanguageResult) => {
+  const releaseCurrent = (terminateWorker: boolean, result?: LanguageResult) => {
     if (timer !== undefined) clearTimeout(timer);
     timer = undefined;
-    worker?.terminate();
-    worker = undefined;
+    if (worker !== undefined) {
+      worker.onmessage = null;
+      worker.onerror = null;
+      if (terminateWorker) {
+        worker.terminate();
+        worker = undefined;
+      }
+    }
     if (result !== undefined) settle?.(result);
     settle = undefined;
     activeRequestId = undefined;
@@ -60,15 +66,12 @@ export const createLanguageController = (
     currentGeneration += 1;
     if (validationTimer !== undefined) clearTimeout(validationTimer);
     validationTimer = undefined;
-    terminateCurrent(
-      activeRequestId === undefined
-        ? undefined
-        : invalidResult(
-            activeRequestId,
-            diagnostic('controller.superseded', 'diagnostic.superseded'),
-            'internal-error',
-          ),
-    );
+    if (activeRequestId !== undefined) {
+      releaseCurrent(
+        true,
+        invalidResult(activeRequestId, diagnostic('controller.superseded', 'diagnostic.superseded'), 'internal-error'),
+      );
+    }
   };
 
   const run = async (language: LanguageId, operation: LanguageOperation, source: string): Promise<LanguageResult> => {
@@ -79,14 +82,14 @@ export const createLanguageController = (
     const requestId = currentGeneration;
     const preflight = preflightInput(requestId, source);
     if (preflight !== undefined) return preflight;
-    const currentWorker = createWorker();
+    const currentWorker = worker ?? createWorker();
     worker = currentWorker;
     activeRequestId = requestId;
     return new Promise<LanguageResult>((resolve) => {
       settle = resolve;
-      const finish = (result: LanguageResult) => {
+      const finish = (result: LanguageResult, terminateWorker: boolean) => {
         if (requestId !== currentGeneration || worker !== currentWorker) return;
-        terminateCurrent();
+        releaseCurrent(terminateWorker);
         resolve(result);
       };
       currentWorker.onmessage = ({ data }) => {
@@ -97,15 +100,20 @@ export const createLanguageController = (
               diagnostic('protocol.result-invalid', 'diagnostic.protocolFailure'),
               'internal-error',
             ),
+            true,
           );
           return;
         }
-        finish(data);
+        finish(data, false);
       };
       currentWorker.onerror = () =>
-        finish(invalidResult(requestId, diagnostic('worker.crashed', 'diagnostic.workerFailure'), 'internal-error'));
+        finish(
+          invalidResult(requestId, diagnostic('worker.crashed', 'diagnostic.workerFailure'), 'internal-error'),
+          true,
+        );
       timer = setTimeout(
-        () => finish(invalidResult(requestId, diagnostic('worker.timeout', 'diagnostic.timeout'), 'internal-error')),
+        () =>
+          finish(invalidResult(requestId, diagnostic('worker.timeout', 'diagnostic.timeout'), 'internal-error'), true),
         deadlineMs,
       );
       currentWorker.postMessage({ requestId, language, operation, source });
@@ -133,6 +141,7 @@ export const createLanguageController = (
       if (disposed) return;
       disposed = true;
       invalidate();
+      releaseCurrent(true);
     },
     generation: () => currentGeneration,
   });

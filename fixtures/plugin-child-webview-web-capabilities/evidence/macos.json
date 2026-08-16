@@ -1,0 +1,34 @@
+{
+  "created": true,
+  "distinct_origins": true,
+  "distinct_data_store_identifiers": true,
+  "first_generation": {
+    "phase": "first",
+    "module_loaded": true,
+    "dedicated_worker_loaded": true,
+    "fetch_loaded": true,
+    "wasm_loaded": true,
+    "host_dom_unreachable": true,
+    "exact_origin": true,
+    "local_storage_isolated": true,
+    "indexed_db_isolated": true,
+    "destroyed": true,
+    "late_callback_inert": true
+  },
+  "second_generation": {
+    "phase": "second",
+    "module_loaded": true,
+    "dedicated_worker_loaded": true,
+    "fetch_loaded": true,
+    "wasm_loaded": true,
+    "host_dom_unreachable": true,
+    "exact_origin": true,
+    "local_storage_isolated": true,
+    "indexed_db_isolated": true,
+    "destroyed": true,
+    "late_callback_inert": true
+  },
+  "cross_plugin_storage_denied": true,
+  "old_generation_storage_denied": true,
+  "replacement_fresh": true
+}

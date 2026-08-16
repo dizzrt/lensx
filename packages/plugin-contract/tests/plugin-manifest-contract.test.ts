@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, test } from '@rstest/core';
 import {
+  type IncompatiblePluginManifestValidationResult,
   type InvalidPluginManifestValidationResult,
   normalizePluginManifest,
   type PluginHostVersions,
@@ -40,9 +41,12 @@ const baseManifest = readJson<unknown>(resolve(fixtureRoot, 'base.json'));
 const evaluateManifest = (
   input: unknown,
   currentVersions: PluginHostVersions,
-): InvalidPluginManifestValidationResult | PluginManifestNormalizationResult => {
+):
+  | InvalidPluginManifestValidationResult
+  | IncompatiblePluginManifestValidationResult
+  | PluginManifestNormalizationResult => {
   const validation = validatePluginManifest(input);
-  return validation.status === 'invalid' ? validation : normalizePluginManifest(validation, currentVersions);
+  return validation.status === 'valid' ? normalizePluginManifest(validation, currentVersions) : validation;
 };
 
 const decodePointer = (path: string): string[] =>
@@ -91,7 +95,9 @@ describe('plugin Manifest 0.2.0 shared contract fixtures', () => {
         const result = evaluateManifest(fixtureInput(fixture), fixture.current_versions ?? defaultVersions);
 
         expect(result.status).toBe(fixture.expected_status);
-        expect(result.diagnostics).toEqual([]);
+        expect(result.diagnostics.map(({ code, path }) => ({ code, path }))).toEqual(
+          fixture.expected_diagnostics ?? [],
+        );
         expect(result.status).not.toBe('invalid');
       });
     }
@@ -119,7 +125,7 @@ describe('plugin Manifest 0.2.0 shared contract fixtures', () => {
 
       expect(result.status).toBe(fixture.expected_status);
       expect(input).toEqual(original);
-      if (result.status === 'invalid') {
+      if (!('manifest' in result)) {
         throw new TypeError('Normalized fixture unexpectedly failed validation.');
       }
       expect(result.manifest).toEqual(fixture.expected_normalized);
@@ -132,7 +138,7 @@ describe('plugin Manifest 0.2.0 shared contract fixtures', () => {
 
 test('Action keywords remain scoped to their owning Action', () => {
   const result = evaluateManifest(baseManifest, defaultVersions);
-  if (result.status === 'invalid') {
+  if (!('manifest' in result)) {
     throw new TypeError('Base fixture unexpectedly failed validation.');
   }
 

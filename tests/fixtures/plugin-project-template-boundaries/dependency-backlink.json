@@ -5,7 +5,9 @@
       "dependencies": { "@lensx/plugin-sdk": "workspace:*" },
       "scripts": { "build": "x", "typecheck": "x", "test": "x", "check": "x" }
     },
-    "sources": {}
+    "sources": {
+      "src/runtime.ts": "import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview'; createPluginWebviewTransport();"
+    }
   },
   "expected": ["template/dependency-protocol: @lensx/plugin-sdk must use an ordinary SemVer range."]
 }

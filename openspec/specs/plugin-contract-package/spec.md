@@ -6,9 +6,7 @@ Define the bounded public package that exposes the lensX plugin Manifest
 Schema, generated author-input types, deterministic validation and
 normalization APIs, independent version dimensions, and publish-artifact drift
 gates without exposing Host-private implementation.
-
 ## Requirements
-
 ### Requirement: Public Plugin Contract package must expose a bounded author contract
 
 The system MUST provide the independently buildable public workspace package
@@ -264,3 +262,16 @@ scripts, and Host-private source.
   tests, fixtures, generation scripts, or Host source appear in the tarball
 - **THEN** package contents or isolated-consumer validation exits non-zero
 - **THEN** the artifact is not considered publishable
+
+### Requirement: Contract package MUST publish the WebView Manifest boundary as one fact chain
+`@lensx/plugin-contract` MUST publish the `0.3.0` Manifest Schema, generated types, normal and malicious fixtures, validator and normalizer for the WebView Runtime. Public declarations and packed files MUST NOT retain iframe Runtime authoring types or expose Child WebView, Tauri, bridge, label, origin token or Host-private Session facts.
+
+#### Scenario: An external consumer installs the packed Contract
+- **WHEN** a temporary consumer validates the canonical WebView and legacy iframe fixtures from the packed tarball
+- **THEN** the WebView fixture succeeds and the iframe fixture receives the same stable incompatible result as the Host
+- **THEN** no workspace source import or private Runtime declaration is required
+
+#### Scenario: Contract artifacts drift
+- **WHEN** Schema, generated types, fixtures, validator, normalizer or Rust consumer disagree about the Runtime kind or protocol version
+- **THEN** the contract drift gate fails before publication
+

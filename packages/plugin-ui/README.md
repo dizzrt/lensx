@@ -6,5 +6,6 @@ types from the root entry. Import `@lensx/plugin-ui/styles.css` once in the
 plugin document.
 
 React, React DOM, and `@lensx/plugin-sdk` are peer dependencies owned by the
-plugin project. This package does not provide an iframe Runtime, Host API,
+plugin project. This package is document-local: it does not create or control a
+Child WebView, configure the private bridge, provide Host API transport,
 navigation, Tauri access, or Host-private React context and styles.

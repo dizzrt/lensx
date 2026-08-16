@@ -76,6 +76,11 @@ pub enum PackageInspectionResult {
         facts: PackageFacts,
         diagnostics: Vec<PackageDiagnostic>,
     },
+    #[serde(rename = "incompatible")]
+    IncompatibleProtocol {
+        facts: PackageFacts,
+        diagnostics: Vec<PackageDiagnostic>,
+    },
 }
 
 fn diagnostic(code: &'static str, path: impl Into<String>) -> PackageDiagnostic {
@@ -114,6 +119,7 @@ pub(crate) fn package_diagnostic_message(code: &str) -> Option<&'static str> {
         "frame_trailing_bytes" => "Trailing bytes after the Zstandard frame are not allowed.",
         "frame_window_exceeded" => "The Zstandard frame window exceeds the limit.",
         "manifest_invalid" => "The plugin Manifest is invalid.",
+        "manifest_incompatible" => "The plugin Manifest protocol is incompatible.",
         "metadata_size_exceeded" => "A package metadata record exceeds the size limit.",
         "package_version_invalid" => "The plugin package format version is unsupported.",
         "path_case_collision" => "Package paths must be unique under ASCII case folding.",
@@ -657,18 +663,22 @@ fn manifest_resources(manifest: &NormalizedPluginManifest) -> Vec<(&str, String)
     resources
 }
 
+enum ValidatedPackageManifest {
+    Normalized {
+        status: PluginManifestValidationStatus,
+        manifest: NormalizedPluginManifest,
+        compatibility: PluginManifestCompatibility,
+    },
+    IncompatibleProtocol {
+        diagnostics: Vec<PackageDiagnostic>,
+    },
+}
+
 fn validate_manifest(
     bytes: &[u8],
     files: &[PackageFileFact],
     current_versions: &PluginHostVersions,
-) -> Result<
-    (
-        PluginManifestValidationStatus,
-        NormalizedPluginManifest,
-        PluginManifestCompatibility,
-    ),
-    Vec<PackageDiagnostic>,
-> {
+) -> Result<ValidatedPackageManifest, Vec<PackageDiagnostic>> {
     let Ok(value) = serde_json::from_slice::<Value>(bytes) else {
         return Err(vec![diagnostic("manifest_invalid", MANIFEST_PATH)]);
     };
@@ -679,6 +689,17 @@ fn validate_manifest(
             .iter()
             .map(|item| diagnostic("manifest_invalid", &item.path))
             .collect());
+    }
+    if validation.status == PluginManifestValidationStatus::Incompatible
+        && validation.manifest.is_none()
+    {
+        return Ok(ValidatedPackageManifest::IncompatibleProtocol {
+            diagnostics: validation
+                .diagnostics
+                .iter()
+                .map(|item| diagnostic("manifest_incompatible", &item.path))
+                .collect(),
+        });
     }
     let manifest = validation
         .manifest
@@ -694,7 +715,11 @@ fn validate_manifest(
         }
     }
     if diagnostics.is_empty() {
-        Ok((validation.status, manifest, compatibility))
+        Ok(ValidatedPackageManifest::Normalized {
+            status: validation.status,
+            manifest,
+            compatibility,
+        })
     } else {
         Err(diagnostics)
     }
@@ -704,6 +729,7 @@ fn validate_manifest(
 #[cfg_attr(not(feature = "plugin-development-mode"), allow(dead_code))]
 pub(crate) enum UnpackedPayloadValidation {
     Invalid(Vec<PackageDiagnostic>),
+    IncompatibleProtocol(Vec<PackageDiagnostic>),
     Valid {
         status: PluginManifestValidationStatus,
         manifest: NormalizedPluginManifest,
@@ -718,11 +744,19 @@ pub(crate) fn validate_unpacked_payload(
     current_versions: &PluginHostVersions,
 ) -> UnpackedPayloadValidation {
     match validate_manifest(manifest_bytes, files, current_versions) {
-        Ok((status, manifest, compatibility)) => UnpackedPayloadValidation::Valid {
+        Ok(ValidatedPackageManifest::Normalized {
+            status,
+            manifest,
+            compatibility,
+        }) => UnpackedPayloadValidation::Valid {
             status,
             manifest,
             compatibility,
         },
+        Ok(ValidatedPackageManifest::IncompatibleProtocol { mut diagnostics }) => {
+            sort_diagnostics(&mut diagnostics);
+            UnpackedPayloadValidation::IncompatibleProtocol(diagnostics)
+        }
         Err(mut diagnostics) => {
             sort_diagnostics(&mut diagnostics);
             UnpackedPayloadValidation::Invalid(diagnostics)
@@ -796,7 +830,7 @@ pub fn inspect_plugin_package(
     if !checksum_diagnostics.is_empty() {
         return invalid(checksum_diagnostics);
     }
-    let (status, manifest, compatibility) =
+    let manifest_validation =
         match validate_manifest(&manifest_bytes, &archive.files, current_versions) {
             Ok(value) => value,
             Err(diagnostics) => return invalid(diagnostics),
@@ -811,6 +845,16 @@ pub fn inspect_plugin_package(
             algorithm: "sha256",
             value: sha256_hex(package_bytes),
         },
+    };
+    let (status, manifest, compatibility) = match manifest_validation {
+        ValidatedPackageManifest::Normalized {
+            status,
+            manifest,
+            compatibility,
+        } => (status, manifest, compatibility),
+        ValidatedPackageManifest::IncompatibleProtocol { diagnostics } => {
+            return PackageInspectionResult::IncompatibleProtocol { facts, diagnostics };
+        }
     };
     match status {
         PluginManifestValidationStatus::Compatible => PackageInspectionResult::Compatible {

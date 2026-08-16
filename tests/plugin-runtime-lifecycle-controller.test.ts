@@ -69,17 +69,15 @@ describe('Plugin Runtime lifecycle controller', () => {
     const order: string[] = [];
     first.bindCancellable(() => order.push('cancel'));
     first.bindSubscription(() => order.push('unsubscribe'));
-    first.bindSession(() => order.push('session'));
-    first.bindIframe(() => order.push('iframe'));
-    first.bindNavigationLease(async () => {
-      order.push('lease');
+    first.bindPresentation(() => {
+      order.push('presentation');
     });
     first.startLoadDeadline();
 
     const cleanup = first.terminate('navigation');
     await first.terminate('manual_close');
     await cleanup;
-    expect(order).toEqual(['cancel', 'unsubscribe', 'session', 'iframe', 'lease']);
+    expect(order).toEqual(['cancel', 'unsubscribe', 'presentation']);
     expect(scheduler.timerCount).toBe(0);
     scheduler.advance(PLUGIN_RUNTIME_LOAD_DEADLINE_MS);
     expect(failures).toEqual([]);
@@ -103,6 +101,7 @@ describe('Plugin Runtime lifecycle controller', () => {
     scheduler.advance(PLUGIN_RUNTIME_LOAD_DEADLINE_MS - 1);
     expect(failures).toEqual([]);
     scheduler.advance(1);
+    await lifecycle.terminateCurrent('failure');
     await Promise.resolve();
     expect(failures).toEqual(['runtime_load_timeout']);
 
@@ -122,7 +121,7 @@ describe('Plugin Runtime lifecycle controller', () => {
     const release = deferred<void>();
     const first = await lifecycle.start({ targetKey, onFailure: (code) => failures.push(code) });
     if (!first) throw new Error('first attempt should start');
-    first.bindNavigationLease(() => release.promise);
+    first.bindPresentation(() => release.promise);
 
     const secondPromise = lifecycle.start({ targetKey, onFailure: (code) => failures.push(code) });
     scheduler.advance(PLUGIN_RUNTIME_START_DEADLINE_MS);
@@ -181,13 +180,13 @@ describe('Plugin Runtime lifecycle controller', () => {
   test('dispose clears all process-local work', async () => {
     const scheduler = new VirtualScheduler();
     const lifecycle = createPluginRuntimeLifecycleService({ scheduler });
-    const disposeSession = rs.fn();
+    const destroyPresentation = rs.fn();
     const attempt = await lifecycle.start({ targetKey, onFailure: () => undefined });
     if (!attempt) throw new Error('attempt should start');
-    attempt.bindSession(disposeSession);
+    attempt.bindPresentation(destroyPresentation);
     attempt.startLoadDeadline();
     await lifecycle.dispose();
-    expect(disposeSession).toHaveBeenCalledTimes(1);
+    expect(destroyPresentation).toHaveBeenCalledTimes(1);
     expect(scheduler.timerCount).toBe(0);
     expect(await lifecycle.start({ targetKey, onFailure: () => undefined })).toBeUndefined();
   });

@@ -3,9 +3,7 @@
 ## Purpose
 
 Define the stable public foundation for `@lensx/plugin-sdk`, including its package boundary, client lifecycle, Runtime context, transport abstraction, operation semantics, version compatibility, safe errors, and release validation, without claiming delivery of a working plugin Runtime or Host API.
-
 ## Requirements
-
 ### Requirement: The system MUST provide a constrained, framework-neutral public Plugin SDK package
 
 The system MUST provide the public workspace package `@lensx/plugin-sdk`, which MUST be independently buildable, testable, and packable. Its public Runtime and type entries MUST NOT depend on the private root Host, `src/app/**`, React, Semi Design, Tauri, DOM global types, Node filesystem APIs, or Host-internal styles. Paths that are not declared in the package exports MUST NOT become public APIs.
@@ -88,35 +86,6 @@ The client MUST provide typed subscription only for declared `HostApiEventName` 
 - **WHEN** a ready client receives a Contract-valid `runtime.context_changed` event through its transport
 - **THEN** it installs the copied and frozen complete context before notifying active typed subscribers
 - **THEN** invalid, unknown, late or post-disposal events neither change context nor notify a consumer
-
-### Requirement: The SDK MUST define a transport abstraction that does not leak the wire protocol
-
-The system MUST expose a framework-neutral `PluginSdkTransport` injection boundary that expresses connection, abstract request, abstract event, disconnection notification, and disposal semantics. This public interface MUST NOT contain request IDs, nonces, plugin identity, origins, `Window`, `MessagePort`, `postMessage`, a JSON-RPC envelope, or Host-private types. `PluginSdkClient` MUST NOT expose a raw Host API call entry that accepts an arbitrary method string.
-
-The package MUST additionally declare an official `@lensx/plugin-sdk/iframe` entry that creates a production iframe implementation of the same semantic transport interface. The iframe entry's public declarations MUST NOT require DOM global types or expose bootstrap, Port, origin, nonce, request ID, frame, codec, identity or Host adapter configuration. Importing the root SDK entry MUST NOT access browser globals or create a transport implicitly.
-
-#### Scenario: A test transport is injected in a non-browser environment
-
-- **WHEN** a test implements the public transport interface in an environment without DOM or Tauri and injects it into an SDK client
-- **THEN** the test can drive initialization, request results, events, cancellation, timeout, disconnection, and disposal semantics
-- **THEN** importing or using the SDK root entry does not require a real iframe transport or browser global
-
-#### Scenario: An external plugin uses the official iframe entry
-
-- **WHEN** a browser plugin outside the workspace installs a real SDK tarball, imports only `@lensx/plugin-sdk` and `@lensx/plugin-sdk/iframe`, and passes the created transport to `createPluginSdk`
-- **THEN** package resolution, TypeScript compilation and browser Runtime loading succeed without access to lensX source or an undeclared deep import
-- **THEN** the consumer neither supplies nor observes the private wire, trusted identity, origin policy, nonce, Port or Host object
-
-#### Scenario: Public transport types are inspected
-
-- **WHEN** a consumer inspects the SDK root and iframe entry declarations
-- **THEN** the declarations describe only semantic operations and the zero-trust-configuration iframe factory and do not expose or require construction of a private wire envelope, trusted identity, browser messaging object or Host object
-
-#### Scenario: A plugin attempts to call an arbitrary Host method
-
-- **WHEN** a plugin author holds only a public `PluginSdkClient`
-- **THEN** the client provides no public call interface that accepts an arbitrary string outside the Contract's closed `HostApiRequest` union
-- **THEN** private or future method names cannot be forwarded merely through a cast or handcrafted transport frame
 
 ### Requirement: The SDK MUST unify cancellation, timeout, event, and late-result semantics
 
@@ -202,30 +171,6 @@ or the complete method catalog.
 - **THEN** this foundation still exposes no raw Host method call or private RPC
   envelope
 
-### Requirement: The SDK and Host API MUST use independent, single-source version boundaries
-
-The SDK package and public API MUST remain independently versioned after starting at `0.1.0`. The current SDK version MUST be `0.2.0` and MUST expose the half-open Host API support range `>=0.2.0 <0.3.0`. The current Host API version MUST continue to use `PLUGIN_HOST_API_VERSION` from `@lensx/plugin-contract` as its sole source of truth, and the SDK MUST NOT define a second current Host API version constant. Before initialization completes, the SDK MUST check the Runtime context's Host API version according to SemVer precedence.
-
-#### Scenario: A compatible Host API initializes
-
-- **WHEN** the Runtime context's Host API version satisfies the SDK's half-open support range
-- **THEN** the version check succeeds, and initialization can continue
-
-#### Scenario: An incompatible Host API is rejected
-
-- **WHEN** the Runtime context's Host API version is below the minimum or reaches the exclusive upper bound
-- **THEN** initialization fails with `incompatible_host_api`, and the client does not enter `ready`
-
-#### Scenario: A prerelease version is compared
-
-- **WHEN** the SDK checks a valid prerelease SemVer Host API version
-- **THEN** comparison follows SemVer prerelease precedence rather than ordinary string ordering
-
-#### Scenario: The SDK receives an implementation revision
-
-- **WHEN** the SDK package receives a fix that does not change its public API or supported Host API range
-- **THEN** the SDK package version can increase independently without changing the Manifest or Host API protocol version
-
 ### Requirement: The SDK MUST expose stable, safe SDK-level errors
 
 The system MUST provide a discriminated `PluginSdkError` and stable `PluginSdkErrorCode` values that cover at least `cancelled`, `timeout`, `disconnected`, `disposed`, `incompatible_host_api`, `invalid_runtime_context`, `invalid_argument`, and `transport_failure`. Errors MUST provide safe, predictable messages but MUST NOT expose raw transport exceptions, stacks, Host objects, or private wire data to consumers. Specific Host API method, parameter, domain, and internal errors MUST remain owned by `@lensx/plugin-contract`, stay discriminable from SDK lifecycle errors, and MUST NOT be duplicated or silently collapsed into `transport_failure`.
@@ -250,14 +195,14 @@ The system MUST provide a discriminated `PluginSdkError` and stable `PluginSdkEr
 
 #### Scenario: A valid Host API rejection crosses the real transport
 
-- **WHEN** the official iframe transport receives a Contract-valid Host API rejection for a pending SDK request
+- **WHEN** the official WebView transport receives a Contract-valid Host API rejection for a pending SDK request
 - **THEN** the SDK preserves its Host API error discrimination and does not map
   it to `transport_failure`
 - **THEN** raw private envelope, exception, stack, path, payload, grant and Host values remain hidden
 
 ### Requirement: The SDK package MUST participate in complete workspace, release, and documentation validation
 
-The SDK package MUST declare meaningful `build`, `typecheck`, `test`, and `check` scripts, and the root aggregate commands MUST cover them. The repository MUST validate the contents, exports, declarations, and Runtime consumption of a real tarball, and MUST exclude tests, fixtures, build scripts, and Host-private source code. Canonical English architecture and development documentation and their Simplified Chinese mirrors at the same relative paths MUST describe the SDK public boundary and MUST explicitly state that this capability does not deliver the iframe Runtime, Host API execution, native authority, plugin execution, or a public Testkit fake.
+The SDK package MUST declare meaningful `build`, `typecheck`, `test`, and `check` scripts, and the root aggregate commands MUST cover them. The repository MUST validate the contents, exports, declarations, and Runtime consumption of a real tarball, and MUST exclude tests, fixtures, build scripts, and Host-private source code. Canonical English architecture and development documentation and their Simplified Chinese mirrors at the same relative paths MUST describe the SDK public boundary and MUST explicitly state that the SDK alone does not deliver the Host Runtime, Host API execution, native authority, plugin execution, or a public Testkit fake.
 
 #### Scenario: Root commands cover the SDK package
 
@@ -275,3 +220,26 @@ The SDK package MUST declare meaningful `build`, `typecheck`, `test`, and `check
 - **WHEN** a developer reads the English or Chinese plugin architecture and workspace documentation
 - **THEN** both languages describe SDK initialization, context, versioning, errors, and the transport injection boundary with equivalent semantics
 - **THEN** neither language describes the SDK foundation as a Runtime that can already install, register, or execute plugins
+
+### Requirement: SDK MUST expose an official zero-configuration WebView transport entry
+The package MUST export `@lensx/plugin-sdk/webview` and `createPluginWebviewTransport` as the only production Runtime transport factory. The root `PluginSdkTransport` abstraction MUST remain semantic, framework-neutral and usable without DOM/native types. The WebView entry MUST NOT expose or accept bridge globals, labels, handles, identities, origins, nonces, frame codecs, Tauri commands or Host adapters.
+
+#### Scenario: External plugin consumes SDK 0.3.0
+- **WHEN** a temporary external consumer imports the root and `/webview` entries from a packed SDK
+- **THEN** TypeScript and browser loading succeed without workspace sources or private modules
+- **THEN** the factory discovers only the Host-installed current bridge
+
+#### Scenario: Root SDK is imported outside a browser
+- **WHEN** a test imports the root package and injects a semantic fake transport
+- **THEN** no browser or native global is read and the normal SDK lifecycle remains testable
+
+### Requirement: SDK 0.3.0 MUST preserve the current Host API compatibility boundary
+The SDK version MUST be `0.3.0` while its Host API support range remains `>=0.2.0 <0.3.0`, sourced from the public Contract rather than a copied catalog. Initialization MUST reject an incompatible Runtime Context before entering ready.
+
+#### Scenario: Compatible Host API initializes
+- **WHEN** Runtime Context reports Host API `0.2.x`
+- **THEN** SDK 0.3.0 may initialize after all other validation succeeds
+
+#### Scenario: Incompatible Host API initializes
+- **WHEN** Runtime Context falls outside the declared half-open range
+- **THEN** initialization fails with the existing stable incompatibility error

@@ -9,7 +9,7 @@ It contains the publishable `@lensx/plugin-contract`, `@lensx/plugin-sdk`,
 `@lensx/plugin-testkit`, optional `@lensx/plugin-ui`, and the Node authoring
 package `@lensx/plugin-cli`, but repository validation does not perform a
 registry publish. The Host can install/register and open a supported local
-plugin, the SDK supplies the authenticated iframe transport, and the production
+plugin, the SDK supplies the source-bound WebView transport, and the production
 Host-private Dispatcher implements `runtime.get_context`, `ui.close`,
 `actions.open`, and the five plugin-scoped `storage.*` methods. The Contract
 package ships the complete eight-method semantic catalog and validators. It
@@ -101,7 +101,7 @@ testing. It proves semantic validity without claiming dispatch or side effects.
 
 `packages/plugin-cli` provides the public `@lensx/plugin-cli` package and
 `lensx-plugin` executable for `create`, `build`, `validate`, `pack`, and
-`inspect`. It is a Node authoring tool, not an iframe Runtime dependency.
+`inspect`. It is a Node authoring tool, not a Runtime container dependency.
 Plugin package scripts may invoke its bin, while plugin `src/**` must not import
 the CLI or an undeclared deep path.
 
@@ -148,7 +148,7 @@ transport. Its supported imports are:
 
 ```text
 @lensx/plugin-sdk
-@lensx/plugin-sdk/iframe
+@lensx/plugin-sdk/webview
 ```
 
 The package has one direct Runtime dependency, `@lensx/plugin-contract`, and
@@ -161,9 +161,9 @@ Use an explicit instance and injected transport:
 
 ```ts
 import { createPluginSdk } from '@lensx/plugin-sdk';
-import { createPluginIframeTransport } from '@lensx/plugin-sdk/iframe';
+import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview';
 
-const client = createPluginSdk({ transport: createPluginIframeTransport() });
+const client = createPluginSdk({ transport: createPluginWebviewTransport() });
 const context = await client.initialize();
 if (context.capabilities.includes('ui.close')) {
   await client.request({ method: 'ui.close', params: {} });
@@ -192,17 +192,17 @@ pnpm run check:plugin-sdk
 ```
 
 The pack gate builds real Contract and SDK tarballs, verifies the SDK file list,
-root/iframe exports, declarations, and Runtime dependency metadata, and installs
+root/WebView exports, declarations, and Runtime dependency metadata, and installs
 both tarballs into isolated external consumers. The root consumer typechecks with
 `lib: ["ES2022"]` and no DOM types, runs an ESM lifecycle smoke test, and proves
 that an undeclared SDK deep import is rejected. The browser consumer typechecks,
-bundles, loads the iframe entry in a real browser, and rejects private transport
+bundles, loads the WebView entry in a real browser, and rejects private transport
 deep imports. Tests, fixtures, scripts, schemas, Host projections, and
 Host-private source are excluded from the tarball. Run
 `pnpm run check:plugin-sdk-transport` for the complete cross-boundary gate. Run
 `pnpm run check:plugin-host-api-dispatcher` for the production Dispatcher,
 response-before-close, Action/Navigation/storage, Context replacement,
-MessageChannel, public tarball, and workspace-boundary gate. The Dispatcher is
+source-bound bridge, public tarball, and workspace-boundary gate. The Dispatcher is
 private Host source; it adds no Contract or SDK export or dependency.
 Run `pnpm run check:plugin-scoped-storage` for the Rust-backed scoped storage,
 Installer lifecycle coordination, public Testkit consumer, and private storage

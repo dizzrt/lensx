@@ -51,6 +51,14 @@ describe('Plugin Testkit public package boundary', () => {
       'requestId',
       'nonce',
       'pluginIdentity',
+      'PluginChildWebview',
+      'PluginWebviewBridge',
+      '__LENSX_PLUGIN_WEBVIEW_BRIDGE__',
+      'bridge_contract_version',
+      'source_label',
+      'native_handle',
+      'data_store_identifier',
+      'entry_url',
       '@rstest/',
       'vitest',
     ]) {
@@ -96,5 +104,18 @@ describe('Plugin Testkit public package boundary', () => {
     expect(
       validatePackedPackage({ declarationSources: [], files, metadata, runtimeImports: ['missing-dependency'] }),
     ).toContain('Runtime import missing-dependency is not declared in dependencies.');
+    expect(
+      validatePackedPackage({
+        declarationSources: ['export interface Leaked { handle: PluginChildWebviewHandle }'],
+        files,
+        metadata,
+        runtimeImports: ['@lensx/plugin-sdk/webview'],
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        'Forbidden public declaration reference: PluginChildWebview.',
+        'The semantic Testkit must not import a container-specific entry: @lensx/plugin-sdk/webview.',
+      ]),
+    );
   });
 });

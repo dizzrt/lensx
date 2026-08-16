@@ -7,9 +7,7 @@ including strict structure, stable identity, localized metadata, package-local
 resources, Page and Action contributions, compatibility
 classification, deterministic normalization and diagnostics, and the boundary
 between author data and Host-owned state.
-
 ## Requirements
-
 ### Requirement: Plugin author Manifests must be strict and versioned inputs
 
 Plugin author Manifests MUST be strict, versioned, JSON Schema-driven inputs, with current version `0.2.0`. The Schema MUST reject unknown fields, including legacy `requested_permissions`, Page `required_permissions`, Host source, grants, trust, signatures, lifecycle, sandbox, CSP, and Host bridge configuration. Manifest, Host API, package protocol, and application versions MUST evolve independently.
@@ -160,7 +158,7 @@ and symbolic links do not escape the plugin package.
 
 #### Scenario: Accept package-local resource paths
 
-- **WHEN** the iframe entry is `dist/plugin.html` and the icon path is
+- **WHEN** the WebView entry is `dist/plugin.html` and the icon path is
   `assets/icon.svg`
 - **THEN** the system accepts the path syntax
 - **THEN** the normalized result preserves the package-relative paths
@@ -178,35 +176,6 @@ and symbolic links do not escape the plugin package.
 - **THEN** the system rejects the Manifest
 - **THEN** the plugin cannot cross the package boundary through a static
   resource field
-
-### Requirement: The first external Runtime must be an iframe
-
-An external plugin's `runtime.kind` MUST equal `iframe`, and `runtime.entry`
-MUST point to a package-relative HTML file. An author MUST NOT declare a Host
-module, frontend framework module, native library, Tauri Command, sidecar,
-background process, or iframe sandbox relaxation configuration.
-
-#### Scenario: Accept an iframe Runtime
-
-- **WHEN** the Runtime kind is `iframe` and its entry is a valid package-local
-  HTML path
-- **THEN** the system accepts the Runtime declaration
-- **THEN** Manifest validation itself does not create or execute an iframe
-
-#### Scenario: Reject another Runtime kind
-
-- **WHEN** an author declares `host_module`, `native`, `sidecar`, `background`,
-  or another Runtime kind
-- **THEN** the system rejects the Manifest
-- **THEN** unsupported code does not execute as a result of parsing the
-  Manifest
-
-#### Scenario: An author attempts to relax the sandbox
-
-- **WHEN** a Runtime declares sandbox tokens, an origin policy, or Host bridge
-  permissions
-- **THEN** the system rejects the corresponding fields as unknown
-- **THEN** the iframe isolation policy remains Host-owned
 
 ### Requirement: Page contributions must form a valid plugin-local navigation graph
 
@@ -467,3 +436,16 @@ MUST NOT be written back or presented as author declarations.
   display, or execute any external plugin
 - **THEN** the current Launcher Action Registry does not automatically contain
   plugin Actions
+
+### Requirement: External Runtime authoring MUST use the WebView protocol exclusively
+Manifest Contract `0.3.0` MUST accept exactly `runtime.kind: "webview"` for an external Page Runtime and MUST keep `runtime.entry` as a safe package-relative HTML reference. It MUST reject `runtime.kind: "iframe"`, Manifest `0.2.x`, unknown Runtime kinds, native labels, bridge configuration, WebView options and permissions. Validation MUST remain deterministic across TypeScript and Rust.
+
+#### Scenario: A current WebView Manifest is normalized
+- **WHEN** an author Manifest declares protocol `0.3.0`, `runtime.kind: "webview"` and a valid package-relative entry
+- **THEN** Contract and Host normalize the same bounded Runtime descriptor
+- **THEN** the descriptor contains no Child WebView, Tauri, bridge, origin or native configuration
+
+#### Scenario: An iframe Manifest is inspected
+- **WHEN** an author Manifest uses protocol `0.2.x` or `runtime.kind: "iframe"`
+- **THEN** validation returns the stable incompatible-protocol diagnostic
+- **THEN** no alias, rewrite or fallback Runtime is created

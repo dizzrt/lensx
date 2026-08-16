@@ -35,6 +35,29 @@ const ajv = new Ajv2020({
 const validateSchema = ajv.compile<PluginManifestInput>(manifestSchema);
 const validatedManifestBrand = Symbol('lensx.validatedPluginManifest');
 
+const legacyProtocolDiagnostics = (input: unknown): PluginManifestDiagnostic[] => {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) return [];
+  const record = input as Record<string, unknown>;
+  const diagnostics: PluginManifestDiagnostic[] = [];
+  if (typeof record.manifest_version === 'string' && /^0\.2\.[0-9]+$/u.test(record.manifest_version)) {
+    diagnostics.push(
+      createDiagnostic('incompatible_protocol', '/manifest_version', 'The plugin Manifest protocol is incompatible.'),
+    );
+  }
+  const runtime = record.runtime;
+  if (
+    typeof runtime === 'object' &&
+    runtime !== null &&
+    !Array.isArray(runtime) &&
+    (runtime as Record<string, unknown>).kind === 'iframe'
+  ) {
+    diagnostics.push(
+      createDiagnostic('incompatible_protocol', '/runtime/kind', 'The plugin Runtime protocol is incompatible.'),
+    );
+  }
+  return sortPluginManifestDiagnostics(diagnostics);
+};
+
 const escapeJsonPointerSegment = (segment: string): string => segment.replaceAll('~', '~0').replaceAll('/', '~1');
 
 const createDiagnostic = (code: string, path: string, message: string): PluginManifestDiagnostic => ({
@@ -136,7 +159,7 @@ const normalizeManifest = (input: PluginManifestInput): NormalizedPluginManifest
   );
 
   return {
-    manifest_version: '0.2.0',
+    manifest_version: '0.3.0',
     plugin_id: input.plugin_id.trim(),
     version: input.version.trim(),
     display: {
@@ -160,7 +183,7 @@ const normalizeManifest = (input: PluginManifestInput): NormalizedPluginManifest
       },
     },
     runtime: {
-      kind: 'iframe',
+      kind: 'webview',
       entry: input.runtime.entry.trim(),
     },
     contributes: {
@@ -471,6 +494,13 @@ const validateManifestSemantics = (manifest: NormalizedPluginManifest): PluginMa
 };
 
 export const validatePluginManifest = (input: unknown): PluginManifestValidationResult => {
+  const incompatibleDiagnostics = legacyProtocolDiagnostics(input);
+  if (incompatibleDiagnostics.length > 0) {
+    return {
+      status: 'incompatible',
+      diagnostics: incompatibleDiagnostics,
+    };
+  }
   if (!validateSchema(input)) {
     return {
       status: 'invalid',

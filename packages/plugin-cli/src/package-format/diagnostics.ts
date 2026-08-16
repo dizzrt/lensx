@@ -24,6 +24,7 @@ const DIAGNOSTIC_MESSAGES: Readonly<Record<PluginPackageDiagnosticCode, string>>
   frame_trailing_bytes: 'Trailing bytes after the Zstandard frame are not allowed.',
   frame_window_exceeded: 'The Zstandard frame window exceeds the limit.',
   manifest_invalid: 'The plugin Manifest is invalid.',
+  manifest_incompatible: 'The plugin Manifest protocol is incompatible.',
   metadata_size_exceeded: 'A package metadata record exceeds the size limit.',
   package_version_invalid: 'The plugin package format version is unsupported.',
   path_case_collision: 'Package paths must be unique under ASCII case folding.',

@@ -9,7 +9,7 @@ const fail = (message: string): never => {
 
 const dispatcher = read('src/app/plugins/runtime/host-api-dispatcher.ts');
 const adapter = read('src/app/plugins/runtime/transport-adapter.ts');
-const frame = read('src/app/plugins/runtime/PluginRuntimeFrame.tsx');
+const childDispatcher = read('src/app/plugins/runtime/child-webview-host-dispatcher.ts');
 const app = read('src/App.tsx');
 
 for (const method of [
@@ -31,15 +31,15 @@ for (const forbidden of ['@lensx/plugin-sdk', '@tauri-apps/', 'invoke(', 'window
 if (!adapter.includes('createPluginRuntimeTransportPostResponseOutcome')) {
   fail('Host adapter does not own the private post-response outcome');
 }
-if (!frame.includes('hostApiDispatcherFactory.create')) fail('Runtime Frame does not create a Session binding');
-if (frame.includes('unavailablePluginRuntimeTransportHandler'))
-  fail('Runtime Frame still installs the old fixed handler');
+if (!childDispatcher.includes('factory.create')) {
+  fail('Child WebView Host dispatcher does not create an authority binding');
+}
 if (!app.includes('createPluginHostApiDispatcherFactory'))
   fail('App does not compose the production Dispatcher factory');
 if (!app.includes('desktopPluginScopedStorageProviderFactory'))
   fail('App does not compose the production scoped-storage provider');
-if (!app.includes('hostApiDispatcherFactory={effectivePluginHostApiDispatcherFactory}')) {
-  fail('App does not inject the production Dispatcher factory into the Runtime Frame');
+if (!app.includes('startPluginChildWebviewHostDispatcherDesktopAdapter(effectivePluginHostApiDispatcherFactory)')) {
+  fail('App does not start the production Child WebView Host dispatcher');
 }
 
 const publicPackages = ['packages/plugin-contract', 'packages/plugin-sdk'];
@@ -70,17 +70,16 @@ if (
 ) {
   fail('Contract public exports changed');
 }
-if (Object.keys(sdkMetadata.exports ?? {}).join('\0') !== '.\0./iframe') fail('SDK public exports changed');
+if (Object.keys(sdkMetadata.exports ?? {}).join('\0') !== '.\0./webview') fail('SDK public exports changed');
 
 for (const publicSource of [
   read('packages/plugin-contract/src/index.ts'),
   read('packages/plugin-sdk/src/index.ts'),
-  read('packages/plugin-sdk/src/iframe.ts'),
+  read('packages/plugin-sdk/src/webview.ts'),
 ]) {
   for (const privateName of [
     'PluginHostApiDispatcher',
     'PluginRuntimeTransportPostResponseOutcome',
-    'PluginRuntimeSessionIdentity',
     'AppNavigationService',
     'LauncherActionService',
     'PluginScopedStorage',

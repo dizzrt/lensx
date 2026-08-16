@@ -54,8 +54,6 @@ export const isValidIsolatedPluginRuntimeEntryUrl = (value: string): boolean => 
 export const pluginRuntimeFragmentFromRoute = (route: string): string | undefined =>
   isValidPluginRuntimeRoute(route) ? route : undefined;
 
-export const pluginRuntimeIframeSrc = (entryUrl: string, fragment: string): string => `${entryUrl}#${fragment}`;
-
 export const pluginRuntimeOriginFromEntryUrl = (entryUrl: string): string | undefined => {
   if (!isValidIsolatedPluginRuntimeEntryUrl(entryUrl)) return undefined;
   const parsed = new URL(entryUrl);

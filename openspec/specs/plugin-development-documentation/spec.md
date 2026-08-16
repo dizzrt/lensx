@@ -5,9 +5,7 @@
 Define the external-developer-first bilingual documentation, complete tutorial
 paths, public reference boundaries, executable examples, and isolated consumer
 validation required for the lensX Plugin Developer Preview.
-
 ## Requirements
-
 ### Requirement: Plugin development documentation MUST provide an external-developer-first bilingual information architecture
 
 The system MUST provide the canonical English developer hub under `docs/en/plugin-development/` and a semantically equivalent Simplified Chinese mirror under the identical relative paths in `docs/zh/plugin-development/`. Both top-level documentation indexes MUST link to their language-specific hub. The hub MUST distinguish getting-started tutorials, public package reference, tooling and installation, Host API, Runtime/permissions/security, and compatibility/errors, and MUST identify capabilities as shipped, conditionally available, or not delivered. External documentation MUST NOT require readers to inspect, import, or understand Host-private source, Tauri payloads, private wire formats, internal tool entry points, or workspace-only deep imports.
@@ -198,3 +196,15 @@ The canonical English plugin developer hub and its path-matched Simplified Chine
 
 - **WHEN** bilingual documentation, an example, an external consumer, API coverage, an existing security boundary, an official product plugin or final validation has a failure, warning, or unverified assumption
 - **THEN** Task 6.6 does not remain complete, the Roadmap does not claim an unsupported Plugin Developer Preview state, and the failed command and complete final validation set are rerun after correction
+
+### Requirement: Bilingual developer documentation MUST describe the Child WebView public boundary
+Canonical English documentation and identical-path Simplified Chinese mirrors MUST teach Manifest `0.3.0`, SDK `/webview`, top-level Web semantics, Host-controlled slot/navigation, current bridge lifecycle, safe recovery and public package flow. It MUST explain that ordinary Web capabilities are open, native Host authority is closed, official/development provenance grants no extra power, and OS process isolation is not guaranteed. Current guides and runnable examples MUST NOT instruct iframe or MessagePort usage except in explicit migration notes.
+
+#### Scenario: External developer follows either tutorial
+- **WHEN** the developer uses only published package references and documented commands
+- **THEN** the resulting plugin builds, packs, installs and reaches SDK ready through Child WebView
+
+#### Scenario: Documentation drift gate runs
+- **WHEN** examples, exports, Manifest Schema, CLI output or Runtime terminology diverge
+- **THEN** automated documentation validation fails in both languages
+

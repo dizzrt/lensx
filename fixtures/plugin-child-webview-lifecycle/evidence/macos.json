@@ -1,0 +1,33 @@
+{
+  "first_open": {
+    "created": true,
+    "exact_top_level_navigation": true,
+    "bounds": true,
+    "hidden": true,
+    "shown": true,
+    "same_attempt_restore": true,
+    "hide_restore_ms": 0,
+    "focused": true,
+    "popup_denied": true,
+    "download_denied": true,
+    "destroyed": true,
+    "zero_residual_webviews": true,
+    "destroy_ms": 0
+  },
+  "reopened": {
+    "created": true,
+    "exact_top_level_navigation": true,
+    "bounds": true,
+    "hidden": true,
+    "shown": true,
+    "same_attempt_restore": true,
+    "hide_restore_ms": 0,
+    "focused": true,
+    "popup_denied": true,
+    "download_denied": true,
+    "destroyed": true,
+    "zero_residual_webviews": true,
+    "destroy_ms": 0
+  },
+  "close_reopen_fresh": true
+}

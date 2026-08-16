@@ -52,6 +52,7 @@ use crate::{
 
 use std::{
   borrow::Cow,
+  collections::HashSet,
   hash::{Hash, Hasher},
   path::{Path, PathBuf},
   sync::{Arc, Mutex, MutexGuard},
@@ -68,6 +69,7 @@ pub(crate) type UriSchemeProtocolHandler =
 pub(crate) type OnPageLoad<R> = dyn Fn(Webview<R>, PageLoadPayload<'_>) + Send + Sync + 'static;
 pub(crate) type OnDocumentTitleChanged<R> = dyn Fn(Webview<R>, String) + Send + 'static;
 pub(crate) type DownloadHandler<R> = dyn Fn(Webview<R>, DownloadEvent<'_>) -> bool + Send + Sync;
+pub(crate) type IsolatedIpcHandler = dyn Fn(String, http::Request<String>) + Send + Sync + 'static;
 
 #[derive(Clone, Serialize)]
 pub(crate) struct CreatedEvent {
@@ -283,6 +285,8 @@ unstable_struct!(
     pub(crate) on_page_load_handler: Option<Box<OnPageLoad<R>>>,
     pub(crate) document_title_changed_handler: Option<Box<OnDocumentTitleChanged<R>>>,
     pub(crate) download_handler: Option<Arc<DownloadHandler<R>>>,
+    pub(crate) isolated_ipc_handler: Option<Box<IsolatedIpcHandler>>,
+    pub(crate) isolated_uri_scheme_protocols: HashSet<String>,
   }
 );
 
@@ -363,6 +367,8 @@ async fn create_window(app: tauri::AppHandle) {
       on_page_load_handler: None,
       document_title_changed_handler: None,
       download_handler: None,
+      isolated_ipc_handler: None,
+      isolated_uri_scheme_protocols: HashSet::new(),
     }
   }
 
@@ -444,6 +450,8 @@ async fn create_window(app: tauri::AppHandle) {
       on_page_load_handler: None,
       document_title_changed_handler: None,
       download_handler: None,
+      isolated_ipc_handler: None,
+      isolated_uri_scheme_protocols: HashSet::new(),
     }
   }
 
@@ -715,12 +723,45 @@ tauri::Builder::default()
     self
   }
 
+  /// Replaces Tauri IPC for this WebView with an isolated Wry message handler.
+  ///
+  /// An isolated WebView receives no Tauri initialization scripts and does not register the
+  /// built-in `tauri` or `ipc` URI protocols. Application URI protocols remain available so the
+  /// WebView can load its owned resources. The handler must validate every received message.
+  #[must_use]
+  pub fn isolated_ipc_handler<
+    F: Fn(String, http::Request<String>) + Send + Sync + 'static,
+  >(
+    mut self,
+    handler: F,
+  ) -> Self {
+    self.isolated_ipc_handler.replace(Box::new(handler));
+    self
+  }
+
+  /// Restricts application URI scheme protocols registered on an isolated WebView.
+  #[must_use]
+  pub fn isolated_uri_scheme_protocols<I, S>(mut self, protocols: I) -> Self
+  where
+    I: IntoIterator<Item = S>,
+    S: Into<String>,
+  {
+    self.isolated_uri_scheme_protocols = protocols.into_iter().map(Into::into).collect();
+    self
+  }
+
   pub(crate) fn into_pending_webview<M: Manager<R>>(
     mut self,
     manager: &M,
     window_label: &str,
   ) -> crate::Result<PendingWebview<EventLoopMessage, R>> {
     let mut pending = PendingWebview::new(self.webview_attributes, self.label.clone())?;
+    if let Some(handler) = self.isolated_ipc_handler.take() {
+      pending.ipc_handler = Some(Box::new(move |webview, request| {
+        handler(webview.label, request)
+      }));
+      pending.restricted_uri_scheme_protocols = Some(self.isolated_uri_scheme_protocols.clone());
+    }
     pending.navigation_handler = self.navigation_handler.take();
     #[cfg(target_os = "macos")]
     {

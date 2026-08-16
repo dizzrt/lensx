@@ -1,5 +1,8 @@
 import { lstat, readdir, readFile } from 'node:fs/promises';
 import { extname, relative, resolve } from 'node:path';
+
+import { validatePluginManifest } from '@lensx/plugin-contract';
+
 import { PluginCliCommandError } from './command-error.js';
 import { cliDiagnostic } from './diagnostics.js';
 import {
@@ -120,6 +123,7 @@ const collectSourceFiles = async (directory: string): Promise<string[]> => {
 export const validateProjectImports = async (project: PluginProject): Promise<void> => {
   const declared = new Set(Object.keys({ ...project.metadata.dependencies, ...project.metadata.devDependencies }));
   const diagnostics = [];
+  const legacyDiagnostics = [];
   for (const base of ['src', 'tests']) {
     for (const file of await collectSourceFiles(resolve(project.root, base))) {
       const source = await readFile(file, 'utf8');
@@ -133,9 +137,19 @@ export const validateProjectImports = async (project: PluginProject): Promise<vo
         const allowedSubpath =
           !packageName.startsWith('@lensx/plugin-') ||
           specifier === packageName ||
-          specifier === '@lensx/plugin-sdk/iframe' ||
+          specifier === '@lensx/plugin-sdk/webview' ||
           specifier === '@lensx/plugin-ui/styles.css';
         const runtimeCliImport = base === 'src' && packageName === '@lensx/plugin-cli';
+        if (specifier === '@lensx/plugin-sdk/iframe') {
+          legacyDiagnostics.push(
+            cliDiagnostic(
+              'CLI_LEGACY_IFRAME_RUNTIME',
+              relative(project.root, file).replaceAll('\\', '/'),
+              'legacy_runtime_incompatible',
+            ),
+          );
+          continue;
+        }
         if (HOST_PRIVATE.test(specifier) || runtimeCliImport || !declared.has(packageName) || !allowedSubpath) {
           diagnostics.push(
             cliDiagnostic(
@@ -150,6 +164,43 @@ export const validateProjectImports = async (project: PluginProject): Promise<vo
     }
   }
   if (diagnostics.length > 0) throw new PluginCliCommandError('invalid', diagnostics);
+  if (legacyDiagnostics.length > 0) throw new PluginCliCommandError('incompatible', legacyDiagnostics);
+};
+
+const validateProjectManifestAuthoring = async (project: PluginProject): Promise<void> => {
+  const manifestPath = resolve(project.root, 'manifest.json');
+  let input: unknown;
+  try {
+    input = JSON.parse(await readFile(manifestPath, 'utf8'));
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return;
+    throw new PluginCliCommandError('invalid', [
+      cliDiagnostic('CLI_PROJECT_MANIFEST_INVALID', 'manifest.json', 'payload_invalid'),
+    ]);
+  }
+  const validation = validatePluginManifest(input);
+  if (validation.status === 'incompatible') {
+    throw new PluginCliCommandError(
+      'incompatible',
+      validation.diagnostics.map((diagnostic) =>
+        cliDiagnostic('CLI_LEGACY_IFRAME_RUNTIME', diagnostic.path, 'legacy_runtime_incompatible'),
+      ),
+    );
+  }
+  if (validation.status === 'invalid') {
+    throw new PluginCliCommandError(
+      'invalid',
+      validation.diagnostics.map((diagnostic) =>
+        cliDiagnostic('CLI_PROJECT_MANIFEST_INVALID', diagnostic.path, 'payload_invalid'),
+      ),
+    );
+  }
+};
+
+const validatePluginProjectAuthoring = async (project: PluginProject): Promise<void> => {
+  validateProjectMetadata(project);
+  await validateProjectImports(project);
+  await validateProjectManifestAuthoring(project);
 };
 
 export const buildPluginProject = async (input: {
@@ -160,7 +211,7 @@ export const buildPluginProject = async (input: {
   readonly writeStderr?: (value: string) => void;
 }): Promise<Readonly<Record<string, unknown>>> => {
   const project = await resolvePluginProject(input.cwd, input.project);
-  validateProjectMetadata(project);
+  await validatePluginProjectAuthoring(project);
   const processResult = await runBoundedProcess({
     command: 'pnpm',
     arguments: ['run', 'build'],
@@ -186,7 +237,15 @@ export const buildPluginProject = async (input: {
       cliDiagnostic('CLI_BUILD_OUTPUT_MISSING', 'dist/manifest.json', 'build_output_missing'),
     ]);
   }
-  return { project: project.callerPath, dist: 'dist' };
+  const validated = await validatePluginProject(input.cwd, input.project);
+  return {
+    project: project.callerPath,
+    dist: 'dist',
+    plugin_id: validated.inspection.manifest.plugin_id,
+    version: validated.inspection.manifest.version,
+    runtime_kind: validated.inspection.manifest.runtime.kind,
+    compatibility: validated.inspection.compatibility,
+  };
 };
 
 const collectDistFiles = async (project: PluginProject): Promise<readonly PluginPackageInputFile[]> => {
@@ -248,8 +307,7 @@ export interface ValidatedPluginProject {
 
 export const validatePluginProject = async (cwd: string, projectPath?: string): Promise<ValidatedPluginProject> => {
   const project = await resolvePluginProject(cwd, projectPath);
-  validateProjectMetadata(project);
-  await validateProjectImports(project);
+  await validatePluginProjectAuthoring(project);
   const files = await collectDistFiles(project);
   try {
     const packed = await packPluginPackage(files);
@@ -261,6 +319,18 @@ export const validatePluginProject = async (cwd: string, projectPath?: string): 
           cliDiagnostic(`CLI_PACKAGE_${item.code.toUpperCase()}`, item.path, 'payload_invalid', {
             package_code: item.code,
           }),
+        ),
+      );
+    }
+    if (!('manifest' in inspection)) {
+      throw new PluginCliCommandError(
+        'incompatible',
+        inspection.diagnostics.map((item) =>
+          item.code === 'manifest_incompatible'
+            ? cliDiagnostic('CLI_LEGACY_IFRAME_RUNTIME', item.path, 'legacy_runtime_incompatible')
+            : cliDiagnostic(`CLI_PACKAGE_${item.code.toUpperCase()}`, item.path, 'package_incompatible', {
+                package_code: item.code,
+              }),
         ),
       );
     }

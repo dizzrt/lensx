@@ -145,31 +145,33 @@ pnpm run check:plugin-development-mode
 
 The gate combines strict boundary parsing, the shared CLI/Host payload corpus,
 feature-enabled Rust transaction tests, production artifact exclusion, frontend
-convergence and accessibility, bilingual schema/docs drift, and the 650×600
-visual matrix. Run it sequentially with the existing management, Runtime,
-Resource, Registration, CLI, and complete frontend/Rust gates. A real final
+Child WebView convergence and accessibility, bilingual schema/docs drift, and
+the 650×600 visual matrix. Global workspace boundaries remain in the complete
+workspace and final change gates so unrelated official-plugin migrations do not
+block this focused workflow. Run it sequentially with the existing management,
+Runtime, Resource, Registration, CLI, and complete frontend/Rust gates. A real final
 smoke uses `pnpm run dev:plugin-development-mode`; ordinary builds must remain
 free of development commands and UI.
 
-The focused gate also consumes bounded canonical macOS WKWebView evidence for
-normal and malicious development registrations. The harness extracts the same
-maintained Runtime payloads used by the external Session evidence, registers a
-process-local development snapshot, opens it, forces a fresh reload with an
-advanced Manifest version, and removes the registration.
-It compares CSP, sandbox, Permissions Policy, Session, transport, Host API,
-deadline, and breaker facts with the external Runtime profile. Refresh this
-evidence only on macOS after reviewing the harness or Runtime boundary change:
+The focused gate also consumes bounded composed evidence for normal and
+malicious development registrations. It pins the maintained macOS Child WebView
+ACL, native slot, and open-Web capability evidence, then combines those facts
+with source-neutral production resolver checks and Development Mode transaction
+tests. The transaction matrix covers register, committed reload to a fresh
+attempt, old-attempt teardown before new projection, rejected staging with the
+current attempt unchanged, and removal. Task 8 maintains the separate full real
+macOS end-to-end matrix. Refresh this composed evidence after reviewing any of
+those production boundaries or Development Mode transactions:
 
 ```bash
-pnpm run build:plugin-runtime-security-lifecycle-harness
 pnpm run refresh:plugin-development-runtime-evidence:normal
 pnpm run refresh:plugin-development-runtime-evidence:malicious
 pnpm run check:plugin-development-runtime-evidence
 ```
 
-Evidence files contain only bounded platform labels, relative resource names,
-booleans, and counters. They must never record source directories, scoped URLs,
-origins, nonces, Ports, tokens, payload values, or raw errors.
+Evidence files contain only bounded protocol/platform labels, relative fixture
+references, digests, and booleans. They must never record source directories,
+scoped URLs, origins, freshness values, tokens, payload values, or raw errors.
 
 ## Plugin Resource Service Validation
 
@@ -256,68 +258,42 @@ changes require exact diff and license review before
 integrity record. These generators do not replace the focused gate or the full
 frontend and Rust validation sets.
 
-## Isolated Plugin iframe Runtime Validation
+## Isolated Plugin Child WebView Runtime Validation
 
-Changes to the Runtime resolver, iframe policy/container, Host navigation
-adapter, Plugin Page composition, or lifecycle cleanup must run:
-
-```bash
-pnpm run check:plugin-iframe-runtime
-```
-
-The gate combines resolver and React state/cancellation tests, exact
-sandbox/Permissions Policy/referrer assertions, native lease activation and
-compare-current disposal, Page/lifecycle/replacement/resource regressions,
-workspace-private imports, canonical real `.lxp` fixtures, bounded macOS
-WKWebView evidence, and both origin/navigation prerequisite gates. Evidence must
-continue to prove the ES Module graph, route fragment, storage partition,
-parent/frame/Tauri absence, zero privileged hits, open-Web positive paths, and
-malicious navigation and native-capability rejection.
-
-This gate proves iframe `loaded`, never Runtime Session or SDK `ready`. It does
-not validate a message bridge, Host API, complete CSP,
-general timeout/crash recovery, or Windows/Linux Runtime. Run it before the
-complete frontend and Rust validation sets; it does not replace them.
-
-## Plugin Runtime Session Validation
-
-Changes to the Host-private Session contract/parser/service, nonce or
-MessageChannel adapters, Runtime descriptor/currentness, iframe ref/bootstrap,
-canonical Session fixtures, evidence schema, or workspace/package boundaries
-must run:
+Changes to the Runtime resolver, native container, slot presentation, resource
+binding, navigation policy, or lifecycle cleanup must run:
 
 ```bash
-pnpm run check:plugin-runtime-session
+pnpm run check:plugin-child-webview-runtime
 ```
 
-The gate combines strict parser and state-machine tests, resolver/detail
-convergence, relevant versus unrelated invalidation, React iframe lifecycle,
-Registration/Page/lifecycle/replacement/resource regressions, canonical real
-`.lxp` drift checks, public tarball consumers, and the complete iframe/origin/
-navigation prerequisites. Its dedicated macOS
-`plugin_runtime_session_harness` uses the production Resource Service,
-isolated-origin package path, sandbox, Permissions Policy, and frame-aware
-navigation policy in WKWebView.
+The gate combines React slot and state tests, physical-bounds revisions,
+compare-current native lifecycle, generation-bound resources, open-Web positive
+paths, top-level navigation denial, terminal cleanup, current `.lxp` fixtures,
+bounded macOS WKWebView evidence, ACL negatives, and workspace-private imports.
+Native load, bridge ready, and SDK ready remain separate evidence facts.
 
-Committed bounded evidence must prove exact target window and origin,
-MessagePort transfer, cryptographic single-use nonce, ready/disconnect/dispose,
-retry and same-version replacement old-Port invalidation, stability across an
-unrelated Registration change, and zero privileged Tauri handler hits for the
-normal, malicious, and replacement fixtures. Evidence must not contain a URL,
-origin/resource token, nonce, Port content, entry/plugin/Page identity, local
-path, raw payload, or private error.
+## Plugin Child WebView Session Validation
 
-This is a macOS-only delivery gate and does not establish Windows or Linux
-Runtime Session support. By itself it proves only the private authenticated
-Session and Port lease; it does not by itself prove the SDK iframe transport,
-Host API methods, complete CSP, general handshake
-timeouts/crash recovery, or background Runtime. The focused gate supplements
-and never replaces the complete frontend and Rust validation sets.
+Changes to the private bridge bootstrap, source identity, readiness state,
+strict RPC frames, Host dispatcher, cancellation, or cleanup must run:
+
+```bash
+pnpm run check:plugin-child-webview-session
+```
+
+The gate proves source-bound ready admission, current attempt/generation/nonce
+validation, bounded requests, out-of-order settlement, event delivery,
+disconnect/dispose, stale replacement rejection, and zero general Tauri
+authority. Committed evidence is bounded and must not contain complete URLs,
+resource tokens, nonces, payloads, identities, local paths, or private errors.
+The focused macOS gate supplements rather than replaces the complete frontend
+and Rust validation sets.
 
 ## Plugin SDK Transport Validation
 
-Changes to the typed SDK request/event API, private transport codec, iframe
-entry, Host Port adapter, Runtime Session lease handoff, transport fixtures,
+Changes to the typed SDK request/event API, private transport codec, WebView
+entry, Host bridge adapter, Runtime Session handoff, transport fixtures,
 package exports, or target WebView evidence must run:
 
 ```bash
@@ -326,16 +302,16 @@ pnpm run check:plugin-sdk-transport
 
 The gate checks deterministic plugin/Host codec drift, strict unknown parsing,
 request/result pairing, safe errors, concurrent out-of-order responses,
-cancellation, timeout, events, disconnect/disposal, stale Page and Port
+cancellation, timeout, events, disconnect/disposal, stale Page and source-WebView
 isolation, and the production Session-binding boundary. It packs real Contract and SDK
 tarballs, retains the no-DOM ES2022 root consumer, builds and runs the declared
-iframe entry in an isolated browser consumer, rejects private deep imports,
-and runs a real MessageChannel SDK/Host-adapter fixture.
+WebView entry in an isolated browser consumer, rejects private deep imports,
+and runs a source-bound SDK/Host bridge fixture.
 
-Bounded macOS WKWebView evidence additionally covers exact parent/origin/Port,
+Bounded macOS WKWebView evidence additionally covers exact source WebView,
 single-use nonce, transport result/error/event round-trip, out-of-order
 responses, cancellation, replacement/close cleanup, pending termination, and
-zero privileged handler hits. Evidence contains no URL, nonce, Port content,
+zero privileged handler hits. Evidence contains no URL, nonce, bridge content,
 payload, token, identity, path, or private error. The gate proves the
 public transport and its Host adapter; the separate Dispatcher and scoped-storage
 gates prove the current production providers. Neither

@@ -13,7 +13,7 @@ assets confer no trust, permission, persistence, clipboard, or native authority.
 ConfigLens is an ephemeral configuration workbench for JSON, YAML 1.2, TOML
 1.0, and XML 1.0. Input remains inside the current Page generation. Hiding and
 restoring the Launcher does not close that Page: activation refreshes current
-plugin facts and keeps the same iframe, Runtime Session, models, Workers, and
+plugin facts and keeps the same Child WebView, Runtime Session, models, Workers, and
 in-memory input while its relevant execution identity remains current. This
 continuity uses no browser or Host persistence. Input is lost when the Page is
 actually closed, disabled, replaced, reloaded, uninstalled, or otherwise torn
@@ -21,7 +21,7 @@ down. The Page has one editable Monaco model. Format replaces its content
 directly for all four languages, while Compact is JSON-only; each successful
 operation is one undoable editor edit, and failures preserve the current
 content. Language choice remains explicit. The Host Page chrome supplies the visible ConfigLens identity, so the
-iframe work area repeats neither a main title nor a subtitle. The editable
+plugin document repeats neither a main title nor a subtitle. The editable
 Monaco surface comes first, followed by the explicit language selector and the
 Format and Compact controls. The plugin performs no fetch,
 WebSocket, browser storage, clipboard, Host persistence, or content logging.

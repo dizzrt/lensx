@@ -41,7 +41,7 @@ const copyPlugin = (toolingRoot: string, fixtureRoot: string, slug: string): voi
   metadata.version = '1.0.0';
   metadata.packageManager = 'pnpm@11.17.0';
   metadata.engines = { node: '>=24 <25', pnpm: '>=11 <12' };
-  metadata.dependencies = { '@lensx/plugin-sdk': '^0.2.0' };
+  metadata.dependencies = { '@lensx/plugin-sdk': '^0.3.0' };
   metadata.devDependencies = {
     ...(metadata.devDependencies as Record<string, string>),
     '@lensx/plugin-contract': '^0.2.0',
@@ -67,8 +67,10 @@ export interface OfficialPluginDryRunEvidence {
   readonly candidate_sha256: string;
   readonly release_slugs: readonly string[];
   readonly root_version: string;
+  readonly runtime_protocol: 'webview';
   readonly selected_slugs: readonly string[];
   readonly versioned_alpha: string;
+  readonly zero_residual_teardown: true;
 }
 
 export const runOfficialPluginReleaseDryRun = (rootDir: string): OfficialPluginDryRunEvidence => {
@@ -159,14 +161,19 @@ export const runOfficialPluginReleaseDryRun = (rootDir: string): OfficialPluginD
       workflowRunUrl: 'https://github.com/lensx-dev/lensx/actions/runs/1',
     });
     verifyCandidateDirectory(candidateDir);
+    const releaseRecord = JSON.parse(readFileSync(join(candidateDir, candidate.release_record.name), 'utf8')) as {
+      runtime_evidence: { protocol: 'webview'; zero_residual: true };
+    };
     return {
       artifact: candidate.artifact.name,
       beta_version: beta.version,
       candidate_sha256: candidate.artifact.sha256,
       release_slugs: plan.release.map((entry) => entry.slug),
       root_version: rootMetadata.version,
+      runtime_protocol: releaseRecord.runtime_evidence.protocol,
       selected_slugs: plan.validate.map((entry) => entry.slug),
       versioned_alpha: alpha.version,
+      zero_residual_teardown: releaseRecord.runtime_evidence.zero_residual,
     };
   } finally {
     rmSync(fixtureRoot, { force: true, recursive: true });

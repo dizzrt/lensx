@@ -10,6 +10,8 @@ unsorted, and trusted-field negative inputs for exercising the real SDK
 validator.
 
 Import only `@lensx/plugin-testkit`. This package does not provide real Host API
-execution, permission decisions or a permission harness, iframe transport,
-plugin execution, or a project template. See the repository Plugin Workspace
-documentation for lifecycle and release validation guidance.
+execution, a Child WebView or bridge simulator, native source identity,
+permission decisions, plugin execution, or a project template. The fake
+implements only the public semantic `PluginSdkTransport` interface, so container
+and security evidence must use the production Host gates. See the repository
+Plugin Workspace documentation for lifecycle and release validation guidance.

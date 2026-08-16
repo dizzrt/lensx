@@ -38,3 +38,7 @@ createPluginRuntimeContextFixture({ permissions: ['granted'] });
 void client.request('private.method', {});
 // @ts-expect-error The Testkit fake intentionally has no RPC envelope configuration.
 void new FakePluginSdkTransport({ origin: 'https://example.com' });
+// @ts-expect-error The Testkit fake intentionally has no native Child WebView binding.
+void new FakePluginSdkTransport({ nativeHandle: 'private' });
+// @ts-expect-error The Testkit fake intentionally has no private bridge configuration.
+void new FakePluginSdkTransport({ bridge: {} });

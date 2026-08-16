@@ -6,9 +6,11 @@
 
 | 维度 | 当前基线 | 含义 |
 | --- | --- | --- |
-| 公共 package | `0.2.0` | Package exports 与实现 release。 |
-| Manifest protocol | `0.2.0` | 作者输入与 normalized Manifest wire contract。 |
+| Contract/UI/Testkit package | `0.2.0` | 公共 semantic contract、UI 与测试 helper。 |
+| SDK package | `0.3.0` | root semantic client 与 `/webview` production transport。 |
+| Manifest protocol | `0.3.0` | 作者输入与 normalized WebView Manifest wire contract。 |
 | Host API protocol | `0.2.0` | Semantic method、result、event、error 与 context。 |
+| Private bridge carrier | `0.2.0` | closed Host/native-to-plugin transport frame；不是 Host API。 |
 | lensX application | `0.1.0` | Manifest 检查的 Host compatibility range。 |
 | `.lxp` package format | `0.1.0` | Canonical archive 与 checksums profile。 |
 
@@ -32,6 +34,10 @@ operational failure、invalid、incompatible 与 success，不会把任意 child
 Host API method error 见 [Host API](host-api.md#稳定错误)。SDK lifecycle error 覆盖 cancellation、
 timeout、transport failure、disconnection、disposal、invalid context 与 incompatible Host API。
 
+声明 `runtime.kind: "iframe"` 的旧 Manifest `0.2.x` package 仅作为迁移期不兼容输入。
+Host 与 CLI 不会改写它，也不存在 fallback Runtime；请从当前 template 重新构建并迁移到
+`@lensx/plugin-sdk/webview`。
+
 不得按 English message 分支。使用稳定 code 和受限 public location，再展示本地化 recovery 文案。
 不要记录 package content、所选 path、stored value 或私有 failure detail。
 
@@ -44,8 +50,11 @@ timeout、transport failure、disconnection、disposal、invalid context 与 inc
 5. pack 两次并 inspect；相同输入必须产生相同字节。
 6. 对 Development Mode 确认专用 build、显式 opt-in、current registration 与 manual reload 结果。
 7. 对正式 package 使用 Settings 本地安装，并遵循 Host 受限 preparation result 与 trust confirmation。
-8. 在 Runtime 检查最新 context，区分 missing capability、`method_not_found`、unavailable provider、
-   disconnect 与 timeout。
+8. Runtime 阶段区分 native load、bridge ready、SDK Context、disconnect 与 timeout。一直停留在
+   loading 且没有 bridge ready 通常指向 document 或 transport startup；Context failure 指向
+   Host API compatibility。
+9. native presentation 问题先运行 `pnpm run check:plugin-child-webview-macos-evidence`；维护者可在
+   macOS 使用 `pnpm run evidence:plugin-child-webview-macos` 重跑真实 WKWebView matrix。
 
 修复第一个失败边界并从 canonical input 重跑；不要复用上次失败 attempt 的 generated cache。
 

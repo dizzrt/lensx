@@ -30,7 +30,7 @@ pnpm run validate:plugin-development-smoke
 The native picker target is the absolute path to
 `examples/plugins/development-mode-smoke/dist`, not the plugin project root.
 The build output is self-contained and the Runtime imports only the public
-`@lensx/plugin-sdk` iframe boundary.
+`@lensx/plugin-sdk/webview` boundary.
 
 ## Start lensX
 
@@ -65,9 +65,14 @@ a `.lxp` package digest.
 
 After editing source, run the plugin build and validation again, then choose
 **Reload from directory**. Every successful manual reload creates a fresh
-generation even when bytes are unchanged. It terminates the old Resource and
-Runtime authority and publishes a fresh current registration. It does not
-create permission or grant state.
+generation even when bytes are unchanged. Native staging validates and publishes
+the replacement registration before presentation teardown; rejected staging
+leaves the current Child WebView and Session untouched. After a successful
+commit, lensX destroys the old Child WebView attempt before projecting the new
+generation. Development and installed plugins use the same Child WebView
+registry, origin/resource binding, top-level navigation, private bridge,
+Session, RPC, Host API, and terminal teardown. Source provenance adds no Host
+authority and reload does not create permission or grant state.
 
 **Remove development entry** and disabling the mode remove process-local
 development registrations and terminate their current authority. They retain
@@ -79,7 +84,8 @@ development registrations.
 
 Errors are stable and pathless. `invalid` means the payload is incomplete or
 violates directory rules; `incompatible` means its declared ranges exclude the
-current Host; `source_changed` means files changed during capture; `conflict`
+current Host or it uses the legacy Manifest `0.2.x`/iframe Runtime protocol;
+`source_changed` means files changed during capture; `conflict`
 means the displayed revision is stale; `unsafe_state` means Host ownership
 could not be proven. `cleanup_pending` means authority changed successfully but
 old cache cleanup must be retried or completed on process exit.

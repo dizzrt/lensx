@@ -1,0 +1,28 @@
+{
+  "evidence_version": "0.1.0",
+  "measurement_scope": "automated-cold-create",
+  "sample_count": 5,
+  "stage_ms": {
+    "resolve": { "p50": 2, "p95": 3, "max": 3 },
+    "create": { "p50": 31, "p95": 38, "max": 38 },
+    "navigation": { "p50": 8, "p95": 11, "max": 11 },
+    "load": { "p50": 45, "p95": 52, "max": 52 },
+    "bridge": { "p50": 3, "p95": 4, "max": 4 },
+    "sdk": { "p50": 4, "p95": 5, "max": 5 },
+    "bundle": { "p50": 67, "p95": 74, "max": 74 },
+    "editor": { "p50": 116, "p95": 129, "max": 129 },
+    "worker": { "p50": 18, "p95": 23, "max": 23 }
+  },
+  "first_interactive_ms": { "p50": 302, "p95": 331, "max": 331 },
+  "host_heartbeat": {
+    "interval_ms": 16,
+    "sample_count": 125,
+    "p95_gap_ms": 19,
+    "max_gap_ms": 27,
+    "responsive": true
+  },
+  "privacy": {
+    "user_content_recorded": false,
+    "host_private_token_recorded": false
+  }
+}

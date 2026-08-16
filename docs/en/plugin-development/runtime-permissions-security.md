@@ -2,24 +2,26 @@
 
 ## Runtime lifecycle
 
-Each eligible plugin Page runs in one isolated iframe with a scoped plugin
-origin. The Host creates a private session, transfers the SDK transport, waits
-for ready, and owns the deadline, retry, breaker, navigation lease, and final
-teardown. Close, navigation, disable, uninstall, replacement, development
-reload, disconnect, Host reload, and app unmount make the old iframe, Worker,
-connection, Blob URL, timer, listener, session, and port inert.
+Each eligible plugin Page runs in the Launcher's single current native Child
+WebView with a generation-scoped origin and data store. The Host creates the
+WebView and private bridge Session, waits separately for native load, bridge
+ready, and `runtime.get_context`, and owns deadlines, retry, breaker,
+navigation, presentation, and final teardown. Close, navigation, disable,
+uninstall, replacement, development reload, disconnect, Host reload, and app
+unmount destroy the old WebView and make its Worker, connection, timer,
+listener, bridge, Session, and resource authority inert.
 
 Temporarily hiding and restoring the Launcher window is not Page close or
 Runtime teardown. Each restore activation refreshes and revalidates current
 Registration and Resource facts. If the current plugin's entry, Page, version,
 origin, resource generation, and Runtime attempt are unchanged, the Host keeps
-the same iframe, navigation lease, Session, and page memory. A global
+the same Child WebView, Session, and page memory. A global
 Registration revision is only an invalidation hint; an unrelated plugin change
 does not replace the current Runtime.
 
 ## Context replacement
 
-Initialize the SDK once per iframe attempt. `runtime.get_context` and later
+Initialize the SDK once per Child WebView attempt. `runtime.get_context` and later
 context events provide complete Host API state: version, locale, theme, and
 the current non-privileged method capabilities. Replace the whole context in
 one state transition. Worker/network support is not a Host API method and does
@@ -51,12 +53,17 @@ browser state as Host authority.
 
 The open Web baseline does not expose the Host DOM, Tauri globals or IPC, Rust
 commands, filesystem, Shell, process, native clipboard, another plugin origin,
-or an old generation. The Host keeps an exact trusted ancestor, isolated
-origin and generation, scoped resource paths, `nosniff`, `no-store`, no Host
-CORS authority, iframe sandbox, referrer policy, device restrictions, bounded
-RPC, deadline, breaker, and deterministic teardown.
+or an old generation. The Host keeps the main WebView and plugin WebView as
+native siblings, derives exact origin/generation/source bindings, scopes
+resource paths, permits only the closed lensX bridge carrier, bounds RPC, and
+owns deterministic teardown. Publisher, repository location, provenance, and
+release metadata do not change this authority.
 
 Installation is therefore a trust decision about code running in this isolated
 Web Runtime. lensX does not inspect, approve, or continuously monitor how the
 plugin uses data that the user gives it, nor does it grant ordinary Web
 behavior item by item.
+
+See [Plugin Child WebView Runtime](../architecture/plugin-child-webview-runtime.md)
+for Host/native ownership, lifecycle ordering, evidence budgets, and maintainer
+troubleshooting.

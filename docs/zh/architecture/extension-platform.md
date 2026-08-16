@@ -4,8 +4,8 @@
 
 本文区分已经交付的静态插件 Manifest 契约、`.lxp` package inspection 与本地安装、Plugin SDK
 foundation、Plugin Testkit、可选 Plugin UI package、Host 私有 Plugin surface 投影与 Page 导航、
-Host 私有生命周期控制、本地 package replacement、Host 私有 scoped resource service、隔离 iframe
-Runtime、进程内 Runtime Session、公共 SDK iframe transport、Host 私有 Port adapter 与公共 Host API
+Host 私有生命周期控制、本地 package replacement、Host 私有 scoped resource service、隔离 Child WebView
+Runtime、进程内 Runtime Session、公共 SDK WebView transport、Host 私有 bridge adapter 与公共 Host API
 语义契约和预期的运行时扩展边界。原 permission core 与 native clipboard provider 已删除。公共
 Plugin Developer CLI 与项目模板、完整前台插件执行 lifecycle、Host 私有管理 surface，以及
 feature-gated Plugin Development Mode 也已交付。仓库还交付了独立官方插件 `.lxp` release
@@ -514,69 +514,30 @@ pnpm run check:frame-aware-webview-navigation-policy
 target lease；下文已交付的 Session 也消费该 lease，但不会改变 native policy contract。Host API 与
 permissions 仍是后续独立 capability。
 
-## 已交付的 macOS 隔离 Plugin iframe Runtime
+## 已交付的 macOS 隔离 Plugin Child WebView Runtime
 
-available external Plugin Page 现在会在现有单窗口 Page slot 中渲染唯一 Host-owned
-`PluginRuntimeFrame`。Host 私有 resolver 会交叉检查 current Page identity、provider、eligible
-Registration entry、Registration revision、Resource response identity、isolated-origin URL 与 Registry
-route。它只从 Host route 派生 fragment target，绝不回退到 Manifest path、shared host、stale URL 或
-plugin 提供的 iframe policy。显式 retry 会刷新 current projection 并创建新的 attempt identity；没有
-自动 retry 或 hidden iframe 复用。
+available external Plugin Page 在现有单窗口 surface 内拥有一个 Host 管理的 Child WebView。React
+渲染可信 chrome 与不可交互的 `PluginRuntimeSlot`；Host 私有 presentation code 把物理 bounds、
+visibility 与 revision 提交给 Rust。native service 在创建或更新 Child WebView 前校验 current Page、
+Registration、resource generation、route、attempt、window 与 slot revision。插件不能选择 native bounds、
+label、configuration、navigation policy 或 data store。
 
-container 固定 `sandbox="allow-scripts allow-same-origin"`、`referrerPolicy="no-referrer"`，并拒绝
-camera、microphone、geolocation、fullscreen、clipboard、display capture、payment、USB、serial、HID、
-Bluetooth 与 screen wake lock。native lease activation 完成后才会给 iframe 设置 `src`。close、Registry
-invalidation、replacement、retry、返回 home/search 与 App teardown 都会移除 iframe，并 compare-current
-dispose lease。最多存在一个 plugin iframe；Host Page 仍是可信 React surface。
+每次 attempt 都拥有隔离 origin 与 generation-bound resource authority。Host 主 WebView 与 plugin Child
+WebView 使用独立 navigation policy：插件 document 可以加载精确 package entry 与 current-origin
+resource，但 top-level escape、popup、download 与 native authority 保持封闭。close、retry、replacement、
+导航离开、invalidation、App teardown 与 fatal bridge failure 都收敛到 compare-current terminal destroy。
+语义等价的 Launcher hide/restore 保留同一 attempt；最多存在一个 external Plugin Page Child WebView。
 
-UI 提供本地化 `resolving`、`loading`、`loaded` 与有边界的 failure 状态，以及可访问的显式 retry。
-`loaded` 只表示 iframe load event 已触发，并不等于 SDK 或 Session `ready`。该能力不增加 message
-readiness 声明。下游 Session capability 只增加私有 MessagePort bootstrap；下述安全生命周期会增加
-deadline、有边界的 crash-loop recovery 与 CSP，但不会引入 JSON-RPC、Host API 或 permission dispatcher。
-Plugin Runtime resolver、Resource/Registration adapter、iframe policy、native lease boundary 与
-origin facts 保持 Host 私有，并由 workspace boundary 阻止公共 package 和 plugin workspace import。
+UI 提供本地化 resolving、loading、ready 与有边界 failure 状态，以及可访问的 retry。native load、
+private bridge ready 与 SDK ready 是三个独立事实。Host 在 document 创建前安装 per-WebView closed
+bridge；native ingress 携带实际 WebView identity，Host 只接纳 current label、attempt、generation、nonce
+与 strict transport frame。bridge 不暴露通用 Tauri command/event、window、WebView、identity、origin、
+path 或 native handle authority。
 
-运行 `pnpm run check:plugin-iframe-runtime` 可验证 resolver、component、navigation lease、Page/
-lifecycle/replacement/resource 回归、真实 normal/malicious/replacement `.lxp` evidence、两项前置 gate 与
-workspace boundary。真实 WKWebView evidence 仅适用于 macOS，不宣称 Windows 或 Linux Runtime 支持。
-
-## 已交付的 Host 私有 Plugin Runtime Session
-
-current iframe 报告 `load` 后，`PluginRuntimeFrame` 只把真实 `contentWindow` 与 Host 派生 descriptor
-交给进程内 `PluginRuntimeSessionService`。resolver 会收敛 Registration summary/detail、Page route、
-Resource entry 与 current revision，并绑定包含 opaque entry、plugin/version/Page、隔离 origin 与
-resource generation 与 Runtime attempt 的不可变 identity。Manifest 数据、source、publisher 文本、enabled
-文本与 plugin message 都不能创建或覆盖 identity。
-
-每次 attempt 都由 Host 新建 128-bit 小写十六进制 nonce 与 `MessageChannel`，只向记录的 window 和
-精确隔离 `targetOrigin` 发送私有 `0.1.0` bootstrap，并且只 transfer 一次 child Port。只有 Host Port
-收到首个 exact、携带相同 nonce 的 ready acknowledgement，Session 才会从 `awaiting_handshake`
-进入 `ready`。bootstrap/ack 不含 plugin、entry、Page、revision、resource token、URL 或 Host
-object。非法 Port input、重复或迟到 acknowledgement、`messageerror`、Host reload 或 current fact
-失效都会断开 Session，不提供 oracle，也不会自动重连。
-
-每次 Registration invalidation 后，currentness 会比较受影响的 entry、Page、version、origin/generation、
-attempt 与 availability。任一相关事实改变都会撤销旧 Session、Port、iframe 与 navigation
-lease；只有其他插件导致的 global revision 变化会保留这四者，revision 只是竞态检测值而不是 Session
-generation。close、retry、replacement、进入 Home/Search/Host Page 与 App unmount 都进行幂等终止
-清理。Session、nonce、Port、window reference 与 message state 永不持久化；进程恢复后 Registration
-仍只报告 `inactive`。
-
-四层 ready 语义保持分离：
-
-1. iframe `loaded` 只表示 browser load completion；
-2. Session `ready` 只表示 current window/origin/nonce/Port binding 已认证；
-3. transport connected 表示已交付的 iframe transport 接管该 Port、确认 nonce，后续 frame 只走 Port；
-4. SDK `ready` 表示 `runtime.get_context` 返回 Contract-valid 且兼容的 Runtime context；它仍不表示
-   production Host method 已执行。
-
-Session contract、parser、adapter、identity 与 Port lease 都只属于 root Host，不进入 Contract、SDK、UI、
-Testkit、官方/示例/外部插件 import 或 tarball。该能力本身不定义公共 wire/Host adapter、permission
-decision/UI、privileged dispatch、plugin storage、background Runtime、sidecar 或 Windows/Linux 支持。
-已交付的 SDK transport 与 Host adapter 会消费该私有 lease，但不改变 Session contract。安全生命周期会增加下述私有 handshake deadline
-与清理。运行
-`pnpm run check:plugin-runtime-session` 可验证 focused logic/React、真实 package、边界、前置 gate 与
-有界真实 macOS WKWebView evidence。
+运行 `pnpm run check:plugin-child-webview-runtime` 验证 slot、origin/resource binding、开放 Web 能力、
+navigation policy、terminal lifecycle、ACL matrix、current fixture 与 workspace boundary。运行
+`pnpm run check:plugin-child-webview-session` 验证 readiness、RPC、Host dispatch 与 cleanup。真实
+WKWebView evidence 仅适用于 macOS，不宣称 Windows 或 Linux Runtime 支持。
 
 ## 已交付的 Plugin Runtime CSP 与安全生命周期
 
@@ -609,18 +570,18 @@ timer 与 Port event 无法影响新 attempt。不存在 preload、hidden pool�
 复用、自动 retry 或持久化 Runtime state。
 
 进程内 breaker 以 trusted entry identity 与 resource generation 为 key。60,000 ms 内第三次 qualifying
-load、handshake 或 unexpected-disconnect failure 会在 resolve、lease、iframe 或 Session 创建前开启
+load、handshake 或 unexpected-disconnect failure 会在 resolve、Child WebView 或 Session 创建前开启
 30,000 ms cooldown；cooldown 到期后仍必须由用户显式 retry。close、navigation、invalidation 与
 graceful exit 不计数；generation 变化或连续 30,000 ms 健康 `ready` 会清除记录，进程退出也会忘记它。
 
 可见 failure 只使用 `runtime_load_timeout`、`runtime_handshake_timeout`、
 `runtime_session_disconnected`、`runtime_security_policy_failure`、`runtime_crash_loop` 或
 `runtime_unavailable`，并通过现有可访问 feedback surface 提供 canonical English 和语义一致的简体中文
-文案。diagnostic/evidence 不包含完整或 blocked URL、origin/scope、path、nonce/Port 内容、payload、
+文案。diagnostic/evidence 不包含完整或 blocked URL、origin/scope、path、nonce/bridge 内容、payload、
 storage value、raw exception 或 stack，也没有远程 CSP report channel。已提交的真实 WKWebView matrix
-仅支持 macOS。公共 SDK iframe transport 不会继承这些 Host 私有 attempt、timer、breaker record 或
+仅支持 macOS。公共 SDK WebView transport 不会继承这些 Host 私有 attempt、timer、breaker record 或
 failure code。运行 `pnpm run check:open-isolated-plugin-runtime` 可执行组合 gate
-及其 Resource、origin、navigation、iframe、Session、workspace 与 public-tarball 前置门禁。
+及其 Resource、origin、navigation、Child WebView、Session、workspace 与 public-tarball 前置门禁。
 
 ## 已交付的 Host 私有 Plugin Surface 投影与 Page 导航
 
@@ -666,15 +627,15 @@ descriptor。Registry replacement 只会在 active Plugin Page identity 消失�
 fallback。
 
 生产组合初始化该协调器，在 Launcher activation 与 listener recovery 时刷新，并在 cleanup 时销毁
-同一 subscription。available Plugin Page 会把 current resolution 交给已交付的 Host 私有 iframe
+同一 subscription。available Plugin Page 会把 current resolution 交给已交付的 Host 私有 Child WebView
 Runtime resolver。surface projection 仍不会向插件暴露 route、entry ID、revision、origin fact、resource
 URL 或 native object。Host 私有 management capability 消费这些 facts，但不改变 surface projection；
 decision history 仍不属于本次交付。
 
-## 已交付的公共 Plugin SDK 与 iframe Transport
+## 已交付的公共 Plugin SDK 与 WebView Transport
 
-lensX 已交付框架无关的 `@lensx/plugin-sdk@0.2.0` workspace package。package 具有公共 root 与
-`@lensx/plugin-sdk/iframe` 入口，Runtime 只依赖 `@lensx/plugin-contract`。未声明的 deep import 不受支持；其公共声明
+lensX 已交付框架无关的 `@lensx/plugin-sdk@0.3.0` workspace package。package 具有公共 root 与
+`@lensx/plugin-sdk/webview` 入口，Runtime 只依赖 `@lensx/plugin-contract`。未声明的 deep import 不受支持；其公共声明
 不要求 React、Semi Design、Tauri、DOM 全局、Node filesystem 类型或 Host 私有模块。
 
 根入口公开 `createPluginSdk`、`PluginSdkError`、SDK lifecycle、Runtime context、取消和
@@ -682,7 +643,7 @@ transport 类型，以及下列独立版本事实：
 
 | Export | 含义 |
 | --- | --- |
-| `PLUGIN_SDK_VERSION` | SDK package 与公共 API 版本，当前为 `0.2.0`。 |
+| `PLUGIN_SDK_VERSION` | SDK package 与公共 API 版本，当前为 `0.3.0`。 |
 | `PLUGIN_SDK_SUPPORTED_HOST_API_RANGE` | 支持的 Host API 半开区间，当前为 `>=0.2.0 <0.3.0`。 |
 | `PLUGIN_HOST_API_VERSION` | SDK 不会重新导出；当前 Host API 版本仍由 `@lensx/plugin-contract` 持有。 |
 
@@ -721,14 +682,11 @@ capability snapshot 未包含的 method。`subscribe()` 只接受 `runtime.conte
 replacement 会先成为 `client.context`，再通知 subscriber。Contract-valid Host API error 与 SDK 的
 cancellation、timeout、disconnect、dispose、invalid argument、transport failure 保持可判别。
 
-`createPluginIframeTransport()` 不接受 trust 配置。它只接受 SDK 自有 Host origin policy 下 current
-parent 发出的首个 exact bootstrap，只返回一次现有 nonce acknowledgement，之后只使用 transferred
-Port。该 policy 包含 production Tauri origins、配置中准确的 `http://localhost:40755` development origin
-与私有 real-WebView harness origin；相邻 localhost port 仍被拒绝。package 私有 `0.1.0` wire 由 exact
-request/response/event/cancel/disconnect frame 与 transport
-自有 bounded request ID 组成；不含 plugin/Page identity、origin、path、executor、Tauri/Host
-object、stack 或 raw exception。package 不 export frame、codec、fixture、Host projection、nonce/origin
-policy 或 deep-import path。
+`createPluginWebviewTransport()` 不接受 trust 配置。它只发现 Host 安装的 current bridge，并校验封闭的
+`0.2.0` carrier contract。bridge 使用精确 ready/request/response/event/cancel/disconnect frame 与
+transport 自有 bounded request ID；不含 plugin/Page identity、origin、path、executor、Tauri/Host
+object、stack 或 raw exception。package 不 export bridge global、frame codec、fixture、Host projection、
+nonce policy、native label 或 deep-import path。
 
 Host 最多消费 ready lease 一次。私有 adapter 向窄 handler 注入不可变 Session identity 与 Host-owned
 cancellation signal，校验所有 result/error/event，支持并发乱序 settle，并让 Session/Page replacement
@@ -865,9 +823,9 @@ outcome；它不直接 invoke Tauri，也不复制 Manager transition 规则。
 
 根级 plugin composition 是共享 management、plugin lifecycle、Runtime lifecycle、replacement 与 Registration
 projection service 的唯一生命周期 owner。每次 React effect setup 都创建并初始化一代 composition，其配对
-cleanup 只销毁这一代实例；`App`、`PluginRuntimeFrame` 与 Settings 组件只消费注入的 service，不执行 terminal
+cleanup 只销毁这一代实例；`App`、`PluginRuntimeSlot` 与 Settings 组件只消费注入的 service，不执行 terminal
 dispose。这样开发模式 `StrictMode` 的 setup-cleanup-setup 不会复用已经销毁的 service，也不会让管理视图永久
-停留在 `loading`，或让 Runtime 在 iframe 尚未创建时永久停留在 `resolving`。
+停留在 `loading`，或让 Runtime 在 Child WebView 尚未创建时永久停留在 `resolving`。
 
 替换仍采用 prepare/confirm/commit 流程。确认界面展示版本分类与信任边界；Registration revision
 变化后确认立即失效。卸载默认 `retain_data`，`delete_data` 必须显式选择。只有 current、disabled、registered
@@ -922,7 +880,7 @@ Web capability 声明。
 
 `pnpm run check:plugin-testkit` 校验 package 测试与声明、Contract -> SDK -> Testkit 依赖方向、真实
 tarball 内容，以及安装到 workspace 外的无 DOM ES2022 consumer。该 consumer 是发布 smoke fixture，
-不是正式插件项目模板。Testkit 不提供 iframe Runtime、插件执行或真实 Host API 执行；后续 transport
+不是正式插件项目模板。Testkit 不提供 native Runtime container、插件执行或真实 Host API 执行；后续 transport
 和 Runtime change 只能在对应契约接受后扩展此 package。
 
 ## 已交付的可选 Plugin UI Package
@@ -1046,10 +1004,10 @@ operation，而不是 raw string method 或具体副作用 provider。
 预期通信流程为：
 
 ```text
-iframe
-  -> 基于已认证 Port 的类型化 Plugin SDK
+Child WebView
+  -> 基于 source-bound bridge 的类型化 Plugin SDK
   -> 私有闭合 request/response/event/cancel wire
-  -> 注入 Session-derived identity 的 Host Port adapter
+  -> 注入 Session-derived identity 的 Host bridge adapter
   -> Session-scoped Host 私有 Dispatcher
   -> Context / 匹配当前 Page 的关闭 / 当前插件 Action / scoped storage
 ```
@@ -1075,14 +1033,14 @@ Host API 方法保持小型、类型化、版本化，并且可以独立测试�
 - 解析包路径时不允许绝对路径或父目录穿越。
 - 区分已声明、已请求和已授予权限。
 - 对未知方法和能力默认拒绝。
-- 永远不向 iframe 暴露内部 Tauri 或原生对象。
+- 永远不向 plugin Child WebView 暴露内部 Tauri 或原生对象。
 
 ## 能力交付
 
 静态 Manifest 格式、校验器、Host 私有本地安装与同 identity replacement、绑定 revision 的
 enable/disable/uninstall 基础设施、scoped package-relative resources、Plugin surface 投影、生产
-Action 激活、Page Registry/navigation、macOS 隔离 iframe Runtime、Host 私有进程内 Runtime Session、
-公共 SDK iframe transport/Host Port adapter、公共 Host API 语义契约、Host 私有 RPC v1 validation boundary、
+Action 激活、Page Registry/navigation、macOS 隔离 Child WebView Runtime、Host 私有进程内 Runtime Session、
+公共 SDK WebView transport/Host bridge adapter、公共 Host API 语义契约、Host 私有 RPC v1 validation boundary、
 Dispatcher、插件 scoped storage provider、open isolated Web Runtime 与 Plugin Management Settings 已交付。
 其他能力还包括公共项目模板与 CLI、feature-gated Plugin
 Development Mode、双语外部开发者文档与官方插件 release 流水线。其余每项能力——npm 发布、签名、Marketplace 分发、

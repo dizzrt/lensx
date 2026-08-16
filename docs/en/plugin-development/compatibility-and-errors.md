@@ -6,9 +6,11 @@ Track these dimensions independently:
 
 | Dimension | Current baseline | Meaning |
 | --- | --- | --- |
-| Public package | `0.2.0` | Package exports and implementation release. |
-| Manifest protocol | `0.2.0` | Author input and normalized Manifest wire contract. |
+| Contract/UI/Testkit packages | `0.2.0` | Public semantic contracts, UI, and test helpers. |
+| SDK package | `0.3.0` | Root semantic client plus the `/webview` production transport. |
+| Manifest protocol | `0.3.0` | Author input and normalized WebView Manifest wire contract. |
 | Host API protocol | `0.2.0` | Semantic methods, results, events, errors, and context. |
+| Private bridge carrier | `0.2.0` | Closed Host/native-to-plugin transport frames; not a Host API. |
 | lensX application | `0.1.0` | Host compatibility range checked by the Manifest. |
 | `.lxp` package format | `0.1.0` | Canonical archive and checksums profile. |
 
@@ -39,6 +41,11 @@ Host API method errors are listed in [Host API](host-api.md#stable-errors).
 SDK lifecycle errors cover cancellation, timeout, transport failure,
 disconnection, disposal, invalid context, and incompatible Host API.
 
+Legacy Manifest `0.2.x` packages declaring `runtime.kind: "iframe"` are a
+migration-only incompatibility case. The Host and CLI do not rewrite them and
+there is no fallback Runtime; rebuild from a current template and migrate to
+`@lensx/plugin-sdk/webview`.
+
 Never branch on an English message. Use the stable code and bounded public
 location, then show localized recovery text. Do not log package contents,
 selected paths, stored values, or private failure details.
@@ -54,8 +61,13 @@ selected paths, stored values, or private failure details.
    registration, and manual reload result.
 7. For a formal package, use Settings local installation and follow the Host's
    bounded preparation result and trust confirmation.
-8. At Runtime, inspect the newest context and distinguish missing capability,
-   unavailable provider, `method_not_found`, disconnect, and timeout.
+8. At Runtime, distinguish native load, bridge ready, SDK context, disconnect,
+   and timeout. A loading surface with no bridge ready points to document or
+   transport startup; a context failure points to Host API compatibility.
+9. For native presentation problems, run
+   `pnpm run check:plugin-child-webview-macos-evidence`; maintainers can use
+   `pnpm run evidence:plugin-child-webview-macos` on macOS to rerun the real
+   WKWebView matrix.
 
 Fix the first failing boundary and rerun from canonical inputs; do not reuse a
 generated cache from a previous failed attempt.

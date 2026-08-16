@@ -13,6 +13,10 @@ use tauri::plugin::TauriPlugin;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State, WebviewWindow, WindowEvent};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
+use crate::plugin_child_webview_service::{
+    PluginChildWebviewPresentationResult, PluginChildWebviewService, PluginChildWebviewState,
+};
+
 pub const MAIN_WINDOW_LABEL: &str = "main";
 pub const LAUNCHER_ACTIVATED_EVENT: &str = "launcher://activated";
 pub const DEFAULT_SHORTCUT_LABEL: &str = "Ctrl+Shift+Space";
@@ -342,11 +346,64 @@ impl LauncherWindowActions {
         app: &AppHandle<R>,
         action: LauncherWindowAction,
     ) -> Result<(), LauncherWindowActionError> {
-        execute_with_resolver_policy(
+        let suppress_hide = self.native_dialog_active();
+        let will_hide = !suppress_hide
+            && match action {
+                LauncherWindowAction::Hide => true,
+                LauncherWindowAction::Toggle(_) => app
+                    .get_webview_window(MAIN_WINDOW_LABEL)
+                    .and_then(|window| window.is_visible().ok())
+                    .unwrap_or(false),
+                LauncherWindowAction::Show(_) => false,
+            };
+        if will_hide {
+            hide_current_plugin_presentation(app);
+        }
+        let result = execute_with_resolver_policy(
             &TauriLauncherWindowResolver { app },
             action,
-            self.native_dialog_active(),
-        )
+            suppress_hide,
+        );
+        if result.is_ok()
+            && app
+                .get_webview_window(MAIN_WINDOW_LABEL)
+                .and_then(|window| window.is_visible().ok())
+                .unwrap_or(false)
+        {
+            restore_current_plugin_presentation(app);
+        }
+        result
+    }
+}
+
+fn hide_current_plugin_presentation<R: Runtime>(app: &AppHandle<R>) {
+    let Some(service) = app.try_state::<Arc<PluginChildWebviewService<R>>>() else {
+        return;
+    };
+    let Some(snapshot) = service.snapshot() else {
+        return;
+    };
+    if !matches!(
+        service.hide_current(snapshot.attempt),
+        PluginChildWebviewPresentationResult::Applied
+            | PluginChildWebviewPresentationResult::StaleAttempt
+    ) {
+        let _ = service.compare_current_teardown(snapshot.attempt);
+    }
+}
+
+fn restore_current_plugin_presentation<R: Runtime>(app: &AppHandle<R>) {
+    let Some(service) = app.try_state::<Arc<PluginChildWebviewService<R>>>() else {
+        return;
+    };
+    let Some(snapshot) = service
+        .snapshot()
+        .filter(|snapshot| snapshot.state == PluginChildWebviewState::Hidden)
+    else {
+        return;
+    };
+    if service.show_current(snapshot.attempt) == PluginChildWebviewPresentationResult::Applied {
+        let _ = service.focus_current(snapshot.attempt);
     }
 }
 

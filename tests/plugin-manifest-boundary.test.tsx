@@ -52,7 +52,7 @@ test('static Manifest validation does not discover, register, render, or execute
 
 test('author and normalized contracts contain plain data but no Host-owned state or executor', () => {
   const result = parsePluginManifest(baseManifest, currentVersions);
-  if (result.status === 'invalid') {
+  if (!('manifest' in result)) {
     throw new TypeError('Base fixture unexpectedly failed validation.');
   }
 
@@ -102,7 +102,7 @@ test('Host orchestration preserves incompatible classification and locale fallba
 
   const result = parsePluginManifest(input, currentVersions);
   expect(result.status).toBe('incompatible');
-  if (result.status === 'invalid') {
+  if (!('manifest' in result)) {
     throw new TypeError('Valid out-of-range Manifest must not be classified as invalid.');
   }
   expect(result.compatibility).toEqual({ lensx: false, host_api: true });

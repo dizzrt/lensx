@@ -68,6 +68,7 @@ export const checkOfficialPluginWorkflowPolicy = (rootDir: string): void => {
     !/github\.ref == 'refs\/heads\/main'/u.test(publish) ||
     !/concurrency:/u.test(candidate) ||
     !/artifact-digest/u.test(build) ||
+    !/verify-candidate/u.test(build) ||
     !/verify-candidate/u.test(publish) ||
     /pnpm\s+(?:install|add)|npm\s+(?:install|ci)|lensx-plugin\s+(?:build|pack)|cargo\s+(?:run|test)/u.test(publish)
   ) {

@@ -8,9 +8,7 @@ payload, including strict contract validation, unguessable process-local
 authorization, path and MIME enforcement, lifecycle revocation, and
 fail-closed responses without exposing Host filesystem or plugin-management
 facts.
-
 ## Requirements
-
 ### Requirement: The Host MUST resolve the current plugin entry URL through an independent private contract
 
 The system MUST provide an independently versioned Host-private Plugin Resource
@@ -421,33 +419,15 @@ canonical safe text.
 - **THEN** reinstalling the same version, disabling and re-enabling, or
   uninstalling cannot allow continued reads through an old cache
 
-### Requirement: Task 4.1 MUST leave subsequent Runtime and UI capabilities unimplemented
+### Requirement: Resource authority MUST match the current Child WebView source
+Entry resolution MUST produce only Host-private facts needed to create the current Child WebView. Every custom-protocol request and verified byte-cache hit MUST match its scope, resource generation, Runtime attempt and actual current Child WebView binding. Destroy, replacement, reload, disable, uninstall and retirement MUST revoke the binding before payload cleanup; Host or old WebViews MUST fail closed even if they know a well-formed URL.
 
-This capability MUST deliver only the Host-private Resource Contract, desktop
-adapter, Manager resource generation and projection, scoped protocol service,
-path, MIME, and lifecycle enforcement, tests, and maintained documentation. It
-MUST NOT create an iframe, execute plugin code, change the Plugin Page
-placeholder, display a package-local icon, inline SVG, establish a Runtime
-Session, transport, RPC, or Host API, create native authority, or claim a complete
-CSP. Because this change adds no UI, its completion MUST NOT alter the existing
-English-default or Simplified Chinese locales, keyboard and accessibility
-behavior, Semi Design theme, or light and dark presentation.
+#### Scenario: Current WebView requests a package file
+- **WHEN** the current bound Child WebView requests a safe regular file in its exact generation
+- **THEN** the service returns fixed MIME and security headers under the existing bounded rules
+- **THEN** the response confers no authority on any other WebView
 
-#### Scenario: Task 4.1 is completed independently
+#### Scenario: Generation is replaced during a cached request
+- **WHEN** a replacement commits before a previous-generation request or cache lookup completes
+- **THEN** compare-current validation rejects the late result and no bytes reach the replacement WebView
 
-- **WHEN** the focused Resource Service gate and complete validation pass while
-  Tasks 4.2 through 4.4 remain unimplemented
-- **THEN** the Host can securely resolve and respond to scoped plugin resource
-  URLs, while the current Plugin Page still displays only the localized
-  Host-owned placeholder
-- **THEN** the user interface, locale, theme, focus, and keyboard behavior remain
-  unchanged, and plugin HTML and JavaScript do not execute
-
-#### Scenario: A later iframe consumes the entry URL
-
-- **WHEN** Task 4.2 uses the current scoped entry URL as iframe input
-- **THEN** Task 4.1 guarantees only restricted reading from one current payload
-  through the URL
-- **THEN** iframe sandboxing, origin and navigation, Tauri bridge isolation,
-  page error state, and session identity remain for a subsequent capability to
-  define explicitly

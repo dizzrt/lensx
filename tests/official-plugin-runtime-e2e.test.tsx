@@ -1,22 +1,33 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
-import { expect, rs, test } from '@rstest/core';
-import { fireEvent, render, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, expect, rs, test } from '@rstest/core';
+import { render, waitFor } from '@testing-library/react';
 
 import { AppProviders } from '../src/app/AppProviders';
 import type { ActivePage, PageResolution } from '../src/app/navigation';
 import type { PluginRegistrationSnapshot } from '../src/app/plugins/registration';
 import { createPluginReplacementService, PLUGIN_REPLACEMENT_CONTRACT_VERSION } from '../src/app/plugins/replacement';
 import {
-  PLUGIN_RUNTIME_IFRAME_SANDBOX,
+  createPluginRuntimeLifecycleService,
+  type PluginChildWebviewPresentationController,
   type PluginPageRuntimeDescriptor,
-  PluginRuntimeFrame,
-  type PluginRuntimeSessionService,
+  PluginRuntimeSlot,
 } from '../src/app/plugins/runtime';
 import type { PluginSurfaceProjectionService } from '../src/app/plugins/surfaces';
 
-test('official candidate opens through the same open Runtime and closed Host boundary', async () => {
+const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+
+beforeEach(() => {
+  HTMLElement.prototype.getBoundingClientRect = () =>
+    ({ left: 20, top: 40, right: 320, bottom: 240, width: 300, height: 200 }) as DOMRect;
+});
+
+afterEach(() => {
+  HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+});
+
+test('official candidate opens through the ordinary Child WebView slot and closed Host boundary', async () => {
   const pluginId = process.env.LENSX_OFFICIAL_CANDIDATE_PLUGIN_ID ?? 'dev.lensx.fixture.alpha';
   const version = process.env.LENSX_OFFICIAL_CANDIDATE_VERSION ?? '1.0.0';
   const candidatePath = process.env.LENSX_OFFICIAL_CANDIDATE_PATH;
@@ -44,11 +55,12 @@ test('official candidate opens through the same open Runtime and closed Host bou
     },
   };
   const origin = 'lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost';
+  const encodedPluginId = Buffer.from(pluginId).toString('hex');
+  const entryUrl = `${origin}/v1/0123456789abcdef0123456789abcdef/v1-${encodedPluginId}/${version}/index.html`;
   const descriptor: PluginPageRuntimeDescriptor = {
     runtime_key: 'official-candidate-runtime',
-    entry_url: `${origin}/v1/0123456789abcdef0123456789abcdef/plugin/${version}/index.html`,
+    entry_url: entryUrl,
     host_fragment: '/',
-    iframe_src: `${origin}/v1/0123456789abcdef0123456789abcdef/plugin/${version}/index.html#/`,
     entry_id: 'entry_0123456789abcdef',
     plugin_id: pluginId,
     version,
@@ -58,52 +70,48 @@ test('official candidate opens through the same open Runtime and closed Host bou
     runtime_attempt_key: 'official-candidate-attempt',
     registration_revision: '1',
   };
-  const disposeSession = rs.fn();
-  const sessionService = {
-    start: rs.fn(({ identity }) => ({
-      snapshot: () => ({ state: 'ready' as const, identity }),
-      subscribe: (listener: (snapshot: { state: 'ready'; identity: typeof identity }) => void) => {
-        listener({ state: 'ready', identity });
-        return () => undefined;
-      },
-      disconnect: () => undefined,
-      dispose: disposeSession,
-    })),
-    current: () => undefined,
-    disconnect: () => undefined,
-    dispose: () => undefined,
-  } as unknown as PluginRuntimeSessionService;
-  const navigationAdapter = {
-    activate: rs.fn(async () => ({ lease_id: '0000000000000001' })),
-    dispose: rs.fn(async () => true),
+  const create = rs.fn(async () => ({ attemptId: 'attempt_0123456789abcdef' as const }));
+  const setVisible = rs.fn(async () => undefined);
+  const destroy = rs.fn(async () => true);
+  const presentationController: PluginChildWebviewPresentationController = {
+    create,
+    updateSlot: rs.fn(async () => undefined),
+    readReadiness: rs.fn(async () => ({ status: 'ready' as const })),
+    setVisible,
+    destroy,
   };
+  const resolver = { resolve: async () => descriptor };
   const view = render(
     <AppProviders>
-      <PluginRuntimeFrame
+      <PluginRuntimeSlot
         activePage={activePage}
-        navigationAdapter={navigationAdapter}
+        lifecycleService={createPluginRuntimeLifecycleService()}
         pageResolution={pageResolution}
         pageTitle="Official fixture"
-        resolver={{ resolve: async () => descriptor }}
-        sessionService={sessionService}
+        presentationController={presentationController}
+        resolver={resolver}
       />
     </AppProviders>,
   );
-  const iframe = await waitFor(() => {
-    const value = document.querySelector('iframe');
-    expect(value).not.toBeNull();
-    return value as HTMLIFrameElement;
-  });
-  expect(iframe).toHaveAttribute('sandbox', PLUGIN_RUNTIME_IFRAME_SANDBOX);
-  fireEvent.load(iframe);
-  expect(sessionService.start).toHaveBeenCalledWith(
+  await waitFor(() => expect(setVisible).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }, true));
+  expect(document.querySelector('iframe')).toBeNull();
+  expect(create).toHaveBeenCalledWith(
     expect.objectContaining({
-      targetOrigin: origin,
+      identity: {
+        entryId: descriptor.entry_id,
+        pluginId,
+        version,
+        pageId: 'main',
+        expectedRevision: '1',
+      },
     }),
   );
+  window.dispatchEvent(new Event('resize'));
+  await waitFor(() => expect(presentationController.updateSlot).toHaveBeenCalledTimes(1));
   view.unmount();
-  await waitFor(() => expect(navigationAdapter.dispose).toHaveBeenCalledTimes(1));
-  expect(disposeSession).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(setVisible).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }, false));
+  await waitFor(() => expect(destroy).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }));
+  expect(document.querySelector('[data-plugin-runtime-slot="true"]')).toBeNull();
 });
 
 test('ordinary ConfigLens replacement terminates the old provider without gaining official authority', async () => {

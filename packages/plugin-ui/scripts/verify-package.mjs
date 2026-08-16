@@ -182,7 +182,19 @@ try {
   if (/(?:from\s+|import\s*)['"](?:react|react-dom|@douyinfe\/semi-ui|@lensx\/plugin-ui)/u.test(javascript)) {
     throw new Error('The browser bundle contains an unresolved Runtime bare import.');
   }
-  for (const forbidden of ['@tauri-apps/', 'src/app/', 'window.React', 'window.Semi', 'type="importmap"']) {
+  for (const forbidden of [
+    '@tauri-apps/',
+    'src/app/',
+    'window.React',
+    'window.Semi',
+    'type="importmap"',
+    '@lensx/plugin-sdk/webview',
+    'createPluginWebviewTransport',
+    '__LENSX_PLUGIN_WEBVIEW_BRIDGE__',
+    'PluginChildWebview',
+    'native_handle',
+    'source_label',
+  ]) {
     if (javascript.includes(forbidden)) {
       throw new Error(`Forbidden Host Runtime reference in browser bundle: ${forbidden}.`);
     }

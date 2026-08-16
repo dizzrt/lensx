@@ -12,7 +12,7 @@ const commandIdentifiers = [
   'pnpm run check:plugin-project-template',
   'examples/plugins/framework-neutral',
   'examples/plugins/react-semi',
-  '@lensx/plugin-sdk/iframe',
+  '@lensx/plugin-sdk/webview',
   'lensx-plugin create',
   '@lensx/plugin-cli',
 ];

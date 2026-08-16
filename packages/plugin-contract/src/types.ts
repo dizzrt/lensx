@@ -68,7 +68,7 @@ export interface NormalizedCompatibility extends Omit<Compatibility, 'lensx' | '
 }
 
 export interface NormalizedRuntime extends Runtime {
-  readonly kind: 'iframe';
+  readonly kind: 'webview';
   readonly entry: string;
 }
 
@@ -110,7 +110,7 @@ export interface NormalizedContributes extends Omit<Contributes, 'pages' | 'acti
 
 export interface NormalizedPluginManifest
   extends Omit<PluginManifestInput, 'display' | 'publisher' | 'compatibility' | 'runtime' | 'contributes'> {
-  readonly manifest_version: '0.2.0';
+  readonly manifest_version: '0.3.0';
   readonly plugin_id: string;
   readonly version: string;
   readonly display: NormalizedPluginDisplay;
@@ -125,6 +125,11 @@ export interface InvalidPluginManifestValidationResult {
   readonly diagnostics: readonly PluginManifestDiagnostic[];
 }
 
+export interface IncompatiblePluginManifestValidationResult {
+  readonly status: 'incompatible';
+  readonly diagnostics: readonly PluginManifestDiagnostic[];
+}
+
 export interface ValidatedPluginManifest {
   readonly status: 'valid';
   readonly value: PluginManifestInput;
@@ -132,7 +137,10 @@ export interface ValidatedPluginManifest {
   readonly [validatedManifestBrand]: true;
 }
 
-export type PluginManifestValidationResult = InvalidPluginManifestValidationResult | ValidatedPluginManifest;
+export type PluginManifestValidationResult =
+  | InvalidPluginManifestValidationResult
+  | IncompatiblePluginManifestValidationResult
+  | ValidatedPluginManifest;
 
 export interface PluginManifestNormalizationResult {
   readonly status: PluginManifestCompatibilityStatus;

@@ -207,7 +207,7 @@ snapshot 解析已存 ID，保持顺序，隐藏缺失或禁用 Action，但不�
 现有项。
 
 插件管理与显式 permission decision 已通过可信 Settings surface 交付；安全插件 icon 解析仍是独立能力。
-scoped resource、生命周期写操作、隔离 iframe Runtime 及其私有 Session 已分别交付，但不会改变
+scoped resource、生命周期写操作、隔离 Child WebView Runtime 及其私有 Session 已分别交付，但不会改变
 Action collection 语义。
 生产 Plugin Action 现在只会在其投影目标 Page available 时出现。持久化 Plugin Action ID 可以自然
 隐藏和恢复，而不会从最近使用或已固定存储中删除。
@@ -321,8 +321,8 @@ Host 私有 Resource Contract 遵循该边界：可信 TypeScript 只提交 entr
 Registration revision；Rust 派生当前 plugin identity/version/entry 与 opaque URL；每个 custom-protocol
 request 都依据当前 Manager generation 与 Installer-owned payload 重新验证进程内 scope。React
 presentation prop 与公共 plugin package 都不会获得 installation path、digest、record key 或通用文件
-读取器。macOS iframe Runtime 通过 Host 私有 adapter 消费该资源读取基础。已交付的进程内 Session
-会认证专用 Port 并比较相关 current facts，不会把无关 Registration revision 变化当成 identity 变化。
+读取器。macOS Child WebView Runtime 通过 Host 私有 adapter 消费该资源读取基础。已交付的进程内 Session
+会认证 source-bound bridge 并比较相关 current facts，不会把无关 Registration revision 变化当成 identity 变化。
 Session state 不持久化，也不改变 Registration 的 `inactive` read model；公共 SDK transport、Host API
 与完整 CSP 仍是独立工作。
 

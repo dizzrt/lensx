@@ -84,6 +84,9 @@ impl DevelopmentSnapshotStore {
                 DevelopmentDirectoryInspection::Incompatible(_) => {
                     return Err(DevelopmentSnapshotFailure::Incompatible)
                 }
+                DevelopmentDirectoryInspection::IncompatibleProtocol { .. } => {
+                    return Err(DevelopmentSnapshotFailure::Incompatible)
+                }
                 DevelopmentDirectoryInspection::Invalid { diagnostics } => {
                     return Err(map_diagnostics(&diagnostics))
                 }
@@ -121,6 +124,9 @@ impl DevelopmentSnapshotStore {
             ) {
                 DevelopmentDirectoryInspection::Compatible(payload) => payload,
                 DevelopmentDirectoryInspection::Incompatible(_) => {
+                    return Err(DevelopmentSnapshotFailure::Incompatible)
+                }
+                DevelopmentDirectoryInspection::IncompatibleProtocol { .. } => {
                     return Err(DevelopmentSnapshotFailure::Incompatible)
                 }
                 DevelopmentDirectoryInspection::Invalid { diagnostics } => {
@@ -294,7 +300,9 @@ impl CompatibleIdentity for DevelopmentDirectoryInspection {
     fn is_compatible_with_identity(&self, identity: &str) -> bool {
         match self {
             Self::Compatible(payload) => development_tree_identity(&payload.files) == identity,
-            Self::Invalid { .. } | Self::Incompatible(_) => false,
+            Self::Invalid { .. } | Self::IncompatibleProtocol { .. } | Self::Incompatible(_) => {
+                false
+            }
         }
     }
 }

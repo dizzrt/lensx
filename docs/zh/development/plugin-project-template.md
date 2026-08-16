@@ -7,7 +7,7 @@ source，并用于 `@lensx/plugin-cli` 中对应的 `lensx-plugin create` 模板
 
 - `examples/plugins/framework-neutral` 使用 TypeScript 和浏览器 DOM API。插件不需要 React 或
   Semi Design 时，应选择这个最小模板。
-- `examples/plugins/react-semi` 在自己的 iframe document 中持有 React、React DOM、Semi Design
+- `examples/plugins/react-semi` 在自己的 Child WebView document 中持有 React、React DOM、Semi Design
   和 `@lensx/plugin-ui`。需要组件化 UI、共享插件语义 token 与 Semi 控件时，应选择它。
 
 两个模板与外部插件使用相同的公共 Contract 和 SDK 边界。它们位于 workspace 中只会改变本地
@@ -41,7 +41,7 @@ framework-neutral bundle 不包含 React、React DOM、Semi Design 或 Plugin UI
 ```text
 @lensx/plugin-contract
 @lensx/plugin-sdk
-@lensx/plugin-sdk/iframe
+@lensx/plugin-sdk/webview
 @lensx/plugin-testkit        # 仅测试
 @lensx/plugin-ui             # 仅 React 模板
 @lensx/plugin-ui/styles.css  # 仅 React 模板
@@ -53,18 +53,19 @@ authoring workflow 中调用 `lensx-plugin` bin，但不得从 `src/**` import `
 
 ## Manifest、Page 与 Action
 
-每个模板都有独立 plugin ID，以及包含一个 iframe Runtime entry、一个 Page 和一个指向该 Page 的
-Action 的 Contract-valid Manifest。两者都不请求权限。Host 会把 Action 投影到共享 Launcher Action
-Registry；激活 Action 会打开已投影 Page。随后 Host 会先解析当前 registration entry 和 resource
-generation，再构造隔离的 custom-protocol iframe URL。
+每个模板都有独立 plugin ID，以及包含一个 WebView Runtime entry、一个 Page 和一个指向该 Page 的
+Action 的 Contract-valid Manifest `0.3.0`。两者都不请求权限。Host 会把 Action 投影到共享 Launcher
+Action Registry；激活 Action 会打开已投影 Page。随后 Host 会解析当前 registration entry 和
+resource generation。React 只使用该安全 identity 请求一个 native Child WebView presentation，native
+code 会独立解析 current document target。
 
 调整模板时，应保持 Page/Action ID 一致、确保 Action target 有效，并在 `dist/` 中包含每项 Manifest
 resource。增加权限属于独立的产品与安全决策；这些起步模板不是权限教程。
 
 ## Runtime 生命周期
 
-插件使用 `createPluginIframeTransport()` 创建显式 SDK client。初始化从 loading 状态开始，只有在
-Host 私有 Session handshake 和 `runtime.get_context` response 完成后才进入 ready。context-change
+插件使用 `createPluginWebviewTransport()` 创建显式 SDK client。初始化从 loading 状态开始，只有在
+Host 安装的 closed bridge handshake 和 `runtime.get_context` response 完成后才进入 ready。context-change
 event 会替换完整 locale/theme/capability snapshot。
 
 初始化失败或断开会产生有界 error。retry 必须由用户显式触发，并创建全新的 transport 与 SDK client；
@@ -120,7 +121,7 @@ preparation boundary 消费相同的临时 `.lxp` bytes。缺失 resource、非�
 权限与 Host-owned facts 等负例都会在 Runtime 启动前停止。
 
 production-component smoke 会让打包后的 Manifest 依次经过当前 Registration、Page/Action projection、
-resource resolution、Runtime resolver、Session、公共 iframe transport、RPC adapter 与 Dispatcher。
+resource resolution、Runtime resolver、公共 WebView transport、closed Child WebView bridge 与 Host dispatcher。
 它不是完整桌面 GUI E2E。React visual gate 会另外检查英语/简体中文、light/dark、长文本、焦点、语义状态、
 公共 token computed styles 和固定视口截图。
 

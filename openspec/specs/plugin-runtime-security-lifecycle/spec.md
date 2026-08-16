@@ -6,9 +6,7 @@ Define the Host-owned Content Security Policy and process-local lifecycle
 boundary for external Plugin Page Runtimes, including bounded deadlines,
 generation-aware terminal cleanup, circuit breaking, single-instance
 enforcement, safe diagnostics, and real WebView evidence.
-
 ## Requirements
-
 ### Requirement: Host and plugin documents MUST run under distinct Host-owned Content Security Policies
 
 The production Host main document and every eligible plugin Runtime document MUST use non-empty, mutually independent Content Security Policies controlled by lensX. The Host policy MUST continue to allow only the validated Host bundle, Tauri IPC, and the current plugin frame class. The plugin policy MUST enforce only trusted Host ancestry, Host and cross-plugin isolation, and Runtime boundaries that an author cannot relax. It MUST NOT treat Worker, network, remote HTTPS or WSS resources, `blob:`, `data:`, WASM, or browser origin storage as lensX permission-gated content categories. A plugin's own policy MAY narrow its content sources further, but the Manifest, HTML, or remote content MUST NOT relax isolation policy in the Host header.
@@ -59,80 +57,32 @@ The open package and remote module graph, Dedicated Worker, network, Blob, Data,
 - **THEN** production does not fall back to a shared origin, Tauri exposure, no ancestor restriction, or an unverified residual Worker
 
 ### Requirement: Every Runtime attempt MUST have one idempotent generation-aware terminal cleanup
-
-The Host MUST assign each explicit open, retry, or successful development
-reload a fresh process-local Runtime attempt and MUST route manual close,
-navigation away, retry, provider quiescence, disable, uninstall, replacement,
-development reload, remove, or mode shutdown, relevant current-fact
-change, resolution, load, or handshake failure, unexpected Session disconnect,
-Host reload, App unmount, and graceful application exit through one terminal
-operation. The operation MUST reject new Runtime-owned work, cancel cancellable
-resolve, currentness, load, and handshake work, make non-cancellable stale
-completions inert, clear timers, unsubscribe listeners, dispose the Session and
-Ports, remove the iframe, compare-current release the navigation lease, and
-discard window and descriptor references. Cleanup MUST be idempotent, and every
-late callback MUST compare the attempt before changing current state.
+Every explicit open, retry or committed development reload MUST create a fresh process-local attempt. Close, navigation away, disable, uninstall, replacement, reload, disconnect, failure, breaker, Host reload, App unmount and process exit MUST converge on one idempotent coordinator that rejects new ingress, aborts work, removes bridge/Session/resource/navigation authority, hides and destroys the Child WebView, and clears bounds, focus, listeners, timers and caches. Every late callback MUST compare current attempt before publishing state.
 
 #### Scenario: User closes a ready plugin Page
-
-- **WHEN** the user closes the current ready external or development Plugin Page
-- **THEN** the Host terminates the attempt exactly once, removes its iframe, Session, Ports, listeners, timers and navigation lease, and returns through the existing Home/focus behavior
-- **THEN** no hidden Runtime, pending Runtime-owned work, window reference or reusable attempt remains
+- **WHEN** the current external Page closes
+- **THEN** its Child WebView and every owned execution/authority binding terminate exactly once
+- **THEN** no hidden Runtime, Worker, connection or reusable attempt remains
 
 #### Scenario: Lifecycle events race with a new attempt
-
-- **WHEN** close, retry, invalidation, replacement, development reload or remove,
-  and old async completions race while a later attempt becomes current
+- **WHEN** close, retry, invalidation, replacement, development reload or removal and old asynchronous completions race while a later attempt becomes current
 - **THEN** old cleanup and late events can affect only their own attempt and cannot release, fail, load, authenticate or revive the current attempt
 - **THEN** repeated cleanup succeeds safely without double-closing or retaining resources
 
 #### Scenario: Application process terminates unexpectedly
-
 - **WHEN** the process exits or crashes before JavaScript can finish best-effort cleanup and later restarts
-- **THEN** operating-system process teardown removes process resources, and the new process restores no scope, Runtime attempt, breaker record, Session, nonce, Port, iframe, listener, timer or pending work
-- **THEN** persistent installed Registration continues to recover with Runtime
-  `inactive`, while development Registration does not recover
+- **THEN** operating-system process teardown removes process resources, and the new process restores no resource scope, Runtime attempt, breaker record, Session, bridge, Child WebView, listener, timer or pending work
+- **THEN** persistent installed Registration continues to recover with Runtime `inactive`, while development Registration does not recover
 
 #### Scenario: Development reload commits a new generation
-
-- **WHEN** a manual reload of the current development Plugin Page successfully
-  commits a new resource generation
-- **THEN** the Host makes the old attempt terminal and clears all of its
-  authority before creating a fresh attempt, iframe, nonce, MessageChannel, and
-  Session for the still-current page
-- **THEN** development source relaxes none of CSP, sandbox, Permissions Policy,
-  deadlines, breaker, single-iframe, Host API, or Host-authority boundaries
+- **WHEN** a manual reload of the current development Plugin Page successfully commits a new resource generation
+- **THEN** the Host makes the old attempt terminal and clears all of its authority before creating a fresh attempt, Child WebView, bridge freshness value and Session for the still-current Page
+- **THEN** development source relaxes none of navigation, origin, bridge ACL, deadlines, breaker, single-WebView, Host API or Host-authority boundaries
 
 #### Scenario: Development reload fails before commit
-
-- **WHEN** a new development snapshot becomes invalid, incompatible, unsafe, or
-  unreadable, or loses a revision race before Manager commit
-- **THEN** the current Runtime attempt is neither terminated nor switched to a
-  new generation because of uncommitted input
-- **THEN** failed staging, late callbacks, and diagnostics gain no Resource,
-  Session, or handler authority
-
-### Requirement: Iframe load and Runtime Session handshake MUST have bounded deadlines
-
-The current attempt MUST have a 10,000 millisecond iframe load deadline starting after its navigation lease is active and iframe source is committed, and a 5,000 millisecond Session handshake deadline starting after the bootstrap is sent. The matching load or first exact ready acknowledgement MUST clear only its own deadline. Expiry MUST produce a stable bounded failure, execute terminal cleanup, and MUST NOT automatically retry. Deadlines MUST remain Host-private and deterministically testable; a user retry MUST resolve all current facts again and create a fresh attempt, iframe, nonce, MessageChannel and lease.
-
-#### Scenario: Canonical plugin loads and authenticates before both deadlines
-
-- **WHEN** the current iframe loads within 10 seconds and its Session returns the exact acknowledgement within 5 seconds of bootstrap
-- **THEN** both timers are cleared, the presentation retains the `loaded` distinction, and the Host-private Session enters `ready`
-- **THEN** no timeout timer can later fail that attempt
-
-#### Scenario: Iframe never loads
-
-- **WHEN** the current iframe does not deliver its matching load event within 10 seconds
-- **THEN** the Host reports `runtime_load_timeout`, performs terminal cleanup, and creates no Session
-- **THEN** a late load event cannot change the failed/disposed state or start a handshake
-
-#### Scenario: Session never acknowledges
-
-- **WHEN** a loaded iframe receives the bootstrap but does not return the matching ready acknowledgement within 5 seconds
-- **THEN** the Host reports `runtime_handshake_timeout`, closes both controllable Ports, and performs terminal cleanup
-- **THEN** a late or replayed acknowledgement cannot enter `ready` or create a Port lease
+- **WHEN** a new development snapshot becomes invalid, incompatible, unsafe or unreadable, or loses a revision race before Manager commit
+- **THEN** the current Runtime attempt is neither terminated nor switched to a new generation because of uncommitted input
+- **THEN** failed staging, late callbacks and diagnostics gain no Resource, Session or handler authority
 
 ### Requirement: Repeated Runtime failures MUST open a bounded process-local circuit breaker without automatic restart
 
@@ -155,22 +105,6 @@ The Host MUST count qualifying failures by trusted entry identity and current re
 - **WHEN** replacement creates a new resource generation, or the current generation remains continuously Session-ready for 30 seconds
 - **THEN** the corresponding failure history is cleared without mutating Plugin Manager, quarantine, source, or enabled intent
 - **THEN** unrelated plugin failures do not open or reset this entry's breaker
-
-### Requirement: The Host MUST keep at most one active external Plugin Page iframe in the window
-
-The single-window Page surface MUST contain at most one active external plugin iframe globally and therefore at most one per plugin. Switching targets MUST terminate the current attempt before constructing the next. The Host MUST NOT preload, hide, pool, persist, background, share across Pages, or automatically restore a plugin iframe; Host Pages MUST remain trusted React surfaces without an external Runtime.
-
-#### Scenario: User switches between external Plugin Pages
-
-- **WHEN** navigation selects another available external Plugin Page
-- **THEN** the Host completes terminal disposal of the current attempt before it mounts the next iframe
-- **THEN** observation never finds two current external plugin iframes, Sessions or navigation leases
-
-#### Scenario: User opens a Host Page or returns to Search
-
-- **WHEN** navigation leaves the external Plugin Page for Home, Search or a `lensx.core` Host Page
-- **THEN** the external Runtime is terminated and no hidden/background iframe remains
-- **THEN** the Host Page uses the existing trusted React composition
 
 ### Requirement: Runtime security failures MUST remain bounded, accessible, localized and non-oracular
 
@@ -196,11 +130,11 @@ The Host MUST map Runtime security and lifecycle failures to stable Host-private
 
 ### Requirement: Delivery MUST prove CSP and terminal lifecycle on focused and real WebView paths
 
-Delivery MUST combine Rust response tests, deterministic TypeScript state/race tests, React accessibility/i18n/theme tests, canonical normal and malicious packages, and target macOS WKWebView evidence. It MUST prove production and harness CSP drift protection, allowed module/resource loading, forbidden content classes, no Host/Tauri access, load and handshake deadlines, circuit breaking, exact single iframe, all terminal triggers, zero residual controllable listeners/timers/Ports/leases, late-event inertness, unrelated-plugin stability and zero privileged handler hits. Simulated DOM, source inspection or unit tests MUST NOT replace real WebView CSP and teardown evidence, and real evidence MUST NOT replace deterministic race tests.
+Delivery MUST combine Rust response tests, deterministic TypeScript state/race tests, React accessibility/i18n/theme tests, canonical normal and malicious packages, and target macOS WKWebView evidence. It MUST prove production and harness CSP drift protection, allowed module/resource loading, forbidden content classes, no Host/Tauri access, load and bridge-ready deadlines, circuit breaking, exactly one current Child WebView, all terminal triggers, zero residual controllable listeners, timers, bridge endpoints, Sessions or resource leases, late-event inertness, unrelated-plugin stability and zero privileged handler hits. Simulated DOM, source inspection or unit tests MUST NOT replace real WebView CSP and teardown evidence, and real evidence MUST NOT replace deterministic race tests.
 
 #### Scenario: Complete focused gate passes
 
-- **WHEN** `check:plugin-runtime-security-lifecycle` runs the normal, malicious, slow, never-acknowledge, repeated-failure, reload and replacement matrices together with all prerequisite gates
+- **WHEN** `check:plugin-child-webview-security-lifecycle` runs the normal, malicious, slow, never-ready, repeated-failure, reload and replacement matrices together with all prerequisite gates
 - **THEN** every CSP, deadline, breaker, instance and cleanup assertion passes with bounded evidence on the supported macOS WKWebView
 - **THEN** public package and workspace boundary checks confirm that policy, controller, scheduler, breaker, Session and native response internals remain Host-private
 
@@ -210,26 +144,33 @@ Delivery MUST combine Rust response tests, deterministic TypeScript state/race t
 - **THEN** Task 4.4 remains incomplete and the design/specification is revised
 - **THEN** validation does not substitute CSP `null`, wildcard/remote sources, relaxed CORS, author-controlled policy, automatic retry, hidden Runtime, removed negative cases, or a source-only assertion
 
-### Requirement: Task 4.4 MUST leave SDK transport and later platform capabilities unimplemented
-
-This capability MUST deliver only Host/private document CSP, Runtime lifecycle coordination, Runtime-owned cancellation, deadlines, process-local failure breaking, bounded diagnostics, single-instance enforcement, tests and maintained documentation. It MUST NOT define public SDK iframe transport, JSON-RPC/request IDs, Host API methods or dispatch, native-authority decisions, plugin storage, RPC pending-call cancellation, management UI, development-mode relaxation, background/sidecar execution, remote reporting, general resource quotas, signing, Catalog, Marketplace, or Windows/Linux Runtime support.
-
-#### Scenario: Task 4.4 completes before Task 5.2
-
-- **WHEN** all Task 4.4 validation passes while SDK iframe transport and Host API work remain undelivered
-- **THEN** an isolated local plugin Page can load, authenticate, fail and terminate under bounded CSP/lifecycle rules but still cannot issue a real Host API request
-- **THEN** Runtime-owned cleanup does not create request IDs, RPC envelopes, method schemas, concurrency rules or public transport behavior
-
 ### Requirement: Open execution contexts MUST terminate completely with the Runtime attempt
-
-Every Dedicated Worker, plugin-page-initiated long-lived connection, Blob URL, and other page-owned open Web context MUST be bound to the lifecycle of the current Runtime attempt and resource generation. Close, navigation away, disable, uninstall, replacement, development reload, Session disconnect, breaker activation, Host reload, application unmount, or process exit MUST prevent an old context from continuing to obtain Session, Host, or new-generation authority.
+Every Dedicated Worker, connection, Blob URL and other supported page-owned context MUST be owned by the current Child WebView attempt and generation. Terminal destroy MUST make it terminated or uncontrollable and without Host authority. SharedWorker, ServiceWorker and background contexts that can outlive the Page remain unsupported.
 
 #### Scenario: Page closes while Worker and connection are active
-- **WHEN** the user closes a plugin page that still has a Dedicated Worker and active network work
-- **THEN** iframe teardown terminates its page-owned execution contexts or leaves them uncontrollable and without Host authority
-- **THEN** a new page does not reuse the old Worker, connection, Blob URL, Session, Port, or origin scope
+- **WHEN** the Host destroys a Child WebView whose plugin Page still has a Dedicated Worker and active network work
+- **THEN** teardown terminates its page-owned execution contexts or leaves them uncontrollable and without Host authority
+- **THEN** a new Page does not reuse the old Worker, connection, Blob URL, Session, bridge or origin scope
 
 #### Scenario: Persistent worker is requested
-- **WHEN** a plugin attempts to register a SharedWorker, ServiceWorker, or background context that could outlive the current page or generation
+- **WHEN** a plugin attempts to register a SharedWorker, ServiceWorker or background context that could outlive the current Page or generation
 - **THEN** the current supported baseline rejects or does not claim support for that capability
-- **THEN** the context retains no plugin authority after page close, replacement, or Host restart
+- **THEN** the context retains no plugin authority after Page close, replacement or Host restart
+
+### Requirement: Child WebView load and bridge readiness MUST have bounded deadlines
+Each attempt MUST have a deterministic 10,000 millisecond initial-load deadline and a 5,000 millisecond bridge-ready deadline. The matching current event clears only its own timer. Expiry MUST produce stable `runtime_load_timeout` or `runtime_handshake_timeout`, run terminal cleanup and never retry automatically.
+
+#### Scenario: Child WebView misses load deadline
+- **WHEN** current exact document does not finish loading within 10 seconds
+- **THEN** Host destroys the attempt and a late load event is inert
+
+#### Scenario: Bridge misses ready deadline
+- **WHEN** a loaded WebView does not complete current bridge ready within 5 seconds
+- **THEN** Host destroys WebView, bridge and Session state without automatic restart
+
+### Requirement: Host MUST keep at most one active external Plugin Page Child WebView
+The Launcher MUST contain at most one external plugin Child WebView. Switching to another Page MUST terminally destroy the current attempt before creating the next. Host Pages MUST use the trusted Host WebView; preload, pool, hidden background Runtime and multi-plugin concurrency MUST remain absent.
+
+#### Scenario: User switches plugin Pages
+- **WHEN** navigation selects another external Page
+- **THEN** old Child WebView teardown completes before the new one is created

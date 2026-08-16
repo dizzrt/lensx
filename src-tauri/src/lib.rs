@@ -3,21 +3,27 @@ pub mod launcher_action_collections;
 pub mod launcher_surface;
 pub mod launcher_window;
 use std::sync::Arc;
+use tauri::Manager;
 pub(crate) mod frame_aware_navigation_policy;
 #[cfg(target_os = "macos")]
 pub(crate) mod frame_aware_navigation_setup;
+#[doc(hidden)]
+pub mod plugin_child_webview_adapter;
+pub(crate) mod plugin_child_webview_host_dispatcher;
+pub(crate) mod plugin_child_webview_presentation;
+pub(crate) mod plugin_child_webview_rpc;
+pub(crate) mod plugin_child_webview_service;
+pub(crate) mod plugin_child_webview_slot;
 pub mod plugin_data_management;
 #[cfg(feature = "plugin-development-mode")]
 pub(crate) mod plugin_development;
 #[cfg(feature = "plugin-development-mode")]
 pub(crate) mod plugin_development_directory;
-#[cfg(feature = "plugin-development-runtime-harness")]
-#[doc(hidden)]
-pub mod plugin_development_runtime_harness;
 #[cfg(feature = "plugin-development-mode")]
 pub(crate) mod plugin_development_snapshot;
 #[cfg(test)]
 mod plugin_host_api_contract;
+pub(crate) mod plugin_host_api_validation;
 pub(crate) mod plugin_identity;
 pub mod plugin_installation_contract;
 pub mod plugin_installer;
@@ -31,7 +37,6 @@ pub mod plugin_replacement_contract;
 pub mod plugin_resource_contract;
 pub mod plugin_resource_service;
 pub(crate) mod plugin_resource_url;
-mod plugin_runtime_navigation;
 pub(crate) mod plugin_runtime_security_policy;
 pub mod plugin_scoped_storage;
 
@@ -66,8 +71,14 @@ pub fn run() {
         plugin_registration::read_plugin_registration_snapshot,
         plugin_resource_service::resolve_plugin_resource_entry,
         plugin_scoped_storage::plugin_scoped_storage,
-        plugin_runtime_navigation::activate_plugin_runtime_navigation,
-        plugin_runtime_navigation::dispose_plugin_runtime_navigation
+        plugin_child_webview_host_dispatcher::settle_plugin_child_webview_host_dispatch,
+        plugin_child_webview_host_dispatcher::fail_plugin_child_webview_host_dispatch,
+        plugin_child_webview_host_dispatcher::emit_plugin_child_webview_host_event,
+        plugin_child_webview_presentation::create_plugin_child_webview_presentation,
+        plugin_child_webview_presentation::read_plugin_child_webview_presentation,
+        plugin_child_webview_presentation::set_plugin_child_webview_presentation_visibility,
+        plugin_child_webview_presentation::destroy_plugin_child_webview_presentation,
+        plugin_child_webview_slot::update_plugin_child_webview_slot
     ]);
     #[cfg(feature = "plugin-development-mode")]
     let builder = builder.invoke_handler(tauri::generate_handler![
@@ -96,14 +107,26 @@ pub fn run() {
         plugin_registration::read_plugin_registration_snapshot,
         plugin_resource_service::resolve_plugin_resource_entry,
         plugin_scoped_storage::plugin_scoped_storage,
-        plugin_runtime_navigation::activate_plugin_runtime_navigation,
-        plugin_runtime_navigation::dispose_plugin_runtime_navigation
+        plugin_child_webview_host_dispatcher::settle_plugin_child_webview_host_dispatch,
+        plugin_child_webview_host_dispatcher::fail_plugin_child_webview_host_dispatch,
+        plugin_child_webview_host_dispatcher::emit_plugin_child_webview_host_event,
+        plugin_child_webview_presentation::create_plugin_child_webview_presentation,
+        plugin_child_webview_presentation::read_plugin_child_webview_presentation,
+        plugin_child_webview_presentation::set_plugin_child_webview_presentation_visibility,
+        plugin_child_webview_presentation::destroy_plugin_child_webview_presentation,
+        plugin_child_webview_slot::update_plugin_child_webview_slot
     ]);
-    builder
+    let app = builder
         .setup(|app| {
             #[cfg(target_os = "macos")]
             frame_aware_navigation_setup::setup_frame_aware_navigation_policy(app.handle())?;
             let plugin_manager = plugin_manager::setup_plugin_manager(app.handle());
+            let plugin_child_webview_service =
+                plugin_child_webview_service::setup_plugin_child_webview_service(app.handle());
+            plugin_child_webview_host_dispatcher::setup_plugin_child_webview_host_dispatcher(
+                app.handle(),
+                Arc::clone(&plugin_child_webview_service),
+            );
             #[cfg(feature = "plugin-development-mode")]
             plugin_development::setup_plugin_development_mode(
                 app.handle(),
@@ -111,10 +134,13 @@ pub fn run() {
             );
             let plugin_installer =
                 plugin_installer::setup_plugin_installer(app.handle(), Arc::clone(&plugin_manager));
-            plugin_resource_service::setup_plugin_resource_service(
+            let plugin_resource_service = plugin_resource_service::setup_plugin_resource_service(
                 app.handle(),
                 Arc::clone(&plugin_manager),
                 Arc::clone(&plugin_installer),
+            );
+            debug_assert!(
+                plugin_child_webview_service.attach_resource_authority(plugin_resource_service)
             );
             plugin_scoped_storage::setup_plugin_scoped_storage(
                 app.handle(),
@@ -125,6 +151,18 @@ pub fn run() {
             launcher_window::setup_launcher_window(app.handle());
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+    app.run(|app, event| {
+        if matches!(event, tauri::RunEvent::Exit) {
+            let Some(service) = app.try_state::<
+                Arc<plugin_child_webview_service::PluginChildWebviewService<tauri::Wry>>,
+            >() else {
+                return;
+            };
+            if let Some(snapshot) = service.snapshot() {
+                let _ = service.compare_current_teardown(snapshot.attempt);
+            }
+        }
+    });
 }

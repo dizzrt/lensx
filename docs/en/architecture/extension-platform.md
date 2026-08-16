@@ -6,8 +6,8 @@ This document separates the shipped static plugin Manifest contract, `.lxp`
 package inspection and local installation, Plugin SDK foundation, Plugin
 Testkit, optional Plugin UI package, Host-private Plugin surface projection and
 Page navigation, Host-private lifecycle controls, local package replacement,
-the Host-private scoped resource service, isolated iframe Runtime,
-process-local Runtime Session, public SDK iframe transport, Host-private Port
+the Host-private scoped resource service, isolated Child WebView Runtime,
+process-local Runtime Session, public SDK WebView transport, Host-private bridge
 adapter and public Host API semantic contract from the intended runtime
 extension boundary. The former permission core and native clipboard provider
 have been removed.
@@ -199,7 +199,7 @@ methods require a Host API minor version plus capability discovery; incompatible
 shape or removal requires a major version, and deprecation must precede removal.
 
 This delivery is an independently usable semantic contract, not an execution
-path. It registers no Tauri command and implements no iframe transport, private
+path. It registers no Tauri command and implements no Runtime transport, private
 RPC envelope, request ID, Dispatcher, Action/close side effect, storage
 persistence, native call, or RPC resource limit. Clipboard and
 `system.open_external` are deliberately
@@ -693,91 +693,39 @@ This capability is macOS-only and does not claim Windows or Linux support. The
 Task 4.2 container consumes its exact target lease. The shipped Session below
 also consumes that lease without changing the native policy contract.
 
-## Shipped macOS Isolated Plugin iframe Runtime
+## Shipped macOS Isolated Plugin Child WebView Runtime
 
-An available external Plugin Page now renders one Host-owned
-`PluginRuntimeFrame` in the existing single-window Page slot. A Host-private
-resolver cross-checks the current Page identity, provider, eligible Registration
-entry, Registration revision, Resource response identity, isolated-origin URL,
-and Registry route. It derives the fragment target from the Host route and never
-falls back to a Manifest path, shared host, stale URL, or plugin-supplied iframe
-policy. Explicit retry refreshes the current projection and creates a new
-attempt identity; there is no automatic retry or hidden iframe reuse.
+An available external Plugin Page owns one Host-managed Child WebView inside
+the existing single-window Page surface. React renders trusted chrome and a
+non-interactive `PluginRuntimeSlot`; Host-private presentation code reports its
+physical bounds, visibility, and revision to Rust. The native service validates
+the current Page, Registration, resource generation, route, attempt, window,
+and slot revision before it creates or updates the Child WebView. Plugins cannot
+choose native bounds, labels, configuration, navigation policy, or data stores.
 
-The container fixes `sandbox="allow-scripts allow-same-origin"`,
-`referrerPolicy="no-referrer"`, and a deny list for camera, microphone,
-geolocation, fullscreen, clipboard, display capture, payment, USB, serial, HID,
-Bluetooth, and screen wake lock. Native lease activation completes before the
-iframe receives `src`. Close, Registry invalidation, replacement, retry, return
-to home/search, and App teardown remove the iframe and compare-current dispose
-its lease. At most one plugin iframe exists; Host Pages remain trusted React
-surfaces.
+Each attempt has an isolated origin and generation-bound resource authority.
+The main Host WebView and plugin Child WebView use separate navigation policies:
+the plugin document may load its exact package entry and current-origin
+resources, but top-level escape, popup, download, and native authority remain
+closed. Close, retry, replacement, navigation away, invalidation, App teardown,
+and fatal bridge failure converge on compare-current terminal destruction.
+Semantic-equivalent Launcher hide/restore retains the same attempt; at most one
+external Plugin Page Child WebView exists.
 
-The UI exposes localized `resolving`, `loading`, `loaded`, and bounded failure
-states with an explicit accessible retry. `loaded` means only that the iframe
-load event fired. It is not SDK or Session `ready`, and this capability adds no
-readiness claim by itself. The downstream Session capability adds only its
-private MessagePort bootstrap. The security lifecycle described below adds
-deadlines, bounded crash-loop recovery, and CSP without introducing JSON-RPC,
-Host API, or permission dispatch. Plugin Runtime resolver, Resource and
-Registration adapters, iframe policy, native lease boundary, and origin facts
-remain Host-private and are blocked from public packages and plugin workspaces.
+The UI exposes localized resolving, loading, ready, and bounded failure states
+with an accessible retry. Native load completion, private bridge readiness, and
+SDK readiness are separate facts. The Host installs a per-WebView closed bridge
+before document creation; native ingress supplies the actual WebView identity,
+and the Host accepts only the current label, attempt, generation, nonce, and
+strict transport frame. The bridge exposes no general Tauri command/event,
+window, WebView, identity, origin, path, or native handle authority.
 
-Run `pnpm run check:plugin-iframe-runtime` for the resolver, component,
-navigation lease, Page/lifecycle/replacement/resource regressions, real
-normal/malicious/replacement `.lxp` evidence, both prerequisite gates, and
-workspace boundary checks. The real WKWebView evidence is macOS-only; no
-Windows or Linux Runtime support is claimed.
-
-## Shipped Host-Private Plugin Runtime Session
-
-After the current iframe reports `load`, `PluginRuntimeFrame` passes only its
-actual `contentWindow` and the Host-derived descriptor to the process-local
-`PluginRuntimeSessionService`. The resolver converges Registration summary and
-detail, Page route, Resource entry, and current revision, then binds an immutable
-identity containing the opaque entry, plugin/version/Page, isolated origin and
-resource generation, and Runtime attempt. Manifest data, source, publisher
-text, enabled text, and plugin messages cannot create or replace identity.
-
-For each attempt the Host creates a new 128-bit lowercase hexadecimal nonce and
-`MessageChannel`, sends the exact private `0.1.0` bootstrap only to the recorded
-window and exact isolated `targetOrigin`, and transfers the child Port once.
-Only the first exact ready acknowledgement received on the Host Port with the
-same nonce changes the Session from `awaiting_handshake` to `ready`. The
-bootstrap and acknowledgement contain no plugin, entry, Page, grant, revision,
-resource token, URL, or Host object. Invalid Port input, duplicate or late
-acknowledgements, `messageerror`, Host reload, or current-fact loss disconnects
-the Session without an oracle or automatic reconnect.
-
-Currentness compares the affected entry, Page, version, origin/generation,
-attempt, and availability after each Registration invalidation. A
-change to those facts revokes the old Session, Port, iframe, and navigation
-lease. A global revision change caused only by another plugin retains all four;
-the revision is a race detector, not a Session generation. Close, retry,
-replacement, navigation to Home/Search/a Host Page, and App unmount perform
-idempotent terminal cleanup. Sessions, nonces, Ports, window references, and
-message state are never persisted, and Registration continues to report only
-`inactive` after process recovery.
-
-Four readiness layers remain distinct:
-
-1. iframe `loaded` means only browser load completion;
-2. Session `ready` means only that the current window/origin/nonce/Port binding
-   authenticated;
-3. transport connected means the shipped iframe transport adopted that Port,
-   acknowledged the nonce, and uses only the Port for later frames;
-4. SDK `ready` means `runtime.get_context` returned a Contract-valid compatible
-   Runtime context; it still does not mean a production Host method executed.
-
-The Session contract, parser, adapters, identity, and Port lease remain private
-to the root Host and are excluded from Contract, SDK, UI, Testkit, official,
-example, and external plugin imports and tarballs. This capability itself
-defines no public wire or Host adapter, permission decision or UI, privileged
-dispatch, plugin storage, background Runtime, sidecar, or Windows/Linux
-support. The shipped SDK transport and Host adapter consume this private lease
-without changing the Session contract. The security lifecycle adds the private
-handshake deadline and cleanup described next. Run `pnpm run check:plugin-runtime-session` for focused logic/React,
-real package, boundary, prerequisite, and bounded real macOS WKWebView evidence.
+Run `pnpm run check:plugin-child-webview-runtime` for the slot, origin/resource
+binding, open-Web capability baseline, navigation policy, terminal lifecycle,
+ACL matrix, current fixtures, and workspace boundaries. Run
+`pnpm run check:plugin-child-webview-session` for readiness, RPC, Host dispatch,
+and cleanup. The real WKWebView evidence is macOS-only; no Windows or Linux
+Runtime support is claimed.
 
 ## Shipped Plugin Runtime CSP And Security Lifecycle
 
@@ -834,13 +782,13 @@ Visible failures use only `runtime_load_timeout`,
 `runtime_security_policy_failure`, `runtime_crash_loop`, or
 `runtime_unavailable`, with canonical English and equivalent Simplified
 Chinese copy in the existing accessible feedback surface. Diagnostics and
-evidence exclude full or blocked URLs, origin/scope values, paths, nonce/Port
+evidence exclude full or blocked URLs, origin/scope values, paths, nonce/bridge
 content, payloads, storage values, raw exceptions, and stacks; there is
 no remote CSP reporting channel. The committed real WKWebView matrices are
-macOS-only. The public SDK iframe transport does not inherit these Host-private
+macOS-only. The public SDK WebView transport does not inherit these Host-private
 attempts, timers, breaker records, or failure codes. Run
 `pnpm run check:open-isolated-plugin-runtime` for the composed
-gate and its Resource, origin, navigation, iframe, Session, workspace, and
+gate and its Resource, origin, navigation, Child WebView, Session, workspace, and
 public-tarball prerequisites.
 
 ## Shipped Host-Private Plugin Surface Projection And Page Navigation
@@ -906,15 +854,15 @@ provider fallback.
 Production composition initializes this coordinator, refreshes it on Launcher
 activation and listener recovery, and destroys the same subscription on
 cleanup. An available Plugin Page passes its current resolution to the shipped
-Host-private iframe Runtime resolver. Surface projection still does not expose
+Host-private Child WebView Runtime resolver. Surface projection still does not expose
 routes, entry IDs, revisions, origin facts, resource URLs, or native objects to
 plugins. The Host-private management capability consumes these facts without
 changing surface projection; decision history remains outside the platform.
 
-## Shipped Public Plugin SDK And iframe Transport
+## Shipped Public Plugin SDK And WebView Transport
 
-lensX ships the framework-neutral `@lensx/plugin-sdk@0.2.0` workspace package.
-The package has public root and `@lensx/plugin-sdk/iframe` entries and depends only on
+lensX ships the framework-neutral `@lensx/plugin-sdk@0.3.0` workspace package.
+The package has public root and `@lensx/plugin-sdk/webview` entries and depends only on
 `@lensx/plugin-contract` at Runtime. Undeclared deep imports are unsupported,
 and its public declarations do not require React, Semi Design, Tauri, DOM
 globals, Node filesystem types, or Host-private modules.
@@ -925,7 +873,7 @@ version facts:
 
 | Export | Meaning |
 | --- | --- |
-| `PLUGIN_SDK_VERSION` | The SDK package and public API version, currently `0.2.0`. |
+| `PLUGIN_SDK_VERSION` | The SDK package and public API version, currently `0.3.0`. |
 | `PLUGIN_SDK_SUPPORTED_HOST_API_RANGE` | The half-open supported Host API range, currently `>=0.2.0 <0.3.0`. |
 | `PLUGIN_HOST_API_VERSION` | Not re-exported by the SDK; the current Host API version remains owned by `@lensx/plugin-contract`. |
 
@@ -980,17 +928,13 @@ becomes `client.context` before subscribers run. Contract-valid Host API errors
 remain distinct from SDK cancellation, timeout, disconnect, disposal, invalid
 argument, and transport failures.
 
-`createPluginIframeTransport()` has no trust configuration. It accepts one
-exact current-parent bootstrap from the SDK-owned Host origin policy, returns
-the existing nonce acknowledgement once, and then uses only the transferred
-Port. The policy includes the production Tauri origins, the exact configured
-`http://localhost:40755` development origin, and private real-WebView harness
-origin; neighboring localhost ports remain rejected. Its package-private
-`0.1.0` wire has exact request, response, event,
-cancel, and disconnect frames with transport-owned bounded request IDs. It
-contains no plugin/Page identity, origin, path, executor, Tauri object,
-Host object, stack, or raw exception. The package does not export the frame,
-codec, fixture, Host projection, nonce/origin policy, or a deep-import path.
+`createPluginWebviewTransport()` has no trust configuration. It discovers only
+the Host-installed current bridge and validates the closed `0.2.0` carrier
+contract. The bridge uses exact ready, request, response, event, cancel, and
+disconnect frames with transport-owned bounded request IDs. It contains no
+plugin/Page identity, origin, path, executor, Tauri object, Host object, stack,
+or raw exception. The package does not export bridge globals, frame codecs,
+fixtures, Host projection, nonce policy, native labels, or a deep-import path.
 
 The Host consumes each ready lease at most once. Its private adapter injects
 the immutable Session identity and a Host-owned cancellation signal into a
@@ -1179,11 +1123,11 @@ The root plugin composition is the sole lifecycle owner for the shared
 management, plugin lifecycle, Runtime lifecycle, replacement, and
 Registration-projection services. Each React effect setup creates and
 initializes one composition generation, and its paired cleanup destroys only
-that generation. `App`, `PluginRuntimeFrame`, and the Settings component consume
+that generation. `App`, `PluginRuntimeSlot`, and the Settings component consume
 injected services without terminally disposing them. This keeps development
 `StrictMode` setup-cleanup-setup cycles from reusing a destroyed service and
 leaving either management in `loading` or Runtime resolution permanently in
-`resolving` before an iframe exists.
+`resolving` before a Child WebView exists.
 
 Replacement remains a prepare/confirm/commit flow. Its confirmation exposes
 the version classification and trust boundary, and becomes
@@ -1251,7 +1195,7 @@ shared closed method type and are not ordinary Web capability declarations.
 Contract -> SDK -> Testkit dependency direction, real tarball contents, and a
 no-DOM ES2022 consumer installed outside the workspace. That consumer is a
 release smoke fixture, not the formal plugin project template. Testkit does not
-provide iframe Runtime, plugin execution, or real Host API execution; later
+provide a native Runtime container, plugin execution, or real Host API execution; later
 transport and Runtime changes may extend
 the package only after their contracts are accepted.
 
@@ -1406,10 +1350,10 @@ side-effect provider.
 The intended communication flow is:
 
 ```text
-iframe
-  -> typed Plugin SDK over the authenticated Port
+Child WebView
+  -> typed Plugin SDK over the source-bound bridge
   -> private closed request/response/event/cancel wire
-  -> Host Port adapter with Session-derived identity
+  -> Host bridge adapter with Session-derived identity
   -> Session-scoped Host-private Dispatcher
   -> Context / matching Page close / current plugin Action / scoped storage
 ```
@@ -1446,8 +1390,8 @@ The static Manifest format, validators, Host-private local installation and
 same-identity replacement, revision-bound enable/disable/uninstall
 infrastructure, scoped package-relative resources, Plugin surface projection,
 production Action activation, Page Registry/navigation, the macOS isolated
-iframe Runtime, Host-private process-local Runtime Session, public SDK iframe
-transport/Host Port adapter, public Host API semantic contract, and the
+Child WebView Runtime, Host-private process-local Runtime Session, public SDK WebView
+transport/Host bridge adapter, public Host API semantic contract, and the
 Host-private RPC v1 validation boundary, Dispatcher, plugin-scoped storage
 provider, open isolated Web Runtime, Plugin Management Settings, public project
 templates and CLI, feature-gated

@@ -178,7 +178,7 @@ describe('Plugin development service', () => {
     expect(service.current().feedback).toEqual({ kind: 'status', code: 'registered' });
   });
 
-  test('quiesces reload/remove/mode shutdown before native mutation and reconciles cleanup-pending commits', async () => {
+  test('stages reload before quiescing the old Child WebView and reconciles cleanup-pending commits', async () => {
     const operations: string[] = [];
     const reload = rs.fn(async () => {
       operations.push('native:reload');
@@ -199,11 +199,11 @@ describe('Plugin development service', () => {
     });
     await service.initialize();
     await service.reload(entryId, '1');
-    expect(operations).toEqual([`quiesce:${pluginId}`, 'native:reload', `reconcile:2:${pluginId}`, 'idle']);
+    expect(operations).toEqual(['native:reload', `quiesce:${pluginId}`, `reconcile:2:${pluginId}`, 'idle']);
     expect(service.current().feedback).toEqual({ kind: 'status', code: 'cleanup_pending' });
   });
 
-  test('restores the old projection after stable native conflict and suppresses late publications after destroy', async () => {
+  test('leaves the current Child WebView untouched after failed staging and suppresses late publications after destroy', async () => {
     const operations: string[] = [];
     const conflict = new PluginDevelopmentError({
       code: 'conflict',
@@ -217,10 +217,10 @@ describe('Plugin development service', () => {
     });
     await service.initialize();
     await service.reload(entryId, '1');
-    expect(operations).toEqual([`quiesce:${pluginId}`, `reconcile:1:${pluginId}`, 'idle']);
+    expect(operations).toEqual([]);
     expect(service.current().feedback).toEqual({ kind: 'error', code: 'conflict' });
     service.destroy();
     await service.remove(entryId, '1');
-    expect(operations).toHaveLength(3);
+    expect(operations).toHaveLength(0);
   });
 });

@@ -44,6 +44,19 @@ for (const file of sourceFiles) {
   if (/\b(?:fetch|WebSocket|XMLHttpRequest)\s*\(/u.test(source)) {
     throw new Error(`privacy/network: ${file.slice(root.length + 1)}`);
   }
+  if (/@lensx\/plugin-sdk\/iframe|createPluginIframeTransport/u.test(source)) {
+    throw new Error(`runtime/legacy-iframe-transport: ${file.slice(root.length + 1)}`);
+  }
+  if (/__LENSX_PLUGIN_WEBVIEW_BRIDGE__|PluginChildWebview|PluginWebviewBridge/u.test(source)) {
+    throw new Error(`runtime/private-native-bridge: ${file.slice(root.length + 1)}`);
+  }
+}
+const appSource = await readFile(resolve(root, 'src/App.tsx'), 'utf8');
+if (
+  !appSource.includes("import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview';") ||
+  !appSource.includes('createTransport = createPluginWebviewTransport')
+) {
+  throw new Error('runtime/public-webview-entry: ConfigLens must use the public SDK WebView transport by default.');
 }
 const controllerSource = await readFile(resolve(root, 'src/language/controller.ts'), 'utf8');
 const workerSource = await readFile(resolve(root, 'src/language/language.worker.ts'), 'utf8');

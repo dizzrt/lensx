@@ -27,7 +27,7 @@ describe('Plugin UI public package boundary', () => {
     expect(metadata.sideEffects).toEqual(['./dist/styles.css']);
     expect(metadata.dependencies).toEqual({ '@douyinfe/semi-ui': '^2.101.1' });
     expect(metadata.peerDependencies).toEqual({
-      '@lensx/plugin-sdk': '^0.2.0',
+      '@lensx/plugin-sdk': '^0.3.0',
       react: '^19.2.7',
       'react-dom': '^19.2.7',
     });
@@ -75,5 +75,21 @@ describe('Plugin UI public package boundary', () => {
       'Runtime import @tauri-apps/api is not declared in dependencies or peerDependencies.',
     );
     expect(diagnostics).toContain('Forbidden public declaration reference: src/app/.');
+
+    const containerLeak = validatePackedPackage({
+      declarationSources: ['export interface Leaked { handle: PluginChildWebviewHandle; port: MessagePort }'],
+      files,
+      metadata,
+      rootDeclaration,
+      runtimeImports: ['@lensx/plugin-sdk/webview'],
+      styles: `${styles}\n.semi-button { display: inline-flex; }`,
+    });
+    expect(containerLeak).toEqual(
+      expect.arrayContaining([
+        'Forbidden public declaration reference: MessagePort.',
+        'Forbidden public declaration reference: PluginChildWebview.',
+        'Plugin UI must not import a container-specific SDK entry: @lensx/plugin-sdk/webview.',
+      ]),
+    );
   });
 });

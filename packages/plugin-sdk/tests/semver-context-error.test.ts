@@ -1,10 +1,15 @@
 import { describe, expect, test } from '@rstest/core';
-
+import { PLUGIN_SDK_SUPPORTED_HOST_API_RANGE, PLUGIN_SDK_VERSION } from '../src/constants.js';
 import { validateRuntimeContext } from '../src/context.js';
 import { PluginSdkError, toPluginSdkError } from '../src/error.js';
 import { compareSemVer, isSupportedHostApiVersion, parseSemVer } from '../src/semver.js';
 
 describe('SemVer and Host API compatibility', () => {
+  test('freezes SDK 0.3.0 independently from the Host API 0.2.x range', () => {
+    expect(PLUGIN_SDK_VERSION).toBe('0.3.0');
+    expect(PLUGIN_SDK_SUPPORTED_HOST_API_RANGE).toBe('>=0.2.0 <0.3.0');
+  });
+
   test('parses boundaries and follows prerelease precedence', () => {
     const alpha = parseSemVer('0.1.0-alpha.2');
     const beta = parseSemVer('0.1.0-alpha.10');

@@ -27,12 +27,12 @@ pnpm install
 插件版本。compatibility 分别为 lensX 和 Host API 声明半开 range。publisher field 是未验证作者文本。
 
 starter 不包含 permission 字段。它贡献一个 Page、一个指向该 Page 的 Action，以及 launcher
-default action。iframe entry 与每个 icon/resource path 都必须是 package-relative 且存在于 `dist/`。
+default action。WebView entry 与每个 icon/resource path 都必须是 package-relative 且存在于 `dist/`。
 Page/Action ID 只在插件内有效。Contract validation 不会安装、注册、授权或执行这些声明。
 
 ## Runtime 生命周期
 
-`src/runtime.ts` 通过 `createPluginIframeTransport` 为每个 attempt 创建一个 SDK client，初始化，
+`src/runtime.ts` 通过 `createPluginWebviewTransport` 为每个 attempt 创建一个 SDK client，初始化，
 发布 loading/ready/error，并监听完整 `runtime.context_changed` replacement。retry 先使旧 attempt
 失效并 dispose，再创建 fresh client。
 

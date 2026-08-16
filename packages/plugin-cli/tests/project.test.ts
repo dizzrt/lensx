@@ -81,7 +81,12 @@ describe('plugin project discovery and build', () => {
       resolve(project, 'build.mjs'),
       "import { cp } from 'node:fs/promises'; await cp('payload/dist', 'dist', { recursive: true });\n",
     );
-    await expect(buildPluginProject({ cwd: project, json: true })).resolves.toEqual({ project: '.', dist: 'dist' });
+    await expect(buildPluginProject({ cwd: project, json: true })).resolves.toMatchObject({
+      project: '.',
+      dist: 'dist',
+      plugin_id: 'com.acme.workspace',
+      runtime_kind: 'webview',
+    });
     await expect(lstat(resolve(project, 'dist/manifest.json'))).resolves.toMatchObject({ size: expect.any(Number) });
   });
 
@@ -126,6 +131,34 @@ describe('read-only plugin project validation', () => {
     incompatible.compatibility.lensx = { min_version: '0.2.0', max_version_exclusive: '0.3.0' };
     const project = await writeProject({ manifest: incompatible });
     expect((await validatePluginProject(project)).inspection.status).toBe('incompatible');
+  });
+
+  test.each([
+    ['Manifest 0.2', { manifest_version: '0.2.0' }, undefined],
+    ['iframe Runtime', { runtime: { ...baseManifest.runtime, kind: 'iframe' } }, undefined],
+    [
+      'iframe SDK import',
+      {},
+      "import { createPluginIframeTransport } from '@lensx/plugin-sdk/iframe';\nvoid createPluginIframeTransport;\n",
+    ],
+  ])('rejects legacy %s before build and never rewrites the project', async (_name, manifestPatch, source) => {
+    const legacyManifest = { ...structuredClone(baseManifest), ...manifestPatch };
+    const project = await writeProject({ manifest: legacyManifest });
+    await writeFile(resolve(project, 'manifest.json'), `${JSON.stringify(legacyManifest)}\n`);
+    if (source !== undefined) await writeFile(resolve(project, 'src/index.ts'), source);
+    const before = await bytesSnapshot(project);
+
+    for (const operation of [
+      () => buildPluginProject({ cwd: project, json: true }),
+      () => validatePluginProject(project),
+    ]) {
+      await expect(operation()).rejects.toMatchObject({
+        status: 'incompatible',
+        diagnostics: [expect.objectContaining({ code: 'CLI_LEGACY_IFRAME_RUNTIME' })],
+      });
+      expect(await bytesSnapshot(project)).toEqual(before);
+    }
+    expect(await readdir(project)).not.toEqual(expect.arrayContaining(['build-count', 'artifacts']));
   });
 
   test.each([

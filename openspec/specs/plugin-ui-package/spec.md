@@ -3,9 +3,7 @@
 ## Purpose
 
 Define the stable public contract for the optional `@lensx/plugin-ui` package, including its constrained exports, Runtime context adaptation, semantic theme tokens, accessible page and feedback components, plugin-owned Runtime dependencies, and complete release validation, without claiming delivery of a Host plugin Runtime.
-
 ## Requirements
-
 ### Requirement: The system MUST provide an optional constrained public Plugin UI package
 
 The system MUST provide the public `@lensx/plugin-ui@0.1.0` workspace package, which MUST be independently buildable, testable, and packable. The package MUST expose only one JavaScript root entry and one `@lensx/plugin-ui/styles.css` style entry; package resolution MUST reject undeclared deep imports. The public JavaScript entry MUST provide only `PluginUiProvider`, `PluginPage`, `PluginFeedback`, and their public types, and MUST NOT re-export the complete Semi Design API, Host React Context, Host-private components, `src/app/**`, Tauri adapters, or Host-private styles.
@@ -170,4 +168,15 @@ The UI package MUST declare meaningful `build`, `typecheck`, `test`, `check`, an
 
 - **WHEN** a developer reads the English or Simplified Chinese plugin architecture and workspace documentation
 - **THEN** both languages describe the React and non-React consumption paths, public components and tokens, style import, and plugin-owned dependencies with equivalent semantics
-- **THEN** the documentation does not describe the UI package as an already implemented iframe Runtime, Host API, installer, Testkit, or plugin execution capability
+- **THEN** the documentation does not describe the UI package as an independently implemented native plugin Runtime, Host API, installer, Testkit, or plugin execution capability
+
+### Requirement: Plugin UI MUST remain document-local inside the Child WebView
+`@lensx/plugin-ui` MUST continue to consume only validated public Runtime Context and plugin-owned React/Semi dependencies inside the plugin document. It MUST NOT access Host DOM, native slot/bounds, Child WebView handles, bridge frames, Tauri APIs or Host navigation. Its theme, locale, accessibility and feedback behavior MUST work when rendered as the top-level Child WebView document.
+
+#### Scenario: Plugin UI renders in current Child WebView
+- **WHEN** a plugin supplies validated Runtime Context to `PluginUiProvider`
+- **THEN** components adapt locale/theme within the plugin document without native or Host authority
+
+#### Scenario: Package declarations are inspected
+- **WHEN** public tarball boundaries are checked
+- **THEN** no Runtime container, bridge or Host-private type leaks through Plugin UI exports

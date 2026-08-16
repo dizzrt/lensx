@@ -12,6 +12,18 @@
     "expected": "incompatible"
   },
   {
+    "name": "legacy_manifest_protocol",
+    "manifest": "legacy_manifest",
+    "paths": ["manifest.json", "dist/plugin.html", "assets/plugin-icon.svg", "assets/home.svg"],
+    "expected": "incompatible"
+  },
+  {
+    "name": "legacy_iframe_runtime",
+    "manifest": "legacy_iframe",
+    "paths": ["manifest.json", "dist/plugin.html", "assets/plugin-icon.svg", "assets/home.svg"],
+    "expected": "incompatible"
+  },
+  {
     "name": "invalid_manifest",
     "manifest": "invalid",
     "paths": ["manifest.json", "dist/plugin.html", "assets/plugin-icon.svg", "assets/home.svg"],

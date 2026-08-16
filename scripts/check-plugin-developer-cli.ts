@@ -55,6 +55,13 @@ const parseEnvelope = (output: string, command: string) => {
   return value;
 };
 
+const requireWebviewResult = (envelope: Record<string, unknown>, command: string): void => {
+  const result = envelope.result;
+  if (result === null || typeof result !== 'object' || (result as Record<string, unknown>).runtime_kind !== 'webview') {
+    throw new Error(`${command} did not report the WebView Runtime.`);
+  }
+};
+
 const overridesFor = (packed: ReadonlyMap<string, string>) =>
   [
     'overrides:',
@@ -166,9 +173,11 @@ try {
       ],
       toolingRoot,
     );
-    if (create.status !== 0 || parseEnvelope(create.stdout, 'create').status !== 'success') {
+    const createEnvelope = parseEnvelope(create.stdout, 'create');
+    if (create.status !== 0 || createEnvelope.status !== 'success') {
       throw new Error(`CLI create failed for ${template}.\n${create.stdout}\n${create.stderr}`);
     }
+    requireWebviewResult(createEnvelope, 'create');
     const negativeCreate = runResult(
       cliBin,
       ['create', projectRoot, '--template', template, '--plugin-id', 'invalid', '--name', 'Invalid', '--json'],
@@ -188,15 +197,25 @@ try {
       });
     }
 
+    const build = runResult(cliBin, ['build', '--project', projectRoot, '--json'], toolingRoot);
+    const buildEnvelope = parseEnvelope(build.stdout, 'build');
+    if (build.status !== 0 || buildEnvelope.status !== 'success') {
+      throw new Error(`CLI build failed for ${template}.\n${build.stdout}\n${build.stderr}`);
+    }
+    requireWebviewResult(buildEnvelope, 'build');
+
     const validate = runResult(cliBin, ['validate', '--project', projectRoot, '--json'], toolingRoot);
-    if (validate.status !== 0 || parseEnvelope(validate.stdout, 'validate').status !== 'compatible') {
+    const validateEnvelope = parseEnvelope(validate.stdout, 'validate');
+    if (validate.status !== 0 || validateEnvelope.status !== 'compatible') {
       throw new Error(`CLI validate failed for ${template}.\n${validate.stdout}\n${validate.stderr}`);
     }
+    requireWebviewResult(validateEnvelope, 'validate');
     const firstPack = runResult(cliBin, ['pack', '--project', projectRoot, '--no-build', '--json'], toolingRoot);
     const firstSummary = parseEnvelope(firstPack.stdout, 'pack') as {
       result: { output: string; package_digest: unknown };
     };
     if (firstPack.status !== 0) throw new Error(`First CLI pack failed for ${template}.`);
+    requireWebviewResult(firstSummary, 'pack');
     const packagePath = resolve(projectRoot, firstSummary.result.output);
     const firstBytes = await readFile(packagePath);
     const secondPack = runResult(cliBin, ['pack', '--project', projectRoot, '--no-build', '--json'], toolingRoot);
@@ -210,9 +229,11 @@ try {
     if (!firstBytes.equals(await readFile(packagePath)))
       throw new Error(`Repeat package bytes drifted for ${template}.`);
     const inspect = runResult(cliBin, ['inspect', packagePath, '--json'], toolingRoot);
-    if (inspect.status !== 0 || parseEnvelope(inspect.stdout, 'inspect').status !== 'compatible') {
+    const inspectEnvelope = parseEnvelope(inspect.stdout, 'inspect');
+    if (inspect.status !== 0 || inspectEnvelope.status !== 'compatible') {
       throw new Error(`CLI inspect failed for ${template}.`);
     }
+    requireWebviewResult(inspectEnvelope, 'inspect');
 
     const packInsideDist = runResult(
       cliBin,
@@ -237,6 +258,23 @@ try {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
     };
+    const generatedManifest = JSON.parse(await readFile(resolve(projectRoot, 'manifest.json'), 'utf8')) as {
+      manifest_version?: unknown;
+      runtime?: { kind?: unknown };
+    };
+    if (generatedManifest.manifest_version !== '0.3.0' || generatedManifest.runtime?.kind !== 'webview') {
+      throw new Error(`${template} generated a legacy Manifest.`);
+    }
+    const generatedSources = [
+      await readFile(resolve(projectRoot, template === 'react-semi' ? 'src/App.tsx' : 'src/main.ts'), 'utf8'),
+    ].join('\n');
+    if (
+      !generatedSources.includes('@lensx/plugin-sdk/webview') ||
+      !generatedSources.includes('createPluginWebviewTransport') ||
+      /plugin-sdk\/iframe|createPluginIframeTransport/u.test(generatedSources)
+    ) {
+      throw new Error(`${template} generated a legacy SDK lifecycle.`);
+    }
     for (const dependency of Object.keys({
       ...generatedMetadata.dependencies,
       ...generatedMetadata.devDependencies,
@@ -246,7 +284,69 @@ try {
         throw new Error(`${template} dependency ${dependency} links back to the checkout.`);
       }
     }
+
+    const legacyManifest = {
+      ...generatedManifest,
+      manifest_version: '0.2.0',
+      runtime: { ...(generatedManifest.runtime ?? {}), kind: 'iframe' },
+    };
+    const legacyManifestBytes = `${JSON.stringify(legacyManifest, null, 2)}\n`;
+    await writeFile(resolve(projectRoot, 'manifest.json'), legacyManifestBytes);
+    const beforeLegacyDist = await readFile(resolve(projectRoot, 'dist/manifest.json'));
+    const beforeLegacyArtifact = await readFile(packagePath);
+    for (const command of [
+      ['build', '--project', projectRoot, '--json'],
+      ['validate', '--project', projectRoot, '--json'],
+      ['pack', '--project', projectRoot, '--json'],
+    ]) {
+      const legacyResult = runResult(cliBin, command, toolingRoot);
+      const legacyEnvelope = parseEnvelope(legacyResult.stdout, command[0] ?? 'unknown') as {
+        status?: unknown;
+        diagnostics?: Array<{ code?: unknown; message_key?: unknown }>;
+      };
+      if (
+        legacyResult.status !== 1 ||
+        legacyEnvelope.status !== 'incompatible' ||
+        !legacyEnvelope.diagnostics?.some(
+          ({ code, message_key }) =>
+            code === 'CLI_LEGACY_IFRAME_RUNTIME' && message_key === 'legacy_runtime_incompatible',
+        )
+      ) {
+        throw new Error(`${template} legacy ${command[0]} classification drifted.`);
+      }
+      if ((await readFile(resolve(projectRoot, 'manifest.json'), 'utf8')) !== legacyManifestBytes) {
+        throw new Error(`${template} legacy ${command[0]} rewrote the author Manifest.`);
+      }
+      if (!(await readFile(resolve(projectRoot, 'dist/manifest.json'))).equals(beforeLegacyDist)) {
+        throw new Error(`${template} legacy ${command[0]} executed or rewrote build output.`);
+      }
+      if (!(await readFile(packagePath)).equals(beforeLegacyArtifact)) {
+        throw new Error(`${template} legacy ${command[0]} replaced the existing artifact.`);
+      }
+    }
     packageOutputs.push(packagePath);
+  }
+
+  const legacyPackage = resolve(toolingRoot, 'legacy-iframe-runtime.lxp');
+  await cp(
+    resolve(repositoryRoot, 'fixtures/plugin-package-format/incompatible/legacy-iframe-runtime.lxp'),
+    legacyPackage,
+  );
+  const legacyInspect = runResult(cliBin, ['inspect', legacyPackage, '--json'], toolingRoot);
+  const legacyInspectEnvelope = parseEnvelope(legacyInspect.stdout, 'inspect') as {
+    status?: unknown;
+    result?: unknown;
+    diagnostics?: Array<{ code?: unknown; message_key?: unknown }>;
+  };
+  if (
+    legacyInspect.status !== 1 ||
+    legacyInspectEnvelope.status !== 'incompatible' ||
+    JSON.stringify(legacyInspectEnvelope.result) !== '{}' ||
+    !legacyInspectEnvelope.diagnostics?.some(
+      ({ code, message_key }) => code === 'CLI_LEGACY_IFRAME_RUNTIME' && message_key === 'legacy_runtime_incompatible',
+    )
+  ) {
+    throw new Error('CLI legacy iframe package inspection classification drifted.');
   }
 
   run(

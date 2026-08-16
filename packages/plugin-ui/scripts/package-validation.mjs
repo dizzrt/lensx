@@ -83,6 +83,9 @@ export const validatePackedPackage = ({
     if (!Object.hasOwn(runtimeOwners, packageName)) {
       diagnostics.push(`Runtime import ${specifier} is not declared in dependencies or peerDependencies.`);
     }
+    if (specifier.startsWith('@lensx/plugin-sdk/')) {
+      diagnostics.push(`Plugin UI must not import a container-specific SDK entry: ${specifier}.`);
+    }
   }
 
   const declarations = declarationSources.join('\n');
@@ -100,6 +103,16 @@ export const validatePackedPackage = ({
     'TableProps',
     'FormProps',
     'ModalProps',
+    'HTMLIFrameElement',
+    'MessagePort',
+    'postMessage',
+    'PluginChildWebview',
+    'PluginWebviewBridge',
+    '__LENSX_PLUGIN_WEBVIEW_BRIDGE__',
+    'createPluginWebviewTransport',
+    'source_label',
+    'native_handle',
+    'entry_url',
   ]) {
     if (declarations.includes(forbidden)) {
       diagnostics.push(`Forbidden public declaration reference: ${forbidden}.`);

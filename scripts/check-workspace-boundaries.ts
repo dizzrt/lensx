@@ -64,8 +64,6 @@ const AUTHORING_TOOL_NODE_BUILTINS = new Set([
   'node:process',
   'node:url',
 ]);
-const PORTABLE_LENSX_SEMVER = /^(?:\^|~)?0\.2\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
-
 const toPosixPath = (value: string): string => value.split(sep).join('/');
 
 const isWithin = (parent: string, child: string): boolean => {
@@ -313,10 +311,14 @@ const validatePackageDependencies = (
       }
 
       const targetMember = membersByName.get(dependencyName);
+      const expectedPortableVersion =
+        targetMember?.kind === 'public-package' && typeof targetMember.manifest.version === 'string'
+          ? `^${targetMember.manifest.version}`
+          : undefined;
       if (
         TEMPLATE_PACKAGE_NAMES.has(member.name) &&
         dependencyName.startsWith('@lensx/plugin-') &&
-        !PORTABLE_LENSX_SEMVER.test(dependencyVersion)
+        dependencyVersion !== expectedPortableVersion
       ) {
         diagnostics.push(
           diagnostic(
@@ -324,7 +326,7 @@ const validatePackageDependencies = (
             WORKSPACE_BOUNDARY_RULES.pluginPortableDependency,
             member.manifestPath,
             `${dependencyName}@${dependencyVersion}`,
-            'Plugin project templates must use ordinary SemVer for public lensX packages.',
+            'Plugin project templates must use the current public lensX package version with an ordinary caret range.',
           ),
         );
       }

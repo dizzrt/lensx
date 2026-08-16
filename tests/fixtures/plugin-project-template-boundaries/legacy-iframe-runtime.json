@@ -1,0 +1,15 @@
+{
+  "input": {
+    "kind": "framework-neutral",
+    "metadata": { "scripts": { "build": "x", "typecheck": "x", "test": "x", "check": "x" } },
+    "sources": {
+      "src/main.ts": "import { createPluginIframeTransport } from '@lensx/plugin-sdk/iframe'; createPluginIframeTransport();"
+    }
+  },
+  "expected": [
+    "template/legacy-runtime-reference: production source contains @lensx/plugin-sdk/iframe.",
+    "template/legacy-runtime-reference: production source contains createPluginIframeTransport.",
+    "template/non-public-import: src/main.ts imports unexported @lensx/plugin-sdk/iframe.",
+    "template/webview-transport-missing: production source must use the public WebView transport."
+  ]
+}

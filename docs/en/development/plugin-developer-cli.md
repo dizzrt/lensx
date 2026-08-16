@@ -39,6 +39,11 @@ rejects recursive CLI build scripts, Host-private imports, Tauri imports,
 undeclared public imports, symlinks, special files, non-portable/colliding
 paths, and protocol size/count violations.
 
+Current authoring is WebView-only: Manifest `0.3.0`, `runtime.kind: "webview"`,
+and `@lensx/plugin-sdk/webview`. A Manifest `0.2.x`, iframe Runtime, or SDK
+`/iframe` import returns the stable `CLI_LEGACY_IFRAME_RUNTIME` incompatible
+diagnostic with migration guidance. The CLI never rewrites the old project.
+
 ## Create
 
 `create` packages byte-checked snapshots of the two canonical
@@ -49,11 +54,13 @@ initialize Git, run project code, or overwrite a non-empty target.
 
 Files are written to a unique sibling staging directory and committed with an
 atomic rename only after complete validation. Failure and interruption remove
-staging data. The generated project requests no permissions.
+staging data. The generated project requests no permissions and reports
+`runtime_kind: "webview"` in machine output.
 
 ## Build And Validate
 
-`build` validates package metadata before spawning `pnpm` with an argument
+`build` validates package metadata, imports, and any author Manifest before
+spawning `pnpm` with an argument
 array and no shell command composition. Human mode streams author-owned build
 logs. JSON mode captures a bounded summary so child output cannot corrupt the
 single JSON document. A non-zero exit, signal, or missing/empty
@@ -64,6 +71,10 @@ single JSON document. A non-zero exit, signal, or missing/empty
 performs canonical pack plus self-inspection entirely in memory. It keeps
 `compatible`, `incompatible`, and `invalid` distinct and does not modify the
 project or artifact directory.
+
+Successful `build`, `validate`, `pack`, and `inspect` machine results all report
+`runtime_kind: "webview"`; legacy incompatible results expose no partial
+Manifest identity or package facts.
 
 ## Pack And Inspect
 

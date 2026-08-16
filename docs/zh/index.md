@@ -10,6 +10,8 @@
   插件和隔离的架构方向。
 - [插件包格式](architecture/plugin-package-format.md) — 已交付的 `.lxp` canonical
   `tar.zst` profile、inspection 边界、limits 和验证方式。
+- [Plugin Child WebView Runtime](architecture/plugin-child-webview-runtime.md) —
+  已交付的 Host/native ownership、隔离、lifecycle、evidence、budget 与故障排查。
 
 ## 开发
 

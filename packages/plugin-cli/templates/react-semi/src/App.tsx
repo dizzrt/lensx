@@ -1,6 +1,6 @@
 import { Button } from '@douyinfe/semi-ui';
 import type { PluginSdkTransport } from '@lensx/plugin-sdk';
-import { createPluginIframeTransport } from '@lensx/plugin-sdk/iframe';
+import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview';
 import { PluginFeedback, PluginPage, PluginUiProvider } from '@lensx/plugin-ui';
 import { useEffect, useRef, useState } from 'react';
 
@@ -16,13 +16,13 @@ const fallbackContext = Object.freeze({
 const copy = {
   'en-US': {
     action: 'Local action',
-    description: 'This page owns React, Semi Design, and Plugin UI inside its iframe bundle.',
+    description: 'This page owns React, Semi Design, and Plugin UI inside its WebView bundle.',
     error: 'The plugin could not connect to lensX. Try again.',
     title: 'React and Semi starter',
   },
   'zh-CN': {
     action: '本地操作',
-    description: '此页面在 iframe bundle 内自行拥有 React、Semi Design 与 Plugin UI。',
+    description: '此页面在 WebView bundle 内自行拥有 React、Semi Design 与 Plugin UI。',
     error: '插件无法连接到 lensX，请重试。',
     title: 'React 与 Semi 起步模板',
   },
@@ -32,7 +32,7 @@ export interface AppProps {
   readonly createTransport?: () => PluginSdkTransport;
 }
 
-export const App = ({ createTransport = createPluginIframeTransport }: AppProps) => {
+export const App = ({ createTransport = createPluginWebviewTransport }: AppProps) => {
   const [state, setState] = useState<ReactPluginRuntimeState>({ kind: 'loading' });
   const runtimeRef = useRef<ReturnType<typeof createReactPluginRuntime>>(undefined);
   const errorRegionRef = useRef<HTMLDivElement>(null);

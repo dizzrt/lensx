@@ -125,5 +125,9 @@ describe('real Plugin SDK lifecycle through the public Testkit', () => {
     expect(fake.observation).not.toHaveProperty('origin');
     expect(fake.observation).not.toHaveProperty('port');
     expect(fake.observation).not.toHaveProperty('identity');
+    expect(fake.observation).not.toHaveProperty('bridge');
+    expect(fake.observation).not.toHaveProperty('sourceLabel');
+    expect(fake.observation).not.toHaveProperty('nativeHandle');
+    expect(fake.observation).not.toHaveProperty('resourceGeneration');
   });
 });

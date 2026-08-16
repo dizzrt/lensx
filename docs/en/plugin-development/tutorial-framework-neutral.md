@@ -32,7 +32,7 @@ Open `manifest.json`. Keep `manifest_version` at `0.2.0`; use a namespaced
 ranges for lensX and Host API. Publisher fields are unverified author text.
 
 The starter has no permission fields. It contributes one Page,
-one Action targeting that Page, and a launcher default action. The iframe entry
+one Action targeting that Page, and a launcher default action. The WebView entry
 and every icon or resource path must be package-relative and present in
 `dist/`. Page and Action IDs are local to this plugin. Contract validation does
 not install, register, authorize, or execute these declarations.
@@ -40,7 +40,7 @@ not install, register, authorize, or execute these declarations.
 ## Runtime lifecycle
 
 `src/runtime.ts` creates one SDK client per attempt with
-`createPluginIframeTransport`, initializes it, publishes loading/ready/error,
+`createPluginWebviewTransport`, initializes it, publishes loading/ready/error,
 and listens for complete `runtime.context_changed` replacements. Retry first
 invalidates and disposes the old attempt, then creates a fresh client.
 

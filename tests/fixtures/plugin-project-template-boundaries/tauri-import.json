@@ -2,7 +2,10 @@
   "input": {
     "kind": "react-semi",
     "metadata": { "scripts": { "build": "x", "typecheck": "x", "test": "x", "check": "x" } },
-    "sources": { "src/main.ts": "import { invoke } from '@tauri-apps/api/core';" }
+    "sources": {
+      "src/main.ts": "import { invoke } from '@tauri-apps/api/core';",
+      "src/runtime.ts": "import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview'; createPluginWebviewTransport();"
+    }
   },
   "expected": ["template/tauri-import: src/main.ts imports @tauri-apps/api/core."]
 }

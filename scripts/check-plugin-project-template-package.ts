@@ -22,7 +22,7 @@ interface TemplateManifest extends Record<string, unknown> {
     readonly actions: readonly Record<string, unknown>[];
   } & Record<string, unknown>;
   display: Record<string, unknown>;
-  runtime: { readonly entry: string };
+  runtime: { readonly entry: string; readonly kind: string };
 }
 
 const run = (command: string, arguments_: readonly string[], cwd = repositoryRoot): string => {
@@ -102,6 +102,7 @@ try {
     const manifestFile = files.find((file) => file.path === 'manifest.json');
     if (manifestFile === undefined) throw new Error('template/package-manifest-missing');
     const manifest = JSON.parse(Buffer.from(manifestFile.bytes).toString('utf8')) as TemplateManifest;
+    if (manifest.runtime.kind !== 'webview') throw new Error(`template/package-runtime-kind: ${directory}`);
     const withoutEntry = files.filter((file) => file.path !== manifest.runtime.entry);
     await expectInvalid(`${directory}/missing-entry`, withoutEntry);
     await expectInvalid(`${directory}/extra-manifest-resource`, [
@@ -182,6 +183,18 @@ try {
     ).join('\n');
     if (sourceText.includes('tools/plugin-package-format'))
       throw new Error(`template/private-packer-import: ${directory}`);
+    if (!sourceText.includes('@lensx/plugin-sdk/webview') || !sourceText.includes('createPluginWebviewTransport')) {
+      throw new Error(`template/public-webview-transport-missing: ${directory}`);
+    }
+    for (const forbidden of [
+      '@lensx/plugin-sdk/iframe',
+      'createPluginIframeTransport',
+      'MessageChannel',
+      'MessagePort',
+    ]) {
+      if (sourceText.includes(forbidden))
+        throw new Error(`template/legacy-runtime-reference: ${directory}/${forbidden}`);
+    }
   }
 
   const rustOutput = run('cargo', [

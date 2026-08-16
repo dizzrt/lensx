@@ -17,12 +17,21 @@ for (const symbol of [
   'createPluginSurfaceProjectionService',
   'createPluginPageRuntimeResolver',
   'createPluginRuntimeLifecycleService',
-  'createPluginRuntimeSessionService',
-  'createPluginIframeTransport',
-  'attachPluginRuntimeTransport',
+  'createPluginChildWebviewHostDispatcherController',
+  'createPluginWebviewTransport',
   'createPluginHostApiDispatcherFactory',
 ]) {
   if (!source.includes(symbol)) diagnostics.push(`template/runtime-production-component-missing: ${symbol}.`);
+}
+for (const forbidden of [
+  'createPluginIframeTransport',
+  'createPluginRuntimeSessionService',
+  'attachPluginRuntimeTransport',
+  'PluginRuntimeFrame',
+  'MessageChannel',
+  'MessagePort',
+]) {
+  if (source.includes(forbidden)) diagnostics.push(`template/runtime-legacy-component-present: ${forbidden}.`);
 }
 if (/complete (?:desktop|GUI) E2E|完整(?:桌面|GUI) E2E/iu.test(source)) {
   diagnostics.push('template/runtime-scope-overclaim: production-component smoke is not a complete desktop GUI E2E.');
@@ -30,5 +39,5 @@ if (/complete (?:desktop|GUI) E2E|完整(?:桌面|GUI) E2E/iu.test(source)) {
 
 if (diagnostics.length > 0) throw new Error(diagnostics.sort().join('\n'));
 console.log(
-  'Plugin template production Runtime boundary passed without Testkit, fake transport, or GUI scope overclaim.',
+  'Plugin template production Child WebView boundary passed without Testkit, fake transport, or GUI scope overclaim.',
 );

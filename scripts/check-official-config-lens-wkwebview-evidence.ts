@@ -19,16 +19,49 @@ const expected = [
   'launcher_responsive_during_worker_work',
   'teardown_completed',
   'bounded_content_free_record',
+  'warm_small_json_p95_budget',
+  'warm_format_host_heartbeat',
+  'warm_format_lexical_correctness',
 ];
+const warmFormat = evidence.warm_format as Record<string, unknown> | undefined;
 if (
   JSON.stringify(Object.keys(evidence).sort()) !==
     JSON.stringify(
-      ['checks', 'evidence_version', 'malicious_fail_closed_count', 'platform', 'valid_language_count'].sort(),
+      [
+        'checks',
+        'evidence_version',
+        'malicious_fail_closed_count',
+        'platform',
+        'valid_language_count',
+        'warm_format',
+      ].sort(),
     ) ||
   evidence.evidence_version !== '0.1.0' ||
   evidence.platform !== 'macos-wkwebview' ||
   evidence.valid_language_count !== 4 ||
   evidence.malicious_fail_closed_count !== 4 ||
+  warmFormat === undefined ||
+  JSON.stringify(Object.keys(warmFormat).sort()) !==
+    JSON.stringify(
+      [
+        'budget_ms',
+        'sample_count',
+        'corpus_case_count',
+        'max_input_bytes',
+        'p95_action_to_model_update_ms',
+        'host_heartbeat_ticks',
+      ].sort(),
+    ) ||
+  warmFormat.budget_ms !== 100 ||
+  warmFormat.sample_count !== 40 ||
+  warmFormat.corpus_case_count !== 4 ||
+  typeof warmFormat.max_input_bytes !== 'number' ||
+  warmFormat.max_input_bytes <= 0 ||
+  typeof warmFormat.p95_action_to_model_update_ms !== 'number' ||
+  warmFormat.p95_action_to_model_update_ms < 0 ||
+  warmFormat.p95_action_to_model_update_ms > 100 ||
+  typeof warmFormat.host_heartbeat_ticks !== 'number' ||
+  warmFormat.host_heartbeat_ticks <= 0 ||
   checks === undefined ||
   JSON.stringify(Object.keys(checks).sort()) !== JSON.stringify([...expected].sort()) ||
   expected.some((key) => checks[key] !== true)

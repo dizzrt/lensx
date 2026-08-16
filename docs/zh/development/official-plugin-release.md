@@ -76,8 +76,12 @@ consumer，而 pull request 不会获得任何写入路径。
 对于 `main` 上每个尚未发布的成员，只读 build job 依次运行 package lifecycle，以及公共
 `lensx-plugin build`、`validate`、重复 `pack --no-build` 和 `inspect`。两次 pack 必须
 byte-identical。同一不可变 `.lxp` 随后通过 Rust inspector、普通本地安装 preparation、
-sandbox iframe open、Runtime Session/SDK-ready、Page/Action open、close/teardown 与插件
+Child WebView open、bridge/SDK ready、Page/Action open、close/teardown 与插件
 自己的 `test:e2e`。任何失败都必须生成新 candidate，旧字节不得复用。
+
+release 验证复用 external 与 development 插件使用的同一真实 macOS Child WebView evidence
+matrix。它检查 generic Tauri denial、source/generation binding、navigation/popup/download denial
+与 zero-residual teardown；official provenance 不能选择另一 Runtime 或增加 authority。
 
 ConfigLens 还会运行四语言语料、Monaco/包内 Worker closure、28 场景视觉矩阵、
 有界 macOS WKWebView 中的单编辑器直接替换与 undo 证据和隐私门禁。已审查

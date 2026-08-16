@@ -186,29 +186,36 @@ try {
   for (const [locale, theme] of combinations) {
     const screenshotPath = resolve(screenshotRoot, `${locale}-${theme}.png`);
     const url = `${previewUrl}/?locale=${locale}&theme=${theme}`;
-    const result = spawnSync(
-      chromePath,
-      [
-        '--headless=new',
-        '--disable-background-networking',
-        '--disable-extensions',
-        '--disable-gpu',
-        '--hide-scrollbars',
-        '--no-default-browser-check',
-        '--no-first-run',
-        '--no-sandbox',
-        `--user-data-dir=${resolve(screenshotRoot, `chrome-${locale}-${theme}`)}`,
-        '--virtual-time-budget=3000',
-        '--window-size=650,600',
-        `--screenshot=${screenshotPath}`,
-        '--dump-dom',
-        url,
-      ],
-      { cwd: packageRoot, encoding: 'utf8', killSignal: 'SIGKILL', timeout: 10_000 },
-    );
-    const html = result.stdout;
+    let result;
+    let html = '';
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      result = spawnSync(
+        chromePath,
+        [
+          '--headless=new',
+          '--disable-background-networking',
+          '--disable-extensions',
+          '--disable-gpu',
+          '--hide-scrollbars',
+          '--no-default-browser-check',
+          '--no-first-run',
+          '--no-sandbox',
+          `--user-data-dir=${resolve(screenshotRoot, `chrome-${locale}-${theme}-${attempt}`)}`,
+          '--virtual-time-budget=3000',
+          '--window-size=650,600',
+          `--screenshot=${screenshotPath}`,
+          '--dump-dom',
+          url,
+        ],
+        { cwd: packageRoot, encoding: 'utf8', killSignal: 'SIGKILL', timeout: 10_000 },
+      );
+      html = result.stdout;
+      if (html.includes('data-visual-check="passed"') && html.includes('data-token-count="10"')) {
+        break;
+      }
+    }
     if (!html.includes('data-visual-check="passed"') || !html.includes('data-token-count="10"')) {
-      throw new Error(`Visual automation failed for ${locale}/${theme}.\n${html}\n${result.stderr}`);
+      throw new Error(`Visual automation failed for ${locale}/${theme}.\n${html}\n${result?.stderr ?? ''}`);
     }
     if (!html.includes(`lang="${locale}"`) || !html.includes(`color-scheme: ${theme}`)) {
       throw new Error(`Document locale/theme attributes are incorrect for ${locale}/${theme}.`);

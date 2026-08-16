@@ -101,7 +101,7 @@ const customizeTemplate = async (staging: string, pluginId: string, name: string
   page.title = { 'en-US': name, 'zh-CN': name };
   action.title = { 'en-US': `Open ${name}`, 'zh-CN': `打开 ${name}` };
   const validation = validatePluginManifest(manifest);
-  if (validation.status === 'invalid') {
+  if (validation.status !== 'valid') {
     throw new PluginCliCommandError('invalid', [
       cliDiagnostic('CLI_CREATE_INVALID_MANIFEST', '/manifest', 'create_invalid_manifest'),
     ]);
@@ -124,6 +124,7 @@ export interface CreatedPluginProject {
   readonly template: PluginTemplateKind;
   readonly plugin_id: string;
   readonly package_name: string;
+  readonly runtime_kind: 'webview';
 }
 
 export const createPluginProject = async (input: CreatePluginProjectInput): Promise<CreatedPluginProject> => {
@@ -184,7 +185,13 @@ export const createPluginProject = async (input: CreatePluginProjectInput): Prom
       removedEmptyTarget = true;
     }
     await rename(staging, target);
-    return { target: input.target, template: input.template, plugin_id: input.pluginId, package_name: packageName };
+    return {
+      target: input.target,
+      template: input.template,
+      plugin_id: input.pluginId,
+      package_name: packageName,
+      runtime_kind: 'webview',
+    };
   } catch (error) {
     await rm(staging, { force: true, recursive: true });
     if (removedEmptyTarget) await mkdir(target, { recursive: false });

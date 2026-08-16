@@ -88,6 +88,7 @@ const ProductionApp = ({
 
   return (
     <App
+      enablePluginChildWebviewHostDispatcher
       pluginManagementService={composition.managementService}
       pluginRuntimeLifecycleService={composition.runtimeLifecycleService}
       preferencesClient={preferencesClient}

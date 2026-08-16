@@ -26,6 +26,7 @@ export type PluginPackageDiagnosticCode =
   | 'frame_trailing_bytes'
   | 'frame_window_exceeded'
   | 'manifest_invalid'
+  | 'manifest_incompatible'
   | 'metadata_size_exceeded'
   | 'package_version_invalid'
   | 'path_case_collision'
@@ -66,7 +67,7 @@ export interface InvalidPluginPackageInspectionResult {
   readonly diagnostics: readonly PluginPackageDiagnostic[];
 }
 
-export interface ValidPluginPackageInspectionResult {
+export interface NormalizedPluginPackageInspectionResult {
   readonly status: 'compatible' | 'incompatible';
   readonly manifest: NormalizedPluginManifest;
   readonly compatibility: PluginManifestCompatibility;
@@ -74,7 +75,18 @@ export interface ValidPluginPackageInspectionResult {
   readonly diagnostics: readonly [];
 }
 
-export type PluginPackageInspectionResult = InvalidPluginPackageInspectionResult | ValidPluginPackageInspectionResult;
+export type ValidPluginPackageInspectionResult = NormalizedPluginPackageInspectionResult;
+
+export interface LegacyIncompatiblePluginPackageInspectionResult {
+  readonly status: 'incompatible';
+  readonly facts: PluginPackageFacts;
+  readonly diagnostics: readonly PluginPackageDiagnostic[];
+}
+
+export type PluginPackageInspectionResult =
+  | InvalidPluginPackageInspectionResult
+  | NormalizedPluginPackageInspectionResult
+  | LegacyIncompatiblePluginPackageInspectionResult;
 
 export interface PluginPackageInputFile {
   readonly path: string;
