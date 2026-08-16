@@ -7,6 +7,29 @@
 
 修复此次变更引入的 warning 和 error。修复后，先重新执行失败命令，再重新执行完整的最终验证集合。
 
+## 本机浏览器自动化
+
+基于浏览器的验证必须自动执行，且不得干扰用户的正常桌面或浏览器会话。该规则同时适用于直接启动
+浏览器的命令，以及传递启动浏览器的聚合门禁。
+
+- 执行前检查所选门禁，确认它是否会启动 Chrome、Chromium 或其他 macOS `.app` 进程。
+- 在 macOS 上，浏览器第一次启动就必须位于能够访问所需应用服务的已批准执行环境中。不得先在
+  受限 sandbox 内试启动同一可执行文件：即使 Chrome 使用 headless 模式，也可能向 LaunchServices
+  和 WindowServer 注册、随后 abort，并触发系统崩溃弹窗。
+- 优先采用最窄命令范围的自动审批或自动审查。只有自动机制无法批准所需执行时，才退回到需要用户
+  感知的授权。
+- 浏览器必须保持 headless 且不打开窗口。每次隔离运行都使用全新的临时 `--user-data-dir`；不得使用
+  默认 Profile、连接现有用户浏览器，或复用其 remote-debugging endpoint。
+- 保持维护中基线所需的确定性 viewport、locale、theme、font、browser version 与 screenshot 输入。
+  不得为了绕过执行限制而静默更换浏览器引擎。
+- 请求浏览器优雅退出，并在进程结束后删除临时 Profile。只有优雅关闭超过有界 timeout 后，才允许
+  把强制终止作为兜底。
+- 如果浏览器只在受限 sandbox 中启动失败，应将其归类为环境失败，并在已批准的 headless 环境中原样
+  重跑门禁。不得为了让 sandbox 尝试通过而修改产品代码、削弱断言或跳过视觉证据。
+
+Headless 只描述渲染和窗口行为，不会移除浏览器进程所需的操作系统权限。已批准执行只扩展指定验证
+命令所需的进程上下文，并不授权使用用户的正常浏览器 Profile。
+
 ## 前端验证
 
 执行单元测试和组件测试：
@@ -373,8 +396,8 @@ degraded、replacement、uninstall 与 clear-data 全部维护状态。每张截
 locale、theme 与 modal 的 computed style。
 
 该聚焦门禁只补充完整 frontend/Rust suite，以及上游 installation、Registration、lifecycle、replacement、
-open Runtime 与 scoped-storage 门禁，不能替代它们。若平台在受限 sandbox 内阻止 GUI process，应在正常本机
-环境中重跑 headless Chrome；仅 sandbox launch failure 不能判定为产品失败。
+open Runtime 与 scoped-storage 门禁，不能替代它们。其 Chrome 子进程必须遵循上文的本机浏览器自动化
+规则；仅 sandbox launch failure 不能判定为产品失败，必须在已批准的 headless 环境中原样重跑后再判断。
 
 ## Open-Web Trust Confirmation 验证
 

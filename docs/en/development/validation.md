@@ -9,6 +9,41 @@ have reproducible evidence for the affected frontend and Rust layers.
 Fix warnings and errors introduced by the change. After a fix, rerun the failed
 command and then rerun the complete final validation set.
 
+## Local Browser Automation
+
+Browser-backed validation must be automated without disturbing the user's
+normal desktop or browser session. This policy applies both to commands that
+launch a browser directly and to aggregate gates that launch one transitively.
+
+- Inspect the selected gate before execution and identify whether it launches
+  Chrome, Chromium, or another macOS `.app` process.
+- On macOS, make the first browser launch in an approved execution context that
+  can access the required application services. Do not first probe the same
+  executable inside a restricted sandbox: even headless Chrome may register
+  with LaunchServices and WindowServer, abort, and trigger a system crash
+  dialog.
+- Prefer automatic approval or review with the narrowest command scope. A
+  user-facing approval is the fallback only when automatic handling cannot
+  authorize the required execution.
+- Keep the browser headless and windowless. Use a fresh temporary
+  `--user-data-dir` for every isolated run, and never use the default profile,
+  attach to an existing user browser, or reuse its remote-debugging endpoint.
+- Preserve deterministic viewport, locale, theme, font, browser version, and
+  screenshot inputs required by the maintained baseline. Do not silently swap
+  browser engines to work around an execution restriction.
+- Request graceful browser shutdown and delete the temporary profile after the
+  process exits. Use forced termination only as a bounded fallback after a
+  graceful-close timeout.
+- If a browser launch fails only in a restricted sandbox, classify it as an
+  environment failure and rerun the unchanged gate in the approved headless
+  context. Do not modify product code, weaken assertions, or skip visual
+  evidence to make the sandboxed attempt pass.
+
+Headless describes rendering and window behavior; it does not remove the
+browser process's operating-system permissions. Approved execution broadens
+only the process context needed by the named validation command and does not
+authorize use of the user's normal browser profile.
+
 ## Frontend Validation
 
 Run unit and component tests:
@@ -471,9 +506,10 @@ checks for the continuous split surface, border, locale, theme, and modal.
 
 This focused gate supplements the complete frontend/Rust suites and the
 upstream installation, Registration, lifecycle, replacement, open Runtime, and
-scoped-storage gates. Headless Chrome must run outside a restricted sandbox
-when the platform blocks GUI processes; a sandbox-only launch failure is not a
-product failure until the same script is rerun in the normal local context.
+scoped-storage gates. Its Chrome-backed subprocesses must follow the local
+browser-automation policy above; a sandbox-only launch failure is not a product
+failure until the unchanged script passes or fails in the approved headless
+context.
 
 ## Open-Web Trust Confirmation Validation
 

@@ -167,6 +167,36 @@ pnpm run src-tauri:format
 If an executable is unavailable from `PATH`, run `source ~/.zshrc` before
 retrying it.
 
+## macOS Browser Automation Safety
+
+Browser automation must remain invisible to the user's normal desktop and
+browser session.
+
+- Before running a validation command, determine whether it directly or
+  transitively launches Chrome, Chromium, or another macOS `.app` process.
+- When a local browser process is required on macOS, make the first launch in
+  an approved execution context that can access the required macOS application
+  services. Never probe-launch the browser inside a restricted sandbox and
+  then retry after it aborts.
+- Prefer automatic approval or review with the narrowest reusable command
+  scope. Request user-facing approval only when the required execution cannot
+  be approved automatically.
+- Run browser validation headlessly, without opening a window, and with a fresh
+  temporary user-data directory. Never use the default browser profile,
+  connect to an existing user browser, or reuse its remote-debugging endpoint.
+- Preserve the repository's selected browser and rendering baseline unless a
+  reviewed change intentionally migrates them. A dedicated test browser is
+  acceptable only after compatibility and visual-baseline evidence is updated.
+- Close browser processes gracefully and remove their temporary profiles.
+  Reserve forced termination for a bounded timeout fallback, not normal
+  cleanup.
+- Treat a restricted-sandbox browser launch failure as an environment failure,
+  not a product failure. Rerun the unchanged gate in the approved headless
+  context; do not weaken assertions or skip visual validation.
+
+Detailed execution guidance lives in
+`docs/en/development/validation.md`.
+
 ## pnpm Store Policy
 
 - Use the machine-configured global pnpm store for commands executed from the

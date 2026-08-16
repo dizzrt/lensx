@@ -63,3 +63,6 @@ rules:
     - The final validation section must cover frontend tests, frontend formatting and static checks, frontend type checking and build, Rust formatting, Rust tests, and Rust static checks.
     - If a validation area is genuinely unaffected, record the reason in the task instead of silently omitting it.
     - Fix every warning and error introduced by the change, then rerun the failed command and the complete final validation set.
+    - For validation that directly or transitively launches a macOS browser application, require headless and windowless execution with a fresh temporary profile, never the user's default profile or existing browser session.
+    - Make the first macOS browser launch in an approved execution context instead of probe-launching it inside a restricted sandbox; prefer automatic approval or review and require user-facing approval only when automatic handling cannot authorize the execution.
+    - Require graceful browser shutdown and temporary-profile cleanup, with forced termination only as a bounded timeout fallback; classify sandbox-only launch failures as environment failures and rerun the unchanged gate without weakening or skipping visual evidence.
