@@ -9,6 +9,7 @@ fn main() {
     let mut root = None;
     let mut output = None;
     let mut samples = None;
+    let mut cursor_repetitions = None;
     let mut arguments = env::args().skip(1);
     while let Some(argument) = arguments.next() {
         let target = match argument.as_str() {
@@ -17,6 +18,7 @@ fn main() {
             "--root" => &mut root,
             "--output" => &mut output,
             "--samples" => &mut samples,
+            "--cursor-repetitions" => &mut cursor_repetitions,
             _ => {
                 eprintln!("unknown ConfigLens cold-open harness argument");
                 process::exit(2);
@@ -30,6 +32,9 @@ fn main() {
         root: PathBuf::from(root.unwrap_or_default()),
         output: PathBuf::from(output.unwrap_or_default()),
         samples: samples.and_then(|value| value.parse().ok()).unwrap_or(0),
+        cursor_repetitions: cursor_repetitions
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(0),
     };
     let result = builder(input).and_then(|builder| {
         builder

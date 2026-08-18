@@ -119,6 +119,7 @@ fn plugin_child_webview_bridge_bootstrap(freshness: &str) -> Option<String> {
     })
 }
 
+#[cfg(feature = "config-lens-cold-open-harness")]
 const PLUGIN_CHILD_WEBVIEW_EVIDENCE_BOOTSTRAP: &str = r#"
 (() => {
   'use strict';
@@ -126,6 +127,26 @@ const PLUGIN_CHILD_WEBVIEW_EVIDENCE_BOOTSTRAP: &str = r#"
     ? globalThis.ipc.postMessage.bind(globalThis.ipc)
     : undefined;
   const stages = new Set(['ui_bundle', 'editor', 'worker', 'first_interactive']);
+  const pointerRegions = Object.freeze([
+    ['gutter', '.margin, [data-pointer-region="gutter"]'],
+    ['scrollbar', '.scrollbar, [data-pointer-region="scrollbar"]'],
+    ['footer_control', 'button, [role="button"], [data-pointer-region="footer_control"]'],
+    ['link', 'a, [data-pointer-region="link"]'],
+    ['overlay', '.overlayWidgets, .suggest-widget, [data-pointer-region="overlay"]'],
+    ['editor_text', '.view-lines, .view-line, textarea.inputarea, .monaco-editor, [data-pointer-region="editor_text"]']
+  ]);
+  let pointerMoveDeliveryCount = 0;
+  addEventListener('mousemove', () => {
+    pointerMoveDeliveryCount = Math.min(pointerMoveDeliveryCount + 1, 256);
+  }, { capture: true });
+  const send = (payload) => {
+    const encoded = JSON.stringify(payload);
+    if (rawPost !== undefined) rawPost(encoded);
+    if (rawPost === undefined || location.protocol === 'lensx-pointer-monaco:'
+      || location.protocol === 'lensx-pointer-plain:') {
+      document.title = `lensx-pointer:${encoded}`;
+    }
+  };
   const report = (stage, duration_ms) => {
     if (rawPost === undefined || !stages.has(stage) || typeof duration_ms !== 'number'
       || !Number.isFinite(duration_ms) || duration_ms < 0 || duration_ms > 60000) return;
@@ -136,14 +157,89 @@ const PLUGIN_CHILD_WEBVIEW_EVIDENCE_BOOTSTRAP: &str = r#"
       duration_ms
     }));
   };
+  const reportPointer = (sequence, x, y) => {
+    if (!Number.isSafeInteger(sequence) || sequence < 1 || sequence > 256
+      || !Number.isFinite(x) || !Number.isFinite(y)
+      || x < 0 || x > 4096 || y < 0 || y > 2160) return;
+    const target = document.elementFromPoint(x, y);
+    let semanticRegion = 'overlay';
+    if (target !== null) {
+      for (const [region, selector] of pointerRegions) {
+        if (target.closest(selector) !== null) {
+          semanticRegion = region;
+          break;
+        }
+      }
+    }
+    const computedCursor = target === null ? 'unknown' : getComputedStyle(target).cursor;
+    send({
+      contract_version: '0.1.0',
+      type: 'lensx.plugin_evidence.pointer',
+      sequence,
+      semantic_region: semanticRegion,
+      computed_cursor: /^[a-z-]{1,32}$/.test(computedCursor) ? computedCursor : 'unknown',
+      document_identity: document === globalThis.document ? 'document_current' : 'document_unknown',
+      editor_identity: document.querySelector('.monaco-editor') === null ? 'not_applicable' : 'editor_current',
+      webkit_version: navigator.userAgent.match(/AppleWebKit\/([0-9.]+)/)?.[1] || 'unknown',
+      device_scale_factor: devicePixelRatio,
+      viewport_width: innerWidth,
+      viewport_height: innerHeight,
+      move_delivery_count: pointerMoveDeliveryCount
+    });
+  };
   Object.defineProperty(globalThis, '__LENSX_PLUGIN_EVIDENCE_STAGE__', {
     value: Object.freeze(report),
     enumerable: false,
     configurable: false,
     writable: false
   });
+  Object.defineProperty(globalThis, '__LENSX_PLUGIN_EVIDENCE_SAMPLE_POINTER__', {
+    value: Object.freeze(reportPointer),
+    enumerable: false,
+    configurable: false,
+    writable: false
+  });
+  Object.defineProperty(globalThis, '__LENSX_PLUGIN_EVIDENCE_RESET_MOVE_DELIVERY__', {
+    value: Object.freeze(() => { pointerMoveDeliveryCount = 0; }),
+    enumerable: false,
+    configurable: false,
+    writable: false
+  });
 })();
 "#;
+
+#[cfg(feature = "config-lens-cold-open-harness")]
+const PLUGIN_CHILD_WEBVIEW_EVIDENCE_BOUNDARIES: &str = r#"
+(() => {
+  'use strict';
+  const install = () => {
+    if (document.querySelector('[data-lensx-pointer-boundaries]') !== null) return;
+    const container = document.createElement('div');
+    container.dataset.lensxPointerBoundaries = 'controlled';
+    const boundaries = Object.freeze([
+      ['scrollbar', 'position:fixed;z-index:2147483640;top:0;right:0;width:40px;height:520px;cursor:default'],
+      ['footer_control', 'position:fixed;z-index:2147483641;top:532px;left:660px;width:100px;height:36px;cursor:default'],
+      ['link', 'position:fixed;z-index:2147483641;top:548px;left:510px;width:100px;height:20px;cursor:pointer'],
+      ['overlay', 'position:fixed;z-index:2147483642;top:60px;left:60px;width:700px;height:24px;cursor:default']
+    ]);
+    for (const [region, cssText] of boundaries) {
+      const boundary = document.createElement('div');
+      boundary.dataset.pointerRegion = region;
+      boundary.setAttribute('aria-hidden', 'true');
+      boundary.style.cssText = `${cssText};background:transparent`;
+      container.append(boundary);
+    }
+    document.body.append(container);
+  };
+  if (document.readyState === 'loading') addEventListener('DOMContentLoaded', install, { once: true });
+  else install();
+})();
+"#;
+
+#[cfg(feature = "config-lens-cold-open-harness")]
+pub(crate) fn plugin_child_webview_evidence_bootstrap() -> &'static str {
+    PLUGIN_CHILD_WEBVIEW_EVIDENCE_BOOTSTRAP
+}
 
 fn valid_bridge_freshness(value: &str) -> bool {
     value.len() == 32
@@ -286,10 +382,20 @@ pub(crate) trait PluginChildWebviewLifecycleIngress: Send + Sync + 'static {
     fn native_loaded(&self, attempt_id: &str, actual_source_label: &str);
 }
 
+#[allow(dead_code)] // Evidence ingress is constructed only by explicit macOS harness features.
 pub(crate) trait PluginChildWebviewEvidenceIngress: Send + Sync + 'static {
     fn observe(&self, actual_source_label: &str, stage: &str, duration: Duration);
+
+    #[cfg(feature = "config-lens-cold-open-harness")]
+    fn observe_pointer(
+        &self,
+        _actual_source_label: &str,
+        _observation: PluginChildWebviewPointerObservation,
+    ) {
+    }
 }
 
+#[cfg(feature = "config-lens-cold-open-harness")]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PluginChildWebviewEvidenceStage {
@@ -297,6 +403,64 @@ struct PluginChildWebviewEvidenceStage {
     r#type: String,
     stage: String,
     duration_ms: f64,
+}
+
+#[cfg(feature = "config-lens-cold-open-harness")]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct PluginChildWebviewPointerObservation {
+    pub(crate) contract_version: String,
+    pub(crate) r#type: String,
+    pub(crate) sequence: u16,
+    pub(crate) semantic_region: String,
+    pub(crate) computed_cursor: String,
+    pub(crate) document_identity: String,
+    pub(crate) editor_identity: String,
+    pub(crate) webkit_version: String,
+    pub(crate) device_scale_factor: f64,
+    pub(crate) viewport_width: f64,
+    pub(crate) viewport_height: f64,
+    pub(crate) move_delivery_count: usize,
+}
+
+#[cfg(feature = "config-lens-cold-open-harness")]
+impl PluginChildWebviewPointerObservation {
+    pub(crate) fn valid(&self) -> bool {
+        self.contract_version == "0.1.0"
+            && self.r#type == "lensx.plugin_evidence.pointer"
+            && (1..=256).contains(&self.sequence)
+            && matches!(
+                self.semantic_region.as_str(),
+                "editor_text" | "gutter" | "scrollbar" | "footer_control" | "link" | "overlay"
+            )
+            && !self.computed_cursor.is_empty()
+            && self.computed_cursor.len() <= 32
+            && self
+                .computed_cursor
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte == b'-')
+            && matches!(
+                self.document_identity.as_str(),
+                "document_current" | "document_unknown"
+            )
+            && matches!(
+                self.editor_identity.as_str(),
+                "editor_current" | "not_applicable"
+            )
+            && !self.webkit_version.is_empty()
+            && self.webkit_version.len() <= 64
+            && self
+                .webkit_version
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || byte == b'.')
+            && self.device_scale_factor.is_finite()
+            && (1.0..=8.0).contains(&self.device_scale_factor)
+            && self.viewport_width.is_finite()
+            && (320.0..=4096.0).contains(&self.viewport_width)
+            && self.viewport_height.is_finite()
+            && (240.0..=2160.0).contains(&self.viewport_height)
+            && self.move_delivery_count <= 256
+    }
 }
 
 #[allow(dead_code)] // Product creation wiring follows after the bridge/session state is complete.
@@ -307,15 +471,31 @@ pub(crate) fn apply_plugin_child_webview_bridge_ingress<R: Runtime>(
     ingress: Arc<dyn PluginChildWebviewBridgeIngress>,
     evidence: Option<Arc<dyn PluginChildWebviewEvidenceIngress>>,
 ) -> Option<WebviewBuilder<R>> {
-    let mut bootstrap = plugin_child_webview_bridge_bootstrap(freshness)?;
-    if evidence.is_some() {
-        bootstrap.push_str(PLUGIN_CHILD_WEBVIEW_EVIDENCE_BOOTSTRAP);
-    }
+    let bridge_bootstrap = plugin_child_webview_bridge_bootstrap(freshness)?;
+    #[cfg(feature = "config-lens-cold-open-harness")]
+    let bootstrap = if evidence.is_some() {
+        format!(
+            "{bridge_bootstrap}{PLUGIN_CHILD_WEBVIEW_EVIDENCE_BOOTSTRAP}{PLUGIN_CHILD_WEBVIEW_EVIDENCE_BOUNDARIES}"
+        )
+    } else {
+        bridge_bootstrap
+    };
+    #[cfg(not(feature = "config-lens-cold-open-harness"))]
+    let bootstrap = bridge_bootstrap;
     Some(
         builder
             .initialization_script(bootstrap)
             .isolated_ipc_handler(move |actual_source_label, request| {
+                #[cfg(feature = "config-lens-cold-open-harness")]
                 if let Some(evidence) = evidence.as_ref() {
+                    if let Ok(observation) =
+                        serde_json::from_str::<PluginChildWebviewPointerObservation>(request.body())
+                    {
+                        if observation.valid() {
+                            evidence.observe_pointer(&actual_source_label, observation);
+                            return;
+                        }
+                    }
                     if let Ok(observation) =
                         serde_json::from_str::<PluginChildWebviewEvidenceStage>(request.body())
                     {
@@ -337,6 +517,8 @@ pub(crate) fn apply_plugin_child_webview_bridge_ingress<R: Runtime>(
                         }
                     }
                 }
+                #[cfg(not(feature = "config-lens-cold-open-harness"))]
+                let _ = &evidence;
                 ingress.receive(&attempt_id, &actual_source_label, request.body());
             }),
     )
@@ -1725,5 +1907,15 @@ mod tests {
             "/",
         )
         .is_none());
+    }
+
+    #[test]
+    fn production_bridge_bootstrap_has_no_pointer_evidence_capability() {
+        let bootstrap = plugin_child_webview_bridge_bootstrap(BRIDGE_PROBE_FRESHNESS)
+            .expect("maintained bridge freshness should build");
+        assert!(!bootstrap.contains("plugin_evidence.pointer"));
+        assert!(!bootstrap.contains("PLUGIN_EVIDENCE_ARM_POINTER"));
+        assert!(!bootstrap.contains("PLUGIN_EVIDENCE_SAMPLE_POINTER"));
+        assert!(!bootstrap.contains("native_cursor"));
     }
 }

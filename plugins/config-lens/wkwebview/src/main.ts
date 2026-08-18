@@ -1,7 +1,9 @@
+import pointerFixture from '../../../../fixtures/plugin-pointer-cursor/editor.json' with { type: 'json' };
 import { loadMonaco } from '../../src/editor/monaco.js';
 import { createLanguageController, type LanguageWorker } from '../../src/language/controller.js';
 import { MAX_INPUT_BYTES, MAX_INPUT_LINES, OPERATION_DEADLINE_MS, preflightInput } from '../../src/language/limits.js';
 import { isLanguageResult, MAX_DIAGNOSTICS } from '../../src/language/protocol.js';
+import '../../src/styles.less';
 
 interface EvidenceChecks {
   readonly exact_limits_observed: boolean;
@@ -47,6 +49,119 @@ const internals = (globalThis as typeof globalThis & { __TAURI_INTERNALS__?: Tau
 
 const recordFailure = async () => {
   await internals?.invoke('config_lens_wkwebview_harness_fail', { phase: 'evidence_record' });
+};
+
+const runPointerHarness = async (): Promise<void> => {
+  const style = document.createElement('style');
+  style.textContent = `
+    [data-pointer-harness="top-level-monaco"] {
+      position: relative;
+      box-sizing: border-box;
+      width: 800px;
+      height: 600px;
+      padding: 0;
+      gap: 0;
+    }
+    [data-pointer-harness="top-level-monaco"] .config-lens__content {
+      position: absolute;
+      inset: 0 0 80px;
+    }
+    [data-pointer-harness="top-level-monaco"] .config-lens__footer {
+      position: absolute;
+      inset: auto 0 0;
+      box-sizing: border-box;
+      height: 80px;
+      border-top: 1px solid var(--lensx-plugin-color-border);
+    }
+    [data-pointer-harness="top-level-monaco"] .config-lens__footer-main {
+      position: relative;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    [data-pointer-harness="top-level-monaco"] [data-pointer-region="link"] {
+      position: absolute;
+      top: 28px;
+      left: 510px;
+      cursor: pointer;
+    }
+    [data-pointer-harness="top-level-monaco"] [data-pointer-region="footer_control"] {
+      position: absolute;
+      top: 20px;
+      left: 660px;
+      width: 100px;
+      height: 36px;
+      cursor: default;
+    }
+    [data-pointer-harness="top-level-monaco"] .config-lens__status {
+      position: absolute;
+      top: 28px;
+      left: 16px;
+    }
+    [data-pointer-harness="top-level-monaco"] .pointer-scrollbar-boundary {
+      position: absolute;
+      z-index: 20;
+      inset: 0 0 0 auto;
+      width: 40px;
+      background: transparent;
+      cursor: default;
+    }
+    [data-pointer-harness="top-level-monaco"] .pointer-overlay-boundary {
+      position: absolute;
+      z-index: 21;
+      top: 60px;
+      left: 60px;
+      width: 700px;
+      height: 24px;
+      background: transparent;
+      cursor: default;
+    }
+  `;
+  document.head.append(style);
+  document.body.innerHTML = `
+    <main class="config-lens" data-pointer-harness="top-level-monaco">
+      <section class="config-lens__content">
+        <div class="config-lens-editor">
+          <section aria-label="Maintained pointer fixture" class="config-lens-editor__surface"></section>
+          <div class="pointer-scrollbar-boundary" data-pointer-region="scrollbar"></div>
+          <div class="pointer-overlay-boundary" data-pointer-region="overlay"></div>
+        </div>
+      </section>
+      <footer class="config-lens__footer">
+        <div class="config-lens__footer-main">
+          <a data-pointer-region="link" href="#maintained">Maintained fixture</a>
+          <span class="config-lens__status">Pointer evidence harness</span>
+          <button data-pointer-region="footer_control" type="button">Format</button>
+        </div>
+      </footer>
+    </main>`;
+  document.documentElement.style.setProperty('--lensx-plugin-space-page', '16px');
+  document.documentElement.style.setProperty('--lensx-plugin-color-background', '#fff');
+  document.documentElement.style.setProperty('--lensx-plugin-color-surface', '#fff');
+  document.documentElement.style.setProperty('--lensx-plugin-color-border', '#d9d9d9');
+  document.documentElement.style.setProperty('--lensx-plugin-color-text', '#1f2329');
+  document.documentElement.style.setProperty('--lensx-plugin-color-text-secondary', '#646a73');
+  document.documentElement.style.setProperty('--lensx-plugin-color-accent', '#3370ff');
+  document.documentElement.style.setProperty('--lensx-plugin-radius-page', '6px');
+  const container = document.querySelector<HTMLElement>('.config-lens-editor__surface');
+  if (container === null) throw new Error('pointer_harness_container_missing');
+  const monaco = await loadMonaco();
+  const model = monaco.editor.createModel(JSON.stringify(pointerFixture, null, 2), 'json');
+  const editor = monaco.editor.create(container, {
+    automaticLayout: true,
+    model,
+    minimap: { enabled: false },
+    scrollBeyondLastLine: false,
+  });
+  editor.layout();
+  window.addEventListener(
+    'pagehide',
+    () => {
+      editor.dispose();
+      model.dispose();
+    },
+    { once: true },
+  );
 };
 
 const percentile95 = (values: readonly number[]): number => {
@@ -213,6 +328,12 @@ const run = async (): Promise<void> => {
   await internals.invoke('config_lens_wkwebview_harness_record', { evidence });
 };
 
-void run().catch(() => {
-  void recordFailure();
-});
+if (new URLSearchParams(location.search).get('mode') === 'pointer') {
+  void runPointerHarness().catch(() => {
+    void recordFailure();
+  });
+} else {
+  void run().catch(() => {
+    void recordFailure();
+  });
+}
