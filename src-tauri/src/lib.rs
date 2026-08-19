@@ -2,6 +2,9 @@ pub mod app_preferences;
 pub mod launcher_action_collections;
 pub mod launcher_surface;
 pub mod launcher_window;
+#[cfg(all(target_os = "macos", feature = "macos-accessory-evidence"))]
+pub(crate) mod macos_accessory_evidence;
+pub(crate) mod macos_launcher;
 use std::sync::Arc;
 use tauri::Manager;
 #[cfg(feature = "config-lens-cold-open-harness")]
@@ -124,8 +127,10 @@ pub fn run() {
     ]);
     let app = builder
         .setup(|app| {
+            macos_launcher::setup_macos_accessory_application(app)?;
             #[cfg(target_os = "macos")]
             frame_aware_navigation_setup::setup_frame_aware_navigation_policy(app.handle())?;
+            macos_launcher::setup_macos_launcher_window_collection(app.handle())?;
             let plugin_manager = plugin_manager::setup_plugin_manager(app.handle());
             let plugin_child_webview_service =
                 plugin_child_webview_service::setup_plugin_child_webview_service(app.handle());
@@ -167,12 +172,15 @@ pub fn run() {
             }
             launcher_window::setup_launcher_window(app.handle());
             launcher_surface::setup_launcher_surface(app.handle());
+            #[cfg(all(target_os = "macos", feature = "macos-accessory-evidence"))]
+            macos_accessory_evidence::start(app.handle())?;
             Ok(())
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
     app.run(|app, event| {
         if matches!(event, tauri::RunEvent::Exit) {
+            launcher_window::release_macos_local_command_monitor();
             let Some(service) = app.try_state::<
                 Arc<plugin_child_webview_service::PluginChildWebviewService<tauri::Wry>>,
             >() else {

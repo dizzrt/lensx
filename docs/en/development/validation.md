@@ -44,6 +44,47 @@ browser process's operating-system permissions. Approved execution broadens
 only the process context needed by the named validation command and does not
 authorize use of the user's normal browser profile.
 
+## macOS Accessory Launcher Validation
+
+Changes to macOS application policy, bundle metadata, Launcher Window
+collection behavior, show/hide/toggle ordering, local `Cmd+W`/`Cmd+Q`, or
+related teardown must run:
+
+```bash
+pnpm run check:macos-accessory-launcher
+pnpm run evidence:macos-accessory-launcher
+```
+
+The focused check validates `LSUIElement`, `visibleOnAllWorkspaces`, retained
+`alwaysOnTop`, non-fullscreen and size constraints, absence of unsupported
+`skipTaskbar`, deterministic Rust failure/order cases, Plugin Child lifecycle,
+the bilingual documentation mirror, and a source-bound committed evidence
+record. Static configuration, source scans, and simulated Window adapters do
+not satisfy the gate without current packaged-product evidence.
+
+The evidence command builds the current feature-observed `.app`, launches it
+through Launch Services, and uses a separate sacrifice application to establish
+an ordinary Space followed by a real full-screen Space. It records the macOS,
+Tauri/Tao/Wry revisions, bundle/runtime Accessory policy, no-Dock/no-ordinary-
+menu state, complete Window collection behavior and level, occlusion, current-
+Space visibility, focus, repeated production action toggles, application-local
+key equivalents and local-monitor cleanup, process exit, and the current ConfigLens Child WebView
+lifecycle matrix. A source digest makes stale or simulation-only evidence fail.
+The product writes its bounded pre-quit record before posting `Cmd+Q`; the controller promotes the
+quit facts only after it observes that exact product process exit within the timeout.
+
+All state uses a dedicated evidence bundle identifier and a fresh system
+temporary directory. The gate does not open a browser, attach to a user
+application, use an existing application session, reuse a user profile, or
+change the user's default browser. Every file and process wait has a bounded
+timeout. Success requests `Cmd+Q`/normal application teardown, asks the
+sacrifice application to exit, removes the temporary files and the dedicated
+evidence application state, and retains failed temporary evidence only in the
+command diagnostics needed to classify the safe stage. Configuration/bundle
+failures, `macos_application_policy`, `macos_window_collection`, Launcher
+action operations, sacrifice readiness, product timeout, schema/privacy drift,
+and cleanup failure are separate failure classes.
+
 ## Frontend Validation
 
 Run unit and component tests:

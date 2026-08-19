@@ -94,9 +94,19 @@ avatar 占位。`home` 保留 launcher 输入，并依次从已接受的 Action 
 
 ## Launcher 窗口生命周期
 
+在 macOS 上，打包 bundle 声明 `LSUIElement=true`，Rust 会在 frame-aware setup 创建首个 Host
+Window 前确认 `ActivationPolicy::Accessory`。因此运行中的 Launcher 没有 Dock tile 或普通应用
+菜单栏，同时仍可被程序化激活。应用策略是启动前提：setter 或确认失败会在 Launcher lifecycle
+listener、全局快捷键或 Plugin service 宣告就绪前终止 setup，绝不回退到 Regular 或 Prohibited。
+非 macOS 启动行为保持不变。
+
 Tauri 中带稳定 `main` 标签的 Window 以 `650×320` 逻辑像素启动，保持透明、置顶、
 无系统边框、不可调大小且非全屏，硬边界为 `320×180..4096×4096`。Home、Search 和
 Host Page 分别固定为 `650×320`、`650×480` 和 `650×600`，均不可调整。
+macOS Window 还启用 `visibleOnAllWorkspaces`；原生 Window 创建后，Rust 会保留完整 AppKit
+collection behavior 并合并 `FullScreenAuxiliary`。完整 parent Window 因而可以加入当前 Space，
+并与其他应用的全屏 Window 共存且显示在其上方。这些 setter 仍是 Host-private，不会提供给 React、
+Plugin Runtime message、公共 Host API 或 DOM measurement。
 
 Manifest `0.4.0` 为每个规范化 plugin Page 提供有界 `presentation`。省略时为固定
 `650×600`；显式值提供初始逻辑尺寸，并可允许用户通过系统边缘/角落调整。React
@@ -106,7 +116,8 @@ Manifest `0.4.0` 为每个规范化 plugin Page 提供有界 `presentation`。�
 
 Rust 通过单一动作边界拥有全部 launcher 原生窗口操作：
 
-- `show` 依次恢复窗口、显示窗口、请求焦点，然后发送类型化激活事件；
+- `show` 依次激活 macOS accessory 应用、恢复窗口、显示窗口、请求焦点、发送类型化激活事件，
+  最后恢复同一个 current Plugin Child WebView presentation；
 - `hide` 隐藏窗口，但不终止应用进程；
 - `toggle` 读取当前可见性，并复用对应的 `show` 或 `hide` 路径。
 
@@ -128,6 +139,20 @@ Rust 通过单一动作边界拥有全部 launcher 原生窗口操作：
 快捷键或窗口 listener 不可用，Host 不会安装该自定义菜单；如果菜单安装本身失败，Host 会记录
 `hide` action 与 `install_menu` 操作阶段且不会终止进程，已经注册的恢复快捷键和原生生命周期 listener
 仍然可用。
+
+Accessory 模式保留隐藏的应用菜单 command graph，因此即使没有可见菜单栏，本地 key equivalent 仍然
+有效。恰好一个 application-local `Cmd+W` 自定义命令复用统一 Hide action，恰好一个
+application-local `Cmd+Q` 自定义命令请求现有应用退出路径；后者通过 `RunEvent::Exit` teardown
+终止 current Child WebView 与 Host 资源。两个路由都会确认 lensX 位于前台，并且都不会进入
+global-shortcut plugin。由于目标 Accessory runtime 不能可靠分发隐藏菜单 key equivalent，Host setup
+会安装一个幂等、仅前台生效的 AppKit local event monitor 作为回退；它会先消费匹配事件，避免菜单路由
+重复处理，并在应用退出时释放。如果默认恢复快捷键未就绪，菜单图以及 close/focus-loss hide 路径都会保持
+禁用，避免 Accessory 进程进入无法恢复的隐藏状态。
+
+普通 Space 恢复与在其他应用的全屏 Space 上方恢复使用同一 action 路径。Accessory policy、完整原生
+Window identity、collection behavior 或应用激活无法建立或确认时，系统会报告安全的 setup/action
+operation，并在 success event 或独立 Child restore 之前停止相应转换。Launcher 保留上次位置与显示器；
+跟随鼠标显示器或在多显示器间自动重新居中不属于该生命周期。
 
 每次 `show` 成功后，Rust 向主 webview 发送 `launcher://activated`。其可序列化 payload 包含
 `reason` 字段，值为 `startup`、`global_shortcut` 或 `programmatic` 之一，并使用 snake-case

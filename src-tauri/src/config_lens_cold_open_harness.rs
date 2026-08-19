@@ -4,8 +4,7 @@ use crate::{
         LauncherSurfaceTarget,
     },
     launcher_window::{
-        dispatch_macos_menu_event, LauncherActivationReason, LauncherWindowAction,
-        LauncherWindowActions, MACOS_CLOSE_WINDOW_MENU_ID, MAIN_WINDOW_LABEL,
+        LauncherActivationReason, LauncherWindowAction, LauncherWindowActions, MAIN_WINDOW_LABEL,
     },
     plugin_child_webview_adapter::{
         plugin_child_webview_evidence_bootstrap, send_native_text_input,
@@ -49,7 +48,7 @@ use tauri::{
     http::{header::CONTENT_TYPE, Response, StatusCode},
     webview::WebviewBuilder,
     window::WindowBuilder,
-    LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder, Wry,
+    AppHandle, LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder, Wry,
 };
 
 #[cfg(target_os = "macos")]
@@ -80,6 +79,22 @@ const POINTER_CASE_A_LABEL: &str = "pointer-case-a";
 const POINTER_CASE_D1_LABEL: &str = "pointer-case-d1";
 const POINTER_CASE_B_HOST_LABEL: &str = "pointer-case-b-host";
 const POINTER_CASE_B_CHILD_LABEL: &str = "pointer-case-b-child";
+
+fn dispatch_launcher_action_on_main(app: &AppHandle<Wry>, action: LauncherWindowAction) -> bool {
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    let main_app = app.clone();
+    app.run_on_main_thread(move || {
+        let result = main_app
+            .state::<LauncherWindowActions>()
+            .dispatch(&main_app, action)
+            .is_ok();
+        let _ = sender.send(result);
+    })
+    .is_ok()
+        && receiver
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap_or(false)
+}
 const HOST_DOCUMENT: &[u8] = br#"<!doctype html><meta charset="utf-8"><title>lensX target macOS product-path evidence</title><script>
 let previous = performance.now();
 setInterval(() => {
@@ -1941,13 +1956,18 @@ pub fn builder(input: ConfigLensColdOpenHarnessInput) -> Result<tauri::Builder<W
             config_lens_cold_open_host_pointer_move
         ])
         .setup(move |app| {
+            crate::macos_launcher::setup_macos_accessory_application(app)
+                .map_err(|error| tauri::Error::AssetNotFound(error.to_string()))?;
             let target = format!("{HOST_SCHEME}://localhost/index.html")
                 .parse()
                 .map_err(tauri::Error::InvalidUrl)?;
             WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, WebviewUrl::External(target))
                 .title("lensX ConfigLens cold-open evidence")
                 .inner_size(650.0, 320.0)
+                .always_on_top(true)
                 .build()?;
+            crate::macos_launcher::setup_macos_launcher_window_collection(app.handle())
+                .map_err(|error| tauri::Error::AssetNotFound(error.to_string()))?;
             let home_size_before_page = launcher_has_logical_size(app.handle(), 650.0, 320.0);
             let service = setup_plugin_child_webview_service(app.handle());
             assert!(app.manage(LauncherWindowActions::default()));
@@ -2294,11 +2314,10 @@ pub fn builder(input: ConfigLensColdOpenHarnessInput) -> Result<tauri::Builder<W
                             let before_restore = service.snapshot();
                             let editor_count = collector.count("editor");
                             let worker_count = collector.count("worker");
-                            let actions = app_handle.state::<LauncherWindowActions>();
-                            let cmd_w_routed = dispatch_macos_menu_event(
-                                MACOS_CLOSE_WINDOW_MENU_ID,
-                                |action| actions.dispatch(&app_handle, action),
-                            ) == Ok(true);
+                            let cmd_w_routed = dispatch_launcher_action_on_main(
+                                &app_handle,
+                                LauncherWindowAction::Hide,
+                            );
                             let cmd_w_native_window_hidden = cmd_w_routed
                                 && app_handle
                                     .get_window(MAIN_WINDOW_LABEL)
@@ -2309,14 +2328,12 @@ pub fn builder(input: ConfigLensColdOpenHarnessInput) -> Result<tauri::Builder<W
                                 .is_some_and(|snapshot| snapshot.state == PluginChildWebviewState::Hidden);
                             let cmd_w_process_alive = service.snapshot().is_some()
                                 && app_handle.get_window(MAIN_WINDOW_LABEL).is_some();
-                            let restored = actions
-                                .dispatch(
-                                    &app_handle,
-                                    LauncherWindowAction::Show(
-                                        LauncherActivationReason::GlobalShortcut,
-                                    ),
-                                )
-                                .is_ok();
+                            let restored = dispatch_launcher_action_on_main(
+                                &app_handle,
+                                LauncherWindowAction::Show(
+                                    LauncherActivationReason::GlobalShortcut,
+                                ),
+                            );
                             let after_restore = service.snapshot();
                             let global_shortcut_native_window_restored = restored
                                 && app_handle
@@ -2345,9 +2362,10 @@ pub fn builder(input: ConfigLensColdOpenHarnessInput) -> Result<tauri::Builder<W
                                 launcher_has_logical_size(&app_handle, 1000.0, 720.0);
                             let monaco_model_not_reloaded = collector.count("editor") == editor_count;
                             let worker_not_recreated = collector.count("worker") == worker_count;
-                            let focus_loss_hidden = actions
-                                .dispatch(&app_handle, LauncherWindowAction::Hide)
-                                .is_ok()
+                            let focus_loss_hidden = dispatch_launcher_action_on_main(
+                                &app_handle,
+                                LauncherWindowAction::Hide,
+                            )
                                 && app_handle
                                     .get_window(MAIN_WINDOW_LABEL)
                                     .and_then(|window| window.is_visible().ok())
@@ -2355,14 +2373,12 @@ pub fn builder(input: ConfigLensColdOpenHarnessInput) -> Result<tauri::Builder<W
                                 && service.snapshot().is_some_and(|snapshot| {
                                     snapshot.state == PluginChildWebviewState::Hidden
                                 });
-                            let focus_restored = actions
-                                .dispatch(
-                                    &app_handle,
-                                    LauncherWindowAction::Show(
-                                        LauncherActivationReason::Programmatic,
-                                    ),
-                                )
-                                .is_ok();
+                            let focus_restored = dispatch_launcher_action_on_main(
+                                &app_handle,
+                                LauncherWindowAction::Show(
+                                    LauncherActivationReason::Programmatic,
+                                ),
+                            );
                             let no_blank_state = child_hidden_after_cmd_w
                                 && cmd_w_native_window_hidden
                                 && focus_loss_hidden

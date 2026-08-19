@@ -442,3 +442,203 @@ reveal, focus, resize, or destroy a replacement.
 #### Scenario: Launcher terminates
 - **WHEN** the app unmounts or exits
 - **THEN** Child WebView teardown joins the existing root lifecycle and leaves no native surface or bridge binding
+
+### Requirement: macOS Host MUST run as an accessory Launcher without a Dock tile
+
+On macOS, the system MUST configure lensX as a programmatically activatable
+accessory application from the observable start of the packaged application.
+While lensX is running, it MUST NOT show a Dock tile or ordinary application
+menu bar, MUST NOT use the prohibited activation policy that prevents Window
+creation or activation, and MUST keep the process and default global shortcut
+available after the Launcher Window is hidden. This policy MUST belong only to
+the trusted Rust Host. React, plugin Runtimes, plugin Host APIs, and public Host
+APIs MUST NOT receive authority to change the application activation policy or
+Dock visibility.
+
+If the Host cannot establish or confirm the required accessory policy, startup
+MUST fail before presenting an ordinary Dock application and MUST provide a
+safe, diagnosable setup stage. The system MUST NOT silently fall back to the
+Regular policy.
+
+#### Scenario: Launch the packaged macOS application
+
+- **WHEN** the user launches the packaged lensX `.app` through Launch Services
+- **THEN** the process runs under a programmatically activatable accessory
+  policy
+- **THEN** no lensX Dock tile appears from observable startup through process
+  exit
+- **THEN** the system does not show an ordinary lensX application menu bar
+
+#### Scenario: Hide an accessory Launcher
+
+- **WHEN** the ready macOS Launcher hides through the unified action boundary
+- **THEN** the lensX process and default global shortcut continue running
+- **THEN** hiding does not create a Dock tile, status item, or other persistent
+  clickable entry point
+
+#### Scenario: Accessory setup fails
+
+- **WHEN** the Host cannot set or confirm the macOS accessory activation policy
+- **THEN** startup terminates before showing an ordinary Regular application
+  Window
+- **THEN** developer diagnostics identify the application-policy setup stage
+  without exposing native error details to the user
+
+#### Scenario: Untrusted code requests application policy authority
+
+- **WHEN** React, a plugin Runtime, a plugin Host API, or a public Contract
+  attempts to change activation policy, Dock visibility, or application-menu
+  identity
+- **THEN** the system provides no such operation boundary
+- **THEN** the Host retains its confirmed accessory policy
+
+### Requirement: macOS Launcher MUST restore over another application's full-screen Space
+
+The complete native macOS `main` Window MUST participate in all Spaces and MUST
+be configured to coexist with another application's full-screen Window.
+Always-on-top, cross-Space, and full-screen auxiliary behavior MUST be
+established by the trusted Rust Host, MUST preserve the Launcher's existing
+non-full-screen semantics, and MUST NOT be exposed as native setters controlled
+by the frontend, plugins, DOM measurement, or Runtime messages.
+
+When the Launcher is hidden and the user presses the default global shortcut
+while another application occupies the current full-screen Space, the system
+MUST use the unified `toggle`/`show` action boundary to activate the accessory
+application, restore and show the complete native Window, request keyboard
+focus, and then send the Host activation event. The Launcher MUST appear above
+the full-screen content in the user's current full-screen Space. The system
+MUST NOT switch the user back to the Launcher's previous ordinary Space or
+exit, minimize, or otherwise change the foreground application's full-screen
+state.
+
+#### Scenario: Restore from another application's full-screen Space
+
+- **WHEN** the macOS Launcher is hidden
+- **AND** another application is full-screen in the user's current Space
+- **AND** the user presses the default global shortcut
+- **THEN** the pressed event enters the show path through the unified `toggle`
+  action
+- **THEN** the complete lensX Window is visible above the full-screen content
+  in the current full-screen Space and receives keyboard focus
+- **THEN** the system does not switch to the previous Space or exit, minimize,
+  or change the foreground application's full-screen state
+
+#### Scenario: Restore from an ordinary Space
+
+- **WHEN** the macOS Launcher is hidden and the user is in an ordinary,
+  non-full-screen Space
+- **AND** the user presses the default global shortcut
+- **THEN** the system shows and focuses the Launcher through the same action
+  boundary
+- **THEN** cross-Space policy does not change the existing size, position,
+  non-full-screen state, or presentation state
+
+#### Scenario: Repeated full-screen toggles
+
+- **WHEN** the user repeatedly hides and restores the Launcher in another
+  application's full-screen Space
+- **THEN** each pressed event executes exactly one hide or show
+- **THEN** after each show the Window is visible and accepts input, and after
+  each hide the Window no longer obscures full-screen content
+- **THEN** the system does not accumulate duplicate shortcuts, Windows, Space
+  listeners, or focus listeners
+
+#### Scenario: Restore a current plugin Page over full-screen content
+
+- **WHEN** the hidden Launcher contains the same equivalent current plugin
+  attempt
+- **AND** the user restores the Launcher from another application's full-screen
+  Space with the default global shortcut
+- **THEN** the system shows and focuses the complete native parent before
+  restoring the same Child WebView presentation
+- **THEN** Host chrome and plugin content are visible together in the same
+  current full-screen Space
+- **THEN** the Runtime attempt, Session, plugin document, and in-memory state are
+  not recreated because of the cross-Space restore
+
+#### Scenario: Full-screen Space setup cannot be established
+
+- **WHEN** the Host cannot resolve the complete native `main` Window, apply
+  collection behavior on the main thread, or confirm the cross-Space and
+  full-screen auxiliary policy
+- **THEN** setup fails before the Launcher is declared ready
+- **THEN** the system does not fall back to calling only `show`, switching to
+  the previous Space, or weakening visibility assertions
+- **THEN** developer diagnostics identify the safe native setup stage
+
+### Requirement: Accessory Launcher MUST retain application-local close and quit shortcuts
+
+When the macOS accessory policy removes the ordinary application menu bar, the
+system MUST continue to provide exactly one lensX application-local `Cmd+W`
+entry point and exactly one lensX application-local `Cmd+Q` entry point.
+`Cmd+W` MUST follow the existing recoverable-hide requirement and enter the
+unified Hide action. `Cmd+Q` MUST terminate the lensX process after performing
+the existing application teardown. Both entry points MUST handle keys only
+while lensX is the foreground application, MUST NOT be registered as
+system-wide global shortcuts, and MUST NOT intercept the corresponding commands
+for another foreground application.
+
+#### Scenario: Press Cmd+W without a visible application menu bar
+
+- **WHEN** the accessory lensX Window is visible and focused without an
+  ordinary application menu bar
+- **AND** the user presses `Cmd+W`
+- **THEN** exactly one application-local entry point hides the complete Launcher
+  through the unified Hide action
+- **THEN** the process and default recovery shortcut continue running
+
+#### Scenario: Press Cmd+Q without a visible application menu bar
+
+- **WHEN** the accessory lensX Window is visible and focused without an
+  ordinary application menu bar
+- **AND** the user presses `Cmd+Q`
+- **THEN** exactly one application-local entry point requests lensX exit
+- **THEN** application teardown terminates the current Child WebView and Host
+  resources before the process ends
+
+#### Scenario: Another application owns the foreground
+
+- **WHEN** another application is the macOS foreground application
+- **AND** the user presses `Cmd+W` or `Cmd+Q` in that application
+- **THEN** lensX does not hide, exit, or consume the corresponding key event
+- **THEN** the foreground application retains its own local shortcut behavior
+
+#### Scenario: Recovery shortcut registration fails
+
+- **WHEN** the default lensX global recovery shortcut cannot be registered
+- **THEN** the system does not enable application-local `Cmd+W` or focus-loss
+  hiding that would hide the Launcher
+- **THEN** the visible Window retains an exit path and the system does not leave
+  a hidden process without a Dock tile or recovery entry point
+
+### Requirement: macOS accessory and full-screen behavior MUST have target product evidence
+
+Delivery MUST combine deterministic Rust tests, configuration and bundle
+policy checks, and bounded product-path evidence from the current packaged
+`.app` on a supported target macOS system. The evidence MUST cover bundle agent
+identity, runtime Accessory policy, absence of a Dock tile, the complete `main`
+Window's cross-Space, full-screen auxiliary, and level state, ordinary-Space
+restore, restore over another application's full-screen Space, keyboard focus,
+repeated toggles, same-attempt current Child WebView restore, `Cmd+W`, `Cmd+Q`,
+non-interference with another foreground application, and setup-failure
+diagnostics. Development mode, static source checks, or a simulated Window MUST
+NOT alone replace packaged-application Dock and full-screen Space evidence.
+Real product evidence MUST NOT replace deterministic failure and race tests.
+
+#### Scenario: Target macOS product matrix passes
+
+- **WHEN** a maintainer runs the focused macOS gate against the current packaged
+  lensX `.app` and an independent full-screen test application
+- **THEN** all accessory, Dock, Space, full-screen level, focus, shortcut, Child
+  presentation, and teardown assertions pass with bounded evidence
+- **THEN** the evidence records macOS and Tauri, Tao, and Wry revisions plus
+  failure diagnostics without depending on the user's default browser
+  configuration or an existing user application session
+
+#### Scenario: Only simulated evidence is available
+
+- **WHEN** unit tests and configuration checks pass but the target macOS
+  packaged-product gate has not run or has not proved absence of a Dock tile and
+  visibility in a full-screen Space
+- **THEN** the change MUST NOT be marked as completely delivered
+- **THEN** maintainers explicitly report the missing target-product evidence

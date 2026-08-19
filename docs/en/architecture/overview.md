@@ -122,10 +122,25 @@ control when page content fails.
 
 ## Launcher Window Lifecycle
 
+On macOS, the packaged bundle declares `LSUIElement=true`, and Rust confirms
+`ActivationPolicy::Accessory` before the frame-aware setup creates the first
+Host Window. The running Launcher therefore has no Dock tile or ordinary
+application menu bar while retaining programmatic activation. Policy
+establishment is a startup prerequisite: a setter or confirmation failure
+terminates setup before Launcher lifecycle listeners, the global shortcut, or
+Plugin services are declared ready; it never falls back to the Regular or
+Prohibited policy. Non-macOS startup remains unchanged.
+
 The Tauri Window with stable label `main` starts at `650×320` logical pixels,
 is transparent, always on top, undecorated, non-resizable, and non-fullscreen,
 and has a `320×180..4096×4096` hard envelope. Home, Search, and Host Pages are
 fixed and non-resizable at `650×320`, `650×480`, and `650×600` respectively.
+On macOS the Window also uses `visibleOnAllWorkspaces`; after native creation,
+Rust preserves its complete AppKit collection behavior and merges
+`FullScreenAuxiliary`. The resulting complete parent Window can join the
+current Space and coexist above another application's full-screen Window.
+These setters remain Host-private and are not available to React, Plugin
+Runtime messages, public Host APIs, or DOM measurements.
 
 Manifest `0.4.0` gives every normalized plugin Page a bounded `presentation`.
 An omitted author value becomes fixed `650×600`; an explicit value supplies an
@@ -139,8 +154,9 @@ can choose native Window presentation.
 
 Rust owns all native launcher window operations through one action boundary:
 
-- `show` restores the window, shows it, requests focus, and then emits a typed
-  activation event;
+- `show` activates the macOS accessory application, restores the window, shows
+  it, requests focus, emits a typed activation event, and then restores the
+  same current Plugin Child WebView presentation;
 - `hide` hides the window without terminating the application process;
 - `toggle` reads the current visibility and reuses the corresponding `show` or
   `hide` path.
@@ -175,6 +191,29 @@ listener is unavailable, the custom menu is not installed. If menu installation
 itself fails, the Host records the `hide` action and `install_menu` operation
 stage without terminating the process; the already registered recovery
 shortcut and native lifecycle listeners remain available.
+
+Accessory mode keeps the hidden application menu command graph so local key
+equivalents still work without a visible menu bar. Exactly one custom
+application-local `Cmd+W` command reuses the unified Hide action, and exactly
+one custom application-local `Cmd+Q` command requests the existing application
+exit path, whose `RunEvent::Exit` teardown terminates the current Child WebView
+and Host resources. Both routes verify that lensX is foreground and are absent
+from the global-shortcut plugin. Because the target Accessory runtime does not
+reliably dispatch the hidden menu key equivalents, Host setup installs one
+idempotent AppKit local event monitor as the foreground-only fallback; it
+consumes matching events before the menu route can duplicate them and is
+released during application exit. If the default recovery shortcut is not ready,
+the menu graph and all hide-on-close/focus-loss paths remain disabled so an
+Accessory process cannot become unreachable.
+
+Restoring from an ordinary Space and restoring above another application's
+full-screen Space use the same action path. A failure to establish or confirm
+Accessory policy, complete native Window identity, collection behavior, or
+application activation is reported as a safe setup/action operation and stops
+the corresponding transition before a success event or independent Child
+restore. The Launcher retains its last position and display; moving it to the
+pointer's display or automatically recentering across multiple displays is not
+part of this lifecycle.
 
 After a successful `show`, Rust emits `launcher://activated` to the main
 webview. Its serializable payload contains a `reason` field with one of

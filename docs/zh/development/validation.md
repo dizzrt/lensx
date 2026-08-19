@@ -30,6 +30,36 @@
 Headless 只描述渲染和窗口行为，不会移除浏览器进程所需的操作系统权限。已批准执行只扩展指定验证
 命令所需的进程上下文，并不授权使用用户的正常浏览器 Profile。
 
+## macOS Accessory Launcher 验证
+
+修改 macOS application policy、bundle metadata、Launcher Window collection behavior、
+show/hide/toggle 顺序、本地 `Cmd+W`/`Cmd+Q` 或相关 teardown 时，必须运行：
+
+```bash
+pnpm run check:macos-accessory-launcher
+pnpm run evidence:macos-accessory-launcher
+```
+
+focused check 会验证 `LSUIElement`、`visibleOnAllWorkspaces`、保留的 `alwaysOnTop`、非全屏和尺寸
+约束、不使用 macOS 不支持的 `skipTaskbar`、确定性的 Rust failure/order case、Plugin Child
+lifecycle、双语文档镜像，以及绑定当前源码的已提交 evidence record。只有静态配置、源码扫描或模拟
+Window adapter，而没有当前打包产品证据时，不能通过该门禁。
+
+evidence 命令构建当前带观察特性的 `.app`，通过 Launch Services 启动，并使用独立牺牲应用依次建立
+普通 Space 与真实全屏 Space。证据记录 macOS、Tauri/Tao/Wry revision、bundle/runtime Accessory
+policy、无 Dock/无普通菜单、完整 Window collection behavior 与 level、occlusion、当前 Space
+可见性、focus、重复 production action toggle、application-local key equivalent、AppKit local monitor
+cleanup、进程退出，以及当前 ConfigLens Child WebView lifecycle matrix。source digest 会使过期或仅模拟证据失败。
+产品会在发送 `Cmd+Q` 前写入有界的退出前记录；控制器只有在超时范围内观察到该产品进程确实退出后，
+才会将退出事实提升为通过。
+
+全部状态使用专用 evidence bundle identifier 和全新的系统临时目录。门禁不会打开浏览器、连接用户
+应用、使用现有应用 session、复用用户 profile 或修改默认浏览器。所有文件与进程等待都有有界 timeout。
+成功时会通过 `Cmd+Q`/正常应用 teardown 退出产品，请求牺牲应用退出，移除临时文件与专用 evidence
+应用状态；失败时只在命令诊断中保留定位安全 stage 所需的信息。配置/bundle 失败、
+`macos_application_policy`、`macos_window_collection`、Launcher action operation、牺牲应用 readiness、
+产品 timeout、schema/privacy drift 与 cleanup failure 属于不同失败分类。
+
 ## 前端验证
 
 执行单元测试和组件测试：

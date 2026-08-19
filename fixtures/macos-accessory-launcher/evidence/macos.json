@@ -1,0 +1,114 @@
+{
+  "evidence_version": "0.1.0",
+  "platform": "macos",
+  "macos_version": "26.6",
+  "source_digest": "b69ec1feda968e2cb7d6716b3717c072bf2b6ddfd21be443c4b039fe39f603e1",
+  "revisions": {
+    "tauri": "2.11.5",
+    "tao": "0.35.3",
+    "wry": "0.55.1"
+  },
+  "bundle_metadata": {
+    "ls_ui_element": true,
+    "launch_services_start": true,
+    "packaged_app": true
+  },
+  "product": {
+    "evidence_version": "0.1.0",
+    "platform": "macos",
+    "bundle_runtime": {
+      "runtime_accessory": true,
+      "dock_tile_absent": true,
+      "ordinary_menu_bar_absent": true,
+      "recovery_shortcut_registered": true,
+      "hidden_process_alive": true
+    },
+    "window_policy": {
+      "complete_main_window": true,
+      "can_join_all_spaces": true,
+      "full_screen_auxiliary": true,
+      "above_normal_level": true,
+      "always_on_top": true,
+      "non_fullscreen": true,
+      "single_native_window": true
+    },
+    "ordinary_space": {
+      "production_global_shortcut_action": true,
+      "visible": true,
+      "focused": true,
+      "on_active_space": true,
+      "occlusion_visible": true
+    },
+    "fullscreen_space": {
+      "sacrifice_activated_before_restore": true,
+      "production_global_shortcut_action": true,
+      "visible": true,
+      "focused": true,
+      "on_active_space": true,
+      "occlusion_visible": true,
+      "above_fullscreen_content": true
+    },
+    "repeated_toggle": {
+      "repetitions": 3,
+      "exact_hide_show_pairs": true,
+      "single_native_window": true,
+      "recovery_shortcut_still_registered": true
+    },
+    "local_shortcuts": {
+      "cmd_w_key_equivalent_dispatched": true,
+      "cmd_w_reused_hide_action": true,
+      "cmd_w_process_alive": true,
+      "restored_after_cmd_w": true,
+      "other_foreground_cmd_w_ignored": true,
+      "other_foreground_cmd_q_ignored": true,
+      "cmd_q_key_equivalent_dispatched": true,
+      "cmd_q_exit_requested": true
+    },
+    "cleanup": {
+      "bounded_execution": true,
+      "graceful_exit_requested": true,
+      "raw_paths_omitted": true
+    }
+  },
+  "sacrifice": {
+    "evidence_version": "0.1.0",
+    "process_alive": true,
+    "ordinary_ready": true,
+    "fullscreen_ready": true,
+    "fullscreen_preserved": true,
+    "graceful_cleanup": true
+  },
+  "plugin_child": {
+    "home_650x320": true,
+    "page_800x600": true,
+    "page_resizable": true,
+    "user_resize_1000x720": true,
+    "same_user_size_restored": true,
+    "close_home_650x320_before_teardown": true,
+    "close_home_non_resizable": true,
+    "reopen_initial_800x600": true,
+    "user_size_not_persisted": true,
+    "cmd_w_native_window_hidden": true,
+    "cmd_w_process_alive": true,
+    "focus_loss_native_window_hidden": true,
+    "no_host_visible_plugin_hidden_blank_state": true,
+    "global_shortcut_native_window_restored": true,
+    "same_child_webview_restored": true,
+    "same_runtime_attempt_restored": true,
+    "same_session_restored": true,
+    "monaco_model_not_reloaded": true,
+    "worker_not_recreated": true,
+    "page_close_destroyed_attempt": true,
+    "zero_native_bridge_resource_authority": true
+  },
+  "gate": {
+    "current_source_digest": true,
+    "packaged_product_executed": true,
+    "product_process_exited": true,
+    "setup_failure_covered_by_deterministic_tests": true,
+    "static_results_not_substituted": true,
+    "temporary_state_isolated": true,
+    "bounded_timeouts": true,
+    "graceful_cleanup": true
+  }
+}

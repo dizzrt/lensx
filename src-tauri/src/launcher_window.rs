@@ -2,7 +2,7 @@ use serde::Serialize;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc,
 };
 #[cfg(target_os = "macos")]
@@ -12,6 +12,13 @@ use tauri::menu::{
 use tauri::plugin::TauriPlugin;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State, Webview, Window, WindowEvent};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+#[cfg(target_os = "macos")]
+use {
+    block2::RcBlock,
+    objc2::{rc::Retained, runtime::AnyObject},
+    objc2_app_kit::{NSEvent, NSEventMask, NSEventModifierFlags, NSRunningApplication},
+    std::ptr::NonNull,
+};
 
 use crate::plugin_child_webview_service::{
     PluginChildWebviewAttempt, PluginChildWebviewPresentationResult, PluginChildWebviewService,
@@ -22,21 +29,44 @@ pub const MAIN_WINDOW_LABEL: &str = "main";
 pub const LAUNCHER_ACTIVATED_EVENT: &str = "launcher://activated";
 pub const DEFAULT_SHORTCUT_LABEL: &str = "Ctrl+Shift+Space";
 pub const MACOS_CLOSE_WINDOW_MENU_ID: &str = "lensx.macos.close_window";
+pub const MACOS_QUIT_MENU_ID: &str = "lensx.macos.quit";
 const MACOS_CLOSE_WINDOW_ACCELERATOR: &str = "Cmd+W";
+const MACOS_QUIT_ACCELERATOR: &str = "Cmd+Q";
 const DEFAULT_SHORTCUT_BINDINGS: [&str; 1] = [DEFAULT_SHORTCUT_LABEL];
+#[cfg(target_os = "macos")]
+static MACOS_LOCAL_COMMAND_MONITOR: AtomicUsize = AtomicUsize::new(0);
+#[cfg(target_os = "macos")]
+static MACOS_LOCAL_CLOSE_COUNT: AtomicUsize = AtomicUsize::new(0);
+#[cfg(target_os = "macos")]
+static MACOS_LOCAL_QUIT_COUNT: AtomicUsize = AtomicUsize::new(0);
+#[cfg(target_os = "macos")]
+static MACOS_QUIT_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MacosMenuCommand {
+    Window(LauncherWindowAction),
+    Quit,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct MacosMenuShortcutBinding {
     id: &'static str,
     accelerator: &'static str,
-    action: LauncherWindowAction,
+    command: MacosMenuCommand,
 }
 
-const MACOS_MENU_SHORTCUT_BINDINGS: [MacosMenuShortcutBinding; 1] = [MacosMenuShortcutBinding {
-    id: MACOS_CLOSE_WINDOW_MENU_ID,
-    accelerator: MACOS_CLOSE_WINDOW_ACCELERATOR,
-    action: LauncherWindowAction::Hide,
-}];
+const MACOS_MENU_SHORTCUT_BINDINGS: [MacosMenuShortcutBinding; 2] = [
+    MacosMenuShortcutBinding {
+        id: MACOS_CLOSE_WINDOW_MENU_ID,
+        accelerator: MACOS_CLOSE_WINDOW_ACCELERATOR,
+        command: MacosMenuCommand::Window(LauncherWindowAction::Hide),
+    },
+    MacosMenuShortcutBinding {
+        id: MACOS_QUIT_MENU_ID,
+        accelerator: MACOS_QUIT_ACCELERATOR,
+        command: MacosMenuCommand::Quit,
+    },
+];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -71,6 +101,7 @@ pub enum LauncherWindowOperation {
     Show,
     Hide,
     Focus,
+    ActivateApplication,
     EmitActivation,
     InstallMenu,
 }
@@ -84,6 +115,7 @@ impl Display for LauncherWindowOperation {
             Self::Show => "show",
             Self::Hide => "hide",
             Self::Focus => "focus",
+            Self::ActivateApplication => "activate_application",
             Self::EmitActivation => "emit_activation",
             Self::InstallMenu => "install_menu",
         };
@@ -171,6 +203,7 @@ trait LauncherWindowResolver {
 
     fn resolve_window(&self) -> Result<Self::Window, String>;
     fn resolve_host(&self) -> Result<Self::Host, String>;
+    fn activate_application(&self) -> Result<(), String>;
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -348,6 +381,11 @@ fn show_with_host<R: LauncherWindowResolver>(
     let mut host = resolver.resolve_host().map_err(|details| {
         LauncherWindowActionError::new(action, LauncherWindowOperation::ResolveWindow, details)
     })?;
+    run_operation(
+        resolver.activate_application(),
+        action,
+        LauncherWindowOperation::ActivateApplication,
+    )?;
     show_native(window, action)?;
     let activation = run_operation(
         host.emit_activation(reason),
@@ -408,7 +446,8 @@ impl<R: Runtime> LauncherWindowAdapter for TauriLauncherWindowAdapter<R> {
     }
 
     fn focus(&mut self) -> Result<(), String> {
-        self.window.set_focus().map_err(|error| error.to_string())
+        self.window.set_focus().map_err(|error| error.to_string())?;
+        crate::macos_launcher::confirm_visible_macos_accessory_application_active()
     }
 }
 
@@ -447,6 +486,10 @@ impl<R: Runtime> LauncherWindowResolver for TauriLauncherWindowResolver<'_, R> {
             .get_webview(MAIN_WINDOW_LABEL)
             .map(|host| TauriLauncherHostWebviewEmitter { host })
             .ok_or_else(|| format!("Host webview '{MAIN_WINDOW_LABEL}' was not found"))
+    }
+
+    fn activate_application(&self) -> Result<(), String> {
+        crate::macos_launcher::activate_macos_accessory_application()
     }
 }
 
@@ -606,13 +649,181 @@ fn route_shortcut_event(
     }
 }
 
+#[cfg(test)]
 fn route_macos_menu_event(menu_id: &str) -> Option<LauncherWindowAction> {
     MACOS_MENU_SHORTCUT_BINDINGS
         .iter()
         .find(|binding| binding.id == menu_id)
-        .map(|binding| binding.action)
+        .and_then(|binding| match binding.command {
+            MacosMenuCommand::Window(action) => Some(action),
+            MacosMenuCommand::Quit => None,
+        })
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MacosLocalCommandOutcome {
+    Ignored,
+    WindowAction,
+    QuitRequested,
+}
+
+fn dispatch_macos_local_command<F, Q>(
+    application_active: bool,
+    menu_id: &str,
+    dispatch: F,
+    request_quit: Q,
+) -> Result<MacosLocalCommandOutcome, LauncherWindowActionError>
+where
+    F: FnOnce(LauncherWindowAction) -> Result<(), LauncherWindowActionError>,
+    Q: FnOnce(),
+{
+    if !application_active {
+        return Ok(MacosLocalCommandOutcome::Ignored);
+    }
+    let Some(binding) = MACOS_MENU_SHORTCUT_BINDINGS
+        .iter()
+        .find(|binding| binding.id == menu_id)
+    else {
+        return Ok(MacosLocalCommandOutcome::Ignored);
+    };
+    match binding.command {
+        MacosMenuCommand::Window(action) => {
+            dispatch(action)?;
+            Ok(MacosLocalCommandOutcome::WindowAction)
+        }
+        MacosMenuCommand::Quit => {
+            request_quit();
+            Ok(MacosLocalCommandOutcome::QuitRequested)
+        }
+    }
+}
+
+#[cfg(all(target_os = "macos", feature = "macos-accessory-evidence"))]
+pub(crate) fn macos_inactive_local_commands_ignored_for_evidence() -> (bool, bool) {
+    let close_ignored = dispatch_macos_local_command(
+        false,
+        MACOS_CLOSE_WINDOW_MENU_ID,
+        |_| Ok(()),
+        || unreachable!("inactive local close must not dispatch"),
+    ) == Ok(MacosLocalCommandOutcome::Ignored);
+    let quit_ignored = dispatch_macos_local_command(
+        false,
+        MACOS_QUIT_MENU_ID,
+        |_| Ok(()),
+        || unreachable!("inactive local quit must not dispatch"),
+    ) == Ok(MacosLocalCommandOutcome::Ignored);
+    (close_ignored, quit_ignored)
+}
+
+#[cfg(target_os = "macos")]
+fn request_macos_application_quit<R: Runtime>(app: &AppHandle<R>) {
+    if MACOS_QUIT_IN_FLIGHT.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    if let Some(service) = app.try_state::<Arc<PluginChildWebviewService<R>>>() {
+        if let Some(snapshot) = service.snapshot() {
+            let _ = service.compare_current_teardown(snapshot.attempt);
+        }
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        app.exit(0);
+    });
+}
+
+#[cfg(target_os = "macos")]
+fn local_command_for_event(event: &NSEvent) -> Option<MacosMenuCommand> {
+    let modifiers = event.modifierFlags() & NSEventModifierFlags::DeviceIndependentFlagsMask;
+    route_macos_local_key(modifiers == NSEventModifierFlags::Command, event.keyCode())
+}
+
+fn route_macos_local_key(command_only: bool, key_code: u16) -> Option<MacosMenuCommand> {
+    if !command_only {
+        return None;
+    }
+    match key_code {
+        13 => Some(MacosMenuCommand::Window(LauncherWindowAction::Hide)),
+        12 => Some(MacosMenuCommand::Quit),
+        _ => None,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn install_macos_local_command_monitor<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<(), LauncherWindowActionError> {
+    if MACOS_LOCAL_COMMAND_MONITOR.load(Ordering::Acquire) != 0 {
+        return Ok(());
+    }
+    let monitor_app = app.clone();
+    let monitor_block = RcBlock::new(move |event: NonNull<NSEvent>| -> *mut NSEvent {
+        let event = unsafe { event.as_ref() };
+        if !NSRunningApplication::currentApplication().isActive() {
+            return event as *const NSEvent as *mut NSEvent;
+        }
+        match local_command_for_event(event) {
+            Some(MacosMenuCommand::Window(action)) => {
+                let actions = monitor_app.state::<LauncherWindowActions>();
+                if actions.dispatch(&monitor_app, action).is_ok() {
+                    MACOS_LOCAL_CLOSE_COUNT.fetch_add(1, Ordering::AcqRel);
+                }
+                std::ptr::null_mut()
+            }
+            Some(MacosMenuCommand::Quit) => {
+                MACOS_LOCAL_QUIT_COUNT.fetch_add(1, Ordering::AcqRel);
+                request_macos_application_quit(&monitor_app);
+                std::ptr::null_mut()
+            }
+            None => event as *const NSEvent as *mut NSEvent,
+        }
+    });
+    let monitor = unsafe {
+        NSEvent::addLocalMonitorForEventsMatchingMask_handler(NSEventMask::KeyDown, &monitor_block)
+    }
+    .ok_or_else(|| {
+        LauncherWindowActionError::new(
+            LauncherWindowAction::Hide,
+            LauncherWindowOperation::InstallMenu,
+            "application-local command monitor is unavailable",
+        )
+    })?;
+    let pointer = Retained::into_raw(monitor) as usize;
+    if MACOS_LOCAL_COMMAND_MONITOR
+        .compare_exchange(0, pointer, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        if let Some(monitor) = unsafe { Retained::<AnyObject>::from_raw(pointer as *mut AnyObject) }
+        {
+            unsafe { NSEvent::removeMonitor(&monitor) };
+        }
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn release_macos_local_command_monitor() {
+    let pointer = MACOS_LOCAL_COMMAND_MONITOR.swap(0, Ordering::AcqRel);
+    if pointer == 0 {
+        return;
+    }
+    if let Some(monitor) = unsafe { Retained::<AnyObject>::from_raw(pointer as *mut AnyObject) } {
+        unsafe { NSEvent::removeMonitor(&monitor) };
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn release_macos_local_command_monitor() {}
+
+#[cfg(all(target_os = "macos", feature = "macos-accessory-evidence"))]
+pub(crate) fn macos_local_command_counts() -> (usize, usize) {
+    (
+        MACOS_LOCAL_CLOSE_COUNT.load(Ordering::Acquire),
+        MACOS_LOCAL_QUIT_COUNT.load(Ordering::Acquire),
+    )
+}
+
+#[cfg(test)]
 pub(crate) fn dispatch_macos_menu_event<F>(
     menu_id: &str,
     dispatch: F,
@@ -830,8 +1041,9 @@ fn install_window_lifecycle_listener<R: Runtime>(
 
 #[cfg(target_os = "macos")]
 fn build_macos_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
-    debug_assert_eq!(MACOS_MENU_SHORTCUT_BINDINGS.len(), 1);
+    debug_assert_eq!(MACOS_MENU_SHORTCUT_BINDINGS.len(), 2);
     let close_binding = MACOS_MENU_SHORTCUT_BINDINGS[0];
+    let quit_binding = MACOS_MENU_SHORTCUT_BINDINGS[1];
     let package_info = app.package_info();
     let config = app.config();
     let about_metadata = AboutMetadata {
@@ -851,6 +1063,13 @@ fn build_macos_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>
         "Close Window",
         true,
         Some(close_binding.accelerator),
+    )?;
+    let quit = MenuItem::with_id(
+        app,
+        quit_binding.id,
+        format!("Quit {}", package_info.name),
+        true,
+        Some(quit_binding.accelerator),
     )?;
     let window_menu = Submenu::with_id_and_items(
         app,
@@ -880,7 +1099,7 @@ fn build_macos_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>
                     &PredefinedMenuItem::hide(app, None)?,
                     &PredefinedMenuItem::hide_others(app, None)?,
                     &PredefinedMenuItem::separator(app)?,
-                    &PredefinedMenuItem::quit(app, None)?,
+                    &quit,
                 ],
             )?,
             &Submenu::with_items(app, "File", true, &[&close_window])?,
@@ -932,17 +1151,38 @@ fn install_macos_close_window_menu<R: Runtime>(
     })?;
     app.on_menu_event(|app, event| {
         let actions = app.state::<LauncherWindowActions>();
-        match dispatch_macos_menu_event(event.id().as_ref(), |action| actions.dispatch(app, action))
-        {
-            Ok(true) => {
+        let application_active = match crate::macos_launcher::is_macos_application_active() {
+            Ok(active) => active,
+            Err(error) => {
+                eprintln!("macOS local command foreground check failed: {error}");
+                false
+            }
+        };
+        match dispatch_macos_local_command(
+            application_active,
+            event.id().as_ref(),
+            |action| actions.dispatch(app, action),
+            || {
+                MACOS_LOCAL_QUIT_COUNT.fetch_add(1, Ordering::AcqRel);
+                request_macos_application_quit(app);
+            },
+        ) {
+            Ok(MacosLocalCommandOutcome::WindowAction) => {
                 eprintln!("macOS Close Window menu routed to launcher action 'hide'");
             }
-            Ok(false) => {}
+            Ok(MacosLocalCommandOutcome::QuitRequested) => {
+                eprintln!("macOS Quit menu routed to application teardown");
+            }
+            Ok(MacosLocalCommandOutcome::Ignored) => {}
             Err(error) => {
-                eprintln!("macOS Close Window menu action failed: {error}");
+                eprintln!("macOS local menu command failed: {error}");
             }
         }
     });
+    // The target Accessory runtime does not reliably dispatch hidden-menu key
+    // equivalents. This foreground-only local monitor is the verified fallback;
+    // it consumes matching events before the menu route can duplicate them.
+    install_macos_local_command_monitor(app)?;
 
     Ok(())
 }
@@ -1080,6 +1320,10 @@ mod tests {
                 Ok(FakeHost::default())
             }
         }
+
+        fn activate_application(&self) -> Result<(), String> {
+            Ok(())
+        }
     }
 
     #[derive(Clone)]
@@ -1148,6 +1392,7 @@ mod tests {
         window: OrderedWindow,
         fail_window: bool,
         fail_host: bool,
+        fail_activation: bool,
     }
 
     impl LauncherWindowResolver for OrderedResolver {
@@ -1172,6 +1417,15 @@ mod tests {
                     calls: Rc::clone(&self.calls),
                     fail: false,
                 })
+            }
+        }
+
+        fn activate_application(&self) -> Result<(), String> {
+            self.calls.borrow_mut().push("activate_application");
+            if self.fail_activation {
+                Err("application activation failed".to_owned())
+            } else {
+                Ok(())
             }
         }
     }
@@ -1247,6 +1501,7 @@ mod tests {
             },
             fail_window: false,
             fail_host: false,
+            fail_activation: false,
         };
         (calls, resolver)
     }
@@ -1356,6 +1611,7 @@ mod tests {
             vec![
                 "resolve_window",
                 "resolve_host",
+                "activate_application",
                 "window_restore",
                 "window_show",
                 "window_focus",
@@ -1392,6 +1648,30 @@ mod tests {
         )
         .expect_err("Host resolution should fail");
         assert_eq!(*calls.borrow(), vec!["resolve_window", "resolve_host"]);
+    }
+
+    #[test]
+    fn application_activation_failure_short_circuits_parent_child_and_host_activation() {
+        let (calls, mut resolver) = ordered_fixture(false, None);
+        let child = child_fixture(&calls, PluginChildWebviewState::Hidden);
+        resolver.fail_activation = true;
+
+        let error = execute_with_resolver_policy(
+            &resolver,
+            Some(&child),
+            LauncherWindowAction::Show(LauncherActivationReason::GlobalShortcut),
+            false,
+        )
+        .expect_err("application activation failure must short-circuit show");
+
+        assert_eq!(
+            error.operation,
+            LauncherWindowOperation::ActivateApplication
+        );
+        assert_eq!(
+            *calls.borrow(),
+            vec!["resolve_window", "resolve_host", "activate_application"]
+        );
     }
 
     #[test]
@@ -1646,15 +1926,95 @@ mod tests {
 
     #[test]
     fn macos_menu_declares_exactly_one_cmd_w_binding() {
-        assert_eq!(MACOS_MENU_SHORTCUT_BINDINGS.len(), 1);
+        assert_eq!(MACOS_MENU_SHORTCUT_BINDINGS.len(), 2);
         assert_eq!(
             MACOS_MENU_SHORTCUT_BINDINGS[0],
             MacosMenuShortcutBinding {
                 id: MACOS_CLOSE_WINDOW_MENU_ID,
                 accelerator: MACOS_CLOSE_WINDOW_ACCELERATOR,
-                action: LauncherWindowAction::Hide,
+                command: MacosMenuCommand::Window(LauncherWindowAction::Hide),
             }
         );
+        assert_eq!(
+            MACOS_MENU_SHORTCUT_BINDINGS[1],
+            MacosMenuShortcutBinding {
+                id: MACOS_QUIT_MENU_ID,
+                accelerator: MACOS_QUIT_ACCELERATOR,
+                command: MacosMenuCommand::Quit,
+            }
+        );
+        assert_eq!(
+            MACOS_MENU_SHORTCUT_BINDINGS
+                .iter()
+                .filter(|binding| binding.accelerator == MACOS_CLOSE_WINDOW_ACCELERATOR)
+                .count(),
+            1
+        );
+        assert_eq!(
+            MACOS_MENU_SHORTCUT_BINDINGS
+                .iter()
+                .filter(|binding| binding.accelerator == MACOS_QUIT_ACCELERATOR)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn macos_local_commands_are_foreground_only_and_quit_once() {
+        let window_dispatches = Cell::new(0);
+        let quit_requests = Cell::new(0);
+        assert_eq!(
+            dispatch_macos_local_command(
+                false,
+                MACOS_CLOSE_WINDOW_MENU_ID,
+                |_| {
+                    window_dispatches.set(window_dispatches.get() + 1);
+                    Ok(())
+                },
+                || quit_requests.set(quit_requests.get() + 1),
+            )
+            .expect("inactive local command should be ignored"),
+            MacosLocalCommandOutcome::Ignored
+        );
+        assert_eq!(window_dispatches.get(), 0);
+        assert_eq!(quit_requests.get(), 0);
+
+        assert_eq!(
+            dispatch_macos_local_command(
+                true,
+                MACOS_QUIT_MENU_ID,
+                |_| {
+                    window_dispatches.set(window_dispatches.get() + 1);
+                    Ok(())
+                },
+                || quit_requests.set(quit_requests.get() + 1),
+            )
+            .expect("foreground Quit should route"),
+            MacosLocalCommandOutcome::QuitRequested
+        );
+        assert_eq!(window_dispatches.get(), 0);
+        assert_eq!(quit_requests.get(), 1);
+    }
+
+    #[test]
+    fn macos_local_key_fallback_is_command_only_and_closed_to_other_keys() {
+        assert_eq!(
+            route_macos_local_key(true, 13),
+            Some(MacosMenuCommand::Window(LauncherWindowAction::Hide))
+        );
+        assert_eq!(
+            route_macos_local_key(true, 12),
+            Some(MacosMenuCommand::Quit)
+        );
+        assert_eq!(route_macos_local_key(false, 13), None);
+        assert_eq!(route_macos_local_key(true, 0), None);
+
+        let source = include_str!("launcher_window.rs");
+        assert!(source.contains(".compare_exchange(0, pointer"));
+        assert!(source.contains("NSEvent::removeMonitor"));
+        assert!(source.contains("NSRunningApplication::currentApplication().isActive()"));
+        assert!(!source.contains("global_shortcut().register(\"Cmd+W\")"));
+        assert!(!source.contains("global_shortcut().register(\"Cmd+Q\")"));
     }
 
     #[test]
