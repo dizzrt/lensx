@@ -20,10 +20,21 @@ actually closed, disabled, replaced, reloaded, uninstalled, or otherwise torn
 down. The Page has one editable Monaco model. Format replaces its content
 directly for all four languages, while Compact is JSON-only; each successful
 operation is one undoable editor edit, and failures preserve the current
-content. Language choice remains explicit. The Host Page chrome supplies the visible ConfigLens identity, so the
-plugin document repeats neither a main title nor a subtitle. The editable
-Monaco surface comes first, followed by the explicit language selector and the
-Format and Compact controls. The plugin performs no fetch,
+content. Language choice remains explicit. The Host Page chrome supplies the
+visible ConfigLens identity, so the plugin document repeats neither a main
+title nor a subtitle. The ready document has exactly two top-level regions:
+one flexible content region and a semantic footer. The Monaco surface fills
+the complete content region without
+page padding, a content/footer gap, or its own card border or radius. The
+footer remains pinned to the bottom of the plugin viewport and meets Monaco at
+one separating edge. It is exactly 40 logical pixels high in the normal layout
+and vertically centers the explicit language selector, non-diagnostic status,
+Format, and Compact controls. Validation diagnostics remain Monaco markers;
+the footer presents no diagnostic count, summary, list, or additional row. At
+no more than 520 logical pixels wide or 260 logical pixels high, the controls
+may use two rows inside a fixed 72-logical-pixel footer, while outer padding and
+the content/footer gap remain zero. Editor content and validation state cannot
+move the footer away from the viewport bottom. The plugin performs no fetch,
 WebSocket, browser storage, clipboard, Host persistence, or content logging.
 
 ## Reviewed Runtime Dependencies
@@ -71,10 +82,13 @@ adapter module. Broader budgets remain 24 MiB for complete uncompressed
 
 Rstest covers both locales, light and dark semantic tokens, empty, valid,
 invalid, limit, long-copy, keyboard, focus, recovery, single-editor replacement,
-one-operation undo, and content-plus-footer state. Rust and lifecycle tests
+one-operation undo, and content-plus-footer state. Source and compiled-CSS
+contracts cover the continuous workbench, fixed-bottom 40-pixel footer, absence
+of footer diagnostics, Monaco diagnostic markers, and fixed 72-pixel constrained
+fallback. Rust and lifecycle tests
 cover same-attempt hide and restore, close and reopen, replacement, cleanup, and
 resource revocation. These deterministic checks do not sample target-environment
-latency or maintain rendering output.
+latency, launch a browser or real WebView, or maintain rendering output.
 
 Run:
 

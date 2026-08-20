@@ -10,8 +10,35 @@ const fail = (message: string): never => {
 const app = read('src/App.tsx');
 if (!app.includes('<PluginRuntimeSlot')) fail('App does not render the native presentation slot');
 if (app.includes('<PluginRuntimeFrame')) fail('App still renders the DOM iframe Runtime');
+if (
+  !app.includes("data-page-layout={pageResolution?.provider.kind === 'plugin' ? 'plugin-edge-to-edge' : undefined}")
+) {
+  fail('App does not derive the edge-to-edge Page body layout from plugin provider kind');
+}
 for (const hostChrome of ['<PageContextBar', 'pageTitle={pageContext.page_title}', 'closeActivePage']) {
   if (!app.includes(hostChrome)) fail(`Host-owned Page chrome omits ${hostChrome}`);
+}
+
+const styles = read('src/styles/global.less');
+const block = (selector: string): string => {
+  const start = styles.indexOf(`${selector} {`);
+  if (start < 0) fail(`Host styles omit ${selector}`);
+  const end = styles.indexOf('\n}', start);
+  if (end < 0) fail(`Host styles do not close ${selector}`);
+  return styles.slice(start, end);
+};
+const pluginBody = block('.launcher-body[data-page-layout="plugin-edge-to-edge"]');
+for (const declaration of ['padding-inline: 0', 'padding-bottom: 0', 'gap: 0']) {
+  if (!pluginBody.includes(declaration)) fail(`plugin Page body omits ${declaration}`);
+}
+const runtimeContainerStyles = block('.plugin-runtime-container');
+if (runtimeContainerStyles.includes('border-radius')) fail('Runtime container still adds an inner radius');
+if (!block('.launcher-surface').includes('border-radius: 18px'))
+  fail('outer Launcher surface lost its clipping radius');
+for (const retainedLayout of ['gap-3', 'px-4', 'pb-4']) {
+  if (!app.includes(`launcher-body min-h-0 flex flex-1 flex-col ${retainedLayout}`) && !app.includes(retainedLayout)) {
+    fail(`non-plugin Page body lost ${retainedLayout}`);
+  }
 }
 
 const slot = read('src/app/plugins/runtime/PluginRuntimeSlot.tsx');

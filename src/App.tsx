@@ -620,7 +620,10 @@ const App = ({
             </div>
           </div>
         </div>
-        <div className="launcher-body min-h-0 flex flex-1 flex-col gap-3 px-4 pb-4">
+        <div
+          className="launcher-body min-h-0 flex flex-1 flex-col gap-3 px-4 pb-4"
+          data-page-layout={pageResolution?.provider.kind === 'plugin' ? 'plugin-edge-to-edge' : undefined}
+        >
           <div className="launcher-content min-h-0 flex flex-1 flex-col" data-presentation-state={presentationState}>
             {presentationState === 'home' ? (
               <LauncherHome

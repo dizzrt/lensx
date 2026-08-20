@@ -9,6 +9,15 @@ creation, bounds, visibility, focus, navigation, bridge ingress, resource
 authority, and destruction. A plugin cannot submit native bounds or obtain a
 Tauri object.
 
+When the trusted current Page resolution has `provider.kind: "plugin"`, React
+selects one shared edge-to-edge Launcher body layout for external,
+Development Mode, and official plugins. The Host keeps Page chrome outside the
+plugin rectangle, removes body inline and bottom inset plus inter-region gap,
+and adds no inner radius on the Runtime container. The outer Launcher surface
+continues to own native-window clipping and radius. Home, Search, and
+Host-owned Pages retain their existing layouts; plugin identity, Publisher,
+repository location, provenance, and Runtime content do not select this state.
+
 ```mermaid
 flowchart LR
   A["React Host WebView<br/>chrome and slot intent"] -->|"validated physical bounds<br/>and presentation revision"| B["Rust presentation and<br/>Child WebView service"]
@@ -86,6 +95,11 @@ constraints. Window and scale changes produce trusted slot revisions for the
 same Child WebView without reloading its document, Session, model, or Worker.
 The plugin observes its ordinary Web viewport but receives no native size,
 position, monitor, constraint, maximize, fullscreen, or Window-handle method.
+React still measures only `.plugin-runtime-slot`: its DOM rectangle,
+`ResizeObserver`, scale conversion, and serialized latest-wins presentation
+revision feed the existing Rust-validated physical-bounds path. The
+edge-to-edge layout adds no payload field, Tauri command, native setter,
+Runtime reload, or Session replacement path.
 
 ## Security And Web Capabilities
 

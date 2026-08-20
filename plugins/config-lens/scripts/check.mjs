@@ -69,4 +69,47 @@ if (
   throw new Error('boundary/main-thread-language-engine: adapters must stay behind the package language Worker.');
 }
 
+const styleSource = await readFile(resolve(root, 'src/styles.less'), 'utf8');
+const styleBlock = (source, selector, from = 0) => {
+  const start = source.indexOf(`${selector} {`, from);
+  if (start < 0) throw new Error(`layout/source-selector: ${selector} is missing.`);
+  const end = source.indexOf('\n}', start);
+  if (end < 0) throw new Error(`layout/source-selector: ${selector} is not closed.`);
+  return source.slice(start, end);
+};
+const requireDeclarations = (name, block, declarations) => {
+  for (const declaration of declarations) {
+    if (!block.includes(declaration)) throw new Error(`layout/source-contract: ${name} omits ${declaration}.`);
+  }
+};
+requireDeclarations('workbench', styleBlock(styleSource, '.config-lens'), ['padding: 0', 'gap: 0']);
+requireDeclarations('editor', styleBlock(styleSource, '.config-lens-editor'), ['border: 0', 'border-radius: 0']);
+requireDeclarations('footer', styleBlock(styleSource, '.config-lens__footer'), [
+  'height: 40px',
+  'min-height: 40px',
+  'max-height: 40px',
+  'flex: 0 0 40px',
+  'margin-top: auto',
+]);
+requireDeclarations('footer main', styleBlock(styleSource, '.config-lens__footer-main'), [
+  'height: 40px',
+  'min-height: 40px',
+  'align-items: center',
+]);
+if (styleSource.includes('.config-lens__diagnostics')) {
+  throw new Error('layout/source-contract: Footer diagnostics styles must not exist.');
+}
+const constrained = styleSource.indexOf('@media (max-width: 520px), (max-height: 260px)');
+if (constrained < 0) throw new Error('layout/source-contract: constrained viewport query is missing.');
+requireDeclarations('constrained workbench', styleBlock(styleSource, '.config-lens', constrained), [
+  'padding: 0',
+  'gap: 0',
+]);
+requireDeclarations('constrained footer', styleBlock(styleSource, '.config-lens__footer', constrained), [
+  'height: 72px',
+  'min-height: 72px',
+  'max-height: 72px',
+  'flex-basis: 72px',
+]);
+
 console.log('ConfigLens dependency, boundary, privacy, and bundle checks passed.');

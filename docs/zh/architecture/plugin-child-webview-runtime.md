@@ -7,6 +7,14 @@ Child WebView。React 拥有 Page chrome、loading、retry、error、Settings �
 Rust 拥有 native create、bounds、visibility、focus、navigation、bridge ingress、resource
 authority 与 destroy。插件不能提交 native bounds，也不能获取 Tauri object。
 
+当可信的 current Page resolution 具有 `provider.kind: "plugin"` 时，React 会为
+external、Development Mode 与 official 插件选择同一套 edge-to-edge Launcher body
+布局。Host 将 Page chrome 保留在插件矩形之外，移除 body 的 inline/bottom inset 与
+区域间 gap，并且不在 Runtime container 上叠加 inner radius。最外层 Launcher surface
+继续拥有 native-window 裁切与圆角。Home、Search 和 Host-owned Page 保留既有布局；
+plugin identity、Publisher、repository location、provenance 与 Runtime content 都不能
+选择该状态。
+
 ```mermaid
 flowchart LR
   A["React Host WebView<br/>chrome 与 slot intent"] -->|"已校验的 physical bounds<br/>和 presentation revision"| B["Rust presentation 与<br/>Child WebView service"]
@@ -72,6 +80,10 @@ single-WebviewWindow conversion。
 转换与当前 monitor 约束。Window 和 scale 变化只为同一 Child WebView 生成可信 slot revision，
 不会重载 document、Session、model 或 Worker。插件只能观察普通 Web viewport，不会获得
 原生 size、position、monitor、constraint、maximize、fullscreen 或 Window handle method。
+React 仍只测量 `.plugin-runtime-slot`：其 DOM rectangle、`ResizeObserver`、scale
+conversion 与串行 latest-wins presentation revision 会进入既有、由 Rust 校验的 physical-bounds
+路径。edge-to-edge 布局不会新增 payload field、Tauri command、native setter、Runtime reload
+或 Session replacement 路径。
 
 ## 安全与 Web 能力
 

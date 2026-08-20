@@ -98,4 +98,41 @@ if (
 if (!source.includes('data-editor') || !source.includes('single')) {
   throw new Error('e2e/single-editor-boundary: the single-editor product marker is missing.');
 }
+const compiledCss = (
+  await Promise.all(files.filter((file) => file.endsWith('.css')).map((file) => readFile(file, 'utf8')))
+)
+  .join('\n')
+  .replaceAll(/\s+/gu, ' ')
+  .replaceAll(/\s*([{}:;,])\s*/gu, '$1');
+const cssBlocks = (selector) => {
+  const escaped = selector.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  return [...compiledCss.matchAll(new RegExp(`${escaped}\\{([^{}]*)\\}`, 'gu'))].map((match) => match[1]);
+};
+const hasCssContract = (selector, declarations) =>
+  cssBlocks(selector).some((block) => declarations.every((declaration) => block.includes(declaration)));
+for (const [name, selector, declarations] of [
+  ['workbench', '.config-lens', ['padding:0', 'gap:0']],
+  ['editor', '.config-lens-editor', ['border:0', 'border-radius:0']],
+  [
+    'footer',
+    '.config-lens__footer',
+    ['height:40px', 'min-height:40px', 'max-height:40px', 'flex:0 0 40px', 'margin-top:auto'],
+  ],
+  ['footer main', '.config-lens__footer-main', ['height:40px', 'min-height:40px', 'align-items:center']],
+  [
+    'constrained footer',
+    '.config-lens__footer',
+    ['height:72px', 'min-height:72px', 'max-height:72px', 'flex-basis:72px'],
+  ],
+]) {
+  if (!hasCssContract(selector, declarations)) {
+    throw new Error(`e2e/layout-css-contract: ${name} is missing from compiled CSS.`);
+  }
+}
+if (compiledCss.includes('.config-lens__diagnostics') || source.includes('config-lens__diagnostics')) {
+  throw new Error('e2e/layout-css-contract: Footer diagnostics UI remains in source or compiled output.');
+}
+if (cssBlocks('.config-lens').filter((block) => block.includes('padding:0') && block.includes('gap:0')).length < 2) {
+  throw new Error('e2e/layout-css-contract: constrained CSS restores workbench outer spacing.');
+}
 console.log(`ConfigLens built-output E2E passed with ${files.length} self-contained files.`);

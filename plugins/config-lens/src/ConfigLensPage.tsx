@@ -2,7 +2,7 @@ import { Button, Select } from '@douyinfe/semi-ui';
 import type { PluginRuntimeContext } from '@lensx/plugin-sdk';
 import { type ComponentType, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { diagnosticMessage, languageLabel, messagesFor } from './catalog.js';
+import { languageLabel, messagesFor } from './catalog.js';
 import { type EditorSurfaceProps, MonacoSurface } from './editor/MonacoSurface.js';
 import { createLanguageController, type LanguageController } from './language/controller.js';
 import { LANGUAGE_IDS, type LanguageId, type LanguageResult } from './language/protocol.js';
@@ -136,27 +136,21 @@ export const ConfigLensPage = ({
 
   const empty = input.trim() === '';
   const diagnostics = result?.diagnostics ?? [];
-  const diagnosticEntries = useMemo(() => {
-    const occurrences = new Map<string, number>();
-    return diagnostics.map((item) => {
-      const identity = JSON.stringify(item);
-      const occurrence = occurrences.get(identity) ?? 0;
-      occurrences.set(identity, occurrence + 1);
-      return { item, key: `${identity}:${occurrence}` };
-    });
-  }, [diagnostics]);
   const status = empty
     ? messages.empty
     : processing
       ? messages.processing
       : result?.status === 'valid'
         ? messages.ready
-        : diagnostics.length > 0
-          ? messages.diagnosticSummary(diagnostics.length)
-          : messages.empty;
+        : '';
 
   return (
-    <main aria-label={messages.title} className="config-lens" onKeyDown={handleKeyDown}>
+    <main
+      aria-label={messages.title}
+      className="config-lens"
+      data-workbench-layout="continuous"
+      onKeyDown={handleKeyDown}
+    >
       <section className="config-lens__content">
         <EditorSurface
           diagnostics={diagnostics}
@@ -167,7 +161,7 @@ export const ConfigLensPage = ({
           theme={context.theme}
         />
       </section>
-      <footer className="config-lens__footer">
+      <footer className="config-lens__footer" data-footer-layout="fixed-bottom">
         <div className="config-lens__footer-main">
           <div className="config-lens__language">
             <span id="config-lens-language-label">{messages.language}</span>
@@ -200,15 +194,6 @@ export const ConfigLensPage = ({
             </Button>
           </div>
         </div>
-        {diagnostics.length > 0 ? (
-          <ul aria-label={messages.diagnosticSummary(diagnostics.length)} className="config-lens__diagnostics">
-            {diagnosticEntries.map(({ item, key }) => (
-              <li key={key}>
-                <strong>{item.code}</strong> {diagnosticMessage(messages, item)}
-              </li>
-            ))}
-          </ul>
-        ) : null}
       </footer>
     </main>
   );

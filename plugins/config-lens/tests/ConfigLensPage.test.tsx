@@ -9,10 +9,12 @@ import type { LanguageResult } from '../src/language/protocol.js';
 const context = (locale: 'en-US' | 'zh-CN' = 'en-US', theme: 'light' | 'dark' = 'light') =>
   Object.freeze({ capabilities: Object.freeze([]), hostApiVersion: '0.2.0', locale, theme });
 
-const TestSurface = ({ input, language, onInput }: EditorSurfaceProps) => (
+const TestSurface = ({ diagnostics, input, language, onInput, theme }: EditorSurfaceProps) => (
   <textarea
     aria-label="Editable input"
+    data-diagnostic-count={diagnostics.length}
     data-language={language}
+    data-theme={theme}
     value={input}
     onChange={(event) => onInput(event.currentTarget.value)}
   />
@@ -66,21 +68,32 @@ describe('ConfigLens product workflow', () => {
     const editor = screen.getByLabelText('Editable input');
     const language = screen.getByRole('combobox');
     const format = screen.getByRole('button', { name: 'Format' });
+    const compact = screen.getByRole('button', { name: 'Compact' });
+    const status = screen.getByRole('status');
+    const footer = workspace.children[1];
     expect(workspace).toBeInTheDocument();
+    expect(workspace).toHaveAttribute('data-workbench-layout', 'continuous');
     expect(workspace.children).toHaveLength(2);
     expect(workspace.children[0]).toHaveClass('config-lens__content');
     expect(workspace.children[0]?.tagName).toBe('SECTION');
-    expect(workspace.children[1]).toHaveClass('config-lens__footer');
-    expect(workspace.children[1]?.tagName).toBe('FOOTER');
+    expect(footer).toHaveClass('config-lens__footer');
+    expect(footer).toHaveAttribute('data-footer-layout', 'fixed-bottom');
+    expect(footer?.tagName).toBe('FOOTER');
+    expect(footer?.children).toHaveLength(1);
     expect(workspace.children[0]).toContainElement(editor);
-    expect(workspace.children[1]).toContainElement(language);
-    expect(workspace.children[1]).toContainElement(format);
+    expect(footer).toContainElement(language);
+    expect(footer).toContainElement(status);
+    expect(footer).toContainElement(format);
+    expect(footer).toContainElement(compact);
+    expect(language.closest('.config-lens__footer-main')).toContainElement(status);
+    expect(language.closest('.config-lens__footer-main')).toContainElement(format);
+    expect(language.closest('.config-lens__footer-main')).toContainElement(compact);
     expect(screen.queryByRole('heading')).not.toBeInTheDocument();
     expect(screen.queryByText(/temporary workspace|临时工作区/u)).not.toBeInTheDocument();
     expect(editor.compareDocumentPosition(language) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
     expect(editor.compareDocumentPosition(format) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
     expect(format).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Compact' })).toBeDisabled();
+    expect(compact).toBeDisabled();
   });
 
   test('keeps language selection explicit and exposes no suggestion or change-application controls', () => {
@@ -115,9 +128,14 @@ describe('ConfigLens product workflow', () => {
     const input = screen.getByLabelText('Editable input');
     fireEvent.change(input, { target: { value: 'bad' } });
     fireEvent.click(screen.getByRole('button', { name: 'Format' }));
-    await waitFor(() => expect(screen.getByText('json.syntax')).toBeInTheDocument());
-    expect(screen.getByText('json.syntax').closest('ul')).toHaveClass('config-lens__diagnostics');
-    expect(screen.getByText('json.syntax').closest('ul')?.closest('footer')).toHaveClass('config-lens__footer');
+    await waitFor(() => expect(input).toHaveAttribute('data-diagnostic-count', '1'));
+    const footer = screen.getByRole('contentinfo');
+    expect(footer).toHaveAttribute('data-footer-layout', 'fixed-bottom');
+    expect(footer.children).toHaveLength(1);
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(footer.querySelector('ul')).toBeNull();
+    expect(screen.queryByText('json.syntax')).not.toBeInTheDocument();
+    expect(screen.queryByText(/diagnostic|诊断|语法无效/iu)).not.toBeInTheDocument();
     expect(input).toHaveValue('bad');
     rerender(
       <ConfigLensPage
@@ -127,7 +145,14 @@ describe('ConfigLens product workflow', () => {
       />,
     );
     expect(screen.getByLabelText('Editable input')).toHaveValue('bad');
+    expect(screen.getByLabelText('Editable input')).toHaveAttribute('data-diagnostic-count', '1');
+    expect(screen.getByLabelText('Editable input')).toHaveAttribute('data-theme', 'dark');
     expect(screen.getByRole('button', { name: '格式化' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Editable input'), { target: { value: '{"ok":true}' } });
+    fireEvent.click(screen.getByRole('button', { name: '格式化' }));
+    await waitFor(() => expect(screen.getByLabelText('Editable input')).toHaveAttribute('data-diagnostic-count', '0'));
+    expect(screen.getByRole('contentinfo')).toHaveAttribute('data-footer-layout', 'fixed-bottom');
   });
 
   test('rejects a pending result after input changes', async () => {

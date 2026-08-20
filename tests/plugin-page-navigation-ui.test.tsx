@@ -18,7 +18,7 @@ import type {
 } from '../src/app/launcher/activation';
 import { EMPTY_LAUNCHER_ACTION_COLLECTIONS } from '../src/app/launcher/collections';
 import type { LauncherSurfaceController, LauncherSurfaceTarget } from '../src/app/launcher/surface';
-import { AppNavigationService, PageRegistry } from '../src/app/navigation';
+import { AppNavigationService, type PageProviderBatch, PageRegistry } from '../src/app/navigation';
 import {
   type PluginRegistrationDesktopAdapter,
   type PluginRegistrationSnapshot,
@@ -225,6 +225,53 @@ describe('Plugin Page navigation UI', () => {
     await waitFor(() => expect(document.querySelectorAll('[data-plugin-runtime-slot="true"]')).toHaveLength(1));
     expect(document.querySelector('iframe')).toBeNull();
     await waitFor(() => expect(pluginChildWebviewPresentationController.create).toHaveBeenCalledTimes(1));
+  });
+
+  test('selects one edge-to-edge Page body layout from plugin provider kind only', async () => {
+    const view = renderPluginComposition({ renderPage: (page) => <div>Current page {page.page_id}</div> });
+    const launcherBody = () => document.querySelector('.launcher-body');
+
+    expect(launcherBody()).not.toHaveAttribute('data-page-layout');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Launcher query' }), {
+      target: { value: 'no matching action' },
+    });
+    expect(launcherBody()).not.toHaveAttribute('data-page-layout');
+
+    await waitFor(() => expect(view.pageRegistry.lookup({ owner_id: pluginId, page_id: 'home' })).toBeDefined());
+    act(() => view.navigationService.openPage({ owner_id: pluginId, page_id: 'home' }, `${pluginId}.open_project`));
+    expect(await screen.findByText('Current page home')).toBeInTheDocument();
+    expect(launcherBody()).toHaveAttribute('data-page-layout', 'plugin-edge-to-edge');
+
+    const configLensId = 'dev.lensx.config-lens';
+    const configLensBatch: PageProviderBatch = {
+      provider: {
+        kind: 'plugin',
+        owner_id: configLensId,
+        display_name: { 'en-US': 'ConfigLens' },
+      },
+      pages: [
+        {
+          owner_id: configLensId,
+          page_id: 'main',
+          title: { 'en-US': 'ConfigLens' },
+          route: '/',
+          presentation: { initial_size: { width: 800, height: 600 }, resizable: true },
+          available: true,
+        },
+      ],
+    };
+    expect(view.pageRegistry.replaceProviderBatch(configLensId, configLensBatch).ok).toBe(true);
+    act(() => view.navigationService.openPage({ owner_id: configLensId, page_id: 'main' }, `${configLensId}.open`));
+    expect(await screen.findByText('Current page main')).toBeInTheDocument();
+    expect(launcherBody()).toHaveAttribute('data-page-layout', 'plugin-edge-to-edge');
+
+    act(() => view.navigationService.openPage({ owner_id: 'lensx.core', page_id: 'settings' }, 'lensx.core.settings'));
+    expect(await screen.findByText('Current page settings')).toBeInTheDocument();
+    expect(launcherBody()).not.toHaveAttribute('data-page-layout');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close settings and return home' }));
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Launcher query' })).toBeInTheDocument());
+    expect(launcherBody()).not.toHaveAttribute('data-page-layout');
   });
 
   test('keeps one current Runtime across shortcut activation refresh and replaces it only after a real close', async () => {

@@ -16,10 +16,17 @@ Runtime Session、model、Worker 和内存输入。这种连续性不使用浏�
 持久化。只有真正关闭、禁用、替换、重新加载、卸载或以其他方式 teardown Page
 时，输入才会丢弃。Page 只包含一个可编辑 Monaco model；四种语言的格式化会直接
 替换其中内容，Compact 仅支持 JSON。每次成功操作都是一次可撤销的编辑器 edit，
-失败时保持当前内容，语言始终由用户显式选择。Host Page chrome 提供可见的 ConfigLens 身份，因此插件 document
-工作区不重复主标题或副标题。可编辑 Monaco 表面位于最前，随后是显式语言选择器以及
-Format 和 Compact 控件。插件不执行 fetch、WebSocket、浏览器存储、剪贴板、Host
-持久化或内容日志。
+失败时保持当前内容，语言始终由用户显式选择。Host Page chrome 提供可见的 ConfigLens
+身份，因此插件 document 工作区不重复主标题或副标题。ready document 只包含两个
+顶层区域：一个可伸缩 content 区域和一个 semantic footer。Monaco 表面会填满完整
+content 区域，不保留 page padding、content/footer gap，也没有自己的
+卡片 border 或 radius。Footer 会固定在插件 viewport 最底部，并通过一条分隔边界直接
+连接 Monaco；正常布局下它始终为 40 logical pixels 高，并让显式语言选择器、非诊断
+状态、Format 与 Compact 控件垂直居中。验证诊断只保留为 Monaco marker；Footer 不显示
+诊断数量、摘要、列表或额外行。当宽度不超过 520 logical pixels 或高度不超过 260
+logical pixels 时，控件可以在固定 72-logical-pixel Footer 内使用两行，但外层 padding
+与 content/footer gap 仍保持为零。编辑内容和验证状态都不能把 Footer 从 viewport
+底部顶起。插件不执行 fetch、WebSocket、浏览器存储、剪贴板、Host 持久化或内容日志。
 
 ## 已审查的 Runtime 依赖
 
@@ -61,9 +68,12 @@ Design、Plugin UI、Monaco 或 language adapter module。其余预算保持为�
 
 Rstest 覆盖双语、light/dark semantic token、empty、valid、invalid、limit、
 长文案、keyboard、focus、recovery、single-editor replacement、单次操作
-undo 与 content-plus-footer 状态。Rust 与 lifecycle 测试覆盖 same-attempt
+undo 与 content-plus-footer 状态。source 与 compiled-CSS contract 覆盖连续
+workbench、固定底部的 40-pixel Footer、Footer 诊断 UI 缺失、Monaco 诊断 marker，
+以及固定 72-pixel constrained fallback。Rust 与
+lifecycle 测试覆盖 same-attempt
 hide/restore、close/reopen、replacement、cleanup 与 resource revocation。
-这些确定性检查不采样目标环境时延，也不维护渲染输出。
+这些确定性检查不采样目标环境时延，不启动浏览器或真实 WebView，也不维护渲染输出。
 
 运行：
 

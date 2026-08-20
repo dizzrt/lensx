@@ -17,13 +17,15 @@ body {
 }
 
 .config-lens {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   width: 100%;
   height: 100%;
   min-height: 0;
-  padding: var(--lensx-plugin-space-page);
-  gap: 10px;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
   color: var(--lensx-plugin-color-text);
   background: var(--lensx-plugin-color-background);
 }
@@ -36,19 +38,29 @@ body {
 }
 
 .config-lens__footer {
-  display: grid;
+  box-sizing: border-box;
+  display: flex;
+  height: 40px;
   min-width: 0;
-  min-height: 0;
-  max-height: 55%;
-  flex: 0 1 auto;
-  gap: 8px;
+  min-height: 40px;
+  max-height: 40px;
+  flex: 0 0 40px;
+  flex-direction: column;
+  gap: 0;
+  margin-top: auto;
+  border-top: 1px solid var(--lensx-plugin-color-border);
 }
 
 .config-lens__footer-main {
+  box-sizing: border-box;
   display: flex;
+  height: 40px;
   min-width: 0;
-  align-items: end;
+  min-height: 40px;
+  flex: 0 0 40px;
+  align-items: center;
   gap: 10px;
+  padding: 4px 8px;
 }
 
 .config-lens__toolbar {
@@ -72,10 +84,13 @@ body {
   min-width: 0;
   min-height: 18px;
   flex: 1 1 auto;
+  overflow: hidden;
   padding-left: 10px;
   border-left: 3px solid var(--lensx-plugin-color-accent);
   color: var(--lensx-plugin-color-text-secondary);
   font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .config-lens-editor {
@@ -84,26 +99,14 @@ body {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--lensx-plugin-color-border);
-  border-radius: var(--lensx-plugin-radius-page);
+  border: 0;
+  border-radius: 0;
   background: var(--lensx-plugin-color-surface);
 }
 
 .config-lens-editor__surface {
   position: absolute;
   inset: 0;
-}
-
-.config-lens__diagnostics {
-  min-height: 0;
-  max-height: 96px;
-  margin: 0;
-  padding: 8px 8px 8px 28px;
-  overflow: auto;
-  border: 1px solid var(--lensx-plugin-color-danger);
-  border-radius: var(--lensx-plugin-radius-page);
-  color: var(--lensx-plugin-color-text);
-  font-size: 12px;
 }
 
 .config-lens :focus-visible {
@@ -113,18 +116,25 @@ body {
 
 @media (max-width: 520px), (max-height: 260px) {
   .config-lens {
-    padding: 8px;
-    gap: 6px;
+    gap: 0;
+    padding: 0;
   }
 
   .config-lens__footer {
-    max-height: 65%;
-    gap: 4px;
+    height: 72px;
+    min-height: 72px;
+    max-height: 72px;
+    flex-basis: 72px;
+    gap: 0;
   }
 
   .config-lens__footer-main {
     display: grid;
+    height: auto;
+    min-height: 72px;
+    flex-basis: auto;
     grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
     gap: 4px 6px;
   }
 
@@ -147,8 +157,4 @@ body {
     gap: 4px;
   }
 
-  .config-lens__diagnostics {
-    max-height: 48px;
-    padding-block: 4px;
-  }
 }
