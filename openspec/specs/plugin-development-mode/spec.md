@@ -7,6 +7,7 @@ manually reloading an unpacked plugin development directory without weakening
 the production Registration, Resource, Runtime, Session, or Host-authority
 boundaries.
 ## Requirements
+
 ### Requirement: Development Mode MUST require build capability and explicit per-process opt-in
 
 The system MUST expose development controls only when both the native and
@@ -333,38 +334,6 @@ pinned collections, production packages, or another plugin's content.
 - **THEN** any failure is shown as a bounded partial or convergence diagnostic,
   and the frontend does not prematurely claim all authority was revoked
 
-### Requirement: Delivery MUST prove safe directory handling, atomic reload, production exclusion, and real Runtime teardown
-
-Delivery MUST combine Rust directory, snapshot, Manager, and Resource tests;
-TypeScript contract and service tests; React accessibility, localization, and
-theme tests; the shared directory corpus; workspace and release boundary gates;
-and target macOS WebView evidence. Validation MUST cover valid, invalid,
-incompatible, cancelled, source-race, link, limit, collision, reload success,
-failure and conflict, unchanged reload, legacy-contract rejection, disable and remove,
-cleanup failure, process restart, production build exclusion, and zero residual
-authority from the old generation.
-
-#### Scenario: Focused Development Mode gate passes completely
-
-- **WHEN** `check:plugin-development-mode` runs every focused, boundary, release
-  artifact, and real WebView matrix check in a supported environment
-- **THEN** CLI and Host conclusions agree for their shared payload semantics and
-  every development transaction and UI requirement passes
-- **THEN** the old scope, iframe, Session, Port, listener, timer, pending RPC,
-  and privileged handler authority are unavailable after reload, while the new
-  generation handshakes under the unrelaxed production policy
-
-#### Scenario: A security or production-build invariant cannot be proven
-
-- **WHEN** required evidence cannot prove directory currentness, snapshot
-  atomicity, source distinction, Host-authority non-escalation, terminal cleanup,
-  production exclusion, or cross-layer contract consistency
-- **THEN** Task 6.5 remains incomplete while the specification, design, or
-  implementation is corrected
-- **THEN** validation MUST NOT replace missing evidence by directly reading the
-  author directory, relaxing Runtime policy, hiding failures, removing negative
-  cases, or checking source text alone
-
 ### Requirement: Development execution MUST use the production Child WebView path
 Development registration and manual reload MUST use the same Manifest `0.4.0`, bounded Page presentation normalization, native surface coordinator, Child WebView registry, origin/resource binding, navigation, bridge, Session, RPC, Host API and teardown boundaries as installed plugins. Development source MUST grant no alternate Tauri command, bridge, bounds, CSP, Host authority, runtime resize setter, or user-size persistence. A development Page's valid presentation MUST receive the same fixed/resizable behavior, work-area fitting, same-attempt retention and actual-close reset as an installed Page.
 
@@ -377,3 +346,19 @@ Development registration and manual reload MUST use the same Manifest `0.4.0`, b
 - **WHEN** a new immutable `0.4.0` snapshot and generation commit atomically after the user resized the previous attempt
 - **THEN** old Child WebView teardown completes and a fresh attempt/WebView uses the new snapshot's Manifest initial size
 - **THEN** uncommitted reload failure leaves the current WebView and its transient current size unchanged
+
+### Requirement: Delivery MUST deterministically prove safe directory handling, atomic reload, production exclusion, and lifecycle revocation
+
+Delivery MUST combine Rust directory, snapshot, Manager, Resource, and lifecycle tests; TypeScript contract/service/state tests; React accessibility, localization, and theme tests; the shared directory corpus; workspace and release boundary checks; and production-build source policy. Validation MUST cover valid, invalid, incompatible, cancelled, source-race, link, limit, collision, reload success/failure/conflict, unchanged reload, legacy-contract rejection, disable/remove, cleanup failure, process restart, production exclusion, and old-generation authority revocation without requiring real WebView teardown evidence.
+
+#### Scenario: Focused deterministic Development Mode validation passes
+
+- **WHEN** the supported Rust, TypeScript, React, corpus, package, and boundary checks run
+- **THEN** CLI and Host conclusions agree for shared payload semantics and every development transaction and UI requirement passes
+- **THEN** state and boundary tests show the old scope, Session, pending RPC, and privileged handler authority unavailable after reload while the new generation uses the production policy
+
+#### Scenario: A deterministic invariant cannot be proven
+
+- **WHEN** validation cannot establish directory currentness, snapshot atomicity, source distinction, Host-authority non-escalation, lifecycle revocation, production exclusion, or cross-layer contract consistency
+- **THEN** the capability remains incomplete while specification, design, or implementation is corrected
+- **THEN** validation does not relax Runtime policy, hide failures, remove negative cases, or reintroduce real WebView evidence as a compatibility Gate

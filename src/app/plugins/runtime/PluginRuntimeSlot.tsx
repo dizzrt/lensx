@@ -21,7 +21,6 @@ import {
   type PluginChildWebviewPresentationController,
 } from './pluginChildWebviewPresentation';
 import { createLatestPluginChildWebviewSlotUpdateQueue, physicalBoundsFromDomRect } from './pluginChildWebviewSlot';
-import { recordPluginRuntimeStage } from './stageMetrics';
 import type { PluginPageRuntimeDescriptor, PluginPageRuntimeRequest, PluginPageRuntimeResolver } from './types';
 
 export type PluginRuntimeSlotState =
@@ -125,7 +124,6 @@ export const PluginRuntimeSlot = ({
   );
 
   useEffect(() => {
-    const resolveStarted = performance.now();
     let cancelled = false;
     let lifecycleAttempt: PluginRuntimeAttempt | undefined;
     dispatch({ type: 'resolve' });
@@ -151,7 +149,6 @@ export const PluginRuntimeSlot = ({
         if (!validDescriptor(descriptor, activePage.owner_id, activePage.page_id)) {
           throw new TypeError('Invalid Host-private Plugin Runtime descriptor.');
         }
-        recordPluginRuntimeStage('resolve', performance.now() - resolveStarted);
         if (!runtimeAttempt.bindTrustedIdentity(descriptor.entry_id, descriptor.resource_generation)) {
           await runtimeAttempt.fail('runtime_crash_loop');
           return;
@@ -207,7 +204,6 @@ export const PluginRuntimeSlot = ({
       return;
     }
     let setupCancelled = false;
-    const hostLoadingStarted = performance.now();
     let active = true;
     let revision = 1n;
     const geometry = () => {
@@ -223,7 +219,6 @@ export const PluginRuntimeSlot = ({
     void Promise.resolve()
       .then(async () => {
         const initial = geometry();
-        const createStarted = performance.now();
         const presentation = await presentationController.create({
           identity: {
             entryId: binding.descriptor.entry_id,
@@ -235,7 +230,6 @@ export const PluginRuntimeSlot = ({
           ...initial,
           presentationRevision: revision,
         });
-        recordPluginRuntimeStage('create', performance.now() - createStarted);
         if (setupCancelled || !binding.attempt.isCurrent() || activeBindingRef.current !== binding) {
           await presentationController.destroy(presentation);
           return;
@@ -282,7 +276,6 @@ export const PluginRuntimeSlot = ({
         await presentationController.setVisible(presentation, true);
         if (active && binding.attempt.isCurrent() && activeBindingRef.current === binding) {
           binding.attempt.markReady();
-          recordPluginRuntimeStage('host_loading', performance.now() - hostLoadingStarted);
           element.dataset.nativePresentation = 'visible';
           dispatch({ type: 'ready', descriptor: binding.descriptor });
         }

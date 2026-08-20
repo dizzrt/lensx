@@ -210,15 +210,11 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
 - 通过 `AppErrorBoundary` 覆盖 App Shell 渲染失败；React 错误边界不会捕获事件处理器和异步
   失败，因此这些失败必须使用显式错误状态。
 - 通过页面级错误边界覆盖活动页面渲染失败，确保上下文头部和关闭控件继续可用。
-- Launcher 顶部区域变化必须在固定 650px viewport 下完成 macOS 原生验收。在 `home`、`search`
-  和 `page` 中分别从顶部空白、搜索输入、页面上下文非操作区域和 avatar 拖动真实窗口；随后回归光标
-  定位、英文和中文输入法、键盘选择、页面关闭、失焦隐藏、快捷键恢复以及固定 320/480/600px 高度。
-  保存验收截图，并检查连续表面、圆角、透明背景、avatar 和顶部间距的计算样式。
-- 分段页面上下文变更必须在 `650×600px` Page 视口下保存英文浅色、简体中文浅色和至少一种深色组合
-  的截图。通过计算样式和几何数据检查胶囊按内容收缩、基于 token 的分段层级、斜切分隔、关闭按钮
-  紧邻关系与键盘焦点、avatar 几何保持，以及长文本省略且不发生重叠。
+- Launcher 顶部区域变化通过 component、controller 与 Rust policy test 覆盖拖动分类、caret/input
+  routing、键盘选择、页面关闭、失焦隐藏、快捷键恢复和固定 320/480/600px mode。
+- 分段页面上下文变更通过 DOM 与状态断言覆盖英文/简体中文、light/dark semantic token、关闭按钮
+  紧邻关系与键盘焦点、avatar 状态保持和长文本省略。
 - 为提取出的领域函数增加聚焦测试。
 - 避免使用会掩盖有效行为断言的 snapshot。
-- Plugin management 变更必须在 `650×600` 下为英文/简体中文与 light/dark 捕获全部维护状态。除截图外，
-  还要通过 computed style 检查 split surface、selected fill、border、overflow、长名称/诊断、modal contrast
-  与 disabled/focus state。
+- Plugin management 变更必须覆盖英文/简体中文与 light/dark 的全部维护状态，并断言 split-surface
+  语义、selection、border/overflow class、长名称/诊断、modal 行为、disabled state 与 focus recovery。

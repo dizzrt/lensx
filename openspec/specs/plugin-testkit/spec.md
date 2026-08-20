@@ -4,6 +4,7 @@
 
 Define the stable public `@lensx/plugin-testkit` package for testing the shipped Plugin Contract and Plugin SDK without starting the lensX desktop Host, including Manifest and Runtime context fixtures, semantic transport control, cancellation and deferred helpers, lifecycle coverage, package boundaries, and release validation. This capability does not claim delivery of a real Host API, permission system, native plugin Runtime, plugin execution path, or formal plugin project template.
 ## Requirements
+
 ### Requirement: The system MUST provide a constrained, framework-neutral public Plugin Testkit package
 
 The system MUST provide the independently buildable, testable, and packable `@lensx/plugin-testkit@0.1.0` workspace package. The package MUST depend only on the public root entries of `@lensx/plugin-contract` and `@lensx/plugin-sdk`. Its public Runtime and type entries MUST NOT depend on the private root Host, `src/app/**`, React, Semi Design, Tauri, DOM global types, Node filesystem APIs, Host-internal styles, or any test-runner API. Paths that are not declared in the package exports MUST NOT become public APIs.
@@ -174,12 +175,22 @@ The Testkit package MUST declare meaningful `build`, `typecheck`, `test`, `check
 - **THEN** neither language presents the Testkit simulation as an implemented Host API, permission decision, native plugin Runtime, formal project template, or plugin execution capability
 
 ### Requirement: Testkit MUST remain a semantic fake across the Child WebView migration
-The public Testkit MUST model SDK lifecycle, Runtime Context, Contract requests/results/events, cancellation and asynchronous control through `PluginSdkTransport`. It MUST NOT simulate a Child WebView, native bridge, WebView label, bounds, Tauri ACL, navigation policy or process isolation. Real Runtime claims MUST remain in Host/native integration and target macOS gates.
+
+The public Testkit MUST model SDK lifecycle, Runtime Context, Contract requests/results/events, cancellation, and asynchronous control through `PluginSdkTransport`. It MUST NOT simulate a Child WebView, native bridge, WebView label, bounds, Tauri ACL, navigation policy, or process isolation. Maintained repository validation MUST treat Testkit only as deterministic author-side behavior support and MUST NOT delegate real Runtime completion claims to a target macOS Gate or any replacement environment-evidence path.
 
 #### Scenario: Plugin author tests business behavior
+
 - **WHEN** an external test injects `FakePluginSdkTransport`
 - **THEN** it can deterministically test public SDK behavior without browser or native dependencies
 
 #### Scenario: Test attempts to claim native isolation
+
 - **WHEN** only Testkit evidence is available
-- **THEN** completion gates reject it as proof of bridge, navigation, WebView or teardown enforcement
+- **THEN** completion reports only semantic SDK behavior coverage
+- **THEN** it MUST NOT claim bridge, navigation, WebView, native isolation, or real teardown enforcement
+
+#### Scenario: Environment Gate is used to supplement Testkit
+
+- **WHEN** a maintained Testkit caller requires a browser, real WebView, native harness, or target macOS evidence
+- **THEN** validation governance rejects the caller
+- **THEN** no compatibility Gate is retained

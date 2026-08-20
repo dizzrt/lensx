@@ -70,7 +70,6 @@ for (const requiredStage of [
   'plugin-child-webview-runtime',
   'plugin-child-webview-session',
   'plugin-rpc-validation',
-  'plugin-development-runtime-evidence',
 ]) {
   if (!focusedPlan.gateIds.includes(requiredStage)) fail(`focused gate composition omitted ${requiredStage}`);
 }

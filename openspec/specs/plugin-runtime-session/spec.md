@@ -8,6 +8,7 @@ through an exact-origin, single-use MessagePort handshake, while keeping public
 SDK transport, Host APIs, native authority, and complete Runtime lifecycle in
 their own capability boundaries.
 ## Requirements
+
 ### Requirement: Host MUST derive every Runtime Session identity from current trusted facts
 The Host MUST establish a private Session only for the actual current, enabled and compatible Child WebView. Identity MUST derive from current Page, Registration, resource descriptor, plugin/version/Page/entry, isolated origin, generation, Runtime attempt and native WebView label/handle. No Manifest field, bridge payload, public UI value or plugin-provided identity MUST select or replace those facts.
 
@@ -144,38 +145,6 @@ Rust object.
 - **THEN** underlying exceptions and untrusted content reach neither
   user-visible feedback nor a later Session
 
-### Requirement: Delivery MUST prove source binding on focused and real WebView paths
-
-Delivery MUST use pure TypeScript state and parser tests, React iframe
-lifecycle tests, canonical normal and malicious `.lxp` fixtures, and the target
-macOS WKWebView to verify exact source and origin, a cryptographic single-use
-nonce, MessagePort transfer, ready, disconnect, disposal, cross-plugin forgery,
-replay, retry and replacement, old-Port invalidation, current-fact invalidation,
-unrelated Registration change stability, and zero privileged
-Tauri hits. Simulated DOM, source inspection, and Rust unit tests MUST NOT
-replace real WebView evidence. This capability MUST NOT claim Windows or Linux
-support.
-
-#### Scenario: macOS Session security matrix passes
-
-- **WHEN** the focused gate runs normal and malicious plugin fixtures in the
-  target macOS WKWebView
-- **THEN** only the current isolated-origin iframe establishes a ready Session
-  using this attempt's nonce and Port, and wrong-source, wrong-origin,
-  cross-plugin, replay, and old-Port attempts fail consistently
-- **THEN** evidence records only bounded boolean, version, and platform facts,
-  without URL, token, nonce, Port content, path, plugin payload, or private
-  error
-
-#### Scenario: Target WebView cannot prove the design
-
-- **WHEN** the target WebView cannot reliably prove the exact window and
-  origin, MessagePort transfer, nonce acknowledgement, or old-Port invalidation
-  after teardown
-- **THEN** the change cannot declare completion or check Task 4.3
-- **THEN** the system does not degrade to a wildcard origin, long-lived shared
-  window message bus, bearer identity alone, or removal of a negative case
-
 ### Requirement: Host MUST bootstrap one source-authenticated native bridge Session
 Before loading the plugin document, Host MUST install the minimal versioned bridge for that Child WebView and create at least 128 bits of unpredictable, single-use attempt freshness. Host MUST accept ready only from the native callback of the actual current WebView and exact freshness value. The bridge MUST NOT fall back to `window.parent`, `postMessage`, `MessageChannel`, a global event bus or a plugin-selected Tauri command.
 
@@ -187,3 +156,18 @@ Before loading the plugin document, Host MUST install the minimal versioned brid
 - **WHEN** any source repeats freshness or submits malformed, old or mismatched ready data
 - **THEN** no Session is created, replaced or revived and rejection remains non-oracular
 
+### Requirement: Delivery MUST deterministically validate Runtime Session source binding
+
+Delivery MUST use pure TypeScript state/parser tests, React lifecycle tests, canonical normal and malicious `.lxp` fixtures, bridge-adapter integration tests, and production composition checks to verify exact source and origin validation, cryptographic single-use nonce semantics, MessagePort transfer handling, ready, disconnect, disposal, cross-plugin forgery, replay, retry/replacement, old-Port invalidation, current-fact invalidation, unrelated Registration stability, and zero privileged Tauri hits. Validation MUST NOT claim a real WebView source or Port transfer was observed.
+
+#### Scenario: Deterministic Session security matrix passes
+
+- **WHEN** normal and malicious fixtures run through Session parsers, state machines, lifecycle controllers, and bridge adapters
+- **THEN** only the modeled current isolated-origin source establishes a ready Session with the current attempt's nonce and Port
+- **THEN** wrong-source, wrong-origin, cross-plugin, replay, and old-Port attempts fail with bounded diagnostics
+
+#### Scenario: Environment evidence is requested
+
+- **WHEN** completion requires a target WebView, native harness, or committed Session evidence
+- **THEN** validation governance rejects the path
+- **THEN** the system does not weaken source binding or retain an environment compatibility Gate

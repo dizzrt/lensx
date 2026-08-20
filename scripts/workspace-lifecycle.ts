@@ -151,6 +151,30 @@ export const sortWorkspaceMembers = (members: readonly WorkspaceMember[]): Works
   return sorted;
 };
 
+export const selectWorkspaceBuildOrder = (
+  members: readonly WorkspaceMember[],
+  targets: readonly WorkspaceMember[],
+): WorkspaceMember[] => {
+  const byName = new Map(members.map((member) => [member.name, member]));
+  const selected = new Set<string>();
+  const pending = targets.map((target) => target.name);
+
+  while (pending.length > 0) {
+    const name = pending.shift();
+    if (name === undefined || selected.has(name)) continue;
+    const member = byName.get(name);
+    if (member === undefined) {
+      throw new Error(`[workspace/unknown-build-target] ${name}.`);
+    }
+    selected.add(name);
+    for (const dependency of workspaceDependencyNames(member.manifest)) {
+      if (byName.has(dependency)) pending.push(dependency);
+    }
+  }
+
+  return sortWorkspaceMembers(members).filter((member) => selected.has(member.name));
+};
+
 export const validateLifecycleScripts = (members: readonly WorkspaceMember[], rootDir: string): void => {
   const missing = members.flatMap((member) =>
     REQUIRED_LIFECYCLE_SCRIPTS.filter((script) => typeof member.manifest.scripts?.[script] !== 'string').map(

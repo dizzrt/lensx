@@ -46,65 +46,41 @@ budget and introduced fetch, WebAssembly, and dynamic-code complexity.
 `smol-toml@1.7.1` was rejected because it targets TOML 1.1 and does not satisfy
 the required TOML 1.0 numeric, date, and lexical-fidelity contract.
 
-## Limits, Chunks, And Evidence
+## Limits, Chunks, And Deterministic Checks
 
 The HTML entry is a minimal bootstrap. It creates the single public WebView
 transport and SDK client before React, React DOM, Semi Design, Plugin UI,
 Monaco, or language adapters are loaded. Before Runtime Context exists, normal
-startup stays visually empty and exposes only accessible busy semantics; a
-focusable retry control appears only after failure. After Context arrives, the mount bundle and the single-flight
-Monaco loader start in parallel; the connected client and validated Context are
-injected into the mount, so no second client, Session, or bridge is created.
-Retry disposes the old attempt before starting a fresh client.
+startup exposes only accessible busy semantics; a focusable retry control
+appears only after failure. After Context arrives, the mount bundle and
+single-flight Monaco loader start in parallel. Retry disposes the old attempt
+before starting a fresh client.
 
 The main thread enforces 2 MiB UTF-8 and 100,000-line input limits before
 dispatch. Language work runs in a replaceable module Worker with a five-second
 deadline and at most 200 safe diagnostics. Monaco uses a separate package-owned
-editor Worker. JSON, YAML, TOML, and XML adapters are dynamically imported by
-the language Worker, while every emitted resource remains in self-contained
-`dist/` and the canonical `.lxp`.
+editor Worker. Every emitted resource remains in self-contained `dist/` and
+the canonical `.lxp`.
 
-The initial HTML graph has stricter budgets: directly referenced JavaScript is
-at most 256 KiB and directly referenced CSS is at most 64 KiB, and its module
-inventory must contain no React, React DOM, Semi Design, Plugin UI, Monaco, or
-language adapter module. The broader drift budgets remain 24 MiB for complete
-uncompressed `dist/`, 8 MiB for all JavaScript and the compressed `.lxp`
-independently, 4 MiB per Monaco or language chunk, and 2 MiB per Worker entry.
-The package gate records every
-Monaco/language/CSS/Worker chunk and rejects remote loading, source maps,
-private Host imports, unreviewed dependency versions, or budget drift. The
-initial `800×600` resizable Page's 28-case primary visual matrix covers English and Simplified Chinese, light and
-dark themes, empty, valid formatted content, invalid, limit, long-copy, focus,
-and recovery states. The macOS WKWebView evidence also proves direct
-single-editor replacement and one-operation undo.
+The production artifact check enforces at most 256 KiB of directly referenced
+JavaScript and 64 KiB of directly referenced CSS. The initial module inventory
+must contain no React, React DOM, Semi Design, Plugin UI, Monaco, or language
+adapter module. Broader budgets remain 24 MiB for complete uncompressed
+`dist/`, 8 MiB for all JavaScript and the compressed `.lxp` independently,
+4 MiB per Monaco or language chunk, and 2 MiB per Worker entry.
 
-Additional hard-minimum and larger user-resized cases verify the semantic
-`content` plus `footer` layout. Monaco fills `content`; the language selector,
-status, Format, JSON-only Compact, and bounded conditional diagnostics remain
-inside `footer`. Same-attempt hide/restore preserves the current size, model,
-Worker, input, and language. Real close/reopen resets to effective `800×600`;
-user size is not persisted.
+Rstest covers both locales, light and dark semantic tokens, empty, valid,
+invalid, limit, long-copy, keyboard, focus, recovery, single-editor replacement,
+one-operation undo, and content-plus-footer state. Rust and lifecycle tests
+cover same-attempt hide and restore, close and reopen, replacement, cleanup, and
+resource revocation. These deterministic checks do not sample target-environment
+latency or maintain rendering output.
 
-`first-interactive` is not a render marker. It requires the current Monaco
-model, an explicit initial layout, a package-owned editor Worker handshake, and
-native keyboard input that changes that model. A document-local event carries
-no payload and grants no authority; the target harness independently checks the
-current source, editor, input, and terminal cleanup. Release-like macOS evidence
-requires p95 at most 500 ms; Development snapshot evidence allows 1000 ms.
-Debug builds may be slower, but they use the same Runtime and cleanup path.
-Actual close/reopen creates fresh SDK, model, editor, and Workers; only
-same-attempt hide/restore retains them.
-
-Run the plugin CI entry and focused product evidence from the repository root:
+Run:
 
 ```bash
 pnpm run gate -- ci-plugins
-pnpm run gate -- official-config-lens-cold-open
-pnpm run gate -- official-config-lens-warm-format
 ```
 
-Plugins CI builds required public dependencies and runs package lifecycle,
-built-output E2E, privacy/boundary checks, and the 28-case visual regression.
-The focused cold-open and warm-format gates retain bounded macOS WKWebView and
-product evidence. Evidence stores booleans and counts only; input, URL, origin,
-path, nonce, Port, payload, and raw errors are forbidden.
+Plugins CI builds required public dependencies and runs the ConfigLens package
+lifecycle once, followed by its pure Node built-output check.

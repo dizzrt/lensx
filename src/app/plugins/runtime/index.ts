@@ -8,7 +8,6 @@ export * from './pluginChildWebviewSlot';
 export * from './resolver';
 export * from './rpc-validation';
 export * from './scheduler';
-export * from './stageMetrics';
 export * from './transport-adapter';
 export * from './transport-contract';
 export * from './types';

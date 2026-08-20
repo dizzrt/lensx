@@ -17,42 +17,6 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [features]
 default = []
 plugin-development-mode = []
-plugin-child-webview-spike = []
-plugin-child-webview-acl-harness = []
-plugin-child-webview-slot-harness = []
-plugin-child-webview-web-capability-harness = []
-config-lens-cold-open-harness = ["plugin-development-mode", "dep:core-graphics"]
-macos-accessory-evidence = []
-
-[[example]]
-name = "plugin_child_webview_spike"
-path = "examples/plugin_child_webview_spike.rs"
-required-features = ["plugin-child-webview-spike"]
-
-[[example]]
-name = "plugin_child_webview_acl_harness"
-path = "examples/plugin_child_webview_acl_harness.rs"
-required-features = ["plugin-child-webview-acl-harness"]
-
-[[example]]
-name = "plugin_child_webview_slot_harness"
-path = "examples/plugin_child_webview_slot_harness.rs"
-required-features = ["plugin-child-webview-slot-harness"]
-
-[[example]]
-name = "plugin_child_webview_web_capability_harness"
-path = "examples/plugin_child_webview_web_capability_harness.rs"
-required-features = ["plugin-child-webview-web-capability-harness"]
-
-[[example]]
-name = "config_lens_cold_open_harness"
-path = "examples/config_lens_cold_open_harness.rs"
-required-features = ["config-lens-cold-open-harness"]
-
-[[example]]
-name = "macos_accessory_fullscreen_sacrifice"
-path = "examples/macos_accessory_fullscreen_sacrifice.rs"
-required-features = ["macos-accessory-evidence"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -75,7 +39,6 @@ getrandom = "=0.3.4"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = { version = "=0.6.2" }
-core-graphics = { version = "=0.25.0", optional = true }
 objc2 = { version = "=0.6.4" }
 objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["block2", "libc", "NSApplication", "NSCursor", "NSEvent", "NSGraphicsContext", "NSMenu", "NSResponder", "NSRunningApplication", "NSView", "NSWindow"] }
 objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSData", "NSDictionary", "NSError", "NSJSONSerialization", "NSObject", "NSString", "NSThread"] }

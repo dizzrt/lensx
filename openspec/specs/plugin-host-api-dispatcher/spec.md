@@ -7,6 +7,7 @@ only currently implemented capabilities through an authenticated Runtime Port,
 while preserving trusted identity, currentness, cancellation, lifecycle, and
 public Contract boundaries.
 ## Requirements
+
 ### Requirement: Production Host MUST route requests through a closed Dispatcher bound to a trusted Session
 
 The production Host MUST route Host API `0.2.0` requests through a closed Dispatcher bound to the current trusted Runtime Session identity. The Dispatcher MUST compose only base navigation and Context, plugin-scoped storage, and other current non-privileged providers. It MUST NOT compose a permission service, grant source, native clipboard provider, arbitrary Tauri command, or mediation for ordinary Web network or Worker behavior. Every request MUST still pass strict Contract validation, identity and currentness checks, cancellation, deadline, and bounded response validation.
@@ -201,44 +202,6 @@ or effect MUST be dropped and MUST NOT affect a replacement Session.
 - **THEN** other plugin Sessions, Registrations, permissions, and application
   service state are not modified as collateral effects
 
-### Requirement: Delivery MUST prove real production wiring without absorbing later capabilities
-
-Production `PluginRuntimeSlot` MUST install a real Session-scoped Dispatcher
-for a current ready lease instead of a fixed unavailable handler. Tests MUST
-retain explicit fake or unavailable binding injection. Delivery MUST cover
-Dispatcher unit tests, Navigation and Action regressions, all five scoped
-storage methods, real SDK and native bridge round trips, concurrency,
-cancellation, replacement, cleanup, malicious or stale identity, complete
-Context events, response-before-close ordering, persistent storage restart,
-bounded diagnostics, and target macOS WKWebView evidence. It MUST prove that
-clipboard, permission mutation, arbitrary Tauri, and other removed or private
-methods are unavailable.
-
-English architecture, workspace, and validation documentation and their
-same-path Simplified Chinese mirrors MUST distinguish the Host API Contract,
-transport, Dispatcher, storage, RPC validation, and open-Web versus native
-authority boundaries. Root frontend and Rust validation MUST pass without
-regression. This capability MUST NOT claim delivery of native clipboard,
-permission UI, general RPC quotas, templates, CLI, or development mode.
-
-#### Scenario: Production Dispatcher and storage loops pass
-
-- **WHEN** an external plugin uses only the public Contract and SDK tarballs to
-  initialize and call every Host API `0.2.0` method on a real Runtime Session
-- **THEN** Context, Page close, same-plugin Action, and scoped persistent
-  storage complete through the authenticated current bridge and Host providers
-- **THEN** the plugin cannot import Host-private modules, private wire types,
-  Tauri, storage paths, cursor codecs, authority coordinators, or executors
-
-#### Scenario: Removed native and permission methods stay unavailable
-
-- **WHEN** a current or legacy plugin requests clipboard, permission mutation,
-  an arbitrary Tauri command, or another method outside Host API `0.2.0`
-- **THEN** the closed Contract or Dispatcher rejects it without a provider side
-  effect or capability projection
-- **THEN** focused and WebView evidence does not describe the removed method as
-  permission-denied, grantable, or delivered
-
 ### Requirement: Dispatcher authority MUST derive only from the current Child WebView Session
 Production dispatch MUST accept a request only after native source binding and RPC validation identify the current Child WebView Session. Dispatcher MUST continue to derive plugin/Page/capability/storage namespace from trusted Session facts and MUST receive no plugin-provided WebView label, native handle, origin token, bridge object or Tauri command.
 
@@ -249,3 +212,25 @@ Production dispatch MUST accept a request only after native source binding and R
 #### Scenario: Old WebView calls a valid method
 - **WHEN** a replaced or destroyed source sends an otherwise valid request
 - **THEN** request is rejected before provider invocation with zero side effect
+
+### Requirement: Delivery MUST prove deterministic production composition without absorbing later capabilities
+
+Production `PluginRuntimeSlot` MUST install a real Session-scoped Dispatcher for a current ready lease instead of a fixed unavailable handler, while tests retain explicit fake or unavailable binding injection. Delivery MUST cover Dispatcher unit tests, production composition tests, Navigation and Action regressions, all five scoped storage methods, SDK codec and bridge-adapter integration, concurrency, cancellation, replacement, cleanup, malicious or stale identity, complete Context events, response-before-close ordering, persistent storage restart, bounded diagnostics, and unavailable clipboard, permission mutation, arbitrary Tauri, and removed/private methods. Public tarball and workspace-boundary checks MUST prove that Host-private modules remain unreachable. No browser, WebView, GUI application, or environment evidence is required.
+
+#### Scenario: Production Dispatcher composition and storage loops pass
+
+- **WHEN** deterministic production-composition tests connect the public Contract and SDK boundary to a current Dispatcher Session
+- **THEN** Context, Page close, same-plugin Action, and scoped persistent storage complete through authenticated current adapters
+- **THEN** the public plugin boundary cannot import Host-private wire types, Tauri, storage paths, authority coordinators, or executors
+
+#### Scenario: Removed native and permission methods stay unavailable
+
+- **WHEN** a current or legacy fixture requests clipboard, permission mutation, arbitrary Tauri, or another method outside Host API `0.2.0`
+- **THEN** the closed Contract or Dispatcher rejects it without provider side effects or capability projection
+- **THEN** validation does not describe the removed method as permission-denied, grantable, or delivered
+
+#### Scenario: Real Runtime evidence is inferred from deterministic composition
+
+- **WHEN** only deterministic tests and package checks have run
+- **THEN** completion may claim the maintained production composition and boundary coverage
+- **THEN** it MUST NOT claim a real WebView or native roundtrip was executed

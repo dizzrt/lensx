@@ -58,9 +58,9 @@ semantically, and focus predictable. On error, move focus to the recovery
 action; after recovery, restore a useful logical target. Do not encode theme by
 hard-coded Host colors.
 
-The maintained visual gate renders both locales in both themes. Component
-tests cover loading, ready, error, recovery, keyboard activation, semantic
-status, and focus behavior.
+Component tests cover both locales, both themes, loading, ready, error,
+recovery, keyboard activation, semantic status, token selection, and focus
+behavior.
 
 ## Test and build
 

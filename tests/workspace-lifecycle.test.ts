@@ -1,7 +1,13 @@
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from '@rstest/core';
 
-import { runWorkspaceLifecycle } from '../scripts/workspace-lifecycle.ts';
+import {
+  discoverWorkspaceMembers,
+  runWorkspaceLifecycle,
+  selectWorkspaceBuildOrder,
+  sortWorkspaceMembers,
+  type WorkspaceMember,
+} from '../scripts/workspace-lifecycle.ts';
 
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 
@@ -80,5 +86,49 @@ describe('workspace lifecycle aggregation', () => {
       '@fixture/base (packages/base):test',
       '@fixture/failing-plugin (plugins/failing):test',
     ]);
+  });
+
+  test('selects and de-duplicates a transitive build closure without relying on dist output', () => {
+    const members = discoverWorkspaceMembers(repositoryRoot);
+    const targets = members.filter((member) =>
+      ['packages/plugin-cli', 'examples/plugins/framework-neutral', 'examples/plugins/react-semi'].includes(
+        member.relativePath,
+      ),
+    );
+
+    expect(selectWorkspaceBuildOrder(members, targets).map((member) => member.name)).toEqual([
+      '@lensx/plugin-contract',
+      '@lensx/plugin-cli',
+      '@lensx/plugin-sdk',
+      '@lensx/plugin-testkit',
+      '@lensx/example-plugin-framework-neutral',
+      '@lensx/plugin-ui',
+      '@lensx/example-plugin-react-semi',
+    ]);
+  });
+
+  test('fails closed for an unknown target and a workspace dependency cycle', () => {
+    const members = discoverWorkspaceMembers(repositoryRoot);
+    const [first, second] = members;
+    if (first === undefined || second === undefined) throw new Error('workspace fixture requires two members');
+    expect(() => selectWorkspaceBuildOrder(members, [{ ...first, name: '@fixture/missing' }])).toThrow(
+      '[workspace/unknown-build-target] @fixture/missing.',
+    );
+
+    const cyclic: WorkspaceMember[] = [
+      {
+        ...first,
+        name: '@fixture/left',
+        manifest: { dependencies: { '@fixture/right': 'workspace:*' } },
+      },
+      {
+        ...second,
+        name: '@fixture/right',
+        manifest: { dependencies: { '@fixture/left': 'workspace:*' } },
+      },
+    ];
+    expect(() => sortWorkspaceMembers(cyclic)).toThrow(
+      '[workspace/dependency-cycle] Workspace dependency cycle: @fixture/left, @fixture/right.',
+    );
   });
 });

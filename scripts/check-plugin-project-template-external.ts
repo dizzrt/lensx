@@ -65,7 +65,7 @@ try {
     const templateRoot = resolve(consumerRoot, 'template');
     await cp(sourceRoot, templateRoot, {
       recursive: true,
-      filter: (source) => !/(?:^|\/)(?:node_modules|dist|visual-dist)(?:\/|$)/u.test(source),
+      filter: (source) => !/(?:^|\/)(?:node_modules|dist)(?:\/|$)/u.test(source),
     });
     await writeFile(
       resolve(consumerRoot, 'package.json'),

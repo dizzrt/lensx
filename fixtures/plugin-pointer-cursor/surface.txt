@@ -1,2 +1,0 @@
-ConfigLens pointer fixture
-This maintained plain-text surface contains no user content.

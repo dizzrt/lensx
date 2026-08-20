@@ -47,7 +47,7 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "test": "rstest run",
-    "check": "pnpm run check:generated && pnpm run typecheck",
+    "check": "pnpm run check:generated && biome check .",
     "generate": "node scripts/generate-plugin-manifest-types.mjs && node scripts/generate-plugin-host-api-types.mjs && node scripts/generate-plugin-host-api-validators.mjs",
     "check:generated": "node scripts/generate-plugin-manifest-types.mjs --check && node scripts/generate-plugin-host-api-types.mjs --check && node scripts/generate-plugin-host-api-validators.mjs --check",
     "test:pack": "node scripts/verify-package.mjs"

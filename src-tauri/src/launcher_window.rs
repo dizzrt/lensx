@@ -36,10 +36,6 @@ const DEFAULT_SHORTCUT_BINDINGS: [&str; 1] = [DEFAULT_SHORTCUT_LABEL];
 #[cfg(target_os = "macos")]
 static MACOS_LOCAL_COMMAND_MONITOR: AtomicUsize = AtomicUsize::new(0);
 #[cfg(target_os = "macos")]
-static MACOS_LOCAL_CLOSE_COUNT: AtomicUsize = AtomicUsize::new(0);
-#[cfg(target_os = "macos")]
-static MACOS_LOCAL_QUIT_COUNT: AtomicUsize = AtomicUsize::new(0);
-#[cfg(target_os = "macos")]
 static MACOS_QUIT_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -698,23 +694,6 @@ where
     }
 }
 
-#[cfg(all(target_os = "macos", feature = "macos-accessory-evidence"))]
-pub(crate) fn macos_inactive_local_commands_ignored_for_evidence() -> (bool, bool) {
-    let close_ignored = dispatch_macos_local_command(
-        false,
-        MACOS_CLOSE_WINDOW_MENU_ID,
-        |_| Ok(()),
-        || unreachable!("inactive local close must not dispatch"),
-    ) == Ok(MacosLocalCommandOutcome::Ignored);
-    let quit_ignored = dispatch_macos_local_command(
-        false,
-        MACOS_QUIT_MENU_ID,
-        |_| Ok(()),
-        || unreachable!("inactive local quit must not dispatch"),
-    ) == Ok(MacosLocalCommandOutcome::Ignored);
-    (close_ignored, quit_ignored)
-}
-
 #[cfg(target_os = "macos")]
 fn request_macos_application_quit<R: Runtime>(app: &AppHandle<R>) {
     if MACOS_QUIT_IN_FLIGHT.swap(true, Ordering::AcqRel) {
@@ -765,13 +744,10 @@ fn install_macos_local_command_monitor<R: Runtime>(
         match local_command_for_event(event) {
             Some(MacosMenuCommand::Window(action)) => {
                 let actions = monitor_app.state::<LauncherWindowActions>();
-                if actions.dispatch(&monitor_app, action).is_ok() {
-                    MACOS_LOCAL_CLOSE_COUNT.fetch_add(1, Ordering::AcqRel);
-                }
+                let _ = actions.dispatch(&monitor_app, action);
                 std::ptr::null_mut()
             }
             Some(MacosMenuCommand::Quit) => {
-                MACOS_LOCAL_QUIT_COUNT.fetch_add(1, Ordering::AcqRel);
                 request_macos_application_quit(&monitor_app);
                 std::ptr::null_mut()
             }
@@ -814,14 +790,6 @@ pub(crate) fn release_macos_local_command_monitor() {
 
 #[cfg(not(target_os = "macos"))]
 pub(crate) fn release_macos_local_command_monitor() {}
-
-#[cfg(all(target_os = "macos", feature = "macos-accessory-evidence"))]
-pub(crate) fn macos_local_command_counts() -> (usize, usize) {
-    (
-        MACOS_LOCAL_CLOSE_COUNT.load(Ordering::Acquire),
-        MACOS_LOCAL_QUIT_COUNT.load(Ordering::Acquire),
-    )
-}
 
 #[cfg(test)]
 pub(crate) fn dispatch_macos_menu_event<F>(
@@ -1163,7 +1131,6 @@ fn install_macos_close_window_menu<R: Runtime>(
             event.id().as_ref(),
             |action| actions.dispatch(app, action),
             || {
-                MACOS_LOCAL_QUIT_COUNT.fetch_add(1, Ordering::AcqRel);
                 request_macos_application_quit(app);
             },
         ) {

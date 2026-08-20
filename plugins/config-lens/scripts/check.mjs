@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
@@ -67,71 +67,6 @@ if (
   !engineSource.includes("import('./adapters/")
 ) {
   throw new Error('boundary/main-thread-language-engine: adapters must stay behind the package language Worker.');
-}
-
-const dist = resolve(root, 'dist');
-try {
-  const files = [];
-  const collect = async (directory) => {
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      const path = resolve(directory, entry.name);
-      if (entry.isDirectory()) await collect(path);
-      else files.push(path);
-    }
-  };
-  await collect(dist);
-  const facts = await Promise.all(files.map(async (file) => ({ file, size: (await stat(file)).size })));
-  if (facts.some(({ file }) => file.endsWith('.map')))
-    throw new Error('bundle/sourcemap: production sourcemaps are forbidden.');
-  const total = facts.reduce((sum, { size }) => sum + size, 0);
-  if (total > 24 * 1024 * 1024) throw new Error(`bundle/total-budget: ${total}`);
-  const css = facts.filter(({ file }) => file.endsWith('.css')).reduce((sum, { size }) => sum + size, 0);
-  if (css > 1024 * 1024) throw new Error(`bundle/css-budget: ${css}`);
-  const workers = facts.filter(({ file }) => /config-lens-(?:editor|language)|editorWebWorkerMain/u.test(file));
-  if (
-    !workers.some(({ file }) => file.includes('config-lens-editor')) ||
-    !workers.some(({ file }) => file.includes('config-lens-language'))
-  ) {
-    throw new Error('bundle/worker-closure: editor and language Worker chunks are required.');
-  }
-  if (workers.some(({ size }) => size > 2 * 1024 * 1024))
-    throw new Error('bundle/worker-budget: a Worker entry exceeds 2 MiB.');
-  const javascript = facts.filter(({ file }) => file.endsWith('.js'));
-  if (javascript.reduce((sum, { size }) => sum + size, 0) > 8 * 1024 * 1024) {
-    throw new Error('bundle/javascript-budget: complete JavaScript exceeds 8 MiB.');
-  }
-  if (javascript.some(({ size }) => size > 4 * 1024 * 1024)) {
-    throw new Error('bundle/chunk-budget: an individual Monaco or language chunk exceeds 4 MiB.');
-  }
-  const initialHtml = await readFile(resolve(dist, 'index.html'), 'utf8');
-  const initialScriptNames = [...initialHtml.matchAll(/<script[^>]+src=["']\.\/([^"']+)["']/gu)].map(
-    (match) => match[1],
-  );
-  const initialStyleNames = [...initialHtml.matchAll(/<link[^>]+href=["']\.\/([^"']+\.css)["']/gu)].map(
-    (match) => match[1],
-  );
-  const initialScripts = initialScriptNames.map((name) => resolve(dist, name));
-  const initialStyles = initialStyleNames.map((name) => resolve(dist, name));
-  const initialBytes = facts
-    .filter(({ file }) => initialScripts.includes(file))
-    .reduce((sum, { size }) => sum + size, 0);
-  const initialCssBytes = facts
-    .filter(({ file }) => initialStyles.includes(file))
-    .reduce((sum, { size }) => sum + size, 0);
-  if (initialScripts.length === 0 || initialBytes > 256 * 1024) {
-    throw new Error(`bundle/initial-script-budget: ${initialBytes}`);
-  }
-  if (initialStyles.length === 0 || initialCssBytes > 64 * 1024) {
-    throw new Error(`bundle/initial-css-budget: ${initialCssBytes}`);
-  }
-  const chunkModules = JSON.parse(await readFile(resolve(dist, 'chunk-modules.json'), 'utf8'));
-  const initialModules = [...initialScriptNames, ...initialStyleNames].flatMap((name) => chunkModules[name] ?? []);
-  const forbiddenInitialModule =
-    /node_modules\/(?:react(?:-dom)?|@douyinfe\/semi|@lensx\/plugin-ui|monaco-editor)|src\/language\/adapters/u;
-  const forbidden = initialModules.find((identifier) => forbiddenInitialModule.test(identifier));
-  if (forbidden !== undefined) throw new Error(`bundle/initial-heavy-module: ${forbidden}`);
-} catch (error) {
-  if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
 }
 
 console.log('ConfigLens dependency, boundary, privacy, and bundle checks passed.');

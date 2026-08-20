@@ -69,7 +69,7 @@ export const validatePackedPackage = ({
   }
   for (const path of files) {
     if (
-      /(^|\/)(tests?|fixtures?|scripts?|visual)(\/|$)/u.test(path) ||
+      /(^|\/)(tests?|fixtures?|scripts?)(\/|$)/u.test(path) ||
       path.startsWith('src/') ||
       path.includes('src/app/') ||
       path.endsWith('.less') ||

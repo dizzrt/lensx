@@ -5,56 +5,39 @@
 Define the Host-owned Content Security Policy and process-local lifecycle
 boundary for external Plugin Page Runtimes, including bounded deadlines,
 generation-aware terminal cleanup, circuit breaking, single-instance
-enforcement, safe diagnostics, and real WebView evidence.
+enforcement, safe diagnostics, and deterministic security and lifecycle
+validation.
 ## Requirements
+
 ### Requirement: Host and plugin documents MUST run under distinct Host-owned Content Security Policies
 
-The production Host main document and every eligible plugin Runtime document MUST use non-empty, mutually independent Content Security Policies controlled by lensX. The Host policy MUST continue to allow only the validated Host bundle, Tauri IPC, and the current plugin frame class. The plugin policy MUST enforce only trusted Host ancestry, Host and cross-plugin isolation, and Runtime boundaries that an author cannot relax. It MUST NOT treat Worker, network, remote HTTPS or WSS resources, `blob:`, `data:`, WASM, or browser origin storage as lensX permission-gated content categories. A plugin's own policy MAY narrow its content sources further, but the Manifest, HTML, or remote content MUST NOT relax isolation policy in the Host header.
+The production Host main document and every eligible plugin Runtime document MUST use non-empty, mutually independent Content Security Policies controlled by lensX. The Host policy MUST continue to allow only the validated Host bundle, Tauri IPC, and current plugin document class. The plugin policy MUST enforce only trusted Host ancestry, Host and cross-plugin isolation, and Runtime boundaries that an author cannot relax. It MUST NOT treat Worker, network, remote HTTPS or WSS resources, `blob:`, `data:`, WASM, or browser origin storage as lensX permission-gated content categories. A plugin's own policy MAY narrow its content sources further, but Manifest, HTML, or remote content MUST NOT relax isolation policy in the Host header.
 
 The Host main policy MUST NOT change because the plugin Web Runtime is open. Both policies MUST prevent a plugin from obtaining Host Tauri authority, using the plugin document as the Host main document, reusing an origin across plugins, or embedding through a wildcard ancestor.
 
 #### Scenario: Plugin uses open content capability
+
 - **WHEN** the current plugin document creates a Dedicated Worker, loads package, remote, Blob, or Data content, or opens a network connection
-- **THEN** the plugin policy requires no lensX grant and the target WebView follows the open Web baseline
+- **THEN** the plugin policy requires no lensX grant and browser-standard behavior remains within the open Web baseline
 - **THEN** the Host main CSP, trusted ancestor, Tauri initialization, and another plugin origin remain unreachable
 
 #### Scenario: Plugin attempts to relax Host isolation
+
 - **WHEN** a Manifest, HTML, remote script, or plugin message declares a wildcard ancestor, Host or Tauri source, shared plugin origin, or broader Host bridge
-- **THEN** the Host-owned response policy and iframe and origin boundaries remain authoritative and prevent escalation
+- **THEN** the Host-owned response policy and document and origin boundaries remain authoritative and prevent escalation
 - **THEN** installation, official source, Publisher, and community labels create no exception
 
 #### Scenario: Production Host starts with bounded policy
 
 - **WHEN** the production Tauri application loads its bundled Host document
-- **THEN** a non-empty Host CSP permits the verified lensX bundle, Tauri IPC, and current plugin frame class without enabling arbitrary remote or inline script execution
+- **THEN** a non-empty Host CSP permits the verified lensX bundle, Tauri IPC, and current plugin document class without enabling arbitrary remote or inline script execution
 - **THEN** Host Settings, Launcher, locale, theme, Action dispatch, and trusted Tauri invocation retain their existing behavior
 
 #### Scenario: Existing Host styling requires an exception
 
-- **WHEN** the production Host bundle cannot render its verified Semi Design UI without a style-only inline mechanism
-- **THEN** any accepted exception is restricted to `style-src`, is locked by production bundle and light and dark visual evidence, and does not expand script, connect, frame, object, base, or form policy
+- **WHEN** the production Host bundle cannot express its verified Semi Design UI without a style-only inline mechanism
+- **THEN** any accepted exception is restricted to `style-src`, is locked by production bundle inspection and deterministic light/dark theme state tests, and does not expand script, connect, frame, object, base, or form policy
 - **THEN** inability to justify that minimum exception prevents completion rather than enabling a general unsafe policy
-
-### Requirement: Plugin CSP MUST be delivered by the current scoped resource response and proven on the target WebView
-
-The Host MUST attach the current plugin isolation CSP as a response header to every successful current scoped HTML response and preserve matching security headers for GET and HEAD. The policy MUST use the exact trusted Host ancestor and operate together with scope, generation, path, MIME, `nosniff`, `no-store`, and no-Host-CORS guarantees. It MUST NOT rely on an author meta element, HTML rewriting, reflected Host origin, a shared plugin origin, or removal of frame and navigation negative cases.
-
-The open package and remote module graph, Dedicated Worker, network, Blob, Data, and WASM MUST have positive evidence in the target WebView. Host and Tauri, cross-plugin, stale-generation, popup, top-navigation, and persistent-background execution MUST have negative evidence. A plugin author policy MAY intersect with the Host header to narrow its own behavior.
-
-#### Scenario: Current open module graph loads
-- **WHEN** a current isolated plugin loads package and remote script, style, image, and font content, creates a Dedicated Worker, and opens a browser connection
-- **THEN** the supported graph executes inside the current plugin origin and sandbox
-- **THEN** every Host-owned resource response preserves current scope, generation, MIME, `nosniff`, `no-store`, and safe diagnostic boundaries
-
-#### Scenario: Open content attempts to obtain Host or old authority
-- **WHEN** package, remote, Blob, Data, or Worker code attempts to access Host or Tauri, another plugin, an old generation, a popup, top navigation, or a persistent background context
-- **THEN** the iframe, origin, navigation, Session, or Resource boundary blocks the attempt
-- **THEN** negative evidence records only bounded content categories and platform facts without disclosing a target URI, origin token, scope, path, payload, or private error
-
-#### Scenario: Target WebView cannot enforce open and isolated policy
-- **WHEN** a supported platform cannot prove the open Web success path, exact Host ancestor, GET and HEAD header agreement, Host and cross-plugin negative paths, and teardown together
-- **THEN** the capability remains incomplete
-- **THEN** production does not fall back to a shared origin, Tauri exposure, no ancestor restriction, or an unverified residual Worker
 
 ### Requirement: Every Runtime attempt MUST have one idempotent generation-aware terminal cleanup
 Every explicit open, retry or committed development reload MUST create a fresh process-local attempt. Close, navigation away, disable, uninstall, replacement, reload, disconnect, failure, breaker, Host reload, App unmount and process exit MUST converge on one idempotent coordinator that rejects new ingress, aborts work, removes bridge/Session/resource/navigation authority, hides and destroys the Child WebView, and clears bounds, focus, listeners, timers and caches. Every late callback MUST compare current attempt before publishing state.
@@ -128,22 +111,6 @@ The Host MUST map Runtime security and lifecycle failures to stable Host-private
 - **THEN** the current localized Host-owned message, accessible name, focus state and light/dark appearance update through existing application mechanisms
 - **THEN** no translated copy or theme branch changes lifecycle authority or exposes private diagnostics
 
-### Requirement: Delivery MUST prove CSP and terminal lifecycle on focused and real WebView paths
-
-Delivery MUST combine Rust response tests, deterministic TypeScript state/race tests, React accessibility/i18n/theme tests, canonical normal and malicious packages, and target macOS WKWebView evidence. It MUST prove production and harness CSP drift protection, allowed module/resource loading, forbidden content classes, no Host/Tauri access, load and bridge-ready deadlines, circuit breaking, exactly one current Child WebView, all terminal triggers, zero residual controllable listeners, timers, bridge endpoints, Sessions or resource leases, late-event inertness, unrelated-plugin stability and zero privileged handler hits. Simulated DOM, source inspection or unit tests MUST NOT replace real WebView CSP and teardown evidence, and real evidence MUST NOT replace deterministic race tests.
-
-#### Scenario: Complete focused gate passes
-
-- **WHEN** `check:plugin-child-webview-security-lifecycle` runs the normal, malicious, slow, never-ready, repeated-failure, reload and replacement matrices together with all prerequisite gates
-- **THEN** every CSP, deadline, breaker, instance and cleanup assertion passes with bounded evidence on the supported macOS WKWebView
-- **THEN** public package and workspace boundary checks confirm that policy, controller, scheduler, breaker, Session and native response internals remain Host-private
-
-#### Scenario: A security or cleanup invariant cannot be proven
-
-- **WHEN** any required CSP source class, module graph, deadline, terminal trigger, late-event guard, single-instance rule or zero-residual assertion cannot be proven
-- **THEN** Task 4.4 remains incomplete and the design/specification is revised
-- **THEN** validation does not substitute CSP `null`, wildcard/remote sources, relaxed CORS, author-controlled policy, automatic retry, hidden Runtime, removed negative cases, or a source-only assertion
-
 ### Requirement: Open execution contexts MUST terminate completely with the Runtime attempt
 Every Dedicated Worker, connection, Blob URL and other supported page-owned context MUST be owned by the current Child WebView attempt and generation. Terminal destroy MUST make it terminated or uncontrollable and without Host authority. SharedWorker, ServiceWorker and background contexts that can outlive the Page remain unsupported.
 
@@ -174,3 +141,35 @@ The Launcher MUST contain at most one external plugin Child WebView. Switching t
 #### Scenario: User switches plugin Pages
 - **WHEN** navigation selects another external Page
 - **THEN** old Child WebView teardown completes before the new one is created
+
+### Requirement: Plugin CSP MUST be delivered by current scoped resource responses and deterministically validated
+
+The Host MUST attach the current plugin isolation CSP as a response header to every successful current scoped HTML response and preserve matching security headers for GET and HEAD. The policy MUST use the exact trusted Host ancestor and operate with scope, generation, path, MIME, `nosniff`, `no-store`, and no-Host-CORS guarantees. It MUST NOT rely on author meta, HTML rewriting, reflected Host origin, shared plugin origin, or removal of negative cases. Deterministic response, resource-graph, header, CSP parsing, Session, and boundary tests MUST cover supported content categories and Host/Tauri, cross-plugin, stale-generation, popup, top-navigation, and persistent-background denial.
+
+#### Scenario: Current open resource graph is validated
+
+- **WHEN** canonical package and remote resource fixtures traverse current resource-response and policy tests
+- **THEN** supported categories remain within the current plugin origin and policy while Host-owned responses preserve scope, generation, MIME, `nosniff`, `no-store`, and safe diagnostics
+- **THEN** validation does not claim that a target WebView executed the graph
+
+#### Scenario: Open content attempts to obtain Host or old authority
+
+- **WHEN** malicious fixtures model attempts to access Host/Tauri, another plugin, an old generation, popup, top navigation, or persistent background authority
+- **THEN** origin, navigation, Session, Resource, and lifecycle boundaries reject them
+- **THEN** diagnostics disclose no target URI, origin token, scope, path, payload, or private error
+
+### Requirement: Delivery MUST deterministically prove CSP and terminal lifecycle
+
+Delivery MUST combine Rust response tests, deterministic TypeScript state/race tests, React accessibility/i18n/theme tests, canonical normal and malicious packages, package-boundary checks, and production configuration drift tests. It MUST cover allowed and forbidden content classes, no Host/Tauri access, load/bridge deadlines as state logic, circuit breaking, exactly one current Child WebView model, terminal triggers, cleanup calls, late-event inertness, unrelated-plugin stability, and zero privileged handler hits. It MUST NOT require browser, real WebView, GUI, native harness, or environment evidence.
+
+#### Scenario: Complete deterministic security lifecycle gate passes
+
+- **WHEN** maintained normal, malicious, slow, never-ready, repeated-failure, reload, and replacement matrices run with prerequisite deterministic Gates
+- **THEN** CSP, deadline, breaker, instance, cleanup, and boundary assertions pass
+- **THEN** public package checks confirm policy, controller, scheduler, breaker, Session, and native response internals remain Host-private
+
+#### Scenario: A security or cleanup invariant cannot be established
+
+- **WHEN** a required CSP source class, deadline, terminal trigger, late-event guard, single-instance rule, cleanup call, or zero-handler-hit assertion fails
+- **THEN** the capability remains incomplete and design or implementation is corrected
+- **THEN** validation does not relax CSP, remove negative cases, hide Runtime state, or restore real WebView evidence as an optional path

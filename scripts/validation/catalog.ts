@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { discoverWorkspaceMembers, selectWorkspaceBuildOrder } from '../workspace-lifecycle.ts';
+
 import type {
   ValidationGate,
   ValidationPlatform,
@@ -38,7 +40,6 @@ export const ROOT_SCRIPT_POLICY = Object.freeze({
   check: 'standard workspace lifecycle',
   dev: 'root application development server',
   'dev:plugin-development-mode': 'explicit Host-private development-mode launch',
-  evidence: 'single governed Evidence dispatcher',
   fix: 'repository formatting and lint repair',
   format: 'repository formatting',
   gate: 'single governed read-only validation dispatcher',
@@ -62,9 +63,7 @@ export const ROOT_SCRIPT_POLICY = Object.freeze({
 } as const satisfies Readonly<Record<string, string>>);
 
 const renamedGateIds: Readonly<Record<string, string>> = Object.freeze({
-  'check:reduce-plugin-cold-open-latency': 'official-config-lens-cold-open-delivery',
   'check:replace-plugin-iframe-runtime-with-child-webview': 'plugin-child-webview-delivery',
-  'check:stabilize-plugin-child-webview-pointer-cursor': 'plugin-pointer-cursor',
   'check:workspace-boundaries': 'workspace-boundaries',
   'test:workspace-boundaries': 'workspace-boundaries',
   'test:workspace-lifecycle': 'workspace-lifecycle',
@@ -97,14 +96,9 @@ const isGateEntry = (name: string): boolean =>
   name === 'test:workspace-lifecycle';
 
 const isGenerateEntry = (name: string): boolean => name.startsWith('generate:');
-const isEvidenceEntry = (name: string): boolean =>
-  name.startsWith('evidence:') || name.startsWith('refresh:') || name.startsWith('run:');
 
 const targetId = (name: string): string => {
   if (name.startsWith('generate:')) return name.slice('generate:'.length).replaceAll(':', '-');
-  if (name.startsWith('evidence:')) return name.slice('evidence:'.length).replaceAll(':', '-');
-  if (name.startsWith('refresh:')) return name.slice('refresh:'.length).replaceAll(':', '-');
-  if (name.startsWith('run:')) return name.slice('run:'.length).replaceAll(':', '-');
   throw new Error(`[validation/catalog] ${name} has no dispatcher target ID.`);
 };
 
@@ -129,14 +123,14 @@ const stepId = (step: Omit<ValidationStep, 'description' | 'id'>): string => {
   return `${kind || 'command'}-${digest}`;
 };
 
-const safetyFor = (executable: string, argv: readonly string[], writable: boolean): ValidationSafety => {
-  const command = `${executable} ${argv.join(' ')}`;
-  const launchesBrowser = /(?:visual|playwright|chrome|chromium|verify-plugin-management)/iu.test(command);
-  const launchesNativeApp = /(?:evidence|harness|tauri\s+dev|cargo\s+run)/iu.test(command);
+const prohibitedEnvironmentCommand =
+  /(?:visual|screenshot|pixel|playwright|chrome|chromium|\bevidence\b|(?:^|[/_-])harness(?:[/_.-]|$)|cargo\s+run|tauri\s+dev|\.app\b|launch services|rsbuild\s+preview)/iu;
+
+export const isProhibitedEnvironmentCommand = (command: string): boolean => prohibitedEnvironmentCommand.test(command);
+
+const safetyFor = (writable: boolean): ValidationSafety => {
   return Object.freeze({
     readOnly: !writable,
-    launchesBrowser,
-    launchesNativeApp,
     writesCommittedArtifacts: writable,
   });
 };
@@ -154,7 +148,11 @@ const parseStep = (command: string, writable = false): Omit<ValidationStep, 'des
   }
   const executable = tokens.shift();
   if (executable === undefined) throw new Error('[validation/catalog] empty command segment.');
-  const safety = safetyFor(executable, tokens, writable);
+  const normalizedCommand = `${executable} ${tokens.join(' ')}`;
+  if (isProhibitedEnvironmentCommand(normalizedCommand)) {
+    throw new Error(`[validation/prohibited-environment-command] ${normalizedCommand}`);
+  }
+  const safety = safetyFor(writable);
   return Object.freeze({
     executable,
     argv: Object.freeze(tokens),
@@ -211,12 +209,6 @@ const expandLegacyCommand = (legacyName: string, gate: MutableGate, stack: reado
     const runIndex = tokens[0] === 'pnpm' && tokens[1] === 'run' ? 1 : -1;
     const dependencyName = runIndex === 1 ? tokens[2] : undefined;
     if (dependencyName !== undefined && tokens.length === 3) {
-      if (dependencyName === 'evidence:plugin-child-webview-macos') {
-        if (!gate.dependsOn.includes('plugin-child-webview-macos-evidence')) {
-          gate.dependsOn.push('plugin-child-webview-macos-evidence');
-        }
-        continue;
-      }
       if (retiredLegacyEntries.has(dependencyName)) {
         if (!gate.dependsOn.includes('validation-governance')) gate.dependsOn.push('validation-governance');
         continue;
@@ -241,15 +233,22 @@ for (const gate of gatesById.values()) {
 
 const ciLensxTestGate = gatesById.get('ci-lensx-test');
 if (ciLensxTestGate === undefined) throw new Error('[validation/catalog] missing ci-lensx-test Gate.');
-ciLensxTestGate.steps.unshift(
-  internStep('pnpm --dir packages/plugin-cli run build'),
-  internStep(
-    'LENSX_TEMPLATE_MODULE_GRAPH=1 LENSX_VALIDATION_STAGE=ci-lensx-test pnpm --dir examples/plugins/framework-neutral run build',
-  ),
-  internStep(
-    'LENSX_TEMPLATE_MODULE_GRAPH=1 LENSX_VALIDATION_STAGE=ci-lensx-test pnpm --dir examples/plugins/react-semi run build',
-  ),
-);
+const ciBuildTargetPaths = new Set([
+  'packages/plugin-cli',
+  'examples/plugins/framework-neutral',
+  'examples/plugins/react-semi',
+]);
+const workspaceMembers = discoverWorkspaceMembers(rootDir);
+const ciBuildTargets = workspaceMembers.filter((member) => ciBuildTargetPaths.has(member.relativePath));
+if (ciBuildTargets.length !== ciBuildTargetPaths.size) {
+  throw new Error('[validation/catalog] missing a CI build preparation target.');
+}
+const ciBuildPreparation = selectWorkspaceBuildOrder(workspaceMembers, ciBuildTargets).map((member) => {
+  const prefix =
+    member.kind === 'example-plugin' ? 'LENSX_TEMPLATE_MODULE_GRAPH=1 LENSX_VALIDATION_STAGE=ci-lensx-test ' : '';
+  return internStep(`${prefix}pnpm --dir ${member.relativePath} run build`);
+});
+ciLensxTestGate.steps.unshift(...ciBuildPreparation);
 
 const governanceGate: MutableGate = {
   id: 'validation-governance',
@@ -302,12 +301,6 @@ export const validationRegistry: ValidationRegistry = Object.freeze({
       .sort()
       .map((name) => targetFromLegacy(name, true)),
   ),
-  evidenceTargets: Object.freeze(
-    Object.keys(legacyScripts)
-      .filter(isEvidenceEntry)
-      .sort()
-      .map((name) => targetFromLegacy(name, true)),
-  ),
 });
 
 export const findGate = (id: string): ValidationGate | undefined =>
@@ -341,7 +334,7 @@ export const migrationInventory = (): readonly MigrationEntry[] => {
           stages: splitCommand(legacyScripts[legacyName] ?? ''),
         });
       }
-      if (isGenerateEntry(legacyName) || isEvidenceEntry(legacyName)) {
+      if (isGenerateEntry(legacyName)) {
         return Object.freeze({
           legacyName,
           destinationId: targetId(legacyName),

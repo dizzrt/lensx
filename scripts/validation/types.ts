@@ -2,8 +2,6 @@ export type ValidationPlatform = 'any' | 'darwin';
 
 export interface ValidationSafety {
   readonly readOnly: boolean;
-  readonly launchesBrowser: boolean;
-  readonly launchesNativeApp: boolean;
   readonly writesCommittedArtifacts: boolean;
 }
 
@@ -36,7 +34,6 @@ export interface ValidationRegistry {
   readonly gates: readonly ValidationGate[];
   readonly steps: readonly ValidationStep[];
   readonly generateTargets: readonly WritableTarget[];
-  readonly evidenceTargets: readonly WritableTarget[];
 }
 
 export interface ValidationPlan {

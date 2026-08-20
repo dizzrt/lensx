@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { cp, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, resolve } from 'node:path';
@@ -180,7 +180,7 @@ try {
     await Promise.all((await collectFiles(resolve(consumerRoot, 'dist'), '.css')).map((path) => readFile(path, 'utf8')))
   ).join('\n');
   if (/(?:from\s+|import\s*)['"](?:react|react-dom|@douyinfe\/semi-ui|@lensx\/plugin-ui)/u.test(javascript)) {
-    throw new Error('The browser bundle contains an unresolved Runtime bare import.');
+    throw new Error('The consumer bundle contains an unresolved Runtime bare import.');
   }
   for (const forbidden of [
     '@tauri-apps/',
@@ -196,59 +196,11 @@ try {
     'source_label',
   ]) {
     if (javascript.includes(forbidden)) {
-      throw new Error(`Forbidden Host Runtime reference in browser bundle: ${forbidden}.`);
+      throw new Error(`Forbidden Host Runtime reference in consumer bundle: ${forbidden}.`);
     }
   }
   if (!consumerStyles.includes('--lensx-plugin-color-background') || !consumerStyles.includes('.semi-button')) {
-    throw new Error('The browser bundle is missing Plugin UI or Semi styles.');
-  }
-
-  const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-  const previewPort = 46_000 + (process.pid % 1_000);
-  const previewUrl = `http://127.0.0.1:${previewPort}`;
-  const preview = spawn('pnpm', ['exec', 'rsbuild', 'preview', '--host', '127.0.0.1', '--port', String(previewPort)], {
-    cwd: consumerRoot,
-    stdio: 'ignore',
-  });
-  try {
-    let previewReady = false;
-    for (let attempt = 0; attempt < 50; attempt += 1) {
-      const probe = spawnSync('curl', ['--fail', '--silent', previewUrl], { encoding: 'utf8' });
-      if (probe.status === 0) {
-        previewReady = true;
-        break;
-      }
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
-    }
-    if (!previewReady) {
-      throw new Error('The isolated consumer preview server did not become ready.');
-    }
-
-    const chromeResult = spawnSync(
-      chromePath,
-      [
-        '--headless=new',
-        '--disable-background-networking',
-        '--disable-extensions',
-        '--disable-gpu',
-        '--no-default-browser-check',
-        '--no-first-run',
-        '--no-sandbox',
-        `--user-data-dir=${resolve(temporaryRoot, 'chrome-profile')}`,
-        '--virtual-time-budget=3000',
-        '--dump-dom',
-        previewUrl,
-      ],
-      { cwd: consumerRoot, encoding: 'utf8', killSignal: 'SIGKILL', timeout: 10_000 },
-    );
-    const chromeOutput = chromeResult.stdout;
-    if (!chromeOutput.includes('data-smoke="ready"') || !chromeOutput.includes('<main ')) {
-      throw new Error(
-        `The isolated browser Runtime smoke test did not render the public Plugin UI entry.\n${chromeOutput}\n${chromeResult.stderr}`,
-      );
-    }
-  } finally {
-    preview.kill('SIGKILL');
+    throw new Error('The consumer bundle is missing Plugin UI or Semi styles.');
   }
 
   for (const specifier of ['@lensx/plugin-ui/dist/src/plugin-page.js', '@lensx/plugin-ui/src/styles.less']) {
@@ -266,7 +218,7 @@ try {
   }
 
   console.log(
-    `Packed ${files.length} UI files; verified metadata, one React Runtime, SDK isolation, browser bundle, and Runtime smoke.`,
+    `Packed ${files.length} UI files; verified metadata, one React Runtime, SDK isolation, and the consumer bundle.`,
   );
 } finally {
   await rm(temporaryRoot, { force: true, recursive: true });

@@ -16,8 +16,7 @@ source，并用于 `@lensx/plugin-cli` 中对应的 `lensx-plugin create` 模板
 ## 项目结构
 
 每个模板都包含 `package.json`、`manifest.json`、`index.html`、Rsbuild/Rstest 配置、`src/`、
-`tests/` 和 package-local metadata check。React 模板还包含 `visual/`、已提交的截图基线和
-visual verification script。普通构建会在 `dist/` 下生成自包含插件 document：
+`tests/` 和 package-local metadata check。普通构建会在 `dist/` 下生成自包含插件 document：
 
 ```text
 dist/
@@ -122,7 +121,7 @@ pnpm --dir examples/plugins/react-semi run visual
 pnpm run gate -- plugin-project-template
 ```
 
-## 隔离与打包证据
+## 隔离与打包验证
 
 聚合门禁先运行 member checks，再把两个模板复制到系统临时 consumer。它会打包真实 Contract、SDK、
 Testkit 与 UI package，使用 consumer 自有 overrides，从机器配置的全局 pnpm store 离线且不运行
@@ -135,8 +134,8 @@ preparation boundary 消费相同的临时 `.lxp` bytes。缺失 resource、非�
 
 production-component smoke 会让打包后的 Manifest 依次经过当前 Registration、Page/Action projection、
 resource resolution、Runtime resolver、公共 WebView transport、closed Child WebView bridge 与 Host dispatcher。
-它不是完整桌面 GUI E2E。React visual gate 会另外检查英语/简体中文、light/dark、长文本、焦点、语义状态、
-公共 token computed styles 和固定视口截图。
+它不是完整桌面 GUI E2E。Rstest 会另外检查英语/简体中文、light/dark semantic token、长文本、
+焦点、loading、error、ready、retry、keyboard 与 accessibility 行为。
 
 ## 当前限制
 

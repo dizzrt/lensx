@@ -25,7 +25,7 @@ import '../../../../src-tauri/src/plugin_child_webview_service.rs';
 import '../../../../src-tauri/src/frame_aware_navigation_policy.rs';
 import '../../../../src-tauri/src/plugin_child_webview_presentation.rs';
 import '../../../../vendor/frame-aware-navigation/wry/src/lib.rs';
-import '../../../../tools/frame-aware-webview-harness/evidence.schema.json';
+import '../../../../scripts/validation/catalog.ts';
 
 export { publicValue } from '@fixture/public';
 

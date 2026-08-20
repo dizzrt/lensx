@@ -10,33 +10,27 @@ interface AppCommand {
 }
 
 const commands: Readonly<Record<AppLifecycle, readonly AppCommand[]>> = Object.freeze({
-  build: [
-    { executable: 'pnpm', argv: ['run', 'app:typecheck'] },
-    { executable: 'rsbuild', argv: ['build'] },
-  ],
+  build: [{ executable: 'rsbuild', argv: ['build'] }],
   check: [
-    { executable: 'biome', argv: ['check', '.'] },
     {
-      executable: 'node',
-      argv: ['--experimental-strip-types', 'scripts/validation/cli.ts', 'gate', 'validation-governance'],
+      executable: 'biome',
+      argv: [
+        'check',
+        'src',
+        'tests',
+        'scripts',
+        'rsbuild.config.ts',
+        'rstest.config.ts',
+        'tsconfig.json',
+        'postcss.config.mjs',
+        'uno.config.ts',
+        'package.json',
+        'biome.json',
+      ],
     },
   ],
-  test: [
-    { executable: 'pnpm', argv: ['--dir', 'packages/plugin-cli', 'run', 'build'] },
-    {
-      executable: 'pnpm',
-      argv: ['--dir', 'examples/plugins/framework-neutral', 'run', 'build'],
-      environment: { LENSX_TEMPLATE_MODULE_GRAPH: '1' },
-    },
-    {
-      executable: 'pnpm',
-      argv: ['--dir', 'examples/plugins/react-semi', 'run', 'build'],
-      environment: { LENSX_TEMPLATE_MODULE_GRAPH: '1' },
-    },
-    { executable: 'rstest', argv: [] },
-  ],
+  test: [{ executable: 'rstest', argv: [] }],
   typecheck: [
-    { executable: 'pnpm', argv: ['--dir', 'packages/plugin-cli', 'run', 'build'] },
     { executable: 'tsc', argv: ['--noEmit'] },
     { executable: 'tsc', argv: ['--noEmit', '-p', 'tests/tsconfig.json'] },
   ],

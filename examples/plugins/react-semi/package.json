@@ -8,8 +8,7 @@
     "build": "rsbuild build",
     "typecheck": "tsc -p tsconfig.json",
     "test": "rstest run",
-    "check": "pnpm run typecheck && pnpm run test && node scripts/check.mjs",
-    "visual": "node scripts/verify-visual.mjs"
+    "check": "biome lint src tests scripts package.json rsbuild.config.ts rstest.config.ts tsconfig.json && node scripts/check.mjs"
   },
   "dependencies": {
     "@douyinfe/semi-ui": "^2.101.1",

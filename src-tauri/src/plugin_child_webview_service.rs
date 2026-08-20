@@ -10,7 +10,6 @@ use crate::plugin_child_webview_rpc::{
     PluginChildWebviewRpcIngressResult, PluginChildWebviewRpcSession,
 };
 use crate::plugin_host_api_validation::validate_host_api_result;
-use crate::plugin_runtime_stage::{record_plugin_runtime_stage, PluginRuntimeStage};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
@@ -313,9 +312,6 @@ struct CurrentEntry<H> {
     data_store_identifier: [u8; 16],
     resource_authority_active: bool,
     load_started_at_ms: Option<u64>,
-    loaded_at_ms: Option<u64>,
-    bridge_ready_at_ms: Option<u64>,
-    navigation_recorded: bool,
 }
 
 struct RegistryState<H> {
@@ -563,9 +559,6 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
             data_store_identifier,
             resource_authority_active: false,
             load_started_at_ms: None,
-            loaded_at_ms: None,
-            bridge_ready_at_ms: None,
-            navigation_recorded: false,
         });
         Some(attempt)
     }
@@ -601,9 +594,6 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
             data_store_identifier,
             resource_authority_active: false,
             load_started_at_ms: None,
-            loaded_at_ms: None,
-            bridge_ready_at_ms: None,
-            navigation_recorded: false,
         });
         Some(attempt)
     }
@@ -720,22 +710,12 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
             .filter(|current| {
                 current.attempt == attempt && current.source_label == actual_source_label
             })
-            .and_then(|current| {
-                let started = current.load_started_at_ms?;
-                current.session.native_loaded(now_ms).then(|| {
-                    current.loaded_at_ms = Some(now_ms);
-                    now_ms.saturating_sub(started)
-                })
-            });
+            .is_some_and(|current| current.session.native_loaded(now_ms));
         drop(state);
-        if let Some(duration_ms) = changed {
-            record_plugin_runtime_stage(
-                PluginRuntimeStage::Load,
-                Duration::from_millis(duration_ms),
-            );
+        if changed {
             self.readiness_changed.notify_all();
         }
-        changed.is_some()
+        changed
     }
 
     pub(crate) fn apply_slot_update(
@@ -961,10 +941,6 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
         if !current.session.bridge_ready(now_ms) {
             return PluginChildWebviewReadyResult::SessionUnavailable;
         }
-        let bridge_duration_ms = current
-            .loaded_at_ms
-            .map(|loaded| now_ms.saturating_sub(loaded));
-        current.bridge_ready_at_ms = Some(now_ms);
         let facts = PluginChildWebviewReadyFacts {
             attempt,
             source_label: current.source_label.clone(),
@@ -991,14 +967,6 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
         } else {
             PluginChildWebviewReadyResult::SessionUnavailable
         };
-        if result == PluginChildWebviewReadyResult::Accepted {
-            if let Some(duration_ms) = bridge_duration_ms {
-                record_plugin_runtime_stage(
-                    PluginRuntimeStage::Bridge,
-                    Duration::from_millis(duration_ms),
-                );
-            }
-        }
         self.readiness_changed.notify_all();
         result
     }
@@ -1153,27 +1121,15 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
         succeeded: bool,
     ) -> bool {
         let mut state = self.lock_state();
-        let duration_ms = state
+        let accepted = state
             .current
             .as_mut()
             .filter(|current| {
                 current.attempt == attempt && current.source_label == actual_source_label
             })
-            .and_then(|current| {
-                let started = current.bridge_ready_at_ms?;
-                current
-                    .session
-                    .sdk_ready_after_context(method, succeeded)
-                    .then(|| monotonic_now_ms().saturating_sub(started))
-            });
+            .is_some_and(|current| current.session.sdk_ready_after_context(method, succeeded));
         drop(state);
-        if let Some(duration_ms) = duration_ms {
-            record_plugin_runtime_stage(
-                PluginRuntimeStage::Sdk,
-                Duration::from_millis(duration_ms),
-            );
-        }
-        duration_ms.is_some()
+        accepted
     }
 
     pub(crate) fn disconnect_current(
@@ -1409,28 +1365,11 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewCurrentSource
     for PluginChildWebviewRegistry<H>
 {
     fn is_current_source(&self, attempt_id: &str, source_label: &str) -> bool {
-        let mut state = self.lock_state();
-        let Some(current) = state.current.as_mut().filter(|current| {
+        let state = self.lock_state();
+        let current = state.current.as_ref().filter(|current| {
             current.attempt.opaque_id() == attempt_id && current.source_label == source_label
-        }) else {
-            return false;
-        };
-        let navigation_duration_ms = if !current.navigation_recorded {
-            current.navigation_recorded = true;
-            current
-                .load_started_at_ms
-                .map(|started| monotonic_now_ms().saturating_sub(started))
-        } else {
-            None
-        };
-        drop(state);
-        if let Some(duration_ms) = navigation_duration_ms {
-            record_plugin_runtime_stage(
-                PluginRuntimeStage::Navigation,
-                Duration::from_millis(duration_ms),
-            );
-        }
-        true
+        });
+        current.is_some()
     }
 }
 

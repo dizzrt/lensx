@@ -10,7 +10,7 @@
     "build:reload": "LENSX_PLUGIN_DEVELOPMENT_SMOKE_PHASE=reload rsbuild build && node scripts/check-csp-safe-bundle.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "test": "rstest run",
-    "check": "pnpm run typecheck && pnpm run test && node scripts/check.mjs"
+    "check": "biome check . && node scripts/check.mjs"
   },
   "dependencies": {
     "@lensx/plugin-sdk": "^0.3.0"

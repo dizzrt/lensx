@@ -108,65 +108,35 @@ External, development, and official plugins use Manifest `0.4.0`,
 `runtime.kind: "webview"`, and `@lensx/plugin-sdk/webview`. Templates and the
 CLI build only this path. Development reload stages the next generation before
 destroying the old current attempt; rejected staging leaves the current attempt
-unchanged. Direct plugins use the same public Runtime, bridge/SDK, interaction,
-and zero-residual teardown boundaries as external plugins; CI does not grant a
-different Host path.
+unchanged. Direct plugins use the same public Runtime, bridge and SDK,
+interaction, and zero-residual teardown boundaries as external plugins; CI
+does not grant a different Host path.
 
-Use these maintained commands:
+Use these deterministic commands:
 
 ```bash
-pnpm run gate -- plugin-child-webview-macos-evidence
-pnpm run evidence -- plugin-child-webview-macos --write
+pnpm run gate -- plugin-child-webview-runtime
+pnpm run gate -- plugin-child-webview-session
 pnpm run gate -- open-isolated-plugin-runtime
 ```
 
-The `evidence:` command opens temporary macOS WKWebView harness windows. The
-ordinary `check:` command validates the committed bounded evidence and is safe
-for non-interactive aggregate validation. A normal evidence run never rewrites
-positive records. After reviewing a fresh passing result, maintainers explicitly
-run `node --experimental-strip-types scripts/plugin-child-webview-macos-evidence.ts --run --update-cold-open`.
-The bounded multi-WebView Launcher record has a separate reviewed update path:
-`node --experimental-strip-types scripts/plugin-child-webview-macos-evidence.ts --run --update-launcher-lifecycle`.
+These Gates validate contracts, state machines, source and generation binding,
+resource policy, bridge adapters, lifecycle races, cleanup, and malicious
+boundaries. They do not launch or claim proof from a real WebView or native
+product environment.
+## Deterministic Resource And Lifecycle Checks
 
-## Performance Budgets And Evidence Schema
-
-Cold create and same-attempt restore are measured separately. ConfigLens warm
-format is also independent of container startup.
-
-| Measurement | Maintained budget | Method |
-| --- | ---: | --- |
-| Release-like Host loading to bridge ready p95 | 250 ms | At least twenty fresh opens through normal registration, Resource Service, presentation, bridge, and SDK paths. |
-| Release-like first interactive p95 | 500 ms | At least twenty fresh opens ending only after current Monaco model/layout, package-owned editor Worker, and native keyboard input are confirmed. |
-| Development snapshot first interactive p95 | 1000 ms | At least twenty fresh Development generation opens through the same product Runtime path. |
-| Same-attempt hide/restore p95 | 100 ms | At least forty native hide/show/focus samples with unchanged attempt, document, Session, model, and Worker. |
-| ConfigLens warm small-JSON format p95 | 100 ms | Forty action-to-model-update samples over the maintained four-case corpus. |
-| Host heartbeat p95 gap | 50 ms | A Host timer while plugin startup or work runs. |
-
-The closed stage catalog is `resolve`, `create`, `navigation`, `load`, `bridge`,
-`sdk`, `ui_bundle`, `editor`, `worker`, `host_loading`, `first_interactive`, and
-`restore`. Each layer reports only monotonic durations; evidence never compares
-or exports cross-layer absolute timestamps. The committed cold-open summary uses
-schema version `0.2.0`, separate `release_like`, `development_snapshot`, and
-`same_attempt_restore` profiles, nearest-rank p50/p95/max, sample counts, bounded
-asset sizes, Host heartbeat, terminal cleanup, and explicit privacy flags.
-Evidence records no user content, raw payload/error,
-complete URL, origin, path, nonce, native label, data-store identifier, or
-Host-private token. Memory/resource release is established by registry absence,
-destroyed WebViews, inert late callbacks, terminated Workers/connections, and
-zero remaining bridge/resource authority; process separation is not measured
-or assumed.
-
-The ConfigLens Launcher lifecycle record contains only reviewed booleans. It
-proves Home/Page/close geometry, application-local `Cmd+W` and focus-loss hide,
-global-shortcut same-attempt restore without another editor/Worker load, Page
-close destruction, and zero remaining native/bridge/resource authority.
-
+Container startup latency and target-environment interaction timing are not
+maintained validation outputs. ConfigLens bundle and initial-resource budgets
+are checked from production build artifacts. Runtime deadlines, bounded frames,
+single-instance ownership, cancellation, replacement, terminal cleanup, and
+late-event suppression remain enforced by Rust, TypeScript, React, package, and
+boundary tests.
 ## Troubleshooting
 
 1. If the Host stays in loading, distinguish native load from bridge ready and
-   SDK context ready; inspect the responsible stage instead of treating them as
-   one timeout. A high `load` stage points to Resource proof or native loading;
-   high `ui_bundle`/`worker` stages point to plugin bootstrap.
+   SDK context ready; inspect the responsible state transition instead of
+   treating them as one timeout.
 2. If content is hidden or misaligned, run the slot/bounds gate and verify
    scale factor, presentation revision, and Host overlay ordering.
 3. If `Cmd+W`, focus loss, or Page close leaves a blank or incorrectly sized
@@ -178,8 +148,8 @@ close destruction, and zero remaining native/bridge/resource authority.
    do not add a Host permission or native fallback.
 5. If reload or replacement fails, verify staging before teardown and confirm
    the old generation cannot send a late callback.
-6. If evidence changes, rerun the real macOS matrix and review the bounded
-   result. Never edit a positive boolean to bypass a failed harness.
+6. If a deterministic assertion changes, review the product invariant and
+   update the responsible unit, state, package, or boundary test.
 
 The Resource Service keeps a process-local 32 MiB/256-entry verified byte cache
 keyed by entry, installed/development payload variant, resource generation, and

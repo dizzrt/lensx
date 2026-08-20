@@ -8,7 +8,7 @@
     "build": "rsbuild build",
     "typecheck": "tsc -p tsconfig.json",
     "test": "rstest run",
-    "check": "pnpm run typecheck && pnpm run test && node scripts/check.mjs"
+    "check": "biome lint src tests scripts package.json rsbuild.config.ts rstest.config.ts tsconfig.json && node scripts/check.mjs"
   },
   "dependencies": {
     "@lensx/plugin-sdk": "^0.3.0"

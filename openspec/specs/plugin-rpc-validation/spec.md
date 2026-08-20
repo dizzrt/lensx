@@ -4,6 +4,7 @@
 
 Define bounded, fail-closed validation and resource controls for plugin Runtime Session RPC while preserving public Contract semantics and Host-private authority.
 ## Requirements
+
 ### Requirement: The Host MUST enforce one immutable RPC v1 budget before recursive Contract validation
 
 The Host MUST apply one Host-private, frozen RPC v1 policy to every value received from or sent to a plugin Runtime Session. The policy MUST allow at most 5,242,880 bytes of canonical JSON-compatible cost per private frame, a semantic payload nesting depth of 32, a total private-frame depth of 36, and 16,384 visited values and object keys. The private wire MUST remain single-request: one frame MUST contain at most one request, and a batch or array envelope MUST NOT be accepted.
@@ -124,30 +125,6 @@ Diagnostic delivery failure MUST NOT change request settlement, Host authority, 
 - **THEN** the adapter swallows the observational failure and completes the predetermined request or terminal action
 - **THEN** no request is settled twice and no Handler gains authority from diagnostic behavior
 
-### Requirement: Delivery MUST prove RPC limits without expanding the public plugin platform
-
-Delivery MUST include deterministic shared valid and malicious fixtures, policy/analyzer unit tests, Host adapter race tests, real Contract and SDK MessageChannel integration, public tarball and workspace-boundary checks, and bounded target macOS WKWebView evidence. Tests MUST cover exact-limit acceptance and over-limit rejection for bytes, depth, node count, concurrency, execution deadline, monotonic request IDs, cancellation races, invalid Handler output, invalid events, safe diagnostics, post-response effects, and zero Handler hits for rejected input.
-
-The focused validation MUST be the stable `plugin-rpc-validation` capability Gate selected through the unified Gate CLI. The change MUST add no public SDK option or export, no new Host API method or error code, no new Tauri command or Rust authority, and no runtime dependency. Canonical English architecture and validation documentation and their Simplified Chinese mirrors MUST distinguish these per-frame and per-Session RPC limits from later iframe, frequency, CPU, memory, isolation, and recovery controls.
-
-#### Scenario: Focused RPC validation gate passes
-
-- **WHEN** the `plugin-rpc-validation` Gate runs with the real Contract, SDK, Host adapter, Dispatcher, storage, MessageChannel, package-boundary, workspace, and macOS evidence prerequisites
-- **THEN** valid calls preserve existing behavior while every malicious or over-budget fixture reaches zero unintended Handlers and effects
-- **THEN** SDK and Host observe stable compatible errors without exposing private wire or policy modules
-
-#### Scenario: Public or later-runtime scope leaks into delivery
-
-- **WHEN** an RPC policy becomes plugin-configurable, a private validator or diagnostic becomes publicly importable, or the change adds batch, streaming, persistent diagnostics, frequency isolation, plugin suspension, CPU or memory control
-- **THEN** the focused boundary Gate fails
-- **THEN** the out-of-scope behavior requires its own explicit capability change
-
-#### Scenario: Legacy RPC script entry remains
-
-- **WHEN** the stable registry Gate is available but the root manifest, CI, documentation, or specs still use a dedicated `check:plugin-rpc-validation` script
-- **THEN** validation fails as a dual entry
-- **THEN** the caller must migrate to the unified Gate CLI without changing RPC coverage
-
 ### Requirement: RPC validation MUST accept frames only from the current WebView bridge binding
 The existing closed RPC budgets, validators, cancellation, deadline, exactly-once and egress rules MUST execute only after native bridge ingress proves the actual current Child WebView Session. Carrier decoding MUST treat input as `unknown`; a malformed, oversized, stale or wrong-source frame MUST NOT reach Dispatcher or reveal expected identity. Valid responses and events MUST be encoded and delivered only to the same current WebView.
 
@@ -158,3 +135,25 @@ The existing closed RPC budgets, validators, cancellation, deadline, exactly-onc
 #### Scenario: Wrong source sends a valid-shaped request
 - **WHEN** a destroyed or unrelated WebView submits a frame within all structural budgets
 - **THEN** source validation rejects it before in-flight state or a Host handler is created
+
+### Requirement: Delivery MUST deterministically prove RPC limits without expanding the public plugin platform
+
+Delivery MUST include deterministic shared valid and malicious fixtures, policy/analyzer unit tests, Host adapter race tests, real Contract and SDK MessageChannel integration, public tarball and workspace-boundary checks. Tests MUST cover exact-limit acceptance and over-limit rejection for bytes, depth, node count, concurrency, execution deadline, monotonic request IDs, cancellation races, invalid Handler output, invalid events, safe diagnostics, post-response effects, current bridge binding, and zero Handler hits for rejected input. Validation MUST use the stable `plugin-rpc-validation` capability Gate and MUST add no public SDK option/export, Host API method/error code, Tauri command, Rust authority, runtime dependency, browser, WebView, native harness, or environment evidence.
+
+#### Scenario: Focused RPC validation gate passes
+
+- **WHEN** the Gate runs with Contract, SDK, Host adapter, Dispatcher, storage, MessageChannel, package-boundary, and workspace checks
+- **THEN** valid calls preserve behavior while malicious or over-budget fixtures reach zero unintended Handlers and effects
+- **THEN** SDK and Host observe stable compatible errors without exposing private wire or policy modules
+
+#### Scenario: Public or later-runtime scope leaks into delivery
+
+- **WHEN** RPC policy becomes plugin-configurable, a private validator becomes public, or the change adds batch, streaming, frequency, CPU, memory, or suspension control
+- **THEN** the focused boundary Gate fails
+- **THEN** the out-of-scope behavior requires its own explicit capability change
+
+#### Scenario: Legacy or environment entry remains
+
+- **WHEN** the root manifest, CI, documentation, or specs use a dedicated legacy RPC alias or require target-environment evidence
+- **THEN** no-dual-entry or environment policy fails
+- **THEN** callers migrate to the deterministic registry Gate without changing RPC coverage

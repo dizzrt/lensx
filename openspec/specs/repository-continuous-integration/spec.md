@@ -41,7 +41,7 @@ The repository SHALL contain exactly two files under `.github/workflows/`: one L
 
 ### Requirement: LensX CI shall validate the complete main project
 
-LensX CI SHALL provide required macOS jobs that validate the LensX frontend and Rust desktop workspace without using plugin failures as a proxy for LensX validation. The frontend evidence SHALL include formatting/static analysis, TypeScript type checking, unit tests, and a production build. The Rust evidence SHALL include formatting, static checking, tests, and a workspace build.
+LensX CI SHALL provide required macOS jobs that validate the LensX frontend and Rust desktop workspace without using plugin failures as a proxy for LensX validation. Frontend validation SHALL include formatting/static analysis, TypeScript type checking, unit tests, and a production build. Rust validation SHALL include formatting, static checking, tests, and a workspace build. These stages SHALL be deterministic repository checks and SHALL NOT launch a browser, WebView, GUI application, Launch Services, or an interactive native harness.
 
 #### Scenario: All LensX validation stages pass
 
@@ -61,7 +61,7 @@ LensX CI SHALL provide required macOS jobs that validate the LensX frontend and 
 #### Scenario: LensX CI is reproduced locally
 
 - **WHEN** a maintainer runs the documented LensX-only entry points on macOS
-- **THEN** they SHALL exercise the same required validation categories as the GitHub workflow
+- **THEN** they SHALL exercise the same required deterministic validation categories as the GitHub workflow
 
 ### Requirement: Plugins CI shall run only for plugin-scope changes and validate all direct plugins
 
@@ -89,7 +89,7 @@ Plugins CI SHALL be selected by changes under `plugins/**` or by changes to its 
 
 ### Requirement: Plugins CI shall prepare public workspace dependencies from a clean checkout
 
-Plugins CI SHALL install dependencies in a clean runner and SHALL build every public workspace package required by the discovered plugins in dependency order before executing plugin consumers. It SHALL NOT require pre-existing `dist` directories, source aliases, or imports from Host/Tauri private source.
+Plugins CI SHALL install dependencies in a clean runner and SHALL build every public workspace package required by the discovered plugins in transitive dependency order before executing plugin consumers. It SHALL derive that order from the workspace dependency graph, de-duplicate shared dependency builds, and SHALL NOT require pre-existing `dist` directories, source aliases, or imports from Host/Tauri private source.
 
 #### Scenario: Public package dist directories are absent
 
@@ -100,6 +100,11 @@ Plugins CI SHALL install dependencies in a clean runner and SHALL build every pu
 
 - **WHEN** a plugin dependency requires another buildable workspace package
 - **THEN** Plugins CI SHALL build the dependency before the dependent package and SHALL build the package before the plugin
+
+#### Scenario: Shared public dependency is required more than once
+
+- **WHEN** multiple discovered plugins or packages depend on the same public workspace package
+- **THEN** one CI plan SHALL prepare that package once before all consumers
 
 #### Scenario: A required public package build fails
 
@@ -113,32 +118,31 @@ Plugins CI SHALL install dependencies in a clean runner and SHALL build every pu
 
 ### Requirement: Plugins CI shall execute every required plugin validation stage
 
-For every discovered direct plugin, Plugins CI SHALL run its declared `typecheck`, `test`, `check`, and `build` lifecycle stages, SHALL run its required `test:e2e` stage, and SHALL run its `visual` stage when that script is declared. All required stages SHALL be blocking.
+For every discovered direct plugin, Plugins CI SHALL run its declared `typecheck`, `test`, `check`, and `build` lifecycle stages exactly once. It MAY run `test:e2e` only when that stage performs a deterministic, non-browser, non-native built-artifact check. All declared supported stages SHALL be blocking. Plugins CI SHALL NOT discover or run `visual`, screenshot, pixel-drift, browser-rendering, WebView, GUI application, native harness, or environment-evidence stages.
 
-#### Scenario: A plugin passes its complete validation set
+#### Scenario: A plugin passes its complete supported validation set
 
-- **WHEN** the plugin passes every required lifecycle, end-to-end, and applicable visual stage
+- **WHEN** the plugin passes each declared supported lifecycle and deterministic built-artifact stage
 - **THEN** that plugin SHALL be counted as successfully validated
 
-#### Scenario: A plugin lifecycle or end-to-end stage fails
+#### Scenario: A supported plugin stage fails
 
-- **WHEN** any plugin `typecheck`, `test`, `check`, `build`, or `test:e2e` stage exits unsuccessfully
+- **WHEN** any plugin `typecheck`, `test`, `check`, `build`, or supported `test:e2e` stage exits unsuccessfully
 - **THEN** Plugins CI SHALL fail
 
-#### Scenario: A declared visual stage fails
+#### Scenario: A lifecycle stage delegates to another lifecycle category
 
-- **WHEN** a plugin declares `visual` and that stage exits unsuccessfully
-- **THEN** Plugins CI SHALL fail
+- **WHEN** a plugin `check` invokes its `typecheck` or `test`, or another declared lifecycle stage recursively duplicates a category
+- **THEN** CI policy SHALL fail and require non-overlapping lifecycle semantics
 
-#### Scenario: Visual validation completes
+#### Scenario: An environment validation entry is declared
 
-- **WHEN** a plugin visual stage creates a temporary browser profile or process
-- **THEN** the stage SHALL run without opening a persistent interactive window
-- **AND** it SHALL clean up its temporary process and profile on success or failure
+- **WHEN** a direct plugin declares `visual` or another stage that launches a browser, WebView, GUI application, native harness, or writes environment evidence
+- **THEN** repository policy SHALL fail rather than retaining or invoking that stage
 
 ### Requirement: CI policy and documentation shall prevent workflow drift
 
-Repository-owned automated policy checks SHALL verify the two-workflow inventory, macOS runners, event path rules, minimum permissions, pinned third-party action revisions, required validation entry points, and absence of automatic publishing behavior. Canonical English CI documentation and its Simplified Chinese mirror SHALL describe the trigger matrix, local reproduction commands, failure recovery, and intentionally unsupported publishing behavior.
+Repository-owned automated policy checks SHALL verify the two-workflow inventory, macOS runners, event path rules, minimum permissions, pinned third-party action revisions, required deterministic validation entry points, non-overlapping plugin lifecycle stages, and absence of automatic publishing or environment-validation behavior. Canonical English CI documentation and its Simplified Chinese mirror SHALL describe the trigger matrix, local reproduction commands, failure recovery, supported validation categories, and intentionally unsupported publishing and environment-evidence behavior.
 
 #### Scenario: A third workflow or release mutation is introduced
 
@@ -149,6 +153,11 @@ Repository-owned automated policy checks SHALL verify the two-workflow inventory
 
 - **WHEN** a workflow changes its runner, path filters, permissions, or required validation commands without the corresponding accepted contract update
 - **THEN** the repository-owned CI policy check SHALL fail
+
+#### Scenario: Environment validation re-enters CI
+
+- **WHEN** a workflow, CI dispatcher, or plugin lifecycle introduces screenshots, pixel comparison, browser rendering, a real WebView, a GUI application, a native harness, or environment evidence
+- **THEN** repository-owned CI policy SHALL fail
 
 #### Scenario: A CI failure is corrected
 

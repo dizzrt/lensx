@@ -3,6 +3,7 @@
 ## Purpose
 TBD - created by archiving change replace-plugin-iframe-runtime-with-child-webview. Update Purpose after archive.
 ## Requirements
+
 ### Requirement: Official WebView transport MUST connect through one current native bridge
 The system MUST provide the framework-neutral `@lensx/plugin-sdk/webview` entry and zero-configuration `createPluginWebviewTransport`. The transport MUST consume only the closed bridge installed by the Host before the current Child WebView document is created, MUST validate the bootstrap and every frame from `unknown`, MUST accept at most one current ready handshake, and MUST NOT accept plugin identity, Page, origin, label, nonce, bridge adapter, Tauri command, or Host object configuration.
 
@@ -50,11 +51,18 @@ SDK disposal, Session disconnect, Child WebView destroy, Page close, disable, un
 - **THEN** the Host and SDK endpoints each become terminal, the pending operation receives a safe lifecycle error, and the handler signal is aborted
 - **THEN** a post-destroy response, event, or bridge callback notifies neither the old nor the new consumer
 
-### Requirement: WebView transport delivery MUST prove public packaging and real native isolation
-The focused gate MUST cover the SDK, private codec, native bridge adapter, RPC validation, lifecycle, and drift tests. A real tarball consumer MUST prove that the root entry needs no DOM or native types, that the `/webview` entry is consumable by an ordinary external plugin, and that private modules cannot be deep-imported. Real macOS Child WebView evidence MUST cover normal handshake and roundtrip, concurrency, cancel, events, stable errors, forged source, malformed frame, replacement, and terminal cleanup, and MUST prove zero generic Tauri authority hits.
+### Requirement: WebView transport delivery MUST prove public packaging and deterministic bridge isolation
 
-#### Scenario: Complete transport matrix passes
-- **WHEN** the unit, consumer, malicious, and target-WebView matrix all pass
-- **THEN** the public package exposes only the semantic SDK and zero-configuration factory, and the Host accepts only the current source bridge
-- **THEN** no iframe, parent window, transferred MessagePort, or public native adapter is required
+Focused deterministic validation MUST cover SDK lifecycle, private codec, production bridge-adapter composition, RPC validation, drift tests, malicious frames, replacement, and terminal cleanup. A real tarball consumer MUST prove that the root entry needs no DOM or native types, `/webview` is consumable by an ordinary external plugin, and private modules cannot be deep-imported. Adapter integration MUST cover handshake state, roundtrip, concurrency, cancel, events, stable errors, forged source, malformed frame, replacement, cleanup, and zero generic Tauri authority hits without launching a real Child WebView.
 
+#### Scenario: Complete deterministic transport matrix passes
+
+- **WHEN** unit, consumer, adapter-integration, and malicious matrices pass
+- **THEN** the public package exposes only the semantic SDK and zero-configuration factory, and production composition accepts only the modeled current source bridge
+- **THEN** no iframe compatibility transport, parent-window bus, public native adapter, or environment evidence is required
+
+#### Scenario: Real native isolation is claimed
+
+- **WHEN** only deterministic adapter and package validation has run
+- **THEN** completion MUST NOT claim real native or WebView isolation evidence
+- **THEN** the supported deterministic transport and boundary conclusions remain reportable

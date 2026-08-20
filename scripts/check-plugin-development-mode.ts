@@ -28,13 +28,6 @@ for (const path of ['docs/en/development/plugin-development-mode.md', 'docs/zh/d
 
 requireMarkers('docs/en/development/plugin-development-mode.md', ['focus-loss hiding']);
 requireMarkers('docs/zh/development/plugin-development-mode.md', ['失焦隐藏']);
-for (const path of ['docs/en/development/validation.md', 'docs/zh/development/validation.md'])
-  requireMarkers(path, [
-    'pnpm run evidence -- plugin-development-runtime-evidence-normal --write',
-    'pnpm run evidence -- plugin-development-runtime-evidence-malicious --write',
-    'pnpm run gate -- plugin-development-runtime-evidence',
-  ]);
-
 requireMarkers('examples/plugins/development-mode-smoke/package.json', [
   '@lensx/example-plugin-development-mode-smoke',
   'build:reload',
@@ -84,18 +77,7 @@ requireMarkers('src/app/pages/PluginManagementSettings.tsx', [
   'plugin-development-reload',
   'plugin-development-remove',
 ]);
-requireMarkers('scripts/verify-plugin-management-visual.mjs', [
-  'development-healthy',
-  'development-pending',
-  'development-error',
-  '650',
-  '600',
-]);
-requireMarkers('package.json', [
-  'dev-plugin-development-mode.mjs',
-  'scripts/validation/cli.ts gate',
-  'scripts/validation/cli.ts evidence',
-]);
+requireMarkers('package.json', ['dev-plugin-development-mode.mjs', 'scripts/validation/cli.ts gate']);
 requireMarkers('scripts/dev-plugin-development-mode.mjs', [
   '--plugins-root',
   'LENSX_PLUGIN_DEVELOPMENT_STARTUP_ROOT',
@@ -117,8 +99,6 @@ for (const path of [
   'docs/zh/development/config-lens.md',
   'docs/en/development/validation.md',
   'docs/zh/development/validation.md',
-  'src-tauri/config-lens-wkwebview-harness.conf.json',
-  'src-tauri/examples/config_lens_wkwebview_harness.rs',
 ]) {
   rejectMarkers(path, ['plugins/official']);
 }
@@ -127,4 +107,4 @@ if (failures.length > 0) {
   for (const failure of failures) console.error(failure);
   process.exit(1);
 }
-console.log('Plugin Development Mode docs, UI, visual, and focused-gate markers passed.');
+console.log('Plugin Development Mode docs, UI, and deterministic Gate markers passed.');

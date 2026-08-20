@@ -24,13 +24,10 @@ export const validateRegistry = (registry: ValidationRegistry): void => {
   const duplicateGates = duplicateIds(registry.gates);
   const duplicateSteps = duplicateIds(registry.steps);
   const duplicateGenerate = duplicateIds(registry.generateTargets);
-  const duplicateEvidence = duplicateIds(registry.evidenceTargets);
   if (duplicateGates.length > 0) throw new Error(`[validation/duplicate-gate] ${duplicateGates.join(', ')}`);
   if (duplicateSteps.length > 0) throw new Error(`[validation/duplicate-step] ${duplicateSteps.join(', ')}`);
   if (duplicateGenerate.length > 0)
     throw new Error(`[validation/duplicate-generate-target] ${duplicateGenerate.join(', ')}`);
-  if (duplicateEvidence.length > 0)
-    throw new Error(`[validation/duplicate-evidence-target] ${duplicateEvidence.join(', ')}`);
 
   const gates = new Map(registry.gates.map((gate) => [gate.id, gate]));
   const steps = new Set(registry.steps.map((step) => step.id));
@@ -120,7 +117,6 @@ export const executePlan = (plan: ValidationPlan, rootDir: string, runCommand: C
 };
 
 export const executeWritableTarget = (
-  kind: 'evidence' | 'generate',
   target: WritableTarget,
   rootDir: string,
   write: boolean,
@@ -128,14 +124,14 @@ export const executeWritableTarget = (
 ): void => {
   if (!write) {
     throw new Error(
-      `[validation/write-required] ${kind} target ${target.id} requires --write; no command was started.`,
+      `[validation/write-required] generate target ${target.id} requires --write; no command was started.`,
     );
   }
   if (target.platform === 'darwin' && process.platform !== 'darwin') {
-    throw new Error(`[validation/platform] ${kind} target ${target.id} requires darwin.`);
+    throw new Error(`[validation/platform] generate target ${target.id} requires darwin.`);
   }
   const plan: ValidationPlan = Object.freeze({
-    requestedGateIds: Object.freeze([`${kind}:${target.id}`]),
+    requestedGateIds: Object.freeze([`generate:${target.id}`]),
     gateIds: Object.freeze([]),
     steps: target.steps,
   });

@@ -39,50 +39,37 @@ Runtime 依赖固定为准确版本，任何变更都必须重新审查。
 代码复杂性而被拒绝。`smol-toml@1.7.1` 因目标是 TOML 1.1，且无法满足
 所需的 TOML 1.0 数字、日期与词法保真合同而被拒绝。
 
-## 限制、Chunk 与证据
+## 限制、Chunk 与确定性检查
 
-HTML entry 是最小 bootstrap。它会在加载 React、React DOM、Semi Design、Plugin UI、Monaco 或
-language adapter 前创建唯一 public WebView transport 与 SDK client。Runtime Context 未知时，正常启动
-保持视觉空白且只暴露 accessible busy semantics；只有启动失败后才显示可聚焦 retry control。Context 到达后，
-mount bundle 与 single-flight Monaco loader 并行启动，并把已连接 client 与已校验 Context 注入 mount，
-因此不会创建第二个 client、Session 或 bridge。retry 会先 dispose 旧 attempt，再启动 fresh client。
+HTML entry 是最小 bootstrap。它会在加载 React、React DOM、Semi Design、
+Plugin UI、Monaco 或 language adapter 前创建唯一 public WebView transport
+与 SDK client。Runtime Context 未知时，正常启动只暴露 accessible busy
+semantics；只有失败后才显示可聚焦 retry control。Context 到达后，mount
+bundle 与 single-flight Monaco loader 并行启动。retry 会先 dispose 旧
+attempt，再启动 fresh client。
 
 主线程在派发前执行 2 MiB UTF-8 与 100,000 行输入限制。语言处理在可替换
-的 module Worker 内执行，deadline 为五秒，最多返回 200 条安全诊断。
-Monaco 使用独立的包内 editor Worker。language Worker 动态导入 JSON、
-YAML、TOML 和 XML adapter，而所有生成资源都保留在自包含 `dist/` 和
+module Worker 内执行，deadline 为五秒，最多返回 200 条安全诊断。Monaco
+使用独立包内 editor Worker。所有生成资源都保留在自包含 `dist/` 与
 canonical `.lxp` 中。
 
-initial HTML graph 使用更严格预算：直接引用 JavaScript 不超过 256 KiB、直接引用 CSS 不超过
-64 KiB，module inventory 不得包含 React、React DOM、Semi Design、Plugin UI、Monaco 或 language
-adapter module。其余 drift 预算仍为：完整未压缩 `dist/` 24 MiB、全部 JavaScript 与压缩 `.lxp`
-分别 8 MiB、每个 Monaco/language chunk 4 MiB、每个 Worker entry 2 MiB。package gate 记录所有 Monaco/language/CSS/Worker
-chunk，并拒绝远程加载、source map、Host 私有 import、未审查依赖版本或
-预算漂移。初始 `800×600` 可调整 Page 的 28 场景主视觉矩阵覆盖英文和简体中文、light/dark、empty、
-有效格式化内容、invalid、limit、长文案、focus 和 recovery。macOS WKWebView
-证据还会验证单编辑器直接替换和一次操作 undo。
+production 产物检查约束直接引用 JavaScript 不超过 256 KiB、直接引用 CSS
+不超过 64 KiB。initial module inventory 不得包含 React、React DOM、Semi
+Design、Plugin UI、Monaco 或 language adapter module。其余预算保持为：
+完整未压缩 `dist/` 24 MiB、全部 JavaScript 与压缩 `.lxp` 分别 8 MiB、
+每个 Monaco/language chunk 4 MiB、每个 Worker entry 2 MiB。
 
-额外 hard-minimum 与较大 user-resized 用例验证语义化 `content` + `footer` 布局。Monaco
-填满 `content`；language selector、status、Format、仅 JSON 的 Compact 与有界条件 diagnostics
-全部位于 `footer`。同 attempt hide/restore 保留当前尺寸、model、Worker、input 和 language；
-真实 close/reopen 重置为有效 `800×600`，不持久化用户尺寸。
+Rstest 覆盖双语、light/dark semantic token、empty、valid、invalid、limit、
+长文案、keyboard、focus、recovery、single-editor replacement、单次操作
+undo 与 content-plus-footer 状态。Rust 与 lifecycle 测试覆盖 same-attempt
+hide/restore、close/reopen、replacement、cleanup 与 resource revocation。
+这些确定性检查不采样目标环境时延，也不维护渲染输出。
 
-`first-interactive` 不是 render marker。它要求 current Monaco model、显式 initial layout、包内 editor
-Worker handshake，以及能够改变该 model 的 native keyboard input。document-local event 不带 payload，
-也不授予 authority；target harness 会独立校验 current source、editor、input 与 terminal cleanup。
-release-like macOS evidence 要求 p95 不超过 500 ms；Development snapshot evidence 允许 1000 ms。
-debug build 可能更慢，但仍使用相同 Runtime 与 cleanup path。真正 close/reopen 会创建 fresh SDK、model、
-editor 与 Worker；只有 same-attempt hide/restore 会保留它们。
-
-从仓库根目录运行插件 CI 入口与聚焦产品证据：
+运行：
 
 ```bash
 pnpm run gate -- ci-plugins
-pnpm run gate -- official-config-lens-cold-open
-pnpm run gate -- official-config-lens-warm-format
 ```
 
-Plugins CI 会构建所需公共依赖，并运行 package lifecycle、built-output E2E、
-隐私/边界检查与 28 场景视觉回归。聚焦 cold-open 与 warm-format gate 保留有界 macOS
-WKWebView 和产品证据。证据只保存布尔值和计数；禁止包含输入、URL、origin、path、
-nonce、Port、payload 或 raw error。
+Plugins CI 会构建所需公共依赖，恰好运行一次 ConfigLens package lifecycle，
+随后执行纯 Node built-output 检查。

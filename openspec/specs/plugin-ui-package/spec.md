@@ -4,6 +4,7 @@
 
 Define the stable public contract for the optional `@lensx/plugin-ui` package, including its constrained exports, Runtime context adaptation, semantic theme tokens, accessible page and feedback components, plugin-owned Runtime dependencies, and complete release validation, without claiming delivery of a Host plugin Runtime.
 ## Requirements
+
 ### Requirement: The system MUST provide an optional constrained public Plugin UI package
 
 The system MUST provide the public `@lensx/plugin-ui@0.1.0` workspace package, which MUST be independently buildable, testable, and packable. The package MUST expose only one JavaScript root entry and one `@lensx/plugin-ui/styles.css` style entry; package resolution MUST reject undeclared deep imports. The public JavaScript entry MUST provide only `PluginUiProvider`, `PluginPage`, `PluginFeedback`, and their public types, and MUST NOT re-export the complete Semi Design API, Host React Context, Host-private components, `src/app/**`, Tauri adapters, or Host-private styles.
@@ -143,33 +144,6 @@ The system MUST provide lensX plugin semantic styles through the public style en
 - **THEN** metadata explicitly preserves style side effects and assigns every Runtime import to a declared dependency or peer dependency
 - **THEN** the tarball does not contain tests, fixtures, build scripts, Host source code, or workspace version ranges
 
-### Requirement: The package MUST participate in complete automated, visual, release, and documentation validation
-
-The UI package MUST declare meaningful `build`, `typecheck`, `test`, `check`, and `test:pack` scripts, and the root workspace aggregate commands MUST cover those scripts. Validation MUST cover public types and exports, a real tarball, an independent browser consumer, dependency direction, a single React instance, normal, empty, error, and recovery states, keyboard and focus behavior, both supported languages, light and dark themes, and a fixed `650×600` visual fixture. Canonical English architecture and development documentation and their Simplified Chinese mirrors MUST describe the UI package's public boundary, consumption model, style entry, dependency ownership, and Runtime non-goals.
-
-#### Scenario: Root workspace validation covers the new package
-
-- **WHEN** a developer runs the root `build`, `typecheck`, `test`, or `check` command
-- **THEN** the corresponding UI package lifecycle script runs in workspace dependency order, and failures propagate to the root command
-- **THEN** the workspace boundary gate rejects an SDK dependency on the UI package, a UI package dependency on a Host-private path, and a plugin dependency on the Host Runtime
-
-#### Scenario: The automated behavior matrix runs
-
-- **WHEN** package tests run the provider, page, and feedback behavior matrix
-- **THEN** assertions for `en-US` and `zh-CN`, light and dark, normal content, loading, empty, error, recovery, document cleanup, keyboard, and focus all pass
-
-#### Scenario: Fixed-viewport visual acceptance runs
-
-- **WHEN** the visual fixture renders pages and feedback states at `650×600` for `en-US` and `zh-CN` in light and dark themes
-- **THEN** automated checks for key computed styles, the theme attribute, tokens, long Chinese text layout, and the focus indicator pass
-- **THEN** four screenshot sets are manually inspected and confirm that the page remains readable, unclipped, and visually consistent
-
-#### Scenario: A developer reads the bilingual documentation
-
-- **WHEN** a developer reads the English or Simplified Chinese plugin architecture and workspace documentation
-- **THEN** both languages describe the React and non-React consumption paths, public components and tokens, style import, and plugin-owned dependencies with equivalent semantics
-- **THEN** the documentation does not describe the UI package as an independently implemented native plugin Runtime, Host API, installer, Testkit, or plugin execution capability
-
 ### Requirement: Plugin UI MUST remain document-local inside the Child WebView
 `@lensx/plugin-ui` MUST continue to consume only validated public Runtime Context and plugin-owned React/Semi dependencies inside the plugin document. It MUST NOT access Host DOM, native slot/bounds, Child WebView handles, bridge frames, Tauri APIs or Host navigation. Its theme, locale, accessibility and feedback behavior MUST work when rendered as the top-level Child WebView document.
 
@@ -180,3 +154,31 @@ The UI package MUST declare meaningful `build`, `typecheck`, `test`, `check`, an
 #### Scenario: Package declarations are inspected
 - **WHEN** public tarball boundaries are checked
 - **THEN** no Runtime container, bridge or Host-private type leaks through Plugin UI exports
+
+### Requirement: The package MUST participate in complete deterministic package, component, release, and documentation validation
+
+The UI package MUST declare meaningful non-overlapping `build`, `typecheck`, `test`, `check`, and deterministic `test:pack` scripts, and root workspace aggregate commands MUST cover them once in dependency order. Validation MUST cover public types/exports, a real tarball in an isolated command-line consumer, dependency direction, a single React instance, normal/empty/error/recovery states, keyboard/focus behavior, both supported languages, light/dark semantic themes, and bilingual documentation. It MUST NOT launch a browser, capture computed styles or screenshots, compare pixels, or retain a visual fixture.
+
+#### Scenario: Root workspace validation covers the package
+
+- **WHEN** a developer runs the root `build`, `typecheck`, `test`, or `check` command
+- **THEN** the corresponding UI package lifecycle stage runs once in workspace dependency order and failures propagate
+- **THEN** boundary checks reject SDK-to-UI, UI-to-Host-private, and plugin-to-Host-Runtime dependencies
+
+#### Scenario: Deterministic behavior matrix runs
+
+- **WHEN** package tests run provider, page, and feedback component/state cases
+- **THEN** assertions for `en-US`/`zh-CN`, light/dark semantic state, normal/loading/empty/error/recovery, cleanup, keyboard, and focus pass
+- **THEN** the test does not require a browser or pixel output
+
+#### Scenario: Tarball consumer runs in isolation
+
+- **WHEN** `test:pack` installs the current UI and required public package tarballs into a temporary consumer
+- **THEN** public entry points, declarations, styles, dependency metadata, and React peer ownership are consumable without repository source access
+- **THEN** the consumer starts no browser, WebView, GUI application, or native harness
+
+#### Scenario: A developer reads bilingual documentation
+
+- **WHEN** a developer reads English or Simplified Chinese plugin architecture and workspace documentation
+- **THEN** both languages describe React/non-React consumption, public components/tokens, style import, plugin-owned dependencies, and deterministic validation with equivalent semantics
+- **THEN** neither language describes the UI package as a native Runtime, Host API, installer, Testkit, or plugin execution capability

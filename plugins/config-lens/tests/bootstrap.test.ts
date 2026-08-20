@@ -22,7 +22,7 @@ describe('ConfigLens early bootstrap', () => {
     expect(source).toContain('onRetry: () => void start()');
   });
 
-  test('keeps normal pre-context startup visually empty and first-interactive evidence payload-free', () => {
+  test('keeps pre-context startup content-free and bootstrap deterministic', () => {
     const html = read('index.html');
     const shell = html.slice(html.indexOf('<section'), html.indexOf('</section>'));
     expect(shell).toContain('aria-busy="true"');
@@ -40,8 +40,9 @@ describe('ConfigLens early bootstrap', () => {
     expect(startupStyles.slice(hiddenShell)).toMatch(/display:\s*none/u);
     expect(startupStyles).not.toContain('config-lens-startup__progress');
     expect(startupStyles).not.toContain('@keyframes');
-    const signal = read('src/first-interactive.ts');
-    expect(signal).toContain('new Event(CONFIG_LENS_FIRST_INTERACTIVE_EVENT)');
-    expect(signal).not.toContain('CustomEvent');
+    const bootstrap = read('src/main.tsx');
+    expect(bootstrap).not.toContain('performance.now');
+    expect(bootstrap).not.toContain('PLUGIN_EVIDENCE');
+    expect(bootstrap.match(/createPluginSdk\(/gu)).toHaveLength(1);
   });
 });

@@ -27,6 +27,16 @@ const assertCommonPolicy = (name: string, source: string): void => {
   ) {
     fail('workflow-release-mutation', `${name} must not contain version, artifact handoff, or release mutation steps.`);
   }
+  if (
+    /\b(?:visual|verify-visual|evidence|harness|playwright|puppeteer|chrome|chromium|webkit|LENSX_CI_WINDOWLESS)\b/iu.test(
+      source,
+    )
+  ) {
+    fail(
+      'workflow-environment-validation',
+      `${name} must not contain browser, visual, native harness, or environment evidence commands.`,
+    );
+  }
   const actions = [...source.matchAll(/^\s*-\s*uses:\s*([^\s#]+)\s*$/gmu)].map((match) => match[1] ?? '');
   if (actions.length === 0 || actions.some((action) => !/@[0-9a-f]{40}$/u.test(action))) {
     fail('workflow-action-unpinned', `${name} must pin every third-party action to a full commit SHA.`);
@@ -75,9 +85,8 @@ export const checkCiWorkflowPolicy = (rootDir: string): void => {
     (plugins.match(/- 'plugins\/\*\*'/gu)?.length ?? 0) !== 2 ||
     (plugins.match(/- '\.github\/workflows\/plugins-ci\.yml'/gu)?.length ?? 0) !== 2 ||
     !plugins.includes('pnpm run gate -- ci-plugins') ||
-    !plugins.includes("CI: 'true'") ||
-    !plugins.includes("LENSX_CI_WINDOWLESS: '1'")
+    !plugins.includes("CI: 'true'")
   ) {
-    fail('workflow-plugins-scope', 'Plugins CI trigger matrix, windowless policy, or local entry point drifted.');
+    fail('workflow-plugins-scope', 'Plugins CI trigger matrix or local entry point drifted.');
   }
 };

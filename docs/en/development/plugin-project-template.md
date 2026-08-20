@@ -21,9 +21,7 @@ or private imports.
 
 Each template contains `package.json`, `manifest.json`, `index.html`, Rsbuild
 and Rstest configuration, `src/`, `tests/`, and a package-local metadata check.
-The React template additionally contains `visual/`, committed screenshot
-baselines, and a visual verification script. A normal build emits a
-self-contained plugin document under `dist/`:
+A normal build emits a self-contained plugin document under `dist/`:
 
 ```text
 dist/
@@ -145,7 +143,7 @@ Run the maintained end-to-end validation of the template boundary with:
 pnpm run gate -- plugin-project-template
 ```
 
-## Isolation And Packaging Evidence
+## Isolation And Packaging Validation
 
 The aggregate gate runs member checks, then copies both templates into system
 temporary consumers. It packs the real Contract, SDK, Testkit, and UI packages,
@@ -163,9 +161,9 @@ permissions, and Host-owned facts before Runtime startup.
 The production-component smoke uses the packed Manifest through current
 Registration, Page/Action projection, resource resolution, Runtime resolver,
 public WebView transport, closed Child WebView bridge, and Host dispatcher. It is not a
-complete desktop GUI E2E. The React visual gate separately checks English and
-Simplified Chinese, light and dark themes, long text, focus, semantic states,
-computed public tokens, and fixed-viewport screenshots.
+complete desktop GUI E2E. Rstest separately checks English and Simplified
+Chinese, light and dark semantic tokens, long text, focus, loading, error,
+ready, retry, keyboard, and accessibility behavior.
 
 ## Current Limits
 

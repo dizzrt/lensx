@@ -5,7 +5,7 @@ const packageRoot = resolve(import.meta.dirname, '..');
 const repositoryRoot = resolve(packageRoot, '../..');
 const write = process.argv.includes('--write');
 const kinds = ['framework-neutral', 'react-semi'];
-const excluded = new Set(['dist', 'node_modules', 'visual-dist']);
+const excluded = new Set(['dist', 'node_modules']);
 
 const collect = async (root, directory = root) => {
   const files = new Map();

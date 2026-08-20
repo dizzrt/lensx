@@ -242,7 +242,7 @@ describe('workspace boundary checker', () => {
     );
   });
 
-  test('rejects frame-aware policy, dependency patch, and harness internals for every plugin consumer kind', () => {
+  test('rejects frame-aware policy and dependency patch internals for every plugin consumer kind', () => {
     const diagnostics = checkWorkspaceBoundaries(fixtureRoot('invalid'));
     const frameAwareImports = diagnostics.filter(
       (item) =>
@@ -251,7 +251,7 @@ describe('workspace boundary checker', () => {
         item.specifier.includes('frame-aware-webview'),
     );
 
-    expect(frameAwareImports).toHaveLength(9);
+    expect(frameAwareImports).toHaveLength(6);
     expect(frameAwareImports.every((item) => item.ruleId === WORKSPACE_BOUNDARY_RULES.hostPrivateImport)).toBe(true);
   });
 

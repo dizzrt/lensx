@@ -1,4 +1,4 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
@@ -21,9 +21,49 @@ const visit = async (directory) => {
 await visit(dist);
 if (!files.some((file) => file.endsWith('index.html'))) throw new Error('e2e/entry: index.html is missing.');
 if (files.some((file) => file.endsWith('.map'))) throw new Error('e2e/sourcemap: sourcemaps must not ship.');
+const facts = await Promise.all(files.map(async (file) => ({ file, size: (await stat(file)).size })));
+const totalBytes = facts.reduce((sum, { size }) => sum + size, 0);
+if (totalBytes > 24 * 1024 * 1024) throw new Error(`e2e/total-budget: ${totalBytes}`);
+const cssBytes = facts.filter(({ file }) => file.endsWith('.css')).reduce((sum, { size }) => sum + size, 0);
+if (cssBytes > 1024 * 1024) throw new Error(`e2e/css-budget: ${cssBytes}`);
+const workerFacts = facts.filter(({ file }) => /config-lens-(?:editor|language)|editorWebWorkerMain/u.test(file));
+if (
+  !workerFacts.some(({ file }) => file.includes('config-lens-editor')) ||
+  !workerFacts.some(({ file }) => file.includes('config-lens-language')) ||
+  workerFacts.some(({ size }) => size > 2 * 1024 * 1024)
+) {
+  throw new Error('e2e/worker-budget: required Worker entries must exist and remain below 2 MiB.');
+}
+const javascriptFacts = facts.filter(({ file }) => file.endsWith('.js'));
+if (javascriptFacts.reduce((sum, { size }) => sum + size, 0) > 8 * 1024 * 1024) {
+  throw new Error('e2e/javascript-budget: complete JavaScript exceeds 8 MiB.');
+}
+if (javascriptFacts.some(({ size }) => size > 4 * 1024 * 1024)) {
+  throw new Error('e2e/chunk-budget: an individual chunk exceeds 4 MiB.');
+}
 const scripts = files.filter((file) => file.endsWith('.js'));
 const source = (await Promise.all(scripts.map((file) => readFile(file, 'utf8')))).join('\n');
 const html = await readFile(resolve(dist, 'index.html'), 'utf8');
+const initialScriptNames = [...html.matchAll(/<script[^>]+src=["']\.\/([^"']+)["']/gu)].map((match) => match[1]);
+const initialStyleNames = [...html.matchAll(/<link[^>]+href=["']\.\/([^"']+\.css)["']/gu)].map((match) => match[1]);
+const sumBytes = async (names) =>
+  (await Promise.all(names.map((name) => stat(resolve(dist, name))))).reduce((sum, facts) => sum + facts.size, 0);
+const initialJavaScriptBytes = await sumBytes(initialScriptNames);
+const initialCssBytes = await sumBytes(initialStyleNames);
+if (initialScriptNames.length === 0 || initialJavaScriptBytes > 256 * 1024) {
+  throw new Error(`e2e/initial-script-budget: ${initialJavaScriptBytes}`);
+}
+if (initialStyleNames.length === 0 || initialCssBytes > 64 * 1024) {
+  throw new Error(`e2e/initial-css-budget: ${initialCssBytes}`);
+}
+const chunkModules = JSON.parse(await readFile(resolve(dist, 'chunk-modules.json'), 'utf8'));
+const initialModules = [...initialScriptNames, ...initialStyleNames].flatMap((name) => chunkModules[name] ?? []);
+const forbiddenInitialModule =
+  /node_modules\/(?:react(?:-dom)?|@douyinfe\/semi|@lensx\/plugin-ui|monaco-editor)|src\/language\/adapters/u;
+const forbiddenInitial = initialModules.find((identifier) => forbiddenInitialModule.test(identifier));
+if (forbiddenInitial !== undefined) {
+  throw new Error(`e2e/initial-heavy-module: ${forbiddenInitial}`);
+}
 const startupShell = html.match(/<section\b[^>]*\bid=["']config-lens-startup["'][^>]*>[\s\S]*?<\/section>/u)?.[0];
 if (
   startupShell === undefined ||

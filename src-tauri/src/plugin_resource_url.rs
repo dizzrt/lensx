@@ -19,7 +19,7 @@ pub(crate) struct PluginResourceUrl {
     pub(crate) fragment: Option<String>,
 }
 
-#[allow(dead_code)] // Standalone harnesses include this shared module with different call surfaces.
+#[allow(dead_code)] // Resource parsing helpers intentionally expose a narrow internal call surface.
 pub(crate) fn build_native_resource_url(
     scope: &str,
     plugin_key: &str,

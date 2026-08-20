@@ -639,16 +639,11 @@ add wildcard or reflected-null CORS. Existing fixed 404/405/500 oracles,
 `no-store`, bounded diagnostics, path/MIME checks, opened-file validation, and
 lifecycle revocation remain in force.
 
-The committed real macOS 26.6 / WKWebView `605.1.15` evidence runs canonical
-normal, malicious, and replacement `.lxp` packages through the real
-`PluginResourceService`. With the downstream policy
-`sandbox="allow-scripts allow-same-origin"`, each isolated authority serializes
-as a stable non-opaque origin, loads HTML, CSS, image, classic script, and a
-package-relative ES Module graph, and retains only its own same-key storage.
-Host storage is unchanged; parent DOM, `frameElement`, and every Tauri surface
-remain unavailable; the representative privileged handler receives zero hits.
-Evidence is bounded and contains no raw URL, scope, path, storage value, or
-invoke secret.
+Deterministic Resource Service, origin parser, package, bridge, and malicious
+fixture tests cover canonical normal, malicious, and replacement `.lxp`
+packages; stable per-generation origin keys; package-relative module graphs;
+storage partition facts; unavailable Host DOM and Tauri surfaces; and zero
+privileged handler hits. These checks do not claim target-WebView execution.
 
 Run:
 
@@ -692,26 +687,18 @@ routing the target to the opener. Tauri initialization remains main-frame-only: 
 retains `isTauri`, `__TAURI_INTERNALS__`, metadata, invoke initialization, and
 IPC, while descendant documents receive none of those surfaces.
 
-The committed 15-case real WKWebView evidence records macOS, WKWebView
-`605.1.15`, Tauri `2.11.5`, Wry `0.55.1`, native custom-protocol shape, native
-frame class, pre-commit outcome, bootstrap isolation, and bounded callback
-counts without URLs or private identity. Each run also verifies activate,
-replacement, late disposal, current disposal, and idle-to-reactivate lease
-lifecycle before opening the selected document. Host, external, cross-plugin, stale,
-fragment, and data document attempts reach the policy and are denied. WKWebView
-preflight-blocks `file:`, no-op `javascript:`, and same-document `blob:` before
-a navigation callback; evidence records `blocked_by_webview`, the retained
-document, and unchanged callback count instead of claiming a policy denial.
-Popup/targeted-context and blob-download cases reach their independent deny
-hooks. Run:
+Deterministic Rust and TypeScript matrices verify activate, replacement, late
+disposal, current disposal, idle-to-reactivate leases, frame classification,
+current source binding, popup and download denial, and Host bootstrap
+isolation. They do not claim target-WebView execution. Run:
 
 ```bash
 pnpm run gate -- frame-aware-webview-navigation-policy
 ```
 
-This capability is macOS-only and does not claim Windows or Linux support. The
-Task 4.2 container consumes its exact target lease. The shipped Session below
-also consumes that lease without changing the native policy contract.
+The product remains macOS-only. The Task 4.2 container consumes the exact target
+lease, and the shipped Session below consumes that lease without changing the
+native policy contract.
 
 ## Shipped macOS Isolated Plugin Child WebView Runtime
 
@@ -744,8 +731,8 @@ Run `pnpm run gate -- plugin-child-webview-runtime` for the slot, origin/resourc
 binding, open-Web capability baseline, navigation policy, terminal lifecycle,
 ACL matrix, current fixtures, and workspace boundaries. Run
 `pnpm run gate -- plugin-child-webview-session` for readiness, RPC, Host dispatch,
-and cleanup. The real WKWebView evidence is macOS-only; no Windows or Linux
-Runtime support is claimed.
+and cleanup. These Gates are deterministic contract and lifecycle validation;
+no Windows or Linux Runtime support is claimed.
 
 ## Shipped Plugin Runtime CSP And Security Lifecycle
 
@@ -795,11 +782,10 @@ Visible failures use only `runtime_load_timeout`,
 `runtime_handshake_timeout`, `runtime_session_disconnected`,
 `runtime_security_policy_failure`, `runtime_crash_loop`, or
 `runtime_unavailable`, with canonical English and equivalent Simplified
-Chinese copy in the existing accessible feedback surface. Diagnostics and
-evidence exclude full or blocked URLs, origin/scope values, paths, nonce/bridge
-content, payloads, storage values, raw exceptions, and stacks; there is
-no remote CSP reporting channel. The committed real WKWebView matrices are
-macOS-only. The public SDK WebView transport does not inherit these Host-private
+Chinese copy in the existing accessible feedback surface. Diagnostics exclude
+full or blocked URLs, origin/scope values, paths, nonce/bridge content,
+payloads, storage values, raw exceptions, and stacks; there is no remote CSP
+reporting channel. The public SDK WebView transport does not inherit these Host-private
 attempts, timers, breaker records, or failure codes. Run
 `pnpm run gate -- open-isolated-plugin-runtime` for the composed
 gate and its Resource, origin, navigation, Child WebView, Session, workspace, and
@@ -1032,9 +1018,9 @@ automatic recovery, public policy configuration or diagnostic history. Those
 Runtime resource controls remain Task 7.5 or later explicit changes.
 
 Run `pnpm run gate -- plugin-sdk-transport` for codec drift, SDK/Testkit,
-iframe/Host adapter, real tarball no-DOM and browser consumers, real
-MessageChannel integration, Runtime lifecycle, and bounded macOS WKWebView
-evidence. This delivery does not claim Windows/Linux Runtime transport support.
+Host adapter, real tarball no-DOM consumption, MessageChannel integration,
+Runtime lifecycle, and deterministic malicious-input boundaries. This delivery
+does not claim Windows/Linux Runtime transport support.
 Run `pnpm run gate -- plugin-rpc-validation` for the RPC policy, malicious
 fixtures, admission/egress races, Dispatcher/provider integration, private
 boundaries, and real resource-rejection evidence.
@@ -1168,9 +1154,9 @@ degraded evidence fails closed.
 The management surface does not expose raw paths or errors, Publisher trust, Registry
 patch/history protocols, a public management API, or any management export
 through Contract, SDK, Testkit, or Plugin UI. Run
-`pnpm run gate -- plugin-management-settings` for the private boundary, facade/UI
-regressions, public-package checks, and fixed `650×600` bilingual light/dark
-screenshots and computed styles.
+`pnpm run gate -- plugin-management-settings` for the private boundary,
+facade/UI regressions, public-package checks, bilingual state semantics, theme
+tokens, keyboard behavior, and focus recovery.
 
 ## Shipped Public Plugin Testkit
 
@@ -1286,8 +1272,8 @@ Host externals, import maps, window globals, React instances, or private CSS.
 A non-React plugin can ignore UI entirely and continue to consume only Contract
 and SDK.
 
-Package tests, a real-tarball Rsbuild consumer, module-graph and bundle checks,
-and a `650×600` browser visual matrix cover public boundaries, locale/theme,
+Package tests, a real-tarball Rsbuild build consumer, module-graph and bundle
+checks, and Rstest component assertions cover public boundaries, locale/theme,
 accessibility, keyboard recovery, focus, and long bilingual content. This
 delivery does not create an iframe, Runtime session, executable Host API, installer,
 registry, template, or plugin execution path.

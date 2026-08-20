@@ -53,4 +53,11 @@ describe('CI workflow policy', () => {
     writeFileSync(path, readFileSync(path, 'utf8').replaceAll("- 'plugins/**'", "- 'plugins/config-lens/**'"));
     expect(() => checkCiWorkflowPolicy(root)).toThrow('[ci/workflow-plugins-scope]');
   });
+
+  test('rejects environment validation commands', () => {
+    const root = createFixture();
+    const path = join(root, '.github/workflows/plugins-ci.yml');
+    writeFileSync(path, `${readFileSync(path, 'utf8')}\n# pnpm run visual\n`);
+    expect(() => checkCiWorkflowPolicy(root)).toThrow('[ci/workflow-environment-validation]');
+  });
 });

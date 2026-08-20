@@ -14,7 +14,7 @@ permission method。
 已经交付的静态 Manifest 契约仍然只负责验证。package 位于本 workspace 内，并不代表它
 获得 Host 信任、Tauri 访问权、native authority 或 Runtime 能力。
 
-仓库维护的可运行起步模板及其隔离、package、Runtime 与 visual 门禁详见
+仓库维护的可运行起步模板及其隔离、package、Runtime 与确定性 Gate 详见
 [插件项目模板](plugin-project-template.md)。
 
 ## 受支持的成员位置
@@ -176,8 +176,7 @@ pnpm run gate -- plugin-sdk
 pack gate 会构建真实 Contract 与 SDK tarball，校验 SDK 文件清单、root/iframe exports、声明与 Runtime
 依赖 metadata，并把两个 tarball 安装进隔离 external consumer。root consumer 使用
 `lib: ["ES2022"]` 且不包含 DOM 类型完成 typecheck，运行 ESM lifecycle smoke，并证明未声明的
-SDK deep import 会被拒绝。browser consumer 会 typecheck、bundle、在真实 browser 中加载 iframe
-entry，并拒绝私有 transport deep import。tarball 排除 tests、fixtures、scripts、schema、Host
+SDK deep import 与私有 transport deep import 会被拒绝。tarball 排除 tests、fixtures、scripts、schema、Host
 projection 与 Host 私有源码。完整跨边界门禁使用 `pnpm run gate -- plugin-sdk-transport`。运行
 `pnpm run gate -- plugin-host-api-dispatcher` 可验证 production Dispatcher、response-before-close、
 Action/Navigation/storage、Context replacement、MessageChannel、公共 tarball 与 workspace boundary。Dispatcher
@@ -293,15 +292,14 @@ pnpm --dir packages/plugin-ui run typecheck
 pnpm --dir packages/plugin-ui run test
 pnpm --dir packages/plugin-ui run check
 pnpm --dir packages/plugin-ui run test:pack
-pnpm --dir packages/plugin-ui run test:visual
 pnpm run gate -- plugin-ui
 pnpm run gate -- plugin-developer-cli
 ```
 
-pack gate 会把真实 Contract、SDK 与 UI tarball 安装到隔离的 Rsbuild browser consumer，
-检查 package metadata 与 bundle module graph，并运行 browser Runtime smoke test。visual gate
-在 package fixture 固定的 `650×600` 下覆盖 `en-US`/`zh-CN` 与 light/dark，包括语义结构、live region、键盘恢复、
-focus、computed token、长文本和截图。这些门禁不会实现或模拟 Host 安装与 Child WebView 执行。
+pack gate 会把真实 Contract、SDK 与 UI tarball 安装到隔离的临时 consumer，完成 typecheck/build，
+并在不启动浏览器的前提下检查 package metadata、exports、styles、单一 React Runtime 与 bundle module graph。
+Rstest 覆盖 `en-US`/`zh-CN`、light/dark semantic token、结构、live region、键盘恢复、focus 与长文本。
+这些 Gate 不证明 Host 安装或 Child WebView 执行。
 plugin Page 可另行声明有界 Manifest `0.4.0` presentation 元数据；公共 UI package 不暴露原生 resize API。
 
 ## 直接插件 CI Member

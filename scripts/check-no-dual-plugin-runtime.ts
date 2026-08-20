@@ -17,7 +17,7 @@ const rootDir = resolve(import.meta.dirname, '..');
 const changeName = ['replace-plugin-', 'iframe-runtime', '-with-child-webview'].join('');
 const changeRoot = join(rootDir, 'openspec', 'changes', changeName);
 const publicPackages = ['plugin-contract', 'plugin-sdk', 'plugin-ui', 'plugin-testkit', 'plugin-cli'] as const;
-const skippedDirectories = new Set(['.git', '.tmp', 'archive', 'coverage', 'node_modules', 'target', 'visual-dist']);
+const skippedDirectories = new Set(['.git', '.tmp', 'archive', 'coverage', 'node_modules', 'target']);
 const textExtensions = new Set([
   '',
   '.cjs',

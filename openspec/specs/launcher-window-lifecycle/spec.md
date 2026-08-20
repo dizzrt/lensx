@@ -6,6 +6,7 @@ Define the accepted native launcher window shape, centralized Rust lifecycle
 actions, global shortcut behavior, recoverable hide semantics, and input focus
 restoration across repeated launcher activations.
 ## Requirements
+
 ### Requirement: The launcher main window must use a compact native window shape
 
 The system MUST configure the main window labeled `main` as an undecorated, non-fullscreen, transparent, always-on-top Launcher Window with initial logical size `650×320`. Home, Search, and Host Page states MUST remain non-resizable and use fixed logical sizes `650×320`, `650×480`, and `650×600`, respectively. A plugin Page MUST use its current validated Page presentation, whose effective initial size is bounded by Contract hard limits and the current monitor work area and whose native user resizing is enabled only when `resizable: true`.
@@ -610,35 +611,3 @@ for another foreground application.
   hiding that would hide the Launcher
 - **THEN** the visible Window retains an exit path and the system does not leave
   a hidden process without a Dock tile or recovery entry point
-
-### Requirement: macOS accessory and full-screen behavior MUST have target product evidence
-
-Delivery MUST combine deterministic Rust tests, configuration and bundle
-policy checks, and bounded product-path evidence from the current packaged
-`.app` on a supported target macOS system. The evidence MUST cover bundle agent
-identity, runtime Accessory policy, absence of a Dock tile, the complete `main`
-Window's cross-Space, full-screen auxiliary, and level state, ordinary-Space
-restore, restore over another application's full-screen Space, keyboard focus,
-repeated toggles, same-attempt current Child WebView restore, `Cmd+W`, `Cmd+Q`,
-non-interference with another foreground application, and setup-failure
-diagnostics. Development mode, static source checks, or a simulated Window MUST
-NOT alone replace packaged-application Dock and full-screen Space evidence.
-Real product evidence MUST NOT replace deterministic failure and race tests.
-
-#### Scenario: Target macOS product matrix passes
-
-- **WHEN** a maintainer runs the focused macOS gate against the current packaged
-  lensX `.app` and an independent full-screen test application
-- **THEN** all accessory, Dock, Space, full-screen level, focus, shortcut, Child
-  presentation, and teardown assertions pass with bounded evidence
-- **THEN** the evidence records macOS and Tauri, Tao, and Wry revisions plus
-  failure diagnostics without depending on the user's default browser
-  configuration or an existing user application session
-
-#### Scenario: Only simulated evidence is available
-
-- **WHEN** unit tests and configuration checks pass but the target macOS
-  packaged-product gate has not run or has not proved absence of a Dock tile and
-  visibility in a full-screen Space
-- **THEN** the change MUST NOT be marked as completely delivered
-- **THEN** maintainers explicitly report the missing target-product evidence

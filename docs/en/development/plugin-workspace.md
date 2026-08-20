@@ -20,7 +20,7 @@ inside this workspace does not grant it Host trust, Tauri access, native authori
 or Runtime capabilities.
 
 The maintained runnable starters and their isolation, package, Runtime, and
-visual gates are documented in [Plugin Project Templates](plugin-project-template.md).
+deterministic Gates are documented in [Plugin Project Templates](plugin-project-template.md).
 
 ## Supported Member Locations
 
@@ -206,9 +206,8 @@ The pack gate builds real Contract and SDK tarballs, verifies the SDK file list,
 root/WebView exports, declarations, and Runtime dependency metadata, and installs
 both tarballs into isolated external consumers. The root consumer typechecks with
 `lib: ["ES2022"]` and no DOM types, runs an ESM lifecycle smoke test, and proves
-that an undeclared SDK deep import is rejected. The browser consumer typechecks,
-bundles, loads the WebView entry in a real browser, and rejects private transport
-deep imports. Tests, fixtures, scripts, schemas, Host projections, and
+that undeclared SDK and private transport deep imports are rejected. Tests,
+fixtures, scripts, schemas, Host projections, and
 Host-private source are excluded from the tarball. Run
 `pnpm run gate -- plugin-sdk-transport` for the complete cross-boundary gate. Run
 `pnpm run gate -- plugin-host-api-dispatcher` for the production Dispatcher,
@@ -342,18 +341,17 @@ pnpm --dir packages/plugin-ui run typecheck
 pnpm --dir packages/plugin-ui run test
 pnpm --dir packages/plugin-ui run check
 pnpm --dir packages/plugin-ui run test:pack
-pnpm --dir packages/plugin-ui run test:visual
 pnpm run gate -- plugin-ui
 pnpm run gate -- plugin-developer-cli
 ```
 
 The pack gate installs real Contract, SDK, and UI tarballs into an isolated
-Rsbuild browser consumer, checks package metadata and the bundle module graph,
-and runs a browser Runtime smoke test. The visual gate covers `en-US`/`zh-CN`
-and light/dark at the package fixture's fixed `650×600`, including semantic structure, live regions,
-keyboard recovery, focus, computed tokens, long text, and screenshots. These
-gates do not implement or simulate Host installation or Child WebView
-execution. A plugin Page may separately declare bounded Manifest `0.4.0`
+temporary consumer, typechecks and builds it, and checks package metadata,
+exports, styles, one React Runtime, and the bundle module graph without starting
+a browser. Rstest covers `en-US`/`zh-CN`, light/dark semantic tokens, structure,
+live regions, keyboard recovery, focus, and long text. These Gates do not prove
+Host installation or Child WebView execution. A plugin Page may separately
+declare bounded Manifest `0.4.0`
 presentation metadata; the public UI package exposes no native resize API.
 
 ## Direct Plugin CI Members

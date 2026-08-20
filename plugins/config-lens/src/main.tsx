@@ -2,7 +2,6 @@ import { createPluginSdk, type PluginSdkClient } from '@lensx/plugin-sdk';
 import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview';
 
 import { disposeMonacoWorkers, loadMonaco } from './editor/monaco.js';
-import { recordConfigLensStage } from './startup-stages.js';
 import './startup.css';
 
 const root = document.getElementById('root');
@@ -36,13 +35,9 @@ const start = async () => {
   const currentClient = createPluginSdk({ transport: createPluginWebviewTransport() });
   client = currentClient;
   try {
-    const sdkStarted = performance.now();
     const context = await currentClient.initialize();
-    recordConfigLensStage('sdk', performance.now() - sdkStarted);
     if (currentGeneration !== generation || client !== currentClient) return;
-    const uiBundleStarted = performance.now();
     const [mountModule] = await Promise.all([import('./mount.js'), loadMonaco()]);
-    recordConfigLensStage('ui_bundle', performance.now() - uiBundleStarted);
     if (currentGeneration !== generation || client !== currentClient) return;
     startup.hidden = true;
     root.hidden = false;

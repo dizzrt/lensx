@@ -87,7 +87,7 @@ describe('Plugins CI workspace selection', () => {
 });
 
 describe('Plugins CI execution', () => {
-  test('builds clean public outputs before every blocking plugin stage and optional visual', () => {
+  test('builds clean public outputs before every supported plugin stage exactly once', () => {
     const root = createRoot();
     addMember(root, 'packages/base', '@fixture/base');
     addMember(root, 'plugins/alpha', '@fixture/alpha', {
@@ -98,7 +98,6 @@ describe('Plugins CI execution', () => {
         test: 'fixture',
         'test:e2e': 'fixture',
         typecheck: 'fixture',
-        visual: 'fixture',
       },
     });
     const dist = join(root, 'packages/base/dist');
@@ -121,22 +120,21 @@ describe('Plugins CI execution', () => {
       '@fixture/alpha (plugins/alpha):check',
       '@fixture/alpha (plugins/alpha):build',
       '@fixture/alpha (plugins/alpha):test:e2e',
-      '@fixture/alpha (plugins/alpha):visual',
     ]);
   });
 
   test('fails before execution when a required plugin script is missing', () => {
     const root = createRoot();
     addMember(root, 'plugins/alpha', '@fixture/alpha', {
-      scripts: { build: 'fixture', check: 'fixture', test: 'fixture', typecheck: 'fixture' },
+      scripts: { build: 'fixture', test: 'fixture', typecheck: 'fixture' },
     });
 
     expect(() => runPluginsCi({ rootDir: root, runCommand: () => 0 })).toThrow(
-      '[ci/required-plugin-script] plugins/alpha/package.json: missing scripts.test:e2e.',
+      '[ci/required-plugin-script] plugins/alpha/package.json: missing scripts.check.',
     );
   });
 
-  test.each(['build', 'test:e2e', 'visual'])('propagates a failing %s command', (failingScript) => {
+  test.each(['build', 'test:e2e'])('propagates a failing %s command', (failingScript) => {
     const root = createRoot();
     addMember(root, 'packages/base', '@fixture/base');
     addMember(root, 'plugins/alpha', '@fixture/alpha', {
@@ -147,7 +145,6 @@ describe('Plugins CI execution', () => {
         test: 'fixture',
         'test:e2e': 'fixture',
         typecheck: 'fixture',
-        visual: 'fixture',
       },
     });
     let buildSeen = false;
@@ -162,5 +159,38 @@ describe('Plugins CI execution', () => {
       }),
     ).toThrow(`script "${failingScript}" exited with status 7`);
     expect(buildSeen).toBe(true);
+  });
+
+  test('allows a plugin to omit the optional deterministic built-output stage', () => {
+    const root = createRoot();
+    addMember(root, 'plugins/alpha', '@fixture/alpha', {
+      scripts: { build: 'fixture', check: 'fixture', test: 'fixture', typecheck: 'fixture' },
+    });
+    const invocations: string[] = [];
+
+    runPluginsCi({
+      rootDir: root,
+      runCommand: (_cwd, script) => {
+        invocations.push(script);
+        return 0;
+      },
+    });
+
+    expect(invocations).toEqual(['typecheck', 'test', 'check', 'build']);
+  });
+
+  test.each([
+    ['visual', 'node scripts/verify-visual.mjs'],
+    ['test:e2e', 'cargo run --example native_harness'],
+    ['test:e2e', 'node scripts/write-evidence.ts'],
+  ])('rejects environment script %s before execution', (name, command) => {
+    const root = createRoot();
+    addMember(root, 'plugins/alpha', '@fixture/alpha', {
+      scripts: { build: 'fixture', check: 'fixture', test: 'fixture', typecheck: 'fixture', [name]: command },
+    });
+    let calls = 0;
+
+    expect(() => runPluginsCi({ rootDir: root, runCommand: () => ++calls })).toThrow('[ci/prohibited-plugin-script]');
+    expect(calls).toBe(0);
   });
 });

@@ -50,8 +50,8 @@ ready content 使用 `PluginPage`。从 `@lensx/plugin-ui/styles.css` 导入公�
 semantic 表达，focus 行为可预测。error 时把 focus 移到 recovery action；恢复后回到有意义的逻辑目标。
 不得用硬编码 Host color 表达 theme。
 
-受维护 visual gate 渲染两种 locale 与两种 theme。component test 覆盖 loading、ready、error、
-recovery、keyboard activation、semantic status 与 focus behavior。
+component test 覆盖两种 locale、两种 theme、loading、ready、error、recovery、
+keyboard activation、semantic status、token 选择与 focus behavior。
 
 ## 测试与构建
 

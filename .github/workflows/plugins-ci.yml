@@ -24,7 +24,6 @@ jobs:
     runs-on: macos-15
     env:
       CI: 'true'
-      LENSX_CI_WINDOWLESS: '1'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:

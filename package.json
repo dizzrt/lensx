@@ -23,7 +23,6 @@
     "app:check": "node scripts/app-lifecycle.ts check",
     "gate": "node --experimental-strip-types scripts/validation/cli.ts gate",
     "generate": "node --experimental-strip-types scripts/validation/cli.ts generate",
-    "evidence": "node --experimental-strip-types scripts/validation/cli.ts evidence",
     "fix": "biome check --write .",
     "format": "biome format --write .",
     "lint-staged": "lint-staged",

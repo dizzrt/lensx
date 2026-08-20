@@ -88,60 +88,34 @@ provenance 与 CI 证据都不会增加 Runtime authority。
 
 ## 开发与 CI
 
-external、development 与 official 插件都使用 Manifest `0.4.0`、`runtime.kind: "webview"` 与
-`@lensx/plugin-sdk/webview`。template 与 CLI 只构建这一路径。Development reload 在销毁旧 current
-attempt 前 staging 下一 generation；被拒绝的 staging 不改变 current attempt。直接插件与 external
-插件使用相同的公共 Runtime、bridge/SDK、interaction 与 zero-residual teardown 边界；CI 不会赋予
-不同的 Host 路径。
+external、development 与 official 插件都使用 Manifest `0.4.0`、
+`runtime.kind: "webview"` 与 `@lensx/plugin-sdk/webview`。template 与 CLI
+只构建这一路径。Development reload 在销毁旧 current attempt 前 staging 下一
+generation；被拒绝的 staging 不改变 current attempt。直接插件与 external
+插件使用相同的公共 Runtime、bridge/SDK、interaction 与 zero-residual teardown
+边界；CI 不会赋予不同 Host 路径。
 
-使用以下维护命令：
+使用以下确定性命令：
 
 ```bash
-pnpm run gate -- plugin-child-webview-macos-evidence
-pnpm run evidence -- plugin-child-webview-macos --write
+pnpm run gate -- plugin-child-webview-runtime
+pnpm run gate -- plugin-child-webview-session
 pnpm run gate -- open-isolated-plugin-runtime
 ```
 
-`evidence:` 命令会打开临时 macOS WKWebView harness window。普通 `check:` 命令验证已提交的
-bounded evidence，适合 non-interactive aggregate validation。普通 evidence run 不会改写 positive
-record。审查新鲜且通过的结果后，维护者才显式运行
-`node --experimental-strip-types scripts/plugin-child-webview-macos-evidence.ts --run --update-cold-open`。
-bounded multi-WebView Launcher record 使用单独的审查后更新路径：
-`node --experimental-strip-types scripts/plugin-child-webview-macos-evidence.ts --run --update-launcher-lifecycle`。
+这些 Gate 验证 contract、状态机、source/generation binding、resource policy、
+bridge adapter、lifecycle 竞态、cleanup 与恶意边界；它们不启动真实 WebView
+或原生产品环境，也不声称提供此类证明。
+## 确定性资源与生命周期检查
 
-## 性能预算与 Evidence Schema
-
-cold create 与 same-attempt restore 分开测量；ConfigLens warm format 也与 container startup 独立。
-
-| 测量项 | 维护预算 | 方法 |
-| --- | ---: | --- |
-| Release-like Host loading 到 bridge ready p95 | 250 ms | 至少二十次 fresh open，经过普通 registration、Resource Service、presentation、bridge 与 SDK path。 |
-| Release-like first interactive p95 | 500 ms | 至少二十次 fresh open；只有 current Monaco model/layout、包内 editor Worker 与 native keyboard input 都确认后才结束。 |
-| Development snapshot first interactive p95 | 1000 ms | 至少二十次 fresh Development generation open，复用相同 product Runtime path。 |
-| Same-attempt hide/restore p95 | 100 ms | 至少四十次 native hide/show/focus sample，并确认 attempt、document、Session、model 与 Worker 不变。 |
-| ConfigLens warm small-JSON format p95 | 100 ms | 对维护的四 case corpus 采集四十次 action-to-model-update sample。 |
-| Host heartbeat p95 gap | 50 ms | plugin startup 或工作期间运行 Host timer。 |
-
-closed stage catalog 为 `resolve`、`create`、`navigation`、`load`、`bridge`、`sdk`、`ui_bundle`、
-`editor`、`worker`、`host_loading`、`first_interactive` 与 `restore`。每层只报告 monotonic
-duration；evidence 不比较或导出跨层 absolute timestamp。已提交 cold-open summary 使用 schema
-version `0.2.0`，分为 `release_like`、`development_snapshot` 与 `same_attempt_restore` profile，
-保存 nearest-rank p50/p95/max、sample count、bounded asset size、Host heartbeat、terminal cleanup
-与显式 privacy flag。evidence 不记录 user content、
-raw payload/error、complete URL、origin、path、nonce、native label、data-store identifier 或
-Host-private token。memory/resource release 通过 registry absence、destroyed WebView、inert late
-callback、terminated Worker/connection 与零残留 bridge/resource authority 证明；不测量或假设
-process separation。
-
-ConfigLens Launcher lifecycle record 只包含审查后的 boolean。它证明 Home/Page/close geometry、
-application-local `Cmd+W` 与 focus-loss hide、global-shortcut same-attempt restore 且没有新的
-editor/Worker load、Page close destroy，以及 native/bridge/resource authority 零残留。
-
+容器启动延迟和目标环境交互时延不再作为维护中的验证输出。ConfigLens bundle
+与初始资源预算从 production build 产物检查。Runtime deadline、有界 frame、
+single-instance ownership、cancellation、replacement、terminal cleanup 与
+late-event suppression 继续由 Rust、TypeScript、React、package 和边界测试约束。
 ## 故障排查
 
 1. Host 一直停留在 loading 时，区分 native load、bridge ready 与 SDK Context ready；按负责 stage
-   排查而不是视为一个 timeout。`load` 偏高指向 Resource proof 或 native loading；`ui_bundle`/`worker`
-   偏高指向插件 bootstrap。
+   排查而不是视为一个 timeout；应检查对应状态转换。
 2. 内容隐藏或错位时，运行 slot/bounds gate，并校验 scale factor、presentation revision 与 Host
    overlay 顺序。
 3. 如果 `Cmd+W`、focus loss 或 Page close 留下空白或尺寸错误的 Launcher，运行
@@ -152,8 +126,7 @@ editor/Worker load、Page close destroy，以及 native/bridge/resource authorit
    native fallback。
 5. reload 或 replacement 失败时，验证 teardown 前的 staging，并确认旧 generation 不能发送 late
    callback。
-6. evidence 变化时重跑真实 macOS matrix 并审查 bounded result。不得手改 positive boolean 来绕过
-   失败 harness。
+6. 确定性断言变化时，审查产品不变量并更新对应 unit、state、package 或 boundary test。
 
 Resource Service 保留 process-local、32 MiB/256-entry 的 verified byte cache，key 包含 entry、
 installed/development payload variant、resource generation 与 normalized path。miss 只有在完整

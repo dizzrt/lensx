@@ -58,17 +58,18 @@ pnpm run gate -- ci-plugins
 The entry point discovers direct plugins, computes their transitive public
 `packages/*` dependencies, builds those packages in topological order, and only
 then runs each plugin's `typecheck`, `test`, `check`, `build`, and `test:e2e`
-scripts. A declared `visual` script also runs as a blocking stage. If no direct
-plugins exist, the command reports a successful no-op.
+scripts. `test:e2e` is optional and is accepted only for a deterministic,
+post-build pure Node artifact check. Each lifecycle category runs once; a
+recursive lifecycle or environment-oriented stage fails policy before execution.
+If no direct plugins exist, the command reports a successful no-op.
 
 Dependency preparation never trusts pre-existing `dist` directories and does
 not add source aliases. Plugins continue to consume only declared public
 package exports, never Host or Tauri private source.
 
-Visual validation is headless and windowless. Each browser attempt uses a fresh
-temporary profile. The preview process receives a graceful termination request
-first, uses forced termination only after a bounded timeout, and deletes the
-temporary profile on success or failure.
+Plugins CI does not launch browsers, real WebViews, GUI applications, Launch
+Services, or native interaction harnesses, and it does not maintain screenshots,
+pixel baselines, or target-environment performance output.
 
 ## Policy And Failure Recovery
 
@@ -80,9 +81,8 @@ pnpm run gate -- ci-workflows
 ```
 
 When a stage fails, fix the cause, rerun that stage, and then rerun its complete
-CI entry point. Browser-backed stages must run in an approved macOS execution
-context with a fresh profile; a sandbox-only browser failure is an environment
-failure and must be retried unchanged rather than skipped or weakened.
+CI entry point. There is no optional environment-validation path to skip or
+restore after deterministic CI succeeds.
 
 The repository currently supports CI only on macOS. It intentionally provides
 no automatic versioning or publishing workflow. If branch protection still

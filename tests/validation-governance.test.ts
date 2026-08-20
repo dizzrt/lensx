@@ -1,11 +1,17 @@
-import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { describe, expect, test } from '@rstest/core';
 
-import { findGate, migrationInventory, ROOT_SCRIPT_POLICY, validationRegistry } from '../scripts/validation/catalog.ts';
+import {
+  findGate,
+  isProhibitedEnvironmentCommand,
+  migrationInventory,
+  ROOT_SCRIPT_POLICY,
+  validationRegistry,
+} from '../scripts/validation/catalog.ts';
 import { planGates, validateRegistry } from '../scripts/validation/runner.ts';
+import { discoverWorkspaceMembers } from '../scripts/workspace-lifecycle.ts';
 
 const root = resolve(import.meta.dirname, '..');
 const read = (path: string): string => readFileSync(join(root, path), 'utf8');
@@ -28,6 +34,7 @@ describe('validation Gate governance', () => {
     ).toEqual([]);
     expect(Object.keys(rootScripts).filter((name) => name.startsWith('test:'))).toEqual(['test:watch']);
     expect(rootScripts).not.toHaveProperty('check:validation-governance');
+    expect(rootScripts).not.toHaveProperty('evidence');
   });
 
   test('classifies every legacy root entry without keeping a compatibility alias', () => {
@@ -42,9 +49,7 @@ describe('validation Gate governance', () => {
         entry.destinationId !== undefined &&
         (entry.disposition === 'dispatcher' || entry.disposition === 'renamed')
       ) {
-        const isTarget =
-          validationRegistry.generateTargets.some((target) => target.id === entry.destinationId) ||
-          validationRegistry.evidenceTargets.some((target) => target.id === entry.destinationId);
+        const isTarget = validationRegistry.generateTargets.some((target) => target.id === entry.destinationId);
         const isRootLifecycle = Object.hasOwn(rootScripts, entry.destinationId);
         expect(findGate(entry.destinationId) !== undefined || isTarget || isRootLifecycle, entry.legacyName).toBe(true);
       }
@@ -54,8 +59,8 @@ describe('validation Gate governance', () => {
     }
     expect(findGate('plugin-rpc-validation')).toBeDefined();
     expect(findGate('plugin-child-webview-delivery')).toBeDefined();
-    expect(findGate('official-config-lens-cold-open-delivery')).toBeDefined();
-    expect(findGate('plugin-pointer-cursor')).toBeDefined();
+    expect(findGate('official-config-lens-cold-open-delivery')).toBeUndefined();
+    expect(findGate('plugin-pointer-cursor')).toBeUndefined();
     expect(inventory.find((entry) => entry.legacyName === 'check:fix')).toMatchObject({
       destinationId: 'fix',
       disposition: 'renamed',
@@ -76,8 +81,12 @@ describe('validation Gate governance', () => {
   test('preserves the root test lifecycle template preparation in the CI Gate', () => {
     const descriptions = planGates(validationRegistry, ['ci-lensx-test']).steps.map((step) => step.description);
     expect(descriptions).toEqual([
+      'pnpm --dir packages/plugin-contract run build',
       'pnpm --dir packages/plugin-cli run build',
+      'pnpm --dir packages/plugin-sdk run build',
+      'pnpm --dir packages/plugin-testkit run build',
       'LENSX_TEMPLATE_MODULE_GRAPH=1 LENSX_VALIDATION_STAGE=ci-lensx-test pnpm --dir examples/plugins/framework-neutral run build',
+      'pnpm --dir packages/plugin-ui run build',
       'LENSX_TEMPLATE_MODULE_GRAPH=1 LENSX_VALIDATION_STAGE=ci-lensx-test pnpm --dir examples/plugins/react-semi run build',
       'rstest',
     ]);
@@ -101,14 +110,49 @@ describe('validation Gate governance', () => {
     }
   });
 
-  test('keeps native Child WebView APIs inside the product adapter or feature-gated evidence harness', () => {
-    const result = spawnSync(
-      process.execPath,
-      ['--experimental-strip-types', 'scripts/check-plugin-child-webview-spike.ts'],
-      { cwd: root, encoding: 'utf8' },
-    );
-    expect(result.stderr).toBe('');
-    expect(result.status).toBe(0);
+  test('keeps maintained validation deterministic and removes environment entry points', () => {
+    for (const step of validationRegistry.steps) {
+      expect(isProhibitedEnvironmentCommand(step.description), step.description).toBe(false);
+      expect(step.safety.readOnly, step.description).toBe(true);
+      expect(step.safety.writesCommittedArtifacts, step.description).toBe(false);
+    }
+    for (const target of validationRegistry.generateTargets) {
+      for (const step of target.steps) {
+        expect(isProhibitedEnvironmentCommand(step.description), target.id).toBe(false);
+        expect(step.safety.writesCommittedArtifacts, target.id).toBe(true);
+      }
+    }
+    expect(validationRegistry.generateTargets.map((target) => target.id)).toEqual([
+      'frame-aware-navigation-dependency-drift',
+      'plugin-host-api-types',
+      'plugin-manifest-types',
+      'plugin-package-format-fixtures',
+      'plugin-webview-runtime-fixtures',
+    ]);
+    for (const path of [
+      'visual',
+      'plugins/config-lens/visual',
+      'packages/plugin-ui/visual',
+      'examples/plugins/react-semi/visual',
+      'src-tauri/src/config_lens_cold_open_harness.rs',
+      'src-tauri/src/macos_accessory_evidence.rs',
+    ]) {
+      expect(existsSync(join(root, path)), path).toBe(false);
+    }
+  });
+
+  test('keeps workspace lifecycle categories non-overlapping and environment-free', () => {
+    for (const member of discoverWorkspaceMembers(root)) {
+      const scripts = member.manifest.scripts ?? {};
+      for (const lifecycle of ['build', 'typecheck', 'test', 'check']) {
+        expect(scripts[lifecycle], `${member.relativePath}:${lifecycle}`).toBeDefined();
+      }
+      expect(scripts.check, member.relativePath).not.toMatch(/pnpm run (?:typecheck|test)\b/u);
+      for (const [name, command] of Object.entries(scripts)) {
+        expect(name, member.relativePath).not.toMatch(/visual|evidence|harness/iu);
+        expect(isProhibitedEnvironmentCommand(`${name} ${command}`), `${member.relativePath}:${name}`).toBe(false);
+      }
+    }
   });
 
   test('resolves every maintained documentation dispatcher reference', () => {
@@ -122,15 +166,15 @@ describe('validation Gate governance', () => {
       for (const match of source.matchAll(/pnpm run gate -- ([a-z0-9][a-z0-9-]*)/gu)) {
         expect(findGate(match[1] ?? ''), path).toBeDefined();
       }
-      for (const match of source.matchAll(/pnpm run (generate|evidence) -- ([a-z0-9][a-z0-9-]*)/gu)) {
-        const targets =
-          match[1] === 'generate' ? validationRegistry.generateTargets : validationRegistry.evidenceTargets;
+      for (const match of source.matchAll(/pnpm run generate -- ([a-z0-9][a-z0-9-]*)/gu)) {
+        const targets = validationRegistry.generateTargets;
         expect(
-          targets.some((target) => target.id === match[2]),
+          targets.some((target) => target.id === match[1]),
           path,
         ).toBe(true);
       }
       expect(source, path).not.toMatch(/pnpm run (?:check|run|refresh|evidence|generate|ci):/u);
+      expect(source, path).not.toMatch(/pnpm run evidence\b/u);
       for (const entry of retiredDocumentationCommands) {
         expect(source, `${path}: ${entry.legacyName}`).not.toContain(`pnpm run ${entry.legacyName}`);
       }

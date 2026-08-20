@@ -6,6 +6,7 @@ Define the two formal plugin project templates, their shared public platform
 boundaries, runnable examples, validation gates, and production-boundary
 evidence.
 ## Requirements
+
 ### Requirement: The system MUST provide two formal plugin project templates that share public platform boundaries
 
 Within the supported example-plugin workspace, the system MUST provide one
@@ -231,71 +232,25 @@ public `pack` CLI before Task 6.4.
 
 ### Requirement: The production-boundary smoke test MUST connect template output to the real Host main path
 
-The template gate MUST use actual built and inspected template payloads to cover
-the current Host's package acceptance, Registration, Page and Action projection,
-resource and Runtime resolution, Runtime Session, public SDK WebView transport,
-Host native bridge adapter, RPC validation, Dispatcher `runtime.get_context`, and
-terminal cleanup. This smoke test MUST NOT inject `FakePluginSdkTransport` or
-treat author-side Testkit as the production Host. Existing macOS WKWebView CSP,
-custom-protocol, and isolation evidence MUST remain the target-browser security
-prerequisites; this smoke test does not need to establish a second GUI runner.
+The template gate MUST use actual built and inspected template payloads to cover the current Host's package acceptance, Registration, Page and Action projection, resource and Runtime resolution, Runtime Session, public SDK WebView transport codec, Host bridge adapter, RPC validation, Dispatcher `runtime.get_context`, and terminal cleanup through deterministic production-composition tests. This smoke test MUST NOT inject `FakePluginSdkTransport` or treat author-side Testkit as the production Host. It MUST NOT depend on an existing browser, WebView, GUI, native harness, or target-environment prerequisite.
 
-#### Scenario: Framework-neutral template passes through the production main path
+#### Scenario: Framework-neutral template passes through the production composition
 
-- **WHEN** the Host test boundary accepts a compatible framework-neutral
-  template package and opens its contributed Action and Page
-- **THEN** the current WebView transport and Runtime Session complete one
-  authenticated connection, and the SDK obtains a Contract-valid Runtime
-  context through the Dispatcher
-- **THEN** after close, the current Session, bridge endpoints, pending requests,
-  subscriptions, Runtime attempt, and Page resources all enter the existing
-  terminal cleanup
+- **WHEN** the deterministic Host test boundary accepts a compatible framework-neutral template package and opens its contributed Action and Page state
+- **THEN** the current transport adapter and Runtime Session complete one authenticated modeled connection, and the SDK obtains a Contract-valid Runtime context through the Dispatcher
+- **THEN** after close, the current Session, bridge endpoints, pending requests, subscriptions, Runtime attempt, and Page resources enter terminal cleanup
 
-#### Scenario: React/Semi template passes through the production main path
+#### Scenario: React/Semi template passes through the production composition
 
-- **WHEN** the same Host test boundary accepts a compatible React/Semi template
-  package and opens its contributed Action and Page
-- **THEN** it uses the same Session, transport, Dispatcher, RPC, and cleanup
-  paths and receives no privilege from React, Semi, official origin, or the UI
-  package
-- **THEN** the Host does not inject a React runtime, Host Context, private
-  styles, or resources that bypass CSP for the template
+- **WHEN** the same Host test boundary accepts a compatible React/Semi template package and opens its contributed Action and Page state
+- **THEN** it uses the same Session, transport, Dispatcher, RPC, and cleanup paths and receives no privilege from React, Semi, official origin, or the UI package
+- **THEN** the Host does not inject a React runtime, Host Context, private styles, or resources that bypass CSP for the template
 
 #### Scenario: Author-side fake is used incorrectly in a production smoke test
 
-- **WHEN** the production-boundary smoke test depends on Testkit,
-  `FakePluginSdkTransport`, or a manually fabricated ready context in place of
-  the production adapter and Dispatcher
-- **THEN** the dedicated gate fails
-- **THEN** a template cannot be declared runnable in the real Host solely
-  because it compiles and passes author-side unit tests
-
-### Requirement: React/Semi template MUST pass accessibility, locale, theme, and visual validation
-
-The React/Semi template MUST use locale and theme mechanisms supported by
-Plugin UI and Semi Design and MUST automate and visually validate `en-US` and
-`zh-CN`, light and dark, loading, error and ready states, long text,
-keyboard-operated retry, visible focus, and key semantic theme tokens in a
-fixed plugin viewport. Template-owned user-visible copy MUST be available in
-English and semantically aligned Simplified Chinese, and English MUST be the
-default and fallback language.
-
-#### Scenario: Four locale and theme combinations render
-
-- **WHEN** the visual gate renders English/light, English/dark, Chinese/light,
-  and Chinese/dark independently
-- **THEN** Page content, feedback, Semi controls, and the document theme remain
-  readable and do not overflow critical areas in the fixed viewport
-- **THEN** computed styles use the public Plugin UI theme contract rather than
-  private Host CSS
-
-#### Scenario: User retries from the error state with a keyboard
-
-- **WHEN** the React template is in an initialization error state and the user
-  operates retry using only the keyboard
-- **THEN** the retry control has visible focus and starts a new attempt
-- **THEN** loading, error, and ready states are understandable to assistive
-  technologies through appropriate semantics or a live region
+- **WHEN** the production-boundary smoke test depends on Testkit, `FakePluginSdkTransport`, or a manually fabricated ready context in place of production adapters and Dispatcher
+- **THEN** the dedicated deterministic gate fails
+- **THEN** a template cannot be declared connected to production composition solely because it compiles and passes author-side unit tests
 
 ### Requirement: The template capability MUST have narrowly scoped bilingual documentation and complete validation
 
@@ -345,3 +300,19 @@ Framework-neutral and React/Semi templates MUST emit Manifest `0.4.0` with `runt
 #### Scenario: Generated project is run outside lensX
 - **WHEN** its page is loaded without the Host bridge
 - **THEN** SDK initialization fails safely without probing legacy, presentation, or native fallbacks
+
+### Requirement: React/Semi template MUST pass deterministic accessibility, locale, and theme validation
+
+The React/Semi template MUST use locale and theme mechanisms supported by Plugin UI and Semi Design. Rstest component and state tests MUST cover `en-US` and `zh-CN`, light and dark semantic theme state, loading, error and ready states, long text, keyboard-operated retry, visible focus semantics, and key public theme tokens without browser rendering, screenshots, pixel comparison, or computed-style capture. Template-owned user-visible copy MUST be available in English and semantically aligned Simplified Chinese, with English as default and fallback.
+
+#### Scenario: Four locale and theme states are validated
+
+- **WHEN** deterministic component tests render English/light, English/dark, Chinese/light, and Chinese/dark state independently
+- **THEN** Page content, feedback, controls, document theme attributes, and public semantic tokens match the selected context
+- **THEN** tests depend on public Plugin UI contracts rather than private Host CSS
+
+#### Scenario: User retries from the error state with a keyboard
+
+- **WHEN** the React template is in an initialization error state and retry is operated through keyboard events
+- **THEN** the retry control exposes visible-focus state and starts a new attempt
+- **THEN** loading, error, and ready states remain understandable through appropriate accessibility semantics or a live region

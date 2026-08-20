@@ -4,6 +4,7 @@
 
 Define the current open Web execution baseline for installed plugins while preserving strict separation from Host-native authority, other plugins, and obsolete Runtime generations.
 ## Requirements
+
 ### Requirement: Installation must be the sole current trust decision for plugin behavior
 
 The system MUST interpret installing, replacing, or development-registering a plugin as the user's decision to allow that plugin to run inside its own isolated Web Runtime. It MUST NOT create lensX permission requests, grants, or per-capability authorization interactions for Workers, network access, remote resources, `blob:`, `data:`, WASM, or browser origin storage. Trusted Host installation UI MUST explain that lensX isolates the Host and other plugins but does not review, endorse, or continuously monitor how a plugin processes data the user deliberately gives it.
@@ -60,20 +61,6 @@ Official, external, and development plugins MUST use the same Web Runtime, Host 
 - **THEN** the installed Runtime's Host authority neither expands nor contracts because of that information
 - **THEN** the user can still control whether the plugin continues to run through Host-owned disable and uninstall operations
 
-### Requirement: The open Web baseline must have target-WebView and Host-availability evidence
-
-The system MUST verify the open Web success path, Host and cross-plugin negative paths, generation teardown, and Launcher responsiveness through both deterministic tests and target macOS WKWebView evidence. Simulated DOM behavior, source inspection, ordinary browser loading, and community review MUST NOT individually substitute for evidence of real Runtime isolation and termination.
-
-#### Scenario: Focused open Runtime gate passes
-- **WHEN** the package and remote resource, Dedicated Worker, network, Blob and Data, replacement, close, disable, and malicious cross-boundary matrix all run
-- **THEN** supported Web behavior succeeds, Host and cross-plugin access fails, and old contexts terminate completely
-- **THEN** evidence contains no user data, complete URL, origin token, scope, path, payload, nonce, Port content, or raw exception
-
-#### Scenario: WebView cannot prove isolation or teardown
-- **WHEN** the target WebView cannot prove that an open context cannot reach the Host or other plugins, or cannot reclaim a Dedicated Worker and old authority when the page terminates
-- **THEN** the open Runtime capability remains incomplete
-- **THEN** the implementation does not use a shared origin, Tauri exposure, ignored residual context, or removal of negative tests as a fallback
-
 ### Requirement: Open Web baseline MUST execute in a top-level Child WebView context
 Dedicated Worker, package/remote HTTPS resources, WSS/HTTPS connections, Blob/Data, WASM and browser origin storage MUST be tested as ordinary Web capabilities of the current top-level Child WebView, without permission prompts. None MUST grant Host DOM, general Tauri, native command, another plugin, old generation or persistent background authority. Official, development and community sources MUST share this exact boundary.
 
@@ -92,3 +79,18 @@ Isolation claims MUST derive from current WebView identity, origin/data store, r
 - **WHEN** platform diagnostics show process reuse
 - **THEN** security acceptance remains based on enforced logical boundaries and must still pass all escape tests
 
+### Requirement: The open Web baseline MUST have deterministic capability and Host-boundary validation
+
+Maintained validation MUST cover package and remote resource policy, Dedicated Worker and browser-capability classification, Host and cross-plugin denial, generation teardown state, and Launcher lifecycle non-interference through deterministic Contract, resource, CSP, Session, state-machine, and malicious-fixture tests. It MUST NOT claim real browser execution or retain target-WebView, responsiveness, or environment-evidence prerequisites.
+
+#### Scenario: Deterministic open Runtime matrix passes
+
+- **WHEN** supported Web categories and malicious cross-boundary fixtures run through the maintained deterministic tests
+- **THEN** browser-standard capabilities remain permissionless in the public contract while Host, Tauri, cross-plugin, and stale-generation authority remain denied
+- **THEN** terminal state tests prove modeled resources and authority are revoked
+
+#### Scenario: Environment proof is proposed as completion evidence
+
+- **WHEN** a maintained caller requires a browser, WebView, GUI, native harness, timing sample, or committed environment record
+- **THEN** validation governance rejects that caller
+- **THEN** the open Web product boundary remains unchanged without an optional environment Gate

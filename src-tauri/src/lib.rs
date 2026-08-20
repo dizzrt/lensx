@@ -2,14 +2,9 @@ pub mod app_preferences;
 pub mod launcher_action_collections;
 pub mod launcher_surface;
 pub mod launcher_window;
-#[cfg(all(target_os = "macos", feature = "macos-accessory-evidence"))]
-pub(crate) mod macos_accessory_evidence;
 pub(crate) mod macos_launcher;
 use std::sync::Arc;
 use tauri::Manager;
-#[cfg(feature = "config-lens-cold-open-harness")]
-#[doc(hidden)]
-pub mod config_lens_cold_open_harness;
 pub(crate) mod frame_aware_navigation_policy;
 #[cfg(target_os = "macos")]
 pub(crate) mod frame_aware_navigation_setup;
@@ -44,7 +39,6 @@ pub mod plugin_resource_contract;
 pub mod plugin_resource_service;
 pub(crate) mod plugin_resource_url;
 pub(crate) mod plugin_runtime_security_policy;
-pub(crate) mod plugin_runtime_stage;
 pub mod plugin_scoped_storage;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -172,8 +166,6 @@ pub fn run() {
             }
             launcher_window::setup_launcher_window(app.handle());
             launcher_surface::setup_launcher_surface(app.handle());
-            #[cfg(all(target_os = "macos", feature = "macos-accessory-evidence"))]
-            macos_accessory_evidence::start(app.handle())?;
             Ok(())
         })
         .build(tauri::generate_context!())

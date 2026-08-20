@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@rstest/core';
 
-import { validationRegistry } from '../scripts/validation/catalog.ts';
+import { isProhibitedEnvironmentCommand, validationRegistry } from '../scripts/validation/catalog.ts';
 import { executePlan, executeWritableTarget, planGates, validateRegistry } from '../scripts/validation/runner.ts';
 import type { ValidationRegistry, ValidationStep } from '../scripts/validation/types.ts';
 
@@ -14,8 +14,6 @@ const step = (id: string, environment: Readonly<Record<string, string>> = {}): V
   platform: 'any',
   safety: {
     readOnly: true,
-    launchesBrowser: false,
-    launchesNativeApp: false,
     writesCommittedArtifacts: false,
   },
 });
@@ -24,7 +22,6 @@ const registry = (gates: ValidationRegistry['gates'], steps: ValidationRegistry[
   gates,
   steps,
   generateTargets: [],
-  evidenceTargets: [],
 });
 
 describe('validation Gate registry and runner', () => {
@@ -99,12 +96,33 @@ describe('validation Gate registry and runner', () => {
     );
   });
 
-  test('requires explicit write authorization before Generate or Evidence starts', () => {
+  test('requires explicit write authorization before Generate starts', () => {
     let calls = 0;
     const target = { id: 'fixture', description: 'fixture', platform: 'any' as const, steps: [step('write')] };
-    expect(() => executeWritableTarget('evidence', target, '/repo', false, () => ({ status: ++calls }))).toThrow(
+    expect(() => executeWritableTarget(target, '/repo', false, () => ({ status: ++calls }))).toThrow(
       '[validation/write-required]',
     );
     expect(calls).toBe(0);
+  });
+
+  test.each([
+    'node scripts/verify-visual.mjs',
+    'cargo run --example native_harness',
+    'node scripts/write-evidence.ts',
+    'rsbuild preview',
+    'open Product.app',
+  ])('classifies %s as prohibited environment validation', (command) => {
+    expect(isProhibitedEnvironmentCommand(command)).toBe(true);
+  });
+
+  test.each([
+    'rstest',
+    'cargo test --manifest-path src-tauri/Cargo.toml',
+    'biome check .',
+    'tsc --noEmit',
+    'rsbuild build',
+    'pnpm --dir packages/plugin-ui run test:pack',
+  ])('allows deterministic command %s', (command) => {
+    expect(isProhibitedEnvironmentCommand(command)).toBe(false);
   });
 });

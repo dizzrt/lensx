@@ -284,23 +284,17 @@ Shell layout and spacing in UnoCSS utilities.
   boundaries do not capture them.
 - Cover active-page render failures through the page-level boundary so the
   context header and close control remain usable.
-- Complete native macOS acceptance at the fixed 650px viewport for launcher
-  top-region changes. Drag the real window from top blank space, the search
-  input, non-interactive page context, and the avatar in `home`, `search`, and
-  `page`; then regress caret placement, English and Chinese IME input, keyboard
-  selection, page close, hide-on-blur, shortcut restore, and fixed
-  320/480/600px heights. Save screenshots and inspect computed styles for the
-  continuous surface, rounded corners, transparent background, avatar, and top
-  spacing.
-- For segmented page-context changes, capture `650×600px` page screenshots in
-  English light, Simplified Chinese light, and at least one dark combination.
-  Inspect computed styles and geometry for content-sized capsule width,
-  token-derived segment hierarchy, the diagonal divider, close-button adjacency
-  and keyboard focus, retained avatar geometry, and long-text ellipsis without
-  overlap.
+- For Launcher top-region changes, cover drag classification, caret and input
+  routing, keyboard selection, page close, hide-on-blur, shortcut restoration,
+  and the fixed 320/480/600px modes through component, controller, and Rust
+  policy tests.
+- For segmented page-context changes, test English and Simplified Chinese,
+  light and dark semantic tokens, close-button adjacency and keyboard focus,
+  retained avatar state, and long-text ellipsis through DOM and state
+  assertions.
 - Add focused tests for extracted domain functions.
 - Avoid snapshots that obscure meaningful behavioral assertions.
-- For Plugin management changes, capture every maintained state at `650×600`
-  in English and Simplified Chinese, light and dark. Inspect the split surface,
-  selected fill, borders, overflow, long names/diagnostics, modal contrast, and
-  disabled/focus states through computed styles as well as screenshots.
+- For Plugin management changes, cover every maintained state in English and
+  Simplified Chinese, light and dark. Assert split-surface semantics, selection,
+  borders and overflow classes, long names and diagnostics, modal behavior,
+  disabled state, and focus recovery.

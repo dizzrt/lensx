@@ -14,7 +14,6 @@ const bootstrap = read('src/app/AppBootstrap.tsx');
 const rust = read('src-tauri/src/plugin_data_management.rs');
 const storage = read('src-tauri/src/plugin_scoped_storage.rs');
 const styles = read('src/styles/global.less');
-const visual = read('scripts/verify-plugin-management-visual.mjs');
 const roadmap = read('plugin-roadmap.md');
 
 for (const marker of [
@@ -73,9 +72,6 @@ for (const marker of [
 ]) {
   if (!styles.includes(marker)) fail(`management styles are missing ${marker}`);
 }
-for (const marker of ['650', '600', 'Page.captureScreenshot', 'surfaceDisplay', 'states']) {
-  if (!visual.includes(marker)) fail(`visual acceptance is missing ${marker}`);
-}
 if (!roadmap.includes('- [x] **Task 6.1：新增插件管理设置页面**')) {
   fail('Roadmap Task 6.1 completion drifted');
 }
@@ -103,6 +99,4 @@ for (const publicFile of [
   }
 }
 
-console.log(
-  'Checked management facade, private boundaries, App composition, continuous UI, visual evidence, and docs.',
-);
+console.log('Checked management facade, private boundaries, App composition, semantic UI states, and docs.');

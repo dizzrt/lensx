@@ -54,13 +54,14 @@ pnpm run gate -- ci-plugins
 
 入口会发现直接插件，计算其传递公共 `packages/*` 依赖，按拓扑顺序构建这些 package，
 随后为每个插件依次运行 `typecheck`、`test`、`check`、`build` 和 `test:e2e`。
-声明了 `visual` 时也会把它作为阻塞阶段执行。没有直接插件时，命令会明确报告成功 no-op。
+`test:e2e` 是可选阶段，只允许 build 后确定性的纯 Node 产物检查。每类 lifecycle 恰好运行一次；
+递归 lifecycle 或环境型阶段会在执行前触发策略失败。没有直接插件时，命令会明确报告成功 no-op。
 
 依赖准备不会信任已有 `dist`，也不会增加源码 alias。插件仍只能消费声明的公共 package
 exports，不能消费 Host 或 Tauri 私有源码。
 
-视觉验证使用 headless/windowless 模式，每次浏览器尝试都有新的临时 profile。preview 进程会
-先收到优雅终止请求，只在有界超时后强制终止，并在成功或失败后删除临时 profile。
+Plugins CI 不启动浏览器、真实 WebView、GUI 应用、Launch Services 或原生交互 harness，
+也不维护截图、像素基线或目标环境性能输出。
 
 ## 策略与失败恢复
 
@@ -70,9 +71,8 @@ exports，不能消费 Host 或 Tauri 私有源码。
 pnpm run gate -- ci-workflows
 ```
 
-阶段失败后，先修复原因并重跑失败阶段，再重跑完整的对应 CI 入口。浏览器门禁必须在批准的
-macOS 执行上下文中使用 fresh profile；仅由 sandbox 导致的浏览器失败属于环境失败，应保持命令
-不变重试，不能跳过或弱化。
+阶段失败后，先修复原因并重跑失败阶段，再重跑完整的对应 CI 入口。确定性 CI 通过后，
+不存在需要跳过或恢复的可选环境验证路径。
 
 仓库当前只支持 macOS CI，并有意不提供自动版本与发布 workflow。如果 branch protection 仍要求
 已删除的 check 名称，需要在仓库设置中切换到 LensX CI 与 Plugins CI 的稳定 job 名称。

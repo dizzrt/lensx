@@ -13,14 +13,5 @@
     "target": "ES2022",
     "types": ["@testing-library/jest-dom"]
   },
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "tests/**/*.ts",
-    "tests/**/*.tsx",
-    "visual/**/*.ts",
-    "visual/**/*.tsx",
-    "rsbuild.config.ts",
-    "rstest.config.ts"
-  ]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "tests/**/*.tsx", "rsbuild.config.ts", "rstest.config.ts"]
 }

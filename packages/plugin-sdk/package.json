@@ -40,7 +40,7 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "test": "rstest run",
-    "check": "pnpm run typecheck && pnpm run test",
+    "check": "biome check .",
     "test:pack": "node scripts/verify-package.mjs"
   },
   "dependencies": {

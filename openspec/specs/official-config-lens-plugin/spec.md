@@ -5,6 +5,7 @@
 Define ConfigLens product behavior, language-processing invariants, public
 plugin boundaries, Runtime lifecycle, and the evidence required for Task 7.2.
 ## Requirements
+
 ### Requirement: ConfigLens MUST be a normal public-boundary official plugin
 
 The system MUST provide the product named `ConfigLens` in both `en-US` and `zh-CN` as the independent package `@lensx/official-config-lens` under the canonical source location `plugins/config-lens`, with plugin identity `dev.lensx.config-lens`. Its Manifest MUST use Contract `0.4.0`, contribute exactly one WebView Page and one Launcher Action targeting that Page, and declare that Page with `initial_size: 800×600` logical pixels and `resizable: true`. The declaration MUST use the same public Page presentation contract as external plugins and MUST request no Host permission, Runtime native setter, or unpublished capability. The plugin MUST consume only public plugin package exports and ordinary browser dependencies, and the Host MUST NOT import its source or grant authority based on its official repository location.
@@ -162,41 +163,47 @@ ConfigLens MUST keep input and output in the current Page memory only and MUST N
 
 All user-visible product copy except the unchanged `ConfigLens` brand MUST use an English-default catalog with a semantically aligned Simplified Chinese catalog. Because Host Page chrome already identifies the contributed Page, the Child WebView work area MUST NOT repeat a visible page-level main title or subtitle and MUST retain an accessible main or region name. Its ready layout MUST contain exactly a flexible `content` region followed by a semantic `footer`: the single editable Monaco surface MUST fill the complete content region, while the footer MUST contain the explicit language selector, non-color-only status, visible Format and Compact controls, and a bounded conditional diagnostics region. Diagnostics MUST remain accessible and scrollable without creating a third top-level layout region.
 
-The Page and lightweight startup feedback MUST respond to complete light/dark and locale context replacement through supported Plugin UI and Semi Design theming, preserve predictable keyboard/focus behavior, expose visible controls for every shortcut, and keep diagnostics in an appropriately bounded live region. Before Runtime Context is available, normal startup MUST remain visually empty while exposing accessible busy semantics and MUST NOT render a visible brand, progress indicator, or locale/theme-dependent message. A startup failure MAY reveal a focusable recovery control. Automated component, responsive and native visual validation MUST cover startup, absent repeated heading, content/footer order, `800×600` initial size, Host hard-min and larger user-resized sizes, both locales, both themes, long text, focus, empty, valid, invalid, limit and recovery states.
+The Page and lightweight startup feedback MUST respond to complete light/dark and locale context replacement through supported Plugin UI and Semi Design theming, preserve predictable keyboard/focus behavior, expose visible controls for every shortcut, and keep diagnostics in an appropriately bounded live region. Before Runtime Context is available, normal startup MUST remain visually empty while exposing accessible busy semantics and MUST NOT render a visible brand, progress indicator, or locale/theme-dependent message. A startup failure MAY reveal a focusable recovery control. Deterministic component and state tests MUST cover startup, absent repeated heading, content/footer order, initial and bounded resized dimensions, both locales, both themes, long text, focus, empty, valid, invalid, limit, and recovery states without screenshots, pixel comparison, browser rendering, or native visual validation.
 
 #### Scenario: Ready ConfigLens fills the available Page body
-- **WHEN** ConfigLens is ready at its initial or a user-resized viewport
+
+- **WHEN** ConfigLens is ready at its initial or a user-resized modeled viewport
 - **THEN** Monaco fills all space above the footer and relayouts without a second editor, clipped control, duplicated title, or document reload
 - **THEN** language, status, Format, Compact and any bounded diagnostics remain inside the footer in document and visual order
 
 #### Scenario: Locale and theme are replaced while editing
+
 - **WHEN** a ready Page receives a complete `zh-CN` dark context after an `en-US` light context
 - **THEN** footer controls, hints and diagnostics change to aligned Simplified Chinese and dark semantic tokens while the brand remains `ConfigLens`
 - **THEN** input, selected language, current generation, presentation attempt and current user size remain consistent
 
 #### Scenario: Bootstrap waits for Runtime Context
+
 - **WHEN** the Child WebView document is loaded before locale and theme Context is available
 - **THEN** normal startup remains visually empty while exposing accessible busy semantics without a visible brand, progress indicator, hard-coded locale-dependent copy or incorrect theme claim
 - **THEN** the complete Plugin UI adopts the validated locale/theme and content/footer layout when Context arrives
 
 #### Scenario: Keyboard user formats and recovers from an error
+
 - **WHEN** a user reaches the Page by keyboard, invokes Format through the footer button or `Ctrl/Cmd+Enter`, encounters a diagnostic and corrects the input
 - **THEN** focus remains visible and predictable, the bounded footer diagnostic is available without color alone, and the next operation can succeed
 - **THEN** the shortcut does not replace the visible button or trap focus inside Monaco
 
 ### Requirement: Task 7.2 completion MUST use the immutable official candidate through the full product lifecycle
 
-The same canonical ConfigLens `.lxp` bytes MUST pass plugin unit, integration, type, static, build, visual and `test:e2e` gates; two byte-identical packs; TypeScript and Rust inspection; ordinary local-install preparation; and target macOS WKWebView Runtime execution. Automated evidence MUST cover install, Action search, open, SDK ready, package-owned Monaco and Worker loading, four-language smoke, Launcher hide/shortcut restore without Runtime replacement or input loss, close, reopen, disable, upgrade and uninstall. Task 7.2 MUST remain incomplete until focused ConfigLens and official release gates, complete frontend/shared and Rust validation, bilingual documentation drift checks and strict OpenSpec validation all pass.
+The same canonical ConfigLens `.lxp` bytes MUST pass plugin unit, integration, type, static, build, and supported deterministic built-artifact checks; two byte-identical packs; TypeScript and Rust inspection; and ordinary local-install preparation. Deterministic lifecycle tests MUST cover install projection, Action search, open state, SDK-ready state, package-owned Monaco and Worker resource resolution, four-language processing, Launcher hide/shortcut restore state, close, reopen, disable, upgrade, and uninstall without requiring browser, WebView, GUI, or target macOS execution. Task 7.2 completion MUST require focused deterministic ConfigLens and official release gates, complete frontend/shared and Rust validation, bilingual documentation drift checks, and strict OpenSpec validation.
 
 #### Scenario: Complete candidate succeeds
-- **WHEN** one immutable ConfigLens candidate passes every plugin, package, install, Runtime, lifecycle, visual, documentation and repository final gate
-- **THEN** Roadmap Task 7.2 may be marked complete and the candidate may enter the existing digest-pinned official release handoff
-- **THEN** completion does not publish the desktop application, grant Host authority or make a release sidecar part of Runtime trust
 
-#### Scenario: Any language or lifecycle evidence fails
-- **WHEN** one supported language, fidelity invariant, Worker boundary, installation step, search/open/hide/restore/close/disable/upgrade/uninstall path or final validation command fails or remains unverified
-- **THEN** Task 7.2 remains incomplete and ConfigLens MUST NOT be described as a fully delivered four-language official plugin
-- **THEN** after correction, the failed command and the complete final validation set MUST run again without reusing an invalid candidate
+- **WHEN** one immutable ConfigLens candidate passes every supported plugin, package, install-projection, lifecycle, documentation, and repository final gate
+- **THEN** Roadmap Task 7.2 may be marked complete and the candidate may enter the existing digest-pinned official release handoff
+- **THEN** completion does not claim real Runtime execution, publish the desktop application, grant Host authority, or make a release sidecar part of Runtime trust
+
+#### Scenario: Any language or deterministic lifecycle check fails
+
+- **WHEN** one supported language, fidelity invariant, Worker boundary, installation preparation, modeled lifecycle path, or final validation command fails
+- **THEN** Task 7.2 remains incomplete and ConfigLens MUST NOT be described as fully validated under the maintained deterministic scope
+- **THEN** after correction, the failed command and complete final validation set MUST run again without reusing an invalid candidate
 
 ### Requirement: ConfigLens MUST consume the same Child WebView Runtime as external plugins
 ConfigLens Manifest, Page presentation, SDK initialization, package candidate, installation and Page execution MUST use the public `0.4.0` WebView contract, `@lensx/plugin-sdk/webview` and the production Child WebView service. Repository location, Publisher and official release metadata MUST NOT select a privileged bridge, direct Host import, alternate WebView configuration, native Window method or retained iframe path.
@@ -209,36 +216,18 @@ ConfigLens Manifest, Page presentation, SDK initialization, package candidate, i
 - **WHEN** ConfigLens attempts an undeclared Tauri, Host, position, size, resizable, monitor, maximize or fullscreen command
 - **THEN** the same Runtime boundary rejects it with zero privileged side effect
 
-### Requirement: ConfigLens performance evidence MUST separate container startup from editor operations
-ConfigLens MUST use a minimal HTML-referenced bootstrap graph that starts the public `@lensx/plugin-sdk/webview` transport before importing or mounting React, React DOM, Semi Design, Plugin UI, Monaco or language adapters. HTML-referenced JavaScript MUST total at most 256 KiB and HTML-referenced CSS MUST total at most 64 KiB. After valid Runtime Context arrives, ConfigLens MUST load the complete React/Semi UI and Monaco without creating a second SDK client or Session. Monaco loading MUST remain single-flight, and a Page MUST count as first-interactive only after the current editable model is created and laid out, the package-owned editor Worker is ready, and target macOS evidence confirms keyboard input reaches that editor. The language Worker MAY remain demand-created and MUST NOT be required for an empty editor to become interactive.
+### Requirement: ConfigLens bootstrap and editor resources MUST remain deterministically bounded
 
-Real target macOS evidence MUST run the canonical ConfigLens candidate through the production Child WebView, Resource Service, bridge and SDK path. Over at least twenty fresh release-like opens, Host loading-to-bridge-ready p95 MUST be at most 250 milliseconds and first-interactive p95 MUST be at most 500 milliseconds. Over at least twenty fresh Plugin Development Mode snapshot opens, first-interactive p95 MUST be at most 1000 milliseconds. Evidence MUST record bounded cold Runtime stages separately from warm editor/Worker operations and Host responsiveness. After SDK and Worker readiness, explicit formatting of the maintained small JSON fixture MUST complete within 100 milliseconds at p95 over forty samples in the reference harness; timeout, crash and retry MUST remain recoverable. No gate MAY attribute bundle, editor or Worker delay to the container without stage evidence, and no static committed summary MAY substitute for rerunning the current product path.
+ConfigLens MUST use a minimal HTML-referenced bootstrap graph that starts the public `@lensx/plugin-sdk/webview` transport before importing or mounting React, React DOM, Semi Design, Plugin UI, Monaco, or language adapters. Built HTML-referenced JavaScript MUST total at most 256 KiB and HTML-referenced CSS MUST total at most 64 KiB. After valid Runtime Context arrives, ConfigLens MUST load the complete React/Semi UI and Monaco without creating a second SDK client or Session. Monaco loading MUST remain single-flight, the package-owned editor Worker MUST resolve from the candidate, and the language Worker MAY remain demand-created. Deterministic bundle inspection, unit tests, and resource-resolution tests SHALL enforce these properties without target-environment timing claims.
 
-#### Scenario: Minimal bootstrap reaches the bridge
-- **WHEN** a fresh ConfigLens Child WebView loads its canonical entry document
-- **THEN** the HTML-referenced graph stays within 256 KiB JavaScript and 64 KiB CSS and starts the public SDK transport without loading React, Semi Design, Plugin UI, Monaco or language adapters first
-- **THEN** bridge-ready still waits for the native finished-load boundary and grants no authority beyond the current source-bound Session
+#### Scenario: Minimal bootstrap bundle is inspected
 
-#### Scenario: Release-like cold open becomes interactive
-- **WHEN** at least twenty fresh canonical candidate opens run through the current target macOS product Runtime
-- **THEN** Host loading-to-bridge-ready p95 is at most 250 milliseconds and action-to-first-interactive p95 is at most 500 milliseconds
-- **THEN** each sample proves a real editor model, layout, package-owned editor Worker, keyboard input and terminal cleanup
+- **WHEN** the canonical ConfigLens candidate is built and its HTML-referenced graph is inspected
+- **THEN** JavaScript and CSS remain within the maintained limits and the bootstrap starts the public SDK transport before the UI/editor graph
+- **THEN** the candidate contains the package-owned editor Worker and requires no second SDK client or Session
 
-#### Scenario: Development snapshot cold open becomes interactive
-- **WHEN** at least twenty fresh ConfigLens development snapshots run through the same target macOS production Runtime path
-- **THEN** action-to-first-interactive p95 is at most 1000 milliseconds and stage evidence identifies development snapshot proof separately
-- **THEN** Development Mode receives no alternate bridge, Runtime authority or relaxed teardown
+#### Scenario: Resource boundary drifts
 
-#### Scenario: Warm small JSON is formatted
-- **WHEN** the ready ConfigLens editor explicitly formats the maintained four-case small JSON corpus forty times
-- **THEN** p95 action-to-model-update latency is at most 100 milliseconds and Host heartbeat remains responsive
-- **THEN** measurement records sizes and stage durations but not user content
-
-#### Scenario: Cold open is slow
-- **WHEN** Host loading, release-like first-interactive or development first-interactive exceeds its maintained budget
-- **THEN** replayable evidence identifies resolve, WebView creation, navigation, load, bridge, SDK, UI bundle, editor and Worker stages separately
-- **THEN** the change remains incomplete until the responsible stage is fixed or the accepted budget is explicitly revised in the planning artifacts and requirements
-
-#### Scenario: Cold-open gate uses only committed values
-- **WHEN** validation reads a historical timing JSON without rerunning the canonical candidate through the target macOS product Runtime
-- **THEN** ConfigLens performance evidence is incomplete even if schema and metric-calculation tests pass
+- **WHEN** the bootstrap exceeds a maintained byte limit, eagerly imports the editor graph, duplicates SDK initialization, or omits a required Worker asset
+- **THEN** deterministic build or package validation fails
+- **THEN** completion does not substitute a historical timing record or real-environment sample

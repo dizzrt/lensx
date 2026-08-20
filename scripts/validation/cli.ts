@@ -41,26 +41,26 @@ const runGate = (arguments_: readonly string[]): void => {
   if (!planOnly) executePlan(planGates(validationRegistry, selectedGateIds), rootDir);
 };
 
-const runWritable = (kind: 'evidence' | 'generate', arguments_: readonly string[]): void => {
-  const targets = kind === 'generate' ? validationRegistry.generateTargets : validationRegistry.evidenceTargets;
+const runGenerate = (arguments_: readonly string[]): void => {
+  const targets = validationRegistry.generateTargets;
   if (arguments_.includes('--list')) {
-    printIds(`${kind} targets`, targets);
+    printIds('generate targets', targets);
     return;
   }
   const write = arguments_.includes('--write');
   const ids = arguments_.filter((argument) => argument !== '--write');
-  if (ids.length !== 1) throw new Error(`[validation/usage] ${kind} requires exactly one target ID.`);
+  if (ids.length !== 1) throw new Error('[validation/usage] generate requires exactly one target ID.');
   const target = targets.find((candidate) => candidate.id === ids[0]);
-  if (target === undefined) throw new Error(`[validation/unknown-${kind}-target] ${ids[0]}`);
-  executeWritableTarget(kind, target, rootDir, write);
+  if (target === undefined) throw new Error(`[validation/unknown-generate-target] ${ids[0]}`);
+  executeWritableTarget(target, rootDir, write);
 };
 
 export const runValidationCli = (arguments_: readonly string[]): void => {
   validateRegistry(validationRegistry);
   const [kind, ...rest] = arguments_;
   if (kind === 'gate') runGate(rest);
-  else if (kind === 'generate' || kind === 'evidence') runWritable(kind, rest);
-  else throw new Error('[validation/usage] expected gate, generate, or evidence dispatcher.');
+  else if (kind === 'generate') runGenerate(rest);
+  else throw new Error('[validation/usage] expected gate or generate dispatcher.');
 };
 
 try {

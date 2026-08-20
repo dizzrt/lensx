@@ -6,13 +6,14 @@ import {
   discoverWorkspaceMembers,
   type LifecycleCommandRunner,
   REQUIRED_LIFECYCLE_SCRIPTS,
-  sortWorkspaceMembers,
+  selectWorkspaceBuildOrder,
   type WorkspaceMember,
-  workspaceDependencyNames,
 } from './workspace-lifecycle.ts';
 
-export const REQUIRED_PLUGIN_CI_SCRIPTS = [...REQUIRED_LIFECYCLE_SCRIPTS, 'test:e2e'] as const;
+export const REQUIRED_PLUGIN_CI_SCRIPTS = REQUIRED_LIFECYCLE_SCRIPTS;
 export const PLUGIN_CI_SCRIPT_ORDER = ['typecheck', 'test', 'check', 'build', 'test:e2e'] as const;
+const PROHIBITED_PLUGIN_SCRIPT =
+  /(?:visual|screenshot|pixel|playwright|chrome|chromium|webview[^\n]*(?:run|harness)|cargo\s+run|tauri\s+dev|\.app\b|launch services|evidence)/iu;
 
 const defaultCommandRunner: LifecycleCommandRunner = (cwd, script) => {
   const result = spawnSync('pnpm', ['run', script], { cwd, stdio: 'inherit' });
@@ -27,21 +28,10 @@ export const selectPluginDependencyBuildOrder = (
   members: readonly WorkspaceMember[],
   plugins: readonly WorkspaceMember[],
 ): WorkspaceMember[] => {
-  const publicPackages = members.filter((member) => member.kind === 'public-package');
-  const publicByName = new Map(publicPackages.map((member) => [member.name, member]));
-  const required = new Set<string>();
-  const pending = plugins.flatMap((plugin) => [...workspaceDependencyNames(plugin.manifest)]);
-
-  while (pending.length > 0) {
-    const name = pending.shift();
-    if (name === undefined || required.has(name)) continue;
-    const dependency = publicByName.get(name);
-    if (dependency === undefined) continue;
-    required.add(name);
-    pending.push(...workspaceDependencyNames(dependency.manifest));
-  }
-
-  return sortWorkspaceMembers(publicPackages).filter((member) => required.has(member.name));
+  const pluginNames = new Set(plugins.map((plugin) => plugin.name));
+  return selectWorkspaceBuildOrder(members, plugins).filter(
+    (member) => member.kind === 'public-package' && !pluginNames.has(member.name),
+  );
 };
 
 const runRequiredScript = (member: WorkspaceMember, script: string, runCommand: LifecycleCommandRunner): void => {
@@ -75,6 +65,15 @@ export const runPluginsCi = ({
   );
   if (missing.length > 0) throw new Error(missing.join('\n'));
 
+  const prohibited = plugins.flatMap((plugin) =>
+    Object.entries(plugin.manifest.scripts ?? {}).flatMap(([name, command]) =>
+      name === 'visual' || PROHIBITED_PLUGIN_SCRIPT.test(`${name} ${command}`)
+        ? [`[ci/prohibited-plugin-script] ${plugin.relativePath}/package.json: scripts.${name}.`]
+        : [],
+    ),
+  );
+  if (prohibited.length > 0) throw new Error(prohibited.join('\n'));
+
   const dependencies = selectPluginDependencyBuildOrder(members, plugins);
   for (const dependency of dependencies) {
     if (typeof dependency.manifest.scripts?.build !== 'string') {
@@ -86,8 +85,10 @@ export const runPluginsCi = ({
   }
 
   for (const plugin of plugins) {
-    for (const script of PLUGIN_CI_SCRIPT_ORDER) runRequiredScript(plugin, script, runCommand);
-    if (typeof plugin.manifest.scripts?.visual === 'string') runRequiredScript(plugin, 'visual', runCommand);
+    for (const script of PLUGIN_CI_SCRIPT_ORDER) {
+      if (script === 'test:e2e' && typeof plugin.manifest.scripts?.[script] !== 'string') continue;
+      runRequiredScript(plugin, script, runCommand);
+    }
   }
 
   log(

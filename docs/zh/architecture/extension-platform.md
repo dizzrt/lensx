@@ -469,13 +469,10 @@ authority/path scope、plugin key 与 version 逐字节一致。旧共享 `lensx
 或 reflected-null CORS。既有 fixed 404/405/500 oracle、`no-store`、bounded diagnostic、path/MIME 检查、
 opened-file 验证与 lifecycle revocation 保持不变。
 
-已提交的真实 macOS 26.6 / WKWebView `605.1.15` evidence 使用 canonical normal、malicious 与 replacement
-`.lxp`，并让请求经过真实 `PluginResourceService`。在下游策略
-`sandbox="allow-scripts allow-same-origin"` 下，每个隔离 authority 都序列化为稳定 non-opaque origin，
-能够加载 HTML、CSS、image、classic script 与 package-relative ES Module graph，并且同名 storage key
-只保留自身值。Host storage 不变；parent DOM、`frameElement` 与全部 Tauri surface 均不可达；代表性
-privileged handler 保持 zero-hit。evidence 有严格边界，不包含 raw URL、scope、path、storage value 或
-invoke secret。
+确定性 Resource Service、origin parser、package、bridge 与恶意 fixture 测试覆盖 canonical normal、
+malicious 和 replacement `.lxp`、稳定的 per-generation origin key、package-relative module graph、
+storage partition 事实、不可达的 Host DOM/Tauri surface 与 zero privileged handler hit。
+这些检查不声称执行了目标 WebView。
 
 运行：
 
@@ -511,23 +508,16 @@ initialization 保持 main-frame-only：Host
 继续拥有 `isTauri`、`__TAURI_INTERNALS__`、metadata、invoke initialization 与 IPC，而
 descendant document 看不到这些 surface。
 
-项目提交的 15-case 真实 WKWebView evidence 记录 macOS、WKWebView `605.1.15`、Tauri
-`2.11.5`、Wry `0.55.1`、native custom-protocol shape、native frame class、pre-commit outcome、
-bootstrap isolation 与有界 callback count，且不记录 URL 或私有 identity。每次运行还会在打开目标
-document 前验证 activate、replacement、late disposal、current disposal 与 idle-to-reactivate lease
-lifecycle。Host、external、
-cross-plugin、stale、fragment 与 data document attempt 会进入 policy 并被拒绝。WKWebView 会在
-navigation callback 前 preflight-block `file:`、no-op `javascript:` 与 same-document `blob:`；
-evidence 如实记录 `blocked_by_webview`、原 document 保留和 callback count 不变，而不宣称 policy
-deny。popup/targeted-context 与 blob-download 用例会进入各自独立 deny hook。运行：
+确定性 Rust 与 TypeScript matrix 验证 activate、replacement、late disposal、current
+disposal、idle-to-reactivate lease、frame classification、current source binding、popup/download
+拒绝与 Host bootstrap 隔离；这些检查不声称执行了目标 WebView。运行：
 
 ```bash
 pnpm run gate -- frame-aware-webview-navigation-policy
 ```
 
-该 capability 仅支持 macOS，不宣称 Windows 或 Linux 支持。Task 4.2 container 会消费它的精确
-target lease；下文已交付的 Session 也消费该 lease，但不会改变 native policy contract。Host API 与
-permissions 仍是后续独立 capability。
+产品仍只支持 macOS。Task 4.2 container 会消费精确 target lease；下文已交付的 Session 也消费该
+lease，但不会改变 native policy contract。Host API 与 permissions 仍是后续独立 capability。
 
 ## 已交付的 macOS 隔离 Plugin Child WebView Runtime
 
@@ -551,8 +541,8 @@ path 或 native handle authority。
 
 运行 `pnpm run gate -- plugin-child-webview-runtime` 验证 slot、origin/resource binding、开放 Web 能力、
 navigation policy、terminal lifecycle、ACL matrix、current fixture 与 workspace boundary。运行
-`pnpm run gate -- plugin-child-webview-session` 验证 readiness、RPC、Host dispatch 与 cleanup。真实
-WKWebView evidence 仅适用于 macOS，不宣称 Windows 或 Linux Runtime 支持。
+`pnpm run gate -- plugin-child-webview-session` 验证 readiness、RPC、Host dispatch 与 cleanup。
+这些 Gate 是确定性的 contract 与 lifecycle 验证；不宣称 Windows 或 Linux Runtime 支持。
 
 ## 已交付的 Plugin Runtime CSP 与安全生命周期
 
@@ -589,9 +579,9 @@ graceful exit 不计数；generation 变化或连续 30,000 ms 健康 `ready` �
 可见 failure 只使用 `runtime_load_timeout`、`runtime_handshake_timeout`、
 `runtime_session_disconnected`、`runtime_security_policy_failure`、`runtime_crash_loop` 或
 `runtime_unavailable`，并通过现有可访问 feedback surface 提供 canonical English 和语义一致的简体中文
-文案。diagnostic/evidence 不包含完整或 blocked URL、origin/scope、path、nonce/bridge 内容、payload、
-storage value、raw exception 或 stack，也没有远程 CSP report channel。已提交的真实 WKWebView matrix
-仅支持 macOS。公共 SDK WebView transport 不会继承这些 Host 私有 attempt、timer、breaker record 或
+文案。diagnostic 不包含完整或 blocked URL、origin/scope、path、nonce/bridge 内容、payload、
+storage value、raw exception 或 stack，也没有远程 CSP report channel。公共 SDK WebView transport
+不会继承这些 Host 私有 attempt、timer、breaker record 或
 failure code。运行 `pnpm run gate -- open-isolated-plugin-runtime` 可执行组合 gate
 及其 Resource、origin、navigation、Child WebView、Session、workspace 与 public-tarball 前置门禁。
 
@@ -758,9 +748,9 @@ origin、exception、stack、Port、provider 或 Host object，sink throw 也不
 本次交付不新增 batch/streaming RPC、持续调用频率限制、iframe/CPU/memory 监控、插件暂停、隔离升级、自动
 恢复、公共 policy 配置或 diagnostic history。这些 Runtime resource control 仍属于 Task 7.5 或后续独立 change。
 
-运行 `pnpm run gate -- plugin-sdk-transport` 可验证 codec drift、SDK/Testkit、iframe/Host adapter、真实
-tarball no-DOM/browser consumer、真实 MessageChannel integration、Runtime lifecycle 与有界 macOS
-WKWebView evidence。本交付不声称 Windows/Linux Runtime transport 支持。
+运行 `pnpm run gate -- plugin-sdk-transport` 可验证 codec drift、SDK/Testkit、Host adapter、真实
+tarball no-DOM consumer、MessageChannel integration、Runtime lifecycle 与确定性恶意输入边界。
+本交付不声称 Windows/Linux Runtime transport 支持。
 运行 `pnpm run gate -- plugin-rpc-validation` 可验证 RPC policy、恶意 fixture、admission/egress race、
 Dispatcher/provider integration、私有边界和真实资源拒绝 evidence。
 
@@ -855,8 +845,8 @@ ambiguous、linked、escaped、stale、enabled、quarantined 或 degraded eviden
 
 管理表面不暴露 raw path/error、Publisher trust、
 Registry patch/history protocol 或公共管理 API，也不会通过 Contract、SDK、Testkit 或 Plugin UI 导出任何
-管理能力。运行 `pnpm run gate -- plugin-management-settings` 可验证私有边界、facade/UI 回归、公共 package
-检查，以及固定 `650×600` 的双语 light/dark screenshot 与 computed style。
+管理能力。运行 `pnpm run gate -- plugin-management-settings` 可验证私有边界、facade/UI 回归、公共
+package 检查、双语状态语义、theme token、keyboard 行为与 focus recovery。
 
 ## 已交付的公共 Plugin Testkit
 
@@ -955,8 +945,8 @@ Runtime dependency。React 插件安装这些 peers，并构建一个自包含 b
 获得 external、import map、window global、React 实例或私有 CSS。非 React 插件可以完全忽略
 UI，继续只消费 Contract 与 SDK。
 
-package tests、真实 tarball Rsbuild consumer、module graph/bundle 检查和 `650×600` browser
-visual matrix 共同覆盖公共边界、locale/theme、可访问性、键盘恢复、focus 与双语长内容。本次
+package tests、真实 tarball Rsbuild build consumer、module graph/bundle 检查和 Rstest component
+断言共同覆盖公共边界、locale/theme、可访问性、键盘恢复、focus 与双语长内容。本次
 交付不会创建 iframe、Runtime session、可执行 Host API、installer、registry、template 或插件执行路径。
 
 ## Host Action Registry

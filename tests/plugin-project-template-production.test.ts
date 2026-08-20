@@ -8,7 +8,7 @@ import {
   inspectPluginPackage,
   type PluginPackageInputFile,
   packPluginPackage,
-} from '../packages/plugin-cli/dist/src/package-format/index.js';
+} from '../packages/plugin-cli/src/package-format/index.ts';
 import { createPluginSdk } from '../packages/plugin-sdk/src';
 import { createPluginWebviewTransport } from '../packages/plugin-sdk/src/webview';
 import { LauncherActionDispatcher, LauncherActionRegistry } from '../src/app/launcher/actions';
@@ -44,7 +44,10 @@ const collectPayload = (root: string): PluginPackageInputFile[] => {
       else if (entry.name !== 'modules.json') files.push({ path: relative(root, path), bytes: readFileSync(path) });
     }
   };
-  visit(root);
+  for (const relativePath of ['manifest.json', 'index.html']) {
+    files.push({ path: relativePath, bytes: readFileSync(resolve(root, relativePath)) });
+  }
+  visit(resolve(root, 'src'));
   return files;
 };
 
@@ -52,27 +55,27 @@ const opaqueId = (sequence: number) => sequence.toString(16).padStart(32, '0');
 const waitFor = async (predicate: () => boolean): Promise<void> => {
   const deadline = Date.now() + 1_000;
   while (!predicate()) {
-    if (Date.now() >= deadline) throw new Error('Template production-component harness timed out.');
+    if (Date.now() >= deadline) throw new Error('Template production-component fixture timed out.');
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 1));
   }
 };
 
-class ChildWebviewNativeHarness implements PluginChildWebviewHostNativePort {
-  readonly bridges = new Map<string, ChildWebviewBridgeHarness>();
-  readonly dispatches = new Map<string, ChildWebviewBridgeHarness>();
+class ChildWebviewNativeAdapterFixture implements PluginChildWebviewHostNativePort {
+  readonly bridges = new Map<string, ChildWebviewBridgeFixture>();
+  readonly dispatches = new Map<string, ChildWebviewBridgeFixture>();
 
-  register(bridge: ChildWebviewBridgeHarness): void {
+  register(bridge: ChildWebviewBridgeFixture): void {
     this.bridges.set(bridge.sessionId, bridge);
   }
 
-  unregister(bridge: ChildWebviewBridgeHarness): void {
+  unregister(bridge: ChildWebviewBridgeFixture): void {
     if (this.bridges.get(bridge.sessionId) === bridge) this.bridges.delete(bridge.sessionId);
     for (const [dispatchId, owner] of this.dispatches) {
       if (owner === bridge) this.dispatches.delete(dispatchId);
     }
   }
 
-  bindDispatch(dispatchId: string, bridge: ChildWebviewBridgeHarness): void {
+  bindDispatch(dispatchId: string, bridge: ChildWebviewBridgeFixture): void {
     this.dispatches.set(dispatchId, bridge);
   }
 
@@ -93,7 +96,7 @@ class ChildWebviewNativeHarness implements PluginChildWebviewHostNativePort {
   }
 }
 
-class ChildWebviewBridgeHarness {
+class ChildWebviewBridgeFixture {
   readonly bootstrap: Readonly<Record<string, unknown>>;
   readonly listeners = new Set<(frame: unknown) => void>();
   readonly outboundFrames: unknown[] = [];
@@ -106,7 +109,7 @@ class ChildWebviewBridgeHarness {
     readonly sessionId: string,
     readonly identity: PluginHostApiAuthorityIdentity,
     readonly controller: PluginChildWebviewHostDispatcherController,
-    readonly native: ChildWebviewNativeHarness,
+    readonly native: ChildWebviewNativeAdapterFixture,
   ) {
     this.bootstrap = Object.freeze({
       contract_version: WEBVIEW_BRIDGE_CARRIER_VERSION,
@@ -208,7 +211,7 @@ class ChildWebviewBridgeHarness {
   }
 }
 
-const installBridge = (bridge: ChildWebviewBridgeHarness): void => {
+const installBridge = (bridge: ChildWebviewBridgeFixture): void => {
   Object.defineProperty(globalThis, '__LENSX_PLUGIN_WEBVIEW_BRIDGE__', {
     configurable: true,
     value: bridge.surface,
@@ -219,7 +222,7 @@ describe('plugin project templates through production Child WebView components',
   for (const directory of templateDirectories) {
     test(directory, async () => {
       const templateRoot = resolve(repositoryRoot, 'examples/plugins', directory);
-      const packed = await packPluginPackage(collectPayload(resolve(templateRoot, 'dist')));
+      const packed = await packPluginPackage(collectPayload(templateRoot));
       const inspection = await inspectPluginPackage(packed.bytes);
       if (inspection.status !== 'compatible') throw new Error('Template package must be compatible.');
       const manifest = inspection.manifest;
@@ -323,19 +326,6 @@ describe('plugin project templates through production Child WebView components',
       const descriptor = await resolver.resolve({ activePage: openedPage, pageResolution, attempt: 0 });
       expect(resourceReads).toEqual([entryId]);
 
-      const modules = JSON.parse(readFileSync(resolve(templateRoot, 'dist/modules.json'), 'utf8')) as string[];
-      if (directory === 'react-semi') {
-        for (const ownedRuntime of [
-          ['react'],
-          ['@douyinfe+semi-ui', '@douyinfe/semi-ui'],
-          ['@lensx+plugin-ui', '@lensx/plugin-ui', '/packages/plugin-ui/'],
-        ]) {
-          expect(modules.some((identifier) => ownedRuntime.some((candidate) => identifier.includes(candidate)))).toBe(
-            true,
-          );
-        }
-      }
-
       const previousBridge = Object.getOwnPropertyDescriptor(globalThis, '__LENSX_PLUGIN_WEBVIEW_BRIDGE__');
       const context = createMutablePluginHostApiContextSource({ locale: 'zh-CN', theme: 'dark' });
       const factory = createPluginHostApiDispatcherFactory({
@@ -343,12 +333,12 @@ describe('plugin project templates through production Child WebView components',
         context,
         navigation,
       });
-      const native = new ChildWebviewNativeHarness();
+      const native = new ChildWebviewNativeAdapterFixture();
       const hostDispatcher = createPluginChildWebviewHostDispatcherController(factory, native);
       const lifecycle = createPluginRuntimeLifecycleService();
       const oldContextEvents: unknown[] = [];
       const clients: Array<ReturnType<typeof createPluginSdk>> = [];
-      const bridges: ChildWebviewBridgeHarness[] = [];
+      const bridges: ChildWebviewBridgeFixture[] = [];
       let sessionSequence = 0;
 
       const connect = async (attemptNumber: number) => {
@@ -364,7 +354,7 @@ describe('plugin project templates through production Child WebView components',
         expect(attempt.bindTrustedIdentity(currentDescriptor.entry_id, currentDescriptor.resource_generation)).toBe(
           true,
         );
-        const bridge = new ChildWebviewBridgeHarness(
+        const bridge = new ChildWebviewBridgeFixture(
           opaqueId(++sessionSequence),
           {
             entry_id: currentDescriptor.entry_id,

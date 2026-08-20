@@ -64,10 +64,10 @@ selected paths, stored values, or private failure details.
 8. At Runtime, distinguish native load, bridge ready, SDK context, disconnect,
    and timeout. A loading surface with no bridge ready points to document or
    transport startup; a context failure points to Host API compatibility.
-9. For native presentation problems, run
-   `pnpm run gate -- plugin-child-webview-macos-evidence`; maintainers can use
-   `pnpm run evidence -- plugin-child-webview-macos --write` on macOS to rerun the real
-   WKWebView matrix.
+9. For presentation problems, run
+   `pnpm run gate -- plugin-child-webview-runtime` and
+   `pnpm run gate -- plugin-child-webview-session`; these diagnose deterministic
+   contract and lifecycle boundaries and do not claim native rendering proof.
 
 Fix the first failing boundary and rerun from canonical inputs; do not reuse a
 generated cache from a previous failed attempt.

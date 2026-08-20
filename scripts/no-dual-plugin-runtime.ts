@@ -104,7 +104,6 @@ const exactAllowlist: Readonly<Record<string, readonly string[] | 'all'>> = Obje
   'plugins/config-lens/scripts/check.mjs': ['legacy-sdk-entry', 'legacy-sdk-factory'],
   'plugins/config-lens/scripts/test-e2e.mjs': ['legacy-sdk-entry', 'legacy-sdk-factory'],
   'scripts/check-plugin-development-mode.ts': ['legacy-sdk-entry', 'legacy-sdk-factory'],
-  'scripts/check-plugin-development-runtime-evidence.ts': ['legacy-sdk-entry', 'legacy-sdk-factory'],
   'scripts/check-plugin-project-template-package.ts': ['legacy-sdk-entry', 'legacy-sdk-factory'],
   'scripts/check-plugin-developer-cli.ts': ['legacy-sdk-factory'],
   'scripts/check-plugin-project-template-runtime.ts': [

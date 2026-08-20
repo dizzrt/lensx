@@ -21,11 +21,6 @@ pub(crate) const fn current_plugin_runtime_document_csp() -> &'static str {
     }
 }
 
-// The real macOS harness uses a dedicated Host scheme so it cannot accidentally
-// inherit production Tauri privileges. It receives an otherwise identical
-// profile with only the exact ancestor substituted.
-pub(crate) const PLUGIN_RUNTIME_HARNESS_DOCUMENT_CSP: &str = "default-src 'self' https: data: blob:; script-src 'self' https: data: blob: 'wasm-unsafe-eval'; style-src 'self' https: data: blob: 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https: wss:; media-src 'self' https: data: blob:; worker-src 'self' https: data: blob:; child-src 'self' https: data: blob:; frame-src 'self' https: data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors lensx-runtime-harness://localhost";
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -54,18 +49,6 @@ mod tests {
         assert!(PLUGIN_RUNTIME_DOCUMENT_CSP.contains("worker-src 'self' https: data: blob:"));
         assert!(PLUGIN_RUNTIME_DOCUMENT_CSP.contains("'wasm-unsafe-eval'"));
         assert!(PLUGIN_RUNTIME_DOCUMENT_CSP.contains("frame-ancestors tauri://localhost"));
-    }
-
-    #[test]
-    fn harness_profile_changes_only_the_exact_host_ancestor() {
-        assert_bounded(PLUGIN_RUNTIME_HARNESS_DOCUMENT_CSP);
-        assert_eq!(
-            PLUGIN_RUNTIME_DOCUMENT_CSP.replace(
-                "frame-ancestors tauri://localhost",
-                "frame-ancestors lensx-runtime-harness://localhost"
-            ),
-            PLUGIN_RUNTIME_HARNESS_DOCUMENT_CSP
-        );
     }
 
     #[test]

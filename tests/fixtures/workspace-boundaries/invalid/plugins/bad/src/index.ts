@@ -27,7 +27,7 @@ import '../../../src-tauri/src/plugin_child_webview_service.rs';
 import '../../../src-tauri/src/frame_aware_navigation_policy.rs';
 import '../../../src-tauri/src/plugin_child_webview_presentation.rs';
 import '../../../vendor/frame-aware-navigation/tauri/src/webview/mod.rs';
-import '../../../fixtures/frame-aware-webview-navigation/cases.json';
+import '../../../fixtures/plugin-package-format/expectations.json';
 import '../../../packages/public/src/index.ts';
 import '@fixture/public/src/index.ts';
 

@@ -48,8 +48,9 @@ rules:
     - Require light and dark modes through the supported Semi Design theming mechanism.
     - Justify every new runtime dependency or component library and prefer the existing stack.
     - Do not cite, link, or name temporary reference files or directories.
-    - Keep cross-layer Rstest, Cargo, build, package-consumer, visual, browser, and native evidence orchestration in the typed Gate registry instead of root shell chains or forwarding aliases.
-    - Separate read-only Gate execution from Generate and Evidence writes, and require an explicit target plus write authorization for committed artifact updates.
+    - Keep cross-layer Rstest, Cargo, build, package-consumer, and pure CLI orchestration in the typed Gate registry instead of root shell chains or forwarding aliases.
+    - Permit only deterministic validation; do not introduce visual, browser, real WebView, GUI application, native harness, or target-environment performance paths, including optional or manual compatibility Gates.
+    - Separate read-only Gate execution from deterministic Generate writes, and require an explicit target plus write authorization for committed artifact updates.
   specs:
     - Write delta specs in the language used in the agent conversation unless the user requests another language.
     - Use normative requirements and observable scenarios; avoid implementation-task wording.
@@ -57,7 +58,7 @@ rules:
     - Do not claim planned behavior is already implemented.
     - Before syncing or archiving, translate or rewrite all content entering main specs into English.
     - Main specs under openspec/specs must remain English.
-    - Before syncing or archiving, require maintained documentation and specs to use resolvable stable Gate, Generate, and Evidence IDs and contain no stale Change-specific root commands.
+    - Before syncing or archiving, require maintained documentation and specs to use resolvable stable Gate and Generate IDs and contain no stale Change-specific root commands or removed Evidence dispatcher references.
   tasks:
     - Write the artifact in the language used in the agent conversation unless the user requests another language.
     - Order tasks by dependency and keep each task independently verifiable.
@@ -67,8 +68,7 @@ rules:
     - The final validation section must cover frontend tests, frontend formatting and static checks, frontend type checking and build, Rust formatting, Rust tests, and Rust static checks.
     - If a validation area is genuinely unaffected, record the reason in the task instead of silently omitting it.
     - Fix every warning and error introduced by the change, then rerun the failed command and the complete final validation set.
-    - For validation that directly or transitively launches a macOS browser application, require headless and windowless execution with a fresh temporary profile, never the user's default profile or existing browser session.
-    - Make the first macOS browser launch in an approved execution context instead of probe-launching it inside a restricted sandbox; prefer automatic approval or review and require user-facing approval only when automatic handling cannot authorize the execution.
-    - Require graceful browser shutdown and temporary-profile cleanup, with forced termination only as a bounded timeout fallback; classify sandbox-only launch failures as environment failures and rerun the unchanged gate without weakening or skipping visual evidence.
+    - Require all maintained validation to remain deterministic and prohibit browser, real WebView, GUI application, Launch Services, native interaction harness, screenshot, pixel, visual-baseline, and target-environment performance stages.
+    - Do not preserve retired environment validation as an optional, manual, hidden, or compatibility Gate.
     - Name every applicable stable capability Gate and keep focused Gate evidence separate from the complete frontend/workspace and Rust validation set.
     - Before sync or archive, scan the root manifest, CI, maintained documentation, and specs for Change IDs, removed aliases, direct Rstest file-list scripts, recursive check scripts, and stale dispatcher references.

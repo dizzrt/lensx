@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from '@rstest/core';
 
-import { inspectPluginPackage } from '../packages/plugin-cli/dist/src/package-format/index.js';
+import { inspectPluginPackage } from '../packages/plugin-cli/src/package-format/index.ts';
 
 const root = join(import.meta.dirname, '..');
 const fixtureRoot = join(root, 'fixtures/plugin-webview-runtime');

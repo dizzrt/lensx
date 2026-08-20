@@ -17,7 +17,6 @@ use crate::{
         PluginResourceUrl,
     },
     plugin_runtime_security_policy::current_plugin_runtime_document_csp,
-    plugin_runtime_stage::{record_plugin_runtime_stage, PluginRuntimeStage},
 };
 #[cfg(feature = "plugin-development-mode")]
 use std::time::{Duration, UNIX_EPOCH};
@@ -27,7 +26,6 @@ use std::{
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::{Arc, Mutex, MutexGuard},
-    time::Instant,
 };
 use tauri::{http, AppHandle, Manager, Runtime, State};
 
@@ -283,18 +281,6 @@ impl PluginResourceService {
         )
     }
 
-    #[doc(hidden)]
-    pub fn initialize_for_macos_harness(
-        manager: Arc<PluginManager>,
-        packages_root: Option<PathBuf>,
-    ) -> Arc<Self> {
-        Self::initialize_with_html_csp(
-            manager,
-            packages_root,
-            crate::plugin_runtime_security_policy::PLUGIN_RUNTIME_HARNESS_DOCUMENT_CSP,
-        )
-    }
-
     fn initialize_with_html_csp(
         manager: Arc<PluginManager>,
         packages_root: Option<PathBuf>,
@@ -483,7 +469,6 @@ impl PluginResourceService {
             self.revoke_binding(&binding);
             return Err(ProtocolFailure::Unavailable);
         }
-        let resource_load_started = Instant::now();
         let payload_root = self
             .prove_eligible_payload(&projection)
             .map_err(|_| ProtocolFailure::Unavailable)?;
@@ -537,7 +522,6 @@ impl PluginResourceService {
                 .insert(cache_key, verified_bytes.clone());
         }
         let bytes = verified_bytes.bytes.as_ref().to_vec();
-        record_plugin_runtime_stage(PluginRuntimeStage::Load, resource_load_started.elapsed());
         Ok((mime, bytes))
     }
 
@@ -712,11 +696,6 @@ impl PluginResourceService {
             .development_snapshots
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = snapshots;
-    }
-
-    #[cfg(feature = "config-lens-cold-open-harness")]
-    pub(crate) fn evidence_runtime_authority_absent(&self) -> bool {
-        self.lock_runtime_authority().is_none()
     }
 
     fn revoke_binding(&self, binding: &ScopeBinding) {

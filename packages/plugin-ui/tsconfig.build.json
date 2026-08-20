@@ -12,5 +12,5 @@
     "types": []
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["tests", "visual"]
+  "exclude": ["tests"]
 }
