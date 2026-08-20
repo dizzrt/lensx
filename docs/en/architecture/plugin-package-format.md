@@ -132,17 +132,17 @@ does not rewrite baselines.
 Run the dedicated gate from the repository root:
 
 ```bash
-pnpm run check:plugin-package-format
+pnpm run gate -- plugin-package-format
 ```
 
 It checks pinned dependencies and duplicated cross-language constants, verifies committed fixture bytes without
 rewriting them, runs focused TypeScript and reproducibility tests, and runs the Rust shared-fixture and boundary tests.
 The TypeScript tests are owned by `@lensx/plugin-cli`; its internal codec path is not a public export. Run
-`pnpm run check:plugin-developer-cli` for the tarball, generated-project, CLI command, and Rust preparation workflow.
+`pnpm run gate -- plugin-developer-cli` for the tarball, generated-project, CLI command, and Rust preparation workflow.
 Only an intentional baseline update uses:
 
 ```bash
-pnpm run generate:plugin-package-format-fixtures
+pnpm run generate -- plugin-package-format-fixtures --write
 ```
 
 The corpus owns `valid`, `invalid`, `incompatible`, and `reproducible` cases plus explicit expected normalized

@@ -215,7 +215,7 @@ for (const [path, source] of runtimeDocs.map(
     '```mermaid',
     'runtime.kind: "webview"',
     '@lensx/plugin-sdk/webview',
-    'pnpm run evidence:plugin-child-webview-macos',
+    'pnpm run evidence -- plugin-child-webview-macos --write',
     '1000 ms',
     '250 ms',
     '100 ms',

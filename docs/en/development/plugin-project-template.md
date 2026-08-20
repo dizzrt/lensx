@@ -142,7 +142,7 @@ pnpm --dir examples/plugins/react-semi run visual
 Run the maintained end-to-end validation of the template boundary with:
 
 ```bash
-pnpm run check:plugin-project-template
+pnpm run gate -- plugin-project-template
 ```
 
 ## Isolation And Packaging Evidence

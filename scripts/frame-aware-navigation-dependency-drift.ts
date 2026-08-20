@@ -72,7 +72,7 @@ if (writeMode) {
   console.log(`Recorded ${files.length} vendored frame-aware dependency files.`);
 } else if (!existsSync(integrityPath) || readFileSync(integrityPath, 'utf8') !== integrity) {
   throw new Error(
-    'Vendored frame-aware dependency drift detected. Review the exact diff, then run pnpm run generate:frame-aware-navigation-dependency-drift.',
+    'Vendored frame-aware dependency drift detected. Review the exact diff, then run pnpm run generate -- frame-aware-navigation-dependency-drift --write.',
   );
 } else {
   console.log(`Checked ${files.length} vendored frame-aware dependency files.`);

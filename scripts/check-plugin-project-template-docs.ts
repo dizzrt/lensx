@@ -9,7 +9,7 @@ const paths = [
 const sources = paths.map((path) => readFileSync(resolve(repositoryRoot, path), 'utf8'));
 const diagnostics: string[] = [];
 const commandIdentifiers = [
-  'pnpm run check:plugin-project-template',
+  'pnpm run gate -- plugin-project-template',
   'examples/plugins/framework-neutral',
   'examples/plugins/react-semi',
   '@lensx/plugin-sdk/webview',

@@ -450,7 +450,7 @@ Runtime health rollback、数据迁移、权限 UI 或完整管理 UI。
 **依赖**：Task 4.1、
 [add-frame-aware-webview-navigation-policy](openspec/changes/archive/2026-08-04-add-frame-aware-webview-navigation-policy/)（macOS）。
 
-**完成标准**：`pnpm run check:isolated-plugin-runtime-origin` 与完整验证通过；真实 bounded evidence
+**完成标准**：`pnpm run gate -- isolated-plugin-runtime-origin` 与完整验证通过；真实 bounded evidence
 证明隔离 authority 和 module/storage/security 边界，且没有启用 production iframe。
 
 - [x] **Task 4.2：实现隔离 iframe Runtime**
@@ -822,7 +822,7 @@ Runtime 重新打开、禁用、双版本升级和卸载；双语文档、28 个
 同时保持开放 Web、封闭 Host、source/generation-bound bridge、精确 lifecycle 与 public-boundary
 official dogfood。
 
-**完成标准**：`pnpm run check:replace-plugin-iframe-runtime-with-child-webview` 与 strict OpenSpec validation
+**完成标准**：`pnpm run gate -- plugin-child-webview-delivery` 与 strict OpenSpec validation
 均通过，归档任务 9.1–9.9 全部完成，且 stable specs 已同步。
 
 - [ ] **Task 7.3：交付首个权限型官方插件**

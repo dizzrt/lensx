@@ -1,28 +1,30 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { validationRegistry } from './validation/catalog.ts';
+import { planGates } from './validation/runner.ts';
+
 const root = join(import.meta.dirname, '..');
 const read = (path: string): string => readFileSync(join(root, path), 'utf8');
-const metadata = JSON.parse(read('package.json')) as { scripts?: Record<string, string> };
-const aggregateName = 'check:replace-plugin-iframe-runtime-with-child-webview';
-const aggregate = metadata.scripts?.[aggregateName] ?? '';
+const aggregate = planGates(validationRegistry, ['plugin-child-webview-delivery']);
 const archivePath = 'openspec/changes/archive/2026-08-16-replace-plugin-iframe-runtime-with-child-webview';
 const requiredStages = [
-  'check:plugin-contract',
-  'check:plugin-sdk',
-  'check:plugin-ui',
-  'check:plugin-testkit',
-  'ci:plugins',
-  'check:ci-workflows',
-  'evidence:plugin-child-webview-macos',
-  'check:plugin-contract-docs',
-  'check:no-dual-plugin-runtime',
-  'openspec validate --all --strict --no-interactive',
+  'plugin-contract',
+  'plugin-sdk',
+  'plugin-ui',
+  'plugin-testkit',
+  'ci-plugins',
+  'ci-workflows',
+  'plugin-contract-docs',
+  'no-dual-plugin-runtime',
 ] as const;
 for (const stage of requiredStages) {
-  if (!aggregate.includes(stage)) {
+  if (!aggregate.gateIds.includes(stage)) {
     throw new Error(`Child WebView change aggregate omitted ${stage}.`);
   }
+}
+if (!aggregate.steps.some((step) => step.description.includes('openspec validate --all --strict --no-interactive'))) {
+  throw new Error('Child WebView delivery Gate omitted strict OpenSpec validation.');
 }
 
 const roadmap = read('plugin-roadmap.md');
@@ -35,7 +37,7 @@ if (complete === incomplete) {
 }
 for (const marker of [
   `**OpenSpec change**：[replace-plugin-iframe-runtime-with-child-webview](${archivePath}/)`,
-  '`pnpm run check:replace-plugin-iframe-runtime-with-child-webview`',
+  '`pnpm run gate -- plugin-child-webview-delivery`',
   'public package consumer',
   'ConfigLens public-boundary plugin CI',
   '真实 WKWebView matrix',

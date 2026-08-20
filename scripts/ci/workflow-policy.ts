@@ -61,8 +61,8 @@ export const checkCiWorkflowPolicy = (rootDir: string): void => {
     !lensx.includes('branches: [main]') ||
     (lensx.match(/paths-ignore:/gu)?.length ?? 0) !== 2 ||
     (lensx.match(/- 'plugins\/\*\*'/gu)?.length ?? 0) !== 2 ||
-    !lensx.includes('pnpm run ci:lensx:frontend') ||
-    !lensx.includes('pnpm run ci:lensx:rust')
+    !lensx.includes('pnpm run gate -- ci-lensx-frontend') ||
+    !lensx.includes('pnpm run gate -- ci-lensx-rust')
   ) {
     fail('workflow-lensx-scope', 'LensX CI trigger matrix or required local entry points drifted.');
   }
@@ -74,7 +74,7 @@ export const checkCiWorkflowPolicy = (rootDir: string): void => {
     plugins.includes('paths-ignore:') ||
     (plugins.match(/- 'plugins\/\*\*'/gu)?.length ?? 0) !== 2 ||
     (plugins.match(/- '\.github\/workflows\/plugins-ci\.yml'/gu)?.length ?? 0) !== 2 ||
-    !plugins.includes('pnpm run ci:plugins') ||
+    !plugins.includes('pnpm run gate -- ci-plugins') ||
     !plugins.includes("CI: 'true'") ||
     !plugins.includes("LENSX_CI_WINDOWLESS: '1'")
   ) {

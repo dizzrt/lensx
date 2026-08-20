@@ -46,14 +46,14 @@ export const runExternalConsumerCommand = (command: string, arguments_: readonly
 };
 
 export const DOCUMENTATION_GATE_STAGES = Object.freeze([
-  'check:plugin-development-documentation:docs',
-  'check:plugin-development-documentation:external',
-  'check:plugin-project-template',
-  'check:plugin-developer-cli',
-  'check:plugin-development-mode',
-  'check:open-isolated-plugin-runtime',
-  'check:plugin-testkit',
-  'check:local-plugin-installation',
+  'plugin-development-documentation-docs',
+  'plugin-development-documentation-external',
+  'plugin-project-template',
+  'plugin-developer-cli',
+  'plugin-development-mode',
+  'open-isolated-plugin-runtime',
+  'plugin-testkit',
+  'local-plugin-installation',
 ] as const);
 
 const documentationTasksActivePath = 'openspec/changes/publish-plugin-development-documentation/tasks.md';
@@ -70,10 +70,9 @@ export const resolveDocumentationTasksPath = (paths: readonly string[]): string 
 };
 
 export const validateDocumentationGateComposition = (
-  script: string,
+  dependencies: readonly string[],
   stages: readonly string[] = DOCUMENTATION_GATE_STAGES,
-): string[] =>
-  stages.filter((stage) => !script.includes(`pnpm run ${stage}`)).map((stage) => `gate/stage-missing: ${stage}.`);
+): string[] => stages.filter((stage) => !dependencies.includes(stage)).map((stage) => `gate/stage-missing: ${stage}.`);
 
 export const validateRoadmapDocumentationState = (roadmap: string, tasks: string): string[] => {
   const diagnostics: string[] = [];

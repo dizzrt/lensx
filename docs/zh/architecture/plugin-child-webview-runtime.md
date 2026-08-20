@@ -97,9 +97,9 @@ attempt 前 staging 下一 generation；被拒绝的 staging 不改变 current a
 使用以下维护命令：
 
 ```bash
-pnpm run check:plugin-child-webview-macos-evidence
-pnpm run evidence:plugin-child-webview-macos
-pnpm run check:open-isolated-plugin-runtime
+pnpm run gate -- plugin-child-webview-macos-evidence
+pnpm run evidence -- plugin-child-webview-macos --write
+pnpm run gate -- open-isolated-plugin-runtime
 ```
 
 `evidence:` 命令会打开临时 macOS WKWebView harness window。普通 `check:` 命令验证已提交的
@@ -145,7 +145,7 @@ editor/Worker load、Page close destroy，以及 native/bridge/resource authorit
 2. 内容隐藏或错位时，运行 slot/bounds gate，并校验 scale factor、presentation revision 与 Host
    overlay 顺序。
 3. 如果 `Cmd+W`、focus loss 或 Page close 留下空白或尺寸错误的 Launcher，运行
-   `pnpm run check:plugin-child-webview-window-lifecycle`。确认 post-creation path 解析
+   `pnpm run gate -- plugin-child-webview-window-lifecycle`。确认 post-creation path 解析
    `Window("main")`、Host activation 只解析 `Webview("main")`，并在改变 teardown timing 前检查
    native-hide rollback。
 4. Web 能力失败时，使用 browser feature detection 并检查插件 CSP；不要增加 Host permission 或

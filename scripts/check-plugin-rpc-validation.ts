@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { PLUGIN_RPC_V1_POLICY } from '../src/app/plugins/runtime/rpc-validation.ts';
+import { validationRegistry } from './validation/catalog.ts';
+import { planGates } from './validation/runner.ts';
 
 const root = join(import.meta.dirname, '..');
 const fail = (message: string): never => {
@@ -25,9 +27,10 @@ if (
 
 const metadata = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
   dependencies?: Record<string, string>;
-  scripts?: Record<string, string>;
 };
-const focusedGate = metadata.scripts?.['check:plugin-rpc-validation'] ?? '';
+const focusedGate = planGates(validationRegistry, ['plugin-rpc-validation'])
+  .steps.map((step) => step.description)
+  .join('\n');
 for (const fragment of [
   'plugin-rpc-validation.test.ts',
   'plugin-sdk-transport-contract.test.ts',

@@ -124,17 +124,17 @@ replacement 已交付；应用卸载清理、远程/自动更新策略、签名�
 从仓库根目录运行专项门禁：
 
 ```bash
-pnpm run check:plugin-package-format
+pnpm run gate -- plugin-package-format
 ```
 
 它检查固定依赖和跨语言重复 constants，验证 committed fixture bytes 且不重写，运行 focused TypeScript 与
 reproducibility tests，并运行 Rust shared-fixture 和 boundary tests。只有有意更新 baseline 时才使用：
 
 TypeScript tests 由 `@lensx/plugin-cli` 持有；其 internal codec path 不是公共 export。真实 tarball、生成项目、
-CLI 命令与 Rust preparation workflow 使用 `pnpm run check:plugin-developer-cli` 验证。
+CLI 命令与 Rust preparation workflow 使用 `pnpm run gate -- plugin-developer-cli` 验证。
 
 ```bash
-pnpm run generate:plugin-package-format-fixtures
+pnpm run generate -- plugin-package-format-fixtures --write
 ```
 
 Corpus 持有 `valid`、`invalid`、`incompatible`、`reproducible` cases，以及明确的 expected normalized Manifest、

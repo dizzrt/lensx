@@ -3,12 +3,23 @@ import { join, relative } from 'node:path';
 
 const root = join(import.meta.dirname, '..');
 const adapterPath = 'src-tauri/src/plugin_child_webview_adapter.rs';
+const coldOpenHarnessPath = 'src-tauri/src/config_lens_cold_open_harness.rs';
 const cargo = readFileSync(join(root, 'src-tauri/Cargo.toml'), 'utf8');
+const lib = readFileSync(join(root, 'src-tauri/src/lib.rs'), 'utf8');
 const adapter = readFileSync(join(root, adapterPath), 'utf8');
 const failures: string[] = [];
 
 if (!cargo.includes('tauri = { version = "2", features = ["macos-private-api", "unstable"] }')) {
   failures.push('src-tauri/Cargo.toml: Tauri unstable multiwebview feature is not enabled.');
+}
+if (
+  !cargo.includes('config-lens-cold-open-harness = ["plugin-development-mode", "dep:core-graphics"]') ||
+  !cargo.includes('required-features = ["config-lens-cold-open-harness"]') ||
+  !/#\[cfg\(feature = "config-lens-cold-open-harness"\)\]\s*#\[doc\(hidden\)\]\s*pub mod config_lens_cold_open_harness;/u.test(
+    lib,
+  )
+) {
+  failures.push(`${coldOpenHarnessPath}: native evidence harness is not feature-gated and hidden.`);
 }
 for (const marker of [
   'WebviewBuilder',
@@ -33,7 +44,7 @@ const visit = (directory: string): void => {
 visit(join(root, 'src-tauri/src'));
 for (const file of rustFiles) {
   const path = relative(root, file).split('\\').join('/');
-  if (path === adapterPath) continue;
+  if (path === adapterPath || path === coldOpenHarnessPath) continue;
   const source = readFileSync(file, 'utf8');
   for (const marker of ['WebviewBuilder', '.add_child(']) {
     if (source.includes(marker)) failures.push(`${path}: Child WebView Tauri API escaped the private adapter.`);

@@ -24,8 +24,8 @@ development reload transaction：
 在仓库根目录构建并校验 A 代版本：
 
 ```bash
-pnpm run build:plugin-development-smoke:initial
-pnpm run validate:plugin-development-smoke
+pnpm run gate -- plugin-development-smoke-initial
+pnpm run gate -- plugin-development-smoke-validation
 ```
 
 native picker 应选择 `examples/plugins/development-mode-smoke/dist` 的绝对路径，
@@ -119,8 +119,8 @@ raw native errors 或 private Manager facts。
 4. 不关闭 lensX，在另一个 terminal 构建并校验 B 代版本：
 
    ```bash
-   pnpm run build:plugin-development-smoke:reload
-   pnpm run validate:plugin-development-smoke
+   pnpm run gate -- plugin-development-smoke-reload
+   pnpm run gate -- plugin-development-smoke-validation
    ```
 
    手动 reload 之前，已经打开的页面必须仍显示 A 代版本。这证明 Host 服务的是不可变
@@ -138,7 +138,7 @@ raw native errors 或 private Manager facts。
    mode 已关闭。
 8. 使用相同 root 停止并重新运行 `pnpm run dev:plugin-development-mode`。模式必须开启并
    重新发现全新的 registrations，但不能恢复上一进程的 snapshot、Runtime 或 registration
-   状态；普通构建仍不得启用开发模式。最后运行 `pnpm run check:plugin-development-mode-boundaries`，
+   状态；普通构建仍不得启用开发模式。最后运行 `pnpm run gate -- plugin-development-mode-boundaries`，
    验证普通 production artifacts 仍然排除该能力。
 
 如需真实验证 unsafe-directory 拒绝路径，可先构建 A 代版本，再在其 `dist/` 内加入一个
@@ -150,7 +150,7 @@ symbolic link，然后尝试 register 或 reload。Host 必须拒绝该目录，
 修改此工作流后运行 focused gate：
 
 ```bash
-pnpm run check:plugin-development-mode
+pnpm run gate -- plugin-development-mode
 ```
 
 该 gate 覆盖构建排除、契约、目录 corpus、Rust transactions、Resource/Runtime invalidation、

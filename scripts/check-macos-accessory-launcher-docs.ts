@@ -43,8 +43,8 @@ for (const [path, source] of [
   [pairs[1][1], chineseValidation],
 ] as const) {
   for (const marker of [
-    'pnpm run check:macos-accessory-launcher',
-    'pnpm run evidence:macos-accessory-launcher',
+    'pnpm run gate -- macos-accessory-launcher',
+    'pnpm run evidence -- macos-accessory-launcher --write',
     'Launch Services',
     'Tauri/Tao/Wry',
     'source digest',

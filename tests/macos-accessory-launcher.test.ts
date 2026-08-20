@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, test } from '@rstest/core';
 import { assertMacosAccessoryPolicy, inspectMacosAccessoryPolicy } from '../scripts/check-macos-accessory-launcher.ts';
 import { validateMacosAccessoryEvidence } from '../scripts/macos-accessory-launcher-evidence.ts';
+import { validationRegistry } from '../scripts/validation/catalog.ts';
+import { planGates } from '../scripts/validation/runner.ts';
 
 const digest = 'a'.repeat(64);
 const truths = (keys: readonly string[]) => Object.fromEntries(keys.map((key) => [key, true]));
@@ -116,16 +116,17 @@ describe('macOS Accessory Launcher policy and product evidence', () => {
   });
 
   test('keeps the aggregate gate connected to policy, Rust, Child, docs, and real evidence', () => {
-    const packageJson = JSON.parse(readFileSync(join(import.meta.dirname, '../package.json'), 'utf8')) as {
-      scripts: Record<string, string>;
-    };
-    const focused = packageJson.scripts['check:macos-accessory-launcher'];
+    const plan = planGates(validationRegistry, ['macos-accessory-launcher']);
+    const focused = plan.steps.map((step) => step.description).join('\n');
     expect(focused).toContain('check-macos-accessory-launcher.ts');
     expect(focused).toContain('macos-accessory-launcher.test.ts');
     expect(focused).toContain('cargo test');
-    expect(focused).toContain('check:plugin-child-webview-window-lifecycle');
-    expect(focused).toContain('check:macos-accessory-launcher-docs');
     expect(focused).toContain('macos-accessory-launcher-evidence.ts');
-    expect(packageJson.scripts['evidence:macos-accessory-launcher']).toContain('--run --write');
+    expect(plan.gateIds).toEqual(
+      expect.arrayContaining(['plugin-child-webview-window-lifecycle', 'macos-accessory-launcher-docs']),
+    );
+    expect(
+      validationRegistry.evidenceTargets.find((target) => target.id === 'macos-accessory-launcher')?.steps[0]?.argv,
+    ).toEqual(expect.arrayContaining(['--run', '--write']));
   });
 });

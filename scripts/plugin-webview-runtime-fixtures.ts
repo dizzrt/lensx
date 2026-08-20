@@ -167,7 +167,7 @@ for (const [relativePath, content] of outputs) {
 for (const relativePath of listFiles(fixtureRoot)) if (!outputs.has(relativePath)) drift.push(relativePath);
 if (drift.length > 0) {
   throw new Error(
-    `Plugin WebView Runtime fixtures drifted: ${drift.sort().join(', ')}. Run pnpm run generate:plugin-webview-runtime-fixtures.`,
+    `Plugin WebView Runtime fixtures drifted: ${drift.sort().join(', ')}. Run pnpm run generate -- plugin-webview-runtime-fixtures --write.`,
   );
 }
 

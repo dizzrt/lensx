@@ -55,6 +55,13 @@ Format 以一次可撤销操作直接替换编辑器内容，Compact 仅支持 J
 这些 scripts 必须执行有效的 package 局部验证。不要使用占位命令，也不要省略 script，
 因为根运行器会拒绝不完整的成员。
 
+这四个 member scripts 是 package-local contract；根 `build`、`typecheck`、`test` 与 `check`
+会发现每个成员、验证四个 scripts 全部存在，并在根应用 lifecycle 之后按 workspace dependency
+顺序执行。focused 跨层验收属于不同接口：通过 `pnpm run gate -- <id>` 选择稳定 capability。
+根 scripts 不得镜像 member script、测试子集或 OpenSpec Change，也不得用 shell `&&` 编码验证图。
+使用 `pnpm run gate -- --list` 与 `--plan <id>` 检查受治理表面和执行计划。Generate/Evidence
+写入使用各自 dispatcher 并要求 `--write`；详见[验证](validation.md)。
+
 ## Plugin Contract Package
 
 `packages/plugin-contract` 持有公共 Manifest/Host API Schema、生成输入、规范化类型、协议
@@ -73,10 +80,10 @@ package 将 `ajv` 声明为直接 runtime 依赖，并复用现有 TypeScript �
 命令生成并验证契约：
 
 ```bash
-pnpm run generate:plugin-manifest-types
-pnpm run generate:plugin-host-api-types
-pnpm run check:plugin-host-api-contract
-pnpm run check:plugin-contract
+pnpm run generate -- plugin-manifest-types --write
+pnpm run generate -- plugin-host-api-types --write
+pnpm run gate -- plugin-host-api-contract
+pnpm run gate -- plugin-contract
 ```
 
 完整检查会重建两组生成类型，运行 package 与 Host 边界测试，检查 Manifest/Host API 的
@@ -98,7 +105,7 @@ inspector 仍位于 `src-tauri` 并消费相同 committed corpus。
 使用专项 drift gate：
 
 ```bash
-pnpm run check:plugin-package-format
+pnpm run gate -- plugin-package-format
 ```
 
 该命令先构建 CLI package，再检查精确 codec/crate inputs 与 constants，验证 committed fixtures 且不重写，
@@ -106,13 +113,13 @@ pnpm run check:plugin-package-format
 regeneration 是显式 review 操作：
 
 ```bash
-pnpm run generate:plugin-package-format-fixtures
+pnpm run generate -- plugin-package-format-fixtures --write
 ```
 
 使用以下命令验证完整作者工具边界：
 
 ```bash
-pnpm run check:plugin-developer-cli
+pnpm run gate -- plugin-developer-cli
 ```
 
 该门禁会打包五个公共 package，在系统临时 consumer 中使用机器配置的全局 pnpm store 安装它们，生成两类
@@ -163,7 +170,7 @@ pnpm --dir packages/plugin-sdk run typecheck
 pnpm --dir packages/plugin-sdk run test
 pnpm --dir packages/plugin-sdk run check
 pnpm --dir packages/plugin-sdk run test:pack
-pnpm run check:plugin-sdk
+pnpm run gate -- plugin-sdk
 ```
 
 pack gate 会构建真实 Contract 与 SDK tarball，校验 SDK 文件清单、root/iframe exports、声明与 Runtime
@@ -171,11 +178,11 @@ pack gate 会构建真实 Contract 与 SDK tarball，校验 SDK 文件清单、r
 `lib: ["ES2022"]` 且不包含 DOM 类型完成 typecheck，运行 ESM lifecycle smoke，并证明未声明的
 SDK deep import 会被拒绝。browser consumer 会 typecheck、bundle、在真实 browser 中加载 iframe
 entry，并拒绝私有 transport deep import。tarball 排除 tests、fixtures、scripts、schema、Host
-projection 与 Host 私有源码。完整跨边界门禁使用 `pnpm run check:plugin-sdk-transport`。运行
-`pnpm run check:plugin-host-api-dispatcher` 可验证 production Dispatcher、response-before-close、
+projection 与 Host 私有源码。完整跨边界门禁使用 `pnpm run gate -- plugin-sdk-transport`。运行
+`pnpm run gate -- plugin-host-api-dispatcher` 可验证 production Dispatcher、response-before-close、
 Action/Navigation/storage、Context replacement、MessageChannel、公共 tarball 与 workspace boundary。Dispatcher
 保持为 Host 私有源码，不增加 Contract/SDK export 或 dependency。
-`pnpm run check:plugin-scoped-storage` 可验证 Rust-backed scoped storage、Installer lifecycle coordination、
+`pnpm run gate -- plugin-scoped-storage` 可验证 Rust-backed scoped storage、Installer lifecycle coordination、
 公共 Testkit consumer 与私有 storage boundary。
 
 ## Plugin Testkit Package
@@ -219,7 +226,7 @@ pnpm --dir packages/plugin-testkit run typecheck
 pnpm --dir packages/plugin-testkit run test
 pnpm --dir packages/plugin-testkit run check
 pnpm --dir packages/plugin-testkit run test:pack
-pnpm run check:plugin-testkit
+pnpm run gate -- plugin-testkit
 ```
 
 专用 gate 校验 Contract、SDK 与 Testkit tarball，以及 workspace dependency/lifecycle 规则。其无 DOM
@@ -287,8 +294,8 @@ pnpm --dir packages/plugin-ui run test
 pnpm --dir packages/plugin-ui run check
 pnpm --dir packages/plugin-ui run test:pack
 pnpm --dir packages/plugin-ui run test:visual
-pnpm run check:plugin-ui
-pnpm run check:plugin-developer-cli
+pnpm run gate -- plugin-ui
+pnpm run gate -- plugin-developer-cli
 ```
 
 pack gate 会把真实 Contract、SDK 与 UI tarball 安装到隔离的 Rsbuild browser consumer，
@@ -324,14 +331,14 @@ pnpm run check
 使用这些专项命令：
 
 ```bash
-pnpm run check:workspace-boundaries
-pnpm run test:workspace-boundaries
-pnpm run test:workspace-lifecycle
-pnpm run check:plugin-sdk
-pnpm run check:plugin-testkit
-pnpm run check:plugin-ui
-pnpm run check:ci-workflows
-pnpm run ci:plugins
+pnpm run gate -- workspace-boundaries
+pnpm run gate -- workspace-boundaries
+pnpm run gate -- workspace-lifecycle
+pnpm run gate -- plugin-sdk
+pnpm run gate -- plugin-testkit
+pnpm run gate -- plugin-ui
+pnpm run gate -- ci-workflows
+pnpm run gate -- ci-plugins
 ```
 
 ## 依赖方向

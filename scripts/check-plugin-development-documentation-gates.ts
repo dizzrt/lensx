@@ -6,13 +6,12 @@ import {
   validateDocumentationGateComposition,
   validateRoadmapDocumentationState,
 } from './plugin-development-documentation-external.ts';
+import { findGate } from './validation/catalog.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
-const metadata = JSON.parse(readFileSync(resolve(repositoryRoot, 'package.json'), 'utf8')) as {
-  readonly scripts?: Readonly<Record<string, string>>;
-};
-const aggregate = metadata.scripts?.['check:plugin-development-documentation'] ?? '';
-const diagnostics = validateDocumentationGateComposition(aggregate);
+const aggregate = findGate('plugin-development-documentation');
+if (aggregate === undefined) throw new Error('gate/missing: plugin-development-documentation.');
+const diagnostics = validateDocumentationGateComposition(aggregate.dependsOn);
 const activeTasksPath = 'openspec/changes/publish-plugin-development-documentation/tasks.md';
 const archiveRoot = resolve(repositoryRoot, 'openspec/changes/archive');
 const taskPaths = [
@@ -35,9 +34,6 @@ diagnostics.push(
   ),
 );
 if (diagnostics.length > 0) throw new Error(diagnostics.join('\n'));
-if (!(metadata.scripts?.check ?? '').includes('check:plugin-development-documentation')) {
-  throw new Error('gate/workspace-check-missing: normal root check does not include plugin development documentation.');
-}
 const governance = ['README.md', 'README-zh.md', 'AGENTS.md', 'openspec/config.yaml'] as const;
 for (const path of governance) {
   const source = readFileSync(resolve(repositoryRoot, path), 'utf8');

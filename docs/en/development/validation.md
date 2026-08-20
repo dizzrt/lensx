@@ -9,6 +9,59 @@ have reproducible evidence for the affected frontend and Rust layers.
 Fix warnings and errors introduced by the change. After a fix, rerun the failed
 command and then rerun the complete final validation set.
 
+## Command Model And Stable Interface
+
+The root script surface is deliberately small and governed. Standard
+`build`, `typecheck`, `test`, and `check` aggregate the corresponding root
+application and workspace-member lifecycle. Rstest automatically discovers
+TypeScript/TSX unit, component, contract, documentation, source-policy, and
+read-only drift assertions under `tests/**/*.test.{ts,tsx}`. Do not add a root
+alias for one test file or a test subset.
+
+Cross-layer capability acceptance uses the typed Gate registry:
+
+```bash
+pnpm run gate -- --list
+pnpm run gate -- --plan plugin-rpc-validation
+pnpm run gate -- plugin-rpc-validation
+pnpm run gate -- --all
+```
+
+Each Gate has a stable capability ID, declared Gate dependencies, and
+structured steps with an executable, argument vector, working directory,
+environment, platform, and read-only/browser/native safety metadata. Before
+starting a command, the runner rejects unknown or duplicate IDs, missing
+dependencies, missing steps, and cycles. It expands dependencies in a stable
+topological order, runs serially, and executes a shared step ID only once per
+invocation. A launch or non-zero failure stops the plan and reports the
+requested Gate and failed step.
+
+The `--all` form requests every maintained Gate in one DAG, so shared steps are
+still de-duplicated. Inspect its plan and obtain the required approved macOS
+execution context before running it because the union includes browser, visual,
+and native evidence checks.
+
+Gate execution is read-only with respect to committed fixtures, baselines, and
+evidence. List and run governed write targets separately:
+
+```bash
+pnpm run generate -- --list
+pnpm run generate -- plugin-package-format-fixtures --write
+pnpm run evidence -- --list
+pnpm run evidence -- macos-accessory-launcher --write
+```
+
+Generate and Evidence reject an omitted `--write` before starting any command.
+Review generated/evidence differences, then rerun the corresponding read-only
+Gate. Builds, temporary consumers, and isolated profiles may write disposable
+outputs, but a Gate never refreshes a committed artifact implicitly.
+
+A focused Gate supplements rather than replaces `pnpm run test`, `typecheck`,
+`check`, `build`, the applicable Rust validation, and documentation/OpenSpec
+validation. CI and maintained documentation must call dispatcher IDs; removed
+root `test:*`, `check:*`, `ci:*`, `run:*`, and `refresh:*` aliases are not
+compatibility interfaces.
+
 ## Local Browser Automation
 
 Browser-backed validation must be automated without disturbing the user's
@@ -51,8 +104,8 @@ collection behavior, show/hide/toggle ordering, local `Cmd+W`/`Cmd+Q`, or
 related teardown must run:
 
 ```bash
-pnpm run check:macos-accessory-launcher
-pnpm run evidence:macos-accessory-launcher
+pnpm run gate -- macos-accessory-launcher
+pnpm run evidence -- macos-accessory-launcher --write
 ```
 
 The focused check validates `LSUIElement`, `visibleOnAllWorkspaces`, retained
@@ -117,9 +170,8 @@ returns a non-zero status fails the root command. Run workspace-specific
 regressions directly when changing the aggregation or dependency rules:
 
 ```bash
-pnpm run test:workspace-lifecycle
-pnpm run test:workspace-boundaries
-pnpm run check:workspace-boundaries
+pnpm run gate -- workspace-lifecycle
+pnpm run gate -- workspace-boundaries
 ```
 
 Use `pnpm run test:watch` only during development. Final evidence must use the
@@ -131,7 +183,7 @@ Changes to `@lensx/plugin-contract`, its Schema, Host consumer, or Rust model
 must run:
 
 ```bash
-pnpm run check:plugin-contract
+pnpm run gate -- plugin-contract
 ```
 
 This gate verifies generated-type drift, package tests, Host boundaries,
@@ -147,17 +199,17 @@ reference packer/inspector, the Rust inspector, fixtures, or package-format
 documentation must run:
 
 ```bash
-pnpm run check:plugin-package-format
+pnpm run gate -- plugin-package-format
 ```
 
 The gate checks dependency and constant drift, compares all committed fixture
 bytes and expectations without rewriting them, proves reference pack
 repeatability, runs focused TypeScript tests, and makes Rust consume the same
 valid, invalid, incompatible, and reproducible cases. An intentional fixture
-or digest update uses `pnpm run generate:plugin-package-format-fixtures` only
+or digest update uses `pnpm run generate -- plugin-package-format-fixtures --write` only
 after reviewing the dependency, parameter, format, and diagnostic change.
 
-This dedicated gate supplements rather than replaces `check:plugin-contract`,
+This dedicated gate supplements rather than replaces the `plugin-contract` Gate,
 workspace boundary/lifecycle checks, and the complete frontend/shared and Rust
 validation sets.
 
@@ -167,7 +219,7 @@ Changes to `@lensx/plugin-cli`, its packaged templates, command/output contract,
 project validator, canonical package core, or CLI documentation must run:
 
 ```bash
-pnpm run check:plugin-developer-cli
+pnpm run gate -- plugin-developer-cli
 ```
 
 The gate checks the executable tarball, bounded exports and dependency closure,
@@ -191,7 +243,7 @@ Changes to `.github/workflows/`, CI scripts, workspace discovery, direct plugin
 lifecycle, or the bilingual CI documentation must run:
 
 ```bash
-pnpm run check:ci-workflows
+pnpm run gate -- ci-workflows
 pnpm exec rstest run tests/ci.test.ts tests/ci-workflow-policy.test.ts tests/workspace-lifecycle.test.ts
 ```
 
@@ -200,7 +252,7 @@ runners, read-only permissions, pinned actions, the documented trigger matrix,
 the maintained local entry points, and no versioning or release authority. The
 focused tests cover direct-plugin discovery, clean public dependency build
 order, blocking plugin stages, empty workspaces, and failure propagation. Run
-`pnpm run ci:lensx` or `pnpm run ci:plugins` for complete local reproduction.
+`pnpm run gate -- ci-lensx` or `pnpm run gate -- ci-plugins` for complete local reproduction.
 
 ## Plugin Development Mode Validation
 
@@ -209,7 +261,7 @@ store, process-local Manager state, Resource/Runtime invalidation, development
 adapter/service/UI, messages, docs, or visual evidence must run:
 
 ```bash
-pnpm run check:plugin-development-mode
+pnpm run gate -- plugin-development-mode
 ```
 
 The gate combines strict boundary parsing, the shared CLI/Host payload corpus,
@@ -233,9 +285,9 @@ macOS end-to-end matrix. Refresh this composed evidence after reviewing any of
 those production boundaries or Development Mode transactions:
 
 ```bash
-pnpm run refresh:plugin-development-runtime-evidence:normal
-pnpm run refresh:plugin-development-runtime-evidence:malicious
-pnpm run check:plugin-development-runtime-evidence
+pnpm run evidence -- plugin-development-runtime-evidence-normal --write
+pnpm run evidence -- plugin-development-runtime-evidence-malicious --write
+pnpm run gate -- plugin-development-runtime-evidence
 ```
 
 Evidence files contain only bounded protocol/platform labels, relative fixture
@@ -249,7 +301,7 @@ generation, Installer ownership proof, custom protocol, path/MIME policy, or
 resource lifecycle must run:
 
 ```bash
-pnpm run check:plugin-resource-service
+pnpm run gate -- plugin-resource-service
 ```
 
 The gate consumes exact shared Rust/TypeScript contract fixtures, checks public
@@ -280,7 +332,7 @@ Changes to the isolated Resource authority, host/path parser, translated URL
 shape, origin evidence, or downstream origin prerequisite must run:
 
 ```bash
-pnpm run check:isolated-plugin-runtime-origin
+pnpm run gate -- isolated-plugin-runtime-origin
 ```
 
 The gate combines canonical `.lxp` fixture validation, bounded committed real
@@ -305,7 +357,7 @@ initialization, WebView harness, evidence schema, or Plugin Page/Resource
 regressions, run:
 
 ```bash
-pnpm run check:frame-aware-webview-navigation-policy
+pnpm run gate -- frame-aware-webview-navigation-policy
 ```
 
 The gate checks all 15 maintained documents, the bounded evidence schema, the
@@ -318,12 +370,12 @@ pre-commit outcomes, Host bootstrap availability, descendant bootstrap/invoke
 absence, and popup/download hook counts. It must never contain a raw URL,
 scope, identity, invoke key or payload, bootstrap source, or local path.
 
-Use `pnpm run generate:frame-aware-webview-navigation-fixtures` only after
+Use `pnpm run generate -- frame-aware-webview-navigation-fixtures --write` only after
 reviewing fixture changes. Real evidence must first be rerun on the target
 macOS WKWebView, then intentionally promoted with
-`pnpm run generate:frame-aware-webview-evidence-matrix`. Vendored dependency
+`pnpm run generate -- frame-aware-webview-evidence-matrix --write`. Vendored dependency
 changes require exact diff and license review before
-`pnpm run generate:frame-aware-navigation-dependency-drift` updates the
+`pnpm run generate -- frame-aware-navigation-dependency-drift --write` updates the
 integrity record. These generators do not replace the focused gate or the full
 frontend and Rust validation sets.
 
@@ -333,9 +385,9 @@ Changes to the Runtime resolver, native container, slot presentation, resource
 binding, navigation policy, or lifecycle cleanup must run:
 
 ```bash
-pnpm run check:plugin-child-webview-runtime
-pnpm run check:plugin-child-webview-window-lifecycle
-pnpm run check:plugin-child-webview-macos-evidence
+pnpm run gate -- plugin-child-webview-runtime
+pnpm run gate -- plugin-child-webview-window-lifecycle
+pnpm run gate -- plugin-child-webview-macos-evidence
 ```
 
 The gate combines React slot and state tests, physical-bounds revisions,
@@ -369,7 +421,7 @@ Changes to the private bridge bootstrap, source identity, readiness state,
 strict RPC frames, Host dispatcher, cancellation, or cleanup must run:
 
 ```bash
-pnpm run check:plugin-child-webview-session
+pnpm run gate -- plugin-child-webview-session
 ```
 
 The gate proves source-bound ready admission, current attempt/generation/nonce
@@ -387,7 +439,7 @@ entry, Host bridge adapter, Runtime Session handoff, transport fixtures,
 package exports, or target WebView evidence must run:
 
 ```bash
-pnpm run check:plugin-sdk-transport
+pnpm run gate -- plugin-sdk-transport
 ```
 
 The gate checks deterministic plugin/Host codec drift, strict unknown parsing,
@@ -416,7 +468,7 @@ safe diagnostics, post-response effects, malicious fixtures, or resource-limit
 evidence must run:
 
 ```bash
-pnpm run check:plugin-rpc-validation
+pnpm run gate -- plugin-rpc-validation
 ```
 
 The gate checks the immutable 5 MiB/32-depth/36-frame-depth/16,384-node/
@@ -448,7 +500,7 @@ post-response outcome, matching Page close, plugin-local Action dispatch, App
 composition, or Dispatcher documentation must run:
 
 ```bash
-pnpm run check:plugin-host-api-dispatcher
+pnpm run gate -- plugin-host-api-dispatcher
 ```
 
 The gate runs focused Dispatcher, transport, MessageChannel, React Runtime,
@@ -475,7 +527,7 @@ response CSP, Worker/network/Blob/Data/WASM support, Runtime teardown, or trust
 copy must run:
 
 ```bash
-pnpm run check:open-isolated-plugin-runtime
+pnpm run gate -- open-isolated-plugin-runtime
 ```
 
 The gate composes generated Contract drift, real public tarballs, closed
@@ -495,9 +547,9 @@ package chunks, Runtime lifecycle, visual evidence, or
 product documentation must run:
 
 ```bash
-pnpm run ci:plugins
-pnpm run check:official-config-lens-cold-open
-pnpm run check:official-config-lens-warm-format
+pnpm run gate -- ci-plugins
+pnpm run gate -- official-config-lens-cold-open
+pnpm run gate -- official-config-lens-warm-format
 ```
 
 These gates run the member lifecycle and four-language malicious/golden corpora,
@@ -518,7 +570,7 @@ Runtime capability availability, public consumer evidence, or storage
 documentation must run:
 
 ```bash
-pnpm run check:plugin-scoped-storage
+pnpm run gate -- plugin-scoped-storage
 ```
 
 The gate verifies exact shared TypeScript/Rust valid and invalid fixtures,
@@ -546,7 +598,7 @@ coordinator, Settings Plugins surface, management messages/styles, or App
 composition must run:
 
 ```bash
-pnpm run check:plugin-management-settings
+pnpm run gate -- plugin-management-settings
 ```
 
 The gate checks strict shared data-management fixtures, desktop and private

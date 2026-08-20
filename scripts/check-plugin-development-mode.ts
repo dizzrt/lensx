@@ -17,10 +17,10 @@ for (const path of ['docs/en/development/plugin-development-mode.md', 'docs/zh/d
   requireMarkers(path, [
     'pnpm run dev:plugin-development-mode',
     'development-mode-smoke',
-    'build:plugin-development-smoke:reload',
+    'pnpm run gate -- plugin-development-smoke-reload',
     'dist/',
     'cleanup_pending',
-    'check:plugin-development-mode',
+    'pnpm run gate -- plugin-development-mode',
     '--plugins-root',
     'plugins/<member>/dist',
     'loaded/skipped',
@@ -30,9 +30,9 @@ requireMarkers('docs/en/development/plugin-development-mode.md', ['focus-loss hi
 requireMarkers('docs/zh/development/plugin-development-mode.md', ['失焦隐藏']);
 for (const path of ['docs/en/development/validation.md', 'docs/zh/development/validation.md'])
   requireMarkers(path, [
-    'refresh:plugin-development-runtime-evidence:normal',
-    'refresh:plugin-development-runtime-evidence:malicious',
-    'check:plugin-development-runtime-evidence',
+    'pnpm run evidence -- plugin-development-runtime-evidence-normal --write',
+    'pnpm run evidence -- plugin-development-runtime-evidence-malicious --write',
+    'pnpm run gate -- plugin-development-runtime-evidence',
   ]);
 
 requireMarkers('examples/plugins/development-mode-smoke/package.json', [
@@ -93,14 +93,8 @@ requireMarkers('scripts/verify-plugin-management-visual.mjs', [
 ]);
 requireMarkers('package.json', [
   'dev-plugin-development-mode.mjs',
-  'build:plugin-development-smoke:initial',
-  'build:plugin-development-smoke:reload',
-  'validate:plugin-development-smoke',
-  'check:plugin-development-mode',
-  'check:plugin-development-mode-boundaries',
-  'check:plugin-development-directory-corpus',
-  'check:plugin-development-runtime-evidence',
-  'run:plugin-development-runtime-harness',
+  'scripts/validation/cli.ts gate',
+  'scripts/validation/cli.ts evidence',
 ]);
 requireMarkers('scripts/dev-plugin-development-mode.mjs', [
   '--plugins-root',

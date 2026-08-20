@@ -98,8 +98,8 @@ const chineseValidation = read('docs/zh/development/validation.md');
 for (const [source, marker] of [
   [englishArchitecture, '## Shipped Host-Private Plugin Host API Dispatcher'],
   [chineseArchitecture, '## 已交付的 Host 私有 Plugin Host API Dispatcher'],
-  [englishWorkspace, 'pnpm run check:plugin-host-api-dispatcher'],
-  [chineseWorkspace, 'pnpm run check:plugin-host-api-dispatcher'],
+  [englishWorkspace, 'pnpm run gate -- plugin-host-api-dispatcher'],
+  [chineseWorkspace, 'pnpm run gate -- plugin-host-api-dispatcher'],
   [englishValidation, '## Plugin Host API Dispatcher Validation'],
   [chineseValidation, '## Plugin Host API Dispatcher 验证'],
 ] as const) {

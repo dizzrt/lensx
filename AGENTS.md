@@ -101,6 +101,19 @@ affected frontend and Rust layers and include tests, formatting, static
 analysis, and builds where relevant. Fix every warning and error introduced by
 the change, then rerun the failed and final validation commands.
 
+## Validation Command Governance
+
+Root `package.json` scripts are a governed repository interface. Do not add a
+root script for an individual test, test subset, OpenSpec Change, forwarding
+alias, or multi-stage `&&` validation graph. Put deterministic repository-only
+assertions in the existing Rstest discovery range. Register cross-layer
+acceptance under a stable capability ID in the validation Gate registry and use
+the single `gate`, `generate`, or `evidence` dispatcher. Before archiving a
+Change, remove temporary entry points and verify that maintained code,
+documentation, CI, and specs contain no stale aliases. See
+`docs/en/development/validation.md` for command categories, planning, write
+boundaries, and browser/macOS execution safety.
+
 ## Frontend Rules
 
 - Use React and TypeScript for the frontend.

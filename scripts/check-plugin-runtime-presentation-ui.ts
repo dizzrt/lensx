@@ -45,5 +45,11 @@ for (const evidence of [
 ]) {
   if (!visual.includes(evidence)) fail(`visual evidence omits ${evidence}`);
 }
+const visualFixture = read('visual/plugin-runtime-slot/src/main.tsx');
+for (const readinessMethod of ['readReadiness', 'waitReadiness']) {
+  if (!visualFixture.includes(`${readinessMethod}:`)) {
+    fail(`visual presentation controller omits ${readinessMethod}`);
+  }
+}
 
 console.log('Checked bilingual accessible themed Runtime feedback and automated screenshot coverage.');

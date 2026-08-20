@@ -1,6 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { validationRegistry } from './validation/catalog.ts';
+import { planGates } from './validation/runner.ts';
+
 const root = join(import.meta.dirname, '..');
 const read = (relative: string): string => readFileSync(join(root, relative), 'utf8');
 const fail = (message: string): never => {
@@ -57,22 +60,19 @@ for (const obsoleteScript of [
   if (packageMetadata.includes(obsoleteScript)) fail(`obsolete root script remains: ${obsoleteScript}`);
 }
 
-const rootScripts = JSON.parse(packageMetadata) as {
-  readonly scripts?: Readonly<Record<string, string>>;
-};
-const focusedGate = rootScripts.scripts?.['check:open-isolated-plugin-runtime'] ?? '';
+const focusedPlan = planGates(validationRegistry, ['open-isolated-plugin-runtime']);
 for (const requiredStage of [
-  'check:plugin-contract',
-  'check:plugin-host-api-dispatcher',
-  'check:plugin-registration-contract',
-  'check:local-plugin-installation',
-  'check:plugin-resource-service',
-  'check:plugin-child-webview-runtime',
-  'check:plugin-child-webview-session',
-  'check:plugin-rpc-validation',
-  'check:plugin-development-runtime-evidence',
+  'plugin-contract',
+  'plugin-host-api-dispatcher',
+  'plugin-registration-contract',
+  'local-plugin-installation',
+  'plugin-resource-service',
+  'plugin-child-webview-runtime',
+  'plugin-child-webview-session',
+  'plugin-rpc-validation',
+  'plugin-development-runtime-evidence',
 ]) {
-  if (!focusedGate.includes(requiredStage)) fail(`focused gate composition omitted ${requiredStage}`);
+  if (!focusedPlan.gateIds.includes(requiredStage)) fail(`focused gate composition omitted ${requiredStage}`);
 }
 
 const publicIndexes = [

@@ -105,7 +105,7 @@ registry release automation 与自动更新仍不属于当前 CLI 版本。
 ```bash
 pnpm --dir packages/plugin-cli run check
 pnpm --dir packages/plugin-cli run test:pack
-pnpm run check:plugin-developer-cli
+pnpm run gate -- plugin-developer-cli
 ```
 
 根门禁会打包 Contract、SDK、UI、Testkit 与 CLI tarball，在系统临时 consumer 中使用机器配置的全局 pnpm store

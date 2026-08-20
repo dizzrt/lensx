@@ -36,6 +36,7 @@ rules:
     - Keep the change cohesive; split unrelated capabilities into separate changes.
     - Do not cite, link, or name temporary reference files or directories.
     - Do not put concrete implementation details in README or agent onboarding files.
+    - Reuse an existing stable capability Gate for focused validation, or propose a stable capability ID and registry design; never propose a root package script named after the Change or a test subset.
   design:
     - Write the artifact in the language used in the agent conversation unless the user requests another language.
     - Record architectural boundaries, data flow, alternatives, risks, migration, and rollback considerations where relevant.
@@ -47,6 +48,8 @@ rules:
     - Require light and dark modes through the supported Semi Design theming mechanism.
     - Justify every new runtime dependency or component library and prefer the existing stack.
     - Do not cite, link, or name temporary reference files or directories.
+    - Keep cross-layer Rstest, Cargo, build, package-consumer, visual, browser, and native evidence orchestration in the typed Gate registry instead of root shell chains or forwarding aliases.
+    - Separate read-only Gate execution from Generate and Evidence writes, and require an explicit target plus write authorization for committed artifact updates.
   specs:
     - Write delta specs in the language used in the agent conversation unless the user requests another language.
     - Use normative requirements and observable scenarios; avoid implementation-task wording.
@@ -54,6 +57,7 @@ rules:
     - Do not claim planned behavior is already implemented.
     - Before syncing or archiving, translate or rewrite all content entering main specs into English.
     - Main specs under openspec/specs must remain English.
+    - Before syncing or archiving, require maintained documentation and specs to use resolvable stable Gate, Generate, and Evidence IDs and contain no stale Change-specific root commands.
   tasks:
     - Write the artifact in the language used in the agent conversation unless the user requests another language.
     - Order tasks by dependency and keep each task independently verifiable.
@@ -66,3 +70,5 @@ rules:
     - For validation that directly or transitively launches a macOS browser application, require headless and windowless execution with a fresh temporary profile, never the user's default profile or existing browser session.
     - Make the first macOS browser launch in an approved execution context instead of probe-launching it inside a restricted sandbox; prefer automatic approval or review and require user-facing approval only when automatic handling cannot authorize the execution.
     - Require graceful browser shutdown and temporary-profile cleanup, with forced termination only as a bounded timeout fallback; classify sandbox-only launch failures as environment failures and rerun the unchanged gate without weakening or skipping visual evidence.
+    - Name every applicable stable capability Gate and keep focused Gate evidence separate from the complete frontend/workspace and Rust validation set.
+    - Before sync or archive, scan the root manifest, CI, maintained documentation, and specs for Change IDs, removed aliases, direct Rstest file-list scripts, recursive check scripts, and stale dispatcher references.

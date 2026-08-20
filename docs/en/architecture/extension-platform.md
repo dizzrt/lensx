@@ -152,9 +152,9 @@ API changes update their own version dimension. The current contract provides
 no earlier Schema, deprecated symbol alias, compatibility adapter, or
 migration branch.
 
-Run `pnpm run generate:plugin-manifest-types` and
-`pnpm run generate:plugin-host-api-types` to regenerate committed input types,
-and `pnpm run check:plugin-contract` for the complete drift gate. The gate
+Run `pnpm run generate -- plugin-manifest-types --write` and
+`pnpm run generate -- plugin-host-api-types --write` to regenerate committed input types,
+and `pnpm run gate -- plugin-contract` for the complete drift gate. The gate
 checks generated types, package tests, Host boundaries, shared Rust fixtures,
 and a real tarball installed into an isolated external consumer. The tarball
 contains runtime JavaScript, declarations, the two public JSON Schemas, and package
@@ -470,7 +470,7 @@ is resumed by a repeated operation or startup recovery under the same process
 and cross-process commit boundary. Malformed, conflicting, symlinked, or
 out-of-root evidence is preserved and blocks destructive cleanup.
 
-Run `pnpm run check:plugin-lifecycle-controls` for the dedicated Rust,
+Run `pnpm run gate -- plugin-lifecycle-controls` for the dedicated Rust,
 TypeScript, surface-convergence, workspace-boundary, and packed-public-package
 gate. These controls intentionally add no management UI, plugin Runtime,
 permission decision workflow, public lifecycle API, application uninstall, or
@@ -528,7 +528,7 @@ does not provide remote or automatic updates, user-initiated rollback,
 multi-version retention, Runtime health rollback, data migration, a permission
 or management UI, signature verification, or quarantine repair.
 
-Run `pnpm run check:plugin-upgrade-and-rollback` for the private contract,
+Run `pnpm run gate -- plugin-upgrade-and-rollback` for the private contract,
 adapter/service, boundary, package/registration/lifecycle regression, packed
 public-package, and focused Rust gate. The command never publishes packages or
 rewrites fixture baselines.
@@ -612,7 +612,7 @@ or unclassified internal failure uses fixed `500`. Responses and logs contain
 no scope, identity, version, digest, record key, absolute path, raw I/O, stack,
 partial bytes, or existence detail.
 
-Run `pnpm run check:plugin-resource-service` for the shared Rust/TypeScript
+Run `pnpm run gate -- plugin-resource-service` for the shared Rust/TypeScript
 fixtures, desktop adapter, workspace boundary, Manager generation, Installer
 ownership regressions, and protocol/path/MIME/lifecycle/race/oracle/platform URL
 tests. This service does not create a Child WebView, execute plugin code, establish
@@ -653,7 +653,7 @@ invoke secret.
 Run:
 
 ```bash
-pnpm run check:isolated-plugin-runtime-origin
+pnpm run gate -- isolated-plugin-runtime-origin
 ```
 
 This is the macOS-only origin prerequisite consumed by the production Child
@@ -706,7 +706,7 @@ Popup/targeted-context and blob-download cases reach their independent deny
 hooks. Run:
 
 ```bash
-pnpm run check:frame-aware-webview-navigation-policy
+pnpm run gate -- frame-aware-webview-navigation-policy
 ```
 
 This capability is macOS-only and does not claim Windows or Linux support. The
@@ -740,10 +740,10 @@ and the Host accepts only the current label, attempt, generation, nonce, and
 strict transport frame. The bridge exposes no general Tauri command/event,
 window, WebView, identity, origin, path, or native handle authority.
 
-Run `pnpm run check:plugin-child-webview-runtime` for the slot, origin/resource
+Run `pnpm run gate -- plugin-child-webview-runtime` for the slot, origin/resource
 binding, open-Web capability baseline, navigation policy, terminal lifecycle,
 ACL matrix, current fixtures, and workspace boundaries. Run
-`pnpm run check:plugin-child-webview-session` for readiness, RPC, Host dispatch,
+`pnpm run gate -- plugin-child-webview-session` for readiness, RPC, Host dispatch,
 and cleanup. The real WKWebView evidence is macOS-only; no Windows or Linux
 Runtime support is claimed.
 
@@ -801,7 +801,7 @@ content, payloads, storage values, raw exceptions, and stacks; there is
 no remote CSP reporting channel. The committed real WKWebView matrices are
 macOS-only. The public SDK WebView transport does not inherit these Host-private
 attempts, timers, breaker records, or failure codes. Run
-`pnpm run check:open-isolated-plugin-runtime` for the composed
+`pnpm run gate -- open-isolated-plugin-runtime` for the composed
 gate and its Resource, origin, navigation, Child WebView, Session, workspace, and
 public-tarball prerequisites.
 
@@ -1031,11 +1031,11 @@ iframe/CPU/memory monitoring, plugin suspension, isolation escalation,
 automatic recovery, public policy configuration or diagnostic history. Those
 Runtime resource controls remain Task 7.5 or later explicit changes.
 
-Run `pnpm run check:plugin-sdk-transport` for codec drift, SDK/Testkit,
+Run `pnpm run gate -- plugin-sdk-transport` for codec drift, SDK/Testkit,
 iframe/Host adapter, real tarball no-DOM and browser consumers, real
 MessageChannel integration, Runtime lifecycle, and bounded macOS WKWebView
 evidence. This delivery does not claim Windows/Linux Runtime transport support.
-Run `pnpm run check:plugin-rpc-validation` for the RPC policy, malicious
+Run `pnpm run gate -- plugin-rpc-validation` for the RPC policy, malicious
 fixtures, admission/egress races, Dispatcher/provider integration, private
 boundaries, and real resource-rejection evidence.
 
@@ -1070,7 +1070,7 @@ never accepts a plugin-selected namespace, path, plugin key, command, or
 executor. A confirmed damaged or blocked namespace produces one complete
 Context replacement without the five storage capabilities.
 
-Run `pnpm run check:plugin-host-api-dispatcher` for the focused Dispatcher,
+Run `pnpm run gate -- plugin-host-api-dispatcher` for the focused Dispatcher,
 Navigation, Action, Runtime, MessageChannel, public-tarball, export, dependency,
 and workspace-boundary gate. This capability adds no public export, wire frame,
 or SDK dependency. Sustained Runtime resource isolation, project template,
@@ -1090,7 +1090,7 @@ open isolated Web Runtime trust decision. lensX isolates Host and other-plugin
 authority but does not inspect or individually authorize ordinary Worker,
 network, remote-resource, Blob/Data, WASM, or browser-origin storage behavior.
 Device/native capabilities remain unavailable unless a future explicit public
-Host boundary is designed. Run `pnpm run check:open-isolated-plugin-runtime`
+Host boundary is designed. Run `pnpm run gate -- open-isolated-plugin-runtime`
 for the negative authority scan and composed Runtime validation.
 
 ## Shipped Plugin-Scoped Storage
@@ -1126,7 +1126,7 @@ namespace with oversized, malformed, non-canonical, symlinked, or abnormal
 evidence. Diagnostics contain only stable codes, operations, and messages—no
 key, value, plugin identity, payload, path, exception, or stack.
 
-Run `pnpm run check:plugin-scoped-storage` for shared TypeScript/Rust fixtures,
+Run `pnpm run gate -- plugin-scoped-storage` for shared TypeScript/Rust fixtures,
 Rust persistence and lifecycle tests, desktop provider and Dispatcher tests,
 the real SDK/MessageChannel loop, public tarball consumers, private-boundary
 checks, and the existing bounded macOS WKWebView transport evidence. This
@@ -1168,7 +1168,7 @@ degraded evidence fails closed.
 The management surface does not expose raw paths or errors, Publisher trust, Registry
 patch/history protocols, a public management API, or any management export
 through Contract, SDK, Testkit, or Plugin UI. Run
-`pnpm run check:plugin-management-settings` for the private boundary, facade/UI
+`pnpm run gate -- plugin-management-settings` for the private boundary, facade/UI
 regressions, public-package checks, and fixed `650×600` bilingual light/dark
 screenshots and computed styles.
 
@@ -1215,7 +1215,7 @@ origin, browser messaging object, or trusted Host identity. Its abstract
 request hook is not a delivered Host API method client. Capability IDs use the
 shared closed method type and are not ordinary Web capability declarations.
 
-`pnpm run check:plugin-testkit` verifies package tests and declarations,
+`pnpm run gate -- plugin-testkit` verifies package tests and declarations,
 Contract -> SDK -> Testkit dependency direction, real tarball contents, and a
 no-DOM ES2022 consumer installed outside the workspace. That consumer is a
 release smoke fixture, not the formal plugin project template. Testkit does not

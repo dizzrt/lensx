@@ -7,6 +7,50 @@
 
 修复此次变更引入的 warning 和 error。修复后，先重新执行失败命令，再重新执行完整的最终验证集合。
 
+## 命令模型与稳定接口
+
+根 scripts 表面刻意保持精简并接受治理。标准 `build`、`typecheck`、`test` 与 `check`
+分别聚合根应用和各 workspace member 的同名 lifecycle。Rstest 会自动发现
+`tests/**/*.test.{ts,tsx}` 中的 TypeScript/TSX 单元、组件、契约、文档、源码策略与只读
+drift 断言；不要为单个测试文件或测试子集新增根 alias。
+
+跨层 capability acceptance 统一使用类型化 Gate registry：
+
+```bash
+pnpm run gate -- --list
+pnpm run gate -- --plan plugin-rpc-validation
+pnpm run gate -- plugin-rpc-validation
+pnpm run gate -- --all
+```
+
+每个 Gate 都声明稳定 capability ID、Gate dependencies，以及包含 executable、argument
+vector、working directory、environment、platform 与 read-only/browser/native 安全元数据的
+结构化 steps。runner 在启动命令前拒绝未知或重复 ID、缺失 dependency、缺失 step 和循环；
+它按稳定拓扑顺序展开依赖，默认串行运行，并在一次 invocation 中只执行一次共享 step ID。
+命令无法启动或返回非零状态时，runner 会停止计划并报告请求的 Gate 与失败 step。
+
+`--all` 会在同一个 DAG 中请求全部 maintained Gates，因此共享 steps 仍会去重。其并集包含
+browser、visual 与 native evidence checks；执行前必须先检查计划，并获得所需的已批准 macOS
+执行上下文。
+
+Gate 对 committed fixtures、baselines 和 evidence 保持只读。受治理的写入目标需要单独列举
+和执行：
+
+```bash
+pnpm run generate -- --list
+pnpm run generate -- plugin-package-format-fixtures --write
+pnpm run evidence -- --list
+pnpm run evidence -- macos-accessory-launcher --write
+```
+
+Generate 与 Evidence 在缺少 `--write` 时会在启动任何命令前拒绝执行。审查生成物或 evidence
+差异后，必须重新运行对应只读 Gate。构建、临时 consumer 和隔离 profile 可以写入可丢弃输出，
+但 Gate 绝不会隐式刷新 committed artifact。
+
+focused Gate 只补充、不替代 `pnpm run test`、`typecheck`、`check`、`build`、适用 Rust 验证，
+以及文档/OpenSpec 验证。CI 与维护文档必须调用 dispatcher ID；已经移除的根 `test:*`、
+`check:*`、`ci:*`、`run:*` 与 `refresh:*` alias 不是兼容接口。
+
 ## 本机浏览器自动化
 
 基于浏览器的验证必须自动执行，且不得干扰用户的正常桌面或浏览器会话。该规则同时适用于直接启动
@@ -36,8 +80,8 @@ Headless 只描述渲染和窗口行为，不会移除浏览器进程所需的�
 show/hide/toggle 顺序、本地 `Cmd+W`/`Cmd+Q` 或相关 teardown 时，必须运行：
 
 ```bash
-pnpm run check:macos-accessory-launcher
-pnpm run evidence:macos-accessory-launcher
+pnpm run gate -- macos-accessory-launcher
+pnpm run evidence -- macos-accessory-launcher --write
 ```
 
 focused check 会验证 `LSUIElement`、`visibleOnAllWorkspaces`、保留的 `alwaysOnTop`、非全屏和尺寸
@@ -90,9 +134,8 @@ pnpm run build
 或返回非零状态时，根命令会失败。修改聚合或依赖规则时，直接运行 workspace 专项回归：
 
 ```bash
-pnpm run test:workspace-lifecycle
-pnpm run test:workspace-boundaries
-pnpm run check:workspace-boundaries
+pnpm run gate -- workspace-lifecycle
+pnpm run gate -- workspace-boundaries
 ```
 
 `pnpm run test:watch` 只用于开发过程。最终证据必须使用非 watch 命令。
@@ -102,7 +145,7 @@ pnpm run check:workspace-boundaries
 修改 `@lensx/plugin-contract`、其 Schema、Host 消费方或 Rust 模型时，必须运行：
 
 ```bash
-pnpm run check:plugin-contract
+pnpm run gate -- plugin-contract
 ```
 
 该门禁验证生成类型 drift、package tests、Host 边界、TypeScript/Rust 共享 fixtures、打包文件
@@ -115,15 +158,15 @@ workspace link 可能掩盖缺失的声明、Schema 文件、export 目标或 ru
 inspector、fixtures 或 package-format 文档时，必须运行：
 
 ```bash
-pnpm run check:plugin-package-format
+pnpm run gate -- plugin-package-format
 ```
 
 该门禁检查 dependency 和 constant drift，对比全部 committed fixture bytes 与 expectations 且不重写，证明
 reference pack repeatability，运行 focused TypeScript tests，并让 Rust 消费同一组 valid、invalid、
 incompatible 和 reproducible cases。只有在审查 dependency、parameter、format 与 diagnostic 变化后，才使用
-`pnpm run generate:plugin-package-format-fixtures` 有意更新 fixture 或 digest。
+`pnpm run generate -- plugin-package-format-fixtures --write` 有意更新 fixture 或 digest。
 
-该专项门禁是对 `check:plugin-contract`、workspace boundary/lifecycle checks，以及完整 frontend/shared 与
+该专项门禁是对 `plugin-contract` Gate、workspace boundary/lifecycle checks，以及完整 frontend/shared 与
 Rust 验证集合的补充，不会替代它们。
 
 ## Plugin Developer CLI 验证
@@ -132,7 +175,7 @@ Rust 验证集合的补充，不会替代它们。
 文档时，必须运行：
 
 ```bash
-pnpm run check:plugin-developer-cli
+pnpm run gate -- plugin-developer-cli
 ```
 
 该门禁检查 executable tarball、受限 exports 与 dependency closure、workspace 和文档边界、template drift、
@@ -150,14 +193,14 @@ signing/provenance 已交付；它们仍属于 roadmap Task 6.5 与 8.1。
 修改 `.github/workflows/`、CI 脚本、workspace discovery、直接插件 lifecycle 或双语 CI 文档时必须运行：
 
 ```bash
-pnpm run check:ci-workflows
+pnpm run gate -- ci-workflows
 pnpm exec rstest run tests/ci.test.ts tests/ci-workflow-policy.test.ts tests/workspace-lifecycle.test.ts
 ```
 
 策略 gate 要求目录中只有 `lensx-ci.yml` 与 `plugins-ci.yml`，并检查 macOS runner、只读权限、
 固定 action、文档定义的触发矩阵、维护的本地入口，以及不存在版本或发布 authority。聚焦测试覆盖
 直接插件发现、clean 公共依赖构建顺序、阻塞插件阶段、空 workspace 与失败传播。完整本地复现使用
-`pnpm run ci:lensx` 或 `pnpm run ci:plugins`。
+`pnpm run gate -- ci-lensx` 或 `pnpm run gate -- ci-plugins`。
 
 ## 插件开发模式验证
 
@@ -165,7 +208,7 @@ pnpm exec rstest run tests/ci.test.ts tests/ci-workflow-policy.test.ts tests/wor
 state、Resource/Runtime invalidation、development adapter/service/UI、消息、文档或视觉证据时必须运行：
 
 ```bash
-pnpm run check:plugin-development-mode
+pnpm run gate -- plugin-development-mode
 ```
 
 该 gate 组合 strict boundary parsing、共享 CLI/Host payload corpus、feature-enabled Rust transaction
@@ -183,9 +226,9 @@ commit 后创建 fresh attempt、新 generation 投影前销毁旧 attempt、sta
 Development Mode transaction 变更后刷新组合证据：
 
 ```bash
-pnpm run refresh:plugin-development-runtime-evidence:normal
-pnpm run refresh:plugin-development-runtime-evidence:malicious
-pnpm run check:plugin-development-runtime-evidence
+pnpm run evidence -- plugin-development-runtime-evidence-normal --write
+pnpm run evidence -- plugin-development-runtime-evidence-malicious --write
+pnpm run gate -- plugin-development-runtime-evidence
 ```
 
 证据文件只能包含有界协议/平台标签、相对 fixture 引用、digest 与布尔值；不得记录 source directory、
@@ -197,7 +240,7 @@ scoped URL、origin、freshness value、token、payload value 或 raw error。
 custom protocol、path/MIME policy 或 resource lifecycle 时，必须运行：
 
 ```bash
-pnpm run check:plugin-resource-service
+pnpm run gate -- plugin-resource-service
 ```
 
 该门禁消费精确的 Rust/TypeScript 共享 contract fixture，检查公共 package 与插件边界，并运行 Manager、
@@ -222,7 +265,7 @@ keyboard、accessibility 或 Semi Design surface，因此这些区域需要回�
 前置条件时，必须运行：
 
 ```bash
-pnpm run check:isolated-plugin-runtime-origin
+pnpm run gate -- isolated-plugin-runtime-origin
 ```
 
 该门禁组合 canonical `.lxp` fixture 验证、有边界的已提交真实 macOS WKWebView evidence、Resource
@@ -242,7 +285,7 @@ fallback 都会使验证失败。
 evidence schema 或 Plugin Page/Resource 回归时，运行：
 
 ```bash
-pnpm run check:frame-aware-webview-navigation-policy
+pnpm run gate -- frame-aware-webview-navigation-policy
 ```
 
 该门禁检查全部 15 个维护中的 document、bounded evidence schema、已提交的真实 WKWebView
@@ -253,10 +296,10 @@ evidence 仅适用于 macOS，必须确认 activate/replace/dispose/reactivate l
 bootstrap 可用、descendant bootstrap/invoke 缺失，以及 popup/download hook count。它绝不能包含
 raw URL、scope、identity、invoke key 或 payload、bootstrap source 或本机路径。
 
-只有在审查 fixture 变更后，才运行 `pnpm run generate:frame-aware-webview-navigation-fixtures`。
+只有在审查 fixture 变更后，才运行 `pnpm run generate -- frame-aware-webview-navigation-fixtures --write`。
 真实 evidence 必须先在目标 macOS WKWebView 重跑，再用
-`pnpm run generate:frame-aware-webview-evidence-matrix` 有意提升。vendored dependency 变更必须先
-审查精确 diff 与 license，再用 `pnpm run generate:frame-aware-navigation-dependency-drift` 更新
+`pnpm run generate -- frame-aware-webview-evidence-matrix --write` 有意提升。vendored dependency 变更必须先
+审查精确 diff 与 license，再用 `pnpm run generate -- frame-aware-navigation-dependency-drift --write` 更新
 integrity record。这些 generator 不替代 focused gate 或完整 frontend/Rust validation 集合。
 
 ## 隔离 Plugin Child WebView Runtime 验证
@@ -265,9 +308,9 @@ integrity record。这些 generator 不替代 focused gate 或完整 frontend/Ru
 lifecycle cleanup 时，必须运行：
 
 ```bash
-pnpm run check:plugin-child-webview-runtime
-pnpm run check:plugin-child-webview-window-lifecycle
-pnpm run check:plugin-child-webview-macos-evidence
+pnpm run gate -- plugin-child-webview-runtime
+pnpm run gate -- plugin-child-webview-window-lifecycle
+pnpm run gate -- plugin-child-webview-macos-evidence
 ```
 
 该门禁组合 React slot/state tests、物理 bounds revision、compare-current native lifecycle、
@@ -295,7 +338,7 @@ restore，以及真实 Page close 后 authority 零残留。
 cancellation 或 cleanup 时，必须运行：
 
 ```bash
-pnpm run check:plugin-child-webview-session
+pnpm run gate -- plugin-child-webview-session
 ```
 
 该门禁证明 source-bound ready admission、current attempt/generation/nonce 校验、bounded request、
@@ -309,7 +352,7 @@ private error。该 focused macOS gate 只补充完整 frontend/Rust validation 
 Session handoff、transport fixture、package export 或目标 WebView evidence 时，必须运行：
 
 ```bash
-pnpm run check:plugin-sdk-transport
+pnpm run gate -- plugin-sdk-transport
 ```
 
 该门禁检查 plugin/Host codec 的确定性 drift、strict `unknown` parsing、request/result 配对、安全 error、
@@ -330,7 +373,7 @@ privileged handler zero-hit。evidence 不含 URL、nonce、bridge 内容、payl
 result/event containment、安全 diagnostic、post-response effect、恶意 fixture 或 resource-limit evidence 时，必须运行：
 
 ```bash
-pnpm run check:plugin-rpc-validation
+pnpm run gate -- plugin-rpc-validation
 ```
 
 该门禁检查不可变的 5 MiB/32 层语义深度/36 层 frame 深度/16,384 节点/单 request/32 并发/10,000 ms policy；
@@ -353,7 +396,7 @@ deadline。它不证明持续频率控制、iframe/CPU/memory 监控、插件暂
 plugin-local Action dispatch、App 组合或 Dispatcher 文档时，必须运行：
 
 ```bash
-pnpm run check:plugin-host-api-dispatcher
+pnpm run gate -- plugin-host-api-dispatcher
 ```
 
 该门禁运行 Dispatcher、transport、MessageChannel、React Runtime、Navigation、Action projection 与
@@ -373,7 +416,7 @@ Manifest/Host API `0.2.0`、permission authority 删除、plugin response CSP、
 Worker/network/Blob/Data/WASM 支持、Runtime teardown 或 trust copy 变化时必须运行：
 
 ```bash
-pnpm run check:open-isolated-plugin-runtime
+pnpm run gate -- open-isolated-plugin-runtime
 ```
 
 该门禁组合 generated Contract drift、真实 public tarball、封闭 Dispatcher、canonical open-Web fixture、
@@ -388,9 +431,9 @@ policy 回流时失败。canonical WKWebView harness 提供 package/Blob/Data Wo
 Runtime lifecycle、视觉证据或产品文档时，必须运行：
 
 ```bash
-pnpm run ci:plugins
-pnpm run check:official-config-lens-cold-open
-pnpm run check:official-config-lens-warm-format
+pnpm run gate -- ci-plugins
+pnpm run gate -- official-config-lens-cold-open
+pnpm run gate -- official-config-lens-warm-format
 ```
 
 这些门禁运行成员 lifecycle 与四语言恶意/golden 语料，检查依赖许可证和准确版本，
@@ -406,7 +449,7 @@ Manifest 初始尺寸的有界真实 macOS WKWebView 证据。证据和诊断不
 Dispatcher storage routing、Runtime capability availability、公共 consumer evidence 或 storage 文档时，必须运行：
 
 ```bash
-pnpm run check:plugin-scoped-storage
+pnpm run gate -- plugin-scoped-storage
 ```
 
 该门禁验证 TypeScript/Rust 完全共享的 valid/invalid fixture、严格边界 result 与安全 error、确定性 quota 与
@@ -426,7 +469,7 @@ accessibility、keyboard 或 Semi Design surface，因此不适用 visual accept
 message/style 或 App composition 时，必须运行：
 
 ```bash
-pnpm run check:plugin-management-settings
+pnpm run gate -- plugin-management-settings
 ```
 
 该门禁检查严格共享的 data-management fixture、desktop/private boundary、Registration revision 与 selection

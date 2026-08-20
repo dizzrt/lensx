@@ -33,14 +33,14 @@ tests, and the production build. The Rust job runs formatting, workspace tests,
 static checks, and a workspace build. Reproduce them locally on macOS with:
 
 ```bash
-pnpm run ci:lensx:frontend
-pnpm run ci:lensx:rust
+pnpm run gate -- ci-lensx-frontend
+pnpm run gate -- ci-lensx-rust
 ```
 
 Run both sequentially with:
 
 ```bash
-pnpm run ci:lensx
+pnpm run gate -- ci-lensx
 ```
 
 These commands are LensX-only. The standard root `build`, `typecheck`, `test`,
@@ -52,7 +52,7 @@ Any matching plugin change validates every direct `plugins/*` member rather
 than only the changed member. Reproduce the complete entry point with:
 
 ```bash
-pnpm run ci:plugins
+pnpm run gate -- ci-plugins
 ```
 
 The entry point discovers direct plugins, computes their transitive public
@@ -76,7 +76,7 @@ Validate the workflow inventory, triggers, permissions, runner selection,
 pinned actions, required entry points, and absence of publishing authority with:
 
 ```bash
-pnpm run check:ci-workflows
+pnpm run gate -- ci-workflows
 ```
 
 When a stage fails, fix the cause, rerun that stage, and then rerun its complete

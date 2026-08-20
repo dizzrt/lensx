@@ -30,14 +30,14 @@ LensX CI 使用 `paths-ignore: [plugins/**]`。Plugins CI 的 `paths` 包含
 workspace 测试、静态检查和 workspace 构建。在 macOS 本地复现：
 
 ```bash
-pnpm run ci:lensx:frontend
-pnpm run ci:lensx:rust
+pnpm run gate -- ci-lensx-frontend
+pnpm run gate -- ci-lensx-rust
 ```
 
 顺序运行两者：
 
 ```bash
-pnpm run ci:lensx
+pnpm run gate -- ci-lensx
 ```
 
 这些命令只验证 LensX。标准根级 `build`、`typecheck`、`test` 与 `check` 仍保持全仓
@@ -49,7 +49,7 @@ lifecycle 语义。
 完整本地入口为：
 
 ```bash
-pnpm run ci:plugins
+pnpm run gate -- ci-plugins
 ```
 
 入口会发现直接插件，计算其传递公共 `packages/*` 依赖，按拓扑顺序构建这些 package，
@@ -67,7 +67,7 @@ exports，不能消费 Host 或 Tauri 私有源码。
 使用以下命令验证 workflow inventory、触发器、权限、runner、固定 action、必需入口和无发布 authority：
 
 ```bash
-pnpm run check:ci-workflows
+pnpm run gate -- ci-workflows
 ```
 
 阶段失败后，先修复原因并重跑失败阶段，再重跑完整的对应 CI 入口。浏览器门禁必须在批准的

@@ -65,6 +65,17 @@ The scripts must perform meaningful package-local validation. Do not use a
 placeholder or omit a script because the root runner rejects incomplete
 members.
 
+The four member scripts are package-local contracts; the root `build`,
+`typecheck`, `test`, and `check` commands discover every member, validate that
+all four scripts exist, and execute them in workspace dependency order after
+the root application lifecycle. Focused cross-layer acceptance is a different
+interface: select a stable capability through `pnpm run gate -- <id>`. Root
+scripts must not mirror a member script, test subset, or OpenSpec Change, and
+must not encode a validation graph with shell `&&`. Use `pnpm run gate --
+--list` and `--plan <id>` to inspect the governed surface and execution plan.
+Generate and Evidence writes use their dedicated dispatchers and require
+`--write`; see [Validation](validation.md).
+
 ## Plugin Contract Package
 
 `packages/plugin-contract` owns the public Manifest and Host API Schemas,
@@ -85,10 +96,10 @@ filesystem access, or a package bundler in its runtime surface. Generate and
 validate the Contract with:
 
 ```bash
-pnpm run generate:plugin-manifest-types
-pnpm run generate:plugin-host-api-types
-pnpm run check:plugin-host-api-contract
-pnpm run check:plugin-contract
+pnpm run generate -- plugin-manifest-types --write
+pnpm run generate -- plugin-host-api-types --write
+pnpm run gate -- plugin-host-api-contract
+pnpm run gate -- plugin-contract
 ```
 
 The complete check rebuilds both generated type sets, runs package and Host
@@ -115,7 +126,7 @@ the same committed corpus.
 Use the dedicated drift gate:
 
 ```bash
-pnpm run check:plugin-package-format
+pnpm run gate -- plugin-package-format
 ```
 
 The command builds the CLI package, checks exact codec/crate inputs and
@@ -124,13 +135,13 @@ package-owned TypeScript/reproducibility tests, and runs Rust against the same
 expectations. Baseline regeneration is an explicit review action:
 
 ```bash
-pnpm run generate:plugin-package-format-fixtures
+pnpm run generate -- plugin-package-format-fixtures --write
 ```
 
 Validate the complete authoring boundary with:
 
 ```bash
-pnpm run check:plugin-developer-cli
+pnpm run gate -- plugin-developer-cli
 ```
 
 That gate packs all five public packages, installs them in system temporary
@@ -188,7 +199,7 @@ pnpm --dir packages/plugin-sdk run typecheck
 pnpm --dir packages/plugin-sdk run test
 pnpm --dir packages/plugin-sdk run check
 pnpm --dir packages/plugin-sdk run test:pack
-pnpm run check:plugin-sdk
+pnpm run gate -- plugin-sdk
 ```
 
 The pack gate builds real Contract and SDK tarballs, verifies the SDK file list,
@@ -199,12 +210,12 @@ that an undeclared SDK deep import is rejected. The browser consumer typechecks,
 bundles, loads the WebView entry in a real browser, and rejects private transport
 deep imports. Tests, fixtures, scripts, schemas, Host projections, and
 Host-private source are excluded from the tarball. Run
-`pnpm run check:plugin-sdk-transport` for the complete cross-boundary gate. Run
-`pnpm run check:plugin-host-api-dispatcher` for the production Dispatcher,
+`pnpm run gate -- plugin-sdk-transport` for the complete cross-boundary gate. Run
+`pnpm run gate -- plugin-host-api-dispatcher` for the production Dispatcher,
 response-before-close, Action/Navigation/storage, Context replacement,
 source-bound bridge, public tarball, and workspace-boundary gate. The Dispatcher is
 private Host source; it adds no Contract or SDK export or dependency.
-Run `pnpm run check:plugin-scoped-storage` for the Rust-backed scoped storage,
+Run `pnpm run gate -- plugin-scoped-storage` for the Rust-backed scoped storage,
 Installer lifecycle coordination, public Testkit consumer, and private storage
 boundary gate.
 
@@ -255,7 +266,7 @@ pnpm --dir packages/plugin-testkit run typecheck
 pnpm --dir packages/plugin-testkit run test
 pnpm --dir packages/plugin-testkit run check
 pnpm --dir packages/plugin-testkit run test:pack
-pnpm run check:plugin-testkit
+pnpm run gate -- plugin-testkit
 ```
 
 The dedicated gate validates Contract, SDK, and Testkit tarballs plus workspace
@@ -332,8 +343,8 @@ pnpm --dir packages/plugin-ui run test
 pnpm --dir packages/plugin-ui run check
 pnpm --dir packages/plugin-ui run test:pack
 pnpm --dir packages/plugin-ui run test:visual
-pnpm run check:plugin-ui
-pnpm run check:plugin-developer-cli
+pnpm run gate -- plugin-ui
+pnpm run gate -- plugin-developer-cli
 ```
 
 The pack gate installs real Contract, SDK, and UI tarballs into an isolated
@@ -376,14 +387,14 @@ validation, and the internal `app:*` scripts avoid recursive root invocation.
 Use these focused commands when changing workspace tooling:
 
 ```bash
-pnpm run check:workspace-boundaries
-pnpm run test:workspace-boundaries
-pnpm run test:workspace-lifecycle
-pnpm run check:plugin-sdk
-pnpm run check:plugin-testkit
-pnpm run check:plugin-ui
-pnpm run check:ci-workflows
-pnpm run ci:plugins
+pnpm run gate -- workspace-boundaries
+pnpm run gate -- workspace-boundaries
+pnpm run gate -- workspace-lifecycle
+pnpm run gate -- plugin-sdk
+pnpm run gate -- plugin-testkit
+pnpm run gate -- plugin-ui
+pnpm run gate -- ci-workflows
+pnpm run gate -- ci-plugins
 ```
 
 ## Dependency Direction

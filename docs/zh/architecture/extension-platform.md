@@ -124,9 +124,9 @@ Contract package 版本、Manifest 协议、Host API 协议与 lensX 应用版�
 change 更新各自版本维度。当前契约不提供更早 Schema、deprecated symbol alias、兼容 adapter
 或迁移分支。
 
-运行 `pnpm run generate:plugin-manifest-types` 与
-`pnpm run generate:plugin-host-api-types` 可重新生成已提交的输入类型，运行
-`pnpm run check:plugin-contract` 可执行完整 drift gate。门禁覆盖生成类型、package tests、Host
+运行 `pnpm run generate -- plugin-manifest-types --write` 与
+`pnpm run generate -- plugin-host-api-types --write` 可重新生成已提交的输入类型，运行
+`pnpm run gate -- plugin-contract` 可执行完整 drift gate。门禁覆盖生成类型、package tests、Host
 边界、Rust 共享 fixtures，以及把真实 tarball 安装到隔离外部消费者中的验证。tarball 只包含
 运行时 JavaScript、声明、两个公共 JSON Schema 和 package metadata，不包含 tests、fixtures、生成
 scripts 或 Host 私有源码。
@@ -350,7 +350,7 @@ Uninstall 必须显式选择 `retain_data` 或 `delete_data` policy。Host 会�
 继续执行。Malformed、冲突、symlink 或 root 之外的 evidence 会被保留，并阻止破坏性 cleanup。
 
 专用 Rust、TypeScript、surface convergence、workspace boundary 与公共 package 打包门禁是
-`pnpm run check:plugin-lifecycle-controls`。这些控制有意不增加管理 UI、plugin Runtime、native capability、
+`pnpm run gate -- plugin-lifecycle-controls`。这些控制有意不增加管理 UI、plugin Runtime、native capability、
 公共 lifecycle API、应用卸载或 replacement 行为；replacement 是下文独立的私有能力。
 
 ## 已交付的 Host 私有本地插件替换
@@ -388,7 +388,7 @@ non-active sibling。异常名称、symlink、root escape 以及 healthy/quarant
 并阻止不安全写入。本能力不提供远程/自动更新、用户主动 rollback、多版本保留、Runtime health rollback、
 data migration、权限/管理 UI、签名验证或 quarantine repair。
 
-运行 `pnpm run check:plugin-upgrade-and-rollback` 可执行私有 contract、adapter/service、boundary、
+运行 `pnpm run gate -- plugin-upgrade-and-rollback` 可执行私有 contract、adapter/service、boundary、
 package/registration/lifecycle 回归、公共 package 打包与 Rust focused 门禁。该命令不会发布 package，
 也不会重写 fixture baseline。
 
@@ -449,7 +449,7 @@ unavailable registration 共用固定 `404`。非 GET/HEAD 使用固定 `405` �
 state 不可用或无法分类的内部失败使用固定 `500`。response 与 log 均不包含 scope、identity、version、
 digest、record key、absolute path、raw I/O、stack、partial bytes 或存在性细节。
 
-运行 `pnpm run check:plugin-resource-service` 可验证 Rust/TypeScript 共享 fixture、desktop adapter、
+运行 `pnpm run gate -- plugin-resource-service` 可验证 Rust/TypeScript 共享 fixture、desktop adapter、
 workspace boundary、Manager generation、Installer ownership 回归，以及 protocol/path/MIME/lifecycle/
 race/oracle/platform URL 测试。该 service 本身不创建 Child WebView、不执行插件代码、不建立 Runtime
 Session 或 Host API transport，也不授予权限。它会强制执行由 Host 私有安全 profile 选择的 document
@@ -480,7 +480,7 @@ invoke secret。
 运行：
 
 ```bash
-pnpm run check:isolated-plugin-runtime-origin
+pnpm run gate -- isolated-plugin-runtime-origin
 ```
 
 这是下文 production Child WebView 所消费的 macOS-only origin 前置能力。它本身不创建 WebView，
@@ -522,7 +522,7 @@ evidence 如实记录 `blocked_by_webview`、原 document 保留和 callback cou
 deny。popup/targeted-context 与 blob-download 用例会进入各自独立 deny hook。运行：
 
 ```bash
-pnpm run check:frame-aware-webview-navigation-policy
+pnpm run gate -- frame-aware-webview-navigation-policy
 ```
 
 该 capability 仅支持 macOS，不宣称 Windows 或 Linux 支持。Task 4.2 container 会消费它的精确
@@ -549,9 +549,9 @@ bridge；native ingress 携带实际 WebView identity，Host 只接纳 current l
 与 strict transport frame。bridge 不暴露通用 Tauri command/event、window、WebView、identity、origin、
 path 或 native handle authority。
 
-运行 `pnpm run check:plugin-child-webview-runtime` 验证 slot、origin/resource binding、开放 Web 能力、
+运行 `pnpm run gate -- plugin-child-webview-runtime` 验证 slot、origin/resource binding、开放 Web 能力、
 navigation policy、terminal lifecycle、ACL matrix、current fixture 与 workspace boundary。运行
-`pnpm run check:plugin-child-webview-session` 验证 readiness、RPC、Host dispatch 与 cleanup。真实
+`pnpm run gate -- plugin-child-webview-session` 验证 readiness、RPC、Host dispatch 与 cleanup。真实
 WKWebView evidence 仅适用于 macOS，不宣称 Windows 或 Linux Runtime 支持。
 
 ## 已交付的 Plugin Runtime CSP 与安全生命周期
@@ -592,7 +592,7 @@ graceful exit 不计数；generation 变化或连续 30,000 ms 健康 `ready` �
 文案。diagnostic/evidence 不包含完整或 blocked URL、origin/scope、path、nonce/bridge 内容、payload、
 storage value、raw exception 或 stack，也没有远程 CSP report channel。已提交的真实 WKWebView matrix
 仅支持 macOS。公共 SDK WebView transport 不会继承这些 Host 私有 attempt、timer、breaker record 或
-failure code。运行 `pnpm run check:open-isolated-plugin-runtime` 可执行组合 gate
+failure code。运行 `pnpm run gate -- open-isolated-plugin-runtime` 可执行组合 gate
 及其 Resource、origin、navigation、Child WebView、Session、workspace 与 public-tarball 前置门禁。
 
 ## 已交付的 Host 私有 Plugin Surface 投影与 Page 导航
@@ -758,10 +758,10 @@ origin、exception、stack、Port、provider 或 Host object，sink throw 也不
 本次交付不新增 batch/streaming RPC、持续调用频率限制、iframe/CPU/memory 监控、插件暂停、隔离升级、自动
 恢复、公共 policy 配置或 diagnostic history。这些 Runtime resource control 仍属于 Task 7.5 或后续独立 change。
 
-运行 `pnpm run check:plugin-sdk-transport` 可验证 codec drift、SDK/Testkit、iframe/Host adapter、真实
+运行 `pnpm run gate -- plugin-sdk-transport` 可验证 codec drift、SDK/Testkit、iframe/Host adapter、真实
 tarball no-DOM/browser consumer、真实 MessageChannel integration、Runtime lifecycle 与有界 macOS
 WKWebView evidence。本交付不声称 Windows/Linux Runtime transport 支持。
-运行 `pnpm run check:plugin-rpc-validation` 可验证 RPC policy、恶意 fixture、admission/egress race、
+运行 `pnpm run gate -- plugin-rpc-validation` 可验证 RPC policy、恶意 fixture、admission/egress race、
 Dispatcher/provider integration、私有边界和真实资源拒绝 evidence。
 
 ## 已交付的 Host 私有 Plugin Host API Dispatcher
@@ -787,7 +787,7 @@ provider，绝不接受插件选择的 namespace、path、plugin key、command �
 blocked 后，Host 只发送一次移除五个 storage capability 的完整 Context replacement；它不会改变独立授权的
 clipboard capability。
 
-运行 `pnpm run check:plugin-host-api-dispatcher` 可执行 Dispatcher、Navigation、Action、Runtime、
+运行 `pnpm run gate -- plugin-host-api-dispatcher` 可执行 Dispatcher、Navigation、Action、Runtime、
 MessageChannel、公共 tarball、export、dependency 与 workspace boundary 聚焦门禁。该能力不增加公共 export、
 wire frame 或 SDK dependency。持续 Runtime resource isolation、项目模板、CLI 与开发模式仍是独立能力。
 
@@ -802,7 +802,7 @@ composition 中。旧 record 与 wire field fail closed。
 可信安装与 replacement confirmation 改为说明开放隔离 Web Runtime 的信任决定。lensX 隔离 Host 与
 其他插件 authority，但不审查或逐项授权普通 Worker、network、远程资源、Blob/Data、WASM 或浏览器
 origin storage 行为。设备/native capability 仍不可用，除非未来设计明确的公共 Host boundary。
-`pnpm run check:open-isolated-plugin-runtime` 提供负向 authority 扫描与组合 Runtime 验证。
+`pnpm run gate -- open-isolated-plugin-runtime` 提供负向 authority 扫描与组合 Runtime 验证。
 
 ## 已交付的插件 Scoped Storage
 
@@ -828,7 +828,7 @@ bounded lazy validation 只降级存在 oversized、malformed、non-canonical、
 namespace。诊断只包含稳定 code、operation 与 message，不包含 key、value、plugin identity、payload、path、
 exception 或 stack。
 
-运行 `pnpm run check:plugin-scoped-storage` 可验证共享 TypeScript/Rust fixture、Rust persistence/lifecycle、
+运行 `pnpm run gate -- plugin-scoped-storage` 可验证共享 TypeScript/Rust fixture、Rust persistence/lifecycle、
 desktop provider/Dispatcher、真实 SDK/MessageChannel loop、公共 tarball consumer、私有边界与既有有界 macOS
 WKWebView transport evidence。本交付不增加管理 UI、产品 copy、theme/accessibility surface、permission
 prompt、通用 RPC limit、模板、CLI 或开发模式。
@@ -855,7 +855,7 @@ ambiguous、linked、escaped、stale、enabled、quarantined 或 degraded eviden
 
 管理表面不暴露 raw path/error、Publisher trust、
 Registry patch/history protocol 或公共管理 API，也不会通过 Contract、SDK、Testkit 或 Plugin UI 导出任何
-管理能力。运行 `pnpm run check:plugin-management-settings` 可验证私有边界、facade/UI 回归、公共 package
+管理能力。运行 `pnpm run gate -- plugin-management-settings` 可验证私有边界、facade/UI 回归、公共 package
 检查，以及固定 `650×600` 的双语 light/dark screenshot 与 computed style。
 
 ## 已交付的公共 Plugin Testkit
@@ -897,7 +897,7 @@ envelope、request identity、nonce、origin、browser messaging object 或可�
 request hook 不是已交付的 Host API method client。capability ID 使用共享闭集 method 类型，不是普通
 Web capability 声明。
 
-`pnpm run check:plugin-testkit` 校验 package 测试与声明、Contract -> SDK -> Testkit 依赖方向、真实
+`pnpm run gate -- plugin-testkit` 校验 package 测试与声明、Contract -> SDK -> Testkit 依赖方向、真实
 tarball 内容，以及安装到 workspace 外的无 DOM ES2022 consumer。该 consumer 是发布 smoke fixture，
 不是正式插件项目模板。Testkit 不提供 native Runtime container、插件执行或真实 Host API 执行；后续 transport
 和 Runtime change 只能在对应契约接受后扩展此 package。

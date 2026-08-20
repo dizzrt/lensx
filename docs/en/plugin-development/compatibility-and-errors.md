@@ -65,8 +65,8 @@ selected paths, stored values, or private failure details.
    and timeout. A loading surface with no bridge ready points to document or
    transport startup; a context failure points to Host API compatibility.
 9. For native presentation problems, run
-   `pnpm run check:plugin-child-webview-macos-evidence`; maintainers can use
-   `pnpm run evidence:plugin-child-webview-macos` on macOS to rerun the real
+   `pnpm run gate -- plugin-child-webview-macos-evidence`; maintainers can use
+   `pnpm run evidence -- plugin-child-webview-macos --write` on macOS to rerun the real
    WKWebView matrix.
 
 Fix the first failing boundary and rerun from canonical inputs; do not reuse a

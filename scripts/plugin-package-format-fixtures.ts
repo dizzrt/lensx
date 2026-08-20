@@ -154,7 +154,7 @@ if (writeMode) {
 
 if (drift.length > 0) {
   throw new Error(
-    `Plugin package fixtures drifted: ${drift.join(', ')}. Review the change, then run pnpm run generate:plugin-package-format-fixtures.`,
+    `Plugin package fixtures drifted: ${drift.join(', ')}. Review the change, then run pnpm run generate -- plugin-package-format-fixtures --write.`,
   );
 }
 

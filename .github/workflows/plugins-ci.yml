@@ -37,4 +37,4 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - run: pnpm run ci:plugins
+      - run: pnpm run gate -- ci-plugins

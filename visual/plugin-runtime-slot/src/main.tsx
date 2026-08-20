@@ -53,6 +53,8 @@ const presentationController: PluginChildWebviewPresentationController = {
   create: async () => ({ attemptId: 'attempt_0123456789abcdef' }),
   updateSlot: async () => undefined,
   readReadiness: async () =>
+    state === 'failure' ? { status: 'failed', failureCode: 'runtime_handshake_timeout' } : { status: 'loading' },
+  waitReadiness: async () =>
     state === 'failure' ? { status: 'failed', failureCode: 'runtime_handshake_timeout' } : pendingReadiness,
   setVisible: async () => undefined,
   destroy: async () => true,

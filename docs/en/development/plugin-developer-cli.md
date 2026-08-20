@@ -140,7 +140,7 @@ Run the focused package and complete external-consumer gates:
 ```bash
 pnpm --dir packages/plugin-cli run check
 pnpm --dir packages/plugin-cli run test:pack
-pnpm run check:plugin-developer-cli
+pnpm run gate -- plugin-developer-cli
 ```
 
 The root gate packs Contract, SDK, UI, Testkit, and CLI tarballs; installs them

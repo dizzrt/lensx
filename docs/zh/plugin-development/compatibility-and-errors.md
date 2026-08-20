@@ -53,8 +53,8 @@ Host 与 CLI 不会改写它，也不存在 fallback Runtime；请从当前 temp
 8. Runtime 阶段区分 native load、bridge ready、SDK Context、disconnect 与 timeout。一直停留在
    loading 且没有 bridge ready 通常指向 document 或 transport startup；Context failure 指向
    Host API compatibility。
-9. native presentation 问题先运行 `pnpm run check:plugin-child-webview-macos-evidence`；维护者可在
-   macOS 使用 `pnpm run evidence:plugin-child-webview-macos` 重跑真实 WKWebView matrix。
+9. native presentation 问题先运行 `pnpm run gate -- plugin-child-webview-macos-evidence`；维护者可在
+   macOS 使用 `pnpm run evidence -- plugin-child-webview-macos --write` 重跑真实 WKWebView matrix。
 
 修复第一个失败边界并从 canonical input 重跑；不要复用上次失败 attempt 的 generated cache。
 

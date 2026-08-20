@@ -115,9 +115,9 @@ different Host path.
 Use these maintained commands:
 
 ```bash
-pnpm run check:plugin-child-webview-macos-evidence
-pnpm run evidence:plugin-child-webview-macos
-pnpm run check:open-isolated-plugin-runtime
+pnpm run gate -- plugin-child-webview-macos-evidence
+pnpm run evidence -- plugin-child-webview-macos --write
+pnpm run gate -- open-isolated-plugin-runtime
 ```
 
 The `evidence:` command opens temporary macOS WKWebView harness windows. The
@@ -170,7 +170,7 @@ close destruction, and zero remaining native/bridge/resource authority.
 2. If content is hidden or misaligned, run the slot/bounds gate and verify
    scale factor, presentation revision, and Host overlay ordering.
 3. If `Cmd+W`, focus loss, or Page close leaves a blank or incorrectly sized
-   Launcher, run `pnpm run check:plugin-child-webview-window-lifecycle`. Verify
+   Launcher, run `pnpm run gate -- plugin-child-webview-window-lifecycle`. Verify
    post-creation paths resolve `Window("main")`, Host activation resolves only
    `Webview("main")`, and inspect native-hide rollback before changing teardown
    timing.

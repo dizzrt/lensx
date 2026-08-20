@@ -280,7 +280,7 @@ for (const relativePath of listFiles(fixtureRoot)) {
 
 if (drift.length > 0) {
   throw new Error(
-    `Frame-aware WebView navigation fixtures drifted: ${drift.sort().join(', ')}. Review the change, then run pnpm run generate:frame-aware-webview-navigation-fixtures.`,
+    `Frame-aware WebView navigation fixtures drifted: ${drift.sort().join(', ')}. Review the change, then run pnpm run generate -- frame-aware-webview-navigation-fixtures --write.`,
   );
 }
 

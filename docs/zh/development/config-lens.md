@@ -77,9 +77,9 @@ editor 与 Worker；只有 same-attempt hide/restore 会保留它们。
 从仓库根目录运行插件 CI 入口与聚焦产品证据：
 
 ```bash
-pnpm run ci:plugins
-pnpm run check:official-config-lens-cold-open
-pnpm run check:official-config-lens-warm-format
+pnpm run gate -- ci-plugins
+pnpm run gate -- official-config-lens-cold-open
+pnpm run gate -- official-config-lens-warm-format
 ```
 
 Plugins CI 会构建所需公共依赖，并运行 package lifecycle、built-output E2E、

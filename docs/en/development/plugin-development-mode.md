@@ -28,8 +28,8 @@ reload transaction:
 Build and validate generation A from the repository root:
 
 ```bash
-pnpm run build:plugin-development-smoke:initial
-pnpm run validate:plugin-development-smoke
+pnpm run gate -- plugin-development-smoke-initial
+pnpm run gate -- plugin-development-smoke-validation
 ```
 
 The native picker target is the absolute path to
@@ -142,8 +142,8 @@ Use a fresh lensX process and keep its terminal open throughout this sequence.
 4. Without closing lensX, build and validate generation B in another terminal:
 
    ```bash
-   pnpm run build:plugin-development-smoke:reload
-   pnpm run validate:plugin-development-smoke
+   pnpm run gate -- plugin-development-smoke-reload
+   pnpm run gate -- plugin-development-smoke-validation
    ```
 
    The already-open page must remain generation A before manual reload, proving
@@ -166,7 +166,7 @@ Use a fresh lensX process and keep its terminal open throughout this sequence.
    The mode must start enabled and rediscover fresh registrations without
    recovering the prior process's snapshot, Runtime, or registration state.
    An ordinary build still starts without Development Mode. Finally run
-   `pnpm run check:plugin-development-mode-boundaries` to verify that the normal
+   `pnpm run gate -- plugin-development-mode-boundaries` to verify that the normal
    production artifacts still exclude the feature.
 
 For a real unsafe-directory rejection without changing the fixture source,
@@ -180,7 +180,7 @@ cleans `dist/` before emitting output.
 Run the focused gate after changing this workflow:
 
 ```bash
-pnpm run check:plugin-development-mode
+pnpm run gate -- plugin-development-mode
 ```
 
 The gate covers build exclusion, contracts, directory corpus, Rust transactions,

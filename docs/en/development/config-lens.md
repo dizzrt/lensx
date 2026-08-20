@@ -98,9 +98,9 @@ same-attempt hide/restore retains them.
 Run the plugin CI entry and focused product evidence from the repository root:
 
 ```bash
-pnpm run ci:plugins
-pnpm run check:official-config-lens-cold-open
-pnpm run check:official-config-lens-warm-format
+pnpm run gate -- ci-plugins
+pnpm run gate -- official-config-lens-cold-open
+pnpm run gate -- official-config-lens-warm-format
 ```
 
 Plugins CI builds required public dependencies and runs package lifecycle,

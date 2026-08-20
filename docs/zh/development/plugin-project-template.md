@@ -119,7 +119,7 @@ pnpm --dir examples/plugins/react-semi run visual
 使用以下命令运行模板边界的完整维护门禁：
 
 ```bash
-pnpm run check:plugin-project-template
+pnpm run gate -- plugin-project-template
 ```
 
 ## 隔离与打包证据

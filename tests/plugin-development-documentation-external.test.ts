@@ -41,15 +41,12 @@ describe('plugin development documentation external consumer helpers', () => {
   });
 
   test('accepts the complete gate composition', () => {
-    const script = DOCUMENTATION_GATE_STAGES.map((stage) => `pnpm run ${stage}`).join(' && ');
-    expect(validateDocumentationGateComposition(script)).toEqual([]);
+    expect(validateDocumentationGateComposition(DOCUMENTATION_GATE_STAGES)).toEqual([]);
   });
 
   test.each(DOCUMENTATION_GATE_STAGES)('fails when the %s stage is omitted', (omitted) => {
-    const script = DOCUMENTATION_GATE_STAGES.filter((stage) => stage !== omitted)
-      .map((stage) => `pnpm run ${stage}`)
-      .join(' && ');
-    expect(validateDocumentationGateComposition(script)).toContain(`gate/stage-missing: ${omitted}.`);
+    const dependencies = DOCUMENTATION_GATE_STAGES.filter((stage) => stage !== omitted);
+    expect(validateDocumentationGateComposition(dependencies)).toContain(`gate/stage-missing: ${omitted}.`);
   });
 
   test('resolves active tasks first and the latest dated archive after archiving', () => {

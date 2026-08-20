@@ -86,8 +86,8 @@ for (const [path, marker] of [
   ['docs/zh/architecture/extension-platform.md', '## 已交付的插件 Scoped Storage'],
   ['docs/en/development/validation.md', '## Plugin Scoped Storage Validation'],
   ['docs/zh/development/validation.md', '## Plugin Scoped Storage 验证'],
-  ['docs/en/development/plugin-workspace.md', 'pnpm run check:plugin-scoped-storage'],
-  ['docs/zh/development/plugin-workspace.md', 'pnpm run check:plugin-scoped-storage'],
+  ['docs/en/development/plugin-workspace.md', 'pnpm run gate -- plugin-scoped-storage'],
+  ['docs/zh/development/plugin-workspace.md', 'pnpm run gate -- plugin-scoped-storage'],
 ] as const) {
   if (!read(path).includes(marker)) fail(`${path} is missing ${marker}`);
 }
