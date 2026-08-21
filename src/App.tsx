@@ -24,11 +24,8 @@ import { desktopLauncherActivationSource, type LauncherActivationSource } from '
 import {
   desktopLauncherActionCollectionsClient,
   EMPTY_LAUNCHER_ACTION_COLLECTIONS,
-  LAUNCHER_ACTION_COLLECTION_LIMIT,
-  LAUNCHER_ACTION_COLLECTIONS_VERSION,
   type LauncherActionCollections,
   type LauncherActionCollectionsClient,
-  LauncherActionCollectionsError,
   resolveLauncherActionCollection,
 } from './app/launcher/collections';
 import { LauncherHome } from './app/launcher/LauncherHome';
@@ -134,7 +131,6 @@ const App = ({
   const [query, setQuery] = useState('');
   const [selectedActionId, setSelectedActionId] = useState<string>();
   const [pendingActionId, setPendingActionId] = useState<string>();
-  const [pendingPinActionId, setPendingPinActionId] = useState<string>();
   const [dispatchFeedback, setDispatchFeedback] = useState<DispatchFeedback>();
   const [collectionsFeedbackKey, setCollectionsFeedbackKey] = useState<AppMessageKey>();
   const [collections, setCollections] = useState<LauncherActionCollections>(EMPTY_LAUNCHER_ACTION_COLLECTIONS);
@@ -142,11 +138,9 @@ const App = ({
   const [pageRevision, setPageRevision] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingActionIdRef = useRef<string | undefined>(undefined);
-  const pendingPinActionIdRef = useRef<string | undefined>(undefined);
   const shouldRestoreInputFocusRef = useRef(false);
   const lastPresentationTargetKeyRef = useRef<string | undefined>(undefined);
   const pageAttemptSequenceRef = useRef(0);
-  const confirmedCollectionsRef = useRef<LauncherActionCollections>(EMPTY_LAUNCHER_ACTION_COLLECTIONS);
   const collectionsMutationRevisionRef = useRef(0);
   const collectionsMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -276,6 +270,14 @@ const App = ({
         : undefined,
     [activePage, locale, pageResolution, registrySnapshot, t],
   );
+  const pageLayout =
+    pageResolution?.provider.kind === 'host' &&
+    activePage?.owner_id === 'lensx.core' &&
+    activePage.page_id === 'settings'
+      ? 'settings-split'
+      : pageResolution?.provider.kind === 'plugin'
+        ? 'plugin-edge-to-edge'
+        : undefined;
 
   const enqueueCollectionMutation = useCallback((operation: () => Promise<LauncherActionCollections>) => {
     const result = collectionsMutationQueueRef.current.then(operation, operation);
@@ -293,13 +295,11 @@ const App = ({
       .read()
       .then((confirmed) => {
         if (mounted && revision === collectionsMutationRevisionRef.current) {
-          confirmedCollectionsRef.current = confirmed;
           setCollections(confirmed);
         }
       })
       .catch(() => {
         if (mounted && revision === collectionsMutationRevisionRef.current) {
-          confirmedCollectionsRef.current = EMPTY_LAUNCHER_ACTION_COLLECTIONS;
           setCollections(EMPTY_LAUNCHER_ACTION_COLLECTIONS);
           setCollectionsFeedbackKey('launcher.collections.loadFailure');
         }
@@ -383,7 +383,6 @@ const App = ({
       collectionsMutationRevisionRef.current += 1;
       void enqueueCollectionMutation(() => collectionsClient.recordUse(actionId))
         .then((confirmed) => {
-          confirmedCollectionsRef.current = confirmed;
           setCollections(confirmed);
         })
         .catch(() => {
@@ -432,56 +431,6 @@ const App = ({
       }
     },
     [actionService, focusLauncherInput, recordSuccessfulUse],
-  );
-
-  const setActionPinned = useCallback(
-    (actionId: string, pinned: boolean) => {
-      if (pendingPinActionIdRef.current) {
-        return;
-      }
-      const current = collections;
-      const alreadyPinned = current.pinned_action_ids.includes(actionId);
-      if (pinned && !alreadyPinned && current.pinned_action_ids.length >= LAUNCHER_ACTION_COLLECTION_LIMIT) {
-        setCollectionsFeedbackKey('launcher.collections.capacity');
-        return;
-      }
-
-      const optimisticPinnedIds = pinned
-        ? alreadyPinned
-          ? current.pinned_action_ids
-          : [...current.pinned_action_ids, actionId]
-        : current.pinned_action_ids.filter((existing) => existing !== actionId);
-      const optimistic: LauncherActionCollections = Object.freeze({
-        version: LAUNCHER_ACTION_COLLECTIONS_VERSION,
-        recent_action_ids: Object.freeze([...current.recent_action_ids]),
-        pinned_action_ids: Object.freeze([...optimisticPinnedIds]),
-      });
-      pendingPinActionIdRef.current = actionId;
-      collectionsMutationRevisionRef.current += 1;
-      setPendingPinActionId(actionId);
-      setCollectionsFeedbackKey(undefined);
-      setCollections(optimistic);
-
-      void enqueueCollectionMutation(() => collectionsClient.setPinned(actionId, pinned))
-        .then((confirmed) => {
-          confirmedCollectionsRef.current = confirmed;
-          setCollections(confirmed);
-        })
-        .catch((error: unknown) => {
-          setCollections(confirmedCollectionsRef.current);
-          setCollectionsFeedbackKey(
-            error instanceof LauncherActionCollectionsError &&
-              error.code === 'launcher_action_collections_capacity_reached'
-              ? 'launcher.collections.capacity'
-              : 'launcher.collections.pinFailure',
-          );
-        })
-        .finally(() => {
-          pendingPinActionIdRef.current = undefined;
-          setPendingPinActionId(undefined);
-        });
-    },
-    [collections, collectionsClient, enqueueCollectionMutation],
   );
 
   const clearSearch = useCallback(() => {
@@ -575,7 +524,7 @@ const App = ({
 
   return (
     <main className="h-screen flex items-center justify-center">
-      <section className="launcher-surface h-full max-h-full w-full flex flex-col">
+      <section className="launcher-surface h-full max-h-full w-full flex flex-col" data-page-layout={pageLayout}>
         {/* biome-ignore lint/a11y/noStaticElementInteractions: native window dragging is pointer-only surface behavior, not a product control */}
         <div
           className="launcher-drag-region w-full flex-none px-4 pt-4 pb-3"
@@ -620,18 +569,13 @@ const App = ({
             </div>
           </div>
         </div>
-        <div
-          className="launcher-body min-h-0 flex flex-1 flex-col gap-3 px-4 pb-4"
-          data-page-layout={pageResolution?.provider.kind === 'plugin' ? 'plugin-edge-to-edge' : undefined}
-        >
+        <div className="launcher-body min-h-0 flex flex-1 flex-col gap-3 px-4 pb-4" data-page-layout={pageLayout}>
           <div className="launcher-content min-h-0 flex flex-1 flex-col" data-presentation-state={presentationState}>
             {presentationState === 'home' ? (
               <LauncherHome
                 locale={locale}
                 onActivate={(actionId) => void executeAction(actionId)}
-                onSetPinned={setActionPinned}
                 pendingActionId={pendingActionId}
-                pendingPinActionId={pendingPinActionId}
                 pinnedActions={pinnedActions}
                 recentActions={recentActions}
               />

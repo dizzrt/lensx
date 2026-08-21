@@ -11,10 +11,7 @@
       "pinnedTitle": "已固定",
       "allPlaceholder": "全部",
       "recentEmpty": "使用过的操作会显示在这里。",
-      "pinnedEmpty": "固定操作以便快速访问。",
-      "pinAction": "固定“{{title}}”",
-      "unpinAction": "取消固定“{{title}}”",
-      "pinnedAction": "“{{title}}”已固定"
+      "pinnedEmpty": "已固定的操作会显示在这里。"
     },
     "page": {
       "closeLabel": "关闭设置并返回主页",
@@ -54,9 +51,7 @@
     },
     "collections": {
       "loadFailure": "无法恢复最近使用和已固定操作。",
-      "syncFailure": "操作已完成，但无法更新操作集合。",
-      "pinFailure": "无法更新已固定操作，仍保留之前的固定状态。",
-      "capacity": "最多可以固定八个操作。"
+      "syncFailure": "操作已完成，但无法更新操作集合。"
     },
     "actions": {
       "hideLauncher": {
@@ -82,14 +77,14 @@
     },
     "theme": {
       "label": "颜色主题",
-      "description": "选择 lensX 及其 Host 界面的显示方式。",
+      "description": "选择 lensX 的外观。",
       "light": "浅色",
       "dark": "深色"
     },
     "locale": {
       "label": "语言",
-      "description": "选择 lensX 与 Semi Design 使用的语言。",
-      "enUS": "英语",
+      "description": "选择 lensX 使用的语言。",
+      "enUS": "English",
       "zhCN": "简体中文"
     },
     "plugins": {

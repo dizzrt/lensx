@@ -15,6 +15,13 @@ authority, watch files, run a build, automatically reload a plugin, or open a
 Page. A discovered Action becomes visible in the Launcher, but only a later
 user action opens its production Child WebView Runtime.
 
+That plugin reload boundary is separate from Host frontend hot module
+replacement. In `dev`, Rsbuild resolves `@lensx/plugin-contract` from its
+workspace source so rebuilding the package `dist/` during validation cannot
+interrupt the running frontend module graph. Production builds continue to
+resolve the package's published `dist/` entry. Plugin author files remain
+snapshot-based and still require **Reload from directory** after rebuilding.
+
 ## Canonical Smoke Plugin
 
 The repository includes `examples/plugins/development-mode-smoke`, a real

@@ -1,7 +1,6 @@
-import { Button, Tooltip, Typography } from '@douyinfe/semi-ui';
+import { Button, Typography } from '@douyinfe/semi-ui';
 import type { LauncherActionHostIcon } from './actions';
 import { HostActionIcon } from './HostActionIcon';
-import { PinIcon } from './LauncherIcons';
 
 export interface ActionTileModel {
   readonly action_id: string;
@@ -17,13 +16,6 @@ interface ActionTileProps {
   readonly mainButtonId?: string;
   readonly onActivate: (actionId: string) => void;
   readonly option?: boolean;
-  readonly pinAction?: {
-    readonly disabled?: boolean;
-    readonly label: string;
-    readonly pinned: boolean;
-    readonly pending?: boolean;
-    readonly onActivate: (actionId: string) => void;
-  };
 }
 
 export const ActionTile = ({
@@ -33,7 +25,6 @@ export const ActionTile = ({
   mainButtonId,
   onActivate,
   option = false,
-  pinAction,
 }: ActionTileProps) => (
   <div
     className="launcher-action-tile flex min-w-0 items-stretch"
@@ -62,19 +53,5 @@ export const ActionTile = ({
         </span>
       </span>
     </Button>
-    {pinAction ? (
-      <Tooltip content={pinAction.label} position="top">
-        <Button
-          aria-label={pinAction.label}
-          className="launcher-action-pin"
-          disabled={pinAction.disabled || pinAction.pending}
-          icon={<PinIcon filled={pinAction.pinned} />}
-          loading={pinAction.pending}
-          onClick={() => pinAction.onActivate(action.action_id)}
-          theme="borderless"
-          type="tertiary"
-        />
-      </Tooltip>
-    ) : null}
   </div>
 );

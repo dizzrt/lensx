@@ -152,12 +152,34 @@ describe('App Shell page navigation', () => {
       'data-presentation-state',
       'page',
     );
+    expect(pageContext.closest('.launcher-surface')).toHaveAttribute('data-page-layout', 'settings-split');
+    expect(pageContext.closest('.launcher-surface')?.querySelector('.launcher-body')).toHaveAttribute(
+      'data-page-layout',
+      'settings-split',
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Close settings and return home' }));
     const restoredInput = await screen.findByRole('combobox', { name: 'Launcher query' });
     expect(restoredInput).toHaveValue('');
     expect(restoredInput).toHaveFocus();
     expect(screen.getByRole('region', { name: 'Recent' })).toBeInTheDocument();
+    expect(restoredInput.closest('.launcher-surface')).not.toHaveAttribute('data-page-layout');
+  });
+
+  test('does not leak the settings split modifier to another resolved Host page', async () => {
+    const notesTarget = { owner_id: 'lensx.core', page_id: 'notes' };
+    const navigationService = new AppNavigationService(
+      new HostPageCatalog([{ ...notesTarget, enabled: true, title: { 'en-US': 'Notes' } }]),
+    );
+    renderShell({ navigationService });
+
+    act(() => navigationService.openPage(notesTarget, 'lensx.core.open_notes'));
+
+    const pageContent = await screen.findByText('Trusted settings content');
+    expect(pageContent.closest('.launcher-surface')).not.toHaveAttribute('data-page-layout');
+    expect(pageContent.closest('.launcher-surface')?.querySelector('.launcher-body')).not.toHaveAttribute(
+      'data-page-layout',
+    );
   });
 
   test('requests fixed tagged Host presentation targets without resizing for result-count changes', async () => {
@@ -232,6 +254,10 @@ describe('App Shell page navigation', () => {
     expect(screen.getByRole('region', { name: 'lensX: Open settings' })).toBeInTheDocument();
     expect(screen.queryByText(/sensitive page implementation detail/)).not.toBeInTheDocument();
     expect(document.body).toHaveAttribute('theme-mode', 'dark');
+    expect(screen.getByRole('alert').closest('.launcher-surface')).toHaveAttribute(
+      'data-page-layout',
+      'settings-split',
+    );
 
     fireEvent.click(screen.getByRole('button', { name: '关闭设置并返回主页' }));
     await waitFor(() => expect(screen.getByRole('combobox', { name: '启动器查询' })).toHaveFocus());

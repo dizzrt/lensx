@@ -1,5 +1,5 @@
 import { describe, expect, rs, test } from '@rstest/core';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from '../src/App';
 import { AppProviders } from '../src/app/AppProviders';
 import {
@@ -7,11 +7,7 @@ import {
   LauncherActionRegistry,
   type LauncherActionService,
 } from '../src/app/launcher/actions';
-import {
-  type LauncherActionCollections,
-  type LauncherActionCollectionsClient,
-  LauncherActionCollectionsError,
-} from '../src/app/launcher/collections';
+import type { LauncherActionCollections, LauncherActionCollectionsClient } from '../src/app/launcher/collections';
 
 const inertActivationSource = { subscribe: async () => () => undefined };
 
@@ -67,21 +63,29 @@ describe('launcher home action collections', () => {
     const { service } = createService(3, 1);
     renderHome(service, {
       read: async () =>
-        createCollections([actionId(2), 'tools.workspace.missing', actionId(1), actionId(0)], [actionId(0)]),
+        createCollections(
+          [actionId(2), 'tools.workspace.missing', actionId(1), actionId(0)],
+          [actionId(2), actionId(0)],
+        ),
       recordUse: async () => createCollections(),
       setPinned: async () => createCollections(),
     });
 
     const recent = screen.getByRole('region', { name: 'Recent' });
     const pinned = screen.getByRole('region', { name: 'Pinned' });
-    await waitFor(() => expect(within(recent).getAllByRole('button')).toHaveLength(4));
+    await waitFor(() => expect(within(recent).getAllByRole('button')).toHaveLength(2));
     expect(
       within(recent)
         .getAllByText(/Action [02]/)
         .map((node) => node.textContent),
     ).toEqual(['Action 2', 'Action 0']);
     expect(within(recent).queryByText(/Action 1|missing/)).not.toBeInTheDocument();
-    expect(within(pinned).getByText('Action 0')).toBeInTheDocument();
+    expect(
+      within(pinned)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Action 2', 'Action 0']);
+    expect(within(pinned).queryByRole('button', { name: /pin|unpin|menu/iu })).not.toBeInTheDocument();
     expect(screen.queryByText(/recommend/i)).not.toBeInTheDocument();
   });
 
@@ -149,90 +153,34 @@ describe('launcher home action collections', () => {
     expect(input).toHaveValue('run');
   });
 
-  test('keeps main activation separate from optimistic pin and unpin operations', async () => {
+  test('keeps persisted pins read-only while their primary Actions remain keyboard and pointer operable', async () => {
     const { executors, service } = createService(1);
-    let confirmed = createCollections([actionId(0)]);
-    const setPinned = rs.fn(async (_id: string, pinned: boolean) => {
-      confirmed = createCollections([actionId(0)], pinned ? [actionId(0)] : []);
-      return confirmed;
-    });
+    const confirmed = createCollections([actionId(0)], [actionId(0)]);
+    const recordUse = rs.fn(async () => confirmed);
+    const setPinned = rs.fn(async () => confirmed);
     renderHome(service, {
       read: async () => confirmed,
-      recordUse: async () => confirmed,
+      recordUse,
       setPinned,
     });
 
     const recent = screen.getByRole('region', { name: 'Recent' });
     const pinned = screen.getByRole('region', { name: 'Pinned' });
-    const pinButton = await within(recent).findByRole('button', { name: 'Pin Action 0' });
-    const mainButton = within(recent).getByRole('button', { name: /^Action 0/ });
-    mainButton.focus();
-    expect(mainButton).toHaveFocus();
-    pinButton.focus();
-    expect(pinButton).toHaveFocus();
-    fireEvent.click(pinButton);
-    expect(executors[0]).not.toHaveBeenCalled();
-    await waitFor(() => expect(setPinned).toHaveBeenCalledWith(actionId(0), true));
-    expect(await within(pinned).findByText('Action 0')).toBeInTheDocument();
+    const recentAction = await within(recent).findByRole('button', { name: /^Action 0/ });
+    const pinnedAction = within(pinned).getByRole('button', { name: /^Action 0/ });
+    expect(within(recent).getAllByRole('button')).toEqual([recentAction]);
+    expect(within(pinned).getAllByRole('button')).toEqual([pinnedAction]);
+    expect(document.querySelector('.launcher-action-pin')).not.toBeInTheDocument();
 
-    fireEvent.click(within(pinned).getByRole('button', { name: 'Unpin Action 0' }));
-    await waitFor(() => expect(setPinned).toHaveBeenLastCalledWith(actionId(0), false));
-    await waitFor(() => expect(within(pinned).queryByText('Action 0')).not.toBeInTheDocument());
-    expect(executors[0]).not.toHaveBeenCalled();
-  });
+    pinnedAction.focus();
+    expect(pinnedAction).toHaveFocus();
+    fireEvent.keyDown(pinnedAction, { key: 'Enter' });
+    fireEvent.click(pinnedAction);
 
-  test('restores confirmed pins after write failure and reports the eight-item capacity', async () => {
-    const { service } = createService(9);
-    const confirmed = createCollections(
-      [actionId(8)],
-      Array.from({ length: 8 }, (_, index) => actionId(index)),
-    );
-    const setPinned = rs.fn(async () => {
-      throw new LauncherActionCollectionsError({
-        code: 'launcher_action_collections_write_failed',
-        operation: 'set_pinned',
-        message: 'safe',
-      });
-    });
-    const capacityRender = renderHome(service, {
-      read: async () => confirmed,
-      recordUse: async () => confirmed,
-      setPinned,
-    });
-
-    const pinButton = await screen.findByRole('button', { name: 'Pin Action 8' });
-    fireEvent.click(pinButton);
-    expect(await screen.findByText('You can pin up to eight actions.')).toBeInTheDocument();
+    await waitFor(() => expect(executors[0]).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(recordUse).toHaveBeenCalledWith(actionId(0)));
     expect(setPinned).not.toHaveBeenCalled();
-    expect(within(screen.getByRole('region', { name: 'Pinned' })).getAllByRole('button')).toHaveLength(16);
-    capacityRender.unmount();
-
-    const oneAction = createService(1);
-    let rejectWrite: (error: Error) => void = () => undefined;
-    const pendingWrite = new Promise<LauncherActionCollections>((_resolve, reject) => {
-      rejectWrite = reject;
-    });
-    renderHome(oneAction.service, {
-      read: async () => createCollections([actionId(0)]),
-      recordUse: async () => createCollections([actionId(0)]),
-      setPinned: async () => pendingWrite,
-    });
-    fireEvent.click(await screen.findByRole('button', { name: 'Pin Action 0' }));
-    expect(await within(screen.getByRole('region', { name: 'Pinned' })).findByText('Action 0')).toBeInTheDocument();
-    await act(async () => {
-      rejectWrite(
-        new LauncherActionCollectionsError({
-          code: 'launcher_action_collections_write_failed',
-          operation: 'set_pinned',
-          message: 'safe',
-        }),
-      );
-      await pendingWrite.catch(() => undefined);
-    });
-    expect(
-      await screen.findByText('Pinned actions could not be updated. Your previous pins are still active.'),
-    ).toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'Pinned' })).queryByText('Action 0')).not.toBeInTheDocument();
+    expect(within(pinned).getByText('Action 0')).toBeInTheDocument();
   });
 
   test('uses localized empty states and keeps avatar and All outside the interaction flow', async () => {
@@ -252,7 +200,8 @@ describe('launcher home action collections', () => {
 
     expect(await screen.findByText('无法恢复最近使用和已固定操作。')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: '最近使用' })).toHaveTextContent('使用过的操作会显示在这里。');
-    expect(screen.getByRole('region', { name: '已固定' })).toHaveTextContent('固定操作以便快速访问。');
+    expect(screen.getByRole('region', { name: '已固定' })).toHaveTextContent('已固定的操作会显示在这里。');
+    expect(screen.queryByRole('button', { name: /固定|取消固定|菜单/u })).not.toBeInTheDocument();
     expect(screen.getByText('全部')).toHaveAttribute('aria-hidden', 'true');
     expect(screen.queryByRole('button', { name: '全部' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '全部' })).not.toBeInTheDocument();

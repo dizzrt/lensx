@@ -65,12 +65,32 @@ for (const marker of ['clear_plugin_data_inner', 'PLUGIN_DATA_MANAGEMENT_CONTRAC
   if (!rust.includes(marker) && !storage.includes(marker)) fail(`Rust data clear is missing ${marker}`);
 }
 for (const marker of [
+  '.launcher-surface[data-page-layout="settings-split"]',
+  '.settings-navigation',
+  'width: 152px',
+  '.settings-content',
+  '.settings-preference-select.semi-select',
+  'flex: 0 0 168px',
   '.plugin-management-surface',
   "[aria-current='true']",
+  "[aria-current='page']",
   'var(--semi-color-border)',
+  'var(--semi-color-focus-border)',
   'overflow: auto',
+  'overflow-y: auto',
 ]) {
   if (!styles.includes(marker)) fail(`management styles are missing ${marker}`);
+}
+const settingsNavigationMenuRules = styles.match(
+  /\.settings-navigation-menu\.semi-navigation\s*\{(?<rules>[\s\S]*?)^\}/mu,
+)?.groups?.rules;
+if (!settingsNavigationMenuRules) {
+  fail('settings navigation menu styles are missing');
+}
+for (const marker of ['width: 100%', 'min-width: 0', 'border-right: 0']) {
+  if (!settingsNavigationMenuRules.includes(marker)) {
+    fail(`settings navigation menu does not override the Semi Nav default with ${marker}`);
+  }
 }
 if (!roadmap.includes('- [x] **Task 6.1：新增插件管理设置页面**')) {
   fail('Roadmap Task 6.1 completion drifted');

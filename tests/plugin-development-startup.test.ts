@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from '@rstest/core';
+import { createRsbuildConfig } from '../rsbuild.config';
 
 import {
   applyPluginDevelopmentChildExit,
@@ -66,5 +67,13 @@ describe('plugin development startup wrapper', () => {
     expect(rsbuild).not.toContain(PLUGIN_DEVELOPMENT_STARTUP_ROOT_ENV);
     expect(metadata.scripts.dev).not.toContain(PLUGIN_DEVELOPMENT_STARTUP_ROOT_ENV);
     expect(metadata.scripts['dev:plugin-development-mode']).toContain('dev-plugin-development-mode.mjs');
+  });
+
+  test('keeps Host HMR independent from workspace package dist rebuilds', () => {
+    const devAlias = createRsbuildConfig({ command: 'dev' }).resolve?.alias as Record<string, string>;
+    const buildAlias = createRsbuildConfig({ command: 'build' }).resolve?.alias as Record<string, string>;
+
+    expect(devAlias['@lensx/plugin-contract$']).toBe(resolve(repositoryRoot, 'packages/plugin-contract/src/index.ts'));
+    expect(buildAlias).not.toHaveProperty('@lensx/plugin-contract$');
   });
 });

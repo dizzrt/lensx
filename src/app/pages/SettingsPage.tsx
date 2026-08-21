@@ -1,5 +1,5 @@
-import { Banner, Radio, RadioGroup, TabPane, Tabs, Typography } from '@douyinfe/semi-ui';
-import { useCallback, useRef, useState } from 'react';
+import { Banner, Nav, Select, Typography } from '@douyinfe/semi-ui';
+import { cloneElement, type KeyboardEvent, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppLocale } from '../i18n';
 import type { PluginManagementService } from '../plugins/management';
@@ -13,6 +13,7 @@ interface SettingsPageProps {
 }
 
 type PreferenceKey = keyof AppPreferences;
+type SettingsSection = 'plugins' | 'preferences';
 
 const isThemeMode = (value: unknown): value is AppPreferences['theme_mode'] => value === 'light' || value === 'dark';
 
@@ -22,6 +23,7 @@ export const SettingsPage = ({ managementService, preferencesClient }: SettingsP
   const { t } = useTranslation();
   const { locale, setLocale } = useAppLocale();
   const { setThemeMode, themeMode } = useAppTheme();
+  const [selectedSection, setSelectedSection] = useState<SettingsSection>('preferences');
   const [confirmedPreferences, setConfirmedPreferences] = useState<AppPreferences>({
     theme_mode: themeMode,
     locale,
@@ -29,6 +31,27 @@ export const SettingsPage = ({ managementService, preferencesClient }: SettingsP
   const [pendingPreference, setPendingPreference] = useState<PreferenceKey>();
   const [saveErrorCode, setSaveErrorCode] = useState<AppPreferencesErrorCode>();
   const saveChainRef = useRef(Promise.resolve());
+  const navigationItems = useMemo(
+    () => [
+      { itemKey: 'preferences', text: t('settings.sections.preferences') },
+      { itemKey: 'plugins', text: t('settings.sections.plugins') },
+    ],
+    [t],
+  );
+  const themeOptions = useMemo(
+    () => [
+      { label: t('settings.theme.light'), showTick: false, value: 'light' },
+      { label: t('settings.theme.dark'), showTick: false, value: 'dark' },
+    ],
+    [t],
+  );
+  const localeOptions = useMemo(
+    () => [
+      { label: t('settings.locale.enUS'), showTick: false, value: 'en-US' },
+      { label: t('settings.locale.zhCN'), showTick: false, value: 'zh-CN' },
+    ],
+    [t],
+  );
 
   const savePreference = useCallback(
     (key: PreferenceKey, value: AppPreferences[PreferenceKey]) => {
@@ -69,28 +92,59 @@ export const SettingsPage = ({ managementService, preferencesClient }: SettingsP
   );
 
   const handleThemeChange = useCallback(
-    (event: { target: { value?: unknown } }) => {
-      if (isThemeMode(event.target.value)) {
-        savePreference('theme_mode', event.target.value);
+    (value: unknown) => {
+      if (isThemeMode(value)) {
+        savePreference('theme_mode', value);
       }
     },
     [savePreference],
   );
 
   const handleLocaleChange = useCallback(
-    (event: { target: { value?: unknown } }) => {
-      if (isLocale(event.target.value)) {
-        savePreference('locale', event.target.value);
+    (value: unknown) => {
+      if (isLocale(value)) {
+        savePreference('locale', value);
       }
     },
     [savePreference],
   );
 
+  const handleSectionSelect = useCallback(({ itemKey }: { itemKey: string | number }) => {
+    if (itemKey === 'preferences' || itemKey === 'plugins') {
+      setSelectedSection(itemKey);
+    }
+  }, []);
+
   return (
-    <div className="settings-page min-h-0 flex flex-1 flex-col">
-      <Tabs aria-label={t('settings.title')} className="settings-tabs" type="line">
-        <TabPane itemKey="preferences" tab={t('settings.sections.preferences')}>
-          <section aria-labelledby="settings-preferences-heading" className="settings-section flex flex-col gap-3">
+    <div className="settings-page min-h-0 flex flex-1">
+      <nav aria-label={t('settings.title')} className="settings-navigation flex-none">
+        <Nav
+          className="settings-navigation-menu"
+          items={navigationItems}
+          mode="vertical"
+          onSelect={handleSectionSelect}
+          renderWrapper={({ itemElement, props }) =>
+            cloneElement(itemElement, {
+              'aria-controls': `settings-${String(props.itemKey)}-panel`,
+              'aria-current': props.itemKey === selectedSection ? 'page' : undefined,
+              onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+                if ((event.key === 'Enter' || event.key === ' ') && props.itemKey) {
+                  event.preventDefault();
+                  handleSectionSelect({ itemKey: props.itemKey });
+                }
+              },
+            })
+          }
+          selectedKeys={[selectedSection]}
+        />
+      </nav>
+      <div className="settings-content min-h-0 min-w-0 flex flex-1 flex-col" data-settings-section={selectedSection}>
+        {selectedSection === 'preferences' ? (
+          <section
+            aria-labelledby="settings-preferences-heading"
+            className="settings-section flex flex-col gap-3"
+            id="settings-preferences-panel"
+          >
             <Typography.Title heading={3} id="settings-preferences-heading">
               {t('settings.sections.preferences')}
             </Typography.Title>
@@ -106,17 +160,15 @@ export const SettingsPage = ({ managementService, preferencesClient }: SettingsP
                   {t('settings.theme.description')}
                 </Typography.Paragraph>
               </div>
-              <RadioGroup
+              <Select
                 aria-describedby="settings-theme-description"
                 aria-labelledby="settings-theme-label"
+                className="settings-preference-select"
                 disabled={Boolean(pendingPreference)}
                 onChange={handleThemeChange}
-                type="button"
+                optionList={themeOptions}
                 value={confirmedPreferences.theme_mode}
-              >
-                <Radio value="light">{t('settings.theme.light')}</Radio>
-                <Radio value="dark">{t('settings.theme.dark')}</Radio>
-              </RadioGroup>
+              />
             </div>
             <div className="settings-row flex items-center justify-between gap-6">
               <div className="min-w-0">
@@ -127,17 +179,15 @@ export const SettingsPage = ({ managementService, preferencesClient }: SettingsP
                   {t('settings.locale.description')}
                 </Typography.Paragraph>
               </div>
-              <RadioGroup
+              <Select
                 aria-describedby="settings-locale-description"
                 aria-labelledby="settings-locale-label"
+                className="settings-preference-select"
                 disabled={Boolean(pendingPreference)}
                 onChange={handleLocaleChange}
-                type="button"
+                optionList={localeOptions}
                 value={confirmedPreferences.locale}
-              >
-                <Radio value="en-US">{t('settings.locale.enUS')}</Radio>
-                <Radio value="zh-CN">{t('settings.locale.zhCN')}</Radio>
-              </RadioGroup>
+              />
             </div>
             <Typography.Text
               aria-live="polite"
@@ -148,11 +198,12 @@ export const SettingsPage = ({ managementService, preferencesClient }: SettingsP
               {pendingPreference ? t('settings.save.inProgress') : ''}
             </Typography.Text>
           </section>
-        </TabPane>
-        <TabPane itemKey="plugins" tab={t('settings.sections.plugins')}>
-          <PluginManagementSettings service={managementService} />
-        </TabPane>
-      </Tabs>
+        ) : (
+          <div className="settings-section-host min-h-0 flex flex-1 flex-col" id="settings-plugins-panel">
+            <PluginManagementSettings service={managementService} />
+          </div>
+        )}
+      </div>
     </div>
   );
 };

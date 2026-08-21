@@ -198,6 +198,14 @@ Shell layout and spacing in UnoCSS utilities.
   semantic bounded footer, keep diagnostics scrollable, and use
   `ResizeObserver` only to lay out the existing editor rather than recreate its
   model, Worker, or Runtime.
+- Bind the Settings split-layout modifier only to the resolved
+  `lensx.core/settings` Host Page identity. Make its body edge-to-edge, draw the
+  token-based horizontal boundary below the shared header and vertical boundary
+  after the approximately `152px` navigation, and restore content padding in the
+  independently scrollable right pane. Preserve `min-height: 0` and
+  `min-width: 0` through that chain so Plugin Management keeps its own nested
+  list-detail split at the fixed `650×600` Host Page size. Do not apply this
+  modifier to Home, Search, another Host Page, or a Plugin Page.
 
 ## Launcher Actions And Collections
 
@@ -209,8 +217,10 @@ Shell layout and spacing in UnoCSS utilities.
   filling gaps from registry order or mock data.
 - Record recent use only after Dispatcher success. Keep Action outcomes separate
   from collection persistence feedback.
-- Optimistic pin/unpin UI must restore the last Rust-confirmed snapshot on
-  failure. Never evict an existing pin to make room for a ninth item.
+- Keep the typed set-pinned client and Rust contract while Launcher Home exposes
+  existing Pinned Actions as a read-only ordered view. Each Recent or Pinned tile
+  has one primary Action only; do not expose pin, unpin, menu, or replacement
+  controls until a dedicated capability defines the future entry point.
 - Keep the localized `All` text and avatar visual as non-interactive
   placeholders until dedicated capabilities are accepted.
 - Present search as one four-column, at-most-eight-item listbox grid. Left/right

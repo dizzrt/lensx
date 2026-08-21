@@ -267,7 +267,7 @@ describe('Plugin Page navigation UI', () => {
 
     act(() => view.navigationService.openPage({ owner_id: 'lensx.core', page_id: 'settings' }, 'lensx.core.settings'));
     expect(await screen.findByText('Current page settings')).toBeInTheDocument();
-    expect(launcherBody()).not.toHaveAttribute('data-page-layout');
+    expect(launcherBody()).toHaveAttribute('data-page-layout', 'settings-split');
 
     fireEvent.click(screen.getByRole('button', { name: 'Close settings and return home' }));
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Launcher query' })).toBeInTheDocument());

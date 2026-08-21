@@ -12,6 +12,11 @@ feature-enabled 开发构建中。专用 `pnpm run dev:plugin-development-mode` 
 执行构建、自动重新加载插件或打开 Page。发现到的 Action 会出现在 Launcher 中，
 但只有用户后续执行该 Action 才会打开 production Child WebView Runtime。
 
+该插件 reload 边界与 Host 前端热更新彼此独立。在 `dev` 中，Rsbuild 会从工作区源码解析
+`@lensx/plugin-contract`，因此验证期间重建该包的 `dist/` 不会中断正在运行的前端模块图。
+Production build 仍解析该包正式发布的 `dist/` 入口。插件作者目录继续使用不可变 snapshot，
+重新构建后仍必须执行 **从目录重新加载**。
+
 ## 标准 Smoke 插件
 
 仓库包含 `examples/plugins/development-mode-smoke`，这是一个使用真实公共 SDK 的插件，

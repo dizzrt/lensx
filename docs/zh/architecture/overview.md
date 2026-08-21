@@ -231,8 +231,9 @@ Rust 在独立的应用配置文件中持有版本化 `LauncherActionCollections
 TypeScript client 只公开读取、记录成功使用和设置固定状态操作。React 通过当前不可变 registry
 snapshot 解析已存 ID，保持顺序，隐藏缺失或禁用 Action，但不删除或替换这些 ID。只有成功 dispatch
 才记录最近使用；dispatch 失败不记录。最近使用持久化失败不会把已成功 Action 改写为失败。固定与
-取消固定使用 optimistic 视图，但失败后恢复最后确认 snapshot；第九个固定请求会被拒绝，且不会删除
-现有项。
+设置固定状态的 typed client 与 Rust 持久化合同继续保留，但 Launcher Home 当前只读展示已确认的
+Pinned Action；每张卡片只提供主 Action，不提供固定、取消固定或菜单入口。已有 ID 不迁移、不重排；
+未来管理入口必须通过独立且已接受的变更定义。
 
 插件管理与显式 permission decision 已通过可信 Settings surface 交付；安全插件 icon 解析仍是独立能力。
 scoped resource、生命周期写操作、隔离 Child WebView Runtime 及其私有 Session 已分别交付，但不会改变
@@ -270,9 +271,12 @@ acknowledgement 才产生 Session `ready`。SDK `ready`、Host API transport、o
 Dispatcher 与 scoped storage 已交付。Manifest 与 Host API `0.2.0` 不暴露 native clipboard 或 permission
 authority。
 
-设置在现有 `main` Tauri 窗口中渲染，包含“偏好”和“插件”两个一级部分。“偏好”控制受支持的
-`light`/`dark` 主题与 `en-US`/`zh-CN` locale；“插件”通过一个 typed Host 私有 service 提供已交付的
-list-detail 管理 surface，覆盖安装、replacement、lifecycle、卸载和仅 disabled 时的数据清除。
+设置在现有 `main` Tauri 窗口中渲染。左侧受控纵向导航只包含“偏好”和“插件”，默认选择“偏好”；
+右侧内容区只渲染当前部分。解析后的 `lensx.core/settings` 身份会启用 edge-to-edge App Shell modifier：
+主题 token 横边界分隔共享 Header 与 body，纵边界分隔导航与内容，右侧内容在固定 `650×600` Host Page
+presentation 内独立滚动。“偏好”控制受支持的 `light`/`dark` 主题与 `en-US`/`zh-CN` locale；“插件”
+保留内部 list-detail 管理 surface，通过一个 typed Host 私有 service 覆盖安装、replacement、lifecycle、
+卸载和仅 disabled 时的数据清除。
 外部作者应使用[插件开发入口](../plugin-development/index.md)，而不是本维护者 overview 中的细节。
 
 Rust 持有完整 `AppPreferences` payload，并在应用配置目录中保存 `preferences.json`。文件缺失时

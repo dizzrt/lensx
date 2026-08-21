@@ -11,10 +11,7 @@
       "pinnedTitle": "Pinned",
       "allPlaceholder": "All",
       "recentEmpty": "Actions you use will appear here.",
-      "pinnedEmpty": "Pin an action for quick access.",
-      "pinAction": "Pin {{title}}",
-      "unpinAction": "Unpin {{title}}",
-      "pinnedAction": "{{title}} is pinned"
+      "pinnedEmpty": "Pinned actions will appear here."
     },
     "page": {
       "closeLabel": "Close settings and return home",
@@ -54,9 +51,7 @@
     },
     "collections": {
       "loadFailure": "Recent and pinned actions could not be restored.",
-      "syncFailure": "The action completed, but its collection could not be updated.",
-      "pinFailure": "Pinned actions could not be updated. Your previous pins are still active.",
-      "capacity": "You can pin up to eight actions."
+      "syncFailure": "The action completed, but its collection could not be updated."
     },
     "actions": {
       "hideLauncher": {
@@ -82,15 +77,15 @@
     },
     "theme": {
       "label": "Color theme",
-      "description": "Choose how lensX and its Host surfaces appear.",
+      "description": "Choose how lensX looks.",
       "light": "Light",
       "dark": "Dark"
     },
     "locale": {
       "label": "Language",
-      "description": "Choose the language used by lensX and Semi Design.",
+      "description": "Choose the language used by lensX.",
       "enUS": "English",
-      "zhCN": "Simplified Chinese"
+      "zhCN": "简体中文"
     },
     "plugins": {
       "title": "Plugins",

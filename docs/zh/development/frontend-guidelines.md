@@ -147,6 +147,11 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
 - 可调整 plugin 布局要在 flex chain 中使用 `min-height: 0`，由一个 content 区吸收 viewport
   变化；基本控件位于语义化有界 footer，diagnostics 可滚动。`ResizeObserver` 只布局现有
   editor，不重建 model、Worker 或 Runtime。
+- 设置 split-layout modifier 只能绑定解析后的 `lensx.core/settings` Host Page 身份。其 body 使用
+  edge-to-edge 布局，在共享 Header 下方绘制基于主题 token 的横边界，在约 `152px` 导航后绘制纵边界，
+  并在可独立滚动的右侧内容区恢复内边距。沿该链保留 `min-height: 0` 与 `min-width: 0`，使 Plugin
+  Management 在固定 `650×600` Host Page 尺寸中继续保有自身的 list-detail 内部分栏。Home、Search、
+  其他 Host Page 与 Plugin Page 不得应用该 modifier。
 
 ## Launcher Action 与集合
 
@@ -155,8 +160,9 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
 - 通过同一个当前不可变 registry snapshot 解析最近使用和已固定 ID，保持持久化顺序，过滤缺失或
   禁用 Action，且不用 registry 顺序或模拟数据补齐。
 - 仅在 Dispatcher 成功后记录最近使用；Action 结果与集合持久化反馈保持分离。
-- Optimistic 固定/取消固定界面必须在失败时恢复最后经 Rust 确认的 snapshot；不得为了第九项固定而
-  移除现有项。
+- 保留设置固定状态的 typed client 与 Rust 合同，但 Launcher Home 只按顺序只读展示已有 Pinned
+  Action。Recent 或 Pinned 卡片都只能包含一个主 Action；在专门能力定义未来入口前，不得暴露固定、
+  取消固定、菜单或替代管理控件。
 - 在专门能力被接受前，本地化“全部”文字和 avatar 视觉始终只是非交互占位。
 - 搜索使用单一四列、最多八项的 listbox 网格。左右键移动一项，上下键仅在目标存在时移动四项；
   pointer 与键盘激活必须复用同一 Dispatcher 路径。

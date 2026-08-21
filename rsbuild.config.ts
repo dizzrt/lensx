@@ -1,15 +1,14 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { defineConfig } from '@rsbuild/core';
+import { type ConfigParams, defineConfig, type RsbuildConfig } from '@rsbuild/core';
 import { pluginLess } from '@rsbuild/plugin-less';
 import { pluginReact } from '@rsbuild/plugin-react';
 
 const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 const pluginDevelopmentModeEnabled = process.env.LENSX_PLUGIN_DEVELOPMENT_MODE === '1';
 
-// Docs: https://rsbuild.rs/config/
-export default defineConfig({
+export const createRsbuildConfig = ({ command }: Pick<ConfigParams, 'command'>): RsbuildConfig => ({
   plugins: [
     pluginLess(),
     pluginReact({
@@ -19,6 +18,12 @@ export default defineConfig({
   resolve: {
     aliasStrategy: 'prefer-alias',
     alias: {
+      ...(command === 'dev'
+        ? {
+            // Keep Host HMR independent from workspace package dist rebuilds.
+            '@lensx/plugin-contract$': resolve(projectRoot, 'packages/plugin-contract/src/index.ts'),
+          }
+        : {}),
       '@/app/plugins/development/composition': resolve(
         projectRoot,
         pluginDevelopmentModeEnabled
@@ -52,3 +57,6 @@ export default defineConfig({
     port: 40755,
   },
 });
+
+// Docs: https://rsbuild.rs/config/
+export default defineConfig(createRsbuildConfig);

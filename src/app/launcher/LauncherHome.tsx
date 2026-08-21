@@ -7,9 +7,7 @@ import { resolveLauncherActionMetadata } from './actions';
 interface LauncherHomeProps {
   readonly locale: LauncherActionLocale;
   readonly onActivate: (actionId: string) => void;
-  readonly onSetPinned: (actionId: string, pinned: boolean) => void;
   readonly pendingActionId?: string;
-  readonly pendingPinActionId?: string;
   readonly pinnedActions: readonly LauncherActionDescriptor[];
   readonly recentActions: readonly LauncherActionDescriptor[];
 }
@@ -19,13 +17,9 @@ interface CollectionRowProps {
   readonly emptyMessage: string;
   readonly locale: LauncherActionLocale;
   readonly onActivate: (actionId: string) => void;
-  readonly onSetPinned: (actionId: string, pinned: boolean) => void;
   readonly pendingActionId?: string;
-  readonly pendingPinActionId?: string;
-  readonly pinnedIds: ReadonlySet<string>;
   readonly title: string;
   readonly trailing?: string;
-  readonly unpin: boolean;
 }
 
 const CollectionRow = ({
@@ -33,15 +27,10 @@ const CollectionRow = ({
   emptyMessage,
   locale,
   onActivate,
-  onSetPinned,
   pendingActionId,
-  pendingPinActionId,
-  pinnedIds,
   title,
   trailing,
-  unpin,
 }: CollectionRowProps) => {
-  const { t } = useTranslation();
   return (
     <section aria-label={title} className="launcher-collection flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex items-center gap-2 px-1">
@@ -56,25 +45,12 @@ const CollectionRow = ({
         <div className="launcher-collection-track min-h-0 flex-1 gap-2">
           {actions.map((descriptor) => {
             const metadata = resolveLauncherActionMetadata(descriptor, locale);
-            const isPinned = pinnedIds.has(descriptor.action_id);
-            const pinLabel = unpin
-              ? t('launcher.home.unpinAction', { title: metadata.title })
-              : isPinned
-                ? t('launcher.home.pinnedAction', { title: metadata.title })
-                : t('launcher.home.pinAction', { title: metadata.title });
             return (
               <ActionTile
                 action={{ action_id: descriptor.action_id, ...metadata }}
                 isPending={pendingActionId === descriptor.action_id}
                 key={descriptor.action_id}
                 onActivate={onActivate}
-                pinAction={{
-                  disabled: !unpin && isPinned,
-                  label: pinLabel,
-                  onActivate: (actionId) => onSetPinned(actionId, !unpin),
-                  pending: pendingPinActionId === descriptor.action_id,
-                  pinned: isPinned,
-                }}
               />
             );
           })}
@@ -91,14 +67,11 @@ const CollectionRow = ({
 export const LauncherHome = ({
   locale,
   onActivate,
-  onSetPinned,
   pendingActionId,
-  pendingPinActionId,
   pinnedActions,
   recentActions,
 }: LauncherHomeProps) => {
   const { t } = useTranslation();
-  const pinnedIds = new Set(pinnedActions.map(({ action_id: actionId }) => actionId));
   return (
     <div className="launcher-home flex min-h-0 flex-1 flex-col gap-3">
       <CollectionRow
@@ -106,25 +79,17 @@ export const LauncherHome = ({
         emptyMessage={t('launcher.home.recentEmpty')}
         locale={locale}
         onActivate={onActivate}
-        onSetPinned={onSetPinned}
         pendingActionId={pendingActionId}
-        pendingPinActionId={pendingPinActionId}
-        pinnedIds={pinnedIds}
         title={t('launcher.home.recentTitle')}
-        unpin={false}
       />
       <CollectionRow
         actions={pinnedActions}
         emptyMessage={t('launcher.home.pinnedEmpty')}
         locale={locale}
         onActivate={onActivate}
-        onSetPinned={onSetPinned}
         pendingActionId={pendingActionId}
-        pendingPinActionId={pendingPinActionId}
-        pinnedIds={pinnedIds}
         title={t('launcher.home.pinnedTitle')}
         trailing={t('launcher.home.allPlaceholder')}
-        unpin
       />
     </div>
   );

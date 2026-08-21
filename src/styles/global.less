@@ -146,28 +146,6 @@ body {
   color: var(--semi-color-primary);
 }
 
-.launcher-action-pin.semi-button {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  z-index: 1;
-  margin: 0;
-  opacity: 0;
-  color: var(--semi-color-text-2);
-  transition: opacity 120ms ease;
-
-  &:focus-visible {
-    outline: 2px solid var(--semi-color-focus-border);
-    outline-offset: -2px;
-  }
-}
-
-.launcher-action-tile:hover .launcher-action-pin,
-.launcher-action-tile:focus-within .launcher-action-pin,
-.launcher-action-pin[aria-busy="true"] {
-  opacity: 1;
-}
-
 .launcher-collection-track {
   display: grid;
   grid-template-columns: repeat(8, minmax(0, 1fr));
@@ -194,10 +172,15 @@ body {
   overflow: hidden;
 }
 
-.launcher-body[data-page-layout="plugin-edge-to-edge"] {
+.launcher-body[data-page-layout="plugin-edge-to-edge"],
+.launcher-body[data-page-layout="settings-split"] {
   gap: 0;
   padding-inline: 0;
   padding-bottom: 0;
+}
+
+.launcher-surface[data-page-layout="settings-split"] .launcher-drag-region {
+  border-bottom: 1px solid var(--semi-color-border);
 }
 
 .plugin-page-placeholder-title.semi-typography,
@@ -384,30 +367,60 @@ body {
 }
 
 .settings-page {
+  height: 100%;
   overflow: hidden;
 }
 
-.settings-tabs,
-.settings-tabs > .semi-tabs-content,
-.settings-tabs .semi-tabs-pane {
+.settings-navigation {
+  width: 152px;
   min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--semi-color-border);
 }
 
-.settings-tabs {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
+.settings-navigation-menu.semi-navigation {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border-right: 0;
+  background: transparent;
 
-  > .semi-tabs-content {
-    flex: 1;
-    overflow-y: auto;
-    overscroll-behavior: contain;
+  .semi-navigation-list-wrapper {
+    padding: 12px 8px;
   }
+
+  .semi-navigation-item {
+    border-radius: var(--semi-border-radius-medium);
+
+    &[aria-current='page'] {
+      background: var(--semi-color-primary-light-default);
+      font-weight: 600;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--semi-color-focus-border);
+      outline-offset: -2px;
+    }
+  }
+}
+
+.settings-content {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+}
+
+.settings-preference-select.semi-select {
+  width: 168px;
+  flex: 0 0 168px;
+}
+
+.settings-section-host {
+  height: 100%;
 }
 
 .settings-section {
   min-height: 160px;
-  padding: 12px 4px 4px;
 
   h3,
   p {

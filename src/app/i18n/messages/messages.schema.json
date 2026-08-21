@@ -55,30 +55,9 @@
             "pinnedEmpty": {
               "type": "string",
               "minLength": 1
-            },
-            "pinAction": {
-              "type": "string",
-              "minLength": 1
-            },
-            "unpinAction": {
-              "type": "string",
-              "minLength": 1
-            },
-            "pinnedAction": {
-              "type": "string",
-              "minLength": 1
             }
           },
-          "required": [
-            "recentTitle",
-            "pinnedTitle",
-            "allPlaceholder",
-            "recentEmpty",
-            "pinnedEmpty",
-            "pinAction",
-            "unpinAction",
-            "pinnedAction"
-          ]
+          "required": ["recentTitle", "pinnedTitle", "allPlaceholder", "recentEmpty", "pinnedEmpty"]
         },
         "page": {
           "type": "object",
@@ -249,17 +228,9 @@
             "syncFailure": {
               "type": "string",
               "minLength": 1
-            },
-            "pinFailure": {
-              "type": "string",
-              "minLength": 1
-            },
-            "capacity": {
-              "type": "string",
-              "minLength": 1
             }
           },
-          "required": ["loadFailure", "syncFailure", "pinFailure", "capacity"]
+          "required": ["loadFailure", "syncFailure"]
         },
         "actions": {
           "type": "object",

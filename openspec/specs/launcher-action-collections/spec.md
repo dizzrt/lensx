@@ -127,75 +127,78 @@ an Action execution failure.
   localized, safe feedback
 - **THEN** the user can continue to search for and execute Actions
 
-### Requirement: Users must be able to pin and unpin visible home Actions
+### Requirement: Home must present pinned collections as read-only while management is deferred
 
-A recent Action tile MUST provide an accessible pin operation separate from
-the primary Action activation. A pinned Action tile MUST provide an accessible
-unpin operation separate from the primary Action activation. Pinning an
-unpinned ID MUST append it to the pinned collection. Unpinning MUST remove the
-ID while preserving the order of remaining items. When the pinned collection
-already contains eight items, the system MUST reject another pin and provide
-localized feedback instead of silently removing an existing item.
+Launcher Home MUST continue to resolve Host-owned `pinned_action_ids` and
+display real, current, enabled Actions in confirmed order. Recent and Pinned
+tiles MUST expose only their primary Action operation and MUST NOT display or
+expose pin, unpin, more-menu, or another replacement management entry point.
 
-The localized All label MUST be only a visual placeholder beside the Pinned
-section heading. It MUST NOT be a button, link, menu trigger, or focusable
-element and MUST NOT display a chevron, hover behavior, pointer cursor, or
-accessible action name.
+The localized All label beside the Pinned heading MUST remain only a visual
+placeholder and MUST NOT become a button, link, menu trigger, or focusable
+element. When no pinned Actions can be resolved, the page MUST use a neutral,
+localized empty state that explains that pinned Actions appear in the section
+and MUST NOT claim that users can currently pin an Action from its tile.
 
-#### Scenario: Pin an Action from recent use
+Removing the visible entry point MUST NOT delete, migrate, reorder, or
+fabricate existing pinned IDs, and it MUST NOT change the Rust/Tauri collection
+read, write, capacity, or safe-error contracts.
 
-- **WHEN** the user activates a recent tile's pin icon button while the pinned
-  collection contains fewer than eight items
-- **THEN** the system appends that Action ID to the pinned collection
-- **THEN** the primary Action is not executed
-- **THEN** the Pinned section displays that real Action
+#### Scenario: Display existing pinned Actions
 
-#### Scenario: Unpin an Action
+- **WHEN** a persisted snapshot contains pinned Action IDs that resolve through
+  the current Registry
+- **THEN** the Pinned section displays the corresponding real Actions in
+  confirmed order
+- **THEN** each tile provides only its primary Action and provides no pin,
+  unpin, or menu operation
 
-- **WHEN** the user activates a pinned tile's unpin icon button
-- **THEN** the system removes that Action ID from the pinned collection
-- **THEN** the relative order of the remaining pinned IDs is preserved
-- **THEN** the primary Action is not executed
+#### Scenario: Execute an existing pinned Action
 
-#### Scenario: The pinned collection is full
+- **WHEN** the user activates the primary operation of a Pinned tile with the
+  keyboard or pointer
+- **THEN** the system executes that Action through the existing Dispatcher path
+- **THEN** primary Action execution does not add, remove, or reorder the pinned
+  collection
 
-- **WHEN** the pinned collection contains eight items and the user attempts to
-  pin another Action
-- **THEN** the system rejects the new pin
-- **THEN** the existing eight items remain unchanged
-- **THEN** the App Shell displays localized and recoverable capacity feedback
+#### Scenario: View an empty pinned collection
 
-#### Scenario: Inspect the All placeholder
+- **WHEN** no current pinned Action can be resolved
+- **THEN** the Pinned section displays a localized neutral empty state
+- **THEN** the page exposes no pin or unpin button and does not direct the user
+  to a management entry point that does not currently exist
 
-- **WHEN** a user or assistive technology inspects the Pinned section heading
-- **THEN** the visual interface displays a localized All label beside the
-  heading
-- **THEN** the page has no button, link, or menu trigger named All
-- **THEN** the placeholder is absent from the keyboard focus order
+#### Scenario: Inspect placeholders and focus order
+
+- **WHEN** the user or assistive technology inspects Recent, Pinned, and the All
+  placeholder
+- **THEN** the Action-tile focus order contains only primary operations
+- **THEN** the All placeholder has no button, link, menu-trigger, or keyboard-
+  focus semantics
 
 ### Requirement: Home Action collections must remain accessible, localized, and theme-aware
 
-Recent and Pinned sections, empty states, Action titles, pin and unpin
-accessible names, capacity feedback, and persistence feedback MUST use
-application i18n with `en-US` as the default and a semantically aligned
-`zh-CN` resource. The primary operation and pin operation for each Action tile
-MUST each work with keyboard and pointer input and MUST have visible focus
-states. In light and dark themes, tiles, selection, hover, focus, empty states,
-and feedback MUST use Semi Design-supported theme tokens and MUST NOT
-communicate state through color alone.
+Recent and Pinned sections, empty states, Action titles, and collection-read
+feedback MUST use application i18n with `en-US` as the default and a
+semantically aligned `zh-CN` resource. The primary operation of each visible
+Action tile MUST work with keyboard and pointer input and MUST have a visible
+focus state. Tiles MUST NOT expose a pin or unpin accessible name, focus
+target, or visual-only control. In light and dark themes, tiles, selection,
+hover, focus, empty states, and feedback MUST use Semi Design-supported theme
+tokens and MUST NOT communicate state through color alone.
 
 #### Scenario: Operate home Actions with the keyboard only
 
 - **WHEN** a user navigates recent or pinned tiles with the keyboard
-- **THEN** the user can separately focus and execute the primary Action and its
-  pin or unpin operation
-- **THEN** the focus order excludes the avatar and All placeholder
+- **THEN** the user can focus and execute the primary Action on each tile
+- **THEN** the focus order excludes pin, unpin, the avatar, and the All
+  placeholder
 
 #### Scenario: Use Simplified Chinese
 
 - **WHEN** the application locale is `zh-CN`
-- **THEN** section headings, empty states, pin operations, and collection
-  feedback use Simplified Chinese
+- **THEN** section headings, neutral empty states, and collection feedback use
+  Simplified Chinese
 - **THEN** Action titles continue to use the existing `zh-CN` to `en-US`
   fallback
 
@@ -203,6 +206,6 @@ communicate state through color alone.
 
 - **WHEN** the user switches between light and dark themes while the home
   surface is visible
-- **THEN** both collections, their tiles, operations, and feedback use the
+- **THEN** both collections, their tiles, primary operations, and feedback use the
   corresponding theme tokens
 - **THEN** text, focus, and interaction states remain distinguishable

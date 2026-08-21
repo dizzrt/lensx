@@ -112,8 +112,11 @@ The App Shell derives `home`, `search`, `host_page`, or identity-bound
 and normalized query state. All targets share one top row and a non-interactive avatar
 placeholder. `home` keeps the launcher input and renders Recent followed by
 Pinned from accepted Action collections; it never fills either row from
-registry order or simulated data. The localized `All` text beside Pinned is a
-non-interactive placeholder. `search` keeps the same input and exposes at most
+registry order or simulated data. Existing Pinned Actions are currently a
+read-only view: each tile exposes only its primary Action, while pin, unpin,
+menu, and replacement management entry points remain deferred. The localized
+`All` text beside Pinned is a non-interactive placeholder. `search` keeps the
+same input and exposes at most
 eight real enabled Action results in one four-column grid. `page` replaces the
 input with a localized owner/action context bar and accessible close icon while
 retaining the avatar placeholder. Closing a page returns to `home` and restores
@@ -331,9 +334,11 @@ operations. React resolves stored IDs against the current immutable registry
 snapshot, preserves stored order, and hides missing or disabled Actions without
 deleting or replacing those IDs. A successful dispatch records recent use;
 failed dispatches do not. Recent-use persistence failure does not rewrite a
-successful Action result. Pin and unpin use an optimistic view but restore the
-last confirmed snapshot after failure, and a ninth pin is rejected without
-dropping an existing one.
+successful Action result. The set-pinned typed client and Rust persistence
+contract remain available, but Launcher Home currently presents confirmed
+Pinned Actions as read-only data and exposes no pin, unpin, or menu control.
+Existing IDs are neither migrated nor reordered; a future management entry
+point requires a separate accepted change.
 
 Plugin management and explicit permission decisions are delivered through the
 trusted Settings surface. Safe plugin icon resolution remains a separate
@@ -377,12 +382,17 @@ ready only for that current Child WebView. Close, retry, invalidation,
 replacement, and App teardown revoke it. Manifest `0.4.0` and Host API `0.2.0`
 expose neither native Window methods nor Child WebView identity.
 
-Settings is rendered in the existing `main` Tauri window. It has first-level
-Preferences and Plugins sections. Preferences controls the supported
-`light`/`dark` theme and `en-US`/`zh-CN` locale. Plugins provides the shipped
-list-detail management surface for installation, replacement, lifecycle,
-uninstall, and disabled-only data clearing through one typed
-Host-private service. External authors should use the
+Settings is rendered in the existing `main` Tauri window. A controlled vertical
+navigation on the left contains only Preferences and Plugins, defaults to
+Preferences, and the right content pane renders only the selected section. The
+resolved `lensx.core/settings` identity enables an edge-to-edge App Shell
+modifier: a token-based horizontal boundary separates the shared header from
+the body, a vertical boundary separates navigation from content, and the right
+pane owns scrolling within the fixed `650×600` Host Page presentation.
+Preferences controls the supported `light`/`dark` theme and `en-US`/`zh-CN`
+locale. Plugins retains its nested list-detail management surface for
+installation, replacement, lifecycle, uninstall, and disabled-only data
+clearing through one typed Host-private service. External authors should use the
 [Plugin Development hub](../plugin-development/index.md), not this maintainer
 overview, for tutorials and public references.
 

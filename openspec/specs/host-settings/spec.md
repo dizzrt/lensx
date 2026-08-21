@@ -67,20 +67,60 @@ PageErrorBoundary MUST remain in the shared content region.
 ### Requirement: The first settings version must contain preferences and plugins sections
 
 The settings page MUST provide localized and accessible top-level
-`Preferences` and `Plugins` sections. `Preferences` MUST contain color-theme
-and language settings. `Plugins` MUST provide the Host-owned local plugin
-management capability from the `plugin-management-settings` specification and
-MUST render only current Registration facts and operations exposed by trusted
-typed services. It MUST NOT display fabricated plugin data, expose plugin
-management to plugin code, or provide marketplace and remote-distribution
-operations.
+`Preferences` and `Plugins` sections in a vertical navigation on the left.
+`Preferences` MUST be selected by default when settings opens, and the right
+pane MUST display only the currently selected section. The navigation MUST
+expose a localized accessible name, the current selection, and visible focus,
+and it MUST support keyboard and pointer selection.
 
-#### Scenario: View the preferences section
+`Preferences` MUST contain color-theme and language settings. Each setting
+MUST use an accessible single-select control instead of displaying every
+option persistently side by side. User-visible descriptions MUST explain only
+the observable purpose of each setting and MUST NOT expose the Host, a
+component library, or another internal implementation detail. In every
+interface locale, the language select MUST display `en-US` as `English` and
+`zh-CN` as `简体中文`; language names MUST NOT be translated according to the
+current interface locale.
 
-- **WHEN** the user opens the settings page and enters `Preferences`
-- **THEN** the page displays the color-theme setting
-- **THEN** the page displays the language setting
+`Plugins` MUST provide the Host-owned local plugin management capability from
+the `plugin-management-settings` specification and MUST render only current
+Registration facts and operations exposed by trusted typed services. It MUST
+NOT display fabricated plugin data, expose plugin management to plugin code,
+or provide marketplace and remote-distribution operations.
+
+#### Scenario: View the default Preferences section
+
+- **WHEN** the user opens the settings page
+- **THEN** the left navigation exposes Preferences as the current selection
+- **THEN** the right pane displays the color-theme and language settings
 - **THEN** every setting and control has a localized label and accessible name
+- **THEN** each setting displays one current selection and reveals the other
+  candidates only when its select is expanded
+
+#### Scenario: View language choices in either interface locale
+
+- **WHEN** the user expands the language select in the `en-US` or `zh-CN`
+  interface
+- **THEN** the `en-US` option is displayed as `English`
+- **THEN** the `zh-CN` option is displayed as `简体中文`
+
+#### Scenario: Read the preference descriptions
+
+- **WHEN** the user reads the color-theme and language descriptions in the
+  `en-US` or `zh-CN` interface
+- **THEN** the color-theme description explains only that it selects the lensX
+  appearance and the language description explains only which language lensX
+  uses
+- **THEN** neither description mentions the Host, Semi Design, a component
+  library, or another internal implementation detail
+
+#### Scenario: Switch top-level sections with the keyboard
+
+- **WHEN** the user selects Plugins from Preferences with the keyboard
+- **THEN** the left navigation exposes Plugins as the current selection and
+  retains visible focus
+- **THEN** the right pane displays the current Plugin Management content
+  without creating another Host page or window
 
 #### Scenario: View the plugins section without registrations
 
@@ -99,6 +139,65 @@ operations.
   revision-consistent Host-owned detail
 - **THEN** lifecycle, replacement and data controls remain inside the trusted
   Host settings boundary and no marketplace operation is displayed
+
+#### Scenario: Switch locale while settings is open
+
+- **WHEN** the user successfully switches the application locale
+- **THEN** the left navigation, right-pane section heading, and current
+  settings content update together to the new locale
+- **THEN** the current section and keyboard-focus semantics remain stable
+
+### Requirement: Settings must separate the shared header, navigation, and content with themed boundaries
+
+When the `lensx.core/settings` Host page is active, the App Shell MUST display
+a horizontal boundary across the content width between the shared page-context
+header and the settings content. Settings MUST use a left top-level navigation
+and a right current-section pane, separated by a vertical boundary that extends
+from below the header to the bottom of the content. The boundaries MUST use
+supported application theme tokens, remain distinguishable in light and dark
+themes, and MUST NOT present the header, navigation, or content as separate
+persistent cards.
+
+The layout MUST retain the fixed `650×600` Host page presentation. The right
+pane MUST scroll independently within its available height, and long content
+MUST NOT enlarge the native window, cover the shared header, or move the left
+navigation outside the available area. The settings-specific layout MUST NOT
+change Home, Search, another Host page, or a Plugin page.
+
+#### Scenario: Open settings
+
+- **WHEN** `lensx.core/settings` becomes active in the fixed Host page surface
+- **THEN** a complete horizontal boundary separates the shared header from the
+  settings content
+- **THEN** a continuous vertical boundary separates the left navigation from
+  the right pane
+- **THEN** the right pane displays Preferences by default while the native
+  window retains the `650×600` Host page presentation
+
+#### Scenario: Show long content in the fixed viewport
+
+- **WHEN** the current settings section exceeds the height available to the
+  right pane
+- **THEN** the right pane can scroll independently and remains readable
+- **THEN** the shared header, left navigation, horizontal boundary, and vertical
+  boundary remain stable
+
+#### Scenario: Switch between light and dark themes
+
+- **WHEN** the application switches between light and dark themes while
+  settings is visible
+- **THEN** the horizontal boundary, vertical boundary, navigation selection,
+  and focus state use the corresponding theme tokens
+- **THEN** the boundaries and interaction states do not communicate meaning by
+  color alone
+
+#### Scenario: Open another page
+
+- **WHEN** the App Shell displays Home, Search, another Host page, or a Plugin
+  page
+- **THEN** the settings-specific split-layout modifier is not applied
+- **THEN** those surfaces retain their existing layout and presentation
+  semantics
 
 ### Requirement: Preferences must use supported theme and locale values
 

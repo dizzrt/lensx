@@ -171,13 +171,25 @@ const openSettingsWithKeyboard = async () => {
   await screen.findByRole('region', { name: /lensX: (?:Open settings|打开设置)/iu });
 };
 
-const openPluginsTab = async () => {
+const openPluginsSection = async () => {
   await openSettingsWithKeyboard();
-  const pluginsTab = screen.getByRole('tab', { name: /plugins|插件/iu });
-  pluginsTab.focus();
-  fireEvent.keyDown(pluginsTab, { key: 'Enter' });
-  fireEvent.click(pluginsTab);
-  await waitFor(() => expect(pluginsTab).toHaveAttribute('aria-selected', 'true'));
+  const pluginsItem = screen.getByRole('menuitem', { name: /plugins|插件/iu });
+  pluginsItem.focus();
+  fireEvent.keyDown(pluginsItem, { code: 'Enter', key: 'Enter' });
+  await waitFor(() => expect(pluginsItem).toHaveAttribute('aria-current', 'page'));
+};
+
+const openPreferenceSelect = async (comboboxName: string) => {
+  const combobox = screen.getByRole('combobox', { name: comboboxName });
+  combobox.focus();
+  fireEvent.click(combobox);
+  await waitFor(() => expect(combobox).toHaveAttribute('aria-expanded', 'true'));
+  return screen.findByRole('listbox');
+};
+
+const selectPreferenceOption = async (comboboxName: string, optionName: string) => {
+  const listbox = await openPreferenceSelect(comboboxName);
+  fireEvent.click(within(listbox).getByRole('option', { name: optionName }));
 };
 
 describe('Host settings surface', () => {
@@ -209,11 +221,44 @@ describe('Host settings surface', () => {
 
     expect(screen.getAllByRole('main')).toHaveLength(1);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Preferences' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('radio', { name: 'Light' })).toBeChecked();
-    expect(screen.getByRole('radio', { name: 'English' })).toBeChecked();
-    expect(screen.getByRole('button', { name: 'Close settings and return home' })).toBeInTheDocument();
+    const settingsNavigation = screen.getByRole('navigation', { name: 'Settings' });
+    const preferencesItem = within(settingsNavigation).getByRole('menuitem', { name: 'Preferences' });
+    const pluginsItem = within(settingsNavigation).getByRole('menuitem', { name: 'Plugins' });
+    expect(preferencesItem).toHaveAttribute('aria-current', 'page');
+    expect(pluginsItem).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('heading', { level: 3, name: 'Preferences' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 3, name: 'Plugins' })).not.toBeInTheDocument();
+    const themeSelect = screen.getByRole('combobox', { name: 'Color theme' });
+    const languageSelect = screen.getByRole('combobox', { name: 'Language' });
+    expect(themeSelect).toHaveTextContent('Light');
+    expect(themeSelect).toHaveAttribute('aria-expanded', 'false');
+    expect(languageSelect).toHaveTextContent('English');
+    expect(languageSelect).toHaveAttribute('aria-expanded', 'false');
+    const languageOptions = await openPreferenceSelect('Language');
+    expect(within(languageOptions).getByRole('option', { name: 'English' })).toBeInTheDocument();
+    expect(within(languageOptions).getByRole('option', { name: '简体中文' })).toBeInTheDocument();
+    fireEvent.click(within(languageOptions).getByRole('option', { name: 'English' }));
+    const closeSettings = screen.getByRole('button', { name: 'Close settings and return home' });
+    const settingsSurface = settingsNavigation.closest('.launcher-surface');
+    expect(settingsSurface).toHaveAttribute('data-page-layout', 'settings-split');
+    expect(settingsSurface?.querySelector('.launcher-body')).toHaveAttribute('data-page-layout', 'settings-split');
+    expect(settingsSurface?.querySelector('.settings-navigation')).toHaveClass('settings-navigation');
+    expect(settingsSurface?.querySelector('.settings-content')).toHaveClass('min-h-0', 'min-w-0', 'flex-1');
     expect(document.querySelector('[data-owner-icon-token]')).toHaveAttribute('data-owner-icon-token', 'lensx-owner');
+
+    pluginsItem.focus();
+    fireEvent.keyDown(pluginsItem, { code: 'Enter', key: 'Enter' });
+    await waitFor(() => expect(pluginsItem).toHaveAttribute('aria-current', 'page'));
+    expect(pluginsItem).toHaveFocus();
+    expect(screen.getByRole('heading', { level: 3, name: 'Plugins' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 3, name: 'Preferences' })).not.toBeInTheDocument();
+
+    fireEvent.click(preferencesItem);
+    await waitFor(() => expect(preferencesItem).toHaveAttribute('aria-current', 'page'));
+    expect(screen.getByRole('heading', { level: 3, name: 'Preferences' })).toBeInTheDocument();
+
+    fireEvent.click(closeSettings);
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Launcher query' })).toHaveFocus());
   });
 
   test('persists complete snapshots serially and updates root theme and locale only after confirmation', async () => {
@@ -233,21 +278,28 @@ describe('Host settings surface', () => {
     });
     await openSettingsWithKeyboard();
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
+    await selectPreferenceOption('Color theme', 'Dark');
     await waitFor(() => expect(write).toHaveBeenCalledWith({ theme_mode: 'dark', locale: 'en-US' }));
     expect(document.body).not.toHaveAttribute('theme-mode');
     expect(screen.getByText('Saving…')).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Simplified Chinese' })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: 'Language' })).toHaveAttribute('aria-disabled', 'true');
 
     resolveWrite({ theme_mode: 'dark', locale: 'en-US' });
     await waitFor(() => expect(document.body).toHaveAttribute('theme-mode', 'dark'));
-    expect(screen.getByRole('radio', { name: 'Dark' })).toBeChecked();
+    expect(screen.getByRole('combobox', { name: 'Color theme' })).toHaveTextContent('Dark');
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Simplified Chinese' }));
+    await selectPreferenceOption('Language', '简体中文');
     await waitFor(() => expect(write).toHaveBeenLastCalledWith({ theme_mode: 'dark', locale: 'zh-CN' }));
     await waitFor(() => expect(document.documentElement).toHaveAttribute('lang', 'zh-CN'));
     expect(screen.getByRole('region', { name: 'lensX: 打开设置' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: '简体中文' })).toBeChecked();
+    const localizedNavigation = screen.getByRole('navigation', { name: '设置' });
+    expect(within(localizedNavigation).getByRole('menuitem', { name: '偏好' })).toHaveAttribute('aria-current', 'page');
+    expect(within(localizedNavigation).getByRole('menuitem', { name: '插件' })).toBeInTheDocument();
+    const localizedLanguageSelect = screen.getByRole('combobox', { name: '语言' });
+    expect(localizedLanguageSelect).toHaveTextContent('简体中文');
+    const localizedLanguageOptions = await openPreferenceSelect('语言');
+    expect(within(localizedLanguageOptions).getByRole('option', { name: 'English' })).toBeInTheDocument();
+    expect(within(localizedLanguageOptions).getByRole('option', { name: '简体中文' })).toBeInTheDocument();
   });
 
   test('retains confirmed values and shows localized safe feedback when persistence fails', async () => {
@@ -266,13 +318,13 @@ describe('Host settings surface', () => {
     });
     await openSettingsWithKeyboard();
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
+    await selectPreferenceOption('Color theme', 'Dark');
 
     expect(
       await screen.findByText('The preference could not be saved. Your previous value is still active.'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Light' })).toBeChecked();
-    expect(screen.getByRole('radio', { name: 'Dark' })).not.toBeChecked();
+    expect(screen.getByRole('combobox', { name: 'Color theme' })).toHaveTextContent('Light');
+    expect(screen.queryByRole('option', { name: 'Dark' })).not.toBeInTheDocument();
     expect(document.body).not.toHaveAttribute('theme-mode');
   });
 
@@ -285,7 +337,7 @@ describe('Host settings surface', () => {
         write: async (preferences) => preferences,
       },
     });
-    await openPluginsTab();
+    await openPluginsSection();
     expect(screen.getByRole('heading', { level: 3, name: 'Plugins' })).toBeInTheDocument();
     expect(screen.getByText('No plugins are installed.')).toBeInTheDocument();
     const install = screen.getByRole('button', { name: 'Install from file' });
@@ -314,7 +366,7 @@ describe('Host settings surface', () => {
         write: async (preferences) => preferences,
       },
     });
-    await openPluginsTab();
+    await openPluginsSection();
     expect(screen.getByText(healthyManifest.plugin_id)).toBeInTheDocument();
     const firstEntry = document.getElementById(`plugin-management-entry-${healthyEntry.entry_id}`) as HTMLElement;
     const secondEntryButton = document.getElementById(`plugin-management-entry-${secondEntry.entry_id}`) as HTMLElement;
@@ -372,7 +424,7 @@ describe('Host settings surface', () => {
         write: async (preferences) => preferences,
       },
     });
-    await openPluginsTab();
+    await openPluginsSection();
     const clear = screen.getByRole('button', { name: 'Clear data' });
     clear.focus();
     fireEvent.click(clear);
@@ -428,8 +480,12 @@ describe('Host settings surface', () => {
         write: async (preferences) => preferences,
       },
     });
-    await openPluginsTab();
+    await openPluginsSection();
     expect(document.body).toHaveAttribute('theme-mode', 'dark');
+    const navigation = screen.getByRole('navigation', { name: '设置' });
+    expect(within(navigation).getByRole('menuitem', { name: '插件' })).toHaveAttribute('aria-current', 'page');
+    expect(document.querySelector('.settings-content')).toHaveAttribute('data-settings-section', 'plugins');
+    expect(document.querySelector('.plugin-management-surface')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 3, name: '插件' })).toBeInTheDocument();
     expect(screen.getByText('插件记录已损坏。')).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent('/private/raw/record.json');
@@ -473,7 +529,7 @@ describe('Host settings surface', () => {
         write: async (preferences) => preferences,
       },
     });
-    await openPluginsTab();
+    await openPluginsSection();
 
     expect(screen.getByText('Plugin Development Mode')).toBeInTheDocument();
     expect(screen.getAllByText('Unpacked').length).toBeGreaterThan(0);

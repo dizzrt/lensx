@@ -65,4 +65,16 @@ describe('application message resources', () => {
     expect(canonicalKeys).toEqual(schemaKeys);
     expect(collectMessageKeys(zhCNMessages)).toEqual(canonicalKeys);
   });
+
+  test('keeps preference descriptions user-facing', () => {
+    expect(enUSMessages.settings.theme.description).toBe('Choose how lensX looks.');
+    expect(enUSMessages.settings.locale.description).toBe('Choose the language used by lensX.');
+    expect(zhCNMessages.settings.theme.description).toBe('选择 lensX 的外观。');
+    expect(zhCNMessages.settings.locale.description).toBe('选择 lensX 使用的语言。');
+
+    for (const resource of [enUSMessages, zhCNMessages]) {
+      const descriptions = `${resource.settings.theme.description} ${resource.settings.locale.description}`;
+      expect(descriptions).not.toMatch(/\bhost\b|semi design/iu);
+    }
+  });
 });
