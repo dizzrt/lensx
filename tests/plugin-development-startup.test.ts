@@ -6,25 +6,24 @@ import { describe, expect, test } from '@rstest/core';
 import { createRsbuildConfig } from '../rsbuild.config';
 
 import {
-  applyPluginDevelopmentChildExit,
-  createPluginDevelopmentLaunch,
+  createDevelopmentLauncherPlan,
   PLUGIN_DEVELOPMENT_STARTUP_ROOT_ENV,
   parsePluginDevelopmentArguments,
-} from '../scripts/dev-plugin-development-mode.mjs';
+} from '../scripts/development-launcher.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 
 describe('plugin development startup wrapper', () => {
   test('uses the direct repository plugins directory by default', () => {
-    const launch = createPluginDevelopmentLaunch([], repositoryRoot);
-    expect(launch).toEqual({
-      command: 'pnpm',
-      arguments: ['exec', 'tauri', 'dev', '--features', 'plugin-development-mode'],
-      cwd: repositoryRoot,
+    const launch = createDevelopmentLauncherPlan({ mode: 'plugin-development', cwd: repositoryRoot });
+    expect(launch).toMatchObject({
+      mode: 'plugin-development',
+      repositoryRoot,
       environment: {
         LENSX_PLUGIN_DEVELOPMENT_MODE: '1',
         [PLUGIN_DEVELOPMENT_STARTUP_ROOT_ENV]: resolve(repositoryRoot, 'plugins'),
       },
+      tauriArguments: ['--features', 'plugin-development-mode'],
     });
   });
 
@@ -41,22 +40,12 @@ describe('plugin development startup wrapper', () => {
     [['--plugins-root', '--other'], 'missing-plugins-root'],
     [['--plugins-root', 'one', '--plugins-root', 'two'], 'duplicate-plugins-root'],
   ])('rejects invalid arguments %j', (arguments_, code) => {
-    expect(() => parsePluginDevelopmentArguments(arguments_, repositoryRoot)).toThrow(code);
-  });
-
-  test('propagates child exit codes and signals without conflating them', () => {
-    const exitCodes: number[] = [];
-    const signals: NodeJS.Signals[] = [];
-    applyPluginDevelopmentChildExit(7, null, {
-      setExitCode: (value) => exitCodes.push(value),
-      relaySignal: (value) => signals.push(value),
-    });
-    applyPluginDevelopmentChildExit(null, 'SIGTERM', {
-      setExitCode: (value) => exitCodes.push(value),
-      relaySignal: (value) => signals.push(value),
-    });
-    expect(exitCodes).toEqual([7]);
-    expect(signals).toEqual(['SIGTERM']);
+    try {
+      parsePluginDevelopmentArguments(arguments_, repositoryRoot);
+      throw new Error('expected argument parsing to fail');
+    } catch (error) {
+      expect(error).toMatchObject({ code });
+    }
   });
 
   test('keeps the startup root out of Rsbuild defines and ordinary dev', () => {
@@ -66,6 +55,7 @@ describe('plugin development startup wrapper', () => {
     };
     expect(rsbuild).not.toContain(PLUGIN_DEVELOPMENT_STARTUP_ROOT_ENV);
     expect(metadata.scripts.dev).not.toContain(PLUGIN_DEVELOPMENT_STARTUP_ROOT_ENV);
+    expect(metadata.scripts['app:dev']).toContain('development-launcher.mjs');
     expect(metadata.scripts['dev:plugin-development-mode']).toContain('dev-plugin-development-mode.mjs');
   });
 

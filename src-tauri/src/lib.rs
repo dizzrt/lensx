@@ -40,6 +40,7 @@ pub mod plugin_resource_service;
 pub(crate) mod plugin_resource_url;
 pub(crate) mod plugin_runtime_security_policy;
 pub mod plugin_scoped_storage;
+pub(crate) mod trusted_app_target;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -122,8 +123,25 @@ pub fn run() {
     let app = builder
         .setup(|app| {
             macos_launcher::setup_macos_accessory_application(app)?;
+            let trusted_app_target =
+                Arc::new(trusted_app_target::TrustedAppTarget::from_runtime_config(
+                    app.config()
+                        .build
+                        .dev_url
+                        .as_ref()
+                        .map(ToString::to_string)
+                        .as_deref(),
+                )?);
+            if !app.manage(Arc::clone(&trusted_app_target)) {
+                return Err(
+                    std::io::Error::other("trusted App target was already installed").into(),
+                );
+            }
             #[cfg(target_os = "macos")]
-            frame_aware_navigation_setup::setup_frame_aware_navigation_policy(app.handle())?;
+            frame_aware_navigation_setup::setup_frame_aware_navigation_policy(
+                app.handle(),
+                &trusted_app_target,
+            )?;
             macos_launcher::setup_macos_launcher_window_collection(app.handle())?;
             let plugin_manager = plugin_manager::setup_plugin_manager(app.handle());
             let plugin_child_webview_service =
@@ -147,6 +165,7 @@ pub fn run() {
                 app.handle(),
                 Arc::clone(&plugin_manager),
                 Arc::clone(&plugin_installer),
+                &trusted_app_target,
             );
             debug_assert!(
                 plugin_child_webview_service.attach_resource_authority(plugin_resource_service)

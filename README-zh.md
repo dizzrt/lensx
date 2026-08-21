@@ -37,8 +37,11 @@ pnpm run dev
 以开发模式启动桌面应用：
 
 ```bash
-pnpm exec tauri dev
+pnpm run app:dev
 ```
+
+统一启动器会持有前端服务器，把实际本地端口传给 Tauri，并统一清理两个进程。只有需要
+独立前端服务器时才使用 `pnpm run dev`。
 
 ## 常用命令
 

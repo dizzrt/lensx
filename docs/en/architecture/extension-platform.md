@@ -746,10 +746,12 @@ relaxations remain denied. Every successful current plugin HTML `GET` and
 profile admits current-origin plus HTTPS/Data/Blob content, HTTPS/WSS
 connections, page-lifetime Dedicated Workers, and WASM while continuing to
 deny objects, base changes, forms, and untrusted ancestors. A production
-application document admits exactly
-`tauri://localhost` as its ancestor; `tauri dev` substitutes only its configured
-`http://localhost:40755` application origin while retaining every other
-directive byte-for-byte. Manifest, publisher, source, query,
+application document admits exactly `tauri://localhost` as its ancestor. In a
+development build, the Host-private `development-launcher` passes its actual
+`http://localhost:<port>/` target through Tauri runtime config. Rust validates
+that single target before navigation or plugin resource authority is created,
+and substitutes only its exact origin as the plugin ancestor while retaining
+every other directive byte-for-byte. Manifest, publisher, source, query,
 request-header, and plugin-authored meta values cannot change either profile.
 
 CSP, isolated origin and data store, native navigation, the closed native

@@ -77,11 +77,18 @@ requireMarkers('src/app/pages/PluginManagementSettings.tsx', [
   'plugin-development-reload',
   'plugin-development-remove',
 ]);
-requireMarkers('package.json', ['dev-plugin-development-mode.mjs', 'scripts/validation/cli.ts gate']);
-requireMarkers('scripts/dev-plugin-development-mode.mjs', [
+requireMarkers('package.json', [
+  'development-launcher.mjs',
+  'dev-plugin-development-mode.mjs',
+  'scripts/validation/cli.ts gate',
+]);
+requireMarkers('scripts/dev-plugin-development-mode.mjs', ["mode: 'plugin-development'", 'runDevelopmentLauncher']);
+requireMarkers('scripts/development-launcher.mjs', [
   '--plugins-root',
   'LENSX_PLUGIN_DEVELOPMENT_STARTUP_ROOT',
-  "LENSX_PLUGIN_DEVELOPMENT_MODE: '1'",
+  'LENSX_PLUGIN_DEVELOPMENT_MODE',
+  "['--features', 'plugin-development-mode']",
+  'beforeDevCommand: null',
 ]);
 for (const path of [
   'pnpm-workspace.yaml',

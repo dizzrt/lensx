@@ -41,8 +41,12 @@ pnpm run dev
 Start the desktop application in development mode:
 
 ```bash
-pnpm exec tauri dev
+pnpm run app:dev
 ```
+
+The unified launcher owns the frontend server, forwards its actual local port
+to Tauri, and cleans up both processes together. Use `pnpm run dev` only when
+you need the standalone frontend server.
 
 ## Common Commands
 

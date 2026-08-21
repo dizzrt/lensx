@@ -559,8 +559,11 @@ mod tests {
         let policy = source
             .find("setup_macos_accessory_application(app)")
             .expect("application policy setup must be installed");
+        let trusted_target = source
+            .find("TrustedAppTarget::from_runtime_config")
+            .expect("trusted App target must be established");
         let window = source
-            .find("setup_frame_aware_navigation_policy(app.handle())")
+            .find("setup_frame_aware_navigation_policy(")
             .expect("main Window creation must remain explicit");
         let collection = source
             .find("setup_macos_launcher_window_collection(app.handle())")
@@ -572,7 +575,11 @@ mod tests {
             .find("setup_launcher_window(app.handle())")
             .expect("Launcher lifecycle must remain in setup");
         assert!(
-            policy < window && window < collection && collection < plugins && plugins < launcher
+            policy < trusted_target
+                && trusted_target < window
+                && window < collection
+                && collection < plugins
+                && plugins < launcher
         );
     }
 }

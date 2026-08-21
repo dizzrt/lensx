@@ -30,6 +30,15 @@ describe('validation Gate registry and runner', () => {
     expect(planGates(validationRegistry, [])).toEqual({ requestedGateIds: [], gateIds: [], steps: [] });
   });
 
+  test('resolves the development launcher Gate through stable capability dependencies', () => {
+    const plan = planGates(validationRegistry, ['development-launcher']);
+    expect(plan.gateIds).toContain('frame-aware-webview-navigation-policy');
+    expect(plan.gateIds).toContain('plugin-development-mode');
+    expect(plan.gateIds).toContain('plugin-child-webview-runtime');
+    expect(plan.gateIds.at(-1)).toBe('development-launcher');
+    expect(plan.steps.every((item) => item.safety.readOnly)).toBe(true);
+  });
+
   test('uses stable topology and de-duplicates shared Gates and steps', () => {
     const shared = step('shared');
     const left = step('left');

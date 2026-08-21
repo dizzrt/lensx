@@ -1,6 +1,7 @@
 use crate::frame_aware_navigation_policy::{
     FrameAwareNavigationPolicy, NavigationDecision, NavigationFrame,
 };
+use crate::trusted_app_target::TrustedAppTarget;
 use std::{error::Error, io, sync::Arc};
 use tauri::{
     webview::{DownloadEvent, NavigationFrame as TauriNavigationFrame, NewWindowResponse},
@@ -10,6 +11,7 @@ use url::Url;
 
 pub(crate) fn setup_frame_aware_navigation_policy(
     app: &AppHandle,
+    app_target: &TrustedAppTarget,
 ) -> Result<Arc<FrameAwareNavigationPolicy>, Box<dyn Error>> {
     let window_config = app
         .config()
@@ -19,18 +21,8 @@ pub(crate) fn setup_frame_aware_navigation_policy(
         .find(|window| window.label == "main")
         .cloned()
         .ok_or_else(|| io::Error::other("main WebView configuration is unavailable"))?;
-    let app_target = if cfg!(dev) {
-        app.config()
-            .build
-            .dev_url
-            .as_ref()
-            .map(ToString::to_string)
-            .ok_or_else(|| io::Error::other("development App target is unavailable"))?
-    } else {
-        "tauri://localhost/".to_owned()
-    };
     let policy = Arc::new(
-        FrameAwareNavigationPolicy::new(&app_target)
+        FrameAwareNavigationPolicy::new(app_target.document_url())
             .map_err(|_| io::Error::other("configured App target is invalid"))?,
     );
     if !app.manage(Arc::clone(&policy)) {
@@ -140,10 +132,10 @@ mod tests {
         let lib = include_str!("lib.rs");
         let config = include_str!("../tauri.conf.json");
         assert_eq!(
-            lib.matches("setup_frame_aware_navigation_policy(app.handle())")
-                .count(),
+            lib.matches("setup_frame_aware_navigation_policy(").count(),
             1
         );
+        assert!(lib.contains("&trusted_app_target"));
         assert!(config.contains(r#""create": false"#));
         assert!(lib.contains("pub(crate) mod frame_aware_navigation_policy"));
         assert!(!lib.contains("plugin_runtime_navigation"));

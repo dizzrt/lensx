@@ -78,6 +78,24 @@ describe('validation Gate governance', () => {
     }
   });
 
+  test('registers the unified development launcher as a deterministic typed Gate', () => {
+    const gate = findGate('development-launcher');
+    expect(gate?.dependsOn).toEqual([
+      'frame-aware-webview-navigation-policy',
+      'plugin-development-mode',
+      'plugin-child-webview-runtime',
+    ]);
+    const descriptions = planGates(validationRegistry, ['development-launcher']).steps.map((step) => step.description);
+    expect(descriptions).toContain(
+      'pnpm exec rstest run tests/development-launcher.test.ts tests/plugin-development-startup.test.ts',
+    );
+    expect(descriptions).toContain('cargo test --manifest-path src-tauri/Cargo.toml trusted_app_target');
+    expect(descriptions).toContain('node --experimental-strip-types scripts/check-development-launcher.ts');
+    for (const description of descriptions) {
+      expect(isProhibitedEnvironmentCommand(description), description).toBe(false);
+    }
+  });
+
   test('preserves the root test lifecycle template preparation in the CI Gate', () => {
     const descriptions = planGates(validationRegistry, ['ci-lensx-test']).steps.map((step) => step.description);
     expect(descriptions).toEqual([

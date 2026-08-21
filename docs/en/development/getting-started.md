@@ -38,12 +38,31 @@ Start the frontend development server:
 pnpm run dev
 ```
 
-The configured development server listens on port `40755`.
+This is a standalone frontend entry, not complete desktop process
+orchestration. It prefers port `40755`; Rsbuild may retain another available
+local port when that port is occupied.
 
-Start the desktop application with the frontend development server:
+Start the complete desktop application through the unified launcher:
 
 ```bash
-pnpm exec tauri dev
+pnpm run app:dev
+```
+
+The `development-launcher` starts and holds one Rsbuild server before creating
+the Tauri child. It passes the actual `http://localhost:<port>/` target through
+an in-memory Tauri config merge, disables the configured duplicate
+`beforeDevCommand`, forwards `SIGINT` or `SIGTERM` once, and closes the server
+when Tauri exits or fails. If Rsbuild cannot listen, Tauri is not started. If
+Tauri cannot start, the server is closed and the launcher returns a bounded
+nonzero diagnostic. Running the Tauri CLI directly is not a maintained complete
+desktop-development entry because it bypasses this ownership and cleanup.
+
+For the feature-enabled Plugin Development Mode build, use the dedicated
+command. It reuses the same launcher while adding only the existing frontend
+capability, Rust feature, and Host-private startup root:
+
+```bash
+pnpm run dev:plugin-development-mode
 ```
 
 Preview a production frontend build:

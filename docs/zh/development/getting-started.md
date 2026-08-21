@@ -37,12 +37,27 @@ pnpm install
 pnpm run dev
 ```
 
-配置的开发服务器监听 `40755` 端口。
+这是独立前端入口，不负责完整桌面进程编排。它优先使用 `40755`；该端口被占用时，
+Rsbuild 可以持有另一个可用本地端口。
 
-启动带有前端开发服务器的桌面应用：
+通过统一启动器启动完整桌面应用：
 
 ```bash
-pnpm exec tauri dev
+pnpm run app:dev
+```
+
+`development-launcher` 会先启动并持有唯一的 Rsbuild server，再创建 Tauri child。它通过
+内存中的 Tauri config merge 传入实际 `http://localhost:<port>/` target，并禁用配置中的
+重复 `beforeDevCommand`；它只转发一次 `SIGINT` 或 `SIGTERM`，且会在 Tauri 退出或失败时
+关闭 server。Rsbuild listen 失败时不会启动 Tauri；Tauri 无法启动时会关闭 server，并返回
+有界的非零诊断。直接运行 Tauri CLI 会绕过这套 ownership 与 cleanup，因此不是维护中的
+完整桌面开发入口。
+
+如需启用 Plugin Development Mode feature，请使用专用命令。它复用相同启动器，只增加已有
+frontend capability、Rust feature 与 Host-private startup root：
+
+```bash
+pnpm run dev:plugin-development-mode
 ```
 
 预览前端生产构建：

@@ -40,6 +40,7 @@ export const ROOT_SCRIPT_POLICY = Object.freeze({
   build: 'standard workspace lifecycle',
   check: 'standard workspace lifecycle',
   dev: 'root application development server',
+  'app:dev': 'workspace-private unified desktop development launcher',
   'dev:plugin-development-mode': 'explicit Host-private development-mode launch',
   fix: 'repository formatting and lint repair',
   format: 'repository formatting',
@@ -280,6 +281,20 @@ const governanceGate: MutableGate = {
   ],
 };
 gatesById.set(governanceGate.id, governanceGate);
+gatesById.set('development-launcher', {
+  id: 'development-launcher',
+  legacyNames: ['typed registry'],
+  dependsOn: ['frame-aware-webview-navigation-policy', 'plugin-development-mode', 'plugin-child-webview-runtime'],
+  steps: [
+    internStep('pnpm exec rstest run tests/development-launcher.test.ts tests/plugin-development-startup.test.ts'),
+    internStep('cargo test --manifest-path src-tauri/Cargo.toml trusted_app_target'),
+    internStep('cargo test --manifest-path src-tauri/Cargo.toml plugin_runtime_security_policy'),
+    internStep(
+      'cargo test --manifest-path src-tauri/Cargo.toml plugin_resource_service::tests::resolves_idempotently_and_serves_get_head_and_static_mime_matrix',
+    ),
+    internStep('node --experimental-strip-types scripts/check-development-launcher.ts'),
+  ],
+});
 gatesById.set('isolated-plugin-runtime-origin', {
   id: 'isolated-plugin-runtime-origin',
   legacyNames: ['stable capability successor'],

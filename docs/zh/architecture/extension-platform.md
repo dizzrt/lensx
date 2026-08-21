@@ -553,10 +553,11 @@ remote script、object、base、form 与 ancestor 放宽仍被拒绝。Resource 
 的 plugin HTML `GET`/`HEAD` 添加同一套 Plugin Runtime profile。该 profile 允许 current origin 加上
 HTTPS/Data/Blob 内容、HTTPS/WSS 连接、页面生命周期内的 Dedicated Worker 与 WASM，同时继续拒绝
 object、base 变更、form 与非可信 ancestor。production application document 只接纳准确的
-`tauri://localhost` ancestor；`tauri dev`
-只把 ancestor 替换为配置中准确的 `http://localhost:40755` application origin，其余 directive 保持逐字节
-一致。Manifest、publisher、source、query、request header 与 plugin-authored meta 都不能修改这两套
-profile。
+`tauri://localhost` ancestor。在 development build 中，Host-private `development-launcher` 通过
+Tauri runtime config 传入实际 `http://localhost:<port>/` target。Rust 会在创建 navigation 或 plugin
+resource authority 前校验这一份单一 target，只把其准确 origin 替换为 plugin ancestor，其余 directive
+保持逐字节一致。Manifest、publisher、source、query、request header 与 plugin-authored meta 都不能
+修改这两套 profile。
 
 CSP、隔离 origin/data store、native navigation、闭合 native bridge 与 Runtime Session 是互补边界。
 CSP 控制 resource/document destination；per-generation origin 分离 DOM 与 storage；native lease 控制

@@ -38,6 +38,21 @@ pnpm run generate -- plugin-manifest-types --write
 
 Do not add root aliases for a Change, a test subset, or a forwarded Gate.
 
+## Unified Development Launcher Validation
+
+```bash
+pnpm run gate -- development-launcher
+```
+
+The `development-launcher` Gate is read-only. Fake servers and children cover
+preferred and incremented ports, mode isolation, in-memory Tauri config,
+server-before-child ordering, spawn/exit/signal races, bounded diagnostics, and
+idempotent cleanup. Rust tests cover strict dynamic App targets, navigation/CSP
+agreement, owned Resource Service policy, and the unchanged production
+`tauri://localhost` profile. The Gate never starts a real Rsbuild listener,
+Tauri GUI, browser, WebView, native harness, screenshot, visual baseline, or
+target-environment performance process.
+
 ## Local Browser Automation
 
 Browser automation is not part of maintained validation. Do not add browser launch, preview-server, screenshot, pixel comparison, real WebView, native harness, or GUI application commands to package lifecycle scripts, Gates, Generate targets, or CI.

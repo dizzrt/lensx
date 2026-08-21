@@ -31,9 +31,11 @@ describe('Plugin Development Mode build capability', () => {
     expect(nativeComposition).toContain('#[cfg(feature = "plugin-development-mode")]');
     expect(nativeComposition).toContain('#[cfg(not(feature = "plugin-development-mode"))]');
     expect(rootPackage).toContain('node scripts/dev-plugin-development-mode.mjs');
-    expect(readFileSync(new URL('../scripts/dev-plugin-development-mode.mjs', import.meta.url), 'utf8')).toContain(
-      "LENSX_PLUGIN_DEVELOPMENT_MODE: '1'",
-    );
+    const pluginLauncher = readFileSync(new URL('../scripts/dev-plugin-development-mode.mjs', import.meta.url), 'utf8');
+    const launcherCore = readFileSync(new URL('../scripts/development-launcher.mjs', import.meta.url), 'utf8');
+    expect(pluginLauncher).toContain("mode: 'plugin-development'");
+    expect(launcherCore).toContain("'LENSX_PLUGIN_DEVELOPMENT_MODE'");
+    expect(launcherCore).toContain("['--features', 'plugin-development-mode']");
     expect(buildConfig).toContain("'src/app/plugins/development/composition-disabled.ts'");
     expect(buildConfig).toContain("'src/app/plugins/development/composition-enabled.ts'");
     expect(productionComposition).toContain("from '@/app/plugins/development/composition'");

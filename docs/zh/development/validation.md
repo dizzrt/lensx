@@ -38,6 +38,18 @@ pnpm run generate -- plugin-manifest-types --write
 
 不得为 Change、测试子集或 Gate 转发新增根 alias。
 
+## 统一开发启动器验证
+
+```bash
+pnpm run gate -- development-launcher
+```
+
+`development-launcher` Gate 是只读的。fake server 与 child 覆盖首选/递增端口、mode 隔离、
+内存 Tauri config、server-before-child 顺序、spawn/exit/signal 竞态、有界诊断与幂等 cleanup。
+Rust 测试覆盖严格动态 App target、navigation/CSP 一致性、Resource Service owned policy，以及
+不变的 production `tauri://localhost` profile。该 Gate 不会启动真实 Rsbuild listener、Tauri GUI、
+浏览器、WebView、native harness、截图、视觉基线或目标环境性能进程。
+
 ## 本机浏览器自动化
 
 浏览器自动化不属于维护中的验证。package lifecycle、Gate、Generate target 与 CI 都不得加入浏览器启动、preview server、截图、像素比较、真实 WebView、原生 harness 或 GUI 应用命令。

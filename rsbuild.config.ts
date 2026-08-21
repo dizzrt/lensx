@@ -54,6 +54,7 @@ export const createRsbuildConfig = ({ command }: Pick<ConfigParams, 'command'>):
     },
   },
   server: {
+    host: 'localhost',
     port: 40755,
   },
 });

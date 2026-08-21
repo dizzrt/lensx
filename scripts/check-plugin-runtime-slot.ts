@@ -11,7 +11,10 @@ const app = read('src/App.tsx');
 if (!app.includes('<PluginRuntimeSlot')) fail('App does not render the native presentation slot');
 if (app.includes('<PluginRuntimeFrame')) fail('App still renders the DOM iframe Runtime');
 if (
-  !app.includes("data-page-layout={pageResolution?.provider.kind === 'plugin' ? 'plugin-edge-to-edge' : undefined}")
+  !app.includes('const pageLayout =') ||
+  !app.includes("pageResolution?.provider.kind === 'plugin'") ||
+  !app.includes("? 'plugin-edge-to-edge'") ||
+  !app.includes('data-page-layout={pageLayout}')
 ) {
   fail('App does not derive the edge-to-edge Page body layout from plugin provider kind');
 }
@@ -21,9 +24,11 @@ for (const hostChrome of ['<PageContextBar', 'pageTitle={pageContext.page_title}
 
 const styles = read('src/styles/global.less');
 const block = (selector: string): string => {
-  const start = styles.indexOf(`${selector} {`);
+  const start = styles.indexOf(selector);
   if (start < 0) fail(`Host styles omit ${selector}`);
-  const end = styles.indexOf('\n}', start);
+  const open = styles.indexOf('{', start);
+  if (open < 0) fail(`Host styles do not open ${selector}`);
+  const end = styles.indexOf('\n}', open);
   if (end < 0) fail(`Host styles do not close ${selector}`);
   return styles.slice(start, end);
 };

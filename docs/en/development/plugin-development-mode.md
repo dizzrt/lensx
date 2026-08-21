@@ -10,6 +10,11 @@ and discovers already-built repository plugins before the frontend loads.
 Other feature builds start disabled. No registration, snapshot, source scope,
 Runtime, or switch value persists across processes.
 
+The command delegates to the Host-private `development-launcher`, so its actual
+local App origin, Tauri child lifecycle, signal forwarding, and cleanup are
+identical to `pnpm run app:dev`; only its frontend capability, Rust feature, and
+startup root differ.
+
 It does not install a `.lxp`, sign or trust publisher claims, create extra Host
 authority, watch files, run a build, automatically reload a plugin, or open a
 Page. A discovered Action becomes visible in the Launcher, but only a later
@@ -192,7 +197,7 @@ pnpm run gate -- plugin-development-mode
 
 The gate covers build exclusion, contracts, directory corpus, Rust transactions,
 Resource/Runtime invalidation, frontend convergence, accessibility, bilingual
-messages and docs, presentation reset/retention behavior, visual evidence, and
+messages and docs, deterministic presentation reset/retention assertions, and
 production artifacts. Development entries use the same work-area-aware native
 coordinator as installed plugins; no author-selected or user-resized size is
 persisted across replacement, process restart, or rediscovery.

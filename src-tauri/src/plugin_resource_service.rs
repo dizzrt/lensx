@@ -17,6 +17,7 @@ use crate::{
         PluginResourceUrl,
     },
     plugin_runtime_security_policy::current_plugin_runtime_document_csp,
+    trusted_app_target::TrustedAppTarget,
 };
 #[cfg(feature = "plugin-development-mode")]
 use std::time::{Duration, UNIX_EPOCH};
@@ -36,6 +37,8 @@ const MAX_SCOPE_ATTEMPTS: usize = 8;
 const NOT_FOUND_BODY: &[u8] = b"Plugin resource unavailable.";
 const METHOD_NOT_ALLOWED_BODY: &[u8] = b"Plugin resource method unavailable.";
 const INTERNAL_BODY: &[u8] = b"Plugin resource request failed.";
+#[cfg(test)]
+const TEST_PLUGIN_DOCUMENT_CSP: &str = "default-src 'none'; frame-ancestors http://localhost:43123";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ScopeBinding {
@@ -199,7 +202,7 @@ impl VerifiedPluginResourceByteCache {
 pub struct PluginResourceService {
     manager: Arc<PluginManager>,
     packages_root: Option<PathBuf>,
-    html_csp: &'static str,
+    html_csp: Arc<str>,
     scopes: Mutex<ScopeState>,
     verified_byte_cache: Mutex<VerifiedPluginResourceByteCache>,
     runtime_authority: Mutex<Option<RuntimeResourceAuthority>>,
@@ -273,18 +276,15 @@ fn development_payload_seal(root: &Path) -> Result<DevelopmentPayloadSeal, ()> {
 }
 
 impl PluginResourceService {
+    #[cfg(test)]
     pub fn initialize(manager: Arc<PluginManager>, packages_root: Option<PathBuf>) -> Arc<Self> {
-        Self::initialize_with_html_csp(
-            manager,
-            packages_root,
-            current_plugin_runtime_document_csp(),
-        )
+        Self::initialize_with_html_csp(manager, packages_root, Arc::from(TEST_PLUGIN_DOCUMENT_CSP))
     }
 
     fn initialize_with_html_csp(
         manager: Arc<PluginManager>,
         packages_root: Option<PathBuf>,
-        html_csp: &'static str,
+        html_csp: Arc<str>,
     ) -> Arc<Self> {
         Arc::new(Self {
             manager,
@@ -424,7 +424,7 @@ impl PluginResourceService {
                 request.method() == http::Method::HEAD,
                 mime,
                 bytes,
-                self.html_csp,
+                &self.html_csp,
             ),
             Err(ProtocolFailure::Unavailable) => {
                 fixed_error(http::StatusCode::NOT_FOUND, NOT_FOUND_BODY, false)
@@ -1037,7 +1037,7 @@ fn success_response(
     head: bool,
     mime: &'static str,
     bytes: Vec<u8>,
-    html_csp: &'static str,
+    html_csp: &str,
 ) -> http::Response<Vec<u8>> {
     let length = bytes.len().to_string();
     let mut response = http::Response::builder()
@@ -1079,12 +1079,17 @@ pub fn resolve_plugin_resource_entry(
     service.resolve_entry(&request)
 }
 
-pub fn setup_plugin_resource_service<R: Runtime>(
+pub(crate) fn setup_plugin_resource_service<R: Runtime>(
     app: &AppHandle<R>,
     manager: Arc<PluginManager>,
     installer: Arc<PluginInstaller>,
+    app_target: &TrustedAppTarget,
 ) -> Arc<PluginResourceService> {
-    let service = PluginResourceService::initialize(manager, installer.managed_packages_root());
+    let service = PluginResourceService::initialize_with_html_csp(
+        manager,
+        installer.managed_packages_root(),
+        current_plugin_runtime_document_csp(app_target),
+    );
     let weak_service = Arc::downgrade(&service);
     installer.attach_resource_eligibility_revoker(Arc::new(move |entry_id| {
         if let Some(service) = weak_service.upgrade() {
@@ -1337,7 +1342,7 @@ mod tests {
     fn assert_plugin_document_csp(response: &http::Response<Vec<u8>>) {
         assert_eq!(
             response.headers()[http::header::CONTENT_SECURITY_POLICY],
-            current_plugin_runtime_document_csp()
+            TEST_PLUGIN_DOCUMENT_CSP
         );
     }
 

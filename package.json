@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dev": "rsbuild",
+    "app:dev": "node scripts/development-launcher.mjs",
     "dev:plugin-development-mode": "node scripts/dev-plugin-development-mode.mjs",
     "build": "node scripts/workspace-lifecycle.ts build",
     "app:build": "node scripts/app-lifecycle.ts build",

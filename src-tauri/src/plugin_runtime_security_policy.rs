@@ -3,22 +3,31 @@
 //! they are never derived from a Manifest, request, registration, or plugin
 //! message.
 
+use crate::trusted_app_target::TrustedAppTarget;
+use std::sync::Arc;
+
 #[allow(dead_code)] // tauri.conf.json is the production consumer; the drift test keeps this profile identical.
 pub(crate) const HOST_DOCUMENT_CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self' ipc: http://ipc.localhost; frame-src lensx-plugin:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
 pub(crate) const PLUGIN_RUNTIME_DOCUMENT_CSP: &str = "default-src 'self' https: data: blob:; script-src 'self' https: data: blob: 'wasm-unsafe-eval'; style-src 'self' https: data: blob: 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https: wss:; media-src 'self' https: data: blob:; worker-src 'self' https: data: blob:; child-src 'self' https: data: blob:; frame-src 'self' https: data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors tauri://localhost";
 
-// `tauri dev` uses the exact configured development URL as the application
-// document origin. Keep the Runtime profile otherwise byte-for-byte identical
-// and never derive this ancestor from a plugin-controlled fact.
-pub(crate) const PLUGIN_RUNTIME_TAURI_DEV_DOCUMENT_CSP: &str = "default-src 'self' https: data: blob:; script-src 'self' https: data: blob: 'wasm-unsafe-eval'; style-src 'self' https: data: blob: 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https: wss:; media-src 'self' https: data: blob:; worker-src 'self' https: data: blob:; child-src 'self' https: data: blob:; frame-src 'self' https: data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors http://localhost:40755";
+const PRODUCTION_FRAME_ANCESTOR: &str = "frame-ancestors tauri://localhost";
 
-pub(crate) const fn current_plugin_runtime_document_csp() -> &'static str {
-    if cfg!(dev) {
-        PLUGIN_RUNTIME_TAURI_DEV_DOCUMENT_CSP
-    } else {
-        PLUGIN_RUNTIME_DOCUMENT_CSP
+pub(crate) fn current_plugin_runtime_document_csp(app_target: &TrustedAppTarget) -> Arc<str> {
+    if !app_target.is_development() {
+        return Arc::from(PLUGIN_RUNTIME_DOCUMENT_CSP);
     }
+    debug_assert_eq!(
+        PLUGIN_RUNTIME_DOCUMENT_CSP
+            .matches(PRODUCTION_FRAME_ANCESTOR)
+            .count(),
+        1
+    );
+    Arc::from(PLUGIN_RUNTIME_DOCUMENT_CSP.replacen(
+        PRODUCTION_FRAME_ANCESTOR,
+        &format!("frame-ancestors {}", app_target.csp_ancestor()),
+        1,
+    ))
 }
 
 #[cfg(test)]
@@ -52,19 +61,28 @@ mod tests {
     }
 
     #[test]
-    fn development_profile_changes_only_the_exact_configured_host_ancestor() {
-        assert_bounded(PLUGIN_RUNTIME_TAURI_DEV_DOCUMENT_CSP);
-        assert_eq!(
-            PLUGIN_RUNTIME_DOCUMENT_CSP.replace(
-                "frame-ancestors tauri://localhost",
-                "frame-ancestors http://localhost:40755"
-            ),
-            PLUGIN_RUNTIME_TAURI_DEV_DOCUMENT_CSP
-        );
-
-        let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
-            .expect("Tauri config should be valid JSON");
-        assert_eq!(config["build"]["devUrl"], "http://localhost:40755");
+    fn development_profile_changes_only_the_exact_trusted_host_ancestor() {
+        for port in [40755, 40756, 43123] {
+            let origin = format!("http://localhost:{port}/");
+            let target = TrustedAppTarget::development(&origin).expect("target should be valid");
+            let policy = current_plugin_runtime_document_csp(&target);
+            assert_bounded(&policy);
+            assert_eq!(
+                PLUGIN_RUNTIME_DOCUMENT_CSP.replace(
+                    PRODUCTION_FRAME_ANCESTOR,
+                    &format!("frame-ancestors http://localhost:{port}")
+                ),
+                policy.as_ref()
+            );
+            assert_eq!(
+                policy
+                    .strip_suffix(&format!("frame-ancestors http://localhost:{port}"))
+                    .expect("development ancestor should be the final directive"),
+                PLUGIN_RUNTIME_DOCUMENT_CSP
+                    .strip_suffix(PRODUCTION_FRAME_ANCESTOR)
+                    .expect("production ancestor should be the final directive")
+            );
+        }
     }
 
     #[test]
@@ -72,5 +90,9 @@ mod tests {
         let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
             .expect("Tauri config should be valid JSON");
         assert_eq!(config["app"]["security"]["csp"], HOST_DOCUMENT_CSP);
+        assert_eq!(
+            current_plugin_runtime_document_csp(&TrustedAppTarget::production()).as_ref(),
+            PLUGIN_RUNTIME_DOCUMENT_CSP
+        );
     }
 }

@@ -8,6 +8,10 @@ feature-enabled 开发构建中。专用 `pnpm run dev:plugin-development-mode` 
 其他 feature build 仍默认关闭。registration、snapshot、source scope、Runtime 与
 开关值都不会跨进程持久化。
 
+该命令会委托 Host-private `development-launcher`，因此实际本地 App origin、Tauri child 生命周期、
+信号转发与 cleanup 都和 `pnpm run app:dev` 相同；只有 frontend capability、Rust feature 与
+startup root 不同。
+
 它不会安装 `.lxp`、签名或信任 Publisher 声明、增加 Host authority、监听文件、
 执行构建、自动重新加载插件或打开 Page。发现到的 Action 会出现在 Launcher 中，
 但只有用户后续执行该 Action 才会打开 production Child WebView Runtime。
@@ -159,6 +163,6 @@ pnpm run gate -- plugin-development-mode
 ```
 
 该 gate 覆盖构建排除、契约、目录 corpus、Rust transactions、Resource/Runtime invalidation、
-前端 convergence、可访问性、双语消息与文档、presentation reset/retention 行为、视觉证据
+前端 convergence、可访问性、双语消息与文档、确定性的 presentation reset/retention 断言
 以及正式构建产物。Development entry 与已安装插件使用同一 work-area-aware native coordinator；
 author-selected 或 user-resized size 都不会跨 replacement、process restart 或 rediscovery 持久化。
