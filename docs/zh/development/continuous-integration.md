@@ -43,6 +43,16 @@ pnpm run gate -- ci-lensx
 这些命令只验证 LensX。标准根级 `build`、`typecheck`、`test` 与 `check` 仍保持全仓
 lifecycle 语义。
 
+`ci-lensx-frontend` Gate 会在第一个 consumer 运行前准备公共 workspace package 输出。
+它发现 workspace member，推导完整的传递构建闭包并按拓扑顺序构建，其中
+`@lensx/plugin-contract` 必须早于 `@lensx/plugin-cli`。typecheck 与 test 阶段共享且
+完全相同的 Contract/CLI preparation 在一次 Gate invocation 中只执行一次；具有阶段专用
+环境语义的模板 build 仍保持独立。
+
+该 preparation 由 Gate registry 统一负责，因此 GitHub Actions 与本地复现使用同一入口。
+它不信任预先存在的 `dist`，也不得由 workflow-only prebuild、源码 alias 或 package
+lifecycle 内部的递归依赖构建替代。
+
 ## Plugins CI
 
 任意匹配的插件改动都会验证全部直接 `plugins/*` member，而不只验证被修改的 member。

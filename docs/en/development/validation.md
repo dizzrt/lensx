@@ -84,6 +84,14 @@ The repository has exactly two read-only macOS workflows:
 
 Both workflows are reproduced locally with the same commands. They do not publish, upload, sign, notarize, or update generated artifacts.
 
+`ci-lensx-frontend` owns clean-checkout workspace preparation: it derives the
+transitive public package build closure, builds dependencies in topological
+order before consumers, and de-duplicates identical steps across frontend
+stages. In particular, Contract is built before CLI. Validation must not rely on
+residual `dist`, workflow-only preparation, source aliases, or recursive package
+builds; stage-specific environment semantics keep otherwise similar steps
+distinct.
+
 ## Plugin Development Mode Validation
 
 ```bash

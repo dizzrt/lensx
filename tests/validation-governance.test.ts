@@ -92,6 +92,36 @@ describe('validation Gate governance', () => {
     ]);
   });
 
+  test('prepares the CLI transitive workspace dependency before LensX type checking', () => {
+    const descriptions = planGates(validationRegistry, ['ci-lensx-typecheck']).steps.map((step) => step.description);
+    const contractBuild = 'pnpm --dir packages/plugin-contract run build';
+    const cliBuild = 'pnpm --dir packages/plugin-cli run build';
+
+    expect(descriptions.filter((description) => description === contractBuild)).toHaveLength(1);
+    expect(descriptions.filter((description) => description === cliBuild)).toHaveLength(1);
+    expect(descriptions.indexOf(contractBuild)).toBeLessThan(descriptions.indexOf(cliBuild));
+    expect(descriptions.indexOf(cliBuild)).toBeLessThan(descriptions.indexOf('tsc --noEmit'));
+  });
+
+  test('de-duplicates shared workspace preparation across the complete LensX frontend plan', () => {
+    const descriptions = planGates(validationRegistry, ['ci-lensx-frontend']).steps.map((step) => step.description);
+    const contractBuild = 'pnpm --dir packages/plugin-contract run build';
+    const cliBuild = 'pnpm --dir packages/plugin-cli run build';
+
+    expect(descriptions.filter((description) => description === contractBuild)).toHaveLength(1);
+    expect(descriptions.filter((description) => description === cliBuild)).toHaveLength(1);
+    expect(descriptions.indexOf(contractBuild)).toBeLessThan(descriptions.indexOf(cliBuild));
+    expect(descriptions.indexOf(cliBuild)).toBeLessThan(descriptions.indexOf('tsc --noEmit'));
+
+    for (const template of ['framework-neutral', 'react-semi']) {
+      expect(
+        descriptions.filter((description) => description.includes(`examples/plugins/${template} run build`)),
+      ).toEqual([
+        `LENSX_TEMPLATE_MODULE_GRAPH=1 LENSX_VALIDATION_STAGE=ci-lensx-test pnpm --dir examples/plugins/${template} run build`,
+      ]);
+    }
+  });
+
   test('does not de-duplicate artifact preparation across invalidating Gate stages', () => {
     const descriptions = planGates(validationRegistry, [
       'ci-lensx-test',

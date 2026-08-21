@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import type { WorkspaceMember } from '../workspace-lifecycle.ts';
 import { discoverWorkspaceMembers, selectWorkspaceBuildOrder } from '../workspace-lifecycle.ts';
 
 import type {
@@ -231,24 +232,42 @@ for (const gate of gatesById.values()) {
   for (const legacyName of gate.legacyNames) expandLegacyCommand(legacyName, gate);
 }
 
-const ciLensxTestGate = gatesById.get('ci-lensx-test');
-if (ciLensxTestGate === undefined) throw new Error('[validation/catalog] missing ci-lensx-test Gate.');
-const ciBuildTargetPaths = new Set([
-  'packages/plugin-cli',
-  'examples/plugins/framework-neutral',
-  'examples/plugins/react-semi',
-]);
 const workspaceMembers = discoverWorkspaceMembers(rootDir);
-const ciBuildTargets = workspaceMembers.filter((member) => ciBuildTargetPaths.has(member.relativePath));
-if (ciBuildTargets.length !== ciBuildTargetPaths.size) {
-  throw new Error('[validation/catalog] missing a CI build preparation target.');
-}
-const ciBuildPreparation = selectWorkspaceBuildOrder(workspaceMembers, ciBuildTargets).map((member) => {
-  const prefix =
-    member.kind === 'example-plugin' ? 'LENSX_TEMPLATE_MODULE_GRAPH=1 LENSX_VALIDATION_STAGE=ci-lensx-test ' : '';
-  return internStep(`${prefix}pnpm --dir ${member.relativePath} run build`);
+const prependWorkspaceBuildPreparation = ({
+  gateId,
+  targetPaths,
+  environmentPrefix = () => '',
+}: {
+  readonly gateId: string;
+  readonly targetPaths: readonly string[];
+  readonly environmentPrefix?: (member: WorkspaceMember) => string;
+}): void => {
+  const gate = gatesById.get(gateId);
+  if (gate === undefined) throw new Error(`[validation/catalog] missing ${gateId} Gate.`);
+  const requestedPaths = new Set(targetPaths);
+  const targets = workspaceMembers.filter((member) => requestedPaths.has(member.relativePath));
+  if (targets.length !== requestedPaths.size) {
+    const selectedPaths = new Set(targets.map((member) => member.relativePath));
+    const missingPaths = [...requestedPaths].filter((path) => !selectedPaths.has(path));
+    throw new Error(`[validation/catalog] ${gateId} is missing build preparation targets: ${missingPaths.join(', ')}.`);
+  }
+  gate.steps.unshift(
+    ...selectWorkspaceBuildOrder(workspaceMembers, targets).map((member) =>
+      internStep(`${environmentPrefix(member)}pnpm --dir ${member.relativePath} run build`),
+    ),
+  );
+};
+
+prependWorkspaceBuildPreparation({
+  gateId: 'ci-lensx-typecheck',
+  targetPaths: ['packages/plugin-cli'],
 });
-ciLensxTestGate.steps.unshift(...ciBuildPreparation);
+prependWorkspaceBuildPreparation({
+  gateId: 'ci-lensx-test',
+  targetPaths: ['packages/plugin-cli', 'examples/plugins/framework-neutral', 'examples/plugins/react-semi'],
+  environmentPrefix: (member) =>
+    member.kind === 'example-plugin' ? 'LENSX_TEMPLATE_MODULE_GRAPH=1 LENSX_VALIDATION_STAGE=ci-lensx-test ' : '',
+});
 
 const governanceGate: MutableGate = {
   id: 'validation-governance',

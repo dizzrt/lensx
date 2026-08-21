@@ -82,6 +82,12 @@ CLI consumer 与兼容 fixture 覆盖维护中的 6.5 和 8.1 行为，不启动
 
 本地使用相同命令复现。workflow 不发布、上传、签名、公证或更新生成物。
 
+`ci-lensx-frontend` 负责 clean-checkout workspace preparation：它推导公共 package 的
+传递构建闭包，在 consumer 前按拓扑顺序构建依赖，并对 frontend 阶段间完全相同的 step
+去重；其中 Contract 必须早于 CLI 构建。验证不得依赖残留 `dist`、workflow-only
+preparation、源码 alias 或递归 package build；阶段专用环境语义会让其他方面相似的 step
+保持独立。
+
 ## 插件开发模式验证
 
 ```bash

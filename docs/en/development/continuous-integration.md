@@ -46,6 +46,18 @@ pnpm run gate -- ci-lensx
 These commands are LensX-only. The standard root `build`, `typecheck`, `test`,
 and `check` commands retain their repository-wide lifecycle semantics.
 
+The `ci-lensx-frontend` Gate prepares public workspace package outputs before
+their first consumer runs. It discovers workspace members, derives the complete
+transitive build closure, and builds it in topological order, including
+`@lensx/plugin-contract` before `@lensx/plugin-cli`. Identical Contract and CLI
+preparation shared by type-check and test stages runs once per Gate invocation;
+template builds with stage-specific environment semantics remain distinct.
+
+This preparation is owned by the Gate registry for both GitHub Actions and
+local reproduction. It does not trust pre-existing `dist` directories and must
+not be replaced by workflow-only prebuild steps, source aliases, or recursive
+dependency builds inside a package lifecycle.
+
 ## Plugins CI
 
 Any matching plugin change validates every direct `plugins/*` member rather
