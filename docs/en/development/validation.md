@@ -61,6 +61,39 @@ Browser automation is not part of maintained validation. Do not add browser laun
 
 Launcher policy, menu routing, focus state, shortcut behavior, restoration, and Child WebView coordination are covered by deterministic Rust and frontend tests. There is no packaged-application or Launch Services validation entry.
 
+## Launcher Input Focus Validation
+
+```bash
+pnpm run gate -- launcher-input-focus
+```
+
+The `launcher-input-focus` Gate covers committed queries, composition drafts,
+IME keyboard priority, invalidated sessions, locale/theme behavior, and input
+accessibility through real Semi components in Rstest. Cargo tests cover native
+surface state, queued updates, rollback, and Host/Child window lifecycle. The
+Gate reuses `frame-aware-navigation-dependency-drift` and
+`plugin-child-webview-window-lifecycle`; the latter builds the public Contract
+through the workspace build graph before UI consumers. Missing package build
+output is prepared without source aliases or rebuilding root `node_modules`.
+
+The Gate explicitly compiles and runs the private Tao resizable policy with
+`rustc --test`, checks both Tao patch files with their two-space Rust formatting,
+and reuses Cargo check to compile the actual macOS adapter. The policy tests use
+fake responders without AppKit interaction. They verify state and call
+boundaries; they do not establish real input-method candidate-window behavior.
+Focused Gate success supplements the complete lifecycle and CI validation.
+
+The Gate only reads the reviewed vendored integrity baseline. Source updates
+require review before this explicit Generate command:
+
+```bash
+pnpm run generate -- frame-aware-navigation-dependency-drift --write
+```
+
+Registry validation rejects committed-write and prohibited environment steps
+before execution. Gate preparation writes only ignored build output; it does
+not regenerate the committed baseline or start native interaction.
+
 ## Frontend Validation
 
 Use `pnpm run test`, `pnpm run typecheck`, `pnpm run check`, and `pnpm run build`. Root Rstest discovery owns repository-only assertions; the lifecycle aggregator covers the root application and every direct workspace member once in dependency order.

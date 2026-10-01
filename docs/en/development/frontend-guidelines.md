@@ -227,6 +227,42 @@ Shell layout and spacing in UnoCSS utilities.
   move by one, up/down move by four only when the target exists, and all pointer
   and keyboard activation must share the Dispatcher path.
 
+### Launcher Composition Input
+
+- Treat App Shell `query` as the committed complete input value. Enable Semi
+  Input's `composition` support so its local draft remains visible and editable
+  while committed results, selection, live status, and the surface target stay
+  unchanged. An independent Registry update still follows the existing search
+  rules.
+- Use Semi's final `onChange` as the single query commit entry point. Read the
+  complete input value rather than `compositionend.data`; deduplicate equal
+  notifications before clearing feedback or resetting selection. Cancellation
+  back to the prior value preserves the search; an empty final value returns
+  home, and unmatched text uses existing localized feedback. Ordinary editing,
+  paste, and deletion commit immediately.
+- Check the synchronous composition session, native `isComposing`, and IME
+  `keyCode === 229` before Escape, Enter, or result navigation. Preserve IME
+  default processing even when a marked confirmation key arrives after
+  composition end. The next independent ordinary key needs no timer or delay.
+- Retire composition sessions on explicit clear, successful dispatch, page
+  transitions, and unmount. Reconcile the visible draft with the reset query;
+  reject composition-marked input from a retired session, late ends, and their
+  equal trailing changes, and ignore events from a detached input. Treat native
+  `isComposing` and composition `inputType` values, including
+  `insertFromComposition`, as origin markers even before a late end. Fresh
+  ordinary editing, paste, or a new composition can continue normally. Keep the
+  same native input DOM across home/search and query resets.
+- Semi UI/Foundation `2.101.1` retains its draft and composition flag when a
+  controlled reset value is unchanged. The typed Semi Input class ref resets
+  only these input-local facts through `foundation.setValue` and
+  `compositionEnter`; `forwardRef` retains the existing DOM focus handle.
+  Revalidate the real component event sequences when upgrading Semi. This
+  bounded integration does not create another query store or focus effect.
+- Cover Chinese commits, cancellation, reset races, keyboard priority, typed
+  failures, combobox/listbox relationships, active descendant, and live status
+  in both application locales and themes. Deterministic DOM and call-boundary
+  tests do not establish native candidate-window behavior.
+
 ## Accessibility And Keyboard Behavior
 
 - Use semantic HTML and accessible names.

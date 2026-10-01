@@ -114,6 +114,24 @@ Manifest `0.4.0` 为每个规范化 plugin Page 提供有界 `presentation`。�
 复验，按当前 monitor work area 拟合尺寸和约束，并通过唯一可 rollback coordinator
 执行转换。plugin message、DOM 测量、结果数量或 Runtime API 都不能选择原生 Window 呈现。
 
+Surface 配置先读取实际原生 resizable 状态，再按顺序投递 guard、约束、尺寸和最终状态操作。
+fixed→fixed 转换不投递 resizable setter；同一次操作根据成功投递更新计划，不依赖立即重新读取
+原生状态；后续 guard 也会考虑先前已投递但仍在途的 enable。rollback 会重新读取实际状态并重申
+完整的旧 target，包括最终 resizable 值，因为消息
+投递可能先于原生执行，也可能在部分生效后失败。rollback 失败会使成功缓存失效，让重复 target
+可以修复配置。不确定的 resizable 状态独立保留，紧急投递也失败时仍会强制下一次修复 guard。
+安全的类型化错误标识读取、投递、约束、尺寸或 rollback 阶段；setter 返回不代表
+已确认 AppKit 响应者恢复。
+
+同版本 vendored `tao 0.35.3` 的 macOS resizable adapter 记录内部状态，在主线程跳过未变化的
+style mask。必要样式变更保留实际响应者，只在其发生变化且仍属于同一 Window 时恢复；该 setter
+不会切向初始化 Tao view、激活 Window 或恢复已移除的 Child。缺失或失效的响应者不被处理，
+恢复遭拒时只提供有界开发诊断。原生 fullscreen 继续延期样式变更，并保存退出时使用的 resizable
+状态。显式 show/页面关闭焦点和真正失焦隐藏仍由既有生命周期负责。补丁不改变公共 command、
+插件权限、其他平台或无关 Tao setter。确定性策略/fake 测试和真实 adapter 编译验证状态与调用
+边界；真实输入法候选框行为仍未实机验证。vendored 版本、补丁路径和文件 hash 由只读 dependency
+drift Gate 检查，仅在审阅后通过其显式 Generate target 更新。
+
 Rust 通过单一动作边界拥有全部 launcher 原生窗口操作：
 
 - `show` 依次激活 macOS accessory 应用、恢复窗口、显示窗口、请求焦点、发送类型化激活事件，
@@ -215,7 +233,9 @@ substring 权重产生按 score 降序的顺序，并以 `action_id` 作为确�
 executor 或 registry 内部状态。
 
 App Shell 将这些结果实现为 combobox/listbox 交互，并使用固定四个视觉列和最多两行。第一项默认
-选中；左右键移动到相邻结果，上下键在目标存在时按四项移动，且移动不循环。Escape 清空搜索，
+选中；左右键移动到相邻结果，上下键在目标存在时按四项移动。组合草稿保留已提交结果和选择；
+组合会话、原生 composing 按键和 IME 229 标记优先于 Escape、Enter 和方向键。在输入法处理之外，
+移动不循环，Escape 清空搜索，
 pending dispatch 会阻止重复执行。成功会清空查询；类型化 dispatcher failure
 会保留查询和选中项，同时显示安全的本地化反馈。结果数量、空状态、pending、成功和失败状态通过
 live region 播报，而不会形成第二个可见结果分区。结果网格在现有 surface 内保持有界，不会调整原生

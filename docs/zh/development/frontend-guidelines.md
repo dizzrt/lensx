@@ -167,6 +167,30 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
 - 搜索使用单一四列、最多八项的 listbox 网格。左右键移动一项，上下键仅在目标存在时移动四项；
   pointer 与键盘激活必须复用同一 Dispatcher 路径。
 
+### Launcher 组合输入
+
+- App Shell 的 `query` 只表示已提交的完整输入值。启用 Semi Input 的 `composition` 支持，
+  让局部草稿保持可见、可编辑，同时保留已提交结果、选择、live status 和 surface target。
+  独立的 Registry 更新仍遵循既有搜索规则。
+- Semi 最终的 `onChange` 是唯一的查询提交入口。采用完整输入值，不从 `compositionend.data`
+  猜测；在清除反馈或重置选择之前对等值通知去重。取消回原值时保留搜索，最终空值返回首页，
+  无匹配文本沿用既有本地化反馈。普通编辑、粘贴和删除立即提交。
+- Escape、Enter 与结果导航之前先检查同步组合会话、原生 `isComposing` 和输入法
+  `keyCode === 229`。即使带标记的确认键在组合结束后到达，也要保留输入法默认处理。
+  下一次独立普通按键不需要定时器或延迟。
+- 显式清空、成功分派、页面切换和卸载使组合会话失效。可见草稿必须与重置查询收敛，
+  拒绝失效会话中带组合标记的 input、迟到结束及其等值尾随 change，并忽略已拆除输入节点的事件。
+  原生 `isComposing` 与组合 `inputType`（包括 `insertFromComposition`）即使在迟到结束之前，
+  也属于来源标记。新的普通编辑、粘贴或组合会话可以正常继续。首页/搜索切换与查询重置保持同一
+  原生输入 DOM。
+- Semi UI/Foundation `2.101.1` 在受控重置值未变化时会保留草稿与组合标记。类型化 Semi
+  Input class ref 仅通过 `foundation.setValue` 和 `compositionEnter` 重置这些输入局部事实；
+  `forwardRef` 保留既有 DOM 焦点句柄。升级 Semi 时重新验证真实组件事件序列。
+  该有界集成不引入第二个查询 store 或焦点 effect。
+- 在两种应用语言和主题中覆盖中文提交、取消、重置竞态、按键优先级、类型化失败、
+  combobox/listbox 关系、active descendant 与 live status。确定性 DOM 与调用边界测试
+  不能证明原生候选窗口行为。
+
 ## 无障碍与键盘行为
 
 - 使用语义化 HTML 和无障碍名称。

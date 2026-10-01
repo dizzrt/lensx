@@ -1,8 +1,11 @@
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, test } from '@rstest/core';
 
-import { isProhibitedEnvironmentCommand, validationRegistry } from '../scripts/validation/catalog.ts';
+import { findGate, isProhibitedEnvironmentCommand, validationRegistry } from '../scripts/validation/catalog.ts';
 import { executePlan, executeWritableTarget, planGates, validateRegistry } from '../scripts/validation/runner.ts';
 import type { ValidationRegistry, ValidationStep } from '../scripts/validation/types.ts';
+import { discoverWorkspaceMembers, selectWorkspaceBuildOrder } from '../scripts/workspace-lifecycle.ts';
 
 const step = (id: string, environment: Readonly<Record<string, string>> = {}): ValidationStep => ({
   id,
@@ -37,6 +40,108 @@ describe('validation Gate registry and runner', () => {
     expect(plan.gateIds).toContain('plugin-child-webview-runtime');
     expect(plan.gateIds.at(-1)).toBe('development-launcher');
     expect(plan.steps.every((item) => item.safety.readOnly)).toBe(true);
+  });
+
+  test('plans launcher input focus with structured commands and shared native dependencies', () => {
+    const gate = findGate('launcher-input-focus');
+    expect(gate?.description).toBe(
+      'Committed launcher input, IME keyboard priority, and native responder preservation',
+    );
+    expect(gate?.dependsOn).toEqual([
+      'frame-aware-navigation-dependency-drift',
+      'plugin-child-webview-window-lifecycle',
+    ]);
+    const plan = planGates(validationRegistry, ['launcher-input-focus']);
+    expect(plan.gateIds).toEqual([
+      'frame-aware-navigation-dependency-drift',
+      'plugin-child-webview-window-lifecycle',
+      'launcher-input-focus',
+    ]);
+    const nativeWindowTests = plan.steps.filter(
+      (item) =>
+        item.executable === 'cargo' &&
+        item.argv.join(' ') === 'test --manifest-path src-tauri/Cargo.toml launcher_window',
+    );
+    expect(nativeWindowTests).toHaveLength(1);
+    expect(
+      plan.steps.filter(
+        (item) => item.executable === 'cargo' && item.argv.join(' ') === 'check --manifest-path src-tauri/Cargo.toml',
+      ),
+    ).toHaveLength(1);
+    const policy = 'vendor/frame-aware-navigation/tao/src/platform_impl/macos/resizable.rs';
+    const binary = 'src-tauri/target/launcher-resizable-policy-tests';
+    const compile = plan.steps.find((item) => item.executable === 'rustc');
+    expect(compile).toMatchObject({
+      argv: ['--edition=2021', '--test', policy, '-o', binary],
+      cwd: '.',
+      environment: {},
+      platform: 'darwin',
+      safety: { readOnly: true, writesCommittedArtifacts: false },
+    });
+    expect(plan.steps.find((item) => item.executable === binary)?.argv).toEqual([]);
+    expect(plan.steps.find((item) => item.executable === 'rm')?.argv).toEqual(['-f', binary]);
+    expect(plan.steps.find((item) => item.executable === 'rustfmt')).toMatchObject({
+      argv: [
+        '--edition',
+        '2021',
+        '--config',
+        'tab_spaces=2',
+        '--check',
+        'vendor/frame-aware-navigation/tao/src/platform_impl/macos/window.rs',
+        policy,
+      ],
+      platform: 'darwin',
+    });
+    const focused = plan.steps.find(
+      (item) => item.executable === 'pnpm' && item.argv.includes('tests/launcher-input-focus-ui.test.tsx'),
+    );
+    expect(focused?.argv.slice(0, 3)).toEqual(['exec', 'rstest', 'run']);
+    expect(focused?.argv).toContain('tests/frame-aware-navigation-dependency-drift.test.ts');
+    expect(focused?.argv).toContain('tests/launcher-action-search-ui.test.tsx');
+    expect(plan.steps.every((item) => item.safety.readOnly && !item.safety.writesCommittedArtifacts)).toBe(true);
+  });
+
+  test('prepares public package output before launcher focus dependency UI tests', () => {
+    const members = discoverWorkspaceMembers(fileURLToPath(new URL('..', import.meta.url)));
+    const contract = members.filter((member) => member.relativePath === 'packages/plugin-contract');
+    const expected = selectWorkspaceBuildOrder(members, contract).map((member) => member.relativePath);
+    expect(expected).toEqual(['packages/plugin-contract']);
+    const plan = planGates(validationRegistry, [
+      'launcher-input-focus',
+      'plugin-child-webview-window-lifecycle',
+      'ci-lensx-typecheck',
+    ]);
+    const builds = plan.steps.filter(
+      (item) => item.executable === 'pnpm' && item.argv.join(' ') === '--dir packages/plugin-contract run build',
+    );
+    expect(builds).toHaveLength(1);
+    const [build] = builds;
+    if (build === undefined) throw new Error('Contract build preparation is required');
+    expect(build.environment).toEqual({});
+    const buildIndex = plan.steps.indexOf(build);
+    const uiTestIndex = plan.steps.findIndex((item) => item.argv.includes('tests/plugin-runtime-slot.test.tsx'));
+    expect(buildIndex).toBeLessThan(uiTestIndex);
+    expect(buildIndex).toBeLessThan(
+      plan.steps.findIndex((item) => item.argv.includes('tests/launcher-input-focus-ui.test.tsx')),
+    );
+    expect(plan.steps.some((item) => item.argv.includes('--store-dir'))).toBe(false);
+    expect(plan.steps.some((item) => item.argv.includes('install'))).toBe(false);
+  });
+
+  test('keeps the launcher focus integrity baseline read-only and Generate separate', () => {
+    const plan = planGates(validationRegistry, ['launcher-input-focus']);
+    const drift = plan.steps.filter((item) => item.argv.includes('scripts/frame-aware-navigation-dependency-drift.ts'));
+    expect(drift).toHaveLength(1);
+    expect(drift[0]?.argv).toEqual([
+      '--experimental-strip-types',
+      'scripts/frame-aware-navigation-dependency-drift.ts',
+    ]);
+    expect(plan.steps.some((item) => item.argv.includes('--write') || item.argv.includes('generate'))).toBe(false);
+    const generate = validationRegistry.generateTargets.find(
+      (target) => target.id === 'frame-aware-navigation-dependency-drift',
+    );
+    expect(generate?.steps[0]?.argv).toContain('--write');
+    expect(generate?.steps[0]?.safety).toEqual({ readOnly: false, writesCommittedArtifacts: true });
   });
 
   test('uses stable topology and de-duplicates shared Gates and steps', () => {
@@ -103,6 +208,51 @@ describe('validation Gate registry and runner', () => {
     expect(() => executePlan(plan, '/repo', () => ({ error: new Error('missing executable'), status: null }))).toThrow(
       /launch-failed.*missing executable/u,
     );
+  });
+
+  test.each([
+    { readOnly: false, writesCommittedArtifacts: true },
+    { readOnly: true, writesCommittedArtifacts: true },
+    { readOnly: false, writesCommittedArtifacts: false },
+  ])('rejects unsafe Gate metadata %o before starting any command', (safety) => {
+    const unsafe = { ...step('unsafe'), safety };
+    let calls = 0;
+    expect(() =>
+      executePlan(
+        planGates(registry([{ id: 'focus', description: 'focus', dependsOn: [], steps: ['unsafe'] }], [unsafe]), [
+          'focus',
+        ]),
+        '/repo',
+        () => ({ status: ++calls }),
+      ),
+    ).toThrow('[validation/unsafe-gate-step] unsafe');
+    expect(calls).toBe(0);
+  });
+
+  test.each([
+    { executable: 'cargo', argv: ['run', '--example', 'native_harness'] },
+    { executable: 'node', argv: ['scripts/verify-visual.mjs'] },
+    { executable: 'open', argv: ['Product.app'] },
+  ])('rejects prohibited structured Gate commands %o before starting any command', (command) => {
+    const unsafe = { ...step('environment'), ...command };
+    let calls = 0;
+    expect(() =>
+      executePlan(
+        planGates(registry([{ id: 'focus', description: 'focus', dependsOn: [], steps: ['environment'] }], [unsafe]), [
+          'focus',
+        ]),
+        '/repo',
+        () => ({ status: ++calls }),
+      ),
+    ).toThrow('[validation/prohibited-environment-command] environment');
+    expect(calls).toBe(0);
+  });
+
+  test('classifies executable arguments without treating explanatory descriptions as commands', () => {
+    const safe = { ...step('safe'), description: 'Deterministic evidence for the native policy' };
+    expect(() =>
+      validateRegistry(registry([{ id: 'focus', description: 'focus', dependsOn: [], steps: ['safe'] }], [safe])),
+    ).not.toThrow();
   });
 
   test('requires explicit write authorization before Generate starts', () => {

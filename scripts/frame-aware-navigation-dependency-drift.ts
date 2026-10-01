@@ -8,6 +8,7 @@ const integrityPath = join(vendorRoot, '.lensx-integrity.json');
 const writeMode = process.argv.includes('--write');
 
 const packages = Object.freeze({
+  tao: '0.35.3',
   tauri: '2.11.5',
   'tauri-runtime': '2.11.3',
   'tauri-runtime-wry': '2.11.4',
@@ -15,6 +16,8 @@ const packages = Object.freeze({
 });
 
 const patchedFiles = Object.freeze([
+  'tao/src/platform_impl/macos/window.rs',
+  'tao/src/platform_impl/macos/resizable.rs',
   'tauri/src/manager/webview.rs',
   'tauri/src/webview/mod.rs',
   'tauri/src/webview/webview_window.rs',

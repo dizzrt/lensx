@@ -155,6 +155,36 @@ constraints, size, and final resizability through one rollback-capable
 coordinator. No plugin message, DOM measurement, result count, or Runtime API
 can choose native Window presentation.
 
+Surface configuration reads actual native resizability before submitting the
+ordered guard, constraints, size, and final-state operations. Fixed-to-fixed
+transitions do not submit a resizable setter. Within one operation, successful
+submissions update the plan rather than relying on an immediate native re-read;
+the next guard also accounts for a previously submitted enable still in flight.
+Rollback re-reads the actual state and reasserts the complete previous target,
+including final resizability, because delivery can precede native execution or
+fail after partial application. Failed rollback invalidates the success cache
+so a repeated target can repair configuration. Uncertain resizability survives
+that invalidation and forces the next repair guard even if emergency delivery
+also failed. Typed safe errors identify the
+read, delivery, constraint, size, or rollback stage; a setter return does not
+confirm AppKit responder restoration.
+
+The same-version vendored `tao 0.35.3` macOS resizable adapter records internal
+state and, on the main thread, skips unchanged style masks. Necessary style
+edits retain the actual responder and restore it only if it changed and still
+belongs to that Window. It never redirects this setter to the initial Tao
+view, activates the Window, or restores a removed Child. Missing or invalid
+responders remain untouched; refused restoration emits only bounded developer
+diagnostics. Native fullscreen continues to defer style changes and retains
+the stored resizable state for exit. Explicit show/page-close focus and genuine
+blur hiding remain owned by the existing lifecycle. The patch changes no
+public command, plugin authority, other platform, or unrelated Tao setter.
+Deterministic policy/fake tests and real adapter compilation establish these
+state and call boundaries; real IME candidate-window behavior remains
+unverified. Vendored versions, patch paths, and hashes are checked through the
+read-only dependency drift Gate and updated only after review through its
+explicit Generate target.
+
 Rust owns all native launcher window operations through one action boundary:
 
 - `show` activates the macOS accessory application, restores the window, shows
@@ -311,7 +341,10 @@ contain executors or registry internals.
 The App Shell treats those results as a combobox/listbox interaction with four
 fixed visual columns and at most two rows. The first result is selected by
 default. Left and right move to adjacent results; up and down move by four when
-the target exists. Movement never wraps, Escape clears the search, and pending
+the target exists. Composition drafts preserve committed results and selection;
+composition, native composing keys, and IME 229 markers take priority over
+Escape, Enter, and arrows. Outside IME handling, movement never wraps, Escape
+clears the search, and pending
 dispatch prevents duplicate execution.
 Success clears the query; typed dispatcher failures preserve the query and
 selection while showing localized safe feedback. Result count, empty, pending,

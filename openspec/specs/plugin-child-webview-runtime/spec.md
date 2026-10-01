@@ -1,7 +1,12 @@
 # plugin-child-webview-runtime Specification
 
 ## Purpose
-TBD - created by archiving change replace-plugin-iframe-runtime-with-child-webview. Update Purpose after archive.
+
+Define the Host-owned presentation of one current plugin as a native Child
+WebView in the Launcher, including revisioned content-slot bounds, current-source
+navigation policy, semantic-equivalent lifecycle reuse, compare-current teardown,
+and deterministic validation of native authority and lifecycle boundaries.
+
 ## Requirements
 
 ### Requirement: Host MUST present one current plugin as a native Child WebView sibling

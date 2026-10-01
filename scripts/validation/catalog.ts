@@ -167,6 +167,7 @@ const parseStep = (command: string, writable = false): Omit<ValidationStep, 'des
 
 interface MutableGate {
   readonly id: string;
+  readonly description?: string;
   readonly legacyNames: string[];
   readonly dependsOn: string[];
   readonly steps: string[];
@@ -269,6 +270,10 @@ prependWorkspaceBuildPreparation({
   environmentPrefix: (member) =>
     member.kind === 'example-plugin' ? 'LENSX_TEMPLATE_MODULE_GRAPH=1 LENSX_VALIDATION_STAGE=ci-lensx-test ' : '',
 });
+prependWorkspaceBuildPreparation({
+  gateId: 'plugin-child-webview-window-lifecycle',
+  targetPaths: ['packages/plugin-contract'],
+});
 
 const governanceGate: MutableGate = {
   id: 'validation-governance',
@@ -293,6 +298,27 @@ gatesById.set('development-launcher', {
       'cargo test --manifest-path src-tauri/Cargo.toml plugin_resource_service::tests::resolves_idempotently_and_serves_get_head_and_static_mime_matrix',
     ),
     internStep('node --experimental-strip-types scripts/check-development-launcher.ts'),
+  ],
+});
+gatesById.set('launcher-input-focus', {
+  id: 'launcher-input-focus',
+  description: 'Committed launcher input, IME keyboard priority, and native responder preservation',
+  legacyNames: [],
+  dependsOn: ['frame-aware-navigation-dependency-drift', 'plugin-child-webview-window-lifecycle'],
+  steps: [
+    internStep(
+      'pnpm exec rstest run tests/launcher-input-focus-ui.test.tsx tests/launcher-action-search-ui.test.tsx tests/launcher-surface-desktop-adapter.test.ts tests/index.test.tsx tests/frame-aware-navigation-dependency-drift.test.ts tests/validation-registry.test.ts tests/validation-governance.test.ts',
+    ),
+    internStep('cargo test --manifest-path src-tauri/Cargo.toml launcher_surface'),
+    internStep('cargo test --manifest-path src-tauri/Cargo.toml launcher_window'),
+    internStep(
+      'rustfmt --edition 2021 --config tab_spaces=2 --check vendor/frame-aware-navigation/tao/src/platform_impl/macos/window.rs vendor/frame-aware-navigation/tao/src/platform_impl/macos/resizable.rs',
+    ),
+    internStep(
+      'rustc --edition=2021 --test vendor/frame-aware-navigation/tao/src/platform_impl/macos/resizable.rs -o src-tauri/target/launcher-resizable-policy-tests',
+    ),
+    internStep('src-tauri/target/launcher-resizable-policy-tests'),
+    internStep('rm -f src-tauri/target/launcher-resizable-policy-tests'),
   ],
 });
 gatesById.set('isolated-plugin-runtime-origin', {
@@ -321,7 +347,7 @@ const targetFromLegacy = (legacyName: string, writable: boolean): WritableTarget
 const toGate = (gate: MutableGate): ValidationGate =>
   Object.freeze({
     id: gate.id,
-    description: `Stable validation Gate migrated from ${gate.legacyNames.join(', ')}`,
+    description: gate.description ?? `Stable validation Gate migrated from ${gate.legacyNames.join(', ')}`,
     dependsOn: Object.freeze([...new Set(gate.dependsOn)]),
     steps: Object.freeze([...new Set(gate.steps)]),
   });

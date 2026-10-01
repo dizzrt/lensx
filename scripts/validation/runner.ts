@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
+import { isProhibitedEnvironmentCommand } from './catalog.ts';
 import type { ValidationGate, ValidationPlan, ValidationRegistry, ValidationStep, WritableTarget } from './types.ts';
 
 export interface CommandResult {
@@ -28,6 +29,16 @@ export const validateRegistry = (registry: ValidationRegistry): void => {
   if (duplicateSteps.length > 0) throw new Error(`[validation/duplicate-step] ${duplicateSteps.join(', ')}`);
   if (duplicateGenerate.length > 0)
     throw new Error(`[validation/duplicate-generate-target] ${duplicateGenerate.join(', ')}`);
+
+  for (const step of registry.steps) {
+    if (!step.safety.readOnly || step.safety.writesCommittedArtifacts) {
+      throw new Error(`[validation/unsafe-gate-step] ${step.id} must not write committed artifacts.`);
+    }
+    const command = `${step.executable} ${step.argv.join(' ')}`;
+    if (isProhibitedEnvironmentCommand(command)) {
+      throw new Error(`[validation/prohibited-environment-command] ${step.id}: ${command}`);
+    }
+  }
 
   const gates = new Map(registry.gates.map((gate) => [gate.id, gate]));
   const steps = new Set(registry.steps.map((step) => step.id));

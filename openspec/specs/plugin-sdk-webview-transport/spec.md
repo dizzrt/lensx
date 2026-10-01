@@ -1,7 +1,12 @@
 # plugin-sdk-webview-transport Specification
 
 ## Purpose
-TBD - created by archiving change replace-plugin-iframe-runtime-with-child-webview. Update Purpose after archive.
+
+Define the framework-neutral, zero-configuration public SDK transport through the
+Host-installed bridge of the current plugin Child WebView, including validated
+closed frames, native-source authority, bounded request and cleanup lifecycles,
+and deterministic packaging and isolation checks without exposing native APIs.
+
 ## Requirements
 
 ### Requirement: Official WebView transport MUST connect through one current native bridge

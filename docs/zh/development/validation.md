@@ -58,6 +58,34 @@ Rust 测试覆盖严格动态 App target、navigation/CSP 一致性、Resource S
 
 Launcher policy、菜单路由、焦点状态、快捷键、恢复和 Child WebView 协同由确定性 Rust 与前端测试覆盖。不存在打包应用或 Launch Services 验证入口。
 
+## 启动器输入焦点验证
+
+```bash
+pnpm run gate -- launcher-input-focus
+```
+
+`launcher-input-focus` Gate 通过真实 Semi 组件的 Rstest 验证已提交查询、组合草稿、
+输入法按键优先级、失效会话、语言/主题行为和输入可访问性。Cargo 测试覆盖原生
+surface 状态、排队更新、回滚和 Host/Child 窗口生命周期。该 Gate 复用
+`frame-aware-navigation-dependency-drift` 和
+`plugin-child-webview-window-lifecycle`；后者通过 workspace 构建图在 UI consumer
+之前构建公共 Contract。缺少的 package 构建输出会被准备，不使用源码 alias，也不重建
+根 `node_modules`。
+
+该 Gate 显式通过 `rustc --test` 编译并运行 Tao 私有的 resizable 策略，按两空格 Rust
+格式检查两个 Tao 补丁文件，并复用 Cargo check 编译真实 macOS adapter。纯策略测试
+使用 fake responder，不进行 AppKit 交互。它们验证状态和调用边界，不证明真实输入法
+候选框行为。聚焦 Gate 成功仍需辅以完整 lifecycle 和 CI 验证。
+
+该 Gate 只读已审阅的 vendored 完整性基线。来源更新需先审阅，再显式执行 Generate：
+
+```bash
+pnpm run generate -- frame-aware-navigation-dependency-drift --write
+```
+
+registry validation 会在执行前拒绝 committed-write 和禁止的环境步骤。Gate 准备只写入
+被忽略的构建输出，不重新生成已提交基线，也不启动原生交互。
+
 ## 前端验证
 
 使用 `pnpm run test`、`pnpm run typecheck`、`pnpm run check` 和 `pnpm run build`。根 Rstest discovery 负责仓库内断言；lifecycle aggregator 按依赖顺序恰好覆盖一次根应用与每个直接 workspace member。

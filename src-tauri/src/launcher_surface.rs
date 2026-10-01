@@ -1,6 +1,9 @@
 use crate::{launcher_window::MAIN_WINDOW_LABEL, plugin_manager::PluginManager};
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 use tauri::{AppHandle, LogicalSize, Manager, Runtime, State, Window, WindowEvent};
 
 const LAUNCHER_SURFACE_TRANSITION_FAILED: &str = "launcher_surface_transition_failed";
@@ -161,6 +164,7 @@ struct PresentationSnapshot {
 trait LauncherSurfaceWindow {
     fn current_logical_size(&self) -> Result<LogicalDimensions, String>;
     fn current_work_area(&self) -> Result<LogicalDimensions, String>;
+    fn current_resizable(&self) -> Result<bool, String>;
     fn set_resizable(&self, resizable: bool) -> Result<(), String>;
     fn set_min_size(&self, size: LogicalDimensions) -> Result<(), String>;
     fn set_max_size(&self, size: LogicalDimensions) -> Result<(), String>;
@@ -168,6 +172,10 @@ trait LauncherSurfaceWindow {
 }
 
 impl<R: Runtime> LauncherSurfaceWindow for Window<R> {
+    fn current_resizable(&self) -> Result<bool, String> {
+        self.is_resizable().map_err(|error| error.to_string())
+    }
+
     fn current_logical_size(&self) -> Result<LogicalDimensions, String> {
         let scale_factor = self.scale_factor().map_err(|error| error.to_string())?;
         let size = self
@@ -244,6 +252,9 @@ impl LauncherSurfaceBindingResolver for PluginManager {
 #[derive(Default)]
 pub struct LauncherSurfaceCoordinator {
     last_successful: Mutex<Option<PresentationSnapshot>>,
+    // Read/write only while holding last_successful. Keep uncertain queued
+    // enables across a failed rollback, independently of the success cache.
+    resizable_uncertain: AtomicBool,
 }
 
 fn valid_owner_id(value: &str) -> bool {
@@ -346,15 +357,30 @@ fn apply_snapshot<W: LauncherSurfaceWindow>(
     window: &W,
     snapshot: &PresentationSnapshot,
     work_area: LogicalDimensions,
+    submitted_resizable: bool,
+    restore_resizable: bool,
 ) -> Result<(), &'static str> {
+    // Read once, then track this operation's ordered message submissions. A setter
+    // return confirms delivery, not AppKit completion; an immediate re-read can
+    // still observe the state before the guard message executes.
+    let mut planned_resizable = window
+        .current_resizable()
+        .map_err(|_| "current_resizable")?
+        || submitted_resizable;
+    // A previous successful transition can also have a final enable awaiting
+    // execution. Account for it as well as the actual state, so a subsequent
+    // fixed target queues its guard behind that enable instead of skipping it.
     let hard_minimum = LogicalDimensions::new(HARD_MIN_WIDTH, HARD_MIN_HEIGHT);
     let hard_maximum = LogicalDimensions::new(
         work_area.width.min(HARD_MAX_WIDTH),
         work_area.height.min(HARD_MAX_HEIGHT),
     );
-    window
-        .set_resizable(false)
-        .map_err(|_| "set_resizable_guard")?;
+    if planned_resizable {
+        window
+            .set_resizable(false)
+            .map_err(|_| "set_resizable_guard")?;
+        planned_resizable = false;
+    }
     window
         .set_min_size(hard_minimum)
         .map_err(|_| "set_wide_min_size")?;
@@ -370,9 +396,14 @@ fn apply_snapshot<W: LauncherSurfaceWindow>(
     window
         .set_max_size(snapshot.maximum)
         .map_err(|_| "set_target_max_size")?;
-    window
-        .set_resizable(snapshot.resizable)
-        .map_err(|_| "set_target_resizable")?;
+    // Rollback reasserts the final state even if the read saw no change: a
+    // failing setter may have partially applied or left an ordered message.
+    // Tao's execution-time mask check makes this safe for the current responder.
+    if planned_resizable != snapshot.resizable || restore_resizable {
+        window
+            .set_resizable(snapshot.resizable)
+            .map_err(|_| "set_target_resizable")?;
+    }
     Ok(())
 }
 
@@ -415,13 +446,39 @@ fn transition<W: LauncherSurfaceWindow, B: LauncherSurfaceBindingResolver + ?Siz
         });
     previous.size = current_size;
 
-    if let Err(operation) = apply_snapshot(window, &next, work_area) {
-        if apply_snapshot(window, &previous, work_area).is_err() {
+    let submitted_resizable = last_successful
+        .as_ref()
+        .is_some_and(|state| state.resizable)
+        || coordinator.resizable_uncertain.load(Ordering::Relaxed);
+    if let Err(operation) = apply_snapshot(window, &next, work_area, submitted_resizable, false) {
+        if operation == "current_resizable" {
+            return Err(LauncherSurfaceError::new(target, operation));
+        }
+        if apply_snapshot(
+            window,
+            &previous,
+            work_area,
+            submitted_resizable || next.resizable,
+            true,
+        )
+        .is_err()
+        {
+            // An incomplete rollback must not make a repeated target look done.
+            *last_successful = None;
+            coordinator
+                .resizable_uncertain
+                .store(true, Ordering::Relaxed);
             let _ = window.set_resizable(false);
             return Err(LauncherSurfaceError::new(target, "rollback"));
         }
+        coordinator
+            .resizable_uncertain
+            .store(false, Ordering::Relaxed);
         return Err(LauncherSurfaceError::new(target, operation));
     }
+    coordinator
+        .resizable_uncertain
+        .store(false, Ordering::Relaxed);
     *last_successful = Some(next);
     Ok(())
 }
@@ -465,13 +522,26 @@ fn refresh_environment<W: LauncherSurfaceWindow>(
         maximum: if previous.resizable { maximum } else { size },
         resizable: previous.resizable,
     };
-    if let Err(operation) = apply_snapshot(window, &next, work_area) {
-        if apply_snapshot(window, &previous, work_area).is_err() {
+    if let Err(operation) = apply_snapshot(window, &next, work_area, previous.resizable, false) {
+        if operation == "current_resizable" {
+            return Err(operation);
+        }
+        if apply_snapshot(window, &previous, work_area, previous.resizable, true).is_err() {
+            *last_successful = None;
+            coordinator
+                .resizable_uncertain
+                .store(true, Ordering::Relaxed);
             let _ = window.set_resizable(false);
             return Err("rollback");
         }
+        coordinator
+            .resizable_uncertain
+            .store(false, Ordering::Relaxed);
         return Err(operation);
     }
+    coordinator
+        .resizable_uncertain
+        .store(false, Ordering::Relaxed);
     *last_successful = Some(next);
     Ok(())
 }
@@ -522,7 +592,7 @@ pub fn setup_launcher_surface<R: Runtime>(app: &AppHandle<R>) {
 mod tests {
     use super::*;
     use std::{
-        cell::RefCell,
+        cell::{Cell, RefCell},
         collections::{HashMap, VecDeque},
     };
 
@@ -534,9 +604,26 @@ mod tests {
         }
     }
 
+    #[derive(Clone, Copy)]
+    enum Mutation {
+        Size(LogicalDimensions),
+        Minimum(LogicalDimensions),
+        Maximum(LogicalDimensions),
+        Resizable(bool),
+    }
+
     struct FakeWindow {
         size: RefCell<LogicalDimensions>,
         work_area: RefCell<LogicalDimensions>,
+        minimum: RefCell<LogicalDimensions>,
+        maximum: RefCell<LogicalDimensions>,
+        resizable: Cell<bool>,
+        queued: Cell<bool>,
+        pending: RefCell<VecDeque<Mutation>>,
+        // Surface operations own the complete window, never the Host/Child
+        // responder or lifecycle. Removed Child identities stay removed.
+        responder: Cell<Option<&'static str>>,
+        child_attached: Cell<bool>,
         operations: RefCell<Vec<String>>,
         operation_counts: RefCell<HashMap<&'static str, usize>>,
         failures: RefCell<VecDeque<String>>,
@@ -547,6 +634,13 @@ mod tests {
             Self {
                 size: RefCell::new(LogicalDimensions::new(LAUNCHER_WIDTH, HOME_HEIGHT)),
                 work_area: RefCell::new(work_area),
+                minimum: RefCell::new(LogicalDimensions::new(LAUNCHER_WIDTH, HOME_HEIGHT)),
+                maximum: RefCell::new(LogicalDimensions::new(LAUNCHER_WIDTH, HOME_HEIGHT)),
+                resizable: Cell::new(false),
+                queued: Cell::new(false),
+                pending: RefCell::new(VecDeque::new()),
+                responder: Cell::new(Some("host_input")),
+                child_attached: Cell::new(false),
                 operations: RefCell::new(Vec::new()),
                 operation_counts: RefCell::new(HashMap::new()),
                 failures: RefCell::new(VecDeque::new()),
@@ -574,9 +668,61 @@ mod tests {
                 Ok(())
             }
         }
+
+        fn apply(&self, mutation: Mutation) {
+            match mutation {
+                Mutation::Size(size) => *self.size.borrow_mut() = size,
+                Mutation::Minimum(size) => *self.minimum.borrow_mut() = size,
+                Mutation::Maximum(size) => *self.maximum.borrow_mut() = size,
+                Mutation::Resizable(value) => self.resizable.set(value),
+            }
+        }
+
+        fn mutate(&self, operation: &'static str, mutation: Mutation) -> Result<(), String> {
+            self.record(operation)?;
+            if self.queued.get() {
+                self.pending.borrow_mut().push_back(mutation);
+            } else {
+                self.apply(mutation);
+            }
+            let count = self.operation_counts.borrow()[operation];
+            if self
+                .failures
+                .borrow()
+                .front()
+                .is_some_and(|failure| failure == &format!("{operation}:{count}:after"))
+            {
+                self.failures.borrow_mut().pop_front();
+                return Err("private partial native detail".to_owned());
+            }
+            Ok(())
+        }
+
+        fn drain(&self) {
+            while let Some(mutation) = self.pending.borrow_mut().pop_front() {
+                self.apply(mutation);
+            }
+        }
+
+        fn reset_operations(&self) {
+            self.operations.borrow_mut().clear();
+            self.operation_counts.borrow_mut().clear();
+        }
+
+        fn assert_snapshot(&self, snapshot: &PresentationSnapshot) {
+            assert_eq!(*self.size.borrow(), snapshot.size);
+            assert_eq!(*self.minimum.borrow(), snapshot.minimum);
+            assert_eq!(*self.maximum.borrow(), snapshot.maximum);
+            assert_eq!(self.resizable.get(), snapshot.resizable);
+        }
     }
 
     impl LauncherSurfaceWindow for FakeWindow {
+        fn current_resizable(&self) -> Result<bool, String> {
+            self.record("current_resizable")?;
+            Ok(self.resizable.get())
+        }
+
         fn current_logical_size(&self) -> Result<LogicalDimensions, String> {
             self.record("current_size")?;
             Ok(*self.size.borrow())
@@ -588,25 +734,26 @@ mod tests {
         }
 
         fn set_resizable(&self, resizable: bool) -> Result<(), String> {
-            self.record(if resizable {
-                "set_resizable_true"
-            } else {
-                "set_resizable_false"
-            })
+            self.mutate(
+                if resizable {
+                    "set_resizable_true"
+                } else {
+                    "set_resizable_false"
+                },
+                Mutation::Resizable(resizable),
+            )
         }
 
-        fn set_min_size(&self, _size: LogicalDimensions) -> Result<(), String> {
-            self.record("set_min_size")
+        fn set_min_size(&self, size: LogicalDimensions) -> Result<(), String> {
+            self.mutate("set_min_size", Mutation::Minimum(size))
         }
 
-        fn set_max_size(&self, _size: LogicalDimensions) -> Result<(), String> {
-            self.record("set_max_size")
+        fn set_max_size(&self, size: LogicalDimensions) -> Result<(), String> {
+            self.mutate("set_max_size", Mutation::Maximum(size))
         }
 
         fn set_logical_size(&self, size: LogicalDimensions) -> Result<(), String> {
-            self.record("set_size")?;
-            *self.size.borrow_mut() = size;
-            Ok(())
+            self.mutate("set_size", Mutation::Size(size))
         }
     }
 
@@ -640,15 +787,13 @@ mod tests {
         .unwrap();
         assert_eq!(*window.size.borrow(), LogicalDimensions::new(650.0, 480.0));
         assert_eq!(
-            &window.operations.borrow()[2..],
+            &window.operations.borrow()[3..],
             [
-                "set_resizable_false",
                 "set_min_size",
                 "set_max_size",
                 "set_size",
                 "set_min_size",
-                "set_max_size",
-                "set_resizable_false"
+                "set_max_size"
             ]
         );
     }
@@ -711,10 +856,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(*window.size.borrow(), LogicalDimensions::new(650.0, 320.0));
-        assert_eq!(
-            window.operations.borrow().last().map(String::as_str),
-            Some("set_resizable_false")
-        );
+        assert!(!window.resizable.get());
+        assert_eq!(window.operations.borrow().last().unwrap(), "set_max_size");
     }
 
     #[test]
@@ -758,7 +901,6 @@ mod tests {
     #[test]
     fn every_native_setter_failure_rolls_back_and_reports_safe_stage() {
         for (failure, expected_stage) in [
-            ("set_resizable_false:1", "set_resizable_guard"),
             ("set_min_size:1", "set_wide_min_size"),
             ("set_max_size:1", "set_wide_max_size"),
             ("set_size:1", "set_size"),
@@ -777,7 +919,10 @@ mod tests {
             )
             .unwrap_err();
             assert_eq!(error.operation, expected_stage);
-            assert_eq!(*window.size.borrow(), LogicalDimensions::new(650.0, 320.0));
+            window.assert_snapshot(
+                &policy_for_target(&LauncherSurfaceTarget::Home, *window.work_area.borrow())
+                    .unwrap(),
+            );
             assert!(!error.message.contains("private native detail"));
         }
     }
@@ -801,6 +946,395 @@ mod tests {
         assert_eq!(
             window.operations.borrow().last().map(String::as_str),
             Some("set_resizable_false")
+        );
+    }
+
+    #[test]
+    fn fixed_transitions_and_environment_refresh_never_submit_resizable_messages() {
+        let coordinator = LauncherSurfaceCoordinator::default();
+        let window = FakeWindow::new(LogicalDimensions::new(1920.0, 1040.0));
+        for target in [
+            LauncherSurfaceTarget::Home,
+            LauncherSurfaceTarget::Search,
+            LauncherSurfaceTarget::HostPage,
+            LauncherSurfaceTarget::Home,
+        ] {
+            transition(&coordinator, &window, &FakeBindings(true), &target).unwrap();
+            window.assert_snapshot(
+                coordinator
+                    .last_successful
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .unwrap(),
+            );
+        }
+        *window.work_area.borrow_mut() = LogicalDimensions::new(600.0, 300.0);
+        refresh_environment(&coordinator, &window).unwrap();
+        window.assert_snapshot(
+            coordinator
+                .last_successful
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap(),
+        );
+        assert!(!window
+            .operations
+            .borrow()
+            .iter()
+            .any(|op| op.starts_with("set_resizable")));
+        assert_eq!(window.responder.get(), Some("host_input"));
+    }
+
+    #[test]
+    fn queued_guard_is_followed_by_required_final_state_without_a_stale_reread() {
+        let coordinator = LauncherSurfaceCoordinator::default();
+        let window = FakeWindow::new(LogicalDimensions::new(1920.0, 1040.0));
+        let plugin = plugin_target("com.acme.a", "main", 1, 800, 600, true);
+        transition(&coordinator, &window, &FakeBindings(true), &plugin).unwrap();
+        window.reset_operations();
+        window.queued.set(true);
+        refresh_environment(&coordinator, &window).unwrap();
+        assert!(window.resizable.get());
+        assert_eq!(
+            window
+                .operations
+                .borrow()
+                .iter()
+                .filter(|op| op.starts_with("set_resizable"))
+                .cloned()
+                .collect::<Vec<_>>(),
+            ["set_resizable_false", "set_resizable_true"]
+        );
+        assert_eq!(window.operation_counts.borrow()["current_resizable"], 1);
+        window.drain();
+        window.assert_snapshot(
+            coordinator
+                .last_successful
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap(),
+        );
+    }
+
+    #[test]
+    fn queued_plugin_enable_is_guarded_before_a_subsequent_fixed_target() {
+        let coordinator = LauncherSurfaceCoordinator::default();
+        let window = FakeWindow::new(LogicalDimensions::new(1920.0, 1040.0));
+        window.queued.set(true);
+        transition(
+            &coordinator,
+            &window,
+            &FakeBindings(true),
+            &plugin_target("com.acme.a", "main", 1, 800, 600, true),
+        )
+        .unwrap();
+        assert!(!window.resizable.get());
+        transition(
+            &coordinator,
+            &window,
+            &FakeBindings(true),
+            &LauncherSurfaceTarget::Home,
+        )
+        .unwrap();
+        window.drain();
+        window.assert_snapshot(
+            coordinator
+                .last_successful
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap(),
+        );
+        assert_eq!(
+            window
+                .operations
+                .borrow()
+                .iter()
+                .filter(|op| op.starts_with("set_resizable"))
+                .cloned()
+                .collect::<Vec<_>>(),
+            ["set_resizable_true", "set_resizable_false"]
+        );
+    }
+
+    #[test]
+    fn failed_state_reads_do_not_mutate_window_or_success_cache() {
+        for failure in ["work_area", "current_size", "current_resizable"] {
+            for refresh in [false, true] {
+                let coordinator = LauncherSurfaceCoordinator::default();
+                let window = FakeWindow::new(LogicalDimensions::new(1920.0, 1040.0));
+                transition(
+                    &coordinator,
+                    &window,
+                    &FakeBindings(true),
+                    &LauncherSurfaceTarget::Home,
+                )
+                .unwrap();
+                let previous = coordinator.last_successful.lock().unwrap().clone().unwrap();
+                window.reset_operations();
+                window.failures.borrow_mut().push_back(failure.to_owned());
+                if refresh {
+                    assert_eq!(refresh_environment(&coordinator, &window), Err(failure));
+                } else {
+                    let error = transition(
+                        &coordinator,
+                        &window,
+                        &FakeBindings(true),
+                        &LauncherSurfaceTarget::Search,
+                    )
+                    .unwrap_err();
+                    assert_eq!(error.operation, failure);
+                    assert!(!serde_json::to_string(&error).unwrap().contains("private"));
+                }
+                window.assert_snapshot(&previous);
+                assert_eq!(
+                    coordinator.last_successful.lock().unwrap().as_ref(),
+                    Some(&previous)
+                );
+                assert!(!window
+                    .operations
+                    .borrow()
+                    .iter()
+                    .any(|op| op.starts_with("set_")));
+            }
+        }
+    }
+
+    #[test]
+    fn delivery_and_partial_application_failures_restore_complete_snapshot() {
+        let stages = [
+            ("set_resizable_false:1", "set_resizable_guard"),
+            ("set_min_size:1", "set_wide_min_size"),
+            ("set_max_size:1", "set_wide_max_size"),
+            ("set_size:1", "set_size"),
+            ("set_min_size:2", "set_target_min_size"),
+            ("set_max_size:2", "set_target_max_size"),
+            ("set_resizable_true:1", "set_target_resizable"),
+        ];
+        for queued in [false, true] {
+            for partial in [false, true] {
+                for (failure, stage) in stages {
+                    let coordinator = LauncherSurfaceCoordinator::default();
+                    let window = FakeWindow::new(LogicalDimensions::new(1920.0, 1040.0));
+                    let plugin = plugin_target("com.acme.a", "main", 1, 800, 600, true);
+                    transition(&coordinator, &window, &FakeBindings(true), &plugin).unwrap();
+                    let previous = coordinator.last_successful.lock().unwrap().clone().unwrap();
+                    window.reset_operations();
+                    window.queued.set(queued);
+                    window.failures.borrow_mut().push_back(if partial {
+                        format!("{failure}:after")
+                    } else {
+                        failure.to_owned()
+                    });
+                    let error = transition(
+                        &coordinator,
+                        &window,
+                        &FakeBindings(true),
+                        &plugin_target("com.acme.b", "main", 2, 720, 540, true),
+                    )
+                    .unwrap_err();
+                    assert_eq!(
+                        error.operation, stage,
+                        "{failure}, queued={queued}, partial={partial}"
+                    );
+                    window.drain();
+                    window.assert_snapshot(&previous);
+                    assert_eq!(
+                        coordinator.last_successful.lock().unwrap().as_ref(),
+                        Some(&previous)
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn queued_partial_final_enable_cannot_escape_fixed_rollback() {
+        let coordinator = LauncherSurfaceCoordinator::default();
+        let window = FakeWindow::new(LogicalDimensions::new(1920.0, 1040.0));
+        transition(
+            &coordinator,
+            &window,
+            &FakeBindings(true),
+            &LauncherSurfaceTarget::Home,
+        )
+        .unwrap();
+        let previous = coordinator.last_successful.lock().unwrap().clone().unwrap();
+        window.reset_operations();
+        window.queued.set(true);
+        window
+            .failures
+            .borrow_mut()
+            .push_back("set_resizable_true:1:after".to_owned());
+        let error = transition(
+            &coordinator,
+            &window,
+            &FakeBindings(true),
+            &plugin_target("com.acme.a", "main", 1, 800, 600, true),
+        )
+        .unwrap_err();
+        assert_eq!(error.operation, "set_target_resizable");
+        assert_eq!(
+            window.operations.borrow().last().unwrap(),
+            "set_resizable_false"
+        );
+        window.drain();
+        window.assert_snapshot(&previous);
+    }
+
+    #[test]
+    fn every_rollback_failure_invalidates_cache_and_allows_the_same_target_to_repair() {
+        for (forward, rollback) in [
+            ("set_resizable_false:1", "set_resizable_false:2"),
+            ("set_size:1", "current_resizable:2"),
+            ("set_size:1", "set_min_size:2"),
+            ("set_size:1", "set_max_size:2"),
+            ("set_size:1", "set_size:2"),
+            ("set_size:1", "set_min_size:3"),
+            ("set_size:1", "set_max_size:3"),
+            ("set_size:1", "set_resizable_true:1"),
+        ] {
+            for refresh in [false, true] {
+                let coordinator = LauncherSurfaceCoordinator::default();
+                let window = FakeWindow::new(LogicalDimensions::new(1920.0, 1040.0));
+                let plugin = plugin_target("com.acme.a", "main", 1, 800, 600, true);
+                transition(&coordinator, &window, &FakeBindings(true), &plugin).unwrap();
+                window.reset_operations();
+                window
+                    .failures
+                    .borrow_mut()
+                    .extend([forward.to_owned(), rollback.to_owned()]);
+                if refresh {
+                    assert_eq!(refresh_environment(&coordinator, &window), Err("rollback"));
+                } else {
+                    assert_eq!(
+                        transition(
+                            &coordinator,
+                            &window,
+                            &FakeBindings(true),
+                            &LauncherSurfaceTarget::Home
+                        )
+                        .unwrap_err()
+                        .operation,
+                        "rollback"
+                    );
+                }
+                assert!(!window.resizable.get());
+                assert!(coordinator.last_successful.lock().unwrap().is_none());
+                let count = window.operations.borrow().len();
+                transition(&coordinator, &window, &FakeBindings(true), &plugin).unwrap();
+                assert!(window.operations.borrow().len() > count);
+                window.assert_snapshot(
+                    coordinator
+                        .last_successful
+                        .lock()
+                        .unwrap()
+                        .as_ref()
+                        .unwrap(),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn failed_queued_rollback_and_emergency_delivery_are_repaired_after_cache_invalidation() {
+        let coordinator = LauncherSurfaceCoordinator::default();
+        let window = FakeWindow::new(LogicalDimensions::new(1920.0, 1040.0));
+        transition(
+            &coordinator,
+            &window,
+            &FakeBindings(true),
+            &LauncherSurfaceTarget::Home,
+        )
+        .unwrap();
+        window.reset_operations();
+        window.queued.set(true);
+        window.failures.borrow_mut().extend([
+            "set_resizable_true:1:after".to_owned(),
+            "set_resizable_false:1".to_owned(),
+            "set_resizable_false:2".to_owned(),
+        ]);
+        assert_eq!(
+            transition(
+                &coordinator,
+                &window,
+                &FakeBindings(true),
+                &plugin_target("com.acme.a", "main", 1, 800, 600, true)
+            )
+            .unwrap_err()
+            .operation,
+            "rollback"
+        );
+        assert!(coordinator.last_successful.lock().unwrap().is_none());
+        assert!(!window.resizable.get());
+        transition(
+            &coordinator,
+            &window,
+            &FakeBindings(true),
+            &LauncherSurfaceTarget::Home,
+        )
+        .unwrap();
+        window.drain();
+        window.assert_snapshot(
+            coordinator
+                .last_successful
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap(),
+        );
+        assert!(!coordinator.resizable_uncertain.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn attached_and_removed_child_identities_are_never_focused_by_surface_configuration() {
+        let coordinator = LauncherSurfaceCoordinator::default();
+        let window = FakeWindow::new(LogicalDimensions::new(1920.0, 1040.0));
+        transition(
+            &coordinator,
+            &window,
+            &FakeBindings(true),
+            &plugin_target("com.acme.a", "main", 1, 800, 600, true),
+        )
+        .unwrap();
+        window.child_attached.set(true);
+        window.responder.set(Some("current_child_input"));
+        transition(
+            &coordinator,
+            &window,
+            &FakeBindings(true),
+            &LauncherSurfaceTarget::Home,
+        )
+        .unwrap();
+        assert!(window.child_attached.get());
+        assert_eq!(window.responder.get(), Some("current_child_input"));
+        assert!(!window.resizable.get());
+        window.child_attached.set(false);
+        window.responder.set(None);
+        window.reset_operations();
+        window
+            .failures
+            .borrow_mut()
+            .push_back("set_size:1:after".to_owned());
+        assert!(transition(
+            &coordinator,
+            &window,
+            &FakeBindings(true),
+            &LauncherSurfaceTarget::Search
+        )
+        .is_err());
+        assert_eq!(window.responder.get(), None);
+        assert!(!window.child_attached.get());
+        window.assert_snapshot(
+            coordinator
+                .last_successful
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap(),
         );
     }
 

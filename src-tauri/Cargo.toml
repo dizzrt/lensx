@@ -48,6 +48,7 @@ objc2-web-kit = { version = "=0.3.2", default-features = false, features = ["blo
 tauri = { version = "2", features = ["test"] }
 
 [patch.crates-io]
+tao = { path = "../vendor/frame-aware-navigation/tao" }
 tauri = { path = "../vendor/frame-aware-navigation/tauri" }
 tauri-runtime = { path = "../vendor/frame-aware-navigation/tauri-runtime" }
 tauri-runtime-wry = { path = "../vendor/frame-aware-navigation/tauri-runtime-wry" }

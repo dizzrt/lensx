@@ -1,5 +1,8 @@
-import { Input, Typography } from '@douyinfe/semi-ui';
+import { Typography } from '@douyinfe/semi-ui';
+import { Input } from '@douyinfe/semi-ui/lib/es/input';
 import {
+  type ChangeEvent,
+  type CompositionEvent,
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
@@ -137,6 +140,13 @@ const App = ({
   const [snapshotRevision, setSnapshotRevision] = useState(0);
   const [pageRevision, setPageRevision] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const semiInputRef = useRef<Input>(null);
+  const committedQueryRef = useRef('');
+  const isComposingRef = useRef(false);
+  const retiredCompositionRef = useRef(false);
+  const acceptsCompositionEndRef = useRef(false);
+  const staleCompositionValueRef = useRef<string | undefined>(undefined);
+  const inputMountedRef = useRef(true);
   const pendingActionIdRef = useRef<string | undefined>(undefined);
   const shouldRestoreInputFocusRef = useRef(false);
   const lastPresentationTargetKeyRef = useRef<string | undefined>(undefined);
@@ -146,6 +156,35 @@ const App = ({
 
   const focusLauncherInput = useCallback(() => {
     inputRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  const resetQuery = useCallback(() => {
+    if (isComposingRef.current) {
+      staleCompositionValueRef.current = inputRef.current?.value;
+    }
+    isComposingRef.current = false;
+    retiredCompositionRef.current = true;
+    acceptsCompositionEndRef.current = false;
+    committedQueryRef.current = '';
+    // Semi's unchanged controlled value cannot clear an internal draft or its
+    // composition flag. Reset those input-local facts without replacing the DOM.
+    if (semiInputRef.current) {
+      semiInputRef.current.foundation.compositionEnter = false;
+      semiInputRef.current.foundation.setValue('');
+    }
+    setQuery('');
+    setSelectedActionId(undefined);
+  }, []);
+
+  useEffect(() => {
+    inputMountedRef.current = true;
+    return () => {
+      inputMountedRef.current = false;
+      isComposingRef.current = false;
+      retiredCompositionRef.current = true;
+      acceptsCompositionEndRef.current = false;
+      staleCompositionValueRef.current = undefined;
+    };
   }, []);
 
   const registrySnapshot = useMemo(() => {
@@ -334,11 +373,10 @@ const App = ({
         }
         setActivePageAttemptId(page ? (`page_attempt_${++pageAttemptSequenceRef.current}` as const) : undefined);
         setActivePage(page);
-        setQuery('');
-        setSelectedActionId(undefined);
+        resetQuery();
         setDispatchFeedback(undefined);
       }),
-    [navigationService],
+    [navigationService, resetQuery],
   );
 
   useEffect(() => {
@@ -406,8 +444,7 @@ const App = ({
       try {
         const result = await actionService.dispatcher.dispatch(actionId);
         if (result.ok) {
-          setQuery('');
-          setSelectedActionId(undefined);
+          resetQuery();
           setDispatchFeedback({
             kind: 'success',
             messageKey: 'launcher.search.success',
@@ -430,35 +467,90 @@ const App = ({
         focusLauncherInput();
       }
     },
-    [actionService, focusLauncherInput, recordSuccessfulUse],
+    [actionService, focusLauncherInput, recordSuccessfulUse, resetQuery],
   );
 
   const clearSearch = useCallback(() => {
-    setQuery('');
-    setSelectedActionId(undefined);
+    resetQuery();
     setDispatchFeedback(undefined);
     focusLauncherInput();
-  }, [focusLauncherInput]);
+  }, [focusLauncherInput, resetQuery]);
 
   const closeActivePage = useCallback(() => {
     shouldRestoreInputFocusRef.current = true;
     navigationService.closePage();
   }, [navigationService]);
 
-  const handleQueryChange = useCallback((value: string) => {
+  const handleQueryChange = useCallback((value: string, event: ChangeEvent<HTMLInputElement>) => {
+    if (!inputMountedRef.current || event.target !== inputRef.current) return;
+    const nativeEvent = event.nativeEvent;
+    if (
+      retiredCompositionRef.current &&
+      nativeEvent instanceof InputEvent &&
+      (nativeEvent.isComposing || nativeEvent.inputType.includes('Composition'))
+    ) {
+      staleCompositionValueRef.current = value;
+      semiInputRef.current?.foundation.setValue(committedQueryRef.current);
+      return;
+    }
+    if (event.type === 'compositionend') {
+      if (!acceptsCompositionEndRef.current) return;
+      acceptsCompositionEndRef.current = false;
+    } else if (value === staleCompositionValueRef.current) {
+      semiInputRef.current?.foundation.setValue(committedQueryRef.current);
+      return;
+    }
+    if (isComposingRef.current) return;
+    staleCompositionValueRef.current = undefined;
+    if (value === committedQueryRef.current) return;
+    committedQueryRef.current = value;
     setQuery(value);
     setDispatchFeedback(undefined);
   }, []);
 
+  const handleCompositionStart = useCallback((event: CompositionEvent<HTMLInputElement>) => {
+    if (!inputMountedRef.current || event.target !== inputRef.current) return;
+    isComposingRef.current = true;
+    retiredCompositionRef.current = false;
+    acceptsCompositionEndRef.current = false;
+    staleCompositionValueRef.current = undefined;
+  }, []);
+
+  const handleCompositionEnd = useCallback((event: CompositionEvent<HTMLInputElement>) => {
+    if (!inputMountedRef.current || event.target !== inputRef.current) return;
+    acceptsCompositionEndRef.current = isComposingRef.current;
+    isComposingRef.current = false;
+    const value = event.currentTarget.value;
+    if (!acceptsCompositionEndRef.current) {
+      retiredCompositionRef.current = true;
+      staleCompositionValueRef.current = value;
+    }
+    // Semi sends its final onChange after this notification. Reconcile both
+    // cancellation and late ends before that single query commit entry point.
+    semiInputRef.current?.foundation.setValue(acceptsCompositionEndRef.current ? value : committedQueryRef.current);
+  }, []);
+
+  const handleInputPaste = useCallback(() => {
+    staleCompositionValueRef.current = undefined;
+  }, []);
+
   const handleInputKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
+      if (isComposingRef.current || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) {
+        return;
+      }
+
+      if (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete') {
+        staleCompositionValueRef.current = undefined;
+      }
+
       if (event.key === 'Escape') {
         event.preventDefault();
         clearSearch();
         return;
       }
 
-      if (event.nativeEvent.isComposing || results.length === 0) {
+      if (results.length === 0) {
         return;
       }
 
@@ -555,10 +647,15 @@ const App = ({
                 aria-label={t('launcher.inputLabel')}
                 autoComplete="off"
                 className="launcher-input min-w-0 flex-1"
+                composition
+                forwardRef={inputRef}
                 onChange={handleQueryChange}
+                onCompositionEnd={handleCompositionEnd}
+                onCompositionStart={handleCompositionStart}
                 onKeyDown={handleInputKeyDown}
+                onPaste={handleInputPaste}
                 placeholder={t('launcher.inputPlaceholder')}
-                ref={inputRef}
+                ref={semiInputRef}
                 role="combobox"
                 size="large"
                 value={query}
