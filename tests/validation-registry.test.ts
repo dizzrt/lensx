@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from '@rstest/core';
@@ -68,29 +69,15 @@ describe('validation Gate registry and runner', () => {
         (item) => item.executable === 'cargo' && item.argv.join(' ') === 'check --manifest-path src-tauri/Cargo.toml',
       ),
     ).toHaveLength(1);
-    const policy = 'vendor/frame-aware-navigation/tao/src/platform_impl/macos/resizable.rs';
-    const binary = 'src-tauri/target/launcher-resizable-policy-tests';
-    const compile = plan.steps.find((item) => item.executable === 'rustc');
-    expect(compile).toMatchObject({
-      argv: ['--edition=2021', '--test', policy, '-o', binary],
+    const policies = plan.steps.filter((item) => item.argv.includes('scripts/tao-policy-tests.ts'));
+    expect(policies).toHaveLength(1);
+    expect(policies[0]).toMatchObject({
+      executable: 'node',
+      argv: ['--experimental-strip-types', 'scripts/tao-policy-tests.ts'],
       cwd: '.',
       environment: {},
-      platform: 'darwin',
+      platform: 'any',
       safety: { readOnly: true, writesCommittedArtifacts: false },
-    });
-    expect(plan.steps.find((item) => item.executable === binary)?.argv).toEqual([]);
-    expect(plan.steps.find((item) => item.executable === 'rm')?.argv).toEqual(['-f', binary]);
-    expect(plan.steps.find((item) => item.executable === 'rustfmt')).toMatchObject({
-      argv: [
-        '--edition',
-        '2021',
-        '--config',
-        'tab_spaces=2',
-        '--check',
-        'vendor/frame-aware-navigation/tao/src/platform_impl/macos/window.rs',
-        policy,
-      ],
-      platform: 'darwin',
     });
     const focused = plan.steps.find(
       (item) => item.executable === 'pnpm' && item.argv.includes('tests/launcher-input-focus-ui.test.tsx'),
@@ -99,6 +86,83 @@ describe('validation Gate registry and runner', () => {
     expect(focused?.argv).toContain('tests/frame-aware-navigation-dependency-drift.test.ts');
     expect(focused?.argv).toContain('tests/launcher-action-search-ui.test.tsx');
     expect(plan.steps.every((item) => item.safety.readOnly && !item.safety.writesCommittedArtifacts)).toBe(true);
+  });
+
+  test('adds strict Tao compilation and complete vendor formatting through the existing dependency Gate', () => {
+    const plan = planGates(validationRegistry, ['frame-aware-navigation-dependency-drift', 'launcher-input-focus']);
+    const strict = plan.steps.filter((item) => item.executable === 'cargo' && item.argv[0] === 'rustc');
+    expect(strict).toHaveLength(1);
+    expect(strict[0]).toMatchObject({
+      argv: [
+        'rustc',
+        '--locked',
+        '--manifest-path',
+        'src-tauri/Cargo.toml',
+        '-p',
+        'tao',
+        '--lib',
+        '--',
+        '-D',
+        'warnings',
+      ],
+      platform: 'darwin',
+      environment: {},
+    });
+    const graph = plan.steps.filter((item) => item.argv.includes('scripts/tao-dependency-graph.ts'));
+    expect(graph).toHaveLength(1);
+    expect(graph[0]?.platform).toBe('darwin');
+    expect(plan.steps.indexOf(graph[0] as ValidationStep)).toBeLessThan(
+      plan.steps.indexOf(strict[0] as ValidationStep),
+    );
+    const format = plan.steps.filter((item) => item.executable === 'rustfmt');
+    expect(format).toHaveLength(1);
+    const reviewedSources = [
+      ...readFileSync(
+        new URL('../scripts/frame-aware-navigation-dependency-drift.ts', import.meta.url),
+        'utf8',
+      ).matchAll(/^\s*'tao\/([^']+\.rs)'/gmu),
+    ].map((match) => `vendor/frame-aware-navigation/tao/${match[1]}`);
+    expect(reviewedSources).toHaveLength(15);
+    expect(format[0]).toMatchObject({
+      argv: ['--edition', '2021', '--config', 'tab_spaces=2', '--check', ...reviewedSources],
+      platform: 'any',
+    });
+    expect(plan.steps.filter((item) => item.argv.includes('scripts/tao-policy-tests.ts'))).toHaveLength(1);
+    expect(plan.steps.every((item) => item.safety.readOnly && !item.safety.writesCommittedArtifacts)).toBe(true);
+    expect(
+      plan.steps.some((item) => item.argv.includes('--write') || isProhibitedEnvironmentCommand(item.description)),
+    ).toBe(false);
+  });
+
+  test.each(['linux', 'win32', 'darwin'] as const)('enforces explicit Tao step platform metadata on %s', (platform) => {
+    const original = Object.getOwnPropertyDescriptor(process, 'platform');
+    if (!original) throw new Error('process.platform descriptor is required');
+    const maintenance = planGates(validationRegistry, ['frame-aware-navigation-dependency-drift']);
+    const strict = maintenance.steps.filter((item) => item.executable === 'cargo' && item.argv[0] === 'rustc');
+    const portable = maintenance.steps.filter(
+      (item) => item.executable === 'rustfmt' || item.argv.includes('scripts/tao-policy-tests.ts'),
+    );
+    try {
+      Object.defineProperty(process, 'platform', { ...original, value: platform });
+      let calls = 0;
+      const run = () => {
+        calls += 1;
+        return { status: 0 };
+      };
+      const strictPlan = { ...maintenance, steps: strict };
+      if (platform === 'darwin') {
+        expect(() => executePlan(strictPlan, '/repo', run)).not.toThrow();
+        expect(calls).toBe(1);
+      } else {
+        expect(() => executePlan(strictPlan, '/repo', run)).toThrow('[validation/platform]');
+        expect(calls).toBe(0);
+      }
+      expect(portable).toHaveLength(2);
+      expect(() => executePlan({ ...maintenance, steps: portable }, '/repo', run)).not.toThrow();
+      expect(calls).toBe(platform === 'darwin' ? 3 : 2);
+    } finally {
+      Object.defineProperty(process, 'platform', original);
+    }
   });
 
   test('prepares public package output before launcher focus dependency UI tests', () => {

@@ -16,8 +16,22 @@ const packages = Object.freeze({
 });
 
 const patchedFiles = Object.freeze([
-  'tao/src/platform_impl/macos/window.rs',
+  'tao/Cargo.toml',
+  'tao/src/platform/macos.rs',
+  'tao/src/platform_impl/macos/app.rs',
+  'tao/src/platform_impl/macos/app_delegate.rs',
+  'tao/src/platform_impl/macos/event.rs',
+  'tao/src/platform_impl/macos/event_loop.rs',
+  'tao/src/platform_impl/macos/file_drop.rs',
+  'tao/src/platform_impl/macos/icon.rs',
+  'tao/src/platform_impl/macos/mod.rs',
+  'tao/src/platform_impl/macos/monitor.rs',
   'tao/src/platform_impl/macos/resizable.rs',
+  'tao/src/platform_impl/macos/util/async.rs',
+  'tao/src/platform_impl/macos/util/mod.rs',
+  'tao/src/platform_impl/macos/window.rs',
+  'tao/src/platform_impl/macos/window_delegate.rs',
+  'tao/src/window.rs',
   'tauri/src/manager/webview.rs',
   'tauri/src/webview/mod.rs',
   'tauri/src/webview/webview_window.rs',

@@ -8,8 +8,22 @@
     "wry": "0.55.1"
   },
   "patched_files": [
-    "tao/src/platform_impl/macos/window.rs",
+    "tao/Cargo.toml",
+    "tao/src/platform/macos.rs",
+    "tao/src/platform_impl/macos/app.rs",
+    "tao/src/platform_impl/macos/app_delegate.rs",
+    "tao/src/platform_impl/macos/event.rs",
+    "tao/src/platform_impl/macos/event_loop.rs",
+    "tao/src/platform_impl/macos/file_drop.rs",
+    "tao/src/platform_impl/macos/icon.rs",
+    "tao/src/platform_impl/macos/mod.rs",
+    "tao/src/platform_impl/macos/monitor.rs",
     "tao/src/platform_impl/macos/resizable.rs",
+    "tao/src/platform_impl/macos/util/async.rs",
+    "tao/src/platform_impl/macos/util/mod.rs",
+    "tao/src/platform_impl/macos/window.rs",
+    "tao/src/platform_impl/macos/window_delegate.rs",
+    "tao/src/window.rs",
     "tauri/src/manager/webview.rs",
     "tauri/src/webview/mod.rs",
     "tauri/src/webview/webview_window.rs",
@@ -24,7 +38,7 @@
   "files": [
     {
       "path": "README.md",
-      "sha256": "638d003a1cced7292e49d65f34ce011f096fbbd61e848cba6b14a8a7fcc8fba3"
+      "sha256": "b2b427d449bbe901bc10dca533a5d88807ad2c46f9a6af740fc63794f1a12ae4"
     },
     {
       "path": "tao/.cargo_vcs_info.json",
@@ -36,7 +50,7 @@
     },
     {
       "path": "tao/Cargo.toml",
-      "sha256": "ff71f61b705389d7f5e9c8cc7e19aa344e0ebd64ae3e0a60192cd5031cc7926c"
+      "sha256": "c510e07a5928da0e0d2bc49b364584fb9a85f0fae5483bab8810a77c21ce1c7f"
     },
     {
       "path": "tao/Cargo.toml.orig",
@@ -216,7 +230,7 @@
     },
     {
       "path": "tao/src/platform/macos.rs",
-      "sha256": "d1993f47ff4958ff98ba35a8560d7b0230e0ee527e8d01d54f28f3cb3b6c8c42"
+      "sha256": "dbcb7ab2c7f8df4b11cd34d8aabb1bac41507e56aa40e3a01965856df89c145d"
     },
     {
       "path": "tao/src/platform/mod.rs",
@@ -348,11 +362,11 @@
     },
     {
       "path": "tao/src/platform_impl/macos/app.rs",
-      "sha256": "102c21b90c4d09a8c1831d47b8b4418b2844e1c758c159db11ae14d9921cfd43"
+      "sha256": "66e68b00b566461822f78dde7e090ef2439d7c82aac7692761da4aad76435642"
     },
     {
       "path": "tao/src/platform_impl/macos/app_delegate.rs",
-      "sha256": "a66447b76f880b559042133ca939305df8a3dd71b1e5a30f530a2d0cb8d16da4"
+      "sha256": "bb5a2ad7fb8122a736b9c224d9ef1fdd2abde5175346b5dfe9d3e7ec92216788"
     },
     {
       "path": "tao/src/platform_impl/macos/app_state.rs",
@@ -368,19 +382,23 @@
     },
     {
       "path": "tao/src/platform_impl/macos/event.rs",
-      "sha256": "874e96604892fe63c1beda1627f2a12763573a3e5347fa6630c672b995fb56eb"
+      "sha256": "f80f456e8cf279a4f8126b4b09eb9e0c5ff779f1047f946f9443aa614c3d07ea"
     },
     {
       "path": "tao/src/platform_impl/macos/event_loop.rs",
-      "sha256": "53a6a0b315527a233cf02160e2eda94f1158f95481c1119367b159cfddea05d6"
+      "sha256": "57df43b658fdad5ee80fff17f250a3538704956417dc9d6bee3f0a15a1ce4d23"
     },
     {
       "path": "tao/src/platform_impl/macos/ffi.rs",
       "sha256": "6e85ece908839c2c9d58077ec32e2d7835f1cffad200969f871f05a0aacaae9c"
     },
     {
+      "path": "tao/src/platform_impl/macos/file_drop.rs",
+      "sha256": "343848787b547e1a191c2762d603ef5de5b71ecc49aa777271645e99bfb9c8d3"
+    },
+    {
       "path": "tao/src/platform_impl/macos/icon.rs",
-      "sha256": "8f5a7f00f96462683b4378702a61d78a30814d538a3111bad24ef4c556f35627"
+      "sha256": "24eff9b151376af7908be79098b2d636d908bcb2adc99b3351167b826b87b204"
     },
     {
       "path": "tao/src/platform_impl/macos/keycode.rs",
@@ -388,11 +406,11 @@
     },
     {
       "path": "tao/src/platform_impl/macos/mod.rs",
-      "sha256": "a60a9bcf84c7bd51f744450674702e6bb88b3e17fc744751b4c4a202544423f8"
+      "sha256": "2ac9f3435103389de72d250d324a3b123b12869e319d9bc419d3d21c6f7a963b"
     },
     {
       "path": "tao/src/platform_impl/macos/monitor.rs",
-      "sha256": "3ef62d6dc6902798fe31b8d57e07bfdfc0a530cdf9a321460e84e4dc62427963"
+      "sha256": "595fcdda6836184ac8ebe5319bae152ddfaedff4daec44e7b1ef4fd3da277f75"
     },
     {
       "path": "tao/src/platform_impl/macos/observer.rs",
@@ -408,7 +426,7 @@
     },
     {
       "path": "tao/src/platform_impl/macos/util/async.rs",
-      "sha256": "c0df3946b4daca0c2e3bdda7bfb8b6b38603d25a2c0ebfe6ce8f1ec93998fb57"
+      "sha256": "3baa1b188eb00a62906b3497c40fa659591e8c1b890c5a719888f720fd905e27"
     },
     {
       "path": "tao/src/platform_impl/macos/util/cursor.rs",
@@ -416,7 +434,7 @@
     },
     {
       "path": "tao/src/platform_impl/macos/util/mod.rs",
-      "sha256": "e8df577333134debdc0731a5198f5876ffb41a70df75b10f1f732874daa8cc1a"
+      "sha256": "41092cb6d7b5c1beb050aa10ec72906937e235043ce1b47c066353b1f7f14cee"
     },
     {
       "path": "tao/src/platform_impl/macos/view.rs",
@@ -424,11 +442,11 @@
     },
     {
       "path": "tao/src/platform_impl/macos/window.rs",
-      "sha256": "d0157d3c7f556c407cf38e515ee88b34299355c3277d4f528f751a393ae42bc7"
+      "sha256": "f0631dea2ed4f5c75f0f2cbd358c91bfd5faa690bc77456b68c68f7a6cfe8079"
     },
     {
       "path": "tao/src/platform_impl/macos/window_delegate.rs",
-      "sha256": "3be35019eb247d253a59692a6c7061338cb4dbf12726d64a295a99784e140a57"
+      "sha256": "5a50f39cddca42c185a53c79d3e578d0ec841d7d0f72d198f53a657cbd8643c3"
     },
     {
       "path": "tao/src/platform_impl/mod.rs",
@@ -504,7 +522,7 @@
     },
     {
       "path": "tao/src/window.rs",
-      "sha256": "1c3d9ea5812f08c1c0fc70a0f15e539e8f224b6ce05063f1233da82b2e7c9eb4"
+      "sha256": "04bddf4195f0eb639e2d52c18ffc6eb98666bacdbec1545010ff5124197ce6bb"
     },
     {
       "path": "tauri-runtime-wry/Cargo.lock",

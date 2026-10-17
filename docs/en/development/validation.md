@@ -76,11 +76,11 @@ Gate reuses `frame-aware-navigation-dependency-drift` and
 through the workspace build graph before UI consumers. Missing package build
 output is prepared without source aliases or rebuilding root `node_modules`.
 
-The Gate explicitly compiles and runs the private Tao resizable policy with
-`rustc --test`, checks both Tao patch files with their two-space Rust formatting,
-and reuses Cargo check to compile the actual macOS adapter. The policy tests use
-fake responders without AppKit interaction. They verify state and call
-boundaries; they do not establish real input-method candidate-window behavior.
+The dependency Gate compiles and runs the private Tao resizable and file-drop
+policies with `rustc --test`, checks all reviewed Tao Rust files with two-space
+formatting, and strictly compiles Tao on macOS. Resizable tests use fake
+responders without AppKit interaction. They verify state and call boundaries;
+they do not establish real input-method candidate-window behavior.
 Focused Gate success supplements the complete lifecycle and CI validation.
 
 The Gate only reads the reviewed vendored integrity baseline. Source updates
@@ -93,6 +93,57 @@ pnpm run generate -- frame-aware-navigation-dependency-drift --write
 Registry validation rejects committed-write and prohibited environment steps
 before execution. Gate preparation writes only ignored build output; it does
 not regenerate the committed baseline or start native interaction.
+
+## Vendored Tao Diagnostic Maintenance
+
+```bash
+pnpm run gate -- frame-aware-navigation-dependency-drift
+```
+
+The Gate compares pinned versions, reviewed patch paths, and every vendored
+file hash against the committed integrity baseline. It also compares Tao's
+resolved path, version, and feature set between the application graph and the
+selected Tao package before running this Darwin-only strict compile:
+
+```bash
+cargo rustc --locked --manifest-path src-tauri/Cargo.toml -p tao --lib -- -D warnings
+```
+
+Only the selected Tao target receives `-D warnings`. Missing graph data or any
+path, version, or feature mismatch fails the Gate. Normal Cargo check/build
+still covers the complete application dependency graph. Hosts without macOS
+cannot complete its required Darwin steps; portable policy tests and vendor
+format checks do not establish compilation on Windows, Linux, or BSD.
+
+Both production policy modules compile and execute in ignored build output,
+with cleanup on success and failure. The formatting check covers every reviewed
+Tao Rust file, including the existing resizable policy and the file-drop helper;
+the application workspace format check alone does not cover this vendored crate.
+Gates never update the baseline; review the source diff before explicitly
+running the Generate command above. No additional root script is needed.
+
+Tao remains pinned to `0.35.3`. Diagnostic maintenance removes unused macOS
+implementation remnants and obsolete aliases while retaining public badge
+extensions, the Windows/Linux/BSD `hit_test` consumers, and the resizable
+responder policy. `PlatformIcon` still validates and stores its RGBA payload
+and derives Debug/Clone. Its retained field has one documented
+`allow(dead_code)` because macOS does not read the pixels. This is the only
+new lint exception; unrelated upstream exceptions remain. Do not add broad
+warning suppression or global Cargo lint flags.
+
+macOS file dragging registers file URLs and reads NSURL objects with the
+file-URLs-only option. Enter, Prepare, and Drop each read the current payload;
+checked object conversion and `to_file_path` feed ordered optional paths into
+the same private `file_drop.rs` policy. Failed candidates are skipped; zero
+valid files rejects the operation without file events. Valid files emit one
+Hover/Drop event each in order, Prepare emits none, and every Exit emits one
+Cancel. `draggingEntered:` returns NSDragOperation; Prepare/Perform retain BOOL.
+
+The pure Rust policy tests cover filtering, order, rejection, phase events,
+and preservation of already resolved Chinese/space/percent paths. These tests
+do not exercise NSURL decoding, Finder format matching, or AppKit callback
+dispatch. Source wiring checks and macOS compilation supplement policy tests;
+no native interaction validation entry is maintained.
 
 ## Frontend Validation
 

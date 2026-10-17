@@ -6,6 +6,7 @@ use std::{
   f64,
   ffi::CStr,
   os::raw::c_void,
+  path::PathBuf,
   sync::{Arc, Weak},
 };
 
@@ -13,11 +14,15 @@ use objc2::{
   msg_send,
   rc::Retained,
   runtime::{AnyClass as Class, AnyObject as Object, ClassBuilder as ClassDecl, Sel},
+  ClassType,
 };
 use objc2_app_kit::{
-  self as appkit, NSApplicationPresentationOptions, NSPasteboard, NSView, NSWindow,
+  NSApplicationPresentationOptions, NSDragOperation, NSPasteboard,
+  NSPasteboardURLReadingFileURLsOnlyKey, NSView, NSWindow,
 };
-use objc2_foundation::{ns_string, NSArray, NSAutoreleasePool, NSString, NSUInteger};
+use objc2_foundation::{
+  ns_string, NSArray, NSAutoreleasePool, NSDictionary, NSNumber, NSString, NSUInteger, NSURL,
+};
 use once_cell::sync::Lazy;
 
 use crate::{
@@ -27,7 +32,8 @@ use crate::{
   platform_impl::platform::{
     app_state::AppState,
     event::{EventProxy, EventWrapper},
-    ffi::{id, nil, BOOL, NO, YES},
+    ffi::{id, nil, BOOL, NO},
+    file_drop::{self, FileDropEvent, Phase},
     util::{self, IdRef},
     view::ViewState,
     window::{get_ns_theme, get_window_id, UnownedWindow},
@@ -212,15 +218,15 @@ static WINDOW_DELEGATE_CLASS: Lazy<WindowDelegateClass> = Lazy::new(|| unsafe {
 
   decl.add_method(
     sel!(draggingEntered:),
-    dragging_entered as extern "C" fn(_, _, _) -> _,
+    dragging_entered as extern "C" fn(_, _, _) -> NSDragOperation,
   );
   decl.add_method(
     sel!(prepareForDragOperation:),
-    prepare_for_drag_operation as extern "C" fn(_, _, _) -> _,
+    prepare_for_drag_operation as extern "C" fn(_, _, _) -> BOOL,
   );
   decl.add_method(
     sel!(performDragOperation:),
-    perform_drag_operation as extern "C" fn(_, _, _) -> _,
+    perform_drag_operation as extern "C" fn(_, _, _) -> BOOL,
   );
   decl.add_method(
     sel!(concludeDragOperation:),
@@ -413,65 +419,79 @@ extern "C" fn window_did_resign_key(this: &Object, _: Sel, _: id) {
   trace!("Completed `windowDidResignKey:`");
 }
 
-/// Invoked when the dragged image enters destination bounds or frame
-extern "C" fn dragging_entered(this: &Object, _: Sel, sender: id) -> BOOL {
-  trace!("Triggered `draggingEntered:`");
-
-  use std::path::PathBuf;
-
-  let pb: Retained<NSPasteboard> = unsafe { msg_send![sender, draggingPasteboard] };
-  let filenames =
-    unsafe { NSPasteboard::propertyListForType(&pb, appkit::NSFilenamesPboardType) }.unwrap();
-
-  for file in unsafe { Retained::cast_unchecked::<NSArray>(filenames) } {
-    let file = unsafe { Retained::cast_unchecked::<NSString>(file) };
-
-    unsafe {
-      let f = NSString::UTF8String(&file);
-      let path = CStr::from_ptr(f).to_string_lossy().into_owned();
-
-      with_state(this, |state| {
-        state.emit_event(WindowEvent::HoveredFile(PathBuf::from(path)));
-      });
-    }
+/// Read the current pasteboard independently at each drag phase.
+fn read_file_drop_candidates(sender: id) -> Vec<Option<PathBuf>> {
+  if sender.is_null() {
+    return Vec::new();
   }
+  // NSDraggingInfo provides the pasteboard; nil or an unexpected class is unavailable data.
+  let pasteboard: Option<Retained<Object>> = unsafe { msg_send![sender, draggingPasteboard] };
+  let Some(pasteboard) = pasteboard.and_then(|object| object.downcast::<NSPasteboard>().ok())
+  else {
+    return Vec::new();
+  };
+  let classes = NSArray::from_slice(&[NSURL::class()]);
+  let file_urls_only = NSNumber::numberWithBool(true);
+  let options = NSDictionary::<NSString, Object>::from_slices(
+    &[unsafe { NSPasteboardURLReadingFileURLsOnlyKey }],
+    &[&file_urls_only],
+  );
+  // Request only NSURL file objects, then still check each result before conversion.
+  let objects = unsafe { pasteboard.readObjectsForClasses_options(&classes, Some(&options)) };
+  objects
+    .into_iter()
+    .flat_map(|objects| objects.into_iter())
+    .map(|object| {
+      let url = object.downcast::<NSURL>().ok()?;
+      if !url.isFileURL() {
+        return None;
+      }
+      url.to_file_path()
+    })
+    .collect()
+}
 
+fn dispatch_file_drop(
+  this: &Object,
+  phase: Phase,
+  candidates: impl IntoIterator<Item = Option<PathBuf>>,
+) -> bool {
+  file_drop::dispatch(phase, candidates, |event| {
+    let event = match event {
+      FileDropEvent::HoveredFile(path) => WindowEvent::HoveredFile(path),
+      FileDropEvent::DroppedFile(path) => WindowEvent::DroppedFile(path),
+      FileDropEvent::HoveredFileCancelled => WindowEvent::HoveredFileCancelled,
+    };
+    with_state(this, |state| state.emit_event(event));
+  })
+}
+
+/// Invoked when the dragged image enters destination bounds or frame
+extern "C" fn dragging_entered(this: &Object, _: Sel, sender: id) -> NSDragOperation {
+  trace!("Triggered `draggingEntered:`");
+  let accepted = dispatch_file_drop(this, Phase::Enter, read_file_drop_candidates(sender));
   trace!("Completed `draggingEntered:`");
-  YES
+  if accepted {
+    NSDragOperation::Copy
+  } else {
+    NSDragOperation::None
+  }
 }
 
 /// Invoked when the image is released
-extern "C" fn prepare_for_drag_operation(_: &Object, _: Sel, _: id) -> BOOL {
+extern "C" fn prepare_for_drag_operation(this: &Object, _: Sel, sender: id) -> BOOL {
   trace!("Triggered `prepareForDragOperation:`");
+  let accepted = dispatch_file_drop(this, Phase::Prepare, read_file_drop_candidates(sender));
   trace!("Completed `prepareForDragOperation:`");
-  YES
+  BOOL::new(accepted)
 }
 
 /// Invoked after the released image has been removed from the screen
 extern "C" fn perform_drag_operation(this: &Object, _: Sel, sender: id) -> BOOL {
   trace!("Triggered `performDragOperation:`");
-
-  use std::path::PathBuf;
-
-  let pb: Retained<NSPasteboard> = unsafe { msg_send![sender, draggingPasteboard] };
-  let filenames =
-    unsafe { NSPasteboard::propertyListForType(&pb, appkit::NSFilenamesPboardType) }.unwrap();
-
-  for file in unsafe { Retained::cast_unchecked::<NSArray>(filenames) } {
-    let file = unsafe { Retained::cast_unchecked::<NSString>(file) };
-
-    unsafe {
-      let f = NSString::UTF8String(&file);
-      let path = CStr::from_ptr(f).to_string_lossy().into_owned();
-
-      with_state(this, |state| {
-        state.emit_event(WindowEvent::DroppedFile(PathBuf::from(path)));
-      });
-    }
-  }
-
+  let accepted = dispatch_file_drop(this, Phase::Drop, read_file_drop_candidates(sender));
   trace!("Completed `performDragOperation:`");
-  YES
+  BOOL::new(accepted)
 }
 
 /// Invoked when the dragging operation is complete
@@ -483,9 +503,7 @@ extern "C" fn conclude_drag_operation(_: &Object, _: Sel, _: id) {
 /// Invoked when the dragging operation is cancelled
 extern "C" fn dragging_exited(this: &Object, _: Sel, _: id) {
   trace!("Triggered `draggingExited:`");
-  with_state(this, |state| {
-    state.emit_event(WindowEvent::HoveredFileCancelled)
-  });
+  dispatch_file_drop(this, Phase::Exit, std::iter::empty());
   trace!("Completed `draggingExited:`");
 }
 

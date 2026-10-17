@@ -28,11 +28,27 @@ The reviewed source changes are limited to:
 - `tauri/src/manager/webview.rs`
 - `tauri/src/webview/mod.rs`
 - `tauri/src/webview/webview_window.rs`
-- `tao/src/platform_impl/macos/window.rs`
+- `tao/Cargo.toml`
+- `tao/src/platform/macos.rs`
+- `tao/src/platform_impl/macos/app.rs`
+- `tao/src/platform_impl/macos/app_delegate.rs`
+- `tao/src/platform_impl/macos/event.rs`
+- `tao/src/platform_impl/macos/event_loop.rs`
+- `tao/src/platform_impl/macos/file_drop.rs`
+- `tao/src/platform_impl/macos/icon.rs`
+- `tao/src/platform_impl/macos/mod.rs`
+- `tao/src/platform_impl/macos/monitor.rs`
 - `tao/src/platform_impl/macos/resizable.rs`
+- `tao/src/platform_impl/macos/util/async.rs`
+- `tao/src/platform_impl/macos/util/mod.rs`
+- `tao/src/platform_impl/macos/window.rs`
+- `tao/src/platform_impl/macos/window_delegate.rs`
+- `tao/src/window.rs`
 
 No Windows or Linux adapter is included in the lensX patch. Remove this directory and the `[patch.crates-io]` entries after an audited upstream release provides equivalent frame context, isolated IPC, and responder protection and passes the deterministic capability Gates.
 
-`launcher-input-focus` explicitly compiles and runs the private Tao policy tests without AppKit interaction; Cargo check/build validates the real adapter. These checks establish state and operation boundaries, not real input-method candidate-window behavior. Switching Tao to a path dependency also exposes warnings in unchanged upstream source that Cargo suppresses for registry dependencies; the two-file patch does not suppress application diagnostics or rewrite unrelated upstream code.
+`launcher-input-focus` reuses the dependency maintenance Gate to compile and run the private Tao policies without AppKit interaction; Cargo check/build validates the real adapter. These checks establish state and operation boundaries, not real input-method candidate-window behavior or Finder/AppKit dragging.
 
-The read-only `frame-aware-navigation-dependency-drift` Gate checks versions, patch paths, and all vendored file hashes. Review the same-version upstream diff before updating the baseline with `pnpm run generate -- frame-aware-navigation-dependency-drift --write`; validation never regenerates it.
+Tao diagnostic maintenance removes unused macOS remnants and obsolete aliases, limits shared hit testing to its Windows/Linux/BSD consumers, and retains the validated RGBA payload with one documented field-level `allow(dead_code)`. Existing unrelated upstream lint exceptions remain. File dragging uses checked NSURL file-URL reads at Enter/Prepare/Drop, filters invalid candidates through the production `file_drop.rs` policy, preserves ordered per-file events and single Exit cancellation, and registers the correct NSDragOperation/BOOL callback types. Binding features are declared directly in the active manifest; original release metadata is unchanged.
+
+The read-only `frame-aware-navigation-dependency-drift` Gate checks versions, patch paths, and all vendored file hashes. It compares application/selected-package Tao paths, versions, and features before Darwin-only strict Tao compilation with `-D warnings`. Portable steps run the production resizable and file-drop policies with cleanup on success/failure and check every reviewed Tao Rust file with two-space rustfmt. Review the same-version upstream diff before updating the baseline with `pnpm run generate -- frame-aware-navigation-dependency-drift --write`; validation never regenerates it.

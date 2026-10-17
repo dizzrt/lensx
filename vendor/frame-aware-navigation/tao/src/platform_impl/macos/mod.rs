@@ -10,6 +10,7 @@ mod dock;
 mod event;
 mod event_loop;
 mod ffi;
+mod file_drop;
 mod icon;
 mod keycode;
 mod monitor;

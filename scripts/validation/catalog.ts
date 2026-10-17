@@ -140,7 +140,11 @@ const safetyFor = (writable: boolean): ValidationSafety => {
 const platformFor = (command: string): ValidationPlatform =>
   /(?:macos|wkwebview|accessory-launcher|pointer-cursor)/iu.test(command) ? 'darwin' : 'any';
 
-const parseStep = (command: string, writable = false): Omit<ValidationStep, 'description' | 'id'> => {
+const parseStep = (
+  command: string,
+  writable = false,
+  platform?: ValidationPlatform,
+): Omit<ValidationStep, 'description' | 'id'> => {
   const tokens = tokenize(command);
   const environment: Record<string, string> = {};
   while (/^[A-Z_][A-Z0-9_]*=/u.test(tokens[0] ?? '')) {
@@ -160,7 +164,7 @@ const parseStep = (command: string, writable = false): Omit<ValidationStep, 'des
     argv: Object.freeze(tokens),
     cwd: '.',
     environment: Object.freeze(environment),
-    platform: platformFor(command),
+    platform: platform ?? platformFor(command),
     safety,
   });
 };
@@ -185,8 +189,8 @@ for (const legacyName of Object.keys(legacyScripts).filter(isGateEntry).sort()) 
 const stepByKey = new Map<string, ValidationStep>();
 const stepById = new Map<string, ValidationStep>();
 
-const internStep = (command: string, writable = false): string => {
-  const parsed = parseStep(command, writable);
+const internStep = (command: string, writable = false, platform?: ValidationPlatform): string => {
+  const parsed = parseStep(command, writable, platform);
   const key = commandKey(parsed);
   const existing = stepByKey.get(key);
   if (existing !== undefined) return existing.id;
@@ -286,6 +290,34 @@ const governanceGate: MutableGate = {
   ],
 };
 gatesById.set(governanceGate.id, governanceGate);
+const taoRustFiles = [
+  'src/platform/macos.rs',
+  'src/platform_impl/macos/app.rs',
+  'src/platform_impl/macos/app_delegate.rs',
+  'src/platform_impl/macos/event.rs',
+  'src/platform_impl/macos/event_loop.rs',
+  'src/platform_impl/macos/file_drop.rs',
+  'src/platform_impl/macos/icon.rs',
+  'src/platform_impl/macos/mod.rs',
+  'src/platform_impl/macos/monitor.rs',
+  'src/platform_impl/macos/resizable.rs',
+  'src/platform_impl/macos/util/async.rs',
+  'src/platform_impl/macos/util/mod.rs',
+  'src/platform_impl/macos/window.rs',
+  'src/platform_impl/macos/window_delegate.rs',
+  'src/window.rs',
+].map((path) => `vendor/frame-aware-navigation/tao/${path}`);
+const dependencyDriftGate = gatesById.get('frame-aware-navigation-dependency-drift');
+if (dependencyDriftGate === undefined) throw new Error('[validation/catalog] missing dependency drift Gate.');
+dependencyDriftGate.steps.push(
+  internStep('node --experimental-strip-types scripts/tao-dependency-graph.ts', false, 'darwin'),
+  internStep('cargo rustc --locked --manifest-path src-tauri/Cargo.toml -p tao --lib -- -D warnings', false, 'darwin'),
+  internStep('node --experimental-strip-types scripts/tao-policy-tests.ts', false, 'any'),
+  internStep(`rustfmt --edition 2021 --config tab_spaces=2 --check ${taoRustFiles.join(' ')}`, false, 'any'),
+  internStep(
+    'pnpm exec rstest run tests/frame-aware-navigation-dependency-drift.test.ts tests/tao-dependency-graph.test.ts tests/tao-policy-tests.test.ts tests/validation-registry.test.ts tests/validation-governance.test.ts',
+  ),
+);
 gatesById.set('development-launcher', {
   id: 'development-launcher',
   legacyNames: ['typed registry'],
@@ -311,14 +343,6 @@ gatesById.set('launcher-input-focus', {
     ),
     internStep('cargo test --manifest-path src-tauri/Cargo.toml launcher_surface'),
     internStep('cargo test --manifest-path src-tauri/Cargo.toml launcher_window'),
-    internStep(
-      'rustfmt --edition 2021 --config tab_spaces=2 --check vendor/frame-aware-navigation/tao/src/platform_impl/macos/window.rs vendor/frame-aware-navigation/tao/src/platform_impl/macos/resizable.rs',
-    ),
-    internStep(
-      'rustc --edition=2021 --test vendor/frame-aware-navigation/tao/src/platform_impl/macos/resizable.rs -o src-tauri/target/launcher-resizable-policy-tests',
-    ),
-    internStep('src-tauri/target/launcher-resizable-policy-tests'),
-    internStep('rm -f src-tauri/target/launcher-resizable-policy-tests'),
   ],
 });
 gatesById.set('isolated-plugin-runtime-origin', {

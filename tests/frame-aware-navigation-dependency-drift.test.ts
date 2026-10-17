@@ -5,6 +5,7 @@ import {
   cpSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -77,6 +78,172 @@ describe('macOS frame-aware navigation dependency patch', () => {
     expect(lifecycle).toContain('child.compare_current_teardown(snapshot.attempt)');
   });
 
+  test('keeps hit-test compilation aligned with its Windows and Linux/BSD consumers', () => {
+    const tao = 'vendor/frame-aware-navigation/tao/src';
+    const dispatch = read(`${tao}/platform_impl/mod.rs`);
+    const consumerPlatforms = [
+      ...dispatch.matchAll(/#\[cfg\(([\s\S]*?)\)\]\s*#\[path = "(windows|linux)\/mod\.rs"\]/gu),
+    ].flatMap((match) => [...(match[1] ?? '').matchAll(/target_os\s*=\s*"([^"]+)"/gu)].map((os) => os[1]));
+    const cfg = read(`${tao}/window.rs`).match(/#\[cfg\(([^#]*?)\)\]\s*pub\(crate\) fn hit_test\(/u)?.[1];
+    expect(cfg).toBeDefined();
+    expect(cfg?.trim()).toMatch(/^any\([\s\S]*\)$/u);
+    const enabledPlatforms = [...(cfg ?? '').matchAll(/target_os\s*=\s*"([^"]+)"/gu)].map((os) => os[1]);
+    expect(enabledPlatforms.sort()).toEqual(['dragonfly', 'freebsd', 'linux', 'netbsd', 'openbsd', 'windows']);
+    expect(enabledPlatforms).toEqual(consumerPlatforms.sort());
+    expect(cfg?.replace(/target_os\s*=\s*"[^"]+"/gu, '').replace(/[\s(),]/gu, '')).toBe('any');
+    for (const platform of ['windows', 'linux']) {
+      expect(read(`${tao}/platform_impl/${platform}/event_loop.rs`)).toContain('crate::window::hit_test(');
+    }
+  });
+
+  test('limits new Tao lint exceptions to the documented retained RGBA field', () => {
+    const tao = 'vendor/frame-aware-navigation/tao/src';
+    const icon = read(`${tao}/platform_impl/macos/icon.rs`);
+    expect(icon).toMatch(/#\[derive\(Debug, Clone\)\]\s*pub struct PlatformIcon\(/u);
+    expect(icon).toMatch(/\/\/ macOS[^\n]*validated payload[^\n]*Debug and Clone\./u);
+    expect(icon).toMatch(/pub struct PlatformIcon\(\s*\/\/[^\n]*\n\s*#\[allow\(dead_code\)\]\s*RgbaIcon,?\s*\);/u);
+    expect(icon).toContain('RgbaIcon::from_rgba(rgba, width, height)?');
+
+    // Reviewed upstream exceptions remain valid. File, scope, lint set, and count
+    // are fixed so another allowance cannot silently hide a future diagnostic.
+    const census = readdirSync(join(rootDir, tao), { recursive: true, encoding: 'utf8' })
+      .filter((path) => path.endsWith('.rs'))
+      .sort()
+      .flatMap((path) => {
+        const source = read(`${tao}/${path}`).replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//gu, '');
+        const counts = new Map<string, number>();
+        for (const match of source.matchAll(/#(!?)\[\s*(allow|expect|cfg_attr)\s*\(([\s\S]*?)\)\s*\]/gu)) {
+          if (match[2] === 'cfg_attr' && !/\b(?:allow|expect)\s*\(/u.test(match[3] ?? '')) continue;
+          const attribute = `${match[1]}${match[2]}(${match[3]?.replace(/\s+/gu, '')})`;
+          counts.set(attribute, (counts.get(attribute) ?? 0) + 1);
+        }
+        const attributes = [...counts].map(([attribute, count]) => `${attribute}${count > 1 ? ` x${count}` : ''}`);
+        return attributes.length === 0 ? [] : [`${path}: ${attributes.join('; ')}`];
+      });
+    expect(census).toEqual([
+      'error.rs: allow(dead_code) x2; allow(unused_macros)',
+      'event.rs: allow(deprecated) x6',
+      'event_loop.rs: cfg_attr(any(target_os="linux",target_os="dragonfly",target_os="freebsd",target_os="netbsd",target_os="openbsd"),allow(clippy::unnecessary_mut_passed)); allow(non_upper_case_globals)',
+      'icon.rs: allow(dead_code)',
+      'lib.rs: !allow(clippy::match_str_case_mismatch,clippy::upper_case_acronyms,clippy::from_over_into,clippy::option_map_unit_fn,clippy::needless_lifetimes,clippy::type_complexity,clippy::identity_op,clippy::wrong_self_convention,clippy::non_send_fields_in_send_ty); allow(unused_imports)',
+      'platform_impl/android/ndk_glue.rs: allow(non_snake_case) x6',
+      'platform_impl/ios/app_state.rs: allow(unused) x2',
+      'platform_impl/ios/event_loop.rs: allow(non_upper_case_globals) x3',
+      'platform_impl/ios/ffi.rs: !allow(non_camel_case_types,non_snake_case,non_upper_case_globals); allow(non_camel_case_types); allow(deprecated) x2; allow(dead_code) x4; allow(clippy::duplicated_attributes)',
+      'platform_impl/ios/monitor.rs: allow(unused)',
+      'platform_impl/ios/scene.rs: allow(non_snake_case)',
+      'platform_impl/ios/view.rs: allow(non_snake_case) x3; allow(deprecated) x4',
+      'platform_impl/ios/window.rs: allow(deprecated)',
+      'platform_impl/linux/device.rs: allow(clippy::uninit_assumed_init)',
+      'platform_impl/linux/keyboard.rs: allow(clippy::just_underscores_and_digits,non_upper_case_globals) x2',
+      'platform_impl/macos/app_delegate.rs: allow(deprecated) x3',
+      'platform_impl/macos/app_state.rs: allow(deprecated)',
+      'platform_impl/macos/dock.rs: !allow(non_snake_case,non_upper_case_globals)',
+      'platform_impl/macos/event.rs: allow(clippy::unnecessary_unwrap)',
+      'platform_impl/macos/ffi.rs: !allow(dead_code,non_snake_case,non_upper_case_globals,clippy::enum_variant_names); allow(non_camel_case_types) x2; allow(deprecated) x2; allow(non_upper_case_globals) x2; allow(non_snake_case) x2',
+      'platform_impl/macos/icon.rs: allow(dead_code)',
+      'platform_impl/macos/mod.rs: allow(dead_code)',
+      'platform_impl/macos/monitor.rs: allow(dead_code)',
+      'platform_impl/macos/observer.rs: allow(dead_code); allow(non_upper_case_globals) x6; allow(non_snake_case) x2',
+      'platform_impl/macos/progress_bar.rs: allow(deprecated) x2',
+      'platform_impl/macos/util/cursor.rs: allow(deprecated)',
+      'platform_impl/macos/util/mod.rs: allow(dead_code) x2; allow(clippy::needless_lifetimes)',
+      'platform_impl/macos/view.rs: !allow(unused_unsafe); !allow(deprecated); allow(clippy::match_like_matches_macro)',
+      'platform_impl/macos/window.rs: !allow(unused_unsafe); allow(deprecated) x6',
+      'platform_impl/macos/window_delegate.rs: allow(deprecated) x3',
+      'platform_impl/windows/dark_mode.rs: !allow(non_snake_case)',
+      'platform_impl/windows/dpi.rs: !allow(non_snake_case,unused_unsafe)',
+      'platform_impl/windows/drop_handler.rs: allow(non_snake_case)',
+      'platform_impl/windows/event_loop.rs: !allow(non_snake_case); allow(non_upper_case_globals); allow(unused_must_use)',
+      'platform_impl/windows/mod.rs: allow(unused)',
+      'platform_impl/windows/raw_input.rs: allow(dead_code) x3',
+      'platform_impl/windows/util.rs: allow(non_snake_case) x15',
+      'window.rs: allow(rustdoc::broken_intra_doc_links); allow(unused) x3; allow(clippy::large_enum_variant)',
+    ]);
+  });
+
+  test('keeps maintained Rust commands free of broad warning suppression', () => {
+    const paths = [
+      'package.json',
+      'src-tauri/Cargo.toml',
+      'vendor/frame-aware-navigation/tao/Cargo.toml',
+      'scripts/validation/catalog.ts',
+      'scripts/tao-dependency-graph.ts',
+      'scripts/tao-policy-tests.ts',
+      ...readdirSync(join(rootDir, '.github/workflows')).map((path) => `.github/workflows/${path}`),
+    ];
+    for (const path of paths) {
+      expect(read(path), path).not.toMatch(/--cap-lints(?:=|\s+)allow\b/u);
+      expect(read(path), path).not.toMatch(/-A(?:\s+|=)?(?:warnings|unused(?:_\w+)?|deprecated|dead_code)\b/u);
+      expect(read(path), path).not.toMatch(/\b(?:warnings|unused|deprecated|dead_code)\s*=\s*["']allow["']/u);
+    }
+  });
+
+  test('uses checked file URL reading and the production policy at every drag phase', () => {
+    const tao = 'vendor/frame-aware-navigation/tao/src/platform_impl/macos';
+    const window = read(`${tao}/window.rs`);
+    const delegate = read(`${tao}/window_delegate.rs`);
+    expect(read(`${tao}/mod.rs`)).toContain('mod file_drop;');
+    expect(window).toContain('registerForDraggedTypes(&NSArray::arrayWithObject(appkit::NSPasteboardTypeFileURL))');
+    const reader = delegate.slice(
+      delegate.indexOf('fn read_file_drop_candidates('),
+      delegate.indexOf('fn dispatch_file_drop('),
+    );
+    for (const check of [
+      'sender.is_null()',
+      'Option<Retained<Object>>',
+      'downcast::<NSPasteboard>().ok()',
+      'NSArray::from_slice(&[NSURL::class()])',
+      'NSPasteboardURLReadingFileURLsOnlyKey',
+      'NSNumber::numberWithBool(true)',
+      'readObjectsForClasses_options(&classes, Some(&options))',
+      'downcast::<NSURL>().ok()?',
+      'if !url.isFileURL()',
+      'url.to_file_path()',
+    ])
+      expect(reader).toContain(check);
+    expect(reader).not.toMatch(/unwrap\(|cast_unchecked|UTF8String|percent_decode|std::fs|File::open/u);
+    for (const [callback, phase] of [
+      ['dragging_entered', 'Enter'],
+      ['prepare_for_drag_operation', 'Prepare'],
+      ['perform_drag_operation', 'Drop'],
+    ]) {
+      const start = delegate.indexOf(`extern "C" fn ${callback}(`);
+      const callbackSource = delegate.slice(start, delegate.indexOf('\n}', start));
+      expect(callbackSource).toContain(`dispatch_file_drop(this, Phase::${phase}, read_file_drop_candidates(sender))`);
+    }
+    expect(delegate).toContain('file_drop::dispatch(phase, candidates, |event|');
+    for (const event of ['HoveredFile(path)', 'DroppedFile(path)', 'HoveredFileCancelled']) {
+      expect(delegate).toContain(`FileDropEvent::${event} => WindowEvent::${event}`);
+    }
+    expect(delegate).toContain('dispatch_file_drop(this, Phase::Exit, std::iter::empty())');
+    expect(`${window}\n${delegate}`).not.toContain('NSFilenamesPboardType');
+    expect(delegate).not.toContain('propertyListForType');
+  });
+
+  test('declares dragging bindings directly and registers native operation and BOOL return types', () => {
+    const manifest = read('vendor/frame-aware-navigation/tao/Cargo.toml');
+    const appkit = manifest
+      .split('[target.\'cfg(target_os = "macos")\'.dependencies.objc2-app-kit]')[1]
+      ?.split('\n[')[0];
+    expect(appkit).toContain('"NSDragging"');
+    const foundation = manifest
+      .split('[target.\'cfg(target_os = "macos")\'.dependencies.objc2-foundation]')[1]
+      ?.split('\n[')[0];
+    for (const feature of ['NSObject', 'NSValue', 'NSURL']) expect(foundation).toContain(`"${feature}"`);
+    const delegate = read('vendor/frame-aware-navigation/tao/src/platform_impl/macos/window_delegate.rs');
+    for (const [callback, returnType] of [
+      ['dragging_entered', 'NSDragOperation'],
+      ['prepare_for_drag_operation', 'BOOL'],
+      ['perform_drag_operation', 'BOOL'],
+    ]) {
+      expect(delegate).toContain(`${callback} as extern "C" fn(_, _, _) -> ${returnType}`);
+      expect(delegate).toContain(`extern "C" fn ${callback}(this: &Object, _: Sel, sender: id) -> ${returnType}`);
+    }
+    expect(delegate).toContain('NSDragOperation::Copy');
+    expect(delegate).toContain('NSDragOperation::None');
+  });
+
   test('documents licenses, scope, and the upstream exit condition', () => {
     const readme = read('vendor/frame-aware-navigation/README.md');
     expect(readme).toContain('Apache-2.0/MIT');
@@ -87,8 +254,22 @@ describe('macOS frame-aware navigation dependency patch', () => {
     const integrity = JSON.parse(read('vendor/frame-aware-navigation/.lensx-integrity.json'));
     expect(integrity.packages.tao).toBe('0.35.3');
     expect(integrity.patched_files.filter((path: string) => path.startsWith('tao/'))).toEqual([
-      'tao/src/platform_impl/macos/window.rs',
+      'tao/Cargo.toml',
+      'tao/src/platform/macos.rs',
+      'tao/src/platform_impl/macos/app.rs',
+      'tao/src/platform_impl/macos/app_delegate.rs',
+      'tao/src/platform_impl/macos/event.rs',
+      'tao/src/platform_impl/macos/event_loop.rs',
+      'tao/src/platform_impl/macos/file_drop.rs',
+      'tao/src/platform_impl/macos/icon.rs',
+      'tao/src/platform_impl/macos/mod.rs',
+      'tao/src/platform_impl/macos/monitor.rs',
       'tao/src/platform_impl/macos/resizable.rs',
+      'tao/src/platform_impl/macos/util/async.rs',
+      'tao/src/platform_impl/macos/util/mod.rs',
+      'tao/src/platform_impl/macos/window.rs',
+      'tao/src/platform_impl/macos/window_delegate.rs',
+      'tao/src/window.rs',
     ]);
   });
 
@@ -127,7 +308,12 @@ describe('macOS frame-aware navigation dependency patch', () => {
         join(rootDir, 'vendor/frame-aware-navigation/tauri-runtime/src/webview.rs'),
         join(temporaryRoot, 'vendor/frame-aware-navigation/tauri-runtime/src/webview.rs'),
       );
-      for (const path of ['tao/src/platform_impl/macos/resizable.rs', 'tao/src/platform_impl/windows/window.rs']) {
+      for (const path of [
+        'tao/Cargo.toml',
+        'tao/src/platform_impl/macos/file_drop.rs',
+        'tao/src/platform_impl/macos/resizable.rs',
+        'tao/src/platform_impl/windows/window.rs',
+      ]) {
         const copied = join(temporaryRoot, 'vendor/frame-aware-navigation', path);
         appendFileSync(copied, '\n// unreviewed Tao patch or unrelated platform edit\n');
         const changed = spawnSync(process.execPath, ['--experimental-strip-types', temporaryScript], {
@@ -138,15 +324,23 @@ describe('macOS frame-aware navigation dependency patch', () => {
         expect(changed.stderr).toContain('Vendored frame-aware dependency drift detected.');
         copyFileSync(join(rootDir, 'vendor/frame-aware-navigation', path), copied);
       }
-      const policy = join(temporaryRoot, 'vendor/frame-aware-navigation/tao/src/platform_impl/macos/resizable.rs');
-      rmSync(policy);
-      const missing = spawnSync(process.execPath, ['--experimental-strip-types', temporaryScript], {
-        cwd: temporaryRoot,
-        encoding: 'utf8',
-      });
-      expect(missing.status).not.toBe(0);
-      expect(missing.stderr).toContain('Reviewed frame-aware dependency patch file is missing:');
-      copyFileSync(join(rootDir, 'vendor/frame-aware-navigation/tao/src/platform_impl/macos/resizable.rs'), policy);
+      for (const path of [
+        'tao/Cargo.toml',
+        'tao/src/platform_impl/macos/file_drop.rs',
+        'tao/src/platform_impl/macos/resizable.rs',
+      ]) {
+        const reviewed = join(temporaryRoot, 'vendor/frame-aware-navigation', path);
+        rmSync(reviewed);
+        const missing = spawnSync(process.execPath, ['--experimental-strip-types', temporaryScript], {
+          cwd: temporaryRoot,
+          encoding: 'utf8',
+        });
+        expect(missing.status).not.toBe(0);
+        expect(missing.stderr).toContain(
+          path === 'tao/Cargo.toml' ? 'ENOENT' : 'Reviewed frame-aware dependency patch file is missing:',
+        );
+        copyFileSync(join(rootDir, 'vendor/frame-aware-navigation', path), reviewed);
+      }
 
       const taoManifest = join(temporaryRoot, 'vendor/frame-aware-navigation/tao/Cargo.toml');
       writeFileSync(taoManifest, readFileSync(taoManifest, 'utf8').replace('version = "0.35.3"', 'version = "0.35.4"'));

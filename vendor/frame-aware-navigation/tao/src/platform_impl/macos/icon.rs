@@ -5,7 +5,10 @@
 use crate::icon::{BadIcon, RgbaIcon};
 
 #[derive(Debug, Clone)]
-pub struct PlatformIcon(RgbaIcon);
+pub struct PlatformIcon(
+  // macOS does not read icon pixels, but retain the validated payload for Debug and Clone.
+  #[allow(dead_code)] RgbaIcon,
+);
 
 impl PlatformIcon {
   pub fn from_rgba(rgba: Vec<u8>, width: u32, height: u32) -> Result<Self, BadIcon> {

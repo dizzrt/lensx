@@ -72,10 +72,10 @@ surface 状态、排队更新、回滚和 Host/Child 窗口生命周期。该 Ga
 之前构建公共 Contract。缺少的 package 构建输出会被准备，不使用源码 alias，也不重建
 根 `node_modules`。
 
-该 Gate 显式通过 `rustc --test` 编译并运行 Tao 私有的 resizable 策略，按两空格 Rust
-格式检查两个 Tao 补丁文件，并复用 Cargo check 编译真实 macOS adapter。纯策略测试
-使用 fake responder，不进行 AppKit 交互。它们验证状态和调用边界，不证明真实输入法
-候选框行为。聚焦 Gate 成功仍需辅以完整 lifecycle 和 CI 验证。
+依赖 Gate 使用 `rustc --test` 编译并运行私有 Tao resizable 和文件拖放策略，以两空格
+格式检查所有受审 Tao Rust 文件，并在 macOS 上严格编译 Tao。Resizable 测试使用
+不与 AppKit 交互的假 responder，验证状态及调用边界，不证明真实输入法候选框行为。
+聚焦 Gate 成功仍需辅以完整 lifecycle 和 CI 验证。
 
 该 Gate 只读已审阅的 vendored 完整性基线。来源更新需先审阅，再显式执行 Generate：
 
@@ -85,6 +85,46 @@ pnpm run generate -- frame-aware-navigation-dependency-drift --write
 
 registry validation 会在执行前拒绝 committed-write 和禁止的环境步骤。Gate 准备只写入
 被忽略的构建输出，不重新生成已提交基线，也不启动原生交互。
+
+## Vendored Tao 诊断维护
+
+```bash
+pnpm run gate -- frame-aware-navigation-dependency-drift
+```
+
+该 Gate 将固定版本、受审补丁路径和所有 vendored 文件哈希与已提交的完整性基线比较。
+它还比较应用依赖图与单独选中的 Tao 包所解析出的路径、版本和 feature 集合，再运行
+以下仅适用于 Darwin 的严格编译：
+
+```bash
+cargo rustc --locked --manifest-path src-tauri/Cargo.toml -p tao --lib -- -D warnings
+```
+
+只有选中的 Tao 目标接收 `-D warnings`。依赖图数据缺失或路径、版本、feature 不一致时
+Gate 失败。普通 Cargo check/build 仍覆盖完整应用依赖图。非 macOS 宿主无法完成其必需
+的 Darwin 步骤；可移植策略测试和 vendor 格式检查不证明 Windows、Linux 或 BSD 编译。
+
+两个生产策略模块都在忽略的构建目录中编译、运行，并在成功和失败时清理输出。格式检查
+覆盖所有受审 Tao Rust 文件，包括已有 resizable 策略和文件拖放 helper；仅运行应用
+workspace 格式检查无法覆盖此 vendored crate。Gate 永不更新基线；先审阅源码 diff，
+再显式执行上文的 Generate 命令，无需新增根脚本。
+
+Tao 保持固定为 `0.35.3`。诊断维护删除未使用的 macOS 实现残留和旧别名，同时保留
+公共 badge 扩展、Windows/Linux/BSD 的 `hit_test` 消费者及 resizable responder 策略。
+`PlatformIcon` 仍验证并存储 RGBA 载荷，保留 Debug/Clone 派生行为。由于 macOS
+不读取像素，其保留字段附有一处说明理由的 `allow(dead_code)`。这是唯一新增的 lint
+例外，无关的上游既有例外继续保留。不得增加宽泛的警告屏蔽或全局 Cargo lint 参数。
+
+macOS 文件拖放注册文件 URL，并以仅允许文件 URL 的选项读取 NSURL 对象。Enter、
+Prepare 和 Drop 分别读取当前 payload，通过受检查的对象转换及 `to_file_path`，
+将有序可选路径交给同一个私有 `file_drop.rs` 策略。失败候选被跳过；零有效文件时
+拒绝操作且不发文件事件。有效文件逐个按顺序发出 Hover/Drop，Prepare 不发事件，
+每次 Exit 发出一个 Cancel。`draggingEntered:` 返回 NSDragOperation，
+Prepare/Perform 保留 BOOL。
+
+纯 Rust 策略测试覆盖过滤、顺序、拒绝、阶段事件，以及已解析中文/空格/百分号路径的
+保留。这些测试不执行 NSURL 解码、Finder 格式匹配或 AppKit 回调派发。源级接线检查和
+macOS 编译补充策略测试；仓库不维护原生交互验证入口。
 
 ## 前端验证
 

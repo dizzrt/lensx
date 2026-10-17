@@ -325,6 +325,7 @@ features = [
     "NSButton",
     "NSColor",
     "NSControl",
+    "NSDragging",
     "NSEvent",
     "NSGraphics",
     "NSImage",
@@ -351,10 +352,12 @@ features = [
     "NSEnumerator",
     "NSGeometry",
     "NSObjCRuntime",
+    "NSObject",
     "NSRange",
     "NSString",
     "NSThread",
     "NSURL",
+    "NSValue",
 ]
 default-features = false
 
