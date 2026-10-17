@@ -10,125 +10,147 @@ interaction, and Dispatcher-based execution behavior.
 
 ### Requirement: Action Search must consume Host Registry snapshots uniformly
 
-The system MUST provide a framework-neutral Launcher Action Search that accepts
-a query string, application locale, positive integer result limit, and read-only
-descriptor snapshot from `LauncherActionRegistry`, and returns deterministically
-sorted serializable Action results. Search MUST depend only on a valid Action
-Descriptor's `action_id`, `owner_id`, localized `title`, optional
-`description`, `default_keywords`, and Host-owned `enabled` state. It MUST NOT
-use different search paths for built-in, plugin, or other provider sources.
-Optional icon metadata and recent or pinned state MAY be carried with safe
-display results, but MUST NOT affect matching, scoring, or ordering.
-Each result MUST retain the `action_id`, `owner_id`, resolved localized display
-text, deterministic relevance score, and optional safe icon metadata. A result
-MUST NOT contain an executor, function, Registry internal state, React state,
-Tauri object, or Rust object.
+The system MUST accept a query, an application locale for presentation, a
+positive integer result limit, and a read-only Action descriptor snapshot, and
+return deterministically sorted serializable results. Search text MUST come
+only from explicitly declared Action `title` and `default_keywords` values in
+all supported languages. `enabled` MUST control filtering, `action_id` MUST
+provide identity and tie-breaking, and `owner_id` MUST provide owner identity.
+Descriptions, plugin names, Page titles, and private metadata MUST NOT affect
+matching or scoring. All sources MUST use the same rules. Icons and Recent or
+Pinned state MAY accompany display data but MUST NOT affect matching, scoring,
+or ordering. Results MUST retain identity, localized display text, scores, and
+optional safe icons, and MUST NOT contain executors, functions, mutable Registry
+internals, React state, Tauri objects, or Rust objects.
 
 #### Scenario: Search a built-in Action
 
-- **WHEN** a Registry snapshot contains a valid and enabled Host built-in Action
-  whose searchable metadata matches the query
-- **THEN** search returns a serializable result for that Action
-- **THEN** the result may contain the descriptor's safe icon metadata
-- **THEN** the result does not contain the Action executor
+- **WHEN** an enabled Host Action in the current snapshot has a title or keyword
+  matching the query
+- **THEN** search returns its serializable result and optional safe icon
+- **THEN** the result does not contain an executor
 
 #### Scenario: Search an Action registered by another future source
 
-- **WHEN** any provider registers a valid Action in the same Host Registry
-  before search runs
-- **THEN** search processes that Action with the same matching and ranking rules
-  used for a built-in Action
-- **THEN** search does not read provider-private data or branch on the source
-  type
+- **WHEN** another trusted source registers a valid Action in the same snapshot
+  before search
+- **THEN** search applies the same cross-language rules as for Host Actions
+- **THEN** search neither reads source-private data nor selects a different
+  algorithm by source
 
 #### Scenario: Recent or pinned state changes
 
-- **WHEN** recent or pinned state changes for a matching Action while the query
-  and Registry snapshot remain the same
-- **THEN** search returns the same matching set, scores, and order
-- **THEN** collection state neither raises nor lowers search relevance
+- **WHEN** only Recent or Pinned state changes for the same query and descriptor
+  snapshot
+- **THEN** matching Action IDs, scores, and order remain identical
+- **THEN** collection state neither raises nor lowers relevance
 
 #### Scenario: A caller modifies search input or results
 
-- **WHEN** a caller modifies the original query, original snapshot, or returned
-  result after a search
-- **THEN** the search process does not modify the Registry snapshot or
-  descriptor
-- **THEN** later Registry lookups, snapshots, and search results remain
-  unaffected by that modification
+- **WHEN** a caller modifies the original input or attempts to modify results
+  after search
+- **THEN** search does not modify Registry descriptors or snapshots
+- **THEN** later queries remain unaffected and results expose no mutable
+  internal references
+
+#### Scenario: Only non-search metadata contains the query
+
+- **WHEN** the query appears only in an Action description, plugin name,
+  plugin-wide description, Page title, ID text, or private metadata
+- **THEN** those fields do not cause the Action to enter results
+- **THEN** their contents do not affect scores of other matching Actions
 
 ### Requirement: Queries must be normalized and tokenized deterministically
 
-Search MUST apply Unicode NFKC normalization to the query, perform case folding
-with the current application locale, trim leading and trailing whitespace, and
-collapse consecutive Unicode whitespace to one ASCII space. The normalized
-query MUST be split on Unicode whitespace into non-empty tokens. An empty or
-whitespace-only query MUST return no results and MUST NOT treat Registry default
-order as recommendation order. The independent `home` presentation state MAY
-display accepted Launcher Action collections for an empty query. Search itself
-MUST NOT generate, order, or populate recent or pinned content.
+Queries and each searchable text MUST use the same locale-independent
+normalization: Unicode NFKC, locale-independent lowercase conversion, trimming,
+and collapsing consecutive Unicode whitespace to one ASCII space. Queries MUST
+be split on whitespace into non-empty tokens, and fields MUST be normalized
+independently. Empty queries MUST return no results and MUST NOT simulate
+recommendations from Registry order. Independent Home content MAY show existing
+Action collections; search MUST NOT generate or order those collections.
 
 #### Scenario: Normalize case and whitespace
 
-- **WHEN** a user enters a query with different case, full-width compatibility
-  characters, or repeated whitespace
-- **THEN** search produces the same normalized query and tokens for equivalent
-  input under the current locale before matching
-- **THEN** equivalent input produces the same result order
+- **WHEN** queries differ only by equivalent case, full-width compatibility
+  characters, or consecutive whitespace
+- **THEN** both interface languages produce the same normalized query and tokens
+- **THEN** equivalent queries produce identical Action IDs, scores, and order
 
 #### Scenario: The query is empty
 
-- **WHEN** the input is empty or contains no token after normalization
-- **THEN** search returns no results
-- **THEN** search does not treat the Registry's default order as a
-  recommendation order
-- **THEN** the App Shell may independently display home content from Launcher
-  Action collections
+- **WHEN** the query is empty or has no tokens after normalization
+- **THEN** search returns no results or Registry-order recommendations
+- **THEN** the App Shell may continue to show independent Home collections
+
+#### Scenario: Field boundaries are not searchable text
+
+- **WHEN** a continuous match would require concatenating titles in different
+  languages or multiple keywords
+- **THEN** search creates no such synthetic exact, prefix, or substring match
+- **THEN** only separate query tokens may independently match different fields
 
 ### Requirement: Matching and ranking must be explainable and deterministic
 
-Search MUST resolve Action titles, descriptions, and keywords for the current
-locale while preserving the Action metadata `en-US` fallback. Every query token
-MUST match the title, at least one keyword, or the description; otherwise the
-Action MUST be excluded. Supported relationships in v0 MUST be limited to
-exact, prefix, and substring matching. Search MUST NOT perform edit-distance,
-semantic, or personalized matching in v0. Relevance MUST first consider exact
-and prefix matches between the complete query and the title, then add the best
-match for each token. The single-token priority MUST be title exact, keyword
-exact, title prefix, keyword prefix, title substring, keyword substring, and
-description substring. Results with equal scores MUST be sorted by ascending
-`action_id`.
+Search MUST match explicitly declared Action titles and keywords from all
+supported languages without filtering text by interface locale. Every query
+token MUST match at least one title or keyword of the same Action; otherwise
+the Action MUST be excluded. Matching MUST use only exact, prefix, and substring
+relationships. Token priority MUST be title exact, keyword exact, title prefix,
+keyword prefix, title substring, then keyword substring. Interface locale and
+descriptions MUST NOT affect scores. Equal scores MUST sort by ascending
+`action_id`. Search MUST NOT add edit-distance, pinyin, translation, semantic,
+or personalized matching.
 
 #### Scenario: A title match outranks a description match
 
-- **WHEN** one Action title exactly matches the query and another Action only
-  contains the query in its description
-- **THEN** the exact title match appears before the description match
+- **WHEN** one Action title exactly matches the query and another Action
+  contains the query only in a description in any language
+- **THEN** search returns the title match and excludes the description-only match
+- **THEN** descriptions receive no fallback matching score
 
 #### Scenario: Multiple tokens match across fields
 
-- **WHEN** a query contains multiple tokens and an Action title matches some
-  tokens while its keywords match the remaining tokens
-- **THEN** the Action satisfies the all-token rule and enters the result set
-- **THEN** only the best field match for each token contributes to its score
+- **WHEN** some query tokens match an Action's English title and the remaining
+  tokens match the same Action's Chinese keywords
+- **THEN** that Action satisfies the all-token matching rule
+- **THEN** Chinese and English interfaces produce identical matches and scores
 
 #### Scenario: Only some tokens match
 
-- **WHEN** an Action matches only part of a multi-token query
+- **WHEN** at least one token matches none of an Action's titles or keywords,
+  even if it appears in a description
 - **THEN** search excludes that Action
 
 #### Scenario: Two Actions have the same score
 
-- **WHEN** two Actions produce the same relevance score for a query
-- **THEN** search returns them in ascending `action_id` order
-- **THEN** provider registration order does not change the result order
+- **WHEN** two Actions have equal scores for the same query
+- **THEN** both interface languages return them in ascending `action_id` order
+- **THEN** registration order and metadata language-key order do not change
+  result order
 
 #### Scenario: Text for the current locale is absent
 
-- **WHEN** the current application locale is `zh-CN` and an Action omits its
-  optional Simplified Chinese title, description, or keywords
-- **THEN** search uses the allowed `en-US` fallback for that field
-- **THEN** the fallback text follows the same matching and ranking rules
+- **WHEN** the interface is Chinese and an Action declares only an English title
+  and English keywords
+- **THEN** those English texts remain searchable and the result title continues
+  to use English display fallback
+- **THEN** missing Chinese text neither raises nor lowers the Action's score
+
+#### Scenario: Empty current-language keywords do not mask another language
+
+- **WHEN** Chinese keywords are an empty array and English keywords declare
+  `format`
+- **THEN** entering `format` in either interface language can match the Action
+- **THEN** an Action with no declared keywords can still be searched by its
+  declared titles
+
+#### Scenario: Changing only descriptions does not affect search
+
+- **WHEN** descriptions in any language are added, changed, or removed while
+  titles, keywords, identity, and availability remain unchanged
+- **THEN** the same query produces identical matches, relevance scores, and order
+- **THEN** descriptions remain available as independent display metadata
 
 ### Requirement: Search must filter unavailable Actions and limit result count
 
@@ -503,3 +525,77 @@ introduce an additional result section or falsely announce final query state.
   semantics are the same
 - **THEN** results and feedback use the current locale, and focus and selection
   follow the existing theme and accessibility semantics
+
+### Requirement: Cross-language duplicate matches MUST contribute relevance only once
+
+Each Action's score MUST be the best complete-query exact or prefix bonus over
+individual titles plus each query token's best match across all titles and
+keywords. A token MUST NOT accumulate scores by field or language count; the
+complete-query bonus MUST apply once. Identical or normalization-equivalent
+text MUST NOT add points or duplicate results. A stronger match from another
+language MUST contribute its best score.
+
+#### Scenario: The same keyword appears in both languages
+
+- **WHEN** `JSON` appears in both languages' keywords
+- **THEN** querying `JSON` produces the same score and result count as retaining
+  only one equivalent declaration
+- **THEN** case-equivalent or NFKC-equivalent cross-language copies likewise
+  contribute no additional score
+
+#### Scenario: The best match can come from any language or field
+
+- **WHEN** a token matches a title substring in one language and an exact keyword
+  in another
+- **THEN** only the higher exact-keyword score contributes
+- **THEN** search neither adds the title-substring score nor favors the current
+  interface language
+
+#### Scenario: Complete-query title bonuses are not accumulated
+
+- **WHEN** the complete query exactly matches equivalent titles in two languages,
+  or exactly matches one title and prefix-matches another
+- **THEN** only the highest complete-query title bonus contributes once
+- **THEN** each query token still contributes only its best match once
+
+#### Scenario: Another language provides a stronger match
+
+- **WHEN** the original title `Format JSON` provides only a substring match for
+  `JSON` and a new title `JSON 格式化` in another language provides a prefix match
+- **THEN** search uses the stronger match and its applicable complete-query title
+  bonus
+- **THEN** the weaker original match is not added and both interface languages
+  produce the same new score
+
+### Requirement: Interface locale MUST affect result presentation only
+
+For the same query, read-only Action snapshot, and result limit, switching the
+interface locale MUST preserve result Action IDs, scores, and order. Result
+titles, retained optional descriptions, and feedback MUST use the current
+locale with existing English fallback for missing text. The matching language
+MUST NOT force a different display language. Existing theme, accessibility,
+and failure-recovery contracts MUST remain applicable.
+
+#### Scenario: Switch locale after a cross-language match
+
+- **WHEN** `format` matches an Action that has English and Chinese titles but
+  contains that keyword only in English, and the interface locale changes
+- **THEN** its identity, score, and order remain identical
+- **THEN** its display title follows the interface language and the Action
+  appears only once
+
+#### Scenario: Mixed-language query has no complete match
+
+- **WHEN** at least one token in a mixed-language query matches no searchable
+  field
+- **THEN** neither interface language returns that Action
+- **THEN** no-results feedback uses the current locale and input remains usable
+
+#### Scenario: Existing theme and failure recovery remain available
+
+- **WHEN** cross-language results are navigated with the keyboard, or execution
+  returns an existing typed failure, in either locale and either theme
+- **THEN** combobox/listbox, focus, theme, and localized error feedback remain
+  available
+- **THEN** users can edit or resubmit the query after failure, and descriptions
+  do not become a fallback search source

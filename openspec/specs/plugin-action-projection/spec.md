@@ -214,29 +214,46 @@ its Page batch.
 
 ### Requirement: Projected Actions must reuse search and collections without provider-specific behavior
 
-Successfully projected Plugin Actions MUST enter the existing search,
-Dispatcher, and Action collections resolution only through the single Launcher
-Registry snapshot. Search MUST apply the same locale fallback, matching,
-scoring, ordering, enabled filtering, and result limit to Host and Plugin
-Actions. Search MUST NOT create a plugin section, source boost, recommendation,
-or Marketplace result. Recent and pinned collections MUST continue to persist
-only stable global Action IDs. When a provider is temporarily unregistered,
-collections MUST hide the Action without deleting its persisted ID.
+Successfully projected Plugin Actions MUST enter search, execution, and
+collection resolution only through the unified Launcher Registry snapshot.
+Host and Plugin Actions MUST use the same matching, duplicate-safe scoring,
+ordering, enabled filtering, and limit over Action titles and keywords in all
+supported languages. Descriptions MUST NOT match or score. Locale fallback
+MUST serve presentation only; interface locale MUST NOT affect matching or
+ordering. Search MUST NOT create plugin sections, source boosts,
+recommendations, or Marketplace results. Recent and Pinned MUST persist only
+stable global Action IDs, hiding temporarily unregistered Actions without
+deleting their persisted IDs.
 
 #### Scenario: One query matches a Host Action and a Plugin Action
 
-- **WHEN** one Host Action and one Plugin Action in the Registry snapshot both
-  match the current query
-- **THEN** search applies the same scoring rules and `action_id` tie-breaker and
-  returns one unified result set
-- **THEN** results expose no provider-private Manifest, executor, or registration
-  detail
+- **WHEN** the same query matches a Host Action's Chinese title and a Plugin
+  Action's English keyword in the current snapshot
+- **THEN** both use the same scoring rules and `action_id` tie-breaker in one
+  unified result set
+- **THEN** switching locale preserves identity, scores, and order, and results
+  expose no private Manifest, executor, or registration detail
 
 #### Scenario: A pinned Plugin Action is temporarily removed and later restored
 
-- **WHEN** a pinned Plugin Action is unregistered while its provider is
-  temporarily unavailable and is later projected with the same global Action ID
-- **THEN** home collections hide the Action while it is unavailable but preserve
-  the persisted ID
-- **THEN** existing collection resolution can display the real Action again after
-  it is reprojected
+- **WHEN** a pinned Plugin Action is unregistered because its provider is
+  temporarily unavailable and later returns with the same global Action ID
+- **THEN** Home hides it while unavailable and preserves its persisted ID
+- **THEN** existing collection resolution can show it again after projection
+
+#### Scenario: Projection preserves descriptions without making them searchable
+
+- **WHEN** a Plugin Action's multilingual titles, descriptions, and keywords are
+  preserved in its descriptor and the query occurs only in a description
+- **THEN** search excludes the Action while retaining its description as display
+  metadata
+- **THEN** changes to plugin names, plugin-wide descriptions, Page titles, or
+  default Action declarations do not automatically expand searchable text
+
+#### Scenario: An invalidated provider does not remain in cross-language results
+
+- **WHEN** a previously searchable plugin becomes disabled, incompatible, or
+  absent from the current valid registration set
+- **THEN** its unregistered Actions appear in neither interface language's results
+- **THEN** other plugins and Host Actions retain unified search and persisted
+  collection IDs are not deleted

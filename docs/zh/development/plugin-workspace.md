@@ -59,8 +59,8 @@ Format 以一次可撤销操作直接替换编辑器内容，Compact 仅支持 J
 会发现每个成员、验证四个 scripts 全部存在，并在根应用 lifecycle 之后按 workspace dependency
 顺序执行。focused 跨层验收属于不同接口：通过 `pnpm run gate -- <id>` 选择稳定 capability。
 根 scripts 不得镜像 member script、测试子集或 OpenSpec Change，也不得用 shell `&&` 编码验证图。
-使用 `pnpm run gate -- --list` 与 `--plan <id>` 检查受治理表面和执行计划。Generate/Evidence
-写入使用各自 dispatcher 并要求 `--write`；详见[验证](validation.md)。
+使用 `pnpm run gate -- --list` 与 `--plan <id>` 检查受治理表面和执行计划。确定性的源代码派生产物
+通过 Generate dispatcher 写入，须指定一个已列出的 target 并显式传入 `--write`；详见[验证](validation.md)。
 
 ## Plugin Contract Package
 

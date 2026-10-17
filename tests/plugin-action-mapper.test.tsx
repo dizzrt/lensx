@@ -5,6 +5,7 @@ import validCases from '../fixtures/plugin-registration-contract/valid/cases.jso
 import { ActionTile } from '../src/app/launcher/ActionTile';
 import { LauncherActionDispatcher } from '../src/app/launcher/actions/dispatcher';
 import { LauncherActionRegistry } from '../src/app/launcher/actions/registry';
+import { searchLauncherActions } from '../src/app/launcher/actions/search';
 import { resolveLauncherActionMetadata } from '../src/app/launcher/actions/validation';
 import { mapPluginActionsToLauncherRegistrations } from '../src/app/plugins/actions';
 import { parsePluginRegistrationDetailResponse } from '../src/app/plugins/registration';
@@ -73,6 +74,48 @@ describe('Plugin Action mapper', () => {
     const registrations = mapPluginActionsToLauncherRegistrations(withActions([]), { openPage: rs.fn() });
     expect(registrations).toEqual([]);
     expect(Object.isFrozen(registrations)).toBe(true);
+  });
+
+  test('preserves independent complete language maps while descriptions remain display-only', () => {
+    const action = {
+      id: 'format_json',
+      title: { 'en-US': 'Format JSON', 'zh-CN': 'JSON 格式化' },
+      description: { 'en-US': 'Reformat structured documents.', 'zh-CN': '重新整理结构化文档。' },
+      default_keywords: { 'en-US': ['format', 'JSON'], 'zh-CN': ['格式化', 'ＪＳＯＮ'] },
+      target: { kind: 'page', page_id: 'home' },
+    } as const;
+    const registry = new LauncherActionRegistry();
+    const registrations = mapPluginActionsToLauncherRegistrations(withActions([action]), { openPage: rs.fn() });
+    expect(registry.replaceProviderBatch(baseManifest.plugin_id, registrations).ok).toBe(true);
+    const descriptor = registry.get(`${baseManifest.plugin_id}.format_json`);
+    if (!descriptor) throw new Error('Mapped multilingual Action must be registered.');
+
+    expect(descriptor.title).toEqual(action.title);
+    expect(descriptor.description).toEqual(action.description);
+    expect(descriptor.default_keywords).toEqual(action.default_keywords);
+    expect(descriptor.title).not.toBe(action.title);
+    expect(descriptor.description).not.toBe(action.description);
+    expect(descriptor.default_keywords).not.toBe(action.default_keywords);
+    for (const locale of ['en-US', 'zh-CN'] as const) {
+      expect(descriptor.default_keywords[locale]).not.toBe(action.default_keywords[locale]);
+      expect(Object.isFrozen(descriptor.default_keywords[locale])).toBe(true);
+      const results = searchLauncherActions({ query: 'JSON', locale, snapshot: registry.snapshot(), limit: 8 });
+      expect(results).toEqual([
+        {
+          action_id: `${baseManifest.plugin_id}.format_json`,
+          owner_id: baseManifest.plugin_id,
+          title: action.title[locale],
+          description: action.description[locale],
+          score: 1300,
+        },
+      ]);
+      for (const query of ['structured', '结构化文档']) {
+        expect(searchLauncherActions({ query, locale, snapshot: registry.snapshot(), limit: 8 })).toEqual([]);
+      }
+    }
+    expect(Object.isFrozen(descriptor.title)).toBe(true);
+    expect(Object.isFrozen(descriptor.description)).toBe(true);
+    expect(Object.isFrozen(descriptor.default_keywords)).toBe(true);
   });
 
   test('publishes only Actions whose target Page is currently available', () => {

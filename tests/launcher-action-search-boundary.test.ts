@@ -14,9 +14,9 @@ describe('launcher action search service boundary', () => {
       descriptor: {
         action_id: 'workspace.tools.open_notes',
         owner_id: 'workspace.tools',
-        title: { 'en-US': 'Open notes' },
-        description: { 'en-US': 'Open the notes workspace' },
-        default_keywords: { 'en-US': ['notes'] },
+        title: { 'en-US': 'Open notes', 'zh-CN': '打开笔记' },
+        description: { 'en-US': 'Open the notes workspace', 'zh-CN': '笔记的保密说明' },
+        default_keywords: { 'en-US': ['notes'], 'zh-CN': ['笔记'] },
         enabled: true,
       },
       executor,
@@ -26,14 +26,26 @@ describe('launcher action search service boundary', () => {
       dispatcher: new LauncherActionDispatcher(registry),
     };
 
-    const [result] = searchLauncherActions({
-      query: 'notes',
-      locale: 'en-US',
-      snapshot: service.registry.snapshot(),
-      limit: 8,
-    });
+    const snapshot = service.registry.snapshot();
+    const results = (query: string, locale: 'en-US' | 'zh-CN') =>
+      searchLauncherActions({ query, locale, snapshot, limit: 8 });
+    const [result] = results('notes', 'zh-CN');
 
-    expect(result?.action_id).toBe('workspace.tools.open_notes');
+    expect(result).toEqual({
+      action_id: 'workspace.tools.open_notes',
+      owner_id: 'workspace.tools',
+      title: '打开笔记',
+      description: '笔记的保密说明',
+      score: 500,
+    });
+    expect(results('笔记', 'en-US')).toEqual([
+      { ...result, title: 'Open notes', description: 'Open the notes workspace' },
+    ]);
+    for (const locale of ['en-US', 'zh-CN'] as const) {
+      expect(results('workspace', locale)).toEqual([]);
+      expect(results('保密说明', locale)).toEqual([]);
+    }
+    expect(executor).not.toHaveBeenCalled();
     expect('executor' in (result ?? {})).toBe(false);
     await expect(service.dispatcher.dispatch(result?.action_id ?? '')).resolves.toEqual({
       ok: true,
@@ -44,20 +56,46 @@ describe('launcher action search service boundary', () => {
 
   test('cannot consume Manifest or provider-private fields through its typed input', () => {
     const registry = new LauncherActionRegistry();
-    const manifestPrivateData = {
-      display: { name: { 'en-US': 'Workspace Tools' } },
-      contributes: { launcher: { default_action_id: 'open-notes' } },
-      runtime: { entry: 'ui/index.html' },
-    };
+    registry.register({
+      descriptor: {
+        action_id: 'workspace.tools.open_notes',
+        owner_id: 'workspace.tools',
+        title: { 'en-US': 'Open notes' },
+        default_keywords: {},
+        enabled: true,
+      },
+      executor: rs.fn(),
+    });
+    const descriptor = registry.get('workspace.tools.open_notes');
+    if (!descriptor) throw new Error('Boundary fixture must register an Action.');
+    const privateRead = rs.fn(() => {
+      throw new Error('Search must not read provider-private or executable state.');
+    });
+    const privateFields = new Set([
+      'manifest',
+      'display',
+      'contributes',
+      'runtime',
+      'target',
+      'executor',
+      'recent',
+      'pinned',
+    ]);
+    const guardedDescriptor = new Proxy(descriptor, {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && privateFields.has(property)) return privateRead();
+        return Reflect.get(target, property, receiver);
+      },
+    });
 
-    expect(
-      searchLauncherActions({
-        query: 'Workspace Tools',
-        locale: 'en-US',
-        snapshot: registry.snapshot(),
-        limit: 8,
-      }),
-    ).toEqual([]);
-    expect(manifestPrivateData.contributes.launcher.default_action_id).toBe('open-notes');
+    for (const locale of ['en-US', 'zh-CN'] as const) {
+      for (const query of ['workspace.tools', 'ui/index.html', 'private-page', 'private-default']) {
+        expect(searchLauncherActions({ query, locale, snapshot: [guardedDescriptor], limit: 8 })).toEqual([]);
+      }
+      expect(searchLauncherActions({ query: 'notes', locale, snapshot: [guardedDescriptor], limit: 8 })).toMatchObject([
+        { action_id: descriptor.action_id, score: 250 },
+      ]);
+    }
+    expect(privateRead).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, rs, test } from '@rstest/core';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from '../src/App';
 import { AppProviders } from '../src/app/AppProviders';
+import { useAppLocale } from '../src/app/i18n';
 import {
   createDefaultLauncherActionService,
   LauncherActionDispatcher,
@@ -46,6 +47,9 @@ const createRegistration = (
     title = localId,
     description = `${title} description`,
     keywords = ['run'],
+    zhTitle,
+    zhDescription,
+    zhKeywords,
     enabled = true,
     executor = () => undefined,
     icon,
@@ -54,6 +58,9 @@ const createRegistration = (
     title?: string;
     description?: string;
     keywords?: readonly string[];
+    zhTitle?: string;
+    zhDescription?: string;
+    zhKeywords?: readonly string[];
     enabled?: boolean;
     executor?: () => Promise<void> | void;
     icon?: { readonly kind: 'host'; readonly token: string };
@@ -62,9 +69,9 @@ const createRegistration = (
   descriptor: {
     action_id: `${ownerId}.${localId}`,
     owner_id: ownerId,
-    title: { 'en-US': title },
-    description: { 'en-US': description },
-    default_keywords: { 'en-US': [...keywords] },
+    title: { 'en-US': title, ...(zhTitle !== undefined ? { 'zh-CN': zhTitle } : {}) },
+    description: { 'en-US': description, ...(zhDescription !== undefined ? { 'zh-CN': zhDescription } : {}) },
+    default_keywords: { 'en-US': [...keywords], ...(zhKeywords !== undefined ? { 'zh-CN': [...zhKeywords] } : {}) },
     ...(icon ? { icon } : {}),
     enabled,
   },
@@ -88,12 +95,27 @@ const createService = (
   return { registry, service };
 };
 
+const TestLocaleControls = () => {
+  const { setLocale } = useAppLocale();
+  return (
+    <aside aria-label="test locale controls">
+      <button onClick={() => setLocale('zh-CN')} type="button">
+        Use Chinese
+      </button>
+      <button onClick={() => setLocale('en-US')} type="button">
+        Use English
+      </button>
+    </aside>
+  );
+};
+
 const renderLauncher = (
   service: LauncherActionService,
   {
     activationSource = inertActivationSource,
     initialLocale = 'en-US',
     initialThemeMode = 'light',
+    withLocaleControls = false,
     collectionsClient = {
       read: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
       recordUse: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
@@ -103,16 +125,106 @@ const renderLauncher = (
     activationSource?: LauncherActivationSource;
     initialLocale?: 'en-US' | 'zh-CN';
     initialThemeMode?: 'light' | 'dark';
+    withLocaleControls?: boolean;
     collectionsClient?: LauncherActionCollectionsClient;
   } = {},
 ) =>
   render(
     <AppProviders initialLocale={initialLocale} initialThemeMode={initialThemeMode}>
+      {withLocaleControls ? <TestLocaleControls /> : null}
       <App actionService={service} activationSource={activationSource} collectionsClient={collectionsClient} />
     </AppProviders>,
   );
 
 describe('launcher action search interface', () => {
+  test('preserves Action identities and order while locale changes result titles and English fallback', async () => {
+    const { service } = createService([
+      createRegistration('zulu_view', {
+        title: 'View data',
+        zhTitle: '查看数据',
+        keywords: ['format'],
+        zhKeywords: ['查看'],
+      }),
+      createRegistration('alpha_open', { title: 'Open notes', keywords: ['format'] }),
+      createRegistration('format_json', {
+        title: 'Format JSON',
+        zhTitle: '格式化 JSON',
+        keywords: ['json'],
+        zhKeywords: ['格式化'],
+      }),
+    ]);
+    renderLauncher(service, { withLocaleControls: true });
+    const input = screen.getByRole('combobox', { name: 'Launcher query' });
+    fireEvent.change(input, { target: { value: 'format' } });
+
+    const expectedOptionIds = [
+      'launcher-action-option-tools.workspace.format_json',
+      'launcher-action-option-tools.workspace.alpha_open',
+      'launcher-action-option-tools.workspace.zulu_view',
+    ];
+    expect(screen.getAllByRole('option').map(({ id }) => id)).toEqual(expectedOptionIds);
+    expect(screen.getByRole('option', { name: 'Format JSON' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'View data' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Open notes' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Results: 3.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use Chinese' }));
+
+    await screen.findByRole('combobox', { name: '启动器查询' });
+    expect(screen.getAllByRole('option').map(({ id }) => id)).toEqual(expectedOptionIds);
+    expect(screen.getByRole('option', { name: '格式化 JSON' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '查看数据' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Open notes' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Format JSON' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'View data' })).not.toBeInTheDocument();
+    expect(input).toHaveValue('format');
+    expect(screen.getByRole('status')).toHaveTextContent('结果：3 项。');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use English' }));
+
+    await screen.findByRole('combobox', { name: 'Launcher query' });
+    expect(screen.getAllByRole('option').map(({ id }) => id)).toEqual(expectedOptionIds);
+    expect(screen.getByRole('option', { name: 'Format JSON' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'View data' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Open notes' })).toBeInTheDocument();
+    expect(input).toHaveValue('format');
+  });
+
+  test.each([
+    ['en-US', 'local-only', 'Launcher query', 'Search results', 'No matching actions.'],
+    ['en-US', '仅限描述', 'Launcher query', 'Search results', 'No matching actions.'],
+    ['zh-CN', 'local-only', '启动器查询', '搜索结果', '没有匹配的操作。'],
+    ['zh-CN', '仅限描述', '启动器查询', '搜索结果', '没有匹配的操作。'],
+  ] as const)('shows localized empty results in %s when %s appears only in descriptions', async (initialLocale, query, inputLabel, resultsLabel, noResultsMessage) => {
+    const { service } = createService([
+      createRegistration('format_json', {
+        title: 'Format JSON',
+        zhTitle: '格式化 JSON',
+        description: 'A local-only configuration utility',
+        zhDescription: '仅限描述的配置说明',
+        keywords: ['format'],
+        zhKeywords: ['格式化'],
+      }),
+    ]);
+    renderLauncher(service, { initialLocale });
+    const input = await screen.findByRole('combobox', { name: inputLabel });
+    fireEvent.change(input, { target: { value: query } });
+
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: resultsLabel })).toBeInTheDocument();
+    expect(screen.getAllByText(noResultsMessage)).toHaveLength(2);
+    expect(screen.getByRole('status')).toHaveTextContent(noResultsMessage);
+    expect(input).toHaveValue(query);
+    expect(input).toBeEnabled();
+
+    fireEvent.change(input, { target: { value: 'format' } });
+    expect(
+      screen.getByRole('option', { name: initialLocale === 'zh-CN' ? '格式化 JSON' : 'Format JSON' }),
+    ).toBeInTheDocument();
+    expect(input).toHaveValue('format');
+  });
+
   test('matches and executes the real Hide Launcher action through the injected service', async () => {
     const hideLauncher = rs.fn(async () => undefined);
     const service = createDefaultLauncherActionService({ hideLauncher });

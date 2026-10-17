@@ -28,8 +28,8 @@ lensX 是一款轻量级桌面效率启动器，其设计重点包括：
   窗口；
 - 框架无关的 TypeScript launcher action 核心，包含经过校验的 descriptor、Host 所有的
   registry、dispatcher，以及内建的隐藏和设置 action；
-- 基于不可变 registry snapshot 的确定性 launcher action 搜索，包含本地化匹配和可访问、
-  键盘优先的四列结果网格；
+- 基于不可变 registry snapshot 的确定性 launcher action 搜索，包含跨语言标题/关键词匹配，
+  以及可访问、键盘优先的四列结果网格；
 - Host 私有 Plugin surface 投影协调器，提供 provider-scoped Page/Action 原子替换、
   revision-aware 资格判断和 fail-closed 生命周期处理；
 - Rust 所有的 scoped Plugin Resource Service，通过 per-generation 隔离 browser authority、严格
@@ -225,10 +225,19 @@ permission catalog、grant decision、提示或 Runtime session 授权。
 
 生产 launcher action service 在 React render 之外只创建一次，并允许在 App Shell 边界替换为
 隔离的测试 service。Launcher action 搜索是 registry descriptor snapshot 的纯消费者。它使用
-Unicode NFKC、locale-aware 大小写折叠和 Unicode 空白折叠来规范化查询及可搜索 metadata。每个
-查询 token 都必须匹配已解析标题、某个已解析默认关键词或已解析描述。固定的 exact、prefix 和
-substring 权重产生按 score 降序的顺序，并以 `action_id` 作为确定性平分规则。禁用 action 会在
-排序结果截断到 v0 上限八项之前被过滤。搜索结果是冻结的可序列化数据，只包含身份、已解析展示文本、
+Unicode NFKC、不依赖界面语言的 `toLowerCase()`、去除首尾空白和 Unicode 空白折叠来规范化
+查询及可搜索 metadata。搜索读取受支持的 `en-US`、`zh-CN` 映射中所有显式声明的标题及默认
+关键词，不按界面语言筛选。每条文本保持独立字段；某语言缺失文本或关键词列表为空，不会遮蔽另一
+语言的文本。每个查询 token 都必须命中同一 Action 的至少一个标题或关键词，不同 token 可以分别
+命中不同语言或字段。描述仅用于展示，绝不参与匹配或计分。
+
+固定的 exact、prefix 和 substring 权重对每个查询 token 只计入最佳匹配。完整查询的标题奖励
+同样只计入最佳匹配一次。规范化后重复的译文或同时命中多个字段不会额外加分，每个 Action 只返回
+一次。结果先按 score 降序，再按 `action_id` 升序排列；禁用 Action 会在排序结果截断到 v0 上限
+八项之前被过滤。同一查询及 snapshot 下，切换界面语言不会改变 Action ID、分数或顺序。当前语言
+只解析展示标题、可选描述和反馈，Action 缺失当前语言文本时回退英文。
+
+搜索结果是冻结的可序列化数据，只包含身份、已解析展示文本、
 可选安全 icon metadata 和 score；icon 与 Action 集合都不影响匹配、评分或排序，结果绝不包含
 executor 或 registry 内部状态。
 

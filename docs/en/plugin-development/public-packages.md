@@ -36,6 +36,26 @@ Contract. Testkit depends on the public Contract and SDK roots. Plugin UI has
 SDK, React, and React DOM as peer boundaries and owns its Semi dependency. CLI
 is a Node authoring tool and must not enter the browser bundle.
 
+## Action discovery metadata
+
+Launcher search uses only each Action's `title` and `default_keywords` from
+all declared supported languages (`en-US` and `zh-CN`). The interface language
+controls display text and feedback, with English fallback for missing localized
+Action text; it does not change matching, scores, or result order. Missing text
+or an empty keyword list in one language does not hide another language's text.
+Every query token must match the same Action, and tokens may span languages or
+fields. Duplicate translations or hits in multiple fields do not add points:
+each token and the complete-query title bonus contribute only their best match
+once, and each Action appears once.
+
+`description` remains optional display metadata and is preserved by projection,
+but is no longer searchable or scored. Existing queries that occur only in a
+description no longer return that Action. Put intended discovery terms in its
+title or `default_keywords`; plugin names, plugin-wide descriptions, Page
+titles, and IDs are not automatically searchable. Existing Manifest and package
+formats remain valid, and this search behavior needs no Manifest, Host API, or
+SDK version change.
+
 ## Lifecycle boundaries
 
 Use `validatePluginManifest` before normalization. Use `createPluginSdk` once

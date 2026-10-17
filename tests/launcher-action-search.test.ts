@@ -58,26 +58,34 @@ const search = (
 ) => searchLauncherActions({ query, locale, snapshot, limit });
 
 describe('launcher action query normalization', () => {
-  test('normalizes NFKC, locale-aware case, and Unicode whitespace into stable tokens', () => {
-    expect(normalizeLauncherActionSearchQuery('  ＨＩＤＥ\u00a0\tLauncher  ', 'en-US')).toEqual({
+  test('normalizes NFKC, language-independent case, and Unicode whitespace into stable tokens', () => {
+    expect(normalizeLauncherActionSearchQuery('  ＨＩＤＥ\u00a0\tLauncher  ')).toEqual({
       query: 'hide launcher',
       tokens: ['hide', 'launcher'],
     });
-    expect(normalizeLauncherActionSearchQuery(' HIDE ', 'en-US')).toEqual(
-      normalizeLauncherActionSearchQuery('ｈｉｄｅ', 'en-US'),
-    );
+    expect(normalizeLauncherActionSearchQuery(' HIDE ')).toEqual(normalizeLauncherActionSearchQuery('ｈｉｄｅ'));
+    const snapshot = [createDescriptor('lensx.core.hide_launcher', { title: 'ＨＩＤＥ\u2003LAUNCHER' })];
+    for (const locale of ['en-US', 'zh-CN'] as const) {
+      expect(search('  ＨＩＤＥ\u00a0\tLauncher  ', snapshot, locale)).toEqual(
+        search('hide launcher', snapshot, locale),
+      );
+      expect(search('hide launcher', snapshot, locale)[0]?.score).toBe(1850);
+    }
   });
 
   test('returns no results for empty or whitespace-only queries', () => {
     const snapshot = [createDescriptor('lensx.core.hide_launcher', { title: 'Hide launcher' })];
 
-    expect(search('', snapshot)).toEqual([]);
-    expect(search('\u3000 \n\t', snapshot)).toEqual([]);
+    expect(normalizeLauncherActionSearchQuery('\u3000 \n\t')).toEqual({ query: '', tokens: [] });
+    for (const locale of ['en-US', 'zh-CN'] as const) {
+      expect(search('', snapshot, locale)).toEqual([]);
+      expect(search('\u3000 \n\t', snapshot, locale)).toEqual([]);
+    }
   });
 });
 
 describe('launcher action matching and ranking', () => {
-  test('uses locale metadata with canonical English fallback', () => {
+  test('searches both languages independently of display locale with canonical English fallback', () => {
     const localized = createDescriptor('lensx.core.localized', {
       title: '隐藏启动器',
       keywords: ['隐藏'],
@@ -88,12 +96,15 @@ describe('launcher action matching and ranking', () => {
       keywords: ['hide'],
     });
 
-    expect(search('隐藏', [localized, fallback], 'zh-CN').map(({ action_id }) => action_id)).toEqual([
-      'lensx.core.localized',
-    ]);
-    expect(search('hide', [localized, fallback], 'zh-CN').map(({ action_id }) => action_id)).toEqual([
-      'lensx.core.fallback',
-    ]);
+    for (const locale of ['en-US', 'zh-CN'] as const) {
+      expect(search('隐藏', [localized, fallback], locale).map(({ action_id }) => action_id)).toEqual([
+        'lensx.core.localized',
+      ]);
+      expect(search('hide', [localized, fallback], locale).map(({ action_id }) => action_id)).toEqual([
+        'lensx.core.fallback',
+      ]);
+      expect(search('hide', [localized, fallback], locale)[0]?.title).toBe('Hide launcher');
+    }
   });
 
   test('requires every token while allowing tokens to match across fields', () => {
@@ -103,7 +114,8 @@ describe('launcher action matching and ranking', () => {
       keywords: ['notes'],
     });
 
-    expect(search('workspace notes local', [crossField])).toHaveLength(1);
+    expect(search('workspace notes', [crossField])).toHaveLength(1);
+    expect(search('workspace notes local', [crossField])).toEqual([]);
     expect(search('workspace missing', [crossField])).toEqual([]);
   });
 
@@ -115,16 +127,52 @@ describe('launcher action matching and ranking', () => {
     ];
     const results = search('hide', descriptors);
 
-    expect(results.map(({ action_id }) => action_id)).toEqual([
-      'lensx.core.title',
-      'lensx.core.keyword',
-      'lensx.core.description',
-    ]);
+    expect(results.map(({ action_id }) => action_id)).toEqual(['lensx.core.title', 'lensx.core.keyword']);
     expect(results.map(({ score }) => score)).toEqual([
       LAUNCHER_ACTION_SEARCH_SCORES.fullQueryTitleExact + LAUNCHER_ACTION_SEARCH_SCORES.tokenTitleExact,
       LAUNCHER_ACTION_SEARCH_SCORES.tokenKeywordExact,
-      LAUNCHER_ACTION_SEARCH_SCORES.tokenDescriptionSubstring,
     ]);
+  });
+
+  test('allows tokens to match across languages and fields without description fallback', () => {
+    const descriptor: LauncherActionDescriptor = {
+      ...createDescriptor('tools.owner.format'),
+      title: { 'en-US': 'Format JSON', 'zh-CN': '格式化配置' },
+      default_keywords: { 'en-US': ['beautify'], 'zh-CN': ['排版'] },
+      description: { 'en-US': 'descriptiononly', 'zh-CN': '仅描述' },
+    };
+    for (const locale of ['en-US', 'zh-CN'] as const) {
+      for (const query of ['format 排版', '格式化 beautify']) {
+        expect(search(query, [descriptor], locale)).toMatchObject([{ action_id: descriptor.action_id, score: 900 }]);
+      }
+      expect(search('format 仅描述', [descriptor], locale)).toEqual([]);
+      expect(search('格式化 missing', [descriptor], locale)).toEqual([]);
+    }
+  });
+
+  test('keeps English keywords searchable with empty Chinese keywords or missing translations', () => {
+    const descriptor: LauncherActionDescriptor = {
+      ...createDescriptor('tools.owner.format', { title: 'Format JSON', keywords: ['beautify'] }),
+      default_keywords: { 'en-US': ['beautify'], 'zh-CN': [] },
+    };
+    for (const locale of ['en-US', 'zh-CN'] as const) {
+      expect(search('beautify', [descriptor], locale)).toMatchObject([{ title: 'Format JSON', score: 500 }]);
+      expect(search('format', [{ ...descriptor, default_keywords: {} }], locale)).toMatchObject([{ score: 1200 }]);
+    }
+  });
+
+  test('never joins titles or keywords into synthetic searchable text or title bonuses', () => {
+    const descriptor: LauncherActionDescriptor = {
+      ...createDescriptor('tools.owner.split'),
+      title: { 'en-US': 'Format', 'zh-CN': 'JSON' },
+      default_keywords: { 'en-US': ['alpha', 'beta'], 'zh-CN': ['gamma'] },
+    };
+    for (const locale of ['en-US', 'zh-CN'] as const) {
+      expect(search('formatjson', [descriptor], locale)).toEqual([]);
+      expect(search('hab', [descriptor], locale)).toEqual([]);
+      expect(search('format json', [descriptor], locale)).toMatchObject([{ score: 1200 }]);
+      expect(search('alpha beta gamma', [descriptor], locale)).toMatchObject([{ score: 1500 }]);
+    }
   });
 
   test('breaks score ties by action_id instead of provider registration order', () => {
@@ -135,6 +183,68 @@ describe('launcher action matching and ranking', () => {
       'tools.alpha.open',
       'tools.zulu.open',
     ]);
+  });
+
+  test.each([
+    { title: 'JSON', keywords: [], score: 1800 },
+    { title: 'JSON formatter', keywords: [], score: 1200 },
+    { title: 'Format JSON', keywords: [], score: 250 },
+    { title: 'Other', keywords: ['JSON'], score: 500 },
+    { title: 'Other', keywords: ['JSON formatter'], score: 350 },
+    { title: 'Other', keywords: ['Format JSON'], score: 200 },
+  ])('keeps fixed title/keyword priority for $title / $keywords', ({ title, keywords, score }) => {
+    expect(search('json', [createDescriptor('tools.owner.weight', { title, keywords })])[0]?.score).toBe(score);
+  });
+
+  test('equivalent translations and keyword copies contribute each token and title bonus once', () => {
+    const descriptor = createDescriptor('tools.owner.json', { title: 'JSON', keywords: ['JSON'] });
+    const copies: LauncherActionDescriptor = {
+      ...descriptor,
+      title: { 'zh-CN': 'ＪＳＯＮ', 'en-US': 'JSON' },
+      default_keywords: { 'zh-CN': ['ｊｓｏｎ'], 'en-US': ['JSON'] },
+    };
+    for (const locale of ['en-US', 'zh-CN'] as const) {
+      expect(search('json', [descriptor], locale)).toMatchObject([{ score: 1800 }]);
+      expect(search('json', [copies], locale)).toMatchObject([{ score: 1800 }]);
+      expect(search('json json', [copies], locale)).toMatchObject([{ score: 1200 }]);
+      expect(
+        search('json', [{ ...copies, title: { 'en-US': 'JSON formatter', 'zh-CN': 'JSON' } }], locale),
+      ).toMatchObject([{ score: 1800 }]);
+      const keywordsOnly = { ...copies, title: { 'en-US': 'Other' } };
+      expect(search('json', [keywordsOnly], locale)).toMatchObject([{ score: 500 }]);
+    }
+  });
+
+  test('uses the best match from any language or field without summing weaker hits', () => {
+    const descriptor = createDescriptor('tools.owner.json', { title: 'Format JSON' });
+    for (const locale of ['en-US', 'zh-CN'] as const) {
+      expect(search('json', [descriptor], locale)).toMatchObject([{ score: 250 }]);
+      expect(search('json', [{ ...descriptor, default_keywords: { 'zh-CN': ['JSON'] } }], locale)).toMatchObject([
+        { score: 500 },
+      ]);
+      expect(
+        search('json', [{ ...descriptor, title: { ...descriptor.title, 'zh-CN': 'JSON 格式化' } }], locale),
+      ).toMatchObject([{ score: 1200 }]);
+    }
+  });
+
+  test('adding, changing, or removing descriptions never changes matches, scores, or order', () => {
+    const descriptor = createDescriptor('tools.owner.json', { title: 'Format JSON', keywords: ['format'] });
+    const descriptions = [
+      undefined,
+      { 'en-US': 'json descriptiononly', 'zh-CN': '仅描述' },
+      { 'en-US': 'Something else' },
+    ];
+    for (const locale of ['en-US', 'zh-CN'] as const) {
+      for (const description of descriptions) {
+        const snapshot = [{ ...descriptor, ...(description ? { description } : {}) }];
+        expect(search('json', snapshot, locale).map(({ action_id, score }) => ({ action_id, score }))).toEqual([
+          { action_id: descriptor.action_id, score: 250 },
+        ]);
+        expect(search('descriptiononly', snapshot, locale)).toEqual([]);
+        expect(search('仅描述', snapshot, locale)).toEqual([]);
+      }
+    }
   });
 
   test('carries icon metadata without changing matching, scores, or order', () => {

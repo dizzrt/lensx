@@ -827,7 +827,9 @@ Page availability calculation.
 
 The pure Action mapper sets `owner_id = plugin_id`, derives
 `action_id = <plugin_id>.<local_action_id>`, preserves normalized localized
-Action metadata and keywords, and sets `enabled = true`. A Host-owned executor
+Action title, optional description, and keyword maps for every declared
+supported language, and sets `enabled = true`. Display fallback does not remove
+another language's searchable titles or keywords. A Host-owned executor
 captures only the frozen plugin Page target and opening Action ID for an
 injected narrow Page opener. Only Actions targeting a currently available Page
 are published. Manifest route, publisher, source, and
@@ -1296,10 +1298,21 @@ package-local asset icon is a different contract and is not projected into this
 Host token field by the shipped runtime.
 
 The launcher search service consumes only immutable descriptor snapshots from
-that registry. It applies the same deterministic locale resolution, token
-matching, scoring, sorting, and enabled filtering to every registered
-descriptor. It does not read a plugin display name, Manifest-private data, or
-provider source, and it does not boost a Manifest
+that registry. Host and Plugin Actions use the same title and
+`default_keywords` text from every explicitly declared supported language
+(`en-US` and `zh-CN`), with locale-independent normalization. Every query token
+must match the same Action; different tokens may match different languages or
+fields. Each token contributes only its best match, and the complete-query
+title bonus also contributes only its best match once. Duplicate translations
+or multiple field hits do not boost scores, and each Action appears once.
+
+The interface language only resolves display titles, optional descriptions,
+and feedback, with English fallback for missing localized Action text; it does
+not change matching, scores, or order. Descriptions remain in projected metadata
+and display results but never participate in search. Plugin names, Page titles,
+IDs, Manifest-private data, and provider source also supply no searchable text.
+The shared sorting, enabled filtering, and result limit apply to every
+descriptor without a boost for Manifest
 `contributes.launcher.default_action_id`. Optional icon metadata and the
 recent/pinned collections do not affect matching, scoring, or sorting.
 
@@ -1307,7 +1320,7 @@ Built-in modules and external plugins project actions through the validated
 Host-private provider adapter described above. It maps provider identity and
 metadata into the stable launcher descriptor contract before atomic Host
 registration. Once registered, a plugin Action automatically
-use the same search path as a built-in Action; search itself will not add a
+uses the same search path as a built-in Action; search itself will not add a
 provider-specific branch. A provider cannot directly mutate the registry,
 choose a trusted executor, invoke privileged desktop commands, or bypass the
 Host dispatcher. Privileged behavior remains an explicit Host capability with

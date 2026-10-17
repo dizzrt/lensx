@@ -1,8 +1,9 @@
-import type {
-  LauncherActionDescriptor,
-  LauncherActionHostIcon,
-  LauncherActionLocale,
-  ResolvedLauncherActionMetadata,
+import {
+  LAUNCHER_ACTION_LOCALES,
+  type LauncherActionDescriptor,
+  type LauncherActionHostIcon,
+  type LauncherActionLocale,
+  type ResolvedLauncherActionMetadata,
 } from './types';
 import { resolveLauncherActionMetadata } from './validation';
 
@@ -17,7 +18,6 @@ export const LAUNCHER_ACTION_SEARCH_SCORES = Object.freeze({
   tokenKeywordPrefix: 350,
   tokenTitleSubstring: 250,
   tokenKeywordSubstring: 200,
-  tokenDescriptionSubstring: 100,
 });
 
 export interface LauncherActionSearchInput {
@@ -37,16 +37,14 @@ export interface LauncherActionSearchResult {
 }
 
 interface SearchableLauncherActionMetadata {
-  readonly title: string;
-  readonly description?: string;
+  readonly titles: readonly string[];
   readonly defaultKeywords: readonly string[];
 }
 
-const normalizeSearchText = (value: string, locale: LauncherActionLocale) =>
-  value.normalize('NFKC').toLocaleLowerCase(locale).trim().replace(/\s+/gu, ' ');
+const normalizeSearchText = (value: string) => value.normalize('NFKC').toLowerCase().trim().replace(/\s+/gu, ' ');
 
-export const normalizeLauncherActionSearchQuery = (query: string, locale: LauncherActionLocale) => {
-  const normalizedQuery = normalizeSearchText(query, locale);
+export const normalizeLauncherActionSearchQuery = (query: string) => {
+  const normalizedQuery = normalizeSearchText(query);
 
   return Object.freeze({
     query: normalizedQuery,
@@ -54,49 +52,52 @@ export const normalizeLauncherActionSearchQuery = (query: string, locale: Launch
   });
 };
 
-const normalizeMetadata = (
-  metadata: ResolvedLauncherActionMetadata,
-  locale: LauncherActionLocale,
-): SearchableLauncherActionMetadata =>
-  Object.freeze({
-    title: normalizeSearchText(metadata.title, locale),
-    ...(metadata.description ? { description: normalizeSearchText(metadata.description, locale) } : {}),
-    defaultKeywords: Object.freeze(metadata.default_keywords.map((keyword) => normalizeSearchText(keyword, locale))),
+const normalizeMetadata = (descriptor: LauncherActionDescriptor): SearchableLauncherActionMetadata => {
+  const titles = new Set<string>();
+  const defaultKeywords = new Set<string>();
+  for (const locale of LAUNCHER_ACTION_LOCALES) {
+    const title = descriptor.title[locale];
+    if (title !== undefined) titles.add(normalizeSearchText(title));
+    for (const keyword of descriptor.default_keywords[locale] ?? []) {
+      defaultKeywords.add(normalizeSearchText(keyword));
+    }
+  }
+  return Object.freeze({
+    titles: Object.freeze([...titles]),
+    defaultKeywords: Object.freeze([...defaultKeywords]),
   });
+};
 
 const bestTokenScore = (token: string, metadata: SearchableLauncherActionMetadata): number => {
-  const { title, description, defaultKeywords } = metadata;
+  const { titles, defaultKeywords } = metadata;
 
-  if (token === title) {
+  if (titles.some((title) => token === title)) {
     return LAUNCHER_ACTION_SEARCH_SCORES.tokenTitleExact;
   }
   if (defaultKeywords.some((keyword) => token === keyword)) {
     return LAUNCHER_ACTION_SEARCH_SCORES.tokenKeywordExact;
   }
-  if (title.startsWith(token)) {
+  if (titles.some((title) => title.startsWith(token))) {
     return LAUNCHER_ACTION_SEARCH_SCORES.tokenTitlePrefix;
   }
   if (defaultKeywords.some((keyword) => keyword.startsWith(token))) {
     return LAUNCHER_ACTION_SEARCH_SCORES.tokenKeywordPrefix;
   }
-  if (title.includes(token)) {
+  if (titles.some((title) => title.includes(token))) {
     return LAUNCHER_ACTION_SEARCH_SCORES.tokenTitleSubstring;
   }
   if (defaultKeywords.some((keyword) => keyword.includes(token))) {
     return LAUNCHER_ACTION_SEARCH_SCORES.tokenKeywordSubstring;
   }
-  if (description?.includes(token)) {
-    return LAUNCHER_ACTION_SEARCH_SCORES.tokenDescriptionSubstring;
-  }
 
   return 0;
 };
 
-const fullQueryTitleScore = (query: string, title: string): number => {
-  if (query === title) {
+const fullQueryTitleScore = (query: string, titles: readonly string[]): number => {
+  if (titles.some((title) => query === title)) {
     return LAUNCHER_ACTION_SEARCH_SCORES.fullQueryTitleExact;
   }
-  if (title.startsWith(query)) {
+  if (titles.some((title) => title.startsWith(query))) {
     return LAUNCHER_ACTION_SEARCH_SCORES.fullQueryTitlePrefix;
   }
 
@@ -127,7 +128,7 @@ export const searchLauncherActions = ({
     throw new RangeError('Launcher action search limit must be a positive integer.');
   }
 
-  const normalizedQuery = normalizeLauncherActionSearchQuery(query, locale);
+  const normalizedQuery = normalizeLauncherActionSearchQuery(query);
   if (normalizedQuery.tokens.length === 0) {
     return Object.freeze([]);
   }
@@ -138,9 +139,8 @@ export const searchLauncherActions = ({
       continue;
     }
 
-    const resolvedMetadata = resolveLauncherActionMetadata(descriptor, locale);
-    const searchableMetadata = normalizeMetadata(resolvedMetadata, locale);
-    let score = fullQueryTitleScore(normalizedQuery.query, searchableMetadata.title);
+    const searchableMetadata = normalizeMetadata(descriptor);
+    let score = fullQueryTitleScore(normalizedQuery.query, searchableMetadata.titles);
     let matchesEveryToken = true;
 
     for (const token of normalizedQuery.tokens) {
@@ -153,7 +153,7 @@ export const searchLauncherActions = ({
     }
 
     if (matchesEveryToken) {
-      matches.push(createSearchResult(descriptor, resolvedMetadata, score));
+      matches.push(createSearchResult(descriptor, resolveLauncherActionMetadata(descriptor, locale), score));
     }
   }
 

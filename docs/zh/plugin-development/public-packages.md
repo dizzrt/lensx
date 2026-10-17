@@ -27,6 +27,20 @@ Contract 可用于 authoring 和 Runtime。SDK 依赖 Contract。Testkit 只依�
 root。Plugin UI 以 SDK、React 和 React DOM 为 peer 边界，并拥有 Semi 依赖。CLI 是 Node
 authoring 工具，不能进入浏览器 bundle。
 
+## Action 发现元数据
+
+Launcher 搜索只使用每个 Action 在全部已声明受支持语言（`en-US`、`zh-CN`）中的 `title`
+和 `default_keywords`。界面语言只控制展示文本及反馈，Action 缺失当前语言文本时回退英文；
+它不改变匹配、分数或结果顺序。某语言缺失文本或关键词列表为空，不会遮蔽另一语言的文本。
+每个查询 token 都必须命中同一 Action，token 可以跨语言或字段分别匹配。重复译文或同时命中
+多个字段不会额外加分：每个 token 及完整查询的标题奖励都只贡献最佳匹配一次，每个 Action
+只返回一次。
+
+`description` 继续作为可选展示 metadata 并由投影保留，但不再参与搜索或计分。只在描述中出现
+的已有查询将不再返回该 Action。请把希望用户搜索的术语放入对应标题或 `default_keywords`；
+插件名称、插件整体描述、Page 标题和 ID 不会自动成为可搜索文本。已有 Manifest 和包格式继续
+有效，本次搜索行为不需要修改 Manifest、Host API 或 SDK 版本。
+
 ## 生命周期边界
 
 normalize 前先使用 `validatePluginManifest`。每个 Runtime attempt 创建一个

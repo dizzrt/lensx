@@ -276,7 +276,7 @@ const App = ({
     ? selectedActionId
     : results[0]?.action_id;
   const selectedIndex = results.findIndex(({ action_id: actionId }) => actionId === effectiveSelectedActionId);
-  const hasSearchQuery = normalizeLauncherActionSearchQuery(query, locale).tokens.length > 0;
+  const hasSearchQuery = normalizeLauncherActionSearchQuery(query).tokens.length > 0;
   const presentationState = activePage ? ('page' as const) : hasSearchQuery ? ('search' as const) : ('home' as const);
   const pageResolution: PageResolution | undefined = useMemo(() => {
     void pageRevision;

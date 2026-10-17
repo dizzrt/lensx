@@ -197,6 +197,10 @@ describe('App Shell page navigation', () => {
     const callsAfterEnteringSearch = setPresentationState.mock.calls.length;
 
     fireEvent.change(input, { target: { value: 'preferences settings' } });
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+    expect(setPresentationState).toHaveBeenCalledTimes(callsAfterEnteringSearch);
+
+    fireEvent.change(input, { target: { value: 'open settings' } });
     await waitFor(() => expect(screen.getByRole('option', { name: /Open settings/ })).toBeInTheDocument());
     expect(setPresentationState).toHaveBeenCalledTimes(callsAfterEnteringSearch);
 

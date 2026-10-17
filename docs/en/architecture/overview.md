@@ -33,7 +33,8 @@ The repository currently provides:
   descriptors, a Host-owned registry, a dispatcher, and built-in hide and
   settings actions;
 - deterministic launcher action search over immutable registry snapshots, with
-  localized matching and an accessible four-column keyboard-first result grid;
+  cross-language title and keyword matching and an accessible four-column
+  keyboard-first result grid;
 - a Host-private Plugin surface projection coordinator with provider-scoped
   atomic Page and Action replacement, revision-aware eligibility, and
   fail-closed lifecycle handling;
@@ -328,11 +329,25 @@ The production launcher action service is created once outside React rendering
 and can be replaced with an isolated service at the App Shell boundary for
 tests. Launcher action search is a pure consumer of registry descriptor
 snapshots. It normalizes queries and searchable metadata with Unicode NFKC,
-locale-aware case folding, and collapsed Unicode whitespace. Every query token
-must match the resolved title, one resolved default keyword, or the resolved
-description. Fixed exact, prefix, and substring weights produce a descending
-score order, with `action_id` as the deterministic tie-breaker. Disabled actions
-are filtered before the sorted result set is truncated to the v0 limit of eight.
+locale-independent `toLowerCase()`, trimming, and collapsed Unicode whitespace.
+Search reads every explicitly declared title and default keyword in the
+supported `en-US` and `zh-CN` maps, independently of the interface language.
+Each text remains a separate field; missing text or an empty keyword list in
+one language does not hide another language's text. Every query token must
+match at least one title or keyword of the same Action, and different tokens
+may match different languages or fields. Descriptions are display-only and
+never contribute a match or score.
+
+Fixed exact, prefix, and substring weights contribute only the best match per
+query token. The complete-query title bonus also contributes only its best
+match once. Normalized duplicate translations or hits in multiple fields do
+not add extra points, and each Action appears once. Results sort by descending
+score and then ascending `action_id`; disabled Actions are filtered before
+truncation to the v0 limit of eight. For the same query and snapshot, switching
+the interface language preserves Action IDs, scores, and order. The current
+language only resolves display titles, optional descriptions, and feedback,
+with missing localized Action text falling back to English.
+
 Search results are frozen serializable data containing identity, resolved
 display text, optional safe icon metadata, and score. Icons and Action
 collections never affect matching, scoring, or sorting, and results never

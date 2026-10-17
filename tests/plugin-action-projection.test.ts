@@ -218,6 +218,89 @@ describe('Plugin Action projection service', () => {
     await projection.destroy();
   });
 
+  test('uses source-neutral cross-language scores and withdraws invalidated providers from both locales', async () => {
+    const alpha = summaryFor('com.acme.alpha', 'entry_0000000000000013', { source: 'builtin' });
+    const zulu = summaryFor('com.acme.zulu', 'entry_0000000000000014', { source: 'external' });
+    let adapter!: ControlledRegistrationAdapter;
+    adapter = new ControlledRegistrationAdapter(snapshotFor('1', [zulu, alpha]), async (entryId) => {
+      const summary = entryId === alpha.entry_id ? alpha : zulu;
+      const manifest = manifestFor(summary.plugin_id);
+      return detailFor(adapter.current.revision, entryId, {
+        ...manifest,
+        contributes: {
+          ...manifest.contributes,
+          actions: [
+            {
+              ...baseAction,
+              title: { 'en-US': 'Project tools', 'zh-CN': '项目工具' },
+              description: { 'en-US': 'catalogue-only', 'zh-CN': '描述专用词' },
+              default_keywords: { 'en-US': ['设置', '打开设置', 'settings'], 'zh-CN': ['设置'] },
+            },
+          ],
+        },
+      });
+    });
+    const actionService = createDefaultLauncherActionService({ hideLauncher: async () => undefined });
+    const openPage = rs.fn();
+    const projection = createPluginActionProjectionForLauncherService(actionService, adapter, { openPage });
+    const alphaActionId = `${alpha.plugin_id}.open_project`;
+    const zuluActionId = `${zulu.plugin_id}.open_project`;
+    const pinnedIds = Object.freeze([alphaActionId]);
+    const resultsFor = (query: string, locale: 'en-US' | 'zh-CN') =>
+      searchLauncherActions({ query, locale, snapshot: actionService.registry.snapshot(), limit: 8 });
+    const expectSearch = (alphaAvailable: boolean) => {
+      const expectedIds = [...(alphaAvailable ? [alphaActionId] : []), zuluActionId, OPEN_SETTINGS_ACTION_ID];
+      for (const locale of ['en-US', 'zh-CN'] as const) {
+        expect(resultsFor('设置', locale).map(({ action_id, score }) => ({ action_id, score }))).toEqual(
+          expectedIds.map((action_id) => ({ action_id, score: 500 })),
+        );
+        expect(resultsFor('settings 设置', locale).map(({ action_id, score }) => ({ action_id, score }))).toEqual(
+          expectedIds.map((action_id) => ({ action_id, score: 1000 })),
+        );
+        expect(resultsFor('打开设置', locale).map(({ action_id, score }) => ({ action_id, score }))).toEqual([
+          { action_id: OPEN_SETTINGS_ACTION_ID, score: 1800 },
+          ...expectedIds
+            .filter((actionId) => actionId !== OPEN_SETTINGS_ACTION_ID)
+            .map((action_id) => ({ action_id, score: 500 })),
+        ]);
+        for (const query of ['catalogue-only', '描述专用词']) {
+          expect(resultsFor(query, locale)).toEqual([]);
+        }
+        const pluginResult = resultsFor('设置', locale).find(({ action_id }) => action_id === zuluActionId);
+        expect(pluginResult).toMatchObject({
+          title: locale === 'en-US' ? 'Project tools' : '项目工具',
+          description: locale === 'en-US' ? 'catalogue-only' : '描述专用词',
+        });
+        expect(JSON.stringify(resultsFor('设置', locale))).not.toMatch(
+          /manifest|executor|page_id|entry_id|runtime|source/u,
+        );
+      }
+      expect(
+        resolveLauncherActionCollection(pinnedIds, actionService.registry.snapshot()).map(({ action_id }) => action_id),
+      ).toEqual(alphaAvailable ? [alphaActionId] : []);
+      expect(pinnedIds).toEqual([alphaActionId]);
+      expect(actionService.registry.get(HIDE_LAUNCHER_ACTION_ID)).toBeDefined();
+    };
+
+    await projection.initialize();
+    expectSearch(true);
+    const invalidations: readonly (readonly PluginRegistrationSummary[])[] = [
+      [{ ...alpha, enabled: false }, zulu],
+      [{ ...alpha, compatibility: { lensx: false, host_api: true } }, zulu],
+      [zulu],
+    ];
+    for (const [index, entries] of invalidations.entries()) {
+      adapter.setSnapshot(snapshotFor(String(index * 2 + 2), entries));
+      await projection.whenIdle();
+      expectSearch(false);
+      adapter.setSnapshot(snapshotFor(String(index * 2 + 3), [alpha, zulu]));
+      await projection.whenIdle();
+      expectSearch(true);
+    }
+    expect(openPage).not.toHaveBeenCalled();
+    await projection.destroy();
+  });
+
   test('fails closed for every ineligible lifecycle state and disappearance while preserving Host Actions', async () => {
     const pluginId = 'com.acme.lifecycle';
     const entryId = 'entry_0000000000000021';

@@ -609,8 +609,9 @@ adapter。因此 surface coordinator 暴露 provider-scoped quiesce 和显式 re
 的 registration 中每个 Page 都 available；普通 Web capability 不进入 Page availability 计算。
 
 纯 Action mapper 设置 `owner_id = plugin_id`，派生
-`action_id = <plugin_id>.<local_action_id>`，保留规范化的本地化 Action metadata 与关键词，并设置
-`enabled = true`。Host-owned executor 只为注入的窄 Page opener 捕获冻结的插件 Page target 和 opening
+`action_id = <plugin_id>.<local_action_id>`，保留所有已声明受支持语言的规范化 Action 标题、
+可选描述及关键词映射，并设置 `enabled = true`。展示回退不会移除另一语言中可搜索的标题或关键词。
+Host-owned executor 只为注入的窄 Page opener 捕获冻结的插件 Page target 和 opening
 Action ID。只有目标当前 available 的 Action 会被发布。Manifest route、publisher、
 source 与 `default_action_id` facts 不会进入
 descriptor，也不影响搜索排序。package-local asset icon 会被有意省略，在 scoped resource service
@@ -961,11 +962,17 @@ Launcher descriptor 可以携带经过校验的 plain-data Host icon token。Hos
 映射到应用 icon 组件，并为缺失或无法解析的 token 使用通用 Action 降级图标。Manifest 的包内 asset
 icon 属于不同契约，当前运行时不会把它投影进该 Host token 字段。
 
-Launcher 搜索 service 只消费该 registry 的不可变 descriptor snapshot。它对每个已注册
-descriptor 使用相同的确定性 locale 解析、token 匹配、评分、排序和 enabled 过滤。它不会读取插件
-display name、Manifest 私有数据或 provider 来源，也不会提升 Manifest 的
-`contributes.launcher.default_action_id`。可选 icon metadata 与最近使用/已固定集合都不影响匹配、
-评分或排序。
+Launcher 搜索 service 只消费该 registry 的不可变 descriptor snapshot。Host 与 Plugin Action
+统一使用所有显式声明的受支持语言（`en-US`、`zh-CN`）中的标题和 `default_keywords` 文本，
+并采用不依赖界面语言的规范化。每个查询 token 都必须命中同一 Action，不同 token 可以分别命中
+不同语言或字段。每个 token 只贡献最佳匹配分，完整查询的标题奖励同样只计入最佳匹配一次。
+重复译文或同时命中多个字段不会提高分数，每个 Action 只返回一次。
+
+界面语言只解析展示标题、可选描述及反馈，Action 缺失当前语言文本时回退英文；它不改变匹配、分数
+或顺序。描述继续保留在投影 metadata 和展示结果中，但绝不参与搜索。插件名称、Page 标题、ID、
+Manifest 私有数据与 provider 来源也不提供可搜索文本。每个 descriptor 都遵循相同的排序、enabled
+过滤与结果上限，Manifest 的 `contributes.launcher.default_action_id` 不会获得加权。可选 icon
+metadata 与最近使用/已固定集合都不影响匹配、评分或排序。
 
 内建 module 和外部插件通过上文经过校验的 Host 私有 provider adapter 投影 action。该 adapter 负责
 先把 provider 身份和元数据映射到稳定的 launcher descriptor 契约，再进行原子 Host 注册。

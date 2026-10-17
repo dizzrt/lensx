@@ -73,8 +73,8 @@ interface: select a stable capability through `pnpm run gate -- <id>`. Root
 scripts must not mirror a member script, test subset, or OpenSpec Change, and
 must not encode a validation graph with shell `&&`. Use `pnpm run gate --
 --list` and `--plan <id>` to inspect the governed surface and execution plan.
-Generate and Evidence writes use their dedicated dispatchers and require
-`--write`; see [Validation](validation.md).
+Deterministic source-derived artifacts use the Generate dispatcher with one
+listed target and explicit `--write`; see [Validation](validation.md).
 
 ## Plugin Contract Package
 
