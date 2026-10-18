@@ -59,7 +59,7 @@
         "description": "Hide the launcher window"
       },
       "openSettings": {
-        "title": "Open settings",
+        "title": "Settings",
         "description": "View and change lensX preferences",
         "keywords": {
           "settings": "settings",

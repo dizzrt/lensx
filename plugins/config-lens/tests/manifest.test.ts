@@ -24,7 +24,15 @@ describe('ConfigLens Manifest', () => {
     expect(normalized.manifest.display.name).toEqual({ 'en-US': 'ConfigLens', 'zh-CN': 'ConfigLens' });
     expect(normalized.manifest.contributes.pages).toHaveLength(1);
     expect(normalized.manifest.contributes.actions).toHaveLength(1);
-    expect(normalized.manifest.contributes.actions[0]?.target).toEqual({ kind: 'page', page_id: 'main' });
+    expect(normalized.manifest.contributes.actions[0]).toMatchObject({
+      id: 'open',
+      title: { 'en-US': 'ConfigLens', 'zh-CN': 'ConfigLens' },
+      target: { kind: 'page', page_id: 'main' },
+      default_keywords: {
+        'en-US': ['ConfigLens', 'JSON', 'YAML', 'TOML', 'XML', 'format', 'validate'],
+        'zh-CN': ['ConfigLens', 'JSON', 'YAML', 'TOML', 'XML', '格式化', '校验'],
+      },
+    });
     expect(normalized.manifest.contributes.launcher?.default_action_id).toBe('open');
     expect(normalized.manifest).not.toHaveProperty('requested_permissions');
   });

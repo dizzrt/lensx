@@ -41,6 +41,15 @@ import、Tauri import、未声明公共 import、symlink、特殊文件、不可
 package 名称、plugin ID 与对应 display/test placeholder，然后重新运行 Manifest Contract。它不访问网络、
 不安装依赖、不初始化 Git、不运行项目代码，也不覆盖非空目标。
 
+对于两种模板，入口 Action 的 `title.en-US` 和 `title.zh-CN` 都直接使用通过校验的 `--name` 值。
+`--name "My Plugin"` 在两种语言中均生成 `My Plugin`；`--name "Open Studio"` 均生成 `Open Studio`，
+既不附加 `Open ` / `打开 `，也不删除输入名称中的词语。输入校验、包名规范化、plugin/Page 命名、
+Action/Page ID、target、默认入口选择及功能关键词均沿用既有规则。
+
+默认值遵循统一的 [Action 命名指南](../plugin-development/public-packages.md#action-display-names)。
+`create` 不添加旧标题或打开前缀兼容关键词。这不会引入前缀禁用校验，也不会改写现有项目：
+其他方面符合契约且含有 `Open` 或 `打开` 的第三方 Action 标题仍被接受。
+
 文件先写入唯一的同级 staging directory，完整验证后才用 atomic rename 提交。失败和中断会清理 staging。
 生成项目不请求权限，machine output 会报告 `runtime_kind: "webview"`。其 Page 省略
 `presentation`，因此规范化为固定 `650×600`。作者可显式声明精确的

@@ -42,7 +42,13 @@ for (const caller of [
   'tests/plugin-webview-runtime-fixtures.test.ts',
 ]) {
   const source = readFileSync(join(rootDir, caller), 'utf8');
-  if (source.includes('packages/plugin-cli/src/') || /from\s+['"][^'"]*tools\/plugin-package-format/gu.test(source)) {
+  // Repository Rstest fixtures consume current source without a CLI build prerequisite.
+  // Packaging and generation scripts must still exercise the built package core.
+  const requiresBuiltCore = caller.startsWith('scripts/');
+  if (
+    (requiresBuiltCore && source.includes('packages/plugin-cli/src/')) ||
+    /from\s+['"][^'"]*tools\/plugin-package-format/gu.test(source)
+  ) {
     failures.push(`${caller} bypasses the built CLI package core.`);
   }
 }

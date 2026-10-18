@@ -1,7 +1,8 @@
-import type { NormalizedPluginManifest } from '@lensx/plugin-contract';
+import { type NormalizedPluginManifest, normalizePluginManifest, validatePluginManifest } from '@lensx/plugin-contract';
 import { describe, expect, rs, test } from '@rstest/core';
 import { render, screen } from '@testing-library/react';
 import validCases from '../fixtures/plugin-registration-contract/valid/cases.json';
+import configLensManifest from '../plugins/config-lens/manifest.json';
 import { ActionTile } from '../src/app/launcher/ActionTile';
 import { LauncherActionDispatcher } from '../src/app/launcher/actions/dispatcher';
 import { LauncherActionRegistry } from '../src/app/launcher/actions/registry';
@@ -31,6 +32,40 @@ const withActions = (
 });
 
 describe('Plugin Action mapper', () => {
+  test.each([
+    'en-US',
+    'zh-CN',
+  ] as const)('projects and searches current ConfigLens metadata without legacy aliases in %s', async (locale) => {
+    const validation = validatePluginManifest(configLensManifest);
+    if (validation.status !== 'valid') throw new Error(JSON.stringify(validation.diagnostics));
+    const { manifest } = normalizePluginManifest(validation, { lensx: '0.1.0', host_api: '0.2.0' });
+    const openPage = rs.fn();
+    const registry = new LauncherActionRegistry();
+    expect(registry.registerBatch(mapPluginActionsToLauncherRegistrations(manifest, { openPage })).ok).toBe(true);
+    const snapshot = registry.snapshot();
+    expect(snapshot).toHaveLength(1);
+    expect(snapshot[0]?.default_keywords).toEqual({
+      'en-US': ['ConfigLens', 'JSON', 'YAML', 'TOML', 'XML', 'format', 'validate'],
+      'zh-CN': ['ConfigLens', 'JSON', 'YAML', 'TOML', 'XML', '格式化', '校验'],
+    });
+    for (const query of ['ConfigLens', 'JSON', 'YAML', 'TOML', 'XML', 'format', 'validate', '格式化', '校验']) {
+      expect(searchLauncherActions({ query, locale, snapshot, limit: 8 })).toEqual([
+        expect.objectContaining({ action_id: 'dev.lensx.config-lens.open', title: 'ConfigLens' }),
+      ]);
+    }
+    for (const query of ['Open ConfigLens', '打开 ConfigLens', 'configuration text', '配置文本']) {
+      expect(searchLauncherActions({ query, locale, snapshot, limit: 8 })).toEqual([]);
+    }
+    await expect(new LauncherActionDispatcher(registry).dispatch('dev.lensx.config-lens.open')).resolves.toEqual({
+      ok: true,
+      action_id: 'dev.lensx.config-lens.open',
+    });
+    expect(openPage).toHaveBeenCalledWith(
+      { owner_id: 'dev.lensx.config-lens', page_id: 'main' },
+      'dev.lensx.config-lens.open',
+    );
+  });
+
   test('maps multiple Actions to stable global IDs and preserves only Action-owned localized metadata', () => {
     const manifest = withActions([
       ...baseManifest.contributes.actions,

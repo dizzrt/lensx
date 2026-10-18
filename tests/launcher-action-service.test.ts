@@ -55,6 +55,14 @@ describe('default launcher action service', () => {
     ]);
     expect(JSON.stringify(service.registry.snapshot())).not.toContain('executor');
     expect(JSON.stringify(service.registry.snapshot())).not.toContain('page_id');
+    expect(service.registry.get(OPEN_SETTINGS_ACTION_ID)?.title).toEqual({
+      'en-US': 'Settings',
+      'zh-CN': '设置',
+    });
+    expect(service.registry.get(HIDE_LAUNCHER_ACTION_ID)?.title).toEqual({
+      'en-US': 'Hide launcher',
+      'zh-CN': '隐藏启动器',
+    });
   });
 
   test('dispatches registry action through the injected desktop adapter', async () => {

@@ -168,7 +168,7 @@ const openSettingsWithKeyboard = async () => {
     target: { value: input.getAttribute('aria-label') === '启动器查询' ? '设置' : 'settings' },
   });
   fireEvent.keyDown(input, { key: 'Enter' });
-  await screen.findByRole('region', { name: /lensX: (?:Open settings|打开设置)/iu });
+  await screen.findByRole('region', { name: /lensX: (?:Settings|设置)/iu });
 };
 
 const openPluginsSection = async () => {
@@ -291,7 +291,7 @@ describe('Host settings surface', () => {
     await selectPreferenceOption('Language', '简体中文');
     await waitFor(() => expect(write).toHaveBeenLastCalledWith({ theme_mode: 'dark', locale: 'zh-CN' }));
     await waitFor(() => expect(document.documentElement).toHaveAttribute('lang', 'zh-CN'));
-    expect(screen.getByRole('region', { name: 'lensX: 打开设置' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'lensX: 设置' })).toBeInTheDocument();
     const localizedNavigation = screen.getByRole('navigation', { name: '设置' });
     expect(within(localizedNavigation).getByRole('menuitem', { name: '偏好' })).toHaveAttribute('aria-current', 'page');
     expect(within(localizedNavigation).getByRole('menuitem', { name: '插件' })).toBeInTheDocument();

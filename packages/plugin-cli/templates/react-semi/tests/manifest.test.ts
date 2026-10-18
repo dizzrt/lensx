@@ -19,6 +19,15 @@ describe('React and Semi template Manifest', () => {
     expect(normalized.manifest.plugin_id).not.toBe('dev.lensx.template.framework-neutral');
     expect(normalized.manifest).not.toHaveProperty('requested_permissions');
     expect(normalized.manifest.runtime.entry).toBe('index.html');
-    expect(normalized.manifest.contributes.actions[0]?.target).toEqual({ kind: 'page', page_id: 'main' });
+    expect(normalized.manifest.contributes.actions).toEqual([
+      expect.objectContaining({
+        id: 'open',
+        title: normalized.manifest.display.name,
+        default_keywords: { 'en-US': ['starter', 'react', 'semi'], 'zh-CN': ['起步', 'React', 'Semi'] },
+        target: { kind: 'page', page_id: 'main' },
+      }),
+    ]);
+    expect(normalized.manifest.contributes.actions[0]?.title).toEqual(normalized.manifest.contributes.pages[0]?.title);
+    expect(normalized.manifest.contributes.launcher?.default_action_id).toBe('open');
   });
 });

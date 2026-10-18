@@ -324,7 +324,8 @@ the native window hide operation directly.
 The default Action service MUST register the enabled
 `lensx.core.open_settings` Action with owner `lensx.core`. Its English and
 Simplified Chinese title, description, and search keywords MUST come from
-application message resources. The public descriptor MUST continue to contain
+application message resources. Its titles MUST be `Settings` and `设置`,
+respectively. The public descriptor MUST continue to contain
 only serializable metadata and MUST NOT contain a page target or executable
 function.
 
@@ -340,14 +341,16 @@ Action ID.
 - **THEN** the registry contains `lensx.core.open_settings`
 - **THEN** the descriptor is enabled and passes identity, ownership,
   localization, keyword, and serialization validation
-- **THEN** the descriptor does not expose a page target or executor
+- **THEN** the descriptor does not expose a page target or executor, and its
+  English and Simplified Chinese titles are `Settings` and `设置`
 
 #### Scenario: Find the settings Action
 
-- **WHEN** a query in a supported locale matches the settings Action title,
-  description, or keywords
+- **WHEN** a query in a supported locale matches the settings Action title or
+  keywords in any declared language
 - **THEN** Action Search returns the real `lensx.core.open_settings` descriptor
-- **THEN** the result uses localized metadata from application messages
+- **THEN** the result uses application messages for the current interface
+  locale, and description is not a search source
 
 #### Scenario: Execute the settings Action
 
@@ -359,6 +362,8 @@ Action ID.
 - **THEN** the React component does not directly receive or call the executor
 - **THEN** the Dispatcher returns its existing typed success result when page
   preflight and opening succeed
+- **THEN** the Page Action context displays `Settings` or `设置` for the current
+  locale
 
 #### Scenario: The settings page cannot open
 
@@ -367,3 +372,63 @@ Action ID.
 - **THEN** the executor reports an execution failure
 - **THEN** the Dispatcher returns `action_execution_failed`
 - **THEN** the public Action and Dispatcher contracts remain unchanged
+
+### Requirement: Action titles MUST express user-facing entry names
+
+An Action's `title` MUST be its primary user-facing name for recognition and
+selection, without requiring a verb phrase. Maintained Page or tool entries
+MUST use distinguishable destination names and omit generic `Open` / `打开`
+prefixes that merely repeat entry behavior. Entries that perform operations
+MUST retain the verbs needed to express those operations. Copy changes MUST
+preserve stable Action identity and execution semantics.
+
+#### Scenario: A maintained entry opens a destination
+
+- **WHEN** a maintained Action only opens a tool or Page
+- **THEN** its title uses a name by which users can recognize that destination
+- **THEN** it does not add a generic `Open` / `打开` prefix merely because the
+  entry is executable
+
+#### Scenario: A maintained Action performs an operation
+
+- **WHEN** a user chooses the Action that hides the launcher window
+- **THEN** its title remains `Hide launcher` / `隐藏启动器`
+- **THEN** naming rules neither remove the necessary operation verb nor change
+  its execution behavior
+
+#### Scenario: A renamed entry already appears in collections
+
+- **WHEN** Recent or Pinned contains the stable ID of an Action whose title has
+  changed
+- **THEN** the record resolves to the same Action and displays its new title
+  for the current locale
+- **THEN** search, collection, and keyboard activation execute the same
+  operation; the title remains the entry's accessible name, with existing
+  theme and focus semantics
+
+### Requirement: Entry title simplification MUST NOT introduce legacy search aliases
+
+When maintained entry titles are simplified, the system and authoring tools
+MUST NOT add replaced full titles or compatibility `Open` / `打开` prefixes to
+`default_keywords`, hidden aliases, or extra search sources. The settings,
+ConfigLens, and template title changes MUST preserve existing functional
+keywords. Matching and scoring MUST continue to use only declared current
+titles and keywords, without guaranteeing matches for old full titles.
+
+#### Scenario: Search uses the simplified metadata
+
+- **WHEN** a user searches for a renamed entry by its new title or existing
+  functional keywords
+- **THEN** the system matches its current title and keywords under the existing
+  cross-language rules
+- **THEN** scores can change naturally with the new title, while description
+  participates in neither matching nor scoring
+
+#### Scenario: An old full title has no remaining searchable match
+
+- **WHEN** a controlled snapshot contains only the renamed target Action and
+  at least one token of its old full title matches neither a current title nor
+  an existing keyword
+- **THEN** the old full title does not return that Action
+- **THEN** the system does not restore the match through a legacy title alias,
+  an automatically added prefix, or description

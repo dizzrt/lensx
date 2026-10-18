@@ -9,6 +9,13 @@ package 为 `@lensx/official-config-lens`，plugin ID 为
 SDK、UI、Testkit、CLI、本地安装、隔离 Runtime 和 Host API 边界。仓库归属
 和 CI 证据不会赋予信任、权限、持久化、剪贴板或原生能力。
 
+Launcher Action 标题在 `en-US` 和 `zh-CN` 中均为 `ConfigLens`，遵循统一的
+[Action 命名指南](../plugin-development/public-packages.md#action-display-names)。其身份仍为
+`dev.lensx.config-lens.open`，Page 目标仍为 `main`，默认 local Action 仍为 `open`。
+已有 Recent/Pinned ID 和打开页面的 Action 上下文解析当前标题。`JSON`、`format`、`格式化`
+等既有功能关键词保持不变，不添加 `Open ConfigLens` / `打开 ConfigLens` 或打开前缀兼容关键词。
+已安装副本通过普通插件更新或开发重新加载路径读取新 Manifest；Host 不会改写旧标题。
+
 ConfigLens 是支持 JSON、YAML 1.2、TOML 1.0 和 XML 1.0 的临时配置工作台。
 输入只保留在当前 Page generation。隐藏和恢复 Launcher 不会关闭该 Page：
 activation 会刷新当前插件事实；只要相关执行身份仍然有效，就保留同一 Child WebView、

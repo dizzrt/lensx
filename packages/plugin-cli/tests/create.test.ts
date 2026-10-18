@@ -20,16 +20,18 @@ afterEach(async () => {
 
 describe('create plugin project', () => {
   test.each([
-    'framework-neutral',
-    'react-semi',
-  ] as const)('creates a complete %s project from packaged assets', async (template) => {
+    ['framework-neutral', 'My Plugin', 'my-plugin'],
+    ['framework-neutral', 'Open Studio', 'open-studio'],
+    ['react-semi', 'My Plugin', 'my-plugin'],
+    ['react-semi', 'Open Studio', 'open-studio'],
+  ] as const)('creates a complete %s project named %s from packaged assets', async (template, name, packageName) => {
     const root = await temporaryRoot();
     const result = await createPluginProject({
       cwd: root,
       target: 'example-plugin',
       template,
       pluginId: `com.example.${template.replace('-', '_')}`,
-      name: 'Example Plugin',
+      name,
     });
     const target = resolve(root, 'example-plugin');
     const metadata = JSON.parse(await readFile(resolve(target, 'package.json'), 'utf8'));
@@ -39,11 +41,11 @@ describe('create plugin project', () => {
       target: 'example-plugin',
       template,
       plugin_id: `com.example.${template.replace('-', '_')}`,
-      package_name: 'example-plugin',
+      package_name: packageName,
       runtime_kind: 'webview',
     });
     expect(metadata).toMatchObject({
-      name: 'example-plugin',
+      name: packageName,
       private: true,
       scripts: expect.objectContaining({
         build: expect.any(String),
@@ -56,8 +58,23 @@ describe('create plugin project', () => {
       manifest_version: '0.4.0',
       plugin_id: result.plugin_id,
       runtime: { kind: 'webview' },
-      display: { name: { 'en-US': 'Example Plugin', 'zh-CN': 'Example Plugin' } },
+      display: { name: { 'en-US': name, 'zh-CN': name } },
     });
+    expect(manifest.contributes.actions).toEqual([
+      expect.objectContaining({
+        id: 'open',
+        title: { 'en-US': name, 'zh-CN': name },
+        default_keywords:
+          template === 'framework-neutral'
+            ? { 'en-US': ['starter', 'typescript'], 'zh-CN': ['起步', 'TypeScript'] }
+            : { 'en-US': ['starter', 'react', 'semi'], 'zh-CN': ['起步', 'React', 'Semi'] },
+        target: { kind: 'page', page_id: 'main' },
+      }),
+    ]);
+    expect(manifest.contributes.pages).toEqual([
+      expect.objectContaining({ id: 'main', title: { 'en-US': name, 'zh-CN': name } }),
+    ]);
+    expect(manifest.contributes.launcher.default_action_id).toBe('open');
     const productionSources = await Promise.all(
       (await readdir(resolve(target, 'src')))
         .filter((name) => /\.[jt]sx?$/u.test(name))

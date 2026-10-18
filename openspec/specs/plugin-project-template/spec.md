@@ -316,3 +316,44 @@ The React/Semi template MUST use locale and theme mechanisms supported by Plugin
 - **WHEN** the React template is in an initialization error state and retry is operated through keyboard events
 - **THEN** the retry control exposes visible-focus state and starts a new attempt
 - **THEN** loading, error, and ready states remain understandable through appropriate accessibility semantics or a live region
+
+### Requirement: Template entry Action titles MUST use destination names
+
+Both maintained canonical templates and their packaged CLI snapshots MUST use
+destination names as default entry Action `title` values, without generic
+`Open` / `打开` prefixes that merely express entry behavior. The titles MUST use
+the exact localized names specified below. Simplification MUST preserve
+existing IDs, targets, functional keywords, and default-entry configuration,
+and MUST NOT add legacy-title compatibility keywords.
+
+#### Scenario: Use the framework-neutral starter
+
+- **WHEN** a developer uses the unrenamed framework-neutral canonical template
+- **THEN** its entry's `title.en-US` is `Framework-neutral starter` and its
+  `title.zh-CN` is `无框架起步模板`
+- **THEN** the same Action opens the same Page, with existing keywords, Runtime,
+  and permission boundaries unchanged
+
+#### Scenario: Use the React and Semi starter
+
+- **WHEN** a developer uses the unrenamed react-semi canonical template
+- **THEN** its entry's `title.en-US` is `React and Semi starter` and its
+  `title.zh-CN` is `React 与 Semi 起步模板`
+- **THEN** the same Action opens the same Page, with existing keywords, locale,
+  theme, and Runtime boundaries unchanged
+
+#### Scenario: Consume the packaged template snapshots
+
+- **WHEN** a developer uses either template snapshot packaged in the CLI
+- **THEN** the snapshot satisfies existing consistency requirements with its
+  canonical template, including the same entry-naming rule
+- **THEN** it retains no extra `Open` / `打开` entry title and adds no replaced
+  title to keywords
+
+#### Scenario: Adapt a starter into multiple entry points
+
+- **WHEN** a developer adds multiple Page entries following maintained guidance
+- **THEN** the guidance requires distinct destination names rather than
+  mechanically reusing the plugin name for every Action
+- **THEN** the guidance explains that operation entries retain necessary verbs
+  and that the `title` field remains in use

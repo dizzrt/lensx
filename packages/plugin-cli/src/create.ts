@@ -99,7 +99,7 @@ const customizeTemplate = async (staging: string, pluginId: string, name: string
   manifest.plugin_id = pluginId;
   manifest.display.name = { 'en-US': name, 'zh-CN': name };
   page.title = { 'en-US': name, 'zh-CN': name };
-  action.title = { 'en-US': `Open ${name}`, 'zh-CN': `打开 ${name}` };
+  action.title = { 'en-US': name, 'zh-CN': name };
   const validation = validatePluginManifest(manifest);
   if (validation.status !== 'valid') {
     throw new PluginCliCommandError('invalid', [

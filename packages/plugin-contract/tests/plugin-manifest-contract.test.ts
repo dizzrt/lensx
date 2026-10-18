@@ -136,12 +136,16 @@ describe('plugin Manifest 0.4.0 shared contract fixtures', () => {
   }
 });
 
-test('Action keywords remain scoped to their owning Action', () => {
+test('Action titles are preserved and keywords remain scoped to their owning Action', () => {
   const result = evaluateManifest(baseManifest, defaultVersions);
   if (!('manifest' in result)) {
     throw new TypeError('Base fixture unexpectedly failed validation.');
   }
 
+  expect(result.manifest.contributes.actions[0]?.title).toEqual({
+    'en-US': 'Open Project',
+    'zh-CN': '打开项目',
+  });
   expect(result.manifest.contributes.actions[0]?.default_keywords).toEqual({
     'en-US': ['open workspace', 'open folder'],
     'zh-CN': ['打开工作区', '打开文件夹'],

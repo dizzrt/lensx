@@ -69,6 +69,21 @@ then resolves the current registered entry and resource generation. React only
 requests one native Child WebView presentation using that safe identity; native
 code independently resolves the current document target.
 
+Canonical templates and their CLI-packaged snapshots use these destination
+names for their entry Action `title`:
+
+| Template | `en-US` | `zh-CN` |
+| --- | --- | --- |
+| `framework-neutral` | `Framework-neutral starter` | `无框架起步模板` |
+| `react-semi` | `React and Semi starter` | `React 与 Semi 起步模板` |
+
+The existing Action/Page IDs, targets, default entry, and functional keywords
+remain unchanged. No former full title or opening-prefix compatibility keyword
+is added. Follow the shared
+[Action naming guide](../plugin-development/public-packages.md#action-display-names)
+when adapting a starter: use distinct destination names for multiple entries,
+and retain meaningful verbs for actual operations.
+
 Template Pages omit `presentation`, so normalization produces a fixed
 `650×600` Page. Authors may opt a Page into a bounded initial logical size and
 user resizing:
@@ -119,7 +134,10 @@ lensx-plugin create ./my-plugin \
 
 Select `react-semi` for the React/Semi starter. The generated project declares
 `pnpm@11`, ordinary public dependency ranges, and the same lifecycle scripts
-as its canonical example. See [Plugin Developer CLI](plugin-developer-cli.md)
+as its canonical example. For either template, the example above sets both
+Action title locales to `My Plugin`. `create` uses the validated `--name`
+unchanged: `Open Studio` stays `Open Studio`, without adding or removing an
+opening word or generating legacy-title keywords. See [Plugin Developer CLI](plugin-developer-cli.md)
 for build, validation, packing, and inspection.
 
 Run one template locally with its package scripts:

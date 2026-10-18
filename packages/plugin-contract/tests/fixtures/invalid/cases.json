@@ -478,6 +478,37 @@
     ]
   },
   {
+    "name": "Action English title is required",
+    "mutations": [
+      {
+        "op": "remove",
+        "path": "/contributes/actions/0/title/en-US"
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "missing_field",
+        "path": "/contributes/actions/0/title/en-US"
+      }
+    ]
+  },
+  {
+    "name": "Action English title is empty after trimming",
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/contributes/actions/0/title/en-US",
+        "value": "   "
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "empty_value",
+        "path": "/contributes/actions/0/title/en-US"
+      }
+    ]
+  },
+  {
     "name": "Action target must be a Page",
     "mutations": [
       {

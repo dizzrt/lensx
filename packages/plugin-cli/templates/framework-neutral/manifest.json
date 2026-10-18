@@ -46,8 +46,8 @@
       {
         "id": "open",
         "title": {
-          "en-US": "Open framework-neutral starter",
-          "zh-CN": "打开无框架起步模板"
+          "en-US": "Framework-neutral starter",
+          "zh-CN": "无框架起步模板"
         },
         "description": {
           "en-US": "Open the starter page.",

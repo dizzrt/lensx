@@ -10,6 +10,17 @@ Contract, SDK, UI, Testkit, CLI, local installation, isolated Runtime, and Host
 API boundaries as an external plugin. Repository ownership and CI evidence
 confer no trust, permission, persistence, clipboard, or native authority.
 
+The Launcher Action title is `ConfigLens` in both `en-US` and `zh-CN`, following
+the shared [Action naming guide](../plugin-development/public-packages.md#action-display-names).
+Its identity remains `dev.lensx.config-lens.open`, with `main` as its Page
+target and `open` as the default local Action. Existing Recent/Pinned IDs and
+the opening Action's page context resolve the current title. Existing
+functional keywords, including `JSON`, `format`, and `格式化`, remain unchanged;
+neither `Open ConfigLens` / `打开 ConfigLens` nor opening-prefix compatibility
+keywords are added. Installed copies receive the new Manifest through the
+ordinary plugin update or development reload path; the Host does not rewrite
+older titles.
+
 ConfigLens is an ephemeral configuration workbench for JSON, YAML 1.2, TOML
 1.0, and XML 1.0. Input remains inside the current Page generation. Hiding and
 restoring the Launcher does not close that Page: activation refreshes current

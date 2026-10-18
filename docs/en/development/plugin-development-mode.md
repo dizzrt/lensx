@@ -144,7 +144,7 @@ Use a fresh lensX process and keep its terminal open throughout this sequence.
 1. Build and validate generation A with the commands above. Place it beneath a
    direct custom-root member as `<root>/smoke/dist`, then run
    `pnpm run dev:plugin-development-mode -- --plugins-root <root>`.
-2. Press `Ctrl+Shift+Space`, run **Open settings**, and open **Plugins**. The
+2. Press `Ctrl+Shift+Space`, run **Settings**, and open **Plugins**. The
    **Plugin Development Mode** Switch must already be on, and the discovered
    entry must show version `0.1.0` and the text labels **Development**,
    **Unpacked**, and **Unsigned**. Its publisher remains unverified author text,

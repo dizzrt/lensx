@@ -59,7 +59,7 @@
         "description": "隐藏启动器窗口"
       },
       "openSettings": {
-        "title": "打开设置",
+        "title": "设置",
         "description": "查看和更改 lensX 偏好设置",
         "keywords": {
           "settings": "设置",

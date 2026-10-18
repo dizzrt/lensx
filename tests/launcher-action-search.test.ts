@@ -1,11 +1,13 @@
 import { describe, expect, test } from '@rstest/core';
 import {
+  createDefaultLauncherActionService,
   LAUNCHER_ACTION_SEARCH_RESULT_LIMIT_V0,
   LAUNCHER_ACTION_SEARCH_SCORES,
   type LauncherActionDescriptor,
   type LauncherActionLocale,
   LauncherActionRegistry,
   normalizeLauncherActionSearchQuery,
+  OPEN_SETTINGS_ACTION_ID,
   searchLauncherActions,
 } from '../src/app/launcher/actions';
 
@@ -56,6 +58,24 @@ const search = (
   locale: LauncherActionLocale = 'en-US',
   limit = LAUNCHER_ACTION_SEARCH_RESULT_LIMIT_V0,
 ) => searchLauncherActions({ query, locale, snapshot, limit });
+
+test.each(['en-US', 'zh-CN'] as const)('searches current Settings metadata without legacy aliases in %s', (locale) => {
+  const service = createDefaultLauncherActionService({ hideLauncher: async () => undefined });
+  const settings = service.registry.get(OPEN_SETTINGS_ACTION_ID);
+  if (!settings) throw new Error('The default service must register Settings.');
+  const snapshot = [settings];
+  for (const query of ['Settings', '设置', 'preferences', 'configuration', '偏好', '配置']) {
+    expect(search(query, snapshot, locale)).toEqual([
+      expect.objectContaining({
+        action_id: OPEN_SETTINGS_ACTION_ID,
+        title: locale === 'en-US' ? 'Settings' : '设置',
+      }),
+    ]);
+  }
+  for (const query of ['Open settings', '打开设置', 'View and change', '查看和更改']) {
+    expect(search(query, snapshot, locale)).toEqual([]);
+  }
+});
 
 describe('launcher action query normalization', () => {
   test('normalizes NFKC, language-independent case, and Unicode whitespace into stable tokens', () => {

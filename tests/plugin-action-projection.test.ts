@@ -249,20 +249,19 @@ describe('Plugin Action projection service', () => {
     const resultsFor = (query: string, locale: 'en-US' | 'zh-CN') =>
       searchLauncherActions({ query, locale, snapshot: actionService.registry.snapshot(), limit: 8 });
     const expectSearch = (alphaAvailable: boolean) => {
-      const expectedIds = [...(alphaAvailable ? [alphaActionId] : []), zuluActionId, OPEN_SETTINGS_ACTION_ID];
+      const expectedPluginIds = [...(alphaAvailable ? [alphaActionId] : []), zuluActionId];
       for (const locale of ['en-US', 'zh-CN'] as const) {
-        expect(resultsFor('设置', locale).map(({ action_id, score }) => ({ action_id, score }))).toEqual(
-          expectedIds.map((action_id) => ({ action_id, score: 500 })),
-        );
-        expect(resultsFor('settings 设置', locale).map(({ action_id, score }) => ({ action_id, score }))).toEqual(
-          expectedIds.map((action_id) => ({ action_id, score: 1000 })),
-        );
-        expect(resultsFor('打开设置', locale).map(({ action_id, score }) => ({ action_id, score }))).toEqual([
+        expect(resultsFor('设置', locale).map(({ action_id, score }) => ({ action_id, score }))).toEqual([
           { action_id: OPEN_SETTINGS_ACTION_ID, score: 1800 },
-          ...expectedIds
-            .filter((actionId) => actionId !== OPEN_SETTINGS_ACTION_ID)
-            .map((action_id) => ({ action_id, score: 500 })),
+          ...expectedPluginIds.map((action_id) => ({ action_id, score: 500 })),
         ]);
+        expect(resultsFor('settings 设置', locale).map(({ action_id, score }) => ({ action_id, score }))).toEqual([
+          { action_id: OPEN_SETTINGS_ACTION_ID, score: 1200 },
+          ...expectedPluginIds.map((action_id) => ({ action_id, score: 1000 })),
+        ]);
+        expect(resultsFor('打开设置', locale).map(({ action_id, score }) => ({ action_id, score }))).toEqual(
+          expectedPluginIds.map((action_id) => ({ action_id, score: 500 })),
+        );
         for (const query of ['catalogue-only', '描述专用词']) {
           expect(resultsFor(query, locale)).toEqual([]);
         }

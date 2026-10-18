@@ -10,9 +10,11 @@ plugin boundaries, Runtime lifecycle, and the evidence required for Task 7.2.
 
 The system MUST provide the product named `ConfigLens` in both `en-US` and `zh-CN` as the independent package `@lensx/official-config-lens` under the canonical source location `plugins/config-lens`, with plugin identity `dev.lensx.config-lens`. Its Manifest MUST use Contract `0.4.0`, contribute exactly one WebView Page and one Launcher Action targeting that Page, and declare that Page with `initial_size: 800×600` logical pixels and `resizable: true`. The declaration MUST use the same public Page presentation contract as external plugins and MUST request no Host permission, Runtime native setter, or unpublished capability. The plugin MUST consume only public plugin package exports and ordinary browser dependencies, and the Host MUST NOT import its source or grant authority based on its official repository location.
 
+The Action's `title.en-US` and `title.zh-CN` MUST both be `ConfigLens`. The title change MUST preserve the `dev.lensx.config-lens.open` execution identity, the `main` Page target, and existing functional keywords. It MUST NOT append `Open ConfigLens`, `打开 ConfigLens`, or compatibility opening prefixes as search keywords.
+
 #### Scenario: User opens ConfigLens from the Launcher
 - **WHEN** the installed ConfigLens Action is found and activated on a work area that can contain its requested size
-- **THEN** the Host opens its contributed Page through the ordinary Registration, Resource, isolated Child WebView Runtime and Session path in an `800×600` logical resizable Window
+- **THEN** its Launcher entry title is `ConfigLens` in both languages, and the Host opens its contributed Page through the ordinary Registration, Resource, isolated Child WebView Runtime and Session path in an `800×600` logical resizable Window
 - **THEN** the Host Page chrome presents the brand `ConfigLens` while the plugin work area repeats no visible main title or subtitle
 - **THEN** the Child WebView retains an accessible work-area name without receiving Tauri, native Window setters, Host DOM, filesystem, native clipboard or another plugin's state
 
@@ -30,6 +32,11 @@ The system MUST provide the product named `ConfigLens` in both `en-US` and `zh-C
 - **WHEN** ConfigLens source remains under the legacy `plugins/official/config-lens` path
 - **THEN** workspace, official release and focused ConfigLens gates MUST report path drift
 - **THEN** the system MUST NOT accept both the legacy path and `plugins/config-lens` as product members
+
+#### Scenario: Discover ConfigLens after the title change
+- **WHEN** a user searches for an available entry by `ConfigLens` or existing keywords such as `JSON`, `format`, or `格式化` in either interface language
+- **THEN** search returns the Action with identity `dev.lensx.config-lens.open` and display name `ConfigLens` under the same rules
+- **THEN** its keyword set remains the existing functional keywords without compatibility aliases added for this title change
 
 ### Requirement: ConfigLens MUST provide direct and reversible editor operations
 

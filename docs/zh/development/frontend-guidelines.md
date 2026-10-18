@@ -155,6 +155,13 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
 
 ## Launcher Action 与集合
 
+- 使用 `title` 作为主要展示名称，并遵循统一的
+  [Action 命名指南](../plugin-development/public-packages.md#action-display-names)。
+  页面和工具入口使用目的地名称；真正的操作保留有意义的动词，例如 `Hide launcher` / `隐藏启动器`。
+- Host 设置入口为 `Settings` / `设置`，ConfigLens 在两种语言中均为 `ConfigLens`。名称保留在各自的
+  应用消息或插件 Manifest 中。不要在渲染时裁剪前缀或合成旧标题搜索别名；保留既有功能关键词。
+- 修改标题时保留稳定的 Action ID 和执行目标。搜索、Recent、Pinned、无障碍名称及打开页面的 Action
+  上下文通过既有元数据路径解析当前本地化标题；改名无需迁移集合，也无需另一条 Dispatcher 路径。
 - 保持 Action descriptor 可序列化且不包含 executor。可选展示图标使用经过校验的 Host token 和共享
   Host resolver；组件不得按 `action_id` 分支选择图标。
 - 通过同一个当前不可变 registry snapshot 解析最近使用和已固定 ID，保持持久化顺序，过滤缺失或

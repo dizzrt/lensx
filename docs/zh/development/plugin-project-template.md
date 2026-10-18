@@ -58,6 +58,18 @@ Action Registry；激活 Action 会打开已投影 Page。随后 Host 会解析�
 resource generation。React 只使用该安全 identity 请求一个 native Child WebView presentation，native
 code 会独立解析 current document target。
 
+canonical 模板及其 CLI 打包快照使用以下目的地名称作为入口 Action 的 `title`：
+
+| 模板 | `en-US` | `zh-CN` |
+| --- | --- | --- |
+| `framework-neutral` | `Framework-neutral starter` | `无框架起步模板` |
+| `react-semi` | `React and Semi starter` | `React 与 Semi 起步模板` |
+
+既有 Action/Page ID、target、默认入口和功能关键词保持不变，不添加旧完整标题或打开前缀
+兼容关键词。调整起步模板时遵循统一的
+[Action 命名指南](../plugin-development/public-packages.md#action-display-names)：
+多个入口使用可区分的目的地名称，真正的操作保留有意义的动词。
+
 template Page 省略 `presentation`，因此规范化为固定 `650×600`。作者可为 Page 声明有界
 初始逻辑尺寸并允许用户调整：
 
@@ -97,7 +109,9 @@ lensx-plugin create ./my-plugin \
 ```
 
 React/Semi 起步项目使用 `react-semi`。生成项目声明 `pnpm@11`、普通公共 dependency range，以及与
-canonical example 相同的 lifecycle scripts。构建、验证、打包与 inspection 详见
+canonical example 相同的 lifecycle scripts。对任一模板，上述示例都会把两种语言的 Action 标题
+设为 `My Plugin`。`create` 原样使用通过校验的 `--name`：`Open Studio` 仍为 `Open Studio`，
+不添加或删除打开词语，也不生成旧标题关键词。构建、验证、打包与 inspection 详见
 [Plugin Developer CLI](plugin-developer-cli.md)。
 
 使用模板自己的 package scripts 运行局部验证：

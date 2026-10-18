@@ -53,8 +53,8 @@
       {
         "id": "open",
         "title": {
-          "en-US": "Open ConfigLens",
-          "zh-CN": "打开 ConfigLens"
+          "en-US": "ConfigLens",
+          "zh-CN": "ConfigLens"
         },
         "description": {
           "en-US": "Validate and format configuration text.",

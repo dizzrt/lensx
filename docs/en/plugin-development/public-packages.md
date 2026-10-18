@@ -38,6 +38,34 @@ is a Node authoring tool and must not enter the browser bundle.
 
 ## Action discovery metadata
 
+<a id="action-display-names"></a>
+
+### Naming Action entries
+
+An Action's `title` is its primary user-facing display name; the field remains
+`title`, and a command-style sentence is not required. Name a Page or tool
+entry after its destination, without adding `Open` merely because selecting
+the entry opens it. Give multiple entries distinct destination names instead
+of replacing every title with the plugin name. Actions that perform an
+operation keep the verb needed to describe that operation, such as the Host's
+`Hide launcher` / `隐藏启动器`.
+
+This is an authoring convention, not a new Manifest validation rule. Valid
+names such as `Open Studio` and existing third-party titles remain accepted;
+normalization and Host projection preserve their wording. The existing
+localized-string rules, including a non-empty English title, still apply.
+Do not trim opening words at runtime or derive an alternative title from a
+plugin name or Page title.
+
+The maintained Settings, ConfigLens, and template title simplification keeps
+existing functional keywords. It adds no replaced full titles, `Open` /
+`打开` compatibility keywords, hidden aliases, or extra search sources. An old
+full-title query may therefore stop matching, and relevance scores may change
+with the new title. Action IDs and execution targets remain stable, so Recent
+and Pinned entries continue to resolve the same Action with its current title.
+
+### Search matching
+
 Launcher search uses only each Action's `title` and `default_keywords` from
 all declared supported languages (`en-US` and `zh-CN`). The interface language
 controls display text and feedback, with English fallback for missing localized

@@ -52,6 +52,20 @@ package name, plugin ID, and matching display/test placeholders, then reruns
 the Manifest Contract. It does not access the network, install dependencies,
 initialize Git, run project code, or overwrite a non-empty target.
 
+For both templates, the entry Action's `title.en-US` and `title.zh-CN` are the
+validated `--name` value itself. `--name "My Plugin"` produces `My Plugin` in
+both locales; `--name "Open Studio"` produces `Open Studio`, without adding
+`Open ` / `打开 ` or removing words from the supplied name. Input validation,
+package-name normalization, plugin/Page naming, Action/Page IDs, targets,
+default entry selection, and functional keywords retain their existing rules.
+
+The defaults follow the shared
+[Action naming guide](../plugin-development/public-packages.md#action-display-names).
+`create` adds no old-title or opening-prefix compatibility keywords. This
+does not introduce a prefix ban in validation or rewrite existing projects:
+otherwise-valid third-party Action titles containing `Open` or `打开` remain
+accepted.
+
 Files are written to a unique sibling staging directory and committed with an
 atomic rename only after complete validation. Failure and interruption remove
 staging data. The generated project requests no permissions and reports

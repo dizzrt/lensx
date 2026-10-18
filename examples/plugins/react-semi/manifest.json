@@ -46,8 +46,8 @@
       {
         "id": "open",
         "title": {
-          "en-US": "Open React and Semi starter",
-          "zh-CN": "打开 React 与 Semi 起步模板"
+          "en-US": "React and Semi starter",
+          "zh-CN": "React 与 Semi 起步模板"
         },
         "description": {
           "en-US": "Open the starter page.",

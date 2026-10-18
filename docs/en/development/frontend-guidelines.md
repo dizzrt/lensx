@@ -209,6 +209,18 @@ Shell layout and spacing in UnoCSS utilities.
 
 ## Launcher Actions And Collections
 
+- Use `title` as the primary display name and follow the shared
+  [Action naming guide](../plugin-development/public-packages.md#action-display-names).
+  Page and tool entries use destination names; operations retain meaningful
+  verbs, such as `Hide launcher` / `隐藏启动器`.
+- The Host settings entry is `Settings` / `设置`, and ConfigLens is `ConfigLens`
+  in both locales. Keep these names in their application messages or plugin
+  Manifest. Do not trim prefixes in rendering or synthesize legacy search
+  aliases; retain existing functional keywords.
+- Preserve stable Action IDs and execution targets when changing titles.
+  Search, Recent, Pinned, accessible names, and the opening Action's page
+  context resolve the current localized title through the existing metadata
+  paths; title changes need no collection migration or alternate Dispatcher.
 - Keep Action descriptors serializable and executor-free. Optional display
   icons use validated Host tokens and the shared Host resolver; never branch on
   `action_id` in a component to choose an icon.

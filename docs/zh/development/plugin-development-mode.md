@@ -119,7 +119,7 @@ raw native errors 或 private Manager facts。
 1. 使用上面的命令构建并校验 A 代版本，把它放到 custom root 的直接成员
    `<root>/smoke/dist` 下，然后运行
    `pnpm run dev:plugin-development-mode -- --plugins-root <root>`。
-2. 按 `Ctrl+Shift+Space`，执行 **打开设置**，进入 **插件**。**插件开发模式** Switch
+2. 按 `Ctrl+Shift+Space`，执行 **设置**，进入 **插件**。**插件开发模式** Switch
    必须已经开启，发现到的条目必须显示 `0.1.0`，以及
    **Development**、**Unpacked**、**Unsigned** 文本标签。Publisher 必须仍是
    未验证的作者文本，并且不存在 permission 或 grant facts。

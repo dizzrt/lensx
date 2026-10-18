@@ -234,13 +234,20 @@ MUST allow only `page`, and `target.page_id` MUST reference a Page contributed
 by the same plugin. An Action MUST NOT contain an executor, function, route,
 URL, Command Target, or author-controlled `enabled` state.
 
+`title` MUST express the author's user-facing display name rather than require
+a verb phrase. Page-entry authoring rules MUST favor distinguishable destination
+names, but this copy convention MUST NOT become a protocol rule that rejects
+or rewrites valid localized strings based on an `Open` / `打开` prefix. Field
+names, existing localized-text validation, and version compatibility boundaries
+MUST remain unchanged.
+
 #### Scenario: A plugin contributes multiple Actions
 
 - **WHEN** a Manifest declares multiple unique Actions and each Action points
   to a declared Page
 - **THEN** the system accepts every Action
 - **THEN** each Action retains its independent title, description, keywords,
-  and target
+  and target rather than having every title replaced with the plugin name
 
 #### Scenario: A plugin contributes no Action
 
@@ -255,7 +262,7 @@ URL, Command Target, or author-controlled `enabled` state.
 - **WHEN** an Action target is `{ "kind": "page", "page_id": "home" }` and the
   `home` Page exists
 - **THEN** the system accepts the target
-- **THEN** the future Host can synthesize a controlled open-Page executor for
+- **THEN** the Host can synthesize a controlled open-Page executor for
   the Action
 
 #### Scenario: An Action uses an unsupported Target
@@ -270,6 +277,23 @@ URL, Command Target, or author-controlled `enabled` state.
 - **WHEN** `target.page_id` is absent from the same plugin's Page collection
 - **THEN** the system rejects the entire Manifest
 - **THEN** the diagnostic points to the Action's Page reference
+
+#### Scenario: A valid authored title contains an opening word
+
+- **WHEN** an otherwise valid Manifest declares `Open Studio` or other valid
+  text containing `Open` / `打开` as an Action title
+- **THEN** validation neither rejects the Manifest solely for that wording nor
+  emits a new prefix-naming diagnostic
+- **THEN** normalization preserves the author's title wording without removing
+  a prefix, renaming the field to `name`, or deriving a replacement title
+
+#### Scenario: Localized title requirements still apply
+
+- **WHEN** an Action's English title is absent or empty after trimming
+- **THEN** the system rejects that input under the existing localized-text
+  contract
+- **THEN** simplified naming does not bypass required English text, field
+  types, or existing unknown-field checks
 
 ### Requirement: Action search keywords must be valid and belong to their Action
 

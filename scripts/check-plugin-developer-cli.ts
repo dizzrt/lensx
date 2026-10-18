@@ -1,3 +1,4 @@
+import { deepStrictEqual } from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { cp, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -134,6 +135,7 @@ try {
 
   const packageOutputs: string[] = [];
   for (const template of templates) {
+    const projectName = template === 'framework-neutral' ? 'My Plugin' : 'Open Studio';
     const consumerRoot = resolve(temporaryRoot, `consumer-${template}`);
     const projectRoot = resolve(consumerRoot, 'plugin');
     await mkdir(consumerRoot);
@@ -168,7 +170,7 @@ try {
         '--plugin-id',
         `com.example.cli-${template}`,
         '--name',
-        `${template} plugin`,
+        projectName,
         '--json',
       ],
       toolingRoot,
@@ -261,10 +263,30 @@ try {
     const generatedManifest = JSON.parse(await readFile(resolve(projectRoot, 'manifest.json'), 'utf8')) as {
       manifest_version?: unknown;
       runtime?: { kind?: unknown };
+      contributes?: {
+        actions?: Array<{ id?: unknown; title?: unknown; default_keywords?: unknown; target?: unknown }>;
+        launcher?: { default_action_id?: unknown };
+      };
     };
     if (generatedManifest.manifest_version !== '0.4.0' || generatedManifest.runtime?.kind !== 'webview') {
       throw new Error(`${template} generated a legacy Manifest.`);
     }
+    const generatedAction = generatedManifest.contributes?.actions?.[0];
+    deepStrictEqual(
+      generatedAction?.title,
+      { 'en-US': projectName, 'zh-CN': projectName },
+      `${template} must preserve the supplied project name as its bilingual Action title.`,
+    );
+    deepStrictEqual(
+      generatedAction?.default_keywords,
+      template === 'framework-neutral'
+        ? { 'en-US': ['starter', 'typescript'], 'zh-CN': ['起步', 'TypeScript'] }
+        : { 'en-US': ['starter', 'react', 'semi'], 'zh-CN': ['起步', 'React', 'Semi'] },
+      `${template} must preserve its functional keywords without legacy title aliases.`,
+    );
+    deepStrictEqual(generatedAction?.target, { kind: 'page', page_id: 'main' });
+    deepStrictEqual(generatedAction?.id, 'open');
+    deepStrictEqual(generatedManifest.contributes?.launcher?.default_action_id, 'open');
     const generatedSources = [
       await readFile(resolve(projectRoot, template === 'react-semi' ? 'src/App.tsx' : 'src/main.ts'), 'utf8'),
     ].join('\n');

@@ -1,8 +1,11 @@
+import { normalizePluginManifest, validatePluginManifest } from '@lensx/plugin-contract';
 import { describe, expect, rs, test } from '@rstest/core';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import configLensManifest from '../plugins/config-lens/manifest.json';
 import App from '../src/App';
 import { AppProviders } from '../src/app/AppProviders';
 import {
+  createDefaultLauncherActionService,
   LauncherActionDispatcher,
   LauncherActionRegistry,
   type LauncherActionService,
@@ -13,6 +16,7 @@ import {
 } from '../src/app/launcher/collections';
 import type { LauncherSurfaceController, LauncherSurfaceTarget } from '../src/app/launcher/surface';
 import { AppNavigationService, HostPageCatalog } from '../src/app/navigation';
+import { mapPluginActionsToLauncherRegistrations } from '../src/app/plugins/actions';
 import type { PluginRuntimeLifecycleService } from '../src/app/plugins/runtime';
 
 const inertActivationSource = {
@@ -100,6 +104,60 @@ const renderShell = ({
   );
 
 describe('App Shell page navigation', () => {
+  test.each([
+    ['en-US', 'light', 'Settings', 'Recent', 'Pinned', 'Launcher query', 'Close settings and return home'],
+    ['zh-CN', 'dark', '设置', '最近使用', '已固定', '启动器查询', '关闭设置并返回主页'],
+  ] as const)('resolves existing collection IDs and searches renamed entries in %s', async (initialLocale, initialThemeMode, settingsTitle, recentLabel, pinnedLabel, queryLabel, closeLabel) => {
+    const navigationService = createNavigationService();
+    const actionService = createDefaultLauncherActionService(
+      { hideLauncher: async () => undefined },
+      navigationService,
+    );
+    const validation = validatePluginManifest(configLensManifest);
+    if (validation.status !== 'valid') throw new Error(JSON.stringify(validation.diagnostics));
+    const { manifest } = normalizePluginManifest(validation, { lensx: '0.1.0', host_api: '0.2.0' });
+    const openPage = rs.fn();
+    expect(
+      actionService.registry.registerBatch(mapPluginActionsToLauncherRegistrations(manifest, { openPage })).ok,
+    ).toBe(true);
+    const ids = ['lensx.core.open_settings', 'dev.lensx.config-lens.open'];
+    const collections = { version: 1 as const, recent_action_ids: ids, pinned_action_ids: ids };
+    const recordUse = rs.fn(async () => collections);
+    renderShell({
+      navigationService,
+      actionService,
+      initialLocale,
+      initialThemeMode,
+      collectionsClient: { read: async () => collections, recordUse, setPinned: async () => collections },
+    });
+    const recent = within(screen.getByRole('region', { name: recentLabel }));
+    const pinned = within(screen.getByRole('region', { name: pinnedLabel }));
+    const settingsTile = await recent.findByRole('button', { name: settingsTitle });
+    expect(recent.getByRole('button', { name: 'ConfigLens' })).toBeInTheDocument();
+    expect(pinned.getByRole('button', { name: settingsTitle })).toBeInTheDocument();
+    settingsTile.focus();
+    expect(settingsTile).toHaveFocus();
+    fireEvent.click(settingsTile);
+    expect(await screen.findByRole('region', { name: `lensX: ${settingsTitle}` })).toBeInTheDocument();
+    await waitFor(() => expect(recordUse).toHaveBeenCalledWith(ids[0]));
+    fireEvent.click(screen.getByRole('button', { name: closeLabel }));
+    const input = await screen.findByRole('combobox', { name: queryLabel });
+    expect(input).toHaveFocus();
+    fireEvent.click(
+      within(screen.getByRole('region', { name: pinnedLabel })).getByRole('button', { name: 'ConfigLens' }),
+    );
+    await waitFor(() => expect(recordUse).toHaveBeenCalledWith(ids[1]));
+    expect(openPage).toHaveBeenCalledWith({ owner_id: 'dev.lensx.config-lens', page_id: 'main' }, ids[1]);
+    fireEvent.change(input, { target: { value: 'JSON' } });
+    expect(screen.getByRole('option', { name: 'ConfigLens' })).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: 'settings' } });
+    expect(screen.getByRole('option', { name: settingsTitle })).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(await screen.findByRole('region', { name: `lensX: ${settingsTitle}` })).toBeInTheDocument();
+    if (initialThemeMode === 'dark') expect(document.body).toHaveAttribute('theme-mode', 'dark');
+    else expect(document.body).not.toHaveAttribute('theme-mode');
+  });
+
   test('routes Host reload and root teardown through the Runtime terminal coordinator', async () => {
     const terminateCurrent = rs.fn(async () => undefined);
     const lifecycleService: PluginRuntimeLifecycleService = {

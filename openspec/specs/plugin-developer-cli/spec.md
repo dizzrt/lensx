@@ -43,6 +43,13 @@ project MUST use only public lensX packages and ordinary publishable
 dependencies, MUST pass Contract validation, and the command MUST NOT download
 dependencies, initialize Git, install the plugin, or run the plugin.
 
+Entry Actions generated from either template MUST retain the `title` field,
+with `title.en-US` and `title.zh-CN` set directly to the `--name` value accepted
+by existing validation. The generator MUST NOT add `Open ` or `打开 ` prefixes,
+trim words from the name, or synthesize legacy-title compatibility keywords.
+Existing accepted name inputs, package naming rules, Action and Page identities,
+targets, and template functional keywords MUST remain unchanged.
+
 #### Scenario: Create a framework-neutral project
 
 - **WHEN** a developer runs `create` for a nonexistent target directory and
@@ -68,6 +75,33 @@ dependencies, initialize Git, install the plugin, or run the plugin.
   any existing file
 - **THEN** staging content is removed without leaving an apparently successful
   partially generated project
+
+#### Scenario: Create an entry with the supplied project name
+
+- **WHEN** a developer supplies the valid name `My Plugin` for either template
+- **THEN** the generated entry's `title.en-US` and `title.zh-CN` are both
+  `My Plugin`
+- **THEN** it generates neither `Open My Plugin` nor `打开 My Plugin` as titles
+  and adds neither those strings nor compatibility opening prefixes to keywords
+- **THEN** the plugin name, Page title, and package name follow their existing
+  generation rules, while the Action target and default entry remain valid
+
+#### Scenario: Preserve an opening word that belongs to the supplied name
+
+- **WHEN** a developer supplies `Open Studio` for either template and it passes
+  existing input validation
+- **THEN** both localized entry titles are `Open Studio`
+- **THEN** the generator neither adds another opening prefix nor trims the
+  name to `Studio`
+
+#### Scenario: Inspect an existing plugin with an older title style
+
+- **WHEN** an author validates an existing Contract-valid plugin whose Action
+  title still contains `Open` or `打开`
+- **THEN** the changed generation defaults introduce no validation rule that
+  rejects that valid title
+- **THEN** the CLI does not automatically rewrite the existing project, title,
+  or keywords
 
 ### Requirement: Build MUST execute only the explicit supported project lifecycle
 

@@ -20,7 +20,16 @@ describe('framework-neutral template Manifest', () => {
     expect(normalized.manifest.runtime).toEqual({ kind: 'webview', entry: 'index.html' });
     expect(normalized.manifest.contributes.pages).toEqual([expect.objectContaining({ id: 'main', route: '/' })]);
     expect(normalized.manifest.contributes.pages[0]).not.toHaveProperty('required_permissions');
-    expect(normalized.manifest.contributes.actions[0]?.target).toEqual({ kind: 'page', page_id: 'main' });
+    expect(normalized.manifest.contributes.actions).toEqual([
+      expect.objectContaining({
+        id: 'open',
+        title: normalized.manifest.display.name,
+        default_keywords: { 'en-US': ['starter', 'typescript'], 'zh-CN': ['起步', 'TypeScript'] },
+        target: { kind: 'page', page_id: 'main' },
+      }),
+    ]);
+    expect(normalized.manifest.contributes.actions[0]?.title).toEqual(normalized.manifest.contributes.pages[0]?.title);
+    expect(normalized.manifest.contributes.launcher?.default_action_id).toBe('open');
   });
 
   test('has no React, Semi Design, or Plugin UI dependency or source import', () => {
