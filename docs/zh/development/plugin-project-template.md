@@ -112,7 +112,6 @@ pnpm --dir examples/plugins/react-semi run test
 pnpm --dir examples/plugins/react-semi run typecheck
 pnpm --dir examples/plugins/react-semi run build
 pnpm --dir examples/plugins/react-semi run check
-pnpm --dir examples/plugins/react-semi run visual
 ```
 
 使用以下命令运行模板边界的完整维护门禁：

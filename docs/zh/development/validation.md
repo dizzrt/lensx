@@ -144,6 +144,8 @@ pnpm run gate -- plugin-contract
 pnpm run gate -- plugin-package-format
 ```
 
+该 Gate 使用确定性的 TypeScript 与 Rust 格式检查，以及 package fixtures。
+
 ## Plugin Developer CLI 验证
 
 ```bash

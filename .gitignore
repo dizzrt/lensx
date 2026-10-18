@@ -19,6 +19,11 @@ src-tauri/rustc-ice-*.txt
 # Local
 .DS_Store
 .tmp
+# Project-root temporary inputs
+/.tmp/
+/.temp/
+/tmp/
+/temp/
 *.local
 
 # Profile

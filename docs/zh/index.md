@@ -1,7 +1,7 @@
 # lensX 文档
 
-英文文档是持续维护的项目文档规范来源。本简体中文索引与
-[英文索引](../en/index.md)保持相同结构。
+英文是 [govern-spec.yaml](../../govern-spec.yaml) 声明的持续维护文档基准。
+本简体中文索引与[英文索引](../en/index.md)保持相同结构和含义。
 
 ## 架构
 
@@ -32,11 +32,11 @@
   重新加载与移除未打包的 `dist/`。
 - [前端指南](development/frontend-guidelines.md) — React、Semi Design、样式、主题、
   国际化和无障碍规则。
-- [项目工作流](development/project-workflow.md) — 事实来源、文档治理、OpenSpec 和
-  临时材料规则。
+- [项目工作流](development/project-workflow.md) — 事实来源、语言策略、文档治理、OpenSpec、
+  变更范围与有条件触发的项目级归档审计，以及临时材料规则。
 - [验证](development/validation.md) — 前端和 Rust 必需的验证与完成标准。
 
 ## 需求
 
-稳定的能力需求位于 `openspec/specs/`，提议中或进行中的工作位于
-`openspec/changes/`。已经实现的行为始终必须通过当前源码和测试确认。
+稳定的能力需求位于 [openspec/specs/](../../openspec/specs/)，提议中或进行中的工作位于
+[openspec/changes/](../../openspec/changes/)。已经实现的行为始终必须通过当前源码和测试确认。

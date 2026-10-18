@@ -63,7 +63,8 @@ pnpm run src-tauri:check
 
 1. Read the [documentation index](docs/en/index.md).
 2. Read [AGENTS.md](AGENTS.md) when working with an AI coding agent.
-3. Use the OpenSpec workflow for meaningful behavior, architecture, or contract
+3. Read the [stable specifications](openspec/specs/) and use the OpenSpec workflow
+   for meaningful behavior, architecture, or contract
    changes.
 4. Keep tests and both documentation languages aligned with every relevant
    change.

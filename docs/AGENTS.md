@@ -1,6 +1,8 @@
 # Documentation Agent Guide
 
-This file governs all documentation under `docs/`.
+This file governs all documentation under `docs/` and follows the
+[root agent instructions](../AGENTS.md) and their canonical
+[language policy](../govern-spec.yaml). Read the baseline documentation first.
 
 ## Canonical Language
 
@@ -8,6 +10,9 @@ This file governs all documentation under `docs/`.
 - Simplified Chinese documents under `docs/zh/` are translations of the
   matching English documents.
 - This file must remain in English.
+- The first declared docs language is the semantic baseline; synchronize every
+  declared translation strictly in the same task, without deferring missing or
+  stale content. The root instructions explain language resolution and scope.
 - Do not use a Chinese document to introduce requirements or decisions that do
   not exist in its English counterpart.
 
@@ -18,10 +23,17 @@ This file governs all documentation under `docs/`.
 - Every `docs/zh/**/*.md` file must have a matching `docs/en/**/*.md` file with
   the same relative path.
 - Both language roots must contain an `index.md`.
+- Only `AGENTS.md` may be a direct file under `docs/`; do not create a language
+  selector at `docs/index.md`. Only `index.md` may be a direct file under each
+  language content root.
 - Organize documents into specific category directories such as
   `architecture/` and `development/`.
 - When adding, moving, renaming, or removing a document, update both language
-  trees and both indexes in the same change.
+  trees, both indexes, and all affected inbound and outbound links in the same
+  change, including references outside `docs/`. Validate against final paths.
+- Each language's root index is its sole categorized content catalog. Topic hubs
+  may guide readers within their category; root entry points must not duplicate
+  the catalog.
 
 ## Reading Order
 
@@ -33,6 +45,10 @@ Agents must:
 4. Check active change artifacts when work is proposed or in progress.
 5. Inspect source code and tests before making claims about implemented
    behavior.
+
+Retrieve documentation and stable specs before judging implementation or
+engineering conventions. Report absent, insufficient, or conflicting evidence
+and check executable configuration; do not fill gaps from general assumptions.
 
 ## Content Boundaries
 
@@ -52,6 +68,7 @@ Temporary material may be inspected as input, but committed documentation must
 not link to, cite, depend on, or name individual temporary files or sources.
 Restate useful information as project-owned goals, constraints, examples,
 architecture, or decisions.
+This includes project-root `.tmp/`, `.temp/`, `tmp/`, and `temp/`.
 
 ## Writing And Linking
 
@@ -62,6 +79,18 @@ architecture, or decisions.
 - Keep terminology consistent between language versions.
 - Preserve code identifiers, file paths, commands, and protocol names when
   translating.
+
+## Change And Archive Audits
+
+Follow the [project governance procedure](en/development/project-workflow.md#governance-and-archive-readiness).
+Every archive reviews documentation and governance within the final accepted
+change scope after stable-spec synchronization. Synchronize affected documents,
+indexes, links, and declared languages; record inspected paths, conclusions,
+rationale, updated paths, actual checks, and the project-level trigger decision
+in the change's `tasks.md`. A no-update result still needs evidence. Reconfirm
+earlier audits before archive. Add project-level review only when governance
+surfaces are affected; repairs can trigger it. Missing or stale in-scope docs or
+unresolved governance prevent archive readiness.
 
 ## Review Checklist
 

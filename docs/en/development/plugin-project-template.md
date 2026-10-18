@@ -134,7 +134,6 @@ pnpm --dir examples/plugins/react-semi run test
 pnpm --dir examples/plugins/react-semi run typecheck
 pnpm --dir examples/plugins/react-semi run build
 pnpm --dir examples/plugins/react-semi run check
-pnpm --dir examples/plugins/react-semi run visual
 ```
 
 Run the maintained end-to-end validation of the template boundary with:

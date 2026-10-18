@@ -84,7 +84,7 @@ lensx-plugin pack --project .
 在 Settings 选择 **从文件安装**，选择该 `.lxp`，检查未验证 publisher 与 open-Web trust notice，
 然后确认。Host 对 exact candidate 重新 inspection，并通过 controlled preparation boundary commit。
 从 launcher 打开 contributed Action，确认 loading、ready、locale/theme replacement 与干净 close。
-CLI acceptance 不会授予 authority；此 starter 仍无权限。
+CLI acceptance 不会授予 Host authority；普通 Web 行为仍限制在隔离 Runtime 内。
 
 ## 负向路径
 

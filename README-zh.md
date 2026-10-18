@@ -58,7 +58,7 @@ pnpm run src-tauri:check
 
 1. 阅读[文档索引](docs/zh/index.md)。
 2. 使用 AI 编码 Agent 时阅读 [AGENTS.md](AGENTS.md)。
-3. 对重要的行为、架构或契约变更使用 OpenSpec 工作流。
+3. 阅读[稳定规格](openspec/specs/)，对重要的行为、架构或契约变更使用 OpenSpec 工作流。
 4. 每次相关变更都要同步维护测试和两个语言版本的文档。
 
 ## 许可证

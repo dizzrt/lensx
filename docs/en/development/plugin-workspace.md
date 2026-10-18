@@ -154,7 +154,7 @@ module realpaths, repeats packaging byte-for-byte, and passes the resulting
 
 `packages/plugin-sdk` owns the framework-neutral SDK client lifecycle, validated
 Runtime context, version compatibility, stable SDK errors, cancellation and
-timeout behavior, the semantic transport interface, and the official iframe
+timeout behavior, the semantic transport interface, and the official WebView
 transport. Its supported imports are:
 
 ```text

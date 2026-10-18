@@ -87,7 +87,8 @@ locale，并比较完整叶子 key 集合。已确认的 locale 通过 Rust 偏�
 App Shell 根据本地 `activePage`、已解析 provider 和规范化查询推导 `home`、`search`、
 `host_page` 或绑定身份的 `plugin_page` surface target。所有 target 共享同一顶部行和非交互
 avatar 占位。`home` 保留 launcher 输入，并依次从已接受的 Action 集合渲染“最近使用”和“已固定”；
-它不会用 registry 顺序或模拟数据补齐。“已固定”旁的本地化“全部”只是非交互占位。`search` 保留
+它不会用 registry 顺序或模拟数据补齐。当前已有 Pinned Action 只读展示：每张卡片仅提供主 Action，
+固定、取消固定、菜单和替代管理入口仍待后续实现。“已固定”旁的本地化“全部”只是非交互占位。`search` 保留
 同一输入，并在单一四列网格中显示最多八个真实启用的 Action 结果。`page` 用本地化的“所属方 / Action”
 上下文条和可访问关闭图标替换输入，同时保留 avatar 占位。关闭页面会返回 `home` 并恢复输入焦点；
 页面级错误边界会在内容失败时保留上下文条和关闭控件。
@@ -288,17 +289,12 @@ Page 标题。Host Page 使用受保护 Host icon token；在 scoped resource re
 使用通用 provider icon。显示字符串不会复制进 `ActivePage`，因此 locale 与 metadata 更新会从当前
 事实重新解析。
 
-App Shell 继续在现有 main window 中使用唯一 `home` / `search` / `page` presentation state。
-`lensx.core/settings` 渲染可信 Settings surface。available Plugin Page 会在现有 Page error boundary 内
-渲染唯一 Host-owned 隔离 iframe。Host 私有 resolver 会交叉检查 current Page、Registration revision、
-Resource identity、isolated `entry_url` 与 Registry route，然后在挂载前激活精确 native navigation lease。
-iframe 固定 `allow-scripts allow-same-origin`、`no-referrer` 与 Host-owned Permissions Policy；close、
-retry、invalidation、replacement 与 App teardown 都会移除它。load event 只表示 `loaded`，不等于 SDK/
-Session `ready`。load 后，Host 私有 Session 会把 current entry、plugin、version、Page、resource
-generation 与 Runtime attempt 绑定到真实 `contentWindow`；只有新 transfer Port 上的 exact
-acknowledgement 才产生 Session `ready`。SDK `ready`、Host API transport、open-Web CSP、Host 私有
-Dispatcher 与 scoped storage 已交付。Manifest 与 Host API `0.2.0` 不暴露 native clipboard 或 permission
-authority。
+`lensx.core/settings` 渲染可信 Host Page surface。available Plugin Page 渲染一个 Host-owned slot，
+同时由 Rust 创建 current native Child WebView sibling。Host 私有 resolver 会交叉检查 Page、
+Registration revision、Resource identity、isolated `entry_url`、route、generation、native source
+与 attempt。closed bridge 和 Session 只会为该 current Child WebView 进入 ready。close、retry、
+invalidation、replacement 与 App teardown 都会撤销它。Manifest `0.4.0` 与 Host API `0.2.0`
+既不暴露 native Window method，也不暴露 Child WebView identity。
 
 设置在现有 `main` Tauri 窗口中渲染。左侧受控纵向导航只包含“偏好”和“插件”，默认选择“偏好”；
 右侧内容区只渲染当前部分。解析后的 `lensx.core/settings` 身份会启用 edge-to-edge App Shell modifier：

@@ -83,7 +83,7 @@ invalid、normalized 和 incompatible fixtures，从而保持 validity、compati
 | `publisher` | 必填的作者声明 `author`、HTTPS `homepage` 和 HTTPS `repository`；三者都不建立信任。 |
 | `compatibility` | 必填的 `lensx` 和 `host_api` SemVer 半开区间。 |
 | `runtime` | 必填 `kind: "webview"` 和包内 HTML `entry`；它不授予原生 authority。 |
-| `contributes.pages` | 一个或多个具有唯一 ID 的 Page，包含本地化标题、内部 route，以及可选 parent/icon 和有界 `presentation`。 |
+| `contributes.pages` | 一个或多个具有唯一 ID 的 Page，包含本地化标题、内部 route，以及可选 parent/icon 和可选的有界 `presentation`。 |
 | `contributes.actions` | 可选的唯一 Action，包含本地化标题/描述、Action 自有的 `default_keywords`、可选 icon 和只指向 Page 的 target。 |
 | `contributes.launcher` | 可选的 `default_action_id`，引用一个已贡献 Action；它不实现排序或注册。 |
 
@@ -99,7 +99,7 @@ Page 和 Action ID 都是插件内本地 ID。Host 私有 Plugin Action 投影�
 
 Page `presentation` 若存在，只能包含 `320..=4096` 的整数逻辑
 `initial_size.width`、`180..=4096` 的整数逻辑 `initial_size.height` 和布尔
-`resizable`。省略时规范化为 `650×600` 且 `resizable: false`。有效 work-area 约束、
+`resizable`。省略时规范化为 `650×600` 且 `resizable: false`。规范化值仍是作者元数据。有效 work-area 约束、
 当前用户尺寸、monitor facts 与原生失败绝不进入 Manifest 或 Registration wire。
 
 ### 校验、规范化与兼容性
@@ -119,8 +119,8 @@ Tauri 值、Rust 实现对象，或 `source`、`lifecycle`、`enabled`、安装�
 sandbox、network policy、native capability、permission 或 grant 等 Host-owned 字段。Publisher 元数据
 是不受信任的作者输入，不能单独用于建立信任。
 
-Contract package 版本、Manifest 协议、Host API 协议与 lensX 应用版本都从 `0.1.0` 起步，
-但此后独立演进。package 实现修复不会改变 wire protocol；Manifest 或 Host API 的 breaking
+Contract package 版本、Manifest 协议、Host API 协议与 lensX 应用版本独立演进。
+package 实现修复不会改变 wire protocol；Manifest 或 Host API 的 breaking
 change 更新各自版本维度。当前契约不提供更早 Schema、deprecated symbol alias、兼容 adapter
 或迁移分支。
 
@@ -133,10 +133,10 @@ scripts 或 Host 私有源码。
 
 ### 静态校验范围外的能力
 
-静态校验本身不会发现或安装包、创建生产 registration 或 iframe、交换 Host API 消息或
+静态校验本身不会发现或安装包、创建生产 registration 或 Child WebView、交换 Host API 消息或
 运行插件代码。下文的 Host 私有 capability 会把一个用户选中的兼容 `.lxp` 添加为 external
 registration，把 current Registration facts 投影进 Page 与 Action Registry，并且只在 eligible Plugin
-Page active 时创建隔离 iframe。Runtime Session 与 Host API 执行是独立 capability；其中下文的
+Page active 时创建隔离 Child WebView。Runtime Session 与 Host API 执行是独立 capability；其中下文的
 Host 私有进程内 Runtime Session 与公共语义契约已经交付。
 
 ## 已交付的公共 Host API 语义契约
@@ -167,8 +167,8 @@ Host API error 使用稳定闭集 code 与有界安全英文 message，并与 SD
 
 本次交付是可独立消费的语义契约，不是执行路径。它不注册 Tauri command，也不实现 Runtime
 transport、私有 RPC envelope、request ID、Dispatcher、Action/close 副作用、storage persistence、
-clipboard native 调用、permission decision 或 RPC resource limit。`system.open_external` 与外链权限
-明确不作为占位能力发布。
+native 调用或 RPC resource limit。Clipboard 与 `system.open_external` 被有意排除，
+不会作为占位能力发布。
 
 ## 已交付的 Host 私有 Plugin Package Inspection
 
@@ -184,7 +184,7 @@ path 或 Host state。Publisher 文本和 author 声明的 Host 字段永远不�
 lifecycle 或 trust 结论。
 
 这是 inspection core，不是 installer 或 plugin-facing API。它没有 Tauri command、Plugin Manager mutation、
-安装目录写入、公共 CLI、development-directory input、resource service、iframe、Runtime session、权限决策或
+安装目录写入、公共 CLI、development-directory input、resource service、Child WebView、Runtime session、权限决策或
 签名行为。精确 layout、limits、dependency review、diagnostics 与 drift gate 见
 [插件包格式](plugin-package-format.md)。
 
@@ -221,7 +221,7 @@ manager-level degraded 恢复报告启动；Tauri 启动仍然完成，也不会
 这一内部状态只表示 Host 已知一条 installed registration。本地安装器可以为一个选中的兼容包建立
 package digest、payload 和首条 external registration。生命周期协调器可以通过绑定 revision 的 opaque
 identity 原子更新 enabled intent，或移除健康、quarantine 条目。Manager record 本身仍不能证明发现
-来源。更新、权限决策、Runtime session 和面向插件的公共 registration API 仍是独立能力。
+来源。更新、Runtime session 和面向插件的公共 registration API 仍是独立能力。
 
 ## 已交付的 Host 私有插件开发模式
 
@@ -350,7 +350,7 @@ Uninstall 必须显式选择 `retain_data` 或 `delete_data` policy。Host 会�
 继续执行。Malformed、冲突、symlink 或 root 之外的 evidence 会被保留，并阻止破坏性 cleanup。
 
 专用 Rust、TypeScript、surface convergence、workspace boundary 与公共 package 打包门禁是
-`pnpm run gate -- plugin-lifecycle-controls`。这些控制有意不增加管理 UI、plugin Runtime、native capability、
+`pnpm run gate -- plugin-lifecycle-controls`。这些控制有意不增加管理 UI、plugin Runtime、权限决策工作流、
 公共 lifecycle API、应用卸载或 replacement 行为；replacement 是下文独立的私有能力。
 
 ## 已交付的 Host 私有本地插件替换
@@ -358,7 +358,7 @@ Uninstall 必须显式选择 `retain_data` 或 `delete_data` policy。Host 会�
 根应用现已交付独立的私有 Plugin Replacement Contract `0.2.0`。无路径参数的 prepare command
 只接受当前健康 entry identity 与调用方观察到的 Registration revision，打开一个原生 `.lxp` picker，
 并返回 `cancelled`、`duplicate` 或有界 `prepared` 结果。Prepared 结果包含进程内 opaque token、
-from/to version、`upgrade | downgrade | reinstall` 分类与安装信任边界；不会包含
+from/to version 和 `upgrade | downgrade | reinstall` 分类；不会包含
 source/staging path、package digest、Store key、package bytes 或原始 native error。Commit 与 cancel
 只接受该 token 及其原 entry/revision 绑定。Contract、desktop adapter、token 与 service 都不会向公共
 package 或插件代码开放。
@@ -452,7 +452,7 @@ digest、record key、absolute path、raw I/O、stack、partial bytes 或存在�
 运行 `pnpm run gate -- plugin-resource-service` 可验证 Rust/TypeScript 共享 fixture、desktop adapter、
 workspace boundary、Manager generation、Installer ownership 回归，以及 protocol/path/MIME/lifecycle/
 race/oracle/platform URL 测试。该 service 本身不创建 Child WebView、不执行插件代码、不建立 Runtime
-Session 或 Host API transport，也不授予权限。它会强制执行由 Host 私有安全 profile 选择的 document
+Session 或 Host API transport。它会强制执行由 Host 私有安全 profile 选择的 document
 policy；Child WebView adapter 与下游 Runtime Session 会消费它校验后的 `entry_url`。
 
 ## 已交付的 macOS 隔离 Plugin Runtime Origin 前置能力
@@ -501,7 +501,7 @@ isolated-authority 与保留 origin key 的 translated document URL 会规范化
 host、丢失 translation key、authority/path mismatch 与歧义 target 都会被拒绝。普通 subresource 仍完全
 由 Resource Service 负责。
 
-production 以无 active plugin target 的状态安装 policy。Host Runtime adapter 会在挂载 current iframe
+production 以无 active plugin target 的状态安装 policy。Host Runtime adapter 会在创建 current Child WebView
 前激活，并在 close、retry、replacement、invalidation 或 App teardown 时 compare-current dispose。
 policy 也拒绝全部 WebView new-window request 与 download，不会把 target 转交 opener。Tauri
 initialization 保持 main-frame-only：Host
@@ -517,7 +517,7 @@ pnpm run gate -- frame-aware-webview-navigation-policy
 ```
 
 产品仍只支持 macOS。Task 4.2 container 会消费精确 target lease；下文已交付的 Session 也消费该
-lease，但不会改变 native policy contract。Host API 与 permissions 仍是后续独立 capability。
+lease，但不会改变 native policy contract。
 
 ## 已交付的 macOS 隔离 Plugin Child WebView Runtime
 
@@ -573,7 +573,7 @@ Host reload 与 App teardown 收敛到同一幂等 compare-current terminal oper
 hidden pool、background Runtime、跨 Page 复用、自动 retry 或持久化 Runtime state。
 
 进程内 breaker 以 trusted entry identity 与 resource generation 为 key。60,000 ms 内第三次 qualifying
-load、handshake 或 unexpected-disconnect failure 会在 resolve、Child WebView 或 Session 创建前开启
+load、handshake 或 unexpected-disconnect failure 会在 resolve、lease、Child WebView 或 Session 创建前开启
 30,000 ms cooldown；cooldown 到期后仍必须由用户显式 retry。close、navigation、invalidation 与
 graceful exit 不计数；generation 变化或连续 30,000 ms 健康 `ready` 会清除记录，进程退出也会忘记它。
 
@@ -605,7 +605,7 @@ adapter。因此 surface coordinator 暴露 provider-scoped quiesce 和显式 re
 部分无效输入会保留完整调用前状态，且不能删除其他 provider 的 Page、descriptor 或 executor。
 
 纯 Page mapper 保持 `(owner_id = plugin_id, page_id = 插件本地 Page ID)` 为唯一 Page identity，
-保留同 owner parent target 与私有 route，并派生本地化 provider/Page presentation。其他条件 eligible
+保留同 owner parent target 与私有 route，复制已验证的 presentation，并派生本地化 provider/Page 文本。其他条件 eligible
 的 registration 中每个 Page 都 available；普通 Web capability 不进入 Page availability 计算。
 
 纯 Action mapper 设置 `owner_id = plugin_id`，派生
@@ -665,8 +665,8 @@ transport 类型，以及下列独立版本事实：
 transport。
 
 进入 `ready` 前，SDK 通过 Contract validator 校验、复制并冻结共享 `PluginRuntimeContext`。该 context 包含兼容的
-`hostApiVersion`、`en-US | zh-CN` locale、`light | dark` theme，以及唯一且只读的 capability
-已声明 Host API method ID 的排序去重只读 snapshot。空 capability 列表有效，并不代表存在任何 method。plugin identity、Page
+`hostApiVersion`、`en-US | zh-CN` locale、`light | dark` theme，以及已声明 Host API method ID 的
+排序去重只读 snapshot。空 capability 列表有效，并不代表存在任何 method。plugin identity、Page
 identity、安装来源和 Host lifecycle 事实都不是受支持的 context 输入。
 SDK 消费的 Host API validator 会在构建时生成并提交为 AJV standalone function。它们不会在插件
 document 内编译 Schema 或执行动态求值，因此 SDK 无需增加 `unsafe-eval`，仍与 Runtime 的
@@ -769,15 +769,14 @@ theme 或 capability snapshot 实际变化时才发送完整 `runtime.context_ch
 Registration revision、Runtime attempt、source、Manifest 数据、path 与 Host lifecycle state
 继续保持私有。
 
-`ui.close` 只接受 `{}` 并从 Session 推导目标。Host 先发送并终结 `{ accepted: true }`，再执行至多一次
+`ui.close` 只接受 `{}` 并从 Session 推导目标。Host 先发送并终结 `{ accepted: true }`，再恰好执行一次
 match-and-close effect，因此 stale Session 无法关闭 replacement Page。`actions.open` 只接受 plugin-local
 Action ID，由 Host 推导 `<plugin_id>.<local_action_id>`，并通过统一 Launcher Dispatcher 重新查询。
 core、跨插件、缺失、禁用、不兼容或已移除的 Action 都会失败关闭，不暴露 Registry 或 executor。
 
 storage 调用只使用认证 Session lease 中冻结的 identity。Dispatcher 把该 identity 注入 Host 私有 desktop
 provider，绝不接受插件选择的 namespace、path、plugin key、command 或 executor。确认 namespace 损坏或
-blocked 后，Host 只发送一次移除五个 storage capability 的完整 Context replacement；它不会改变独立授权的
-clipboard capability。
+blocked 后，Host 只发送一次移除五个 storage capability 的完整 Context replacement。
 
 运行 `pnpm run gate -- plugin-host-api-dispatcher` 可执行 Dispatcher、Navigation、Action、Runtime、
 MessageChannel、公共 tarball、export、dependency 与 workspace boundary 聚焦门禁。该能力不增加公共 export、
@@ -822,8 +821,8 @@ exception 或 stack。
 
 运行 `pnpm run gate -- plugin-scoped-storage` 可验证共享 TypeScript/Rust fixture、Rust persistence/lifecycle、
 desktop provider/Dispatcher、真实 SDK/MessageChannel loop、公共 tarball consumer、私有边界与既有有界 macOS
-WKWebView transport evidence。本交付不增加管理 UI、产品 copy、theme/accessibility surface、permission
-prompt、通用 RPC limit、模板、CLI 或开发模式。
+WKWebView transport evidence。本交付不增加管理 UI、产品 copy、theme/accessibility surface、
+通用 RPC limit、模板、CLI 或开发模式。
 
 ## 已交付的 Host 私有插件管理设置
 
@@ -1045,10 +1044,10 @@ Host API 方法保持小型、类型化、版本化，并且可以独立测试�
 
 ## 安全原则
 
-- 先校验结构，再校验语义引用和权限。
+- 先校验结构，再校验语义引用。
 - 将插件包和消息视为不受信任的输入。
 - 解析包路径时不允许绝对路径或父目录穿越。
-- 区分已声明、已请求和已授予权限。
+- 普通 Web 能力不得进入 Host 私有 authority 模型。
 - 对未知方法和能力默认拒绝。
 - 永远不向 plugin Child WebView 暴露内部 Tauri 或原生对象。
 

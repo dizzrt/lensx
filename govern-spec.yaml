@@ -1,0 +1,7 @@
+language_policy:
+  readme: [en, zh-CN]
+  docs: [en, zh-CN]
+  agent_instructions: en
+  spec_driver_config: en
+  active_changes: auto
+  stable_specs: en

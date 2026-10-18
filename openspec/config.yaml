@@ -14,12 +14,18 @@ context: |
 
   Artifact and documentation roles:
   - README files are human onboarding only and contain no concrete implementation design.
-  - AGENTS.md is the English agent onboarding and operating guide.
-  - docs/en is the canonical English implementation and architecture documentation.
-  - docs/zh mirrors docs/en in Simplified Chinese at identical relative paths.
-  - Stable specs under openspec/specs are written in English.
-  - Active change artifacts use the language of the agent conversation unless the user requests otherwise.
+  - Read [AGENTS.md](../AGENTS.md) for mandatory project rules and language-policy semantics.
+  - [govern-spec.yaml](../govern-spec.yaml) is the sole source of language-policy values.
+  - Use the [canonical documentation index](../docs/en/index.md) and [stable specs](specs/) to retrieve relevant durable guidance and contracts before judging implementation or engineering conventions; report missing or conflicting evidence and corroborate behavior against source and executable configuration.
+  - Entry points must not duplicate detailed document or feature catalogs or implementation documentation.
+  - Follow the [governance and archive-readiness procedure](../docs/en/development/project-workflow.md#governance-and-archive-readiness); operation guidance is advisory and does not execute or replace the mandatory project gates.
   - Temporary material may inform a change but must never be cited, linked, imported, or named as a maintained project source.
+
+  Active-change language resolution:
+  - Resolve language_policy.active_changes when writing or substantively revising prose. An explicit artifact-language request takes precedence; otherwise use the configured fixed language, or resolve auto from the current task's conversation language.
+  - If auto cannot be resolved from the conversation, use the relevant existing artifact's language or ask. Do not freeze auto to the language of a governance session.
+  - Preserve untouched and archived prose, code identifiers, API names, driver-required structural headings, schema fields, commands, paths, package names, established product names, and quoted diagnostics.
+  - Reconcile accepted delta prose into language_policy.stable_specs before synchronization and archive, preserving machine-facing text.
 
   Source-of-truth order:
   1. Current source code and tests for implemented behavior.
@@ -30,7 +36,7 @@ context: |
 
 rules:
   proposal:
-    - Write the artifact in the language used in the agent conversation unless the user requests another language.
+    - Write new or substantively rewritten proposal prose in the active-change language resolved by the context and root AGENTS.md.
     - State the problem, goals, non-goals, user-visible impact, and affected capabilities.
     - Clearly distinguish current implemented behavior from proposed behavior.
     - Keep the change cohesive; split unrelated capabilities into separate changes.
@@ -38,7 +44,7 @@ rules:
     - Do not put concrete implementation details in README or agent onboarding files.
     - Reuse an existing stable capability Gate for focused validation, or propose a stable capability ID and registry design; never propose a root package script named after the Change or a test subset.
   design:
-    - Write the artifact in the language used in the agent conversation unless the user requests another language.
+    - Write new or substantively rewritten design prose in the active-change language resolved by the context and root AGENTS.md.
     - Record architectural boundaries, data flow, alternatives, risks, migration, and rollback considerations where relevant.
     - Keep Rust responsible for privileged native operations, persistence, and stable Tauri boundaries.
     - Keep React responsible for presentation, interaction state, and view composition.
@@ -52,23 +58,37 @@ rules:
     - Permit only deterministic validation; do not introduce visual, browser, real WebView, GUI application, native harness, or target-environment performance paths, including optional or manual compatibility Gates.
     - Separate read-only Gate execution from deterministic Generate writes, and require an explicit target plus write authorization for committed artifact updates.
   specs:
-    - Write delta specs in the language used in the agent conversation unless the user requests another language.
+    - Write new or substantively rewritten delta-spec prose in the active-change language resolved by the context and root AGENTS.md.
     - Use normative requirements and observable scenarios; avoid implementation-task wording.
     - Cover success, empty, error, recovery, accessibility, localization, and theme behavior when relevant.
     - Do not claim planned behavior is already implemented.
-    - Before syncing or archiving, translate or rewrite all content entering main specs into English.
-    - Main specs under openspec/specs must remain English.
+    - Before syncing or archiving, translate or rewrite applicable prose entering main specs into language_policy.stable_specs from govern-spec.yaml, preserving machine-facing text.
+    - Main specs under openspec/specs must use the configured stable-spec language.
     - Before syncing or archiving, require maintained documentation and specs to use resolvable stable Gate and Generate IDs and contain no stale Change-specific root commands or removed Evidence dispatcher references.
   tasks:
-    - Write the artifact in the language used in the agent conversation unless the user requests another language.
+    - Write new or substantively rewritten task and audit prose in the active-change language resolved by the context and root AGENTS.md.
     - Order tasks by dependency and keep each task independently verifiable.
-    - Include tests and English and Simplified Chinese documentation updates alongside the implementation they cover.
+    - Include tests and synchronized updates to every declared documentation language alongside the implementation they cover.
     - Do not use README or agent onboarding files for concrete implementation documentation.
-    - End every task list with an explicit final validation section.
-    - The final validation section must cover frontend tests, frontend formatting and static checks, frontend type checking and build, Rust formatting, Rust tests, and Rust static checks.
+    - End every new task list with a final validation and archive-readiness section that reserves a change-scope governance and documentation audit under docs/en/development/project-workflow.md#governance-and-archive-readiness.
+    - Record the audit evidence and project-level trigger decision in tasks.md using that procedure; add project-level review only when governance is affected, rather than requiring a full-repository audit for every change.
+    - The final section must name applicable existing commands and cover frontend tests, frontend formatting and static checks, frontend type checking and build, Rust formatting, Rust tests, Rust static checks, and affected Rust builds.
     - If a validation area is genuinely unaffected, record the reason in the task instead of silently omitting it.
     - Fix every warning and error introduced by the change, then rerun the failed command and the complete final validation set.
     - Require all maintained validation to remain deterministic and prohibit browser, real WebView, GUI application, Launch Services, native interaction harness, screenshot, pixel, visual-baseline, and target-environment performance stages.
     - Do not preserve retired environment validation as an optional, manual, hidden, or compatibility Gate.
     - Name every applicable stable capability Gate and keep focused Gate evidence separate from the complete frontend/workspace and Rust validation set.
     - Before sync or archive, scan the root manifest, CI, maintained documentation, and specs for Change IDs, removed aliases, direct Rstest file-list scripts, recursive check scripts, and stale dispatcher references.
+
+operations:
+  apply:
+    guidance:
+      - Follow the dependency-ordered task list, record actual validation evidence before marking tasks complete, and keep implementation aligned with accepted scope and stable requirements.
+      - Run the applicable final checks, fix warnings, errors, and regressions introduced by the change, and rerun failed commands and the final validation set.
+      - Follow the project governance procedure in docs/en/development/project-workflow.md#governance-and-archive-readiness and retain its audit evidence in tasks.md.
+  archive:
+    guidance:
+      - Follow docs/en/development/project-workflow.md#governance-and-archive-readiness and the mandatory root AGENTS.md gates; an audit establishes readiness but does not authorize or execute archive or Git operations.
+      - First translate and reconcile accepted deltas into language_policy.stable_specs from govern-spec.yaml, preserving machine-facing text, and synchronize stable specs before moving the change.
+      - Audit the final accepted change scope, reconfirm any prior audit, and add project-level review only when governance is affected; record evidence and the trigger decision in tasks.md according to the project procedure.
+      - Synchronize affected documentation, indexes, links, and declared languages, then validate synchronized specs and documentation before moving the change. Readiness is blocked while required documentation or in-scope governance constraints are missing, stale, or unresolved.

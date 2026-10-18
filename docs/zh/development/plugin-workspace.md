@@ -173,13 +173,13 @@ pnpm --dir packages/plugin-sdk run test:pack
 pnpm run gate -- plugin-sdk
 ```
 
-pack gate 会构建真实 Contract 与 SDK tarball，校验 SDK 文件清单、root/iframe exports、声明与 Runtime
+pack gate 会构建真实 Contract 与 SDK tarball，校验 SDK 文件清单、root/WebView exports、声明与 Runtime
 依赖 metadata，并把两个 tarball 安装进隔离 external consumer。root consumer 使用
 `lib: ["ES2022"]` 且不包含 DOM 类型完成 typecheck，运行 ESM lifecycle smoke，并证明未声明的
 SDK deep import 与私有 transport deep import 会被拒绝。tarball 排除 tests、fixtures、scripts、schema、Host
 projection 与 Host 私有源码。完整跨边界门禁使用 `pnpm run gate -- plugin-sdk-transport`。运行
 `pnpm run gate -- plugin-host-api-dispatcher` 可验证 production Dispatcher、response-before-close、
-Action/Navigation/storage、Context replacement、MessageChannel、公共 tarball 与 workspace boundary。Dispatcher
+Action/Navigation/storage、Context replacement、source-bound bridge、公共 tarball 与 workspace boundary。Dispatcher
 保持为 Host 私有源码，不增加 Contract/SDK export 或 dependency。
 `pnpm run gate -- plugin-scoped-storage` 可验证 Rust-backed scoped storage、Installer lifecycle coordination、
 公共 Testkit consumer 与私有 storage boundary。
