@@ -78,6 +78,17 @@ Import `@douyinfe/semi-ui/dist/css/semi.min.css` and
 token bridges, and cross-component base rules in `global.less`; keep simple App
 Shell layout and spacing in UnoCSS utilities.
 
+The shared `.launcher-surface` owns the `18px` outer radius, `overflow: hidden`
+content clipping, and `var(--semi-color-bg-0)` theme background across Home,
+Search, Host Pages, and plugin Pages. It adds no CSS shadow; the macOS desktop
+window retains its existing native shadow. Keep this policy consistent in
+`en-US`, `zh-CN`, and both themes, without changing window geometry, page
+layout, dragging, keyboard navigation, focus restoration, plugin Page native
+resize permissions, or inner component and overlay shadows. Browser previews
+show the rounded surface without the macOS native shadow. Deterministic tests,
+source review, and builds verify the implementation and existing contracts;
+they do not establish the final macOS pixel appearance.
+
 ## Theme
 
 - Support both light and dark modes.

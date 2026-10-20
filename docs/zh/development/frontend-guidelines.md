@@ -64,6 +64,13 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
 `src/styles/global.less`。根元素 reset、语义 token 桥接和跨组件基础规则保留在 `global.less`；
 简单的 App Shell 布局和间距使用 UnoCSS 工具类。
 
+共享 `.launcher-surface` 负责 Home、Search、Host Page 和插件 Page 的 `18px` 外层圆角、
+`overflow: hidden` 内容裁剪及 `var(--semi-color-bg-0)` 主题背景。外层不叠加 CSS 投影，
+macOS 桌面窗口保留现有原生投影。该策略在 `en-US`、`zh-CN` 及两种主题下保持一致，不改变
+窗口几何、页面布局、拖动、键盘导航、焦点恢复、插件 Page 的原生缩放权限，以及内层控件与浮层
+自身的投影。浏览器预览呈现没有 macOS 原生投影的圆角表面。确定性测试、源码审查和构建用于
+验证实现及既有契约，不能证明 macOS 最终像素效果。
+
 ## 主题
 
 - 同时支持明亮和黑暗模式。

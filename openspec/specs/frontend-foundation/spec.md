@@ -699,3 +699,54 @@ leaves both or the tooltip is explicitly dismissed.
 - **THEN** the title's newly fitted truncation state determines whether the
   tooltip remains visible
 - **THEN** accessible naming, focus, and execution semantics remain usable
+
+### Requirement: Launcher outer surfaces must use consistent rounded corners and shadows
+
+The shared Launcher outer surface MUST preserve its existing rounded outline,
+content clipping, and theme background across Home, Search, Host Pages, and
+plugin Pages. The frontend MUST NOT add a CSS shadow to this outer surface.
+The macOS desktop window MUST retain its existing native window shadow so
+frontend shadows do not add edge artifacts at transparent rounded corners and
+window boundaries.
+
+This policy MUST remain consistent in `en-US`, `zh-CN`, and light and dark
+themes. Shadow changes MUST NOT alter logical window dimensions, content
+layout, dragging, keyboard navigation, focus restoration, or native resize
+permissions for plugin Pages. They MUST NOT alter shadows belonging to inner
+controls or overlays.
+
+#### Scenario: Display Home and Search surfaces
+
+- **WHEN** the Launcher displays Home or Search, including empty collections or
+  a search with no results
+- **THEN** the shared outer surface retains its rounded corners, clipping, and
+  current theme background without drawing a CSS shadow
+- **THEN** the macOS native window shadow remains enabled, and existing window
+  dimensions and input interactions remain unchanged
+
+#### Scenario: Enter or leave a page
+
+- **WHEN** the user opens a Host Page or plugin Page, or closes a page to return
+  to Home
+- **THEN** the shared outer surface continues to use the same rounded-corner
+  and shadow policy without adding an outer CSS shadow based on page origin
+- **THEN** page layout, close behavior, focus restoration, and existing native
+  resize permissions for plugin Pages remain unchanged
+
+#### Scenario: Return Home after page content fails
+
+- **WHEN** the current page displays its existing failure feedback and the
+  user subsequently closes it to return to Home
+- **THEN** both the failed page and the restored Home retain the shared outer
+  rounded corners and current theme background without adding a CSS shadow
+- **THEN** failure feedback, page context, close controls, and focus restoration
+  continue to follow their existing contracts
+
+#### Scenario: Switch locale and theme
+
+- **WHEN** the Launcher uses or switches between `en-US`, `zh-CN`, and light
+  and dark themes
+- **THEN** the outer surface draws no CSS shadow while its rounded corners and
+  theme background remain effective
+- **THEN** the macOS native shadow is not disabled, and no additional product
+  copy, focus target, or substitute border is introduced
