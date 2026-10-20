@@ -93,6 +93,18 @@ avatar 占位。`home` 保留 launcher 输入，并依次从已接受的 Action 
 上下文条和可访问关闭图标替换输入，同时保留 avatar 占位。关闭页面会返回 `home` 并恢复输入焦点；
 页面级错误边界会在内容失败时保留上下文条和关闭控件。
 
+Recent、Pinned 和 Search 共用 Host 私有 `ActionTile` 展示：列宽决定方形交互边界，图标与单行
+标题保持固定结构。纯字号适配 helper 与 DOM 测量 hook 根据完整本地化标题及可用宽度选择连续
+`12–14px` 字号。CSS 拥有最终单行溢出处理；隐藏的完整文本测量随标题、locale、宽度和字体变化
+失效，尺寸暂不可用时安全回退。这些度量只控制前端展示，不成为原生窗口尺寸。
+
+Home 在两个集合间共用一份局部完整名称提示协调器；Search 拥有另一份，其键盘候选在既有输入框
+保留焦点时跟随选中结果。pointer 候选优先，只有实际截断的标题才显示挂载于 `body` 的受控
+Semi Tooltip。实例身份、测量和提示状态均为 React 临时展示事实，不增加 Registry、Dispatcher、
+Rust/Tauri 或持久化契约。输入框的 active descendant、状态区关联、IME 优先级和执行路径仍保持
+主导。适配、焦点、生命周期及确定性测试边界见
+[Action 卡片指南](../development/frontend-guidelines.md#action-卡片展示)。
+
 ## Launcher 窗口生命周期
 
 在 macOS 上，打包 bundle 声明 `LSUIElement=true`，Rust 会在 frame-aware setup 创建首个 Host

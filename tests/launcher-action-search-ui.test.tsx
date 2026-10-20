@@ -20,6 +20,9 @@ import {
   EMPTY_LAUNCHER_ACTION_COLLECTIONS,
   type LauncherActionCollectionsClient,
 } from '../src/app/launcher/collections';
+import type { LauncherSurfaceController } from '../src/app/launcher/surface';
+import { useAppTheme } from '../src/app/theme';
+import { installActionTitleMeasurement } from './helpers/action-title-measurement';
 
 class FakeActivationSource implements LauncherActivationSource {
   readonly listeners = new Set<LauncherActivationListener>();
@@ -97,6 +100,7 @@ const createService = (
 
 const TestLocaleControls = () => {
   const { setLocale } = useAppLocale();
+  const { setThemeMode } = useAppTheme();
   return (
     <aside aria-label="test locale controls">
       <button onClick={() => setLocale('zh-CN')} type="button">
@@ -104,6 +108,12 @@ const TestLocaleControls = () => {
       </button>
       <button onClick={() => setLocale('en-US')} type="button">
         Use English
+      </button>
+      <button onClick={() => setThemeMode('dark')} type="button">
+        Use dark theme
+      </button>
+      <button onClick={() => setThemeMode('light')} type="button">
+        Use light theme
       </button>
     </aside>
   );
@@ -115,6 +125,7 @@ const renderLauncher = (
     activationSource = inertActivationSource,
     initialLocale = 'en-US',
     initialThemeMode = 'light',
+    surfaceController,
     withLocaleControls = false,
     collectionsClient = {
       read: async () => EMPTY_LAUNCHER_ACTION_COLLECTIONS,
@@ -125,6 +136,7 @@ const renderLauncher = (
     activationSource?: LauncherActivationSource;
     initialLocale?: 'en-US' | 'zh-CN';
     initialThemeMode?: 'light' | 'dark';
+    surfaceController?: LauncherSurfaceController;
     withLocaleControls?: boolean;
     collectionsClient?: LauncherActionCollectionsClient;
   } = {},
@@ -132,11 +144,242 @@ const renderLauncher = (
   render(
     <AppProviders initialLocale={initialLocale} initialThemeMode={initialThemeMode}>
       {withLocaleControls ? <TestLocaleControls /> : null}
-      <App actionService={service} activationSource={activationSource} collectionsClient={collectionsClient} />
+      <App
+        actionService={service}
+        activationSource={activationSource}
+        collectionsClient={collectionsClient}
+        surfaceController={surfaceController}
+      />
     </AppProviders>,
   );
 
 describe('launcher action search interface', () => {
+  test('shows selected names without moving input focus and preserves pointer, keyboard, IME, and pending behavior', async () => {
+    const firstTitle = 'Inspect the complete workspace configuration history';
+    const lastTitle = 'Review every saved workspace configuration change';
+    const measurement = installActionTitleMeasurement({
+      availableWidth: 70,
+      measureTextWidth: (title, fontSize) => title.length * fontSize * 0.5,
+    });
+    let resolveDispatch: (result: LauncherActionDispatchResult) => void = () => undefined;
+    const pendingDispatch = new Promise<LauncherActionDispatchResult>((resolve) => {
+      resolveDispatch = resolve;
+    });
+    const dispatch = rs.fn(async () => pendingDispatch);
+    const { service } = createService(
+      [
+        createRegistration('alpha', { title: firstTitle }),
+        createRegistration('beta', { title: 'Short' }),
+        createRegistration('gamma', { title: lastTitle }),
+      ],
+      dispatch,
+    );
+    const view = renderLauncher(service);
+    try {
+      const input = screen.getByRole('combobox', { name: 'Launcher query' });
+      fireEvent.change(input, { target: { value: 'run' } });
+      const options = screen.getAllByRole('option');
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(firstTitle);
+      expect(input).toHaveFocus();
+      expect(input).toHaveAttribute('aria-describedby', 'launcher-status');
+      expect(input).toHaveAttribute('aria-activedescendant', options[0].id);
+      expect(options.every((option) => option.tabIndex === -1)).toBe(true);
+      expect(
+        [...view.container.querySelectorAll<HTMLElement>('button,input,[tabindex]')].filter(
+          (element) => element.tabIndex >= 0,
+        ),
+      ).toEqual([input]);
+
+      fireEvent.keyDown(input, { key: 'ArrowRight' });
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+      fireEvent.keyDown(input, { key: 'ArrowRight' });
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(lastTitle);
+      fireEvent.mouseEnter(options[0].closest('.launcher-action-tile') as HTMLElement);
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(firstTitle);
+      expect(options[2]).toHaveAttribute('aria-selected', 'true');
+      fireEvent.mouseEnter(options[1].closest('.launcher-action-tile') as HTMLElement);
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+      fireEvent.mouseLeave(options[1].closest('.launcher-action-tile') as HTMLElement);
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(lastTitle);
+      act(() => input.blur());
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+      act(() => input.focus());
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(lastTitle);
+
+      fireEvent.compositionStart(input);
+      for (const key of ['ArrowLeft', 'Enter', 'Escape']) {
+        fireEvent.keyDown(input, { key, isComposing: true });
+      }
+      expect(input).toHaveValue('run');
+      expect(input).toHaveAttribute('aria-activedescendant', options[2].id);
+      expect(screen.getByRole('tooltip')).toHaveTextContent(lastTitle);
+      expect(dispatch).not.toHaveBeenCalled();
+      fireEvent.compositionEnd(input, { data: 'run', target: { value: 'run' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      fireEvent.click(options[2]);
+      expect(dispatch).toHaveBeenCalledTimes(1);
+      expect(dispatch).toHaveBeenCalledWith('tools.workspace.gamma');
+      expect(input).toHaveFocus();
+      expect(input).toHaveAttribute('aria-describedby', 'launcher-status');
+
+      await act(async () => {
+        resolveDispatch({ ok: true, action_id: 'tools.workspace.gamma' });
+        await pendingDispatch;
+      });
+      expect(input).toHaveValue('');
+      expect(input).toHaveFocus();
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      expect(input).not.toHaveAttribute('aria-activedescendant');
+    } finally {
+      view.unmount();
+      measurement.restore();
+    }
+  });
+
+  test('refreshes localized names and English fallback in the body overlay across theme and measurement updates', async () => {
+    const englishTitle = 'Inspect the complete workspace configuration history';
+    const chineseTitle = '查看工作区的完整配置修改历史记录';
+    const fallbackTitle = 'Review every saved workspace configuration change';
+    const measurement = installActionTitleMeasurement({
+      availableWidth: 70,
+      measureTextWidth: (title, fontSize) => title.length * fontSize * 0.5,
+    });
+    const { service } = createService([
+      createRegistration('alpha', { title: englishTitle, zhTitle: chineseTitle }),
+      createRegistration('beta', { title: fallbackTitle }),
+    ]);
+    const view = renderLauncher(service, { withLocaleControls: true });
+    try {
+      const input = screen.getByRole('combobox', { name: 'Launcher query' });
+      fireEvent.change(input, { target: { value: 'run' } });
+      const firstOptionId = screen.getAllByRole('option')[0].id;
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(englishTitle);
+      fireEvent.click(screen.getByRole('button', { name: 'Use Chinese' }));
+      act(() => input.focus());
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(chineseTitle);
+      expect(screen.getByRole('option', { name: chineseTitle })).toHaveAttribute('id', firstOptionId);
+      expect(input).toHaveAttribute('aria-activedescendant', firstOptionId);
+      expect(input).toHaveAttribute('aria-describedby', 'launcher-status');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Use dark theme' }));
+      const darkTooltip = await screen.findByRole('tooltip');
+      expect(document.body).toHaveAttribute('theme-mode', 'dark');
+      expect(document.body).toContainElement(darkTooltip);
+      expect(view.container).not.toContainElement(darkTooltip);
+      expect(darkTooltip).toHaveTextContent(chineseTitle);
+      fireEvent.keyDown(input, { key: 'ArrowRight' });
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(fallbackTitle);
+      expect(screen.getByRole('option', { name: fallbackTitle })).toHaveAttribute('aria-selected', 'true');
+      fireEvent.click(screen.getByRole('button', { name: 'Use light theme' }));
+      expect(document.body).not.toHaveAttribute('theme-mode');
+      expect(screen.getByRole('tooltip')).toHaveTextContent(fallbackTitle);
+
+      act(() => {
+        measurement.setAvailableWidth(1000);
+        measurement.notifyResize();
+        measurement.flushFrame();
+      });
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+      act(() => {
+        measurement.setAvailableWidth(70);
+        measurement.notifyResize();
+        measurement.flushFrame();
+      });
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(fallbackTitle);
+      act(() => {
+        measurement.setMeasureTextWidth(() => 20);
+        measurement.notifyFonts();
+        measurement.flushFrame();
+      });
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+      act(() => {
+        measurement.setMeasureTextWidth((title, fontSize) => title.length * fontSize * 0.5);
+        measurement.notifyFonts();
+        measurement.flushFrame();
+      });
+      await screen.findByRole('tooltip');
+      fireEvent.keyDown(input, { key: 'Escape' });
+      expect(input).toHaveValue('');
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      fireEvent.change(input, { target: { value: 'run' } });
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(chineseTitle);
+    } finally {
+      view.unmount();
+      measurement.restore();
+    }
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  test('removes stale full names when the current Action title changes or its provider removes the Action', async () => {
+    const longTitle = 'Inspect the complete workspace configuration history';
+    const hoveredTitle = 'Review every saved workspace configuration change';
+    const hoveredRegistration = createRegistration('beta', { title: hoveredTitle });
+    const measurement = installActionTitleMeasurement({
+      availableWidth: 70,
+      measureTextWidth: (title, fontSize) => title.length * fontSize * 0.5,
+    });
+    const { registry, service } = createService([
+      createRegistration('alpha', { title: longTitle }),
+      hoveredRegistration,
+    ]);
+    const view = renderLauncher(service);
+    try {
+      const input = screen.getByRole('combobox', { name: 'Launcher query' });
+      fireEvent.change(input, { target: { value: 'run' } });
+      const optionId = screen.getByRole('option', { name: longTitle }).id;
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(longTitle);
+      act(() => {
+        expect(
+          registry.replaceProviderBatch('tools.workspace', [
+            createRegistration('alpha', { title: 'Short' }),
+            hoveredRegistration,
+          ]).ok,
+        ).toBe(true);
+      });
+      expect(screen.getByRole('option', { name: 'Short' })).toHaveAttribute('id', optionId);
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+      expect(input).toHaveFocus();
+      expect(input).toHaveValue('run');
+      expect(input).toHaveAttribute('aria-activedescendant', optionId);
+
+      act(() => {
+        expect(
+          registry.replaceProviderBatch('tools.workspace', [
+            createRegistration('alpha', { title: longTitle }),
+            hoveredRegistration,
+          ]).ok,
+        ).toBe(true);
+      });
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(longTitle);
+      fireEvent.mouseEnter(
+        screen.getByRole('option', { name: hoveredTitle }).closest('.launcher-action-tile') as HTMLElement,
+      );
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(hoveredTitle);
+      act(() => {
+        expect(
+          registry.replaceProviderBatch('tools.workspace', [createRegistration('alpha', { title: longTitle })]).ok,
+        ).toBe(true);
+      });
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(longTitle);
+      expect(screen.getAllByRole('tooltip')).toHaveLength(1);
+      expect(input).toHaveAttribute('aria-activedescendant', optionId);
+      expect(input).toHaveFocus();
+      act(() => {
+        expect(registry.replaceProviderBatch('tools.workspace', []).ok).toBe(true);
+      });
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+      expect(screen.queryByRole('option')).not.toBeInTheDocument();
+      expect(input).not.toHaveAttribute('aria-activedescendant');
+      expect(input).toHaveValue('run');
+      expect(input).toHaveFocus();
+      expect(screen.getByRole('status')).toHaveTextContent('No matching actions.');
+    } finally {
+      view.unmount();
+      measurement.restore();
+    }
+  });
+
   test('preserves Action identities and order while locale changes result titles and English fallback', async () => {
     const { service } = createService([
       createRegistration('zulu_view', {
@@ -259,17 +502,23 @@ describe('launcher action search interface', () => {
         }),
       ),
     );
-    renderLauncher(service);
+    const setPresentationState = rs.fn(async () => undefined);
+    renderLauncher(service, { surfaceController: { setPresentationState } });
     const input = screen.getByRole('combobox', { name: 'Launcher query' });
 
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(setPresentationState.mock.calls).toEqual([[{ kind: 'home' }]]);
 
     fireEvent.change(input, { target: { value: 'run' } });
     expect(screen.getAllByRole('option')).toHaveLength(8);
     expect(screen.getByRole('listbox', { name: 'Search results' })).toHaveClass('grid-cols-4');
     expect(screen.getAllByRole('heading', { level: 2, name: 'Search results' })).toHaveLength(1);
     expect(screen.getByRole('status')).toHaveTextContent('Results: 8.');
+    expect(screen.getAllByRole('option')).toEqual(
+      Array.from({ length: 8 }, (_, index) => screen.getByRole('option', { name: `Action ${index}` })),
+    );
+    expect(setPresentationState.mock.calls).toEqual([[{ kind: 'home' }], [{ kind: 'search' }]]);
 
     fireEvent.change(input, { target: { value: '' } });
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
@@ -284,6 +533,72 @@ describe('launcher action search interface', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Search results' })).toBeInTheDocument();
     expect(screen.getAllByText('No matching actions.')).toHaveLength(2);
     expect(screen.getByRole('status')).toHaveTextContent('No matching actions.');
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    expect(setPresentationState.mock.calls).toEqual([
+      [{ kind: 'home' }],
+      [{ kind: 'search' }],
+      [{ kind: 'home' }],
+      [{ kind: 'search' }],
+    ]);
+  });
+
+  test('preserves the eight-result four-column order and fixed Search target through pending and failure', async () => {
+    let resolveDispatch: (result: LauncherActionDispatchResult) => void = () => undefined;
+    const pendingDispatch = new Promise<LauncherActionDispatchResult>((resolve) => {
+      resolveDispatch = resolve;
+    });
+    const dispatch = rs.fn(async () => pendingDispatch);
+    const { service } = createService(
+      Array.from({ length: 8 }, (_, index) => createRegistration(`action_${index}`, { title: `Action ${index}` })),
+      dispatch,
+    );
+    const setPresentationState = rs.fn(async () => undefined);
+    renderLauncher(service, { surfaceController: { setPresentationState } });
+    const input = screen.getByRole('combobox', { name: 'Launcher query' });
+    fireEvent.change(input, { target: { value: 'run' } });
+    const options = screen.getAllByRole('option');
+    expect(options).toHaveLength(8);
+    expect(screen.getByRole('listbox', { name: 'Search results' })).toHaveClass('grid-cols-4');
+
+    for (let column = 0; column < 3; column += 1) {
+      fireEvent.keyDown(input, { key: 'ArrowRight' });
+    }
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(options[7]).toHaveAttribute('aria-selected', 'true');
+    expect(input).toHaveAttribute('aria-activedescendant', options[7].id);
+    fireEvent.keyDown(input, { key: 'ArrowRight' });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(options[7]).toHaveAttribute('aria-selected', 'true');
+    expect(input).toHaveFocus();
+
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.click(options[7]);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith('tools.workspace.action_7');
+    expect(options[7]).toBeDisabled();
+    expect(options[7]).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('status')).toHaveTextContent('Running Action 7…');
+    expect(screen.getAllByRole('option')).toEqual(options);
+
+    await act(async () => {
+      resolveDispatch({
+        ok: false,
+        action_id: 'tools.workspace.action_7',
+        error: { code: 'action_execution_failed', message: 'private execution detail' },
+      });
+      await pendingDispatch;
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('The action could not be completed.');
+    expect(screen.getAllByRole('option')).toEqual(options);
+    expect(options[7]).toBeEnabled();
+    expect(options[7]).toHaveAttribute('aria-selected', 'true');
+    expect(input).toHaveAttribute('aria-activedescendant', options[7].id);
+    expect(input).toHaveValue('run');
+    expect(input).toHaveFocus();
+    expect(screen.queryByText('private execution detail')).not.toBeInTheDocument();
+    expect(setPresentationState.mock.calls).toEqual([[{ kind: 'home' }], [{ kind: 'search' }]]);
   });
 
   test('keeps input focus while navigating fixed-grid boundaries and clears on Escape', () => {

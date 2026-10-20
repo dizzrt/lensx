@@ -239,6 +239,88 @@ Shell layout and spacing in UnoCSS utilities.
   move by one, up/down move by four only when the target exists, and all pointer
   and keyboard activation must share the Dispatcher path.
 
+### Action Tile Presentation
+
+Recent, Pinned, and Search use the shared `ActionTile` presentation. Let the
+current grid column width determine each tile's square side through
+`aspect-ratio: 1`; align grid content and items to the start so remaining row
+height cannot stretch the interaction surface. The primary button fills that
+surface, and its pointer, hover, focus, selected, and pending states keep the
+same square boundary and `12px` corners. Keep the `28px` icon and fixed `20px`
+title line box centered within the tile; title length and feedback must not
+resize the tile or move neighboring Actions.
+
+Each Home collection keeps eight equal columns and at most eight resolved
+Actions in its confirmed order. Search keeps four equal columns and at most
+eight results in two rows. Different grids may therefore have different square
+side lengths. Home and Search retain their fixed `650×320` and `650×480`
+native window targets, including empty, pending, and error states; do not derive
+window dimensions from text or item count. Keep idle tiles transparent on the
+continuous launcher surface and use existing theme tokens only for interaction
+states. Simple grid composition stays in UnoCSS; square geometry, button
+boundaries, and reusable state styling belong in semantic Less.
+
+#### Single-Line Title Fitting
+
+Fit the complete current localized title against the title box's available
+inner width. The Host-private `fitActionTileTitle` helper measures at an
+independent `14px` baseline and keeps `14px` when the title fits exactly or with
+space to spare. Otherwise, it uses a width-proportional candidate and bounded
+correction to select the largest fitting size in the continuous `12–14px`
+range, within `0.1px` precision. Do not estimate by character count, poll fixed
+integer sizes, or progressively shrink an already fitted title. Only a title
+that still overflows at `12px` is marked truncated and needs a full-name
+tooltip. Preserve the original title and complete accessible name.
+
+`useActionTileTitleFit` owns DOM measurement and invalidation. Its full-text
+measurement node is outside normal layout, hidden from assistive technology,
+and non-focusable; it shares the visible title's font family, weight, and
+letter spacing without participating in button naming. Semantic Less owns the
+fixed line height and single-line CSS ellipsis, while the hook supplies the
+computed font size. Do not enable Typography's JavaScript ellipsis alongside
+this path, rely on `text-fit`, or add a font-fitting library.
+
+Remeasure on title or locale changes, available-width changes through
+`ResizeObserver`, initial font readiness, and later font loading completion or
+failure. Coalesce repeated notifications into one animation frame and retain
+state when the result is unchanged. Disconnect observers, remove font
+listeners, cancel queued frames, and ignore old asynchronous callbacks after
+replacement or unmount. Invalid, zero, or unavailable measurements fall back to
+`14px` with single-line CSS overflow protection and the complete accessible
+name, without asserting truncation or showing a misleading tooltip. A later
+valid layout or font notification retries measurement and can restore `14px`.
+
+#### Full-Name Tooltips
+
+Each Home or Search surface owns one local `useActionTileTooltip` coordinator;
+Home shares it across Recent and Pinned. Give each rendered instance a unique
+identity, including separate identities when one Action appears in both Home
+collections. Arbitrate candidates before checking truncation: the tile under
+the pointer, including its readable tooltip, takes precedence over Home's
+focused primary button or Search's selected result while its input is focused.
+This includes Search's default first selection. Hovering a fully visible short
+title therefore suppresses another keyboard candidate's tooltip; leaving the
+tile and its overlay restores a still-valid keyboard candidate. At most one
+truncated title has a visible tooltip.
+
+Use a controlled Semi Tooltip mounted under `body`, with current theme tokens,
+window-bounded width and height, long-word wrapping, and scrollable overflow for
+extreme names. Keep it readable while the pointer moves from tile to overlay.
+The content is only the complete resolved title; it adds no product copy,
+operation, or Tab stop and never takes or restores focus. Associate it with
+the instance's primary button or option without replacing the input's status
+`aria-describedby` or `aria-activedescendant` relationship.
+
+Home Escape dismisses the current tooltip until a pointer or focus trigger is
+re-established; Enter and Space retain primary activation. Search's input
+keyboard handler remains authoritative: IME takes priority, arrows update the
+selection, Enter dispatches, and one ordinary Escape clears the query and
+tooltip. Results remain active descendants rather than DOM focus targets.
+Clear keyboard candidates on blur, release removed or unmounted instances, and
+discard obsolete tooltip content when the query clears, the surface changes,
+or remeasurement finds that the current title is no longer truncated. Keep
+pending execution deduplication and the existing locale fallback unchanged.
+
 ### Launcher Composition Input
 
 - Treat App Shell `query` as the committed complete input value. Enable Semi
@@ -350,6 +432,14 @@ Shell layout and spacing in UnoCSS utilities.
   light and dark semantic tokens, close-button adjacency and keyboard focus,
   retained avatar state, and long-text ellipsis through DOM and state
   assertions.
+- For shared Action tiles, cover continuous title fitting and invalid-size
+  recovery with controlled width measurements, observer/font invalidation and
+  cleanup, square style constraints, and full accessible names. Exercise real
+  Semi tooltip interaction across Home collections and Search, including
+  pointer precedence, duplicate instances, focus, Escape, IME, localization,
+  themes, and pending execution. Deterministic DOM measurements establish the
+  calculation and interaction contracts, not platform font layout or final
+  pixel appearance; do not add browser, WebView, or screenshot validation.
 - Add focused tests for extracted domain functions.
 - Avoid snapshots that obscure meaningful behavioral assertions.
 - For Plugin management changes, cover every maintained state in English and

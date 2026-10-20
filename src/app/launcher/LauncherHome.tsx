@@ -1,8 +1,10 @@
 import { Typography } from '@douyinfe/semi-ui';
+import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionTile } from './ActionTile';
 import type { LauncherActionDescriptor, LauncherActionLocale } from './actions';
 import { resolveLauncherActionMetadata } from './actions';
+import { type ActionTileTooltipController, useActionTileTooltip } from './useActionTileTooltip';
 
 interface LauncherHomeProps {
   readonly locale: LauncherActionLocale;
@@ -20,6 +22,8 @@ interface CollectionRowProps {
   readonly pendingActionId?: string;
   readonly title: string;
   readonly trailing?: string;
+  readonly instancePrefix: string;
+  readonly tooltip: ActionTileTooltipController;
 }
 
 const CollectionRow = ({
@@ -30,6 +34,8 @@ const CollectionRow = ({
   pendingActionId,
   title,
   trailing,
+  instancePrefix,
+  tooltip,
 }: CollectionRowProps) => {
   return (
     <section aria-label={title} className="launcher-collection flex min-h-0 flex-1 flex-col gap-2">
@@ -50,7 +56,10 @@ const CollectionRow = ({
                 action={{ action_id: descriptor.action_id, ...metadata }}
                 isPending={pendingActionId === descriptor.action_id}
                 key={descriptor.action_id}
+                instanceId={`${instancePrefix}-${descriptor.action_id}`}
+                locale={locale}
                 onActivate={onActivate}
+                tooltip={tooltip}
               />
             );
           })}
@@ -72,12 +81,16 @@ export const LauncherHome = ({
   recentActions,
 }: LauncherHomeProps) => {
   const { t } = useTranslation();
+  const instanceId = useId();
+  const tooltip = useActionTileTooltip(undefined, true);
   return (
     <div className="launcher-home flex min-h-0 flex-1 flex-col gap-3">
       <CollectionRow
         actions={recentActions}
         emptyMessage={t('launcher.home.recentEmpty')}
         locale={locale}
+        instancePrefix={`${instanceId}-recent`}
+        tooltip={tooltip}
         onActivate={onActivate}
         pendingActionId={pendingActionId}
         title={t('launcher.home.recentTitle')}
@@ -86,6 +99,8 @@ export const LauncherHome = ({
         actions={pinnedActions}
         emptyMessage={t('launcher.home.pinnedEmpty')}
         locale={locale}
+        instancePrefix={`${instanceId}-pinned`}
+        tooltip={tooltip}
         onActivate={onActivate}
         pendingActionId={pendingActionId}
         title={t('launcher.home.pinnedTitle')}

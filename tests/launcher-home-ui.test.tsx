@@ -1,13 +1,16 @@
 import { describe, expect, rs, test } from '@rstest/core';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from '../src/App';
 import { AppProviders } from '../src/app/AppProviders';
 import {
   LauncherActionDispatcher,
+  type LauncherActionDispatchResult,
   LauncherActionRegistry,
   type LauncherActionService,
 } from '../src/app/launcher/actions';
 import type { LauncherActionCollections, LauncherActionCollectionsClient } from '../src/app/launcher/collections';
+import type { LauncherSurfaceController } from '../src/app/launcher/surface';
+import { installActionTitleMeasurement } from './helpers/action-title-measurement';
 
 const inertActivationSource = { subscribe: async () => () => undefined };
 
@@ -22,7 +25,7 @@ const createCollections = (
 
 const actionId = (index: number) => `tools.workspace.action_${index}`;
 
-const createService = (count: number, disabledIndex?: number) => {
+const createService = (count: number, disabledIndex?: number, titles: readonly string[] = []) => {
   const registry = new LauncherActionRegistry();
   const executors = Array.from({ length: count }, () => rs.fn(() => undefined));
   const result = registry.registerBatch(
@@ -30,7 +33,7 @@ const createService = (count: number, disabledIndex?: number) => {
       descriptor: {
         action_id: actionId(index),
         owner_id: 'tools.workspace',
-        title: { 'en-US': `Action ${index}`, 'zh-CN': `操作 ${index}` },
+        title: { 'en-US': titles[index] ?? `Action ${index}`, 'zh-CN': `操作 ${index}` },
         description: { 'en-US': `Description ${index}`, 'zh-CN': `描述 ${index}` },
         default_keywords: { 'en-US': ['run'], 'zh-CN': ['运行'] },
         icon: index === 0 ? { kind: 'host', token: 'settings' } : undefined,
@@ -51,14 +54,196 @@ const renderHome = (
   collectionsClient: LauncherActionCollectionsClient,
   initialLocale: 'en-US' | 'zh-CN' = 'en-US',
   initialThemeMode: 'light' | 'dark' = 'light',
+  surfaceController?: LauncherSurfaceController,
 ) =>
   render(
     <AppProviders initialLocale={initialLocale} initialThemeMode={initialThemeMode}>
-      <App actionService={service} activationSource={inertActivationSource} collectionsClient={collectionsClient} />
+      <App
+        actionService={service}
+        activationSource={inertActivationSource}
+        collectionsClient={collectionsClient}
+        surfaceController={surfaceController}
+      />
     </AppProviders>,
   );
 
 describe('launcher home action collections', () => {
+  test('arbitrates one readable tooltip across duplicate collection entries without changing focus or controls', async () => {
+    const longTitle = 'Inspect the complete workspace configuration history';
+    const measurement = installActionTitleMeasurement({
+      availableWidth: 64,
+      measureTextWidth: (title, fontSize) => title.length * fontSize * 0.5,
+    });
+    const { executors, service } = createService(2, undefined, [longTitle, 'Short']);
+    const confirmed = createCollections([actionId(0), actionId(1)], [actionId(0), actionId(1)]);
+    const view = renderHome(service, {
+      read: async () => confirmed,
+      recordUse: async () => confirmed,
+      setPinned: async () => confirmed,
+    });
+    try {
+      const recent = screen.getByRole('region', { name: 'Recent' });
+      const pinned = screen.getByRole('region', { name: 'Pinned' });
+      const recentLong = await within(recent).findByRole('button', { name: longTitle });
+      const pinnedLong = within(pinned).getByRole('button', { name: longTitle });
+      const pinnedShort = within(pinned).getByRole('button', { name: 'Short' });
+      const mainButtons = screen.getAllByRole('button');
+
+      act(() => recentLong.focus());
+      const firstTooltip = await screen.findByRole('tooltip');
+      expect(firstTooltip).toHaveTextContent(longTitle);
+      expect(recentLong).toHaveFocus();
+      expect(recentLong).toHaveAccessibleName(longTitle);
+      expect(view.container).not.toContainElement(firstTooltip);
+      expect(within(firstTooltip).queryByRole('button')).not.toBeInTheDocument();
+      const recentTooltipId = recentLong.getAttribute('aria-describedby');
+
+      fireEvent.mouseEnter(pinnedLong.closest('.launcher-action-tile') as HTMLElement);
+      await waitFor(() => expect(pinnedLong).toHaveAttribute('aria-describedby'));
+      expect(screen.getAllByRole('tooltip')).toHaveLength(1);
+      expect(pinnedLong.getAttribute('aria-describedby')).not.toBe(recentTooltipId);
+      expect(recentLong).not.toHaveAttribute('aria-describedby');
+      expect(recentLong).toHaveFocus();
+
+      const popupContent = screen.getByRole('tooltip').querySelector('.launcher-action-tooltip-content') as HTMLElement;
+      fireEvent.mouseLeave(pinnedLong.closest('.launcher-action-tile') as HTMLElement);
+      fireEvent.mouseEnter(popupContent);
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      });
+      expect(screen.getByRole('tooltip')).toHaveTextContent(longTitle);
+      fireEvent.scroll(popupContent, { target: { scrollTop: 40 } });
+      expect(screen.getByRole('tooltip')).toHaveTextContent(longTitle);
+      fireEvent.mouseLeave(popupContent);
+      await waitFor(() => expect(recentLong).toHaveAttribute('aria-describedby', recentTooltipId));
+
+      fireEvent.mouseEnter(pinnedShort.closest('.launcher-action-tile') as HTMLElement);
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+      fireEvent.mouseLeave(pinnedShort.closest('.launcher-action-tile') as HTMLElement);
+      await screen.findByRole('tooltip');
+      expect(recentLong).toHaveFocus();
+
+      fireEvent.keyDown(recentLong, { key: 'Escape', isComposing: true });
+      expect(screen.getByRole('tooltip')).toHaveTextContent(longTitle);
+      fireEvent.keyDown(recentLong, { key: 'Escape' });
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+      act(() => {
+        measurement.notifyResize();
+        measurement.flushFrame();
+      });
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      expect(executors[0]).not.toHaveBeenCalled();
+      expect(recentLong).toHaveFocus();
+      act(() => {
+        recentLong.blur();
+        recentLong.focus();
+      });
+      await screen.findByRole('tooltip');
+      expect(screen.getAllByRole('button')).toEqual(mainButtons);
+      expect(mainButtons.every((button) => button.tabIndex === 0)).toBe(true);
+      expect(
+        [...view.container.querySelectorAll<HTMLElement>('button,input,[tabindex]')].filter(
+          (element) => element.tabIndex >= 0,
+        ),
+      ).toEqual([screen.getByRole('combobox', { name: 'Launcher query' }), ...mainButtons]);
+
+      const input = screen.getByRole('combobox', { name: 'Launcher query' });
+      act(() => input.focus());
+      fireEvent.mouseEnter(pinnedLong.closest('.launcher-action-tile') as HTMLElement);
+      await screen.findByRole('tooltip');
+      fireEvent.keyDown(input, { key: 'Escape', keyCode: 229 });
+      expect(screen.getByRole('tooltip')).toHaveTextContent(longTitle);
+      fireEvent.keyDown(input, { key: 'Escape' });
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      expect(input).toHaveFocus();
+
+      act(() => recentLong.focus());
+      fireEvent.keyDown(recentLong, { key: 'Enter' });
+      fireEvent.click(recentLong);
+      await waitFor(() => expect(executors[0]).toHaveBeenCalledTimes(1));
+      act(() => pinnedLong.focus());
+      fireEvent.keyDown(pinnedLong, { key: ' ' });
+      fireEvent.click(pinnedLong);
+      await waitFor(() => expect(executors[0]).toHaveBeenCalledTimes(2));
+    } finally {
+      view.unmount();
+      measurement.restore();
+    }
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  test('keeps eight primary Actions in each collection ordered through pending and collection failure without resizing Home', async () => {
+    const base = createService(8);
+    const recentOrder = [7, 0, 6, 1, 5, 2, 4, 3];
+    const pinnedOrder = [3, 4, 2, 5, 1, 6, 0, 7];
+    const confirmed = createCollections(recentOrder.map(actionId), pinnedOrder.map(actionId));
+    let resolveDispatch: (result: LauncherActionDispatchResult) => void = () => undefined;
+    const pendingDispatch = new Promise<LauncherActionDispatchResult>((resolve) => {
+      resolveDispatch = resolve;
+    });
+    const dispatch = rs.fn(async () => pendingDispatch);
+    const recordUse = rs.fn(async () => {
+      throw new Error('private collection detail');
+    });
+    const setPinned = rs.fn(async () => confirmed);
+    const setPresentationState = rs.fn(async () => undefined);
+    renderHome(
+      { registry: base.service.registry, dispatcher: { dispatch } },
+      { read: async () => confirmed, recordUse, setPinned },
+      'en-US',
+      'light',
+      { setPresentationState },
+    );
+
+    const recent = screen.getByRole('region', { name: 'Recent' });
+    const pinned = screen.getByRole('region', { name: 'Pinned' });
+    await waitFor(() => expect(within(recent).getAllByRole('button')).toHaveLength(8));
+    const recentButtons = within(recent).getAllByRole('button');
+    const pinnedButtons = within(pinned).getAllByRole('button');
+    expect(recentButtons).toEqual(
+      recentOrder.map((index) => within(recent).getByRole('button', { name: `Action ${index}` })),
+    );
+    expect(pinnedButtons).toEqual(
+      pinnedOrder.map((index) => within(pinned).getByRole('button', { name: `Action ${index}` })),
+    );
+    expect(screen.getAllByRole('button')).toHaveLength(16);
+    expect(setPresentationState.mock.calls).toEqual([[{ kind: 'home' }]]);
+
+    fireEvent.click(pinnedButtons[0]);
+    fireEvent.click(pinnedButtons[0]);
+    fireEvent.click(within(recent).getByRole('button', { name: 'Action 3' }));
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith(actionId(3));
+    expect(screen.getByRole('status')).toHaveTextContent('Running Action 3…');
+    for (const collection of [recent, pinned]) {
+      expect(within(collection).getByRole('button', { name: 'Action 3' })).toBeDisabled();
+      expect(within(collection).getByRole('button', { name: 'Action 3' })).toHaveAttribute('aria-busy', 'true');
+      expect(within(collection).getAllByRole('button')).toHaveLength(8);
+    }
+
+    await act(async () => {
+      resolveDispatch({
+        ok: true,
+        action_id: actionId(3),
+      });
+      await pendingDispatch;
+    });
+
+    expect(
+      await screen.findByText('The action completed, but its collection could not be updated.'),
+    ).toBeInTheDocument();
+    expect(within(recent).getAllByRole('button')).toEqual(recentButtons);
+    expect(within(pinned).getAllByRole('button')).toEqual(pinnedButtons);
+    expect(within(pinned).getByRole('button', { name: 'Action 3' })).toBeEnabled();
+    expect(recordUse).toHaveBeenCalledTimes(1);
+    expect(recordUse).toHaveBeenCalledWith(actionId(3));
+    expect(setPinned).not.toHaveBeenCalled();
+    expect(screen.queryByText('private collection detail')).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Launcher query' })).toHaveValue('');
+    expect(setPresentationState.mock.calls).toEqual([[{ kind: 'home' }]]);
+  });
+
   test('renders persisted order, filters missing and disabled IDs, and never fills gaps', async () => {
     const { service } = createService(3, 1);
     renderHome(service, {
@@ -76,7 +261,7 @@ describe('launcher home action collections', () => {
     await waitFor(() => expect(within(recent).getAllByRole('button')).toHaveLength(2));
     expect(
       within(recent)
-        .getAllByText(/Action [02]/)
+        .getAllByRole('button')
         .map((node) => node.textContent),
     ).toEqual(['Action 2', 'Action 0']);
     expect(within(recent).queryByText(/Action 1|missing/)).not.toBeInTheDocument();
@@ -103,7 +288,7 @@ describe('launcher home action collections', () => {
 
     await waitFor(() => expect(executors[0]).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(recordUse).toHaveBeenCalledWith(actionId(0)));
-    expect(await screen.findByText('Action 0')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Action 0' })).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Action completed.');
     firstRender.unmount();
 
@@ -180,11 +365,12 @@ describe('launcher home action collections', () => {
     await waitFor(() => expect(executors[0]).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(recordUse).toHaveBeenCalledWith(actionId(0)));
     expect(setPinned).not.toHaveBeenCalled();
-    expect(within(pinned).getByText('Action 0')).toBeInTheDocument();
+    expect(within(pinned).getByRole('button', { name: 'Action 0' })).toBeInTheDocument();
   });
 
   test('uses localized empty states and keeps avatar and All outside the interaction flow', async () => {
     const { service } = createService(0);
+    const setPresentationState = rs.fn(async () => undefined);
     renderHome(
       service,
       {
@@ -196,6 +382,7 @@ describe('launcher home action collections', () => {
       },
       'zh-CN',
       'dark',
+      { setPresentationState },
     );
 
     expect(await screen.findByText('无法恢复最近使用和已固定操作。')).toBeInTheDocument();
@@ -209,5 +396,8 @@ describe('launcher home action collections', () => {
     expect(avatar).toHaveAttribute('aria-hidden', 'true');
     expect(avatar).not.toHaveAttribute('tabindex');
     expect(document.body).toHaveAttribute('theme-mode', 'dark');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    expect(setPresentationState.mock.calls).toEqual([[{ kind: 'home' }]]);
   });
 });

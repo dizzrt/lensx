@@ -174,6 +174,57 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
 - 搜索使用单一四列、最多八项的 listbox 网格。左右键移动一项，上下键仅在目标存在时移动四项；
   pointer 与键盘激活必须复用同一 Dispatcher 路径。
 
+### Action 卡片展示
+
+Recent、Pinned 和 Search 共用 `ActionTile` 展示。通过 `aspect-ratio: 1`，以当前网格列宽决定每张
+卡片的方形边长；网格内容和条目均向起始侧对齐，避免剩余行高拉伸交互区域。主按钮填满该区域，
+pointer、hover、focus、selected 和 pending 状态保持相同的方形边界及 `12px` 圆角。`28px` 图标
+和固定 `20px` 标题行盒在卡片内居中；标题长短和反馈不得改变卡片尺寸或移动相邻 Action。
+
+Home 的每个集合保持八个等宽列，按已确认顺序展示最多八个已解析 Action。Search 保持四个等宽列，
+最多八项结果、两行。因此不同网格可以使用不同的方形边长。Home 和 Search 在空态、pending 和错误
+状态下仍保持固定的 `650×320` 和 `650×480` 原生窗口目标，不得从文字或条目数量推导窗口尺寸。
+静止卡片在连续 launcher surface 上保持透明，交互状态仅使用现有主题 token。简单网格组合使用
+UnoCSS；方形几何、按钮边界和可复用状态样式归语义 Less 所有。
+
+#### 单行标题适配
+
+以完整的当前本地化标题作为输入，依据标题行盒的可用内宽进行适配。Host 私有
+`fitActionTileTitle` helper 从独立的 `14px` 基准测量，恰好容纳或仍有余量时保持 `14px`。
+否则先按宽度比例计算候选，再通过有界校正在连续 `12–14px` 区间中选择尽可能大的可容纳字号，
+精度误差不超过 `0.1px`。不得按字符数估算、轮询固定整数字号，或在已适配结果上逐步缩小。
+只有完整标题在 `12px` 下仍超宽时才标记为截断并需要完整名称提示。保留标题原文及完整可访问名称。
+
+`useActionTileTitleFit` 拥有 DOM 测量与失效处理。完整文本测量节点脱离正常布局、对辅助技术隐藏且
+不可聚焦；它与可见标题共用 font family、weight 和 letter spacing，但不参与按钮命名。语义 Less
+拥有固定行高和单行 CSS 省略，hook 提供计算后的字号。不得同时启用 Typography 的 JavaScript
+ellipsis，不依赖 `text-fit`，也不新增字体适配库。
+
+标题或 locale 变化、`ResizeObserver` 发现可用宽度变化、字体首次就绪及后续加载完成或失败时重新
+测量。将重复通知合并到同一个动画帧，结果未变时保留状态。替换或卸载时断开 observer、移除字体
+listener、取消排队帧，并忽略旧异步回调。无效、零宽或暂不可用的测量回退到 `14px`，通过单行 CSS
+溢出保护保留完整可访问名称，不断言截断，也不展示误导提示。后续有效布局或字体通知会重试测量，
+并可恢复 `14px`。
+
+#### 完整名称提示
+
+每个 Home 或 Search surface 拥有局部的 `useActionTileTooltip` 协调器，Home 的 Recent 与 Pinned
+共用一份。每个渲染实例具有唯一身份，同一 Action 在两个首页集合中出现时也使用不同身份。
+先仲裁候选，再判断截断：指针所在卡片及其可阅读提示优先于 Home 已聚焦主按钮，或 Search 输入框
+保持焦点时的选中结果，包括默认选中的首项。因此悬停完整显示的短标题会抑制另一键盘候选的提示；
+离开卡片和浮层后恢复仍有效的键盘候选。最多只有一个截断标题显示提示。
+
+使用挂载于 `body` 的受控 Semi Tooltip，采用当前主题 token、限制在窗口内的宽高、长词换行，
+并为极端长名称提供可滚动溢出。指针从卡片移入浮层时保持可读。内容仅为完整已解析标题，不新增产品
+文案、操作或 Tab 停靠点，也不获取或恢复焦点。将提示关联到对应实例的主按钮或 option，不覆盖
+输入框的状态区 `aria-describedby` 或 `aria-activedescendant` 关系。
+
+Home 的 Escape 关闭当前提示，直到指针或焦点触发条件重新建立；Enter 和 Space 仍执行主操作。
+Search 输入框的键盘处理保持主导：IME 优先，方向键更新选择，Enter 分派，一次普通 Escape 清空
+查询和提示。结果仍通过 active descendant 表达，不成为 DOM 焦点目标。失焦时清除键盘候选，
+移除或卸载时释放实例，查询清空、surface 切换或重新测量发现当前标题不再截断时清除旧提示内容。
+保留 pending 执行去重和既有语言回退。
+
 ### Launcher 组合输入
 
 - App Shell 的 `query` 只表示已提交的完整输入值。启用 Semi Input 的 `composition` 支持，
@@ -251,6 +302,10 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
   routing、键盘选择、页面关闭、失焦隐藏、快捷键恢复和固定 320/480/600px mode。
 - 分段页面上下文变更通过 DOM 与状态断言覆盖英文/简体中文、light/dark semantic token、关闭按钮
   紧邻关系与键盘焦点、avatar 状态保持和长文本省略。
+- 共享 Action 卡片使用可控宽度度量覆盖连续字号适配和无效尺寸恢复、observer/字体失效及清理、
+  方形样式约束和完整可访问名称。通过真实 Semi Tooltip 交互覆盖 Home 两集合与 Search，包括
+  pointer 优先、重复实例、焦点、Escape、IME、语言、主题及 pending 执行。确定性 DOM 度量证明
+  计算和交互契约，不能证明平台字体排版或最终像素外观；不得新增浏览器、WebView 或截图验证。
 - 为提取出的领域函数增加聚焦测试。
 - 避免使用会掩盖有效行为断言的 snapshot。
 - Plugin management 变更必须覆盖英文/简体中文与 light/dark 的全部维护状态，并断言 split-surface

@@ -1,7 +1,9 @@
 import { Typography } from '@douyinfe/semi-ui';
+import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionTile } from './ActionTile';
 import type { LauncherActionSearchResult } from './actions';
+import { useActionTileTooltip } from './useActionTileTooltip';
 
 interface ActionSearchResultsProps {
   readonly listboxId: string;
@@ -10,6 +12,8 @@ interface ActionSearchResultsProps {
   readonly pendingActionId?: string;
   readonly onActivate: (actionId: string) => void;
   readonly visibleError?: string;
+  readonly isInputFocused?: boolean;
+  readonly locale?: string;
 }
 
 export const getLauncherActionOptionId = (actionId: string) => `launcher-action-option-${actionId}`;
@@ -21,9 +25,15 @@ export const ActionSearchResults = ({
   pendingActionId,
   onActivate,
   visibleError,
+  isInputFocused = false,
+  locale,
 }: ActionSearchResultsProps) => {
   const { t } = useTranslation();
   const headingId = `${listboxId}-heading`;
+  const instanceId = useId();
+  const tooltip = useActionTileTooltip(
+    isInputFocused && selectedActionId ? `${instanceId}-${selectedActionId}` : undefined,
+  );
 
   return (
     <section aria-labelledby={headingId} className="launcher-search-section flex min-h-0 flex-1 flex-col gap-3">
@@ -43,9 +53,12 @@ export const ActionSearchResults = ({
               isPending={pendingActionId === result.action_id}
               isSelected={selectedActionId === result.action_id}
               key={result.action_id}
+              instanceId={`${instanceId}-${result.action_id}`}
+              locale={locale}
               mainButtonId={getLauncherActionOptionId(result.action_id)}
               onActivate={onActivate}
               option
+              tooltip={tooltip}
             />
           ))}
         </div>

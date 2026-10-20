@@ -192,7 +192,7 @@ describe('Plugin Action mapper', () => {
         onActivate={() => undefined}
       />,
     );
-    expect(screen.getByText('Open Project')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Project' })).toBeInTheDocument();
     expect(document.querySelector('[data-icon-token="action-fallback"]')).not.toBeNull();
   });
 

@@ -133,6 +133,7 @@ const App = ({
   const [activePageAttemptId, setActivePageAttemptId] = useState<`page_attempt_${number}`>();
   const [query, setQuery] = useState('');
   const [selectedActionId, setSelectedActionId] = useState<string>();
+  const [isInputFocused, setIsInputFocused] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string>();
   const [dispatchFeedback, setDispatchFeedback] = useState<DispatchFeedback>();
   const [collectionsFeedbackKey, setCollectionsFeedbackKey] = useState<AppMessageKey>();
@@ -650,6 +651,8 @@ const App = ({
                 composition
                 forwardRef={inputRef}
                 onChange={handleQueryChange}
+                onBlur={() => setIsInputFocused(false)}
+                onFocus={() => setIsInputFocused(true)}
                 onCompositionEnd={handleCompositionEnd}
                 onCompositionStart={handleCompositionStart}
                 onKeyDown={handleInputKeyDown}
@@ -679,6 +682,8 @@ const App = ({
             ) : null}
             {presentationState === 'search' ? (
               <ActionSearchResults
+                isInputFocused={isInputFocused}
+                locale={locale}
                 listboxId={ACTION_RESULTS_LISTBOX_ID}
                 onActivate={(actionId) => void executeAction(actionId)}
                 pendingActionId={pendingActionId}

@@ -124,6 +124,26 @@ retaining the avatar placeholder. Closing a page returns to `home` and restores
 input focus. A page-level error boundary retains that context bar and close
 control when page content fails.
 
+Recent, Pinned, and Search share the Host-private `ActionTile` presentation:
+column width determines its square interaction boundary, with a fixed icon and
+single title line. A pure title-fitting helper and a DOM measurement hook select
+a continuous `12–14px` font size from the complete localized title and available
+width. CSS owns final single-line overflow; hidden full-text measurement is
+invalidated by title, locale, width, and font changes and safely falls back when
+dimensions are unavailable. These measurements only control frontend
+presentation and never become native window dimensions.
+
+Home owns one local full-name-tooltip coordinator across both collections;
+Search owns another whose keyboard candidate follows the selected result while
+the existing input retains focus. Pointer candidates take precedence, and only
+actually truncated titles show a controlled body-mounted Semi Tooltip. Instance
+identity, measurement, and tooltip state remain temporary React presentation
+facts; they add no Registry, Dispatcher, Rust/Tauri, or persistence contract.
+The input's active descendant, status association, IME priority, and execution
+path remain authoritative. See the
+[Action tile guidance](../development/frontend-guidelines.md#action-tile-presentation)
+for fitting, focus, lifecycle, and deterministic-test boundaries.
+
 ## Launcher Window Lifecycle
 
 On macOS, the packaged bundle declares `LSUIElement=true`, and Rust confirms
