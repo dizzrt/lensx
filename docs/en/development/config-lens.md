@@ -22,31 +22,148 @@ ordinary plugin update or development reload path; the Host does not rewrite
 older titles.
 
 ConfigLens is an ephemeral configuration workbench for JSON, YAML 1.2, TOML
-1.0, and XML 1.0. Input remains inside the current Page generation. Hiding and
-restoring the Launcher does not close that Page: activation refreshes current
-plugin facts and keeps the same Child WebView, Runtime Session, models, Workers, and
-in-memory input while its relevant execution identity remains current. This
-continuity uses no browser or Host persistence. Input is lost when the Page is
-actually closed, disabled, replaced, reloaded, uninstalled, or otherwise torn
-down. The Page has one editable Monaco model. Format replaces its content
-directly for all four languages, while Compact is JSON-only; each successful
-operation is one undoable editor edit, and failures preserve the current
-content. Language choice remains explicit. The Host Page chrome supplies the
-visible ConfigLens identity, so the plugin document repeats neither a main
-title nor a subtitle. The ready document has exactly two top-level regions:
-one flexible content region and a semantic footer. The Monaco surface fills
-the complete content region without
-page padding, a content/footer gap, or its own card border or radius. The
-footer remains pinned to the bottom of the plugin viewport and meets Monaco at
-one separating edge. It is exactly 40 logical pixels high in the normal layout
-and vertically centers the explicit language selector, non-diagnostic status,
-Format, and Compact controls. Validation diagnostics remain Monaco markers;
-the footer presents no diagnostic count, summary, list, or additional row. At
-no more than 520 logical pixels wide or 260 logical pixels high, the controls
-may use two rows inside a fixed 72-logical-pixel footer, while outer padding and
-the content/footer gap remain zero. Editor content and validation state cannot
-move the footer away from the viewport bottom. The plugin performs no fetch,
-WebSocket, browser storage, clipboard, Host persistence, or content logging.
+1.0, and XML 1.0. The Page has one editable Monaco model. Format replaces its
+content directly for all four languages; Compact is available only for the
+current input version after strict JSON validation succeeds. Each successful
+operation is one undoable edit. Failure or a stale result preserves the current
+content, and recognition never rewrites or automatically formats it.
+
+The Host Page chrome supplies the visible ConfigLens identity, so the plugin
+document repeats neither a main title nor a subtitle. The ready document has
+exactly two top-level regions: one flexible content region and one semantic
+footer. Monaco fills the complete content region without page padding, a
+content/footer gap, or its own card border or radius. The footer remains at the
+bottom of the viewport, meeting Monaco at one separating edge. It is exactly
+40 logical pixels high in the normal layout and contains only the language
+selector, Format, and Compact. At no more than 520
+logical pixels wide or 260 logical pixels high, these controls use two rows in
+a fixed 72-logical-pixel footer; outer padding and the content/footer gap remain
+zero. Editor content and validation state cannot move the footer.
+
+There is no footer status node, reserved status space, empty-input hint, valid
+message, progress summary, diagnostic count, or additional status region.
+Buttons retain loading/disabled behavior and the operation group exposes
+`aria-busy`. Errors appear as Monaco markers and an accessible live diagnostic
+message inside the editor region. Worker failure and input-limit errors without
+a precise location map to a safe starting range; correcting the input can
+recover. Unrecognized ordinary text does not become a syntax error.
+
+## Language Selection And Highlighting
+
+A fresh document starts in Auto with no recognized language and a plaintext
+model. The compact selector always displays `Auto` in English or `自动` in
+Simplified Chinese while automatic mode is selected, including before, during,
+and after analysis. Its manual options display only `JSON`, `YAML`, `TOML`,
+and `XML`; the supported syntax versions remain JSON, YAML 1.2, TOML 1.0, and
+XML 1.0. Automatic detection continues to drive highlighting, validation, and
+operations internally without adding a detected-language or unresolved suffix.
+The selector prefers 120 logical pixels and can shrink to 72 logical pixels in
+constrained layouts, with a 120-pixel maximum and `flex: 0 1 120px`; it does not
+expand to fill the row. The 40/72-pixel Footer heights stay unchanged.
+Manual selection locks that language across editing, pasting, and clearing;
+selecting Auto again clears the manual choice and analyzes the current input. Clearing
+Auto returns to unrecognized plaintext and removes diagnostics, while clearing
+a manual selection retains that selected language. Empty input cannot be
+formatted or compacted.
+
+Recognition combines structural candidates with the existing parsers in one
+Worker request. Explicit XML structure selects XML, strict JSON objects and
+arrays take priority over YAML, and TOML assignments or table headers such as
+`port = 8080` and `[server]` select TOML. Clear but incomplete JSON or XML keeps
+that language and can produce syntax diagnostics. YAML block/flow collections
+remain eligible without making every scalar, ordinary string, or comment YAML.
+If nonempty editing temporarily has no reliable new structure, Auto retains
+its most recent automatically recognized language; a clear new structure can
+switch it. The initial ambiguous case stays unrecognized. Manual selection is
+the visible way to resolve intent; recognition is not a guarantee of intent or
+valid syntax. XML external constructs retain the existing rejection rules.
+
+Input and selection versions, operation generation, and Runtime locale/theme
+context guard asynchronous results. Editing or changing any of those contexts
+invalidates earlier work and schedules analysis for the current input. The
+180ms debounce may retain previous coloring, but pending or unresolved analysis
+cannot trigger a transform. The Format button and `Cmd/Ctrl+Enter` use the same
+execution condition. Compact additionally requires the current input and
+selection versions to have a valid strict JSON result.
+
+Highlighting follows the effective language on the same model, with plaintext
+for an unrecognized document. JSON uses the package tokenization module; YAML
+and XML use its language definitions and configuration. A small project-owned
+TOML Monarch definition covers tables and array tables, bare and quoted keys,
+single-line and multiline strings, escapes, comments, booleans, numbers, and
+date/time literals. These resources color incomplete text as well as valid
+text. Coloring is independent of diagnostics and does not replace strict
+Worker parsing or fidelity checks, particularly TOML 1.0 validation. Language
+and light/dark theme changes preserve content and undo history. No second JSON
+validation/formatting provider, remote schema resolver, LSP, completion service,
+or additional language-service Worker is loaded.
+
+## Native Find And Interface Language
+
+`Cmd/Ctrl+F` invokes the native Monaco Find widget through `actions.find`,
+including when the document is empty or its
+language is unrecognized. Find provides previous/next match navigation,
+no-result feedback, and case, whole-word, and regular-expression options.
+Opening it repeatedly reuses the widget. Escape or its close control returns
+focus to the editor without closing the plugin Page. Find itself does not edit
+the document; if the native widget's explicit Replace operation is used, it
+follows ordinary model changes, undo, and in-flight analysis invalidation.
+
+ConfigLens-local styles keep native Find buttons vertically aligned and align
+the widget with Monaco's existing reserved top space. With Find or expanded
+Replace open and the editor scrolled to the top, the first content line remains
+unobscured. Closing the widget releases that native space. This uses Monaco's
+existing `find.addExtraSpaceOnTop` behavior without adding editor padding or
+changing the shared Plugin UI reset.
+
+Monaco's packaged Codicon TrueType font supplies the native Find icons. Its
+emitted CSS URL must resolve relative to the stylesheet to the font within the
+plugin package, and the emitted font bytes must match the locked dependency.
+The Host resource service serves `.ttf` as `font/ttf` under its existing scoped
+resource rules. No remote loading, new permission, or CSP change is required.
+
+`Cmd/Ctrl+A` in the editor and the visible Select All context-menu item select
+the whole model. While the Find input has focus, select all applies to its
+query only. No document-wide selection handler takes focus from the language
+Select, Host inputs, or another native view. The
+[shared Child Runtime](../architecture/plugin-child-webview-runtime.md#native-editing-shortcuts)
+owns native macOS delivery; that fix ships with the Host and is independent of
+the plugin update.
+
+The first valid Runtime Context fixes the document's Monaco interface language.
+Package-owned NLS is initialized before the Monaco API, Find, context menu, and
+diagnostic contributions are first imported, using one shared loader for
+bootstrap preloading and editor initialization. English and Simplified Chinese
+are supported. A later application locale change updates ConfigLens controls
+and the diagnostic messages supplied by ConfigLens immediately. Monaco's native
+Find, menu, and diagnostic-interaction framework text retains the opening
+language until ConfigLens is actually closed and reopened. Recreating an
+editor or retrying the SDK in the same document does not refresh evaluated
+module messages. Theme changes apply immediately without reopening.
+
+## Temporary State And Cleanup
+
+Input, language mode, the effective language, Find query/options, selection,
+and undo history remain in memory in the current Page generation. Hiding and
+restoring Launcher preserves the same Child WebView, Runtime Session, model,
+and Workers while execution identity remains current. This is not a close or
+a new document. A real close/reopen starts empty in Auto with no recognized
+language and uses the new opening interface locale. Disable, replacement,
+development reload, uninstall, teardown, or an SDK failure/retry discards the
+old editor and its temporary content/query state. A same-document retry keeps
+only the module/NLS initialization described above.
+
+Teardown disposes the model, editor and Find widget, content/layout
+subscriptions, markers, language work, and editor Workers; late async work
+cannot restore the previous surface. Find's global clipboard is disabled;
+standalone clipboard/storage services use document memory only, and
+query/replace history is not persisted. The package service adapter is isolated
+to the fixed Monaco version and must be revalidated when that version is
+reviewed. ConfigLens adds no programmatic system
+clipboard access, Host clipboard request, private bridge, browser storage,
+Host persistence, network recognition,
+content logging, Fetch, or WebSocket path. Ordinary native Web editing retains
+its existing clipboard behavior without a new Host permission.
 
 ## Reviewed Runtime Dependencies
 
@@ -54,7 +171,7 @@ Runtime versions are exact and changes require a new review.
 
 | Dependency | Version | License | Role and review result |
 | --- | --- | --- | --- |
-| `monaco-editor` | `0.56.0` | MIT | Maintained browser ESM editor, tested on Node 24 tooling and WKWebView. Package-owned module Workers and chunks are emitted without CDN, runtime resolution, source maps, or `eval`. |
+| `monaco-editor` | `0.56.0` | MIT | Browser ESM editor with package-owned tokenizers, NLS, Find, module Workers, and chunks. Resources are emitted without CDN, runtime resolution, source maps, or `eval`. |
 | `yaml` | `2.9.0` | ISC | Maintained browser export and YAML 1.2 document/CST support. Remote tags and resources are never resolved; aliases, depth, documents, and diagnostics remain bounded. |
 | `toml-eslint-parser` | `1.0.3` | MIT | ESM parser with an explicit TOML 1.0 mode and Node 24 support. It contains no runtime fetch, `eval`, or WASM path and remains inside the language Worker. |
 | `saxes` | `6.0.0` | ISC | Browser-compatible strict XML 1.0 streaming parser. ConfigLens rejects DOCTYPE, entity, XInclude, SYSTEM, and PUBLIC inputs before parsing, so no external entity resolution path exists. |
@@ -79,8 +196,9 @@ single-flight Monaco loader start in parallel. Retry disposes the old attempt
 before starting a fresh client.
 
 The main thread enforces 2 MiB UTF-8 and 100,000-line input limits before
-dispatch. Language work runs in a replaceable module Worker with a five-second
-deadline and at most 200 safe diagnostics. Monaco uses a separate package-owned
+dispatch. Recognition and validation share one replaceable module Worker request with
+a five-second total deadline and at most 200 safe diagnostics. Candidates do
+not each receive a fresh timeout; input over the limits is not dispatched. Monaco uses a separate package-owned
 editor Worker. Every emitted resource remains in self-contained `dist/` and
 the canonical `.lxp`.
 
@@ -91,15 +209,22 @@ adapter module. Broader budgets remain 24 MiB for complete uncompressed
 `dist/`, 8 MiB for all JavaScript and the compressed `.lxp` independently,
 4 MiB per Monaco or language chunk, and 2 MiB per Worker entry.
 
-Rstest covers both locales, light and dark semantic tokens, empty, valid,
-invalid, limit, long-copy, keyboard, focus, recovery, single-editor replacement,
-one-operation undo, and content-plus-footer state. Source and compiled-CSS
-contracts cover the continuous workbench, fixed-bottom 40-pixel footer, absence
-of footer diagnostics, Monaco diagnostic markers, and fixed 72-pixel constrained
-fallback. Rust and lifecycle tests
-cover same-attempt hide and restore, close and reopen, replacement, cleanup, and
-resource revocation. These deterministic checks do not sample target-environment
-latency, launch a browser or real WebView, or maintain rendering output.
+Deterministic validation covers automatic/manual language state, structural and
+incomplete fixtures, version races, shared budgets, cancellation and recovery,
+real tokenizer output, native Find registration and supported DOM behavior,
+ConfigLens-local Find alignment and native reserved-space lifecycle,
+packaged Codicon font bytes and stylesheet-relative resource resolution,
+first-import NLS, both locales/themes, single-model edits/undo, and resource
+cleanup. Source and compiled-CSS contracts cover the continuous two-region
+workbench, the 40/72-pixel footer, absence of a status region, button busy
+semantics, and editor-owned accessible diagnostics. Rust and lifecycle tests
+cover shared native shortcut policy, same-attempt hide/restore, close/reopen,
+replacement, cleanup, and resource revocation. Built-output module inventory
+must place Find, NLS, and the four tokenizers in the delayed graph while keeping
+the initial graph free of heavy modules and extra language services. These are
+validation responsibilities, not a substitute for the actual command results.
+The checks do not sample target-environment latency, launch a browser or real
+WebView, or maintain rendering output.
 
 Run:
 

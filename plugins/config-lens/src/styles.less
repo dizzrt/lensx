@@ -54,42 +54,45 @@ body {
 .config-lens__footer-main {
   box-sizing: border-box;
   display: flex;
-  height: 40px;
+  height: 100%;
   min-width: 0;
-  min-height: 40px;
-  flex: 0 0 40px;
+  min-height: 0;
+  flex: 1 1 auto;
   align-items: center;
   gap: 10px;
-  padding: 4px 8px;
+  padding: 3px 8px;
 }
 
 .config-lens__toolbar {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
+  margin-left: auto;
   gap: 8px;
 }
 
 .config-lens__language {
   display: flex;
-  min-width: 132px;
-  flex: 0 1 auto;
+  min-width: 0;
+  flex: 1 1 auto;
   align-items: center;
   gap: 8px;
   color: var(--lensx-plugin-color-text-secondary);
   font-size: 12px;
 }
 
-.config-lens__status {
-  min-width: 0;
-  min-height: 18px;
-  flex: 1 1 auto;
+.config-lens__language .semi-select {
+  min-width: 72px;
+  max-width: 120px;
+  flex: 0 1 120px;
+}
+
+.config-lens-editor__diagnostics {
+  position: absolute;
+  width: 1px;
+  height: 1px;
   overflow: hidden;
-  padding-left: 10px;
-  border-left: 3px solid var(--lensx-plugin-color-accent);
-  color: var(--lensx-plugin-color-text-secondary);
-  font-size: 13px;
-  text-overflow: ellipsis;
+  clip-path: inset(50%);
   white-space: nowrap;
 }
 
@@ -107,6 +110,16 @@ body {
 .config-lens-editor__surface {
   position: absolute;
   inset: 0;
+}
+
+/* Monaco 0.56's top view zone excludes the Find widget's outer margin. */
+.config-lens-editor .monaco-editor .find-widget {
+  margin-top: 0;
+}
+
+/* Preserve Find's content-box buttons without changing its border-box toggle. */
+.config-lens-editor .monaco-editor .find-widget .button:not(.toggle) {
+  box-sizing: content-box;
 }
 
 .config-lens :focus-visible {
@@ -130,10 +143,8 @@ body {
 
   .config-lens__footer-main {
     display: grid;
-    height: auto;
-    min-height: 72px;
-    flex-basis: auto;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 1fr 1fr;
     align-items: center;
     gap: 4px 6px;
   }
@@ -142,18 +153,9 @@ body {
     min-width: 0;
   }
 
-  .config-lens__language .semi-select {
-    min-width: 72px;
-  }
-
-  .config-lens__status {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-
   .config-lens__toolbar {
-    grid-column: 2;
-    grid-row: 1;
+    grid-column: 1;
+    grid-row: 2;
     gap: 4px;
   }
 

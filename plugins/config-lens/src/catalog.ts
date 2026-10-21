@@ -4,15 +4,12 @@ import type { LanguageId, SafeDiagnostic } from './language/protocol.js';
 
 const copy = {
   'en-US': {
+    auto: 'Auto',
     compact: 'Compact',
-    diagnosticSummary: (count: number) => `${count} diagnostic${count === 1 ? '' : 's'}`,
-    empty: 'Enter configuration text to begin.',
     format: 'Format',
     inputLabel: 'Editable configuration input',
     language: 'Language',
     loading: 'Connecting ConfigLens to lensX…',
-    processing: 'Processing in a dedicated Worker…',
-    ready: 'Input is valid.',
     retry: 'Retry',
     sdkError: 'ConfigLens could not connect to lensX. No content was sent.',
     title: 'ConfigLens',
@@ -34,15 +31,12 @@ const copy = {
     },
   },
   'zh-CN': {
+    auto: '自动',
     compact: '压缩',
-    diagnosticSummary: (count: number) => `${count} 条诊断`,
-    empty: '输入配置文本以开始。',
     format: '格式化',
     inputLabel: '可编辑的配置输入',
     language: '语言',
     loading: '正在将 ConfigLens 连接到 lensX…',
-    processing: '正在专用 Worker 中处理…',
-    ready: '输入有效。',
     retry: '重试',
     sdkError: 'ConfigLens 无法连接到 lensX，未发送任何内容。',
     title: 'ConfigLens',
@@ -78,5 +72,4 @@ const messageName = (key: SafeDiagnostic['messageKey']): keyof ConfigLensMessage
 export const diagnosticMessage = (messages: ConfigLensMessages, diagnostic: SafeDiagnostic): string =>
   messages.diagnostics[messageName(diagnostic.messageKey)];
 
-export const languageLabel = (language: LanguageId): string =>
-  language === 'yaml' ? 'YAML 1.2' : language === 'toml' ? 'TOML 1.0' : language === 'xml' ? 'XML 1.0' : 'JSON';
+export const languageLabel = (language: LanguageId): string => language.toUpperCase();

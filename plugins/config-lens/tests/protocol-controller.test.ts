@@ -5,6 +5,8 @@ import { MAX_INPUT_BYTES, MAX_INPUT_LINES, measureInput, preflightInput } from '
 import { diagnosticToMarker } from '../src/language/markers.js';
 import { isLanguageRequest, isLanguageResult, MAX_DIAGNOSTICS } from '../src/language/protocol.js';
 
+const versions = { inputVersion: 1, selectionVersion: 1 };
+
 class FakeWorker implements LanguageWorker {
   onerror: ((event: ErrorEvent) => unknown) | null = null;
   onmessage: ((event: MessageEvent<unknown>) => unknown) | null = null;
@@ -49,10 +51,10 @@ describe('language protocol and generation controller', () => {
       workers.push(worker);
       return worker;
     });
-    await expect(controller.run('json', 'format', 'x'.repeat(MAX_INPUT_BYTES + 1))).resolves.toMatchObject({
+    await expect(controller.run('json', 'format', 'x'.repeat(MAX_INPUT_BYTES + 1), versions)).resolves.toMatchObject({
       status: 'limit',
     });
-    await expect(controller.run('json', 'format', `${'\n'.repeat(MAX_INPUT_LINES)}`)).resolves.toMatchObject({
+    await expect(controller.run('json', 'format', `${'\n'.repeat(MAX_INPUT_LINES)}`, versions)).resolves.toMatchObject({
       status: 'limit',
     });
     expect(workers).toHaveLength(0);
@@ -90,23 +92,23 @@ describe('language protocol and generation controller', () => {
       workers.push(worker);
       return worker;
     }, 5);
-    const malformed = controller.run('json', 'format', '{}');
+    const malformed = controller.run('json', 'format', '{}', versions);
     workers[0]?.onmessage?.(new MessageEvent('message', { data: { rawError: '/private/path' } }));
     await expect(malformed).resolves.toMatchObject({ status: 'internal-error' });
     expect(workers[0]?.terminated).toBe(true);
 
-    const crashed = controller.run('json', 'format', '{}');
+    const crashed = controller.run('json', 'format', '{}', versions);
     workers[1]?.onerror?.(new ErrorEvent('error', { message: '/private/path' }));
     await expect(crashed).resolves.toMatchObject({ status: 'internal-error' });
 
-    await expect(controller.run('json', 'format', '{}')).resolves.toMatchObject({ status: 'internal-error' });
+    await expect(controller.run('json', 'format', '{}', versions)).resolves.toMatchObject({ status: 'internal-error' });
     expect(workers[2]?.terminated).toBe(true);
 
-    const recovered = controller.run('json', 'format', '{}');
+    const recovered = controller.run('json', 'format', '{}', versions);
     const request = workers[3]?.request as { requestId: number };
     workers[3]?.onmessage?.(
       new MessageEvent('message', {
-        data: { requestId: request.requestId, status: 'valid', diagnostics: [], output: '{}\n' },
+        data: { ...versions, requestId: request.requestId, status: 'valid', diagnostics: [], output: '{}\n' },
       }),
     );
     await expect(recovered).resolves.toMatchObject({ status: 'valid', output: '{}\n' });
@@ -120,8 +122,8 @@ describe('language protocol and generation controller', () => {
       workers.push(worker);
       return worker;
     });
-    const first = controller.run('json', 'format', '{}');
-    const second = controller.run('yaml', 'format', 'value: 1');
+    const first = controller.run('json', 'format', '{}', versions);
+    const second = controller.run('yaml', 'format', 'value: 1', versions);
     await expect(first).resolves.toMatchObject({
       status: 'internal-error',
       diagnostics: [{ code: 'controller.superseded' }],
@@ -130,7 +132,7 @@ describe('language protocol and generation controller', () => {
     const request = workers[1]?.request as { requestId: number };
     workers[1]?.onmessage?.(
       new MessageEvent('message', {
-        data: { requestId: request.requestId, status: 'valid', diagnostics: [], output: 'value: 1\n' },
+        data: { ...versions, requestId: request.requestId, status: 'valid', diagnostics: [], output: 'value: 1\n' },
       }),
     );
     await expect(second).resolves.toMatchObject({ status: 'valid', output: 'value: 1\n' });
@@ -145,11 +147,11 @@ describe('language protocol and generation controller', () => {
       return worker;
     });
     for (const output of ['{\n  "value": 1\n}\n', '{"value":1}']) {
-      const operation = controller.run('json', output.includes('\n') ? 'format' : 'compact', '{"value":1}');
+      const operation = controller.run('json', output.includes('\n') ? 'format' : 'compact', '{"value":1}', versions);
       const request = workers[0]?.request as { requestId: number };
       workers[0]?.onmessage?.(
         new MessageEvent('message', {
-          data: { requestId: request.requestId, status: 'valid', diagnostics: [], output },
+          data: { ...versions, requestId: request.requestId, status: 'valid', diagnostics: [], output },
         }),
       );
       await expect(operation).resolves.toMatchObject({ status: 'valid', output });

@@ -275,8 +275,9 @@ Protocol v0 MUST support only `GET` and `HEAD`, and MUST NOT support Range,
 conditional requests, content negotiation, directory indexes, or arbitrary
 downloads. Based only on a fixed ASCII case-insensitive table keyed by the final
 extension, the Host MUST return exact MIME types for HTML, JavaScript or ES
-modules, CSS, JSON, Wasm, PNG, JPEG, GIF, WebP, AVIF, SVG, ICO, and WOFF2. An
-unknown extension MUST NOT fall back to `application/octet-stream`. A successful
+modules, CSS, JSON, Wasm, PNG, JPEG, GIF, WebP, AVIF, SVG, ICO, WOFF2
+(`font/woff2`), and TrueType (`.ttf`, `font/ttf`). An unknown extension MUST NOT
+fall back to `application/octet-stream`. A successful
 response MUST contain accurate `Content-Type` and `Content-Length`,
 `X-Content-Type-Options: nosniff`, and `Cache-Control: no-store`, and MUST NOT
 add wildcard CORS. Every successful current scoped HTML response MUST also
@@ -292,6 +293,15 @@ serve the validated bytes unchanged and MUST NOT rewrite HTML to inject CSP.
 - **THEN** the response uses the fixed MIME type, accurate length, `nosniff`,
   `no-store`, and the complete body
 - **THEN** the Host does not inspect the content to guess another MIME type
+
+#### Scenario: GET and HEAD serve a packaged TrueType font
+
+- **WHEN** the current scope requests a valid packaged `.ttf` or `.TTF` resource
+  through GET or HEAD
+- **THEN** both responses use `font/ttf`, the font's exact byte length,
+  `nosniff`, and `no-store`
+- **THEN** GET returns the unchanged font bytes and HEAD returns no body after
+  the same scope, path, lifecycle, and MIME validation
 
 #### Scenario: GET returns a current scoped HTML document
 

@@ -1,208 +1,327 @@
-import { describe, expect, test } from '@rstest/core';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, rs, test } from '@rstest/core';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { ConfigLensPage } from '../src/ConfigLensPage.js';
 import type { EditorSurfaceProps } from '../src/editor/MonacoSurface.js';
 import type { LanguageController } from '../src/language/controller.js';
-import type { LanguageResult } from '../src/language/protocol.js';
+import type {
+  AnalysisInput,
+  AnalysisResult,
+  LanguageId,
+  LanguageOperationResult,
+  LanguageVersions,
+} from '../src/language/protocol.js';
 
 const context = (locale: 'en-US' | 'zh-CN' = 'en-US', theme: 'light' | 'dark' = 'light') =>
   Object.freeze({ capabilities: Object.freeze([]), hostApiVersion: '0.2.0', locale, theme });
-
+// This double tests Page orchestration only. Actual Monaco actions, focus and
+// model/undo behavior are exercised by the native editor tests.
 const TestSurface = ({ diagnostics, input, language, onInput, theme }: EditorSurfaceProps) => (
   <textarea
     aria-label="Editable input"
     data-diagnostic-count={diagnostics.length}
-    data-language={language}
+    data-language={language ?? 'plaintext'}
     data-theme={theme}
     value={input}
     onChange={(event) => onInput(event.currentTarget.value)}
   />
 );
 
-const createController = (): LanguageController => {
-  let generation = 0;
-  const run = async (
-    language: 'json' | 'yaml' | 'toml' | 'xml',
-    operation: 'validate' | 'format' | 'compact',
-    source: string,
-  ) => {
-    generation += 1;
-    if (source.includes('bad')) {
-      return {
-        requestId: generation,
-        status: 'invalid',
-        diagnostics: [
-          {
-            code: `${language}.syntax`,
-            severity: 'error',
-            offset: 0,
-            length: 3,
-            messageKey: `diagnostic.${language}Syntax`,
-          },
-        ],
-      } satisfies LanguageResult;
-    }
-    return {
-      requestId: generation,
+const harness = () => {
+  const requests: { input: AnalysisInput; publish: (result: AnalysisResult) => void }[] = [];
+  const run = rs.fn(
+    async (
+      _language: LanguageId,
+      _operation: string,
+      source: string,
+      versions: LanguageVersions,
+    ): Promise<LanguageOperationResult> => ({
+      ...versions,
+      requestId: 1,
       status: 'valid',
       diagnostics: [],
-      output: operation === 'validate' ? undefined : `formatted:${source}`,
-    } satisfies LanguageResult;
-  };
-  return {
-    run,
-    scheduleValidation: (language, source, publish) => void run(language, 'validate', source).then(publish),
-    invalidate: () => {
-      generation += 1;
+      output: `${source}\n`,
+    }),
+  );
+  const controller: LanguageController = {
+    analyze: async (input) => ({
+      requestId: 0,
+      inputVersion: input.inputVersion,
+      selectionVersion: input.selectionVersion,
+      status: 'unresolved',
+      diagnostics: [],
+    }),
+    scheduleAnalysis: (input, publish) => {
+      requests.push({ input, publish });
     },
-    dispose: () => undefined,
-    generation: () => generation,
+    run,
+    invalidate: rs.fn(),
+    dispose: rs.fn(),
+    generation: () => 0,
   };
+  const settle = (language?: LanguageId, valid = true, request = requests.at(-1)) => {
+    if (request === undefined) throw new Error('Missing analysis request');
+    const base = {
+      requestId: 1,
+      inputVersion: request.input.inputVersion,
+      selectionVersion: request.input.selectionVersion,
+      diagnostics: [],
+    };
+    act(() =>
+      request.publish(
+        language === undefined
+          ? { ...base, status: 'unresolved' }
+          : {
+              ...base,
+              status: 'resolved',
+              effectiveLanguage: language,
+              validationStatus: valid ? 'valid' : 'invalid',
+            },
+      ),
+    );
+  };
+  return { controller, create: () => controller, requests, run, settle };
 };
+const edit = (value: string) => fireEvent.change(screen.getByLabelText('Editable input'), { target: { value } });
+const choose = async (name: string) => {
+  fireEvent.click(screen.getByRole('combobox'));
+  fireEvent.click(await screen.findByRole('option', { name: new RegExp(name, 'u') }));
+};
+const format = () => screen.getByRole('button', { name: /^(Format|格式化)$/u });
+const compact = () => screen.getByRole('button', { name: /^(Compact|压缩)$/u });
 
-describe('ConfigLens product workflow', () => {
-  test('renders an editor-first workspace without repeated page headings', () => {
-    render(<ConfigLensPage context={context()} createController={createController} EditorSurface={TestSurface} />);
+const renderPage = (
+  h: ReturnType<typeof harness>,
+  locale: 'en-US' | 'zh-CN' = 'en-US',
+  theme: 'light' | 'dark' = 'light',
+) =>
+  render(<ConfigLensPage context={context(locale, theme)} createController={h.create} EditorSurface={TestSurface} />);
+
+describe('ConfigLens versioned language selection', () => {
+  test('starts automatic and unresolved; detection changes language without editing input', () => {
+    const h = harness();
+    renderPage(h);
+    expect(screen.getByRole('combobox')).toHaveTextContent(/^Auto$/u);
+    expect(screen.getByLabelText('Editable input')).toHaveAttribute('data-language', 'plaintext');
+    expect(format()).toBeDisabled();
+    expect(compact()).toBeDisabled();
+    edit('<root/>');
+    expect(format()).toBeDisabled();
+    expect(h.requests.at(-1)?.input.selection).toEqual({ mode: 'auto', previousAutoLanguage: undefined });
+    h.settle('xml');
+    expect(screen.getByRole('combobox')).toHaveTextContent(/^Auto$/u);
+    expect(screen.getByLabelText('Editable input')).toHaveValue('<root/>');
+    expect(format()).toBeEnabled();
+    expect(compact()).toBeDisabled();
+  });
+
+  test('locks a manual choice through paste and clear; returning to auto discards manual evidence', async () => {
+    const h = harness();
+    renderPage(h);
+    edit('<root/>');
+    const stale = h.requests.at(-1);
+    fireEvent.click(screen.getByRole('combobox'));
+    expect((await screen.findAllByRole('option')).map((option) => option.textContent)).toEqual([
+      'Auto',
+      'JSON',
+      'YAML',
+      'TOML',
+      'XML',
+    ]);
+    fireEvent.click(screen.getByRole('option', { name: /TOML/u }));
+    expect(screen.getByLabelText('Editable input')).toHaveAttribute('data-language', 'toml');
+    h.settle('xml', true, stale);
+    expect(screen.getByRole('combobox')).toHaveTextContent('TOML');
+    edit('{"port":80}');
+    expect(h.requests.at(-1)?.input.selection).toEqual({ mode: 'manual', language: 'toml' });
+    h.settle('toml', false);
+    expect(compact()).toBeDisabled();
+    edit('');
+    expect(screen.getByRole('combobox')).toHaveTextContent('TOML');
+    expect(screen.getByLabelText('Editable input')).toHaveAttribute('data-language', 'toml');
+    edit('<new/>');
+    await choose('Auto');
+    expect(h.requests.at(-1)?.input.selection).toEqual({ mode: 'auto', previousAutoLanguage: undefined });
+    h.settle('xml');
+    expect(screen.getByRole('combobox')).toHaveTextContent(/^Auto$/u);
+  });
+
+  test('passes only previous automatic language through ambiguity and clears it on empty input', () => {
+    const h = harness();
+    renderPage(h);
+    edit('{"a":1}');
+    h.settle('json');
+    edit('unfinished');
+    expect(h.requests.at(-1)?.input.selection).toEqual({ mode: 'auto', previousAutoLanguage: 'json' });
+    h.settle('json', false);
+    expect(screen.getByLabelText('Editable input')).toHaveAttribute('data-language', 'json');
+    edit('<xml>');
+    h.settle('xml', false);
+    expect(screen.getByLabelText('Editable input')).toHaveAttribute('data-language', 'xml');
+    edit('  ');
+    expect(screen.getByRole('combobox')).toHaveTextContent(/^Auto$/u);
+    expect(screen.getByLabelText('Editable input')).toHaveAttribute('data-language', 'plaintext');
+    expect(h.controller.invalidate).toHaveBeenCalled();
+  });
+
+  test('buttons and keyboard share pending, unresolved and current valid JSON guards', async () => {
+    const h = harness();
+    renderPage(h);
+    edit('unknown');
+    fireEvent.keyDown(screen.getByLabelText('Editable input'), { key: 'Enter', ctrlKey: true });
+    expect(h.run).not.toHaveBeenCalled();
+    h.settle();
+    fireEvent.keyDown(screen.getByLabelText('Editable input'), { key: 'Enter', metaKey: true });
+    expect(h.run).not.toHaveBeenCalled();
+    edit('{"a":}');
+    h.settle('json', false);
+    expect(format()).toBeEnabled();
+    expect(compact()).toBeDisabled();
+    edit('{"a":1}');
+    expect(format()).toBeDisabled();
+    expect(compact()).toBeDisabled();
+    h.settle('json');
+    expect(compact()).toBeEnabled();
+    fireEvent.keyDown(screen.getByLabelText('Editable input'), { key: 'Enter', metaKey: true });
+    await waitFor(() => expect(screen.getByLabelText('Editable input')).toHaveValue('{"a":1}\n'));
+    expect(h.run).toHaveBeenCalledTimes(1);
+    expect(compact()).toBeDisabled();
+    h.settle('json');
+    expect(compact()).toBeEnabled();
+  });
+
+  test.each([
+    'input',
+    'selection',
+    'locale',
+    'theme',
+  ] as const)('rejects late transform after %s changes and resumes analysis', async (change) => {
+    const h = harness();
+    let finish: ((result: LanguageOperationResult) => void) | undefined;
+    h.run.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const view = renderPage(h);
+    edit('{"a":1}');
+    h.settle('json');
+    const versions = h.requests.at(-1)?.input;
+    fireEvent.click(format());
+    expect(format()).toBeDisabled();
+    fireEvent.keyDown(screen.getByLabelText('Editable input'), { key: 'Enter', ctrlKey: true });
+    expect(h.run).toHaveBeenCalledTimes(1);
+    if (change === 'input') edit('{"a":2}');
+    else if (change === 'selection') await choose('XML');
+    else
+      view.rerender(
+        <ConfigLensPage
+          context={context(change === 'locale' ? 'zh-CN' : 'en-US', change === 'theme' ? 'dark' : 'light')}
+          createController={h.create}
+          EditorSurface={TestSurface}
+        />,
+      );
+    await act(async () =>
+      finish?.({
+        inputVersion: versions?.inputVersion ?? 0,
+        selectionVersion: versions?.selectionVersion ?? 0,
+        requestId: 2,
+        status: 'valid',
+        diagnostics: [],
+        output: 'STALE',
+      }),
+    );
+    expect(screen.getByLabelText('Editable input')).not.toHaveValue('STALE');
+    expect(format()).toBeDisabled();
+    h.settle(change === 'selection' ? 'xml' : 'json');
+    expect(format()).toBeEnabled();
+  });
+
+  test('hiding preserves mode and content; unmount invalidates callbacks and reopening resets them', async () => {
+    const h = harness();
+    const view = renderPage(h);
+    edit('<root/>');
+    await choose('XML');
+    h.settle('xml');
+    view.container.hidden = true;
+    view.rerender(<ConfigLensPage context={context()} createController={h.create} EditorSurface={TestSurface} />);
+    view.container.hidden = false;
+    expect(screen.getByLabelText('Editable input')).toHaveValue('<root/>');
+    expect(screen.getByRole('combobox')).toHaveTextContent('XML');
+    const stale = h.requests.at(-1);
+    view.unmount();
+    expect(h.controller.dispose).toHaveBeenCalledTimes(1);
+    const next = harness();
+    renderPage(next);
+    h.settle('toml', true, stale);
+    expect(screen.getByLabelText('Editable input')).toHaveValue('');
+    expect(screen.getByRole('combobox')).toHaveTextContent(/^Auto$/u);
+  });
+});
+
+describe('ConfigLens footer and feedback', () => {
+  test.each([
+    ['en-US', 'light'],
+    ['en-US', 'dark'],
+    ['zh-CN', 'light'],
+    ['zh-CN', 'dark'],
+  ] as const)('keeps two regions and no status placeholder in %s/%s across states', (locale, theme) => {
+    const h = harness();
+    renderPage(h, locale, theme);
     const workspace = screen.getByRole('main', { name: 'ConfigLens' });
-    const editor = screen.getByLabelText('Editable input');
-    const language = screen.getByRole('combobox');
-    const format = screen.getByRole('button', { name: 'Format' });
-    const compact = screen.getByRole('button', { name: 'Compact' });
-    const status = screen.getByRole('status');
-    const footer = workspace.children[1];
-    expect(workspace).toBeInTheDocument();
-    expect(workspace).toHaveAttribute('data-workbench-layout', 'continuous');
+    const footer = screen.getByRole('contentinfo');
     expect(workspace.children).toHaveLength(2);
     expect(workspace.children[0]).toHaveClass('config-lens__content');
-    expect(workspace.children[0]?.tagName).toBe('SECTION');
-    expect(footer).toHaveClass('config-lens__footer');
-    expect(footer).toHaveAttribute('data-footer-layout', 'fixed-bottom');
-    expect(footer?.tagName).toBe('FOOTER');
-    expect(footer?.children).toHaveLength(1);
-    expect(workspace.children[0]).toContainElement(editor);
-    expect(footer).toContainElement(language);
-    expect(footer).toContainElement(status);
-    expect(footer).toContainElement(format);
-    expect(footer).toContainElement(compact);
-    expect(language.closest('.config-lens__footer-main')).toContainElement(status);
-    expect(language.closest('.config-lens__footer-main')).toContainElement(format);
-    expect(language.closest('.config-lens__footer-main')).toContainElement(compact);
+    expect(workspace.children[1]).toBe(footer);
     expect(screen.queryByRole('heading')).not.toBeInTheDocument();
-    expect(screen.queryByText(/temporary workspace|临时工作区/u)).not.toBeInTheDocument();
-    expect(editor.compareDocumentPosition(language) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
-    expect(editor.compareDocumentPosition(format) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
-    expect(format).toBeDisabled();
-    expect(compact).toBeDisabled();
+    const verify = () => {
+      expect(screen.getByRole('combobox')).toHaveTextContent(locale === 'zh-CN' ? /^自动$/u : /^Auto$/u);
+      expect(footer.querySelector('.config-lens__status')).toBeNull();
+      expect(footer.querySelector('[role="status"]')).toBeNull();
+      expect(footer.querySelector('ul')).toBeNull();
+      expect(footer.children).toHaveLength(1);
+      expect(footer).toContainElement(format());
+      expect(footer).toContainElement(compact());
+      expect(footer.querySelectorAll('button')).toHaveLength(2);
+      expect(screen.queryByRole('button', { name: /^(Search|搜索)$/u })).not.toBeInTheDocument();
+    };
+    verify();
+    edit(`{"long":"${'内容'.repeat(500)}"}`);
+    verify();
+    expect(footer.querySelector('[aria-busy="true"]')).not.toBeNull();
+    h.settle('json');
+    verify();
+    edit('bad');
+    h.settle('json', false);
+    verify();
+    expect(screen.getByLabelText('Editable input')).toHaveAttribute('data-theme', theme);
   });
 
-  test('keeps language selection explicit and exposes no suggestion or change-application controls', () => {
-    render(<ConfigLensPage context={context()} createController={createController} EditorSurface={TestSurface} />);
-    const editor = screen.getByLabelText('Editable input');
-    fireEvent.change(editor, { target: { value: '<root/>' } });
-    expect(screen.getByRole('combobox')).toHaveTextContent('JSON');
-    expect(editor).toHaveAttribute('data-language', 'json');
-    expect(screen.getByRole('button', { name: 'Format' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Compact' })).toBeEnabled();
-    expect(screen.queryByText(/suggestion|may be|建议|可能/u)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Apply result|应用结果/u })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/preview|预览/u)).not.toBeInTheDocument();
-  });
-
-  test('formats directly and supports keyboard format without preview or Apply', async () => {
-    render(<ConfigLensPage context={context()} createController={createController} EditorSurface={TestSurface} />);
-    const input = screen.getByLabelText('Editable input');
-    fireEvent.change(input, { target: { value: '{"a":1}' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Format' }));
-    await waitFor(() => expect(input).toHaveValue('formatted:{"a":1}'));
-    fireEvent.change(input, { target: { value: '{"a":2}' } });
-    fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true });
-    await waitFor(() => expect(input).toHaveValue('formatted:{"a":2}'));
-    expect(screen.queryByRole('button', { name: 'Apply result' })).not.toBeInTheDocument();
-  });
-
-  test('preserves invalid input and updates locale/theme without losing content', async () => {
-    const { rerender } = render(
-      <ConfigLensPage context={context()} createController={createController} EditorSurface={TestSurface} />,
+  test('recovers from safe failures without adding footer feedback', () => {
+    const h = harness();
+    renderPage(h);
+    edit('unknown');
+    const request = h.requests.at(-1);
+    if (request === undefined) throw new Error('No request');
+    act(() =>
+      request.publish({
+        requestId: 1,
+        inputVersion: request.input.inputVersion,
+        selectionVersion: request.input.selectionVersion,
+        status: 'failed',
+        failureStatus: 'limit',
+        diagnostics: [
+          { code: 'input.bytes', severity: 'error', offset: 0, length: 0, messageKey: 'diagnostic.inputBytesLimit' },
+        ],
+      }),
     );
-    const input = screen.getByLabelText('Editable input');
-    fireEvent.change(input, { target: { value: 'bad' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Format' }));
-    await waitFor(() => expect(input).toHaveAttribute('data-diagnostic-count', '1'));
-    const footer = screen.getByRole('contentinfo');
-    expect(footer).toHaveAttribute('data-footer-layout', 'fixed-bottom');
-    expect(footer.children).toHaveLength(1);
-    expect(screen.getByRole('status')).toBeEmptyDOMElement();
-    expect(footer.querySelector('ul')).toBeNull();
-    expect(screen.queryByText('json.syntax')).not.toBeInTheDocument();
-    expect(screen.queryByText(/diagnostic|诊断|语法无效/iu)).not.toBeInTheDocument();
-    expect(input).toHaveValue('bad');
-    rerender(
-      <ConfigLensPage
-        context={context('zh-CN', 'dark')}
-        createController={createController}
-        EditorSurface={TestSurface}
-      />,
-    );
-    expect(screen.getByLabelText('Editable input')).toHaveValue('bad');
     expect(screen.getByLabelText('Editable input')).toHaveAttribute('data-diagnostic-count', '1');
-    expect(screen.getByLabelText('Editable input')).toHaveAttribute('data-theme', 'dark');
-    expect(screen.getByRole('button', { name: '格式化' })).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText('Editable input'), { target: { value: '{"ok":true}' } });
-    fireEvent.click(screen.getByRole('button', { name: '格式化' }));
-    await waitFor(() => expect(screen.getByLabelText('Editable input')).toHaveAttribute('data-diagnostic-count', '0'));
-    expect(screen.getByRole('contentinfo')).toHaveAttribute('data-footer-layout', 'fixed-bottom');
-  });
-
-  test('rejects a pending result after input changes', async () => {
-    let resolveRun: ((result: LanguageResult) => void) | undefined;
-    const deferredController = (): LanguageController => ({
-      run: () =>
-        new Promise((resolve) => {
-          resolveRun = resolve;
-        }),
-      scheduleValidation: () => undefined,
-      invalidate: () => undefined,
-      dispose: () => undefined,
-      generation: () => 0,
-    });
-    render(<ConfigLensPage context={context()} createController={deferredController} EditorSurface={TestSurface} />);
-    const input = screen.getByLabelText('Editable input');
-    fireEvent.change(input, { target: { value: '{"a":1}' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Format' }));
-    fireEvent.change(input, { target: { value: '{"a":2}' } });
-    resolveRun?.({ requestId: 1, status: 'valid', diagnostics: [], output: 'stale-result' });
-    await waitFor(() => expect(input).toHaveValue('{"a":2}'));
-  });
-
-  test('rejects a pending result when the complete Runtime context is replaced', async () => {
-    let resolveRun: ((result: LanguageResult) => void) | undefined;
-    const deferredController = (): LanguageController => ({
-      run: () =>
-        new Promise((resolve) => {
-          resolveRun = resolve;
-        }),
-      scheduleValidation: () => undefined,
-      invalidate: () => undefined,
-      dispose: () => undefined,
-      generation: () => 0,
-    });
-    const { rerender } = render(
-      <ConfigLensPage context={context()} createController={deferredController} EditorSurface={TestSurface} />,
-    );
-    fireEvent.change(screen.getByLabelText('Editable input'), { target: { value: '{"a":1}' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Format' }));
-    rerender(
-      <ConfigLensPage
-        context={context('zh-CN', 'dark')}
-        createController={deferredController}
-        EditorSurface={TestSurface}
-      />,
-    );
-    resolveRun?.({ requestId: 1, status: 'valid', diagnostics: [], output: 'stale-result' });
-    await Promise.resolve();
-    expect(screen.getByLabelText('Editable input')).toHaveValue('{"a":1}');
-    expect(screen.queryByRole('button', { name: '应用结果' })).not.toBeInTheDocument();
+    expect(format()).toBeDisabled();
+    expect(screen.getByRole('contentinfo')).not.toHaveTextContent('limit');
+    edit('{"ok":true}');
+    h.settle('json');
+    expect(format()).toBeEnabled();
+    expect(screen.getByLabelText('Editable input')).toHaveAttribute('data-diagnostic-count', '0');
   });
 });

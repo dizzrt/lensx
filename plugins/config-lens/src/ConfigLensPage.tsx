@@ -5,7 +5,13 @@ import { type ComponentType, type KeyboardEvent, useCallback, useEffect, useMemo
 import { languageLabel, messagesFor } from './catalog.js';
 import { type EditorSurfaceProps, MonacoSurface } from './editor/MonacoSurface.js';
 import { createLanguageController, type LanguageController } from './language/controller.js';
-import { LANGUAGE_IDS, type LanguageId, type LanguageResult } from './language/protocol.js';
+import {
+  type AnalysisResult,
+  LANGUAGE_IDS,
+  type LanguageId,
+  type LanguageSelection,
+  type SafeDiagnostic,
+} from './language/protocol.js';
 
 export interface ConfigLensPageProps {
   readonly context: PluginRuntimeContext;
@@ -14,114 +20,179 @@ export interface ConfigLensPageProps {
   readonly initialInput?: string;
 }
 
+interface EditingState {
+  readonly input: string;
+  readonly inputVersion: number;
+  readonly selectionVersion: number;
+  readonly selection: LanguageSelection;
+  readonly effectiveLanguage: LanguageId | undefined;
+  readonly analysis: AnalysisResult | undefined;
+  readonly diagnostics: readonly SafeDiagnostic[];
+  readonly pending: boolean;
+  readonly processing: boolean;
+}
+
+const canFormat = (state: EditingState): boolean =>
+  state.input.trim() !== '' && !state.pending && !state.processing && state.effectiveLanguage !== undefined;
+const canCompact = (state: EditingState): boolean =>
+  canFormat(state) &&
+  state.effectiveLanguage === 'json' &&
+  state.analysis?.status === 'resolved' &&
+  state.analysis.validationStatus === 'valid' &&
+  state.analysis.inputVersion === state.inputVersion &&
+  state.analysis.selectionVersion === state.selectionVersion;
+
 export const ConfigLensPage = ({
   context,
   createController = createLanguageController,
   EditorSurface = MonacoSurface,
   initialInput = '',
 }: ConfigLensPageProps) => {
-  const [language, setLanguage] = useState<LanguageId>('json');
-  const [input, setInput] = useState(initialInput);
-  const [result, setResult] = useState<LanguageResult>();
-  const [processing, setProcessing] = useState(false);
-  const inputRef = useRef(input);
-  const languageRef = useRef(language);
+  const [state, setState] = useState<EditingState>(() => ({
+    input: initialInput,
+    inputVersion: 0,
+    selectionVersion: 0,
+    selection: { mode: 'auto' },
+    effectiveLanguage: undefined,
+    analysis: undefined,
+    diagnostics: [],
+    pending: initialInput.trim() !== '',
+    processing: false,
+  }));
+  const stateRef = useRef(state);
   const contextKey = `${context.locale}:${context.theme}`;
   const contextRef = useRef(contextKey);
-  const invalidatedContextRef = useRef(contextKey);
-  const operationRef = useRef(0);
-  inputRef.current = input;
-  languageRef.current = language;
   contextRef.current = contextKey;
+  const epoch = useRef(0);
   const messages = messagesFor(context.locale);
-  const controller = useMemo(() => {
-    return createController();
-  }, [createController]);
+  const controller = useMemo(() => createController(), [createController]);
+  const commit = useCallback((next: EditingState) => {
+    stateRef.current = next;
+    setState(next);
+  }, []);
+
+  const analyze = useCallback(
+    (next: EditingState, requestContext = contextRef.current) => {
+      const requestEpoch = ++epoch.current;
+      const empty = next.input.trim() === '';
+      const current: EditingState = {
+        ...next,
+        effectiveLanguage: empty && next.selection.mode === 'auto' ? undefined : next.effectiveLanguage,
+        analysis: undefined,
+        diagnostics: [],
+        processing: false,
+        pending: !empty,
+      };
+      commit(current);
+      if (empty) {
+        controller.invalidate();
+        return;
+      }
+      controller.scheduleAnalysis(
+        {
+          source: current.input,
+          inputVersion: current.inputVersion,
+          selectionVersion: current.selectionVersion,
+          selection:
+            current.selection.mode === 'manual'
+              ? current.selection
+              : {
+                  mode: 'auto',
+                  previousAutoLanguage: current.effectiveLanguage,
+                },
+        },
+        (result) => {
+          if (
+            requestEpoch !== epoch.current ||
+            requestContext !== contextRef.current ||
+            result.inputVersion !== stateRef.current.inputVersion ||
+            result.selectionVersion !== stateRef.current.selectionVersion
+          )
+            return;
+          commit({
+            ...stateRef.current,
+            effectiveLanguage:
+              result.status === 'resolved'
+                ? result.effectiveLanguage
+                : result.status === 'unresolved'
+                  ? undefined
+                  : stateRef.current.effectiveLanguage,
+            analysis: result,
+            diagnostics: result.diagnostics,
+            pending: false,
+          });
+        },
+      );
+    },
+    [commit, controller],
+  );
+
+  useEffect(() => {
+    analyze(stateRef.current, contextKey);
+  }, [analyze, contextKey]);
 
   useEffect(
     () => () => {
+      epoch.current += 1;
       controller.dispose();
     },
     [controller],
   );
 
-  useEffect(() => {
-    if (invalidatedContextRef.current === contextKey) return;
-    invalidatedContextRef.current = contextKey;
-    operationRef.current += 1;
-    controller.invalidate();
-    setProcessing(false);
-  }, [contextKey, controller]);
-
-  const scheduleValidation = useCallback(
-    (selected: LanguageId, source: string) => {
-      const requestContext = contextRef.current;
-      controller.scheduleValidation(selected, source, (next) => {
-        if (source === inputRef.current && selected === languageRef.current && requestContext === contextRef.current) {
-          setResult(next);
-        }
-      });
-    },
-    [controller],
-  );
-
   const handleInput = useCallback(
-    (value: string) => {
-      setInput(value);
-      inputRef.current = value;
-      operationRef.current += 1;
-      setProcessing(false);
-      if (value.trim() === '') {
-        controller.invalidate();
-        setResult(undefined);
-      } else {
-        scheduleValidation(languageRef.current, value);
-      }
+    (input: string) => {
+      const current = stateRef.current;
+      // Monaco also notifies when a successful operation is applied to its model.
+      if (input === current.input) return;
+      analyze({ ...current, input, inputVersion: current.inputVersion + 1 });
     },
-    [controller, scheduleValidation],
+    [analyze],
   );
 
   const handleLanguage = useCallback(
     (value: unknown) => {
-      if (!LANGUAGE_IDS.includes(value as LanguageId)) return;
-      const next = value as LanguageId;
-      setLanguage(next);
-      languageRef.current = next;
-      operationRef.current += 1;
-      setProcessing(false);
-      if (inputRef.current.trim() !== '') scheduleValidation(next, inputRef.current);
+      if (value !== 'auto' && !LANGUAGE_IDS.includes(value as LanguageId)) return;
+      const current = stateRef.current;
+      analyze({
+        ...current,
+        selection: value === 'auto' ? { mode: 'auto' } : { mode: 'manual', language: value as LanguageId },
+        effectiveLanguage: value === 'auto' ? undefined : (value as LanguageId),
+        selectionVersion: current.selectionVersion + 1,
+      });
     },
-    [scheduleValidation],
+    [analyze],
   );
 
   const perform = useCallback(
     async (operation: 'format' | 'compact') => {
-      const source = inputRef.current;
-      const selected = languageRef.current;
+      const current = stateRef.current;
+      if (
+        !(operation === 'compact' ? canCompact(current) : canFormat(current)) ||
+        current.effectiveLanguage === undefined
+      )
+        return;
+      const requestEpoch = ++epoch.current;
       const requestContext = contextRef.current;
-      if (source.trim() === '') return;
-      const operationId = ++operationRef.current;
-      setProcessing(true);
-      try {
-        const next = await controller.run(selected, operation, source);
-        if (
-          operationId !== operationRef.current ||
-          source !== inputRef.current ||
-          selected !== languageRef.current ||
-          requestContext !== contextRef.current
-        ) {
-          return;
-        }
-        setResult(next);
-        if (next.status === 'valid' && next.output !== undefined) {
-          inputRef.current = next.output;
-          setInput(next.output);
-        }
-      } finally {
-        if (operationId === operationRef.current) setProcessing(false);
+      commit({ ...current, processing: true });
+      const result = await controller.run(current.effectiveLanguage, operation, current.input, {
+        inputVersion: current.inputVersion,
+        selectionVersion: current.selectionVersion,
+      });
+      if (
+        requestEpoch !== epoch.current ||
+        requestContext !== contextRef.current ||
+        result.inputVersion !== stateRef.current.inputVersion ||
+        result.selectionVersion !== stateRef.current.selectionVersion ||
+        current.effectiveLanguage !== stateRef.current.effectiveLanguage
+      )
+        return;
+      if (result.status === 'valid' && result.output !== undefined) {
+        analyze({ ...stateRef.current, input: result.output, inputVersion: current.inputVersion + 1 });
+      } else {
+        commit({ ...stateRef.current, processing: false, diagnostics: result.diagnostics });
       }
     },
-    [controller],
+    [analyze, commit, controller],
   );
 
   const handleKeyDown = useCallback(
@@ -134,16 +205,6 @@ export const ConfigLensPage = ({
     [perform],
   );
 
-  const empty = input.trim() === '';
-  const diagnostics = result?.diagnostics ?? [];
-  const status = empty
-    ? messages.empty
-    : processing
-      ? messages.processing
-      : result?.status === 'valid'
-        ? messages.ready
-        : '';
-
   return (
     <main
       aria-label={messages.title}
@@ -153,9 +214,10 @@ export const ConfigLensPage = ({
     >
       <section className="config-lens__content">
         <EditorSurface
-          diagnostics={diagnostics}
-          input={input}
-          language={language}
+          diagnostics={state.diagnostics}
+          input={state.input}
+          language={state.effectiveLanguage}
+          locale={context.locale}
           messages={messages}
           onInput={handleInput}
           theme={context.theme}
@@ -167,17 +229,18 @@ export const ConfigLensPage = ({
             <span id="config-lens-language-label">{messages.language}</span>
             <Select
               aria-labelledby="config-lens-language-label"
-              optionList={LANGUAGE_IDS.map((value) => ({ label: languageLabel(value), value }))}
-              value={language}
+              optionList={[
+                { label: messages.auto, value: 'auto' },
+                ...LANGUAGE_IDS.map((value) => ({ label: languageLabel(value), value })),
+              ]}
+              value={state.selection.mode === 'auto' ? 'auto' : state.selection.language}
               onChange={handleLanguage}
             />
           </div>
-          <div aria-live="polite" className="config-lens__status" role="status">
-            {status}
-          </div>
-          <div className="config-lens__toolbar">
+          <div aria-busy={state.pending || state.processing} className="config-lens__toolbar">
             <Button
-              disabled={empty || processing}
+              disabled={!canFormat(state)}
+              loading={state.processing}
               htmlType="button"
               theme="solid"
               onClick={() => void perform('format')}
@@ -185,7 +248,7 @@ export const ConfigLensPage = ({
               {messages.format}
             </Button>
             <Button
-              disabled={empty || processing || language !== 'json'}
+              disabled={!canCompact(state)}
               htmlType="button"
               theme="outline"
               onClick={() => void perform('compact')}

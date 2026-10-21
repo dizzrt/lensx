@@ -120,16 +120,62 @@ When native user resizing is enabled by the current validated Page presentation,
 
 ### Requirement: Child WebView delivery MUST pass deterministic security and lifecycle validation
 
-Delivery MUST combine Rust unit and integration tests, TypeScript controller and state tests, React accessibility/localization/theme tests, canonical normal and malicious packages, public-package boundary checks, builds, and deterministic package inspection. Validation MUST cover create intent, navigation policy, bridge/SDK readiness state, bounds, focus intent, hide/restore reuse, close, replacement, disable, uninstall, failure, destroy, stale-event inertness, and zero generic Tauri authority hits. It MUST NOT report real interaction, real teardown, or performance evidence.
+Delivery MUST combine Rust unit and integration tests, TypeScript controller and state tests, React accessibility/localization/theme tests, canonical normal and malicious packages, public-package boundary checks, builds, and deterministic artifact checks. Coverage MUST include create intent, navigation policy, bridge/SDK readiness state, bounds, focus intent, hide/restore reuse, close, replacement, disable, uninstall, failure, destroy, late-event inertness, and zero generic Tauri authority hits.
+
+Editing-shortcut validation MUST cover the production routing policy's native focus ownership, target validity, preservation of the original event and modifiers, delegation count, handled/unhandled results, and Host-reserved commands, and MUST verify production adapter wiring and the dependency path used by the actual build. Checking a few source strings MUST NOT substitute for behavioral tests of the production policy. Checks MUST NOT launch a real WebView, GUI, native interaction harness, or browser and MUST NOT claim real interaction, real teardown, or target-performance evidence.
 
 #### Scenario: Deterministic Child WebView matrix passes
 
 - **WHEN** the maintained Rust, TypeScript, React, package, and malicious-fixture checks run
-- **THEN** supported lifecycle transitions, current-source authority, cleanup calls, and public/private boundaries pass
-- **THEN** official, external, and development plugins share the same specified Runtime path without a target-environment proof claim
+- **THEN** lifecycle behavior, source authority, cleanup, shortcut focus policy, single delivery, and public/private boundaries pass
+- **THEN** all plugins share the specified Runtime path and the results are explicitly limited to deterministic evidence
 
 #### Scenario: Environment-only validation remains
 
-- **WHEN** a maintained Gate or script launches a real Child WebView, measures target latency, drives native interaction, or reads/writes environment evidence
+- **WHEN** a maintained Gate or script launches a real Child WebView, drives native interaction, measures target latency, or reads/writes environment acceptance artifacts
 - **THEN** validation governance fails
-- **THEN** the entry and its assets are deleted rather than retained as optional validation
+- **THEN** the entry and assets are deleted without retaining an optional, manual, or compatibility validation path
+
+#### Scenario: Keyboard policy is exercised without native interaction
+
+- **WHEN** fake native responders exercise the production routing policy for focused, hidden, replaced, absent-target, and Host-reserved-command cases
+- **THEN** decisions, invocation counts, and result propagation are verifiable, and compilation and wiring checks confirm production use of the policy
+- **THEN** modeled results are not described as measurements of real macOS key events
+
+### Requirement: Child WebView MUST deliver editing shortcuts according to native focus
+
+On macOS, the current valid, visible plugin Child WebView with native text focus MUST receive ordinary Web editing shortcuts so that existing Page commands for Select All, Find, Cut, Copy, Paste, Undo, Redo, and editing can operate under that Page's rules. Official, external, and Development Mode plugins MUST share this behavior without exceptions based on plugin identity, Publisher, repository location, Monaco use, or plugin-reported focus.
+
+Delivery MUST preserve the original native event, modifiers, and single-handling semantics. An unfocused, hidden, detached, destroyed, or replaced Child MUST NOT consume the event, reclaim focus, reveal itself, or affect Host input or another native view. Unhandled events MUST retain native propagation semantics, and existing non-Child behavior MUST remain unchanged.
+
+The Host-reserved application commands `Cmd+W/Q` MUST continue to follow `launcher-window-lifecycle`: only foreground lensX handles them, invoking recoverable Hide or complete Quit respectively once per keypress. They MUST NOT be global shortcuts or be overridden by a plugin. Editing-shortcut delivery MUST NOT introduce a Host API, SDK method, plugin permission, generic Tauri capability, controllable native handle, or script-driven synthetic-key channel.
+
+#### Scenario: Current focused plugin receives editing shortcuts
+
+- **WHEN** text input in the current visible Child has native focus and the user invokes an editing shortcut
+- **THEN** the event and its modifiers are delivered once to that native Web editing target for the Page to handle
+- **THEN** external, development, and official plugins share the same rules without a plugin-specific Host shortcut mapping
+
+#### Scenario: Host or another native input owns focus
+
+- **WHEN** Host search, another native view, or a target outside the window has focus
+- **THEN** an unfocused Child neither consumes nor redispatches the event
+- **THEN** the original focus and corresponding input behavior are preserved
+
+#### Scenario: Hidden or replaced plugin cannot consume late input
+
+- **WHEN** the Child is hidden, detached, destroyed, replaced, or cannot be confirmed as the native focus owner
+- **THEN** late events cannot execute old Page editing commands, restore old focus, or reveal the old Child
+- **THEN** the new Page or Host input state remains unaffected
+
+#### Scenario: Native handled result is preserved
+
+- **WHEN** the valid target's native handler returns handled or unhandled
+- **THEN** that result is preserved without synthesizing the same event again for the Page or menu
+- **THEN** unhandled events continue under native propagation rules
+
+#### Scenario: Application close and quit keep their reserved meaning
+
+- **WHEN** lensX is foreground, a current plugin is being edited, and the user presses `Cmd+W` or `Cmd+Q`
+- **THEN** the existing Hide or Quit runs exactly once respectively and applies the corresponding Child lifecycle handling
+- **THEN** lensX does not consume those key combinations while another application is foreground

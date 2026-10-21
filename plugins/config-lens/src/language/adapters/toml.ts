@@ -119,7 +119,16 @@ export const runToml = (request: LanguageRequest): LanguageResult => {
       typeof error === 'object' && error !== null && 'index' in error && typeof error.index === 'number'
         ? error.index
         : 0;
-    return invalidResult(request.requestId, diagnostic('toml.syntax', 'diagnostic.tomlSyntax', offset, 1));
+    const boundedOffset = Math.max(0, Math.min(offset, request.source.length));
+    return invalidResult(
+      request.requestId,
+      diagnostic(
+        'toml.syntax',
+        'diagnostic.tomlSyntax',
+        boundedOffset,
+        Math.min(1, request.source.length - boundedOffset),
+      ),
+    );
   }
 };
 

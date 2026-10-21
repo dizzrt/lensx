@@ -101,6 +101,35 @@ revision feed the existing Rust-validated physical-bounds path. The
 edge-to-edge layout adds no payload field, Tauri command, native setter,
 Runtime reload, or Session replacement path.
 
+## Native Editing Shortcuts
+
+The shared macOS Wry adapter delegates a Child key equivalent only while its
+native window is visible and key, the Child and its ancestors are visible, and
+the current first responder is a visible native view in that Child's subtree
+and the same window. The production Rust policy passes the original event and
+modifiers to WKWebView at most once and preserves its handled/unhandled result.
+Non-Child behavior remains unchanged. Host inputs, another view, missing focus,
+hidden windows, and detached or replaced Children cannot be intercepted by an
+old Child; dispatch never focuses, reveals, or revives a target.
+
+The Host application-local monitor remains authoritative for foreground
+`Cmd+W/Q`: each event is consumed once for the existing recoverable Hide or
+complete Quit lifecycle. Other combinations, including select all, Find,
+clipboard editing, undo/redo, and editor operations, are handled by the focused
+Web document. No plugin identity, Publisher, provenance, DOM selector, or Monaco
+type selects a special route. There is no synthesized keyboard event, new
+permission, SDK method, Host API, or native handle.
+
+The dependency Gate runs the production Wry policy with fake adapters and
+checks the actual Objective-C wiring; Host Cargo tests compose the local monitor
+with that same policy. These tests cover native ownership, original event
+identity and modifiers, delegate count, both return values, stale targets, and
+reserved commands. Cargo check/build validates the real adapter. The
+[validation guide](../development/validation.md) documents these deterministic
+bounds; they are not real macOS keyboard interaction evidence. Updating a
+plugin alone does not repair an older Host: native delivery ships with the Host,
+while each plugin remains responsible for its own editing behavior.
+
 ## Security And Web Capabilities
 
 Each generation has an isolated origin, data-store identity, resource scope,

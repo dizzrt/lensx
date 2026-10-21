@@ -1,4 +1,4 @@
-import { parseAllDocuments } from 'yaml';
+import { isCollection, parseAllDocuments } from 'yaml';
 
 import {
   diagnostic,
@@ -41,19 +41,32 @@ const canonical = (value: unknown, seen = new Set<unknown>()): string => {
     .join(',')}}`;
 };
 
-const parseYaml = (source: string) => {
-  const documents = parseAllDocuments(source, {
+const readYamlDocuments = (source: string) =>
+  parseAllDocuments(source, {
     keepSourceTokens: true,
     prettyErrors: false,
     strict: true,
     uniqueKeys: true,
     version: '1.2',
   });
+
+const parseYaml = (source: string) => {
+  const documents = readYamlDocuments(source);
   const firstError = documents.flatMap((document) => document.errors)[0];
   if (firstError !== undefined) throw firstError;
   const values = documents.map((document) => document.toJS({ maxAliasCount: MAX_YAML_ALIASES }));
   if (values.some((value) => depthOf(value) > MAX_YAML_DEPTH)) throw new Error('yaml-depth-limit');
   return { documents, fingerprint: values.map((value) => canonical(value)), inventory: inventory(source) };
+};
+
+export const inspectYamlStructure = (source: string): boolean => {
+  try {
+    // Structural evidence must survive syntax and alias/depth failures. Values
+    // are resolved only by the bounded validation adapter after selection.
+    return readYamlDocuments(source).some((document) => isCollection(document.contents));
+  } catch {
+    return false;
+  }
 };
 
 export const runYaml = (request: LanguageRequest): LanguageResult => {

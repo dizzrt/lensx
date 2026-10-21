@@ -262,6 +262,11 @@ impl<R: Runtime> LauncherChildPresentation for PluginChildWebviewService<R> {
 }
 
 #[cfg(test)]
+#[rustfmt::skip]
+#[path = "../../vendor/frame-aware-navigation/wry/src/wkwebview/class/key_equivalent.rs"]
+mod child_key_equivalent_policy;
+
+#[cfg(test)]
 fn execute_with_resolver<R: LauncherWindowResolver>(
     resolver: &R,
     action: LauncherWindowAction,
@@ -711,10 +716,22 @@ fn request_macos_application_quit<R: Runtime>(app: &AppHandle<R>) {
     });
 }
 
-#[cfg(target_os = "macos")]
-fn local_command_for_event(event: &NSEvent) -> Option<MacosMenuCommand> {
-    let modifiers = event.modifierFlags() & NSEventModifierFlags::DeviceIndependentFlagsMask;
-    route_macos_local_key(modifiers == NSEventModifierFlags::Command, event.keyCode())
+// The local monitor consumes only these foreground application commands. Other
+// events retain their original native object and continue to the focused view.
+fn dispatch_macos_local_key(
+    application_active: bool,
+    command_only: bool,
+    key_code: u16,
+    dispatch: impl FnOnce(MacosMenuCommand),
+) -> bool {
+    if !application_active {
+        return false;
+    }
+    let Some(command) = route_macos_local_key(command_only, key_code) else {
+        return false;
+    };
+    dispatch(command);
+    true
 }
 
 fn route_macos_local_key(command_only: bool, key_code: u16) -> Option<MacosMenuCommand> {
@@ -738,20 +755,23 @@ fn install_macos_local_command_monitor<R: Runtime>(
     let monitor_app = app.clone();
     let monitor_block = RcBlock::new(move |event: NonNull<NSEvent>| -> *mut NSEvent {
         let event = unsafe { event.as_ref() };
-        if !NSRunningApplication::currentApplication().isActive() {
-            return event as *const NSEvent as *mut NSEvent;
-        }
-        match local_command_for_event(event) {
-            Some(MacosMenuCommand::Window(action)) => {
-                let actions = monitor_app.state::<LauncherWindowActions>();
-                let _ = actions.dispatch(&monitor_app, action);
-                std::ptr::null_mut()
-            }
-            Some(MacosMenuCommand::Quit) => {
-                request_macos_application_quit(&monitor_app);
-                std::ptr::null_mut()
-            }
-            None => event as *const NSEvent as *mut NSEvent,
+        let modifiers = event.modifierFlags() & NSEventModifierFlags::DeviceIndependentFlagsMask;
+        let consumed = dispatch_macos_local_key(
+            NSRunningApplication::currentApplication().isActive(),
+            modifiers == NSEventModifierFlags::Command,
+            event.keyCode(),
+            |command| match command {
+                MacosMenuCommand::Window(action) => {
+                    let actions = monitor_app.state::<LauncherWindowActions>();
+                    let _ = actions.dispatch(&monitor_app, action);
+                }
+                MacosMenuCommand::Quit => request_macos_application_quit(&monitor_app),
+            },
+        );
+        if consumed {
+            std::ptr::null_mut()
+        } else {
+            event as *const NSEvent as *mut NSEvent
         }
     });
     let monitor = unsafe {
@@ -1982,6 +2002,69 @@ mod tests {
         assert!(source.contains("NSRunningApplication::currentApplication().isActive()"));
         assert!(!source.contains("global_shortcut().register(\"Cmd+W\")"));
         assert!(!source.contains("global_shortcut().register(\"Cmd+Q\")"));
+    }
+
+    #[test]
+    fn foreground_monitor_and_child_policy_dispatch_each_original_event_once() {
+        use super::child_key_equivalent_policy::{self, ChildFocus, KeyEquivalent};
+        struct FakeChild {
+            focus: ChildFocus,
+            events: Vec<*const (u16, bool)>,
+        }
+        impl KeyEquivalent for FakeChild {
+            type Event = (u16, bool);
+            fn is_child(&self) -> bool {
+                true
+            }
+            fn child_focus(&self) -> ChildFocus {
+                self.focus
+            }
+            fn perform_super(&mut self, event: &Self::Event) -> bool {
+                self.events.push(event);
+                true
+            }
+        }
+        for active in [false, true] {
+            for command_only in [false, true] {
+                // Native virtual keys A/F/C/X/V/Z/Enter and the reserved W/Q.
+                for code in [0, 3, 8, 7, 9, 6, 36, 13, 12] {
+                    let event = (code, command_only);
+                    let mut child = FakeChild {
+                        focus: ChildFocus {
+                            attached_to_window: true,
+                            window_visible: true,
+                            window_is_key: active,
+                            view_visible: true,
+                            owns_first_responder: active,
+                        },
+                        events: vec![],
+                    };
+                    let mut commands = vec![];
+                    let consumed =
+                        dispatch_macos_local_key(active, command_only, code, |command| {
+                            commands.push(command);
+                            // Hide and Quit invalidate native eligibility before any late event.
+                            child.focus.view_visible = false;
+                        });
+                    let reserved = active && command_only && matches!(code, 13 | 12);
+                    assert_eq!(consumed, reserved);
+                    assert_eq!(commands.len(), usize::from(reserved));
+                    if !consumed {
+                        assert_eq!(
+                            child_key_equivalent_policy::perform(&mut child, &event),
+                            active
+                        );
+                    } else {
+                        assert_eq!(commands[0], route_macos_local_key(true, code).unwrap());
+                        assert!(!child_key_equivalent_policy::perform(&mut child, &event));
+                    }
+                    assert_eq!(child.events.len(), usize::from(active && !reserved));
+                    if let Some(delivered) = child.events.first() {
+                        assert_eq!(*delivered, &event as *const _);
+                    }
+                }
+            }
+        }
     }
 
     #[test]

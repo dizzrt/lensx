@@ -5,7 +5,19 @@ import { cleanup } from '@testing-library/react';
 expect.extend(jestDomMatchers);
 Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
   configurable: true,
-  value: () => ({ fillStyle: '', fillRect: () => undefined }),
+  value: () => ({
+    fillStyle: '',
+    fillRect: () => undefined,
+    clearRect: () => undefined,
+    beginPath: () => undefined,
+    rect: () => undefined,
+    fill: () => undefined,
+    stroke: () => undefined,
+    moveTo: () => undefined,
+    lineTo: () => undefined,
+    measureText: (value: string) => ({ width: value.length * 8 }),
+    getImageData: () => ({ data: new Uint8ClampedArray(4) }),
+  }),
 });
 afterEach(() => {
   cleanup();

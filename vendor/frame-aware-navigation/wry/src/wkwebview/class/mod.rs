@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: MIT
 
 pub mod document_title_changed_observer;
+#[cfg(target_os = "macos")]
+pub(crate) mod key_equivalent;
 pub mod url_scheme_handler;
 pub mod wry_download_delegate;
 pub mod wry_navigation_delegate;

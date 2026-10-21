@@ -313,9 +313,15 @@ dependencyDriftGate.steps.push(
   internStep('node --experimental-strip-types scripts/tao-dependency-graph.ts', false, 'darwin'),
   internStep('cargo rustc --locked --manifest-path src-tauri/Cargo.toml -p tao --lib -- -D warnings', false, 'darwin'),
   internStep('node --experimental-strip-types scripts/tao-policy-tests.ts', false, 'any'),
+  internStep('node --experimental-strip-types scripts/wry-policy-tests.ts', false, 'any'),
+  internStep(
+    'rustfmt --config-path scripts/validation/vendor-rustfmt.toml --check vendor/frame-aware-navigation/wry/src/wkwebview/class/mod.rs vendor/frame-aware-navigation/wry/src/wkwebview/class/wry_web_view.rs vendor/frame-aware-navigation/wry/src/wkwebview/class/key_equivalent.rs',
+    false,
+    'any',
+  ),
   internStep(`rustfmt --edition 2021 --config tab_spaces=2 --check ${taoRustFiles.join(' ')}`, false, 'any'),
   internStep(
-    'pnpm exec rstest run tests/frame-aware-navigation-dependency-drift.test.ts tests/tao-dependency-graph.test.ts tests/tao-policy-tests.test.ts tests/validation-registry.test.ts tests/validation-governance.test.ts',
+    'pnpm exec rstest run tests/frame-aware-navigation-dependency-drift.test.ts tests/tao-dependency-graph.test.ts tests/tao-policy-tests.test.ts tests/wry-policy-tests.test.ts tests/wry-key-equivalent.test.ts tests/validation-registry.test.ts tests/validation-governance.test.ts',
   ),
 );
 gatesById.set('development-launcher', {

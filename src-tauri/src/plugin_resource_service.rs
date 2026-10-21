@@ -880,6 +880,7 @@ fn mime_for_path(path: &str) -> Option<&'static str> {
         "avif" => Some("image/avif"),
         "svg" => Some("image/svg+xml"),
         "ico" => Some("image/vnd.microsoft.icon"),
+        "ttf" => Some("font/ttf"),
         "woff2" => Some("font/woff2"),
         _ => None,
     }
@@ -1374,6 +1375,8 @@ mod tests {
             ("asset.avif", "image/avif"),
             ("asset.svg", "image/svg+xml"),
             ("asset.ico", "image/vnd.microsoft.icon"),
+            ("asset.ttf", "font/ttf"),
+            ("asset.TTF", "font/ttf"),
             ("asset.woff2", "font/woff2"),
         ];
         for (path, mime) in cases {

@@ -170,6 +170,7 @@ describe('macOS frame-aware navigation dependency patch', () => {
       'scripts/validation/catalog.ts',
       'scripts/tao-dependency-graph.ts',
       'scripts/tao-policy-tests.ts',
+      'scripts/wry-policy-tests.ts',
       ...readdirSync(join(rootDir, '.github/workflows')).map((path) => `.github/workflows/${path}`),
     ];
     for (const path of paths) {
@@ -253,6 +254,7 @@ describe('macOS frame-aware navigation dependency patch', () => {
     expect(read('vendor/frame-aware-navigation/tao/LICENSE.spdx')).toContain('PackageLicenseDeclared: Apache-2.0');
     const integrity = JSON.parse(read('vendor/frame-aware-navigation/.lensx-integrity.json'));
     expect(integrity.packages.tao).toBe('0.35.3');
+    expect(integrity.files.some((entry: { path: string }) => /\/(?:target|\.gradle)\//u.test(entry.path))).toBe(false);
     expect(integrity.patched_files.filter((path: string) => path.startsWith('tao/'))).toEqual([
       'tao/Cargo.toml',
       'tao/src/platform/macos.rs',
@@ -284,11 +286,17 @@ describe('macOS frame-aware navigation dependency patch', () => {
         recursive: true,
       });
 
+      const ignoredBuildCache = join(temporaryRoot, 'vendor/frame-aware-navigation/tauri/mobile/android/.gradle');
+      mkdirSync(ignoredBuildCache, { recursive: true });
+      writeFileSync(join(ignoredBuildCache, 'local-cache.bin'), 'unrelated machine-local build cache');
       const baseline = spawnSync(process.execPath, ['--experimental-strip-types', temporaryScript], {
         cwd: temporaryRoot,
         encoding: 'utf8',
       });
       expect(baseline.status).toBe(0);
+      expect(readFileSync(join(ignoredBuildCache, 'local-cache.bin'), 'utf8')).toBe(
+        'unrelated machine-local build cache',
+      );
       const integrity = JSON.parse(read('vendor/frame-aware-navigation/.lensx-integrity.json'));
       expect(baseline.stdout).toContain(`Checked ${integrity.files.length} vendored frame-aware dependency files.`);
 
@@ -312,10 +320,13 @@ describe('macOS frame-aware navigation dependency patch', () => {
         'tao/Cargo.toml',
         'tao/src/platform_impl/macos/file_drop.rs',
         'tao/src/platform_impl/macos/resizable.rs',
+        'wry/src/wkwebview/class/mod.rs',
+        'wry/src/wkwebview/class/wry_web_view.rs',
+        'wry/src/wkwebview/class/key_equivalent.rs',
         'tao/src/platform_impl/windows/window.rs',
       ]) {
         const copied = join(temporaryRoot, 'vendor/frame-aware-navigation', path);
-        appendFileSync(copied, '\n// unreviewed Tao patch or unrelated platform edit\n');
+        appendFileSync(copied, '\n// unreviewed vendor patch or unrelated platform edit\n');
         const changed = spawnSync(process.execPath, ['--experimental-strip-types', temporaryScript], {
           cwd: temporaryRoot,
           encoding: 'utf8',
@@ -328,6 +339,9 @@ describe('macOS frame-aware navigation dependency patch', () => {
         'tao/Cargo.toml',
         'tao/src/platform_impl/macos/file_drop.rs',
         'tao/src/platform_impl/macos/resizable.rs',
+        'wry/src/wkwebview/class/mod.rs',
+        'wry/src/wkwebview/class/wry_web_view.rs',
+        'wry/src/wkwebview/class/key_equivalent.rs',
       ]) {
         const reviewed = join(temporaryRoot, 'vendor/frame-aware-navigation', path);
         rmSync(reviewed);

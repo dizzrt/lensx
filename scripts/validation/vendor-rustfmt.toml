@@ -1,0 +1,3 @@
+# Match reviewed vendor Rust style without Wry's nightly-only import setting.
+edition = "2021"
+tab_spaces = 2

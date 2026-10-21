@@ -5,10 +5,12 @@
 use std::{collections::HashMap, sync::Mutex};
 
 #[cfg(target_os = "macos")]
+use super::key_equivalent::{self, ChildFocus, KeyEquivalent};
+#[cfg(target_os = "macos")]
 use objc2::runtime::ProtocolObject;
 use objc2::{define_class, rc::Retained, runtime::Bool, DeclaredClass};
 #[cfg(target_os = "macos")]
-use objc2_app_kit::{NSDraggingDestination, NSEvent};
+use objc2_app_kit::{NSDraggingDestination, NSEvent, NSView};
 use objc2_foundation::{NSObjectProtocol, NSUUID};
 
 #[cfg(target_os = "ios")]
@@ -43,15 +45,20 @@ define_class!(
   impl WryWebView {
     #[unsafe(method(performKeyEquivalent:))]
     fn perform_key_equivalent(&self, event: &NSEvent) -> Bool {
-      // This is a temporary workaround for https://github.com/tauri-apps/tauri/issues/9426
-      // FIXME: When the webview is a child webview, performKeyEquivalent always return YES
-      // and stop propagating the event to the window, hence the menu shortcut won't be
-      // triggered. However, overriding this method also means the cmd+key event won't be
-      // handled in webview, which means the key cannot be listened by JavaScript.
-      if self.ivars().is_child {
-        Bool::NO
-      } else {
-        unsafe { objc2::msg_send![super(self), performKeyEquivalent: event] }
+      #[cfg(target_os = "macos")]
+      {
+        Bool::new(key_equivalent::perform(
+          &mut NativeKeyEquivalent(self),
+          event,
+        ))
+      }
+      #[cfg(target_os = "ios")]
+      {
+        if self.ivars().is_child {
+          Bool::NO
+        } else {
+          unsafe { objc2::msg_send![super(self), performKeyEquivalent: event] }
+        }
       }
     }
 
@@ -120,6 +127,48 @@ define_class!(
     }
   }
 );
+
+// AppKit calls this synchronously on the main thread. Inspect actual view
+// ownership for every event; never focus/show a view or retain a routing target.
+#[cfg(target_os = "macos")]
+struct NativeKeyEquivalent<'a>(&'a WryWebView);
+
+#[cfg(target_os = "macos")]
+impl KeyEquivalent for NativeKeyEquivalent<'_> {
+  type Event = NSEvent;
+
+  fn is_child(&self) -> bool {
+    self.0.ivars().is_child
+  }
+
+  fn child_focus(&self) -> ChildFocus {
+    let Some(window) = self.0.window() else {
+      return ChildFocus::default();
+    };
+    let owns_first_responder = window.firstResponder().is_some_and(|responder| {
+      responder.downcast_ref::<NSView>().is_some_and(|view| {
+        view
+          .window()
+          .is_some_and(|owner| std::ptr::eq(&*owner, &*window))
+          && !view.isHiddenOrHasHiddenAncestor()
+          && view.isDescendantOf(self.0)
+      })
+    });
+    ChildFocus {
+      attached_to_window: true,
+      window_visible: window.isVisible(),
+      window_is_key: window.isKeyWindow(),
+      view_visible: !self.0.isHiddenOrHasHiddenAncestor(),
+      owns_first_responder,
+    }
+  }
+
+  fn perform_super(&mut self, event: &NSEvent) -> bool {
+    let view = self.0;
+    let handled: Bool = unsafe { objc2::msg_send![super(view), performKeyEquivalent: event] };
+    handled.as_bool()
+  }
+}
 
 // Custom Protocol Task Checker
 impl WryWebView {

@@ -597,7 +597,8 @@ use package-relative URLs.
 
 Only `GET` and `HEAD` are supported. A fixed case-insensitive table covers
 HTML, JavaScript/ES modules, CSS, JSON, Wasm, PNG, JPEG, GIF, WebP, AVIF, SVG,
-ICO, and WOFF2; there is no sniffing or `application/octet-stream` fallback.
+ICO, WOFF2 (`font/woff2`), and TrueType (`.ttf`, `font/ttf`); there is no sniffing
+or `application/octet-stream` fallback.
 Success includes exact `Content-Type`/`Content-Length`, `nosniff`, and
 `Cache-Control: no-store`; successful HTML also receives the exact Host-owned
 Plugin Runtime CSP. `HEAD` has the same status and headers with no body.

@@ -115,7 +115,23 @@ describe('validation Gate registry and runner', () => {
       plan.steps.indexOf(strict[0] as ValidationStep),
     );
     const format = plan.steps.filter((item) => item.executable === 'rustfmt');
-    expect(format).toHaveLength(1);
+    expect(format).toHaveLength(2);
+    const taoFormat = format.find((item) => item.argv.includes('vendor/frame-aware-navigation/tao/src/window.rs'));
+    const wryFormat = format.find((item) =>
+      item.argv.includes('vendor/frame-aware-navigation/wry/src/wkwebview/class/key_equivalent.rs'),
+    );
+    expect(wryFormat).toMatchObject({
+      argv: [
+        '--config-path',
+        'scripts/validation/vendor-rustfmt.toml',
+        '--check',
+        'vendor/frame-aware-navigation/wry/src/wkwebview/class/mod.rs',
+        'vendor/frame-aware-navigation/wry/src/wkwebview/class/wry_web_view.rs',
+        'vendor/frame-aware-navigation/wry/src/wkwebview/class/key_equivalent.rs',
+      ],
+      platform: 'any',
+    });
+    expect(plan.steps.filter((item) => item.argv.includes('scripts/wry-policy-tests.ts'))).toHaveLength(1);
     const reviewedSources = [
       ...readFileSync(
         new URL('../scripts/frame-aware-navigation-dependency-drift.ts', import.meta.url),
@@ -123,7 +139,7 @@ describe('validation Gate registry and runner', () => {
       ).matchAll(/^\s*'tao\/([^']+\.rs)'/gmu),
     ].map((match) => `vendor/frame-aware-navigation/tao/${match[1]}`);
     expect(reviewedSources).toHaveLength(15);
-    expect(format[0]).toMatchObject({
+    expect(taoFormat).toMatchObject({
       argv: ['--edition', '2021', '--config', 'tab_spaces=2', '--check', ...reviewedSources],
       platform: 'any',
     });
@@ -140,7 +156,10 @@ describe('validation Gate registry and runner', () => {
     const maintenance = planGates(validationRegistry, ['frame-aware-navigation-dependency-drift']);
     const strict = maintenance.steps.filter((item) => item.executable === 'cargo' && item.argv[0] === 'rustc');
     const portable = maintenance.steps.filter(
-      (item) => item.executable === 'rustfmt' || item.argv.includes('scripts/tao-policy-tests.ts'),
+      (item) =>
+        item.executable === 'rustfmt' ||
+        item.argv.includes('scripts/tao-policy-tests.ts') ||
+        item.argv.includes('scripts/wry-policy-tests.ts'),
     );
     try {
       Object.defineProperty(process, 'platform', { ...original, value: platform });
@@ -157,9 +176,9 @@ describe('validation Gate registry and runner', () => {
         expect(() => executePlan(strictPlan, '/repo', run)).toThrow('[validation/platform]');
         expect(calls).toBe(0);
       }
-      expect(portable).toHaveLength(2);
+      expect(portable).toHaveLength(4);
       expect(() => executePlan({ ...maintenance, steps: portable }, '/repo', run)).not.toThrow();
-      expect(calls).toBe(platform === 'darwin' ? 3 : 2);
+      expect(calls).toBe(platform === 'darwin' ? 5 : 4);
     } finally {
       Object.defineProperty(process, 'platform', original);
     }

@@ -213,7 +213,12 @@ export const runJson = (request: LanguageRequest): LanguageResult => {
     const syntax = error instanceof JsonSyntaxError ? error : new JsonSyntaxError(0, 0);
     return invalidResult(
       request.requestId,
-      diagnostic('json.syntax', 'diagnostic.jsonSyntax', syntax.offset, syntax.length),
+      diagnostic(
+        'json.syntax',
+        'diagnostic.jsonSyntax',
+        Math.min(syntax.offset, request.source.length),
+        Math.min(syntax.length, Math.max(0, request.source.length - syntax.offset)),
+      ),
     );
   }
 };

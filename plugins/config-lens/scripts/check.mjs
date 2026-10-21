@@ -92,12 +92,12 @@ requireDeclarations('footer', styleBlock(styleSource, '.config-lens__footer'), [
   'margin-top: auto',
 ]);
 requireDeclarations('footer main', styleBlock(styleSource, '.config-lens__footer-main'), [
-  'height: 40px',
-  'min-height: 40px',
+  'height: 100%',
+  'min-height: 0',
   'align-items: center',
 ]);
-if (styleSource.includes('.config-lens__diagnostics')) {
-  throw new Error('layout/source-contract: Footer diagnostics styles must not exist.');
+if (styleSource.includes('.config-lens__diagnostics') || styleSource.includes('.config-lens__status')) {
+  throw new Error('layout/source-contract: Footer diagnostics and status styles must not exist.');
 }
 const constrained = styleSource.indexOf('@media (max-width: 520px), (max-height: 260px)');
 if (constrained < 0) throw new Error('layout/source-contract: constrained viewport query is missing.');
@@ -113,3 +113,11 @@ requireDeclarations('constrained footer', styleBlock(styleSource, '.config-lens_
 ]);
 
 console.log('ConfigLens dependency, boundary, privacy, and bundle checks passed.');
+
+requireDeclarations('constrained controls', styleBlock(styleSource, '.config-lens__footer-main', constrained), [
+  'grid-template-columns: minmax(0, 1fr)',
+  'grid-template-rows: 1fr 1fr',
+]);
+requireDeclarations('constrained actions', styleBlock(styleSource, '.config-lens__toolbar', constrained), [
+  'grid-row: 2',
+]);

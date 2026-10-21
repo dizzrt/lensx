@@ -20,8 +20,8 @@ const release = async () => {
   unmount = undefined;
   const currentClient = client;
   client = undefined;
-  await currentClient?.dispose().catch(() => undefined);
   disposeMonacoWorkers();
+  await currentClient?.dispose().catch(() => undefined);
 };
 
 const start = async () => {
@@ -37,7 +37,7 @@ const start = async () => {
   try {
     const context = await currentClient.initialize();
     if (currentGeneration !== generation || client !== currentClient) return;
-    const [mountModule] = await Promise.all([import('./mount.js'), loadMonaco()]);
+    const [mountModule] = await Promise.all([import('./mount.js'), loadMonaco(context.locale)]);
     if (currentGeneration !== generation || client !== currentClient) return;
     startup.hidden = true;
     root.hidden = false;

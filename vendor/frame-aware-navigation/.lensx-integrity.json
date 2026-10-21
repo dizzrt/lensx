@@ -31,6 +31,9 @@
     "tauri-runtime-wry/src/lib.rs",
     "wry/src/lib.rs",
     "wry/src/wkwebview/download.rs",
+    "wry/src/wkwebview/class/mod.rs",
+    "wry/src/wkwebview/class/key_equivalent.rs",
+    "wry/src/wkwebview/class/wry_web_view.rs",
     "wry/src/wkwebview/class/wry_navigation_delegate.rs",
     "wry/src/wkwebview/mod.rs",
     "wry/src/wkwebview/navigation.rs"
@@ -38,7 +41,7 @@
   "files": [
     {
       "path": "README.md",
-      "sha256": "b2b427d449bbe901bc10dca533a5d88807ad2c46f9a6af740fc63794f1a12ae4"
+      "sha256": "69b7e2ec8b98e02d8cc881ec61caf05ef7a3ecb4e88290acd38dd3afe1a0dbc7"
     },
     {
       "path": "tao/.cargo_vcs_info.json",
@@ -1473,8 +1476,12 @@
       "sha256": "7e09f34f232f7838ecfa11c0d75d0361d32df91aa9ce9e041915e316f0784af8"
     },
     {
+      "path": "wry/src/wkwebview/class/key_equivalent.rs",
+      "sha256": "af185b7ad118af4a5c1240bc472e90dca514c9b1eadc4e46b48b1a62d3105e20"
+    },
+    {
       "path": "wry/src/wkwebview/class/mod.rs",
-      "sha256": "f20048d06e0098d25eee0c549eb7fe26b20d041ada2fe1daf7771125fd44a7b8"
+      "sha256": "2518cc62df4fc32d4d9933f9b4b8017ddcbcbc389cffcc6b4ea73c4997a5b476"
     },
     {
       "path": "wry/src/wkwebview/class/url_scheme_handler.rs",
@@ -1490,7 +1497,7 @@
     },
     {
       "path": "wry/src/wkwebview/class/wry_web_view.rs",
-      "sha256": "692b4420ace30fafece0707533d68b40b82c20ee7f5843eb17e04a7c6fcb4656"
+      "sha256": "9d2f843e19b6991398c48e77319c72a9ad2eb38443733c8d79563f1a2510feb0"
     },
     {
       "path": "wry/src/wkwebview/class/wry_web_view_delegate.rs",

@@ -145,6 +145,33 @@ do not exercise NSURL decoding, Finder format matching, or AppKit callback
 dispatch. Source wiring checks and macOS compilation supplement policy tests;
 no native interaction validation entry is maintained.
 
+## Vendored Wry Editing Shortcut Validation
+
+The same `frame-aware-navigation-dependency-drift` Gate compiles and runs
+`key_equivalent.rs` with `rustc --test` through the private Wry policy runner.
+It cleans its unique ignored output directory after success, compiler failure,
+test failure, launch failure, or signal, preserving unrelated output. The Gate
+explicitly checks formatting of the Wry class module, native adapter, and policy
+with stable two-space rustfmt configuration; the application Cargo formatter
+does not own vendored formatting. Neither step writes the integrity baseline or adds a root
+script, permission, dependency upgrade, or environment-validation entry.
+
+Fake adapters exercise original-event identity and modifiers, at-most-once
+superclass delegation, handled/unhandled results, non-Child behavior, and Child
+eligibility across attachment, visibility, key-window status, and native
+first-responder ownership. Host Cargo tests compose the production local
+`Cmd+W/Q` monitor with the same Child policy and retain late-event and lifecycle
+regressions. Rstest checks actual native wiring, public boundaries, runner
+cleanup, and read-only registry metadata. Cargo check/build compiles the real
+Objective-C adapter; no fake result is claimed as real keyboard interaction.
+
+Run the existing `plugin-child-webview-runtime`,
+`plugin-child-webview-window-lifecycle`, `launcher-input-focus`, and
+`frame-aware-webview-navigation-policy` Gates for the corresponding lifecycle
+and routing regressions. Source review against the same Wry `0.55.1` release
+precedes the explicit baseline Generate command above. Host native delivery and
+plugin editing code have separate release responsibilities.
+
 ## Frontend Validation
 
 Use `pnpm run test`, `pnpm run typecheck`, `pnpm run check`, and `pnpm run build`. Root Rstest discovery owns repository-only assertions; the lifecycle aggregator covers the root application and every direct workspace member once in dependency order.

@@ -39,6 +39,9 @@ const patchedFiles = Object.freeze([
   'tauri-runtime-wry/src/lib.rs',
   'wry/src/lib.rs',
   'wry/src/wkwebview/download.rs',
+  'wry/src/wkwebview/class/mod.rs',
+  'wry/src/wkwebview/class/key_equivalent.rs',
+  'wry/src/wkwebview/class/wry_web_view.rs',
   'wry/src/wkwebview/class/wry_navigation_delegate.rs',
   'wry/src/wkwebview/mod.rs',
   'wry/src/wkwebview/navigation.rs',
@@ -47,7 +50,7 @@ const patchedFiles = Object.freeze([
 const listFiles = (directory: string): string[] =>
   readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const absolutePath = join(directory, entry.name);
-    if (absolutePath === integrityPath || entry.name === 'target') return [];
+    if (absolutePath === integrityPath || entry.name === 'target' || entry.name === '.gradle') return [];
     return entry.isDirectory() ? listFiles(absolutePath) : [relative(vendorRoot, absolutePath)];
   });
 

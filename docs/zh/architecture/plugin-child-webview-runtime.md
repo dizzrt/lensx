@@ -85,6 +85,28 @@ conversion 与串行 latest-wins presentation revision 会进入既有、由 Rus
 路径。edge-to-edge 布局不会新增 payload field、Tauri command、native setter、Runtime reload
 或 Session replacement 路径。
 
+## 原生编辑快捷键
+
+共享 macOS Wry adapter 仅在原生窗口可见且为 key window、Child 及其祖先可见，
+并且当前 first responder 是该 Child 子树中、属于同一窗口的可见原生 view 时，
+委托 Child key equivalent。生产 Rust 策略最多将原事件及修饰键交给 WKWebView
+一次，并保留已处理／未处理返回值。非 Child 行为不变。Host 输入、另一 view、
+缺失焦点、隐藏窗口以及脱离或替换后的 Child 均不能被旧 Child 接管；派发不会
+聚焦、显示或恢复目标。
+
+Host 的 application-local monitor 继续拥有前台 `Cmd+W/Q` 的处理权：每个事件
+只消费一次，分别进入既有可恢复 Hide 或完整 Quit 生命周期。其他组合键，包括
+全选、Find、剪贴板编辑、撤销／重做和编辑器操作，由聚焦的 Web document 处理。
+插件身份、Publisher、provenance、DOM selector 或 Monaco 类型均不会选择特殊路径。
+不合成键盘事件，不增加权限、SDK 方法、Host API 或原生句柄。
+
+依赖 Gate 使用 fake adapter 运行生产 Wry 策略并检查实际 Objective-C 接线；
+Host Cargo 测试将本地 monitor 与同一策略组合。测试覆盖原生归属、原事件身份与
+修饰键、委托次数、两类返回值、过期目标及保留命令。Cargo check/build 验证真实
+adapter 的编译。[验证指南](../development/validation.md) 说明这些确定性边界；
+它们不是真实 macOS 按键交互证据。仅更新插件不会修复旧 Host：原生交付随 Host
+发布，每个插件仍负责自身编辑行为。
+
 ## 安全与 Web 能力
 
 每个 generation 都有隔离的 origin、data-store identity、resource scope、native label 与 opaque

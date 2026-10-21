@@ -126,6 +126,27 @@ Prepare/Perform 保留 BOOL。
 保留。这些测试不执行 NSURL 解码、Finder 格式匹配或 AppKit 回调派发。源级接线检查和
 macOS 编译补充策略测试；仓库不维护原生交互验证入口。
 
+## Vendored Wry 编辑快捷键验证
+
+同一个 `frame-aware-navigation-dependency-drift` Gate 通过私有 Wry policy runner，
+使用 `rustc --test` 编译并运行 `key_equivalent.rs`。成功、编译失败、测试失败、
+启动失败或信号结束后，均清理唯一的忽略输出目录并保留无关输出。Gate 使用稳定的
+两空格 rustfmt 配置显式检查 Wry class 模块、原生 adapter 与策略；应用 Cargo
+formatter 不负责 vendor 格式。两步均不写完整性基线，不增加根脚本、权限、依赖
+升级或环境验证入口。
+
+Fake adapter 验证原事件身份与修饰键、最多一次 superclass 委托、已处理／未处理
+结果、非 Child 行为，以及 attachment、可见性、key-window 状态和原生
+first-responder 归属下的 Child 资格。Host Cargo 测试将生产本地 `Cmd+W/Q` monitor
+与同一 Child 策略组合，并保留晚到事件与生命周期回归。Rstest 检查实际原生接线、
+公开边界、runner cleanup 和只读 registry metadata。Cargo check/build 编译真实
+Objective-C adapter；fake 结果不被宣称为真实键盘交互。
+
+使用既有 `plugin-child-webview-runtime`、`plugin-child-webview-window-lifecycle`、
+`launcher-input-focus` 和 `frame-aware-webview-navigation-policy` Gate 执行对应
+生命周期与路由回归。先对照相同 Wry `0.55.1` release 审阅源码，再显式执行上文
+基线 Generate 命令。Host 原生交付与插件编辑代码各自承担发布责任。
+
 ## 前端验证
 
 使用 `pnpm run test`、`pnpm run typecheck`、`pnpm run check` 和 `pnpm run build`。根 Rstest discovery 负责仓库内断言；lifecycle aggregator 按依赖顺序恰好覆盖一次根应用与每个直接 workspace member。

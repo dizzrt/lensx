@@ -61,6 +61,8 @@ export default defineConfig({
   plugins: [pluginReact({ reactCompiler: true }), pluginLess()],
   source: { entry: { index: resolve(import.meta.dirname, 'src/main.tsx') } },
   tools: {
+    // Resolve extracted CSS assets from each stylesheet, including async chunks.
+    cssExtract: { loaderOptions: { publicPath: 'auto' } },
     rspack: (_config, { appendPlugins }) => {
       if (process.env.RSTEST === undefined) appendPlugins([moduleInventoryPlugin]);
     },

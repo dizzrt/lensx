@@ -438,7 +438,8 @@ canonical containment、打开一个 regular file、复核打开后的 identity 
 目录也不重写 HTML，因此插件 HTML、CSS 与 JavaScript 必须使用 package-relative URL。
 
 协议只支持 `GET` 与 `HEAD`。固定、大小写不敏感的表覆盖 HTML、JavaScript/ES module、CSS、JSON、
-Wasm、PNG、JPEG、GIF、WebP、AVIF、SVG、ICO 与 WOFF2；不嗅探内容，也不回退
+Wasm、PNG、JPEG、GIF、WebP、AVIF、SVG、ICO、WOFF2（`font/woff2`）与
+TrueType（`.ttf`、`font/ttf`）；不嗅探内容，也不回退
 `application/octet-stream`。成功响应包含准确 `Content-Type`/`Content-Length`、`nosniff` 与
 `Cache-Control: no-store`；成功 HTML 还会获得准确的 Host-owned Plugin Runtime CSP。`HEAD` 使用相同 status/header 且无 body。不支持 Range、conditional
 request、query routing、directory index、content negotiation、wildcard CORS 或 download。所有成功

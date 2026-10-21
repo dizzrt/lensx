@@ -12,7 +12,7 @@ describe('ConfigLens early bootstrap', () => {
     const client = source.indexOf('createPluginSdk({');
     const context = source.indexOf('await currentClient.initialize()');
     const mount = source.indexOf("import('./mount.js')");
-    const monaco = source.indexOf('loadMonaco()');
+    const monaco = source.indexOf('loadMonaco(context.locale)');
     expect(client).toBeGreaterThanOrEqual(0);
     expect(context).toBeGreaterThan(client);
     expect(mount).toBeGreaterThan(context);
