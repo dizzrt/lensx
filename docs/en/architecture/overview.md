@@ -246,19 +246,32 @@ itself fails, the Host records the `hide` action and `install_menu` operation
 stage without terminating the process; the already registered recovery
 shortcut and native lifecycle listeners remain available.
 
-Accessory mode keeps the hidden application menu command graph so local key
-equivalents still work without a visible menu bar. Exactly one custom
+Accessory mode keeps the application menu command graph without a visible menu
+bar. Exactly one custom
 application-local `Cmd+W` command reuses the unified Hide action, and exactly
 one custom application-local `Cmd+Q` command requests the existing application
 exit path, whose `RunEvent::Exit` teardown terminates the current Child WebView
 and Host resources. Both routes verify that lensX is foreground and are absent
 from the global-shortcut plugin. Because the target Accessory runtime does not
 reliably dispatch the hidden menu key equivalents, Host setup installs one
-idempotent AppKit local event monitor as the foreground-only fallback; it
-consumes matching events before the menu route can duplicate them and is
+idempotent AppKit local event monitor for foreground `Cmd+W/Q`; it
+consumes only those matching events before the menu route can duplicate them and is
 released during application exit. If the default recovery shortcut is not ready,
 the menu graph and all hide-on-close/focus-loss paths remain disabled so an
 Accessory process cannot become unreachable.
+
+Standard editing uses the shared native responder path. With Tauri `unstable`,
+the Host `main` WebView and plugin WebViews are both created as `WindowChild`.
+Wry checks current native focus and delegates the original event; its synchronous
+BOOL is not final Web handling. When a visible native descendant owns focus in
+the same visible key window, the Tao parent forwards the original command
+selector to its NSView superclass. WebKit can then identify unhandled commands
+and reenter its normal event route, allowing the existing menu to perform its
+standard editing action once. The adapter adds no menu call, pending queue,
+delayed target, editing-key table, plugin exception, or clipboard permission.
+Tao's own raw-input focus and the reserved W/Q monitor keep their existing roles.
+See [Native Editing Shortcuts](plugin-child-webview-runtime.md#native-editing-shortcuts)
+for Web cancellation, external-plugin compatibility, and evidence boundaries.
 
 Restoring from an ordinary Space and restoring above another application's
 full-screen Space use the same action path. A failure to establish or confirm

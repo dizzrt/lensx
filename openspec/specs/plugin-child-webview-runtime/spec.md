@@ -122,13 +122,19 @@ When native user resizing is enabled by the current validated Page presentation,
 
 Delivery MUST combine Rust unit and integration tests, TypeScript controller and state tests, React accessibility/localization/theme tests, canonical normal and malicious packages, public-package boundary checks, builds, and deterministic artifact checks. Coverage MUST include create intent, navigation policy, bridge/SDK readiness state, bounds, focus intent, hide/restore reuse, close, replacement, disable, uninstall, failure, destroy, late-event inertness, and zero generic Tauri authority hits.
 
-Editing-shortcut validation MUST cover the production routing policy's native focus ownership, target validity, preservation of the original event and modifiers, delegation count, handled/unhandled results, and Host-reserved commands, and MUST verify production adapter wiring and the dependency path used by the actual build. Checking a few source strings MUST NOT substitute for behavioral tests of the production policy. Checks MUST NOT launch a real WebView, GUI, native interaction harness, or browser and MUST NOT claim real interaction, real teardown, or target-performance evidence.
+Editing-shortcut validation MUST separately cover the production native dispatch policy, the adapter wiring and dependency path used by the actual build, and real controls'/editors' DOM editing-event handling and content results. Policy validation MUST verify native focus ownership, target validity, original events and modifiers, dispatch order, single handling, Web handling/default cancellation, pending handling and legal completion/reentry, confirmed unhandled propagation, native editing-command results, and Host-reserved commands. A superclass fake's synchronous return value or invocation count MUST NOT substitute for validation of final Web handling, menu/responder-chain behavior, and editing results. A few source-string matches MUST NOT substitute for behavioral tests of the production policy.
+
+Deterministic DOM validation MUST cover Host ordinary inputs, external-plugin `input`/`textarea`/`contenteditable` controls, the Monaco body, and Find queries: current selections, copy/cut output, external-text paste input, content changes, Undo/Redo, focus transitions, read-only/disabled and empty states, and recovery after failure. Explicitly labeled native-adapter fakes, models of DOM default editing primitives, and in-memory ClipboardEvent data are permitted, but tests MUST distinguish these boundaries from real control/editor logic. A plugin-internal clipboard-service write/read round trip MUST NOT replace evidence of cross-application text-clipboard delivery. Verifying only the absence of clipboard access MUST NOT be described as successful user copy/paste.
+
+`Cmd+A/C/X/V/Z` and `Cmd+Shift+Z` MUST be acceptance samples without requiring a production key-code allowlist. Validation MUST cover a command executing once on the current valid target, not executing on old/hidden/unfocused/invalid targets, and no duplication between standard commands and Page-owned shortcuts. Checks MUST verify that production adapters actually use the tested policy and the locked dependency path. Compilation evidence and behavioral evidence MUST be recorded separately.
+
+These checks MUST NOT launch a real WebView, GUI, native interaction harness, or browser, and MUST NOT claim real macOS key delivery, system-clipboard round trips, real teardown, or target-environment performance. Deterministic samples' simulated events, fixture text, and local-state results MUST state their evidence boundaries rather than hide unverified native dispatch behind an end-to-end success claim.
 
 #### Scenario: Deterministic Child WebView matrix passes
 
 - **WHEN** the maintained Rust, TypeScript, React, package, and malicious-fixture checks run
-- **THEN** lifecycle behavior, source authority, cleanup, shortcut focus policy, single delivery, and public/private boundaries pass
-- **THEN** all plugins share the specified Runtime path and the results are explicitly limited to deterministic evidence
+- **THEN** lifecycle behavior, source authority, cleanup, shortcut focus policy, single-edit results, and public/private boundaries pass assertions at their respective layers
+- **THEN** all plugins share the specified Runtime path, and results are explicitly limited to deterministic evidence without claims of actual native-key or clipboard delivery
 
 #### Scenario: Environment-only validation remains
 
@@ -138,44 +144,91 @@ Editing-shortcut validation MUST cover the production routing policy's native fo
 
 #### Scenario: Keyboard policy is exercised without native interaction
 
-- **WHEN** fake native responders exercise the production routing policy for focused, hidden, replaced, absent-target, and Host-reserved-command cases
-- **THEN** decisions, invocation counts, and result propagation are verifiable, and compilation and wiring checks confirm production use of the policy
-- **THEN** modeled results are not described as measurements of real macOS key events
+- **WHEN** fake native responders exercise the production policy for focused, hidden, replaced, absent-target, and Host-reserved-command cases
+- **THEN** decisions, dispatch order, invocation counts, handled/unhandled results, and fallback propagation are verifiable, and compilation and wiring checks confirm production use of the policy
+- **THEN** modeled results are not described as real macOS key measurements, and a single handler returning success is not taken as proof that target text was edited
+
+#### Scenario: DOM clipboard events verify actual editing logic
+
+- **WHEN** deterministic fixtures provide explicit selections, copy/cut events, or external paste text to real control/editor event-handling paths
+- **THEN** assertions verify actual output text, target content, input notifications, undo/redo, and current focus, rather than only event or service invocation
+- **THEN** fixture memory data and any modeled default behavior are identified, and the results do not prove that the OS converted real keypresses into ClipboardEvent delivery
+
+#### Scenario: An earlier handling stage must prevent duplicate editing
+
+- **WHEN** the Web target has handled or cancelled default behavior, or a native editing branch has completed the command, while another candidate path can still observe the event
+- **THEN** production dispatch-policy tests prove the later path does not repeat the command, with paste/cut/undo results changing only once
+- **THEN** unhandled or invalid-target negative cases still prove continued propagation without incorrectly editing an old Page
+
+#### Scenario: Asynchronous handling and native redispatch retain one gesture
+
+- **WHEN** deterministic production-policy cases model native takeover remaining pending, final Web handling, finally confirmed unhandled reentry, and focus changes/target invalidation/Child replacement before reentry
+- **THEN** pending handling does not trigger an early menu, legal reentry is not counted as another user gesture, and an applicable native command continues only after confirmed non-handling with a still-valid target
+- **THEN** any repair-owned delayed compensation stays bound to the original event target and is cancelled after focus or generation changes instead of being redirected; cases cover edit counts and target state without presenting simulated completion as actual WebKit timing evidence
 
 ### Requirement: Child WebView MUST deliver editing shortcuts according to native focus
 
-On macOS, the current valid, visible plugin Child WebView with native text focus MUST receive ordinary Web editing shortcuts so that existing Page commands for Select All, Find, Cut, Copy, Paste, Undo, Redo, and editing can operate under that Page's rules. Official, external, and Development Mode plugins MUST share this behavior without exceptions based on plugin identity, Publisher, repository location, Monaco use, or plugin-reported focus.
+On macOS, the current valid, visible plugin Child WebView with native text focus MUST receive ordinary Web editing shortcuts so that existing Page commands for Select All, Find, Cut, Copy, Paste, Undo, Redo, and editing operate under that Page's rules. Standard editing commands MUST follow the unified Host/Child native-delivery contract in `launcher-window-lifecycle` and produce actual selection, clipboard, or content results supported by the current text target. Find, formatting, and other Page business commands remain plugin-defined. Official, external, and Development Mode plugins MUST share this behavior without exceptions based on plugin identity, Publisher, repository location, Monaco use, page index, or plugin-reported focus.
 
-Delivery MUST preserve the original native event, modifiers, and single-handling semantics. An unfocused, hidden, detached, destroyed, or replaced Child MUST NOT consume the event, reclaim focus, reveal itself, or affect Host input or another native view. Unhandled events MUST retain native propagation semantics, and existing non-Child behavior MUST remain unchanged.
+Delivery MUST preserve the original native event, modifiers, and single-handling semantics. The current valid target MUST be determined from native focus and existing Window/WebView ownership. An unfocused, hidden, detached, destroyed, replaced, or unverified Child MUST NOT consume the event, reclaim focus, reveal itself, or affect Host input or another native view. Web handling or default cancellation MUST NOT be followed by an additional standard editing command. Finally confirmed unhandled events MUST continue native-menu and current-responder-chain semantics, execute an available command at most once, and continue propagating if still unhandled. The unified standard editing chain can repair equivalent behavior in non-Child inputs such as the Host, but other non-Child behavior MUST remain unchanged.
 
-The Host-reserved application commands `Cmd+W/Q` MUST continue to follow `launcher-window-lifecycle`: only foreground lensX handles them, invoking recoverable Hide or complete Quit respectively once per keypress. They MUST NOT be global shortcuts or be overridden by a plugin. Editing-shortcut delivery MUST NOT introduce a Host API, SDK method, plugin permission, generic Tauri capability, controllable native handle, or script-driven synthetic-key channel.
+Native takeover and final Web handling MUST be distinguished. Pending handling MUST preserve native completion and legal unhandled reentry, and MUST NOT immediately execute an extra menu command based on the synchronous takeover return value. Legal WebKit reentry MUST NOT be treated as a new user gesture; the repair layer MUST NOT additionally synthesize or resend that keyboard event. If the repair introduces delayed compensation, it MUST bind that compensation to the original gesture's initial Window, text target, and Child generation and revalidate them before execution. A focus change, invalid target, or generation change during the wait MUST cancel that event's compensation instead of reading a new first responder and redirecting the old event to a new target. WebKit's own legal reentry MUST retain its existing mechanism.
+
+Existing compliant external plugins' `input`/`textarea`/`contenteditable` controls and editor inputs MUST support standard editing without Host-source special cases, SDK updates, or new permissions. The body and Find query MUST handle selection, copy, cut, paste, undo, and redo separately according to current focus; an operation on one target MUST NOT affect the other. Read-only, disabled, empty-selection, empty-clipboard, and empty-undo/redo states MUST retain each control's semantics without forcibly clearing the clipboard or synthesizing content changes. Normal editing MUST resume when input, focus, and a valid generation are restored.
+
+The Host-reserved application commands `Cmd+W/Q` MUST continue to follow `launcher-window-lifecycle`: only foreground lensX executes recoverable Hide and complete Quit respectively once per keypress. They MUST NOT become global shortcuts or be overridden by a plugin. Editing delivery MUST NOT add a Host API, SDK method, plugin permission, generic Tauri capability, controllable native handle, injected script, DOM/page-index targeting, `eval`, or synthetic-key channel, and MUST NOT implement standard editing through production per-plugin or per-key-code allowlists. `Cmd+A/C/X/V/Z` and `Cmd+Shift+Z` are acceptance samples and do not change these boundaries.
 
 #### Scenario: Current focused plugin receives editing shortcuts
 
-- **WHEN** text input in the current visible Child has native focus and the user invokes an editing shortcut
-- **THEN** the event and its modifiers are delivered once to that native Web editing target for the Page to handle
-- **THEN** external, development, and official plugins share the same rules without a plugin-specific Host shortcut mapping
+- **WHEN** text input in the current visible Child owns valid native focus and the user invokes an editing shortcut
+- **THEN** the original event and modifiers are handled once under Page and native standard-editing semantics, producing the corresponding selection, clipboard, or content result for the current text target
+- **THEN** external, Development Mode, and official plugins share the same rules without plugin-specific Host shortcut mappings or SDK-adaptation requirements
 
 #### Scenario: Host or another native input owns focus
 
-- **WHEN** Host search, another native view, or a target outside the window has focus
-- **THEN** an unfocused Child neither consumes nor redispatches the event
-- **THEN** the original focus and corresponding input behavior are preserved
+- **WHEN** Host search, another native view, or a target outside the Window owns focus
+- **THEN** the unfocused Child neither consumes nor resends the event or reclaims focus
+- **THEN** Host ordinary inputs receive standard commands through the unified native editing chain, other targets retain their own input behavior, and unrelated non-Child behavior is unchanged
 
 #### Scenario: Hidden or replaced plugin cannot consume late input
 
 - **WHEN** the Child is hidden, detached, destroyed, replaced, or cannot be confirmed as the native focus owner
 - **THEN** late events cannot execute old Page editing commands, restore old focus, or reveal the old Child
-- **THEN** the new Page or Host input state remains unaffected
+- **THEN** the new Page or Host input state remains unaffected, and subsequent commands affect only the still-valid current target
 
 #### Scenario: Native handled result is preserved
 
-- **WHEN** the valid target's native handler returns handled or unhandled
-- **THEN** that result is preserved without synthesizing the same event again for the Page or menu
-- **THEN** unhandled events continue under native propagation rules
+- **WHEN** the valid target's native handling path finally confirms handled or unhandled status
+- **THEN** handled status ends later candidate paths for the corresponding edit, without the repair layer additionally synthesizing/resending the same event to the Page or menu or repeating the command
+- **THEN** confirmed unhandled status preserves legal reentry and continues native-menu and current-responder-chain propagation; an applicable standard command executes at most once, and unhandled semantics remain when no handler is available
+
+#### Scenario: Native handling remains pending before the Web result
+
+- **WHEN** Child native handling has taken over an event while Web handling is incomplete and later produces legal completion or unhandled reentry
+- **THEN** synchronous takeover does not trigger early menu/default editing, and final handling/default cancellation does not trigger a second command
+- **THEN** only finally confirmed non-handling continues through the applicable native editing chain; any repair-owned delayed compensation is bound to the original Window/text target/Child generation and cancelled after focus or generation changes rather than redirected to a new first responder
+- **THEN** WebKit's own legal reentry retains its existing mechanism and remains part of the original gesture; an invalidated old Child cannot regain editing authority or focus
 
 #### Scenario: Application close and quit keep their reserved meaning
 
-- **WHEN** lensX is foreground, a current plugin is being edited, and the user presses `Cmd+W` or `Cmd+Q`
-- **THEN** the existing Hide or Quit runs exactly once respectively and applies the corresponding Child lifecycle handling
-- **THEN** lensX does not consume those key combinations while another application is foreground
+- **WHEN** lensX is foreground, the user is editing the current plugin, and presses `Cmd+W` or `Cmd+Q`
+- **THEN** the existing Hide or Quit executes exactly once respectively and completes the corresponding Child lifecycle handling
+- **THEN** lensX does not consume these combinations while another application is foreground
+
+#### Scenario: Ordinary external controls use the same standard editing contract
+
+- **WHEN** a compliant external plugin's `input`, `textarea`, and `contenteditable` controls become the current native text focus in turn
+- **THEN** standard selection, copy, cut, paste, undo, and redo follow each control's capabilities and state without plugin-specific platform code
+- **THEN** read-only, disabled, empty, and input-recovery states retain each control's semantics, and the plugin gains no background clipboard access, Host DOM access, or native authority
+
+#### Scenario: Monaco body and Find query keep separate editing targets
+
+- **WHEN** current focus moves between the Monaco body and Find query and the user invokes standard editing commands
+- **THEN** selection and editing affect only the current text target; the body and query do not select all, paste, or undo each other's content
+- **THEN** Find toggling, Page business commands, the existing model/undo lifecycle, and Host input retain their respective ownership
+
+#### Scenario: Page-specific handling does not trigger a second standard command
+
+- **WHEN** the current plugin handles an event under its own input rules or cancels its default behavior
+- **THEN** the Host does not force the standard editing command for the same gesture or duplicate content/clipboard changes
+- **THEN** other unhandled events can still enter the unified native editing chain without the plugin registering per-key handling results with the Host

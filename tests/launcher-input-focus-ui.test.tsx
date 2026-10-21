@@ -11,6 +11,13 @@ import {
 import { EMPTY_LAUNCHER_ACTION_COLLECTIONS } from '../src/app/launcher/collections';
 import type { LauncherSurfaceTarget } from '../src/app/launcher/surface';
 import { AppNavigationService, HostPageCatalog } from '../src/app/navigation';
+import {
+  clipboardText,
+  editSelection,
+  modelPlainTextEditing,
+  pressModeledEdit,
+  selectEditText,
+} from './helpers/modeled-web-editing';
 
 const inertActivationSource = { subscribe: async () => () => undefined };
 const settingsTarget = { owner_id: 'lensx.core', page_id: 'settings' };
@@ -110,6 +117,103 @@ const localizedFeedback = {
 };
 
 describe('launcher committed input and IME focus', () => {
+  test.each(
+    (['en-US', 'zh-CN'] as const).flatMap((initialLocale) =>
+      (['light', 'dark'] as const).map((initialThemeMode) => ({ initialLocale, initialThemeMode })),
+    ),
+  )('real Semi input accepts modeled standard edits in $initialLocale/$initialThemeMode', (options) => {
+    const { input } = renderLauncher(options);
+    fireEvent.change(input, { target: { value: 'run' } });
+    const defaults = modelPlainTextEditing(input);
+    const inputTypes: string[] = [];
+    const clipboardEvents: string[] = [];
+    input.addEventListener('input', (event) => inputTypes.push((event as InputEvent).inputType));
+    for (const type of ['copy', 'cut', 'paste']) input.addEventListener(type, () => clipboardEvents.push(type));
+
+    expect(pressModeledEdit(input, 'a', defaults.selectAll).defaultPrevented).toBe(false);
+    expect(editSelection(input)).toEqual([0, 3]);
+    const output = clipboardText('old clipboard');
+    expect(pressModeledEdit(input, 'c', () => defaults.copy(output)).defaultPrevented).toBe(false);
+    expect(output.getData('text/plain')).toBe('run');
+    expect(input).toHaveValue('run');
+    expect(pressModeledEdit(input, 'x', () => defaults.cut(output)).defaultPrevented).toBe(false);
+    expect(input).toHaveValue('');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+
+    const incoming = clipboardText('运行');
+    expect(pressModeledEdit(input, 'v', () => defaults.paste(incoming)).defaultPrevented).toBe(false);
+    expect(input).toHaveValue('运行');
+    expect(editSelection(input)).toEqual([2, 2]);
+    expect(screen.getAllByRole('option')).toHaveLength(6);
+    expect(pressModeledEdit(input, 'z', defaults.undo).defaultPrevented).toBe(false);
+    expect(input).toHaveValue('');
+    expect(pressModeledEdit(input, 'z', defaults.redo, { shiftKey: true }).defaultPrevented).toBe(false);
+    expect(input).toHaveValue('运行');
+    expect(screen.getAllByRole('option')).toHaveLength(6);
+    expect(inputTypes).toEqual(['deleteByCut', 'insertFromPaste', 'historyUndo', 'historyRedo']);
+    expect(clipboardEvents).toEqual(['copy', 'cut', 'paste']);
+    expect(output.getData('text/plain')).toBe('run');
+    expect(input).toHaveFocus();
+  });
+
+  test('Host and an ordinary external editor keep separate selections, clipboard targets and history', () => {
+    const { input } = renderLauncher();
+    fireEvent.change(input, { target: { value: 'run' } });
+    const host = modelPlainTextEditing(input);
+    selectEditText(input, 0, 3);
+    render(<textarea aria-label="ordinary external test editor" defaultValue="external" />);
+    const externalInput = screen.getByLabelText('ordinary external test editor') as HTMLTextAreaElement;
+    const external = modelPlainTextEditing(externalInput);
+    externalInput.focus();
+    selectEditText(externalInput, 0, 8);
+    const output = clipboardText('previous');
+    pressModeledEdit(externalInput, 'c', () => external.copy(output));
+    expect(output.getData('text/plain')).toBe('external');
+    pressModeledEdit(externalInput, 'v', () => external.paste(clipboardText('new external')));
+    expect(externalInput).toHaveValue('new external');
+    host.paste(clipboardText('stale Host delivery'));
+    expect(input).toHaveValue('run');
+    input.focus();
+    expect(host.undo()).toBe(false);
+    pressModeledEdit(input, 'v', () => host.paste(clipboardText('运行')));
+    expect(input).toHaveValue('运行');
+    expect(externalInput).toHaveValue('new external');
+    externalInput.focus();
+    pressModeledEdit(externalInput, 'z', external.undo);
+    expect(externalInput).toHaveValue('external');
+    expect(input).toHaveValue('运行');
+  });
+
+  test('real Semi input leaves composing standard keys untouched and resumes with one paste edit', () => {
+    const { input } = renderLauncher({ initialLocale: 'zh-CN', initialThemeMode: 'dark' });
+    startComposition(input, 'yunxing');
+    const defaults = modelPlainTextEditing(input);
+    const defaultPrimitive = rs.fn();
+    for (const sample of [
+      { key: 'a' },
+      { key: 'c' },
+      { key: 'x' },
+      { key: 'v' },
+      { key: 'z' },
+      { key: 'z', shiftKey: true },
+    ]) {
+      const event = pressModeledEdit(input, sample.key, defaultPrimitive, { ...sample, isComposing: true });
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(defaultPrimitive).not.toHaveBeenCalled();
+    expect(input).toHaveValue('yunxing');
+    endComposition(input, '运行');
+    selectEditText(input, 0, 2);
+    const edits = rs.fn();
+    input.addEventListener('input', edits);
+    const event = pressModeledEdit(input, 'v', () => defaults.paste(clipboardText('run')));
+    expect(event.defaultPrevented).toBe(false);
+    expect(input).toHaveValue('run');
+    expect(edits).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole('option')).toHaveLength(6);
+    expect(input).toHaveFocus();
+  });
+
   test('displays the first and continuous phonetic draft without leaving home', () => {
     const { input, setPresentationState } = renderLauncher();
     startComposition(input, 'n');
@@ -188,8 +292,8 @@ describe('launcher committed input and IME focus', () => {
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
     expect(document.querySelector('[data-presentation-state]')).toHaveAttribute('data-presentation-state', 'home');
 
-    fireEvent.paste(input, { clipboardData: { getData: () => 'run' } });
-    fireEvent.change(input, { target: { value: 'run' } });
+    const defaults = modelPlainTextEditing(input);
+    pressModeledEdit(input, 'v', () => defaults.paste(clipboardText('run')));
     expect(screen.getAllByRole('option')).toHaveLength(6);
     fireEvent.change(input, { target: { value: '' } });
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
@@ -351,8 +455,8 @@ describe('launcher committed input and IME focus', () => {
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
     expect(setPresentationState.mock.calls.map(([target]) => target.kind)).toEqual(['home', 'search', 'home']);
 
-    fireEvent.paste(input, { clipboardData: { getData: () => '运行' } });
-    fireEvent.change(input, { target: { value: '运行' } });
+    const defaults = modelPlainTextEditing(input);
+    pressModeledEdit(input, 'v', () => defaults.paste(clipboardText('运行')));
     expect(screen.getAllByRole('option')).toHaveLength(6);
   });
 

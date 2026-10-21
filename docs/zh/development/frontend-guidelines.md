@@ -268,6 +268,19 @@ Search 输入框的键盘处理保持主导：IME 优先，方向键更新选择
 - 不要只通过颜色表达状态。
 - 以合适方式通知异步错误和重要状态变化。
 
+### 标准编辑命令
+
+全选、复制、剪切、粘贴、撤销和重做属于当前文本焦点。在 macOS 上，Host 通过共享响应链
+负责原生交付；恢复正常命令传播的修复同时覆盖 Host 输入与当前插件 Child WebView。
+前端 handler 应兼容这条路径，不增加 document 全局编辑键 handler 或剪贴板 bridge。
+保留 Web 取消默认行为的能力，以及各控件的只读、禁用、空选区和历史语义；已处理的命令
+不能再触发一次默认编辑。
+
+既有合规外部插件随 Host 更新获得平台修正，无需修改插件源码、重新打包、更新 SDK 或
+申请额外权限。Find、格式化等业务命令仍由插件负责。前台 `Cmd+W/Q` 仍是 Host 保留的
+应用命令。原生焦点、传播和生命周期的所有权见
+[原生编辑边界](../architecture/plugin-child-webview-runtime.md#原生编辑快捷键)。
+
 ### 插件管理表面
 
 - Plugins 保持为单一连续的列表/详情表面。button、banner、tag、empty/loading state、radio choice 与 modal
@@ -300,6 +313,15 @@ Search 输入框的键盘处理保持主导：IME 优先，方向键更新选择
 - 测试用户可观察行为，而不是组件实现细节。
 - 优先使用 Testing Library 的无障碍查询。
 - 为键盘优先工作流覆盖键盘和焦点行为。
+- 编辑测试必须区分真实 handler 与浏览器缺失的默认行为。Host 测试挂载真实 Semi Input；
+  测试自有外部文档只使用普通 `input`、`textarea`、`contenteditable`，不授予插件权限或注入
+  生产界面。Happy DOM 缺失的选择、剪贴板默认编辑与撤销历史采用明确的纯文本原语模型：
+  先派发可取消的键盘、剪贴板及适用的 `beforeinput` 事件，再执行未被取消的默认操作，
+  最后通过 `input` 通知。断言选区、独立 `DataTransfer` 输入／输出、内容、编辑次数、取消、
+  焦点变化、空／只读／禁用状态与恢复。不得用 paste 后手动 `change` 或剪贴板 service 的
+  自写自读代替编辑证据。这些模型不证明原生事件交付或系统剪贴板访问；应配合生产原生策略、
+  适配接线及独立记录的运行证据。Monaco 正文和 Find 输入的不同边界见
+  [ConfigLens 检查](config-lens.md#限制chunk-与确定性检查)。
 - locale 行为变化时覆盖英文和简体中文输出。
 - 主题行为变化时覆盖明亮和黑暗模式集成。
 - 通过 `AppErrorBoundary` 覆盖 App Shell 渲染失败；React 错误边界不会捕获事件处理器和异步

@@ -7,6 +7,40 @@ const read = (path: string): string => readFileSync(join(rootDir, path), 'utf8')
 const base = 'vendor/frame-aware-navigation/wry/src/wkwebview/class';
 
 describe('production Child key-equivalent wiring', () => {
+  test('forwards descendant commands through the tested Tao policy and the original native selector', () => {
+    const tao = 'vendor/frame-aware-navigation/tao/src/platform_impl/macos';
+    const source = read(`${tao}/view.rs`);
+    expect(read(`${tao}/mod.rs`)).toContain('mod responder;');
+    expect(source).toContain('responder::do_command(&mut NativeCommandResponder(this), &command);');
+    const adapter = source.slice(source.indexOf('struct NativeCommandResponder'), source.indexOf('// Get characters'));
+    for (const fact of [
+      'self.0.downcast_ref::<NSView>()',
+      'parent.window()',
+      'window.firstResponder()',
+      'responder.downcast_ref::<NSView>()',
+      '!std::ptr::eq(view, parent)',
+      'view.window()',
+      'std::ptr::eq(&*owner, &*window)',
+      '!view.isHiddenOrHasHiddenAncestor()',
+      'view.isDescendantOf(parent)',
+      'window.isVisible()',
+      'window.isKeyWindow()',
+      '!parent.isHiddenOrHasHiddenAncestor()',
+      'util::superclass(this)',
+      'super(this, superclass), doCommandBySelector: *command',
+    ])
+      expect(adapter.replace(/\s+/gu, '')).toContain(fact.replace(/\s+/gu, ''));
+    const policy = read(`${tao}/responder.rs`).split('#[cfg(test)]')[0] ?? '';
+    for (const forbidden of [
+      /noop:|selectAll:|copy:|paste:/u,
+      /keyCode|modifierFlags|performKeyEquivalent|mainMenu/u,
+      /config.?lens|publisher|monaco/iu,
+      /eval\(|makeFirstResponder|set_focus/u,
+    ])
+      expect(`${adapter}\n${policy}`).not.toMatch(forbidden);
+    expect(policy.match(/adapter\.perform_super\(command\)/gu)).toHaveLength(1);
+  });
+
   test('uses the tested macOS policy with native ownership and the original superclass event', () => {
     const source = read(`${base}/wry_web_view.rs`);
     expect(read(`${base}/mod.rs`)).toContain('#[cfg(target_os = "macos")]\npub(crate) mod key_equivalent;');

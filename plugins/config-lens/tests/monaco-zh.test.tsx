@@ -2,7 +2,9 @@ import { afterEach, beforeEach, expect, rs, test } from '@rstest/core';
 import { fireEvent, waitFor } from '@testing-library/react';
 import { messagesFor } from '../src/catalog.js';
 import { disposeMonacoWorkers, loadMonaco } from '../src/editor/monaco.js';
+import { registerNativeEditingCases } from './monaco-editing-cases.js';
 import { installWorkerDouble, mountEditor, queryInput, releaseWorkers } from './monaco-fixture.js';
+import { registerWordSelectionCases } from './monaco-word-selection-cases.js';
 
 beforeEach(installWorkerDouble);
 afterEach(releaseWorkers);
@@ -41,3 +43,6 @@ test('a new document initializes Chinese native NLS and retains it across same-d
     spy.mockRestore();
   }
 });
+
+registerNativeEditingCases('zh-CN');
+registerWordSelectionCases('zh-CN');

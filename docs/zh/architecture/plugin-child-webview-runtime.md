@@ -87,25 +87,41 @@ conversion 与串行 latest-wins presentation revision 会进入既有、由 Rus
 
 ## 原生编辑快捷键
 
-共享 macOS Wry adapter 仅在原生窗口可见且为 key window、Child 及其祖先可见，
-并且当前 first responder 是该 Child 子树中、属于同一窗口的可见原生 view 时，
-委托 Child key equivalent。生产 Rust 策略最多将原事件及修饰键交给 WKWebView
-一次，并保留已处理／未处理返回值。非 Child 行为不变。Host 输入、另一 view、
-缺失焦点、隐藏窗口以及脱离或替换后的 Child 均不能被旧 Child 接管；派发不会
-聚焦、显示或恢复目标。
+启用 Tauri `unstable` feature 后，初始 Host `main` WebView 和插件 WebView 都使用
+原生 `WindowChild` 创建路径。共享原生布局不会改变各自的 document 身份或权限。
+Host 搜索框、普通外部 Web 控件和 ConfigLens 因此使用同一原生编辑边界。
 
-Host 的 application-local monitor 继续拥有前台 `Cmd+W/Q` 的处理权：每个事件
-只消费一次，分别进入既有可恢复 Hide 或完整 Quit 生命周期。其他组合键，包括
-全选、Find、剪贴板编辑、撤销／重做和编辑器操作，由聚焦的 Web document 处理。
-插件身份、Publisher、provenance、DOM selector 或 Monaco 类型均不会选择特殊路径。
-不合成键盘事件，不增加权限、SDK 方法、Host API 或原生句柄。
+macOS Wry adapter 仅在原生窗口可见且为 key window、Child 及其祖先可见，并且当前
+first responder 是该 Child 子树中、属于同一窗口的可见原生 view 时，委托 Child
+key equivalent。每次原生回调最多向 WKWebView 传递一次原事件和修饰键，并保留同步
+返回值。该返回值可能只表示异步 Web 处理已开始，不证明最终处理完成。失焦、隐藏、
+脱离、被替换或无法验证的 Child 不能抢回焦点、显示自身或接管其他目标。
 
-依赖 Gate 使用 fake adapter 运行生产 Wry 策略并检查实际 Objective-C 接线；
-Host Cargo 测试将本地 monitor 与同一策略组合。测试覆盖原生归属、原事件身份与
-修饰键、委托次数、两类返回值、过期目标及保留命令。Cargo check/build 验证真实
-adapter 的编译。[验证指南](../development/validation.md) 说明这些确定性边界；
-它们不是真实 macOS 按键交互证据。仅更新插件不会修复旧 Host：原生交付随 Host
-发布，每个插件仍负责自身编辑行为。
+共享 Tao 父视图仅在当前 first responder 是同一可见 key window 中的可见原生后代时，
+将 `doCommandBySelector:` 交给 NSView superclass，原 selector 不经解释直接传播。
+Tao 自身持有 raw-input 焦点时保留既有行为。这样恢复正常命令传播，使 WebKit 能识别
+未处理命令并执行自身合法事件回流；既有应用菜单随后可匹配 accelerator、验证菜单项，
+并向 responder 投递原生 action。Web 已处理或取消默认行为时不会额外执行默认编辑，
+已完成的原生 action 也不会重复。Wry 的非 Child 委托行为保持不变。
+
+该 adapter 不调用菜单，不增加第二条 `keyDown` 回退，不从同步 BOOL 推定最终处理，
+也不实现 pending 状态、完成回调、事件队列、重放或延迟目标补偿。它不会跨回调保存
+路由目标。完成与回流由 WebKit 所有，包括其既有焦点变化语义；每个 lensX guard 都
+读取当前原生归属，不聚焦或恢复 view。
+
+application-local monitor 继续拥有前台 `Cmd+W/Q` 的处理权：每个事件只消费一次，
+分别进入可恢复 Hide 或完整 Quit。标准全选、复制、剪切、粘贴、撤销和重做复用原生
+菜单／responder 契约；Find 和其他页面命令仍由 Web document 所有。插件身份、
+Publisher、provenance、DOM selector 或 Monaco 类型均不会选择特殊路径。既有合规
+外部插件只需更新 Host，无需改源码、重打包、更新 SDK 或新增剪贴板权限。不合成键盘
+事件，不新增 Host API，也不暴露原生句柄。
+
+[验证指南](../development/validation.md) 分别说明生产 Rust 策略测试、原生接线与
+Cargo 编译、建模的普通控件 DOM 编辑，以及使用测试剪贴板数据的真实 Monaco handler。
+任何一层都不能单独证明操作系统事件交付。当前 macOS 构建的一次临时调查确认了未处理
+命令传播、WebKit 回流和既有菜单 action 的单次执行；移除调试器后，用户确认快捷键恢复。
+该观察仅限于实际执行的构建与场景，不代表全部按键／控件矩阵或其他平台验收。仓库不维护
+原生交互 harness 或诊断入口。
 
 ## 安全与 Web 能力
 

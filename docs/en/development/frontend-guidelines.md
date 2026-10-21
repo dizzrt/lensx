@@ -383,6 +383,24 @@ pending execution deduplication and the existing locale fallback unchanged.
 - Do not use color alone to communicate state.
 - Announce asynchronous errors and important state changes appropriately.
 
+### Standard Editing Commands
+
+Select All, Copy, Cut, Paste, Undo, and Redo belong to the current text focus.
+On macOS the Host owns their native delivery through the shared responder
+chain; the normal command propagation repair covers Host input and current
+plugin Child WebViews. Keep frontend handlers compatible with that path instead
+of adding document-wide editing-key handlers or a clipboard bridge. Preserve
+Web cancellation and each control's read-only, disabled, empty-selection, and
+history semantics; a handled command must not cause a second default edit.
+
+Existing compliant external plugins receive this platform correction with the
+updated Host, without changing plugin source, repackaging, updating the SDK, or
+requesting another permission. Plugins still own their business commands,
+including Find and formatting. Foreground `Cmd+W/Q` remain Host-reserved
+application commands. See the
+[native editing boundary](../architecture/plugin-child-webview-runtime.md#native-editing-shortcuts)
+for native focus, propagation, and lifecycle ownership.
+
 ### Plugin Management Surface
 
 - Keep Plugins as one continuous list/detail surface. Use Semi Design for
@@ -428,6 +446,20 @@ pending execution deduplication and the existing locale fallback unchanged.
 - Test user-observable behavior instead of component implementation details.
 - Prefer accessible queries from Testing Library.
 - Cover keyboard and focus behavior for keyboard-first workflows.
+- Editing tests must distinguish real handlers from missing browser defaults.
+  Host tests mount the real Semi Input; test-owned external documents use plain
+  `input`, `textarea`, and `contenteditable` controls without a plugin privilege
+  or product injection. Happy DOM's missing selection, clipboard defaults, and
+  undo history use explicit plain-text primitives: deliver cancelable keyboard,
+  clipboard, and applicable `beforeinput` events before applying an uncancelled
+  default, then notify through `input`. Assert selection, independent
+  `DataTransfer` input/output, content, edit counts, cancellation, focus changes,
+  empty/read-only/disabled states, and recovery. Do not substitute a manual
+  `change` after paste or a clipboard-service round trip for editing evidence.
+  These models do not prove native event delivery or system clipboard access;
+  pair them with production native policy, adapter wiring, and separately
+  recorded runtime evidence. See [ConfigLens checks](config-lens.md#limits-chunks-and-deterministic-checks)
+  for the distinct Monaco body and Find-input boundaries.
 - Cover English and Simplified Chinese output when locale behavior changes.
 - Cover light and dark mode integration when theme behavior changes.
 - Cover App Shell render failures through `AppErrorBoundary`; event-handler and

@@ -103,32 +103,56 @@ Runtime reload, or Session replacement path.
 
 ## Native Editing Shortcuts
 
-The shared macOS Wry adapter delegates a Child key equivalent only while its
-native window is visible and key, the Child and its ancestors are visible, and
-the current first responder is a visible native view in that Child's subtree
-and the same window. The production Rust policy passes the original event and
-modifiers to WKWebView at most once and preserves its handled/unhandled result.
-Non-Child behavior remains unchanged. Host inputs, another view, missing focus,
-hidden windows, and detached or replaced Children cannot be intercepted by an
-old Child; dispatch never focuses, reveals, or revives a target.
+With the enabled Tauri `unstable` feature, both the initial Host `main` WebView
+and plugin WebViews use the native `WindowChild` creation path. This shared
+native layout does not change their separate document identities or authority.
+Host search, ordinary external Web controls, and ConfigLens therefore use the
+same native editing boundary.
 
-The Host application-local monitor remains authoritative for foreground
-`Cmd+W/Q`: each event is consumed once for the existing recoverable Hide or
-complete Quit lifecycle. Other combinations, including select all, Find,
-clipboard editing, undo/redo, and editor operations, are handled by the focused
-Web document. No plugin identity, Publisher, provenance, DOM selector, or Monaco
-type selects a special route. There is no synthesized keyboard event, new
-permission, SDK method, Host API, or native handle.
+The macOS Wry adapter delegates a Child key equivalent only while its native
+window is visible and key, the Child and its ancestors are visible, and the
+current first responder is a visible native view in that Child's subtree and
+the same window. It passes the original event and modifiers to WKWebView at
+most once per native callback and preserves the synchronous return value.
+That return may mean asynchronous Web handling has started; it does not establish
+final handling. An unfocused, hidden, detached, replaced, or unverifiable Child
+cannot reclaim focus, reveal itself, or intercept another target.
 
-The dependency Gate runs the production Wry policy with fake adapters and
-checks the actual Objective-C wiring; Host Cargo tests compose the local monitor
-with that same policy. These tests cover native ownership, original event
-identity and modifiers, delegate count, both return values, stale targets, and
-reserved commands. Cargo check/build validates the real adapter. The
-[validation guide](../development/validation.md) documents these deterministic
-bounds; they are not real macOS keyboard interaction evidence. Updating a
-plugin alone does not repair an older Host: native delivery ships with the Host,
-while each plugin remains responsible for its own editing behavior.
+The shared Tao parent forwards `doCommandBySelector:` to the NSView superclass
+only when the current first responder is its visible native descendant in the
+same visible key window. It forwards the original selector without interpreting
+it. Tao's own raw-input focus keeps its existing behavior. This restores normal
+command propagation, so WebKit can recognize an unhandled command and perform
+its own legal event reentry; the existing application menu can then match its
+accelerator, validate its item, and deliver the native action to the responder.
+Web handling or cancellation does not trigger an extra default edit, and a
+completed native action is not repeated. Wry's non-Child delegation is unchanged.
+
+The adapter does not call the menu, add a second `keyDown` fallback, infer final
+handling from the synchronous BOOL, or implement pending state, a completion
+callback, an event queue, replay, or delayed target compensation. It retains no
+routing target across callbacks. WebKit owns completion and reentry, including
+its existing focus-change semantics; each lensX guard reads current native
+ownership without focusing or reviving a view.
+
+The application-local monitor remains authoritative for foreground `Cmd+W/Q`:
+each event is consumed once for recoverable Hide or complete Quit. Standard
+Select All, Copy, Cut, Paste, Undo, and Redo reuse the native menu/responder
+contract; Find and other page commands remain owned by the Web document.
+No plugin identity, Publisher, provenance, DOM selector, or Monaco type selects
+a route. Existing compliant external plugins need a Host update, without source
+changes, repackaging, a new SDK, or clipboard permission. There is no synthetic
+keyboard event, new Host API, or exposed native handle.
+
+The [validation guide](../development/validation.md) separates production Rust
+policy tests, native wiring and Cargo compilation, modeled plain-control DOM
+editing, and actual Monaco handlers with test clipboard data. None of those
+alone proves operating-system event delivery. A temporary investigation of the
+current macOS build confirmed unhandled-command propagation, WebKit reentry,
+and a single existing-menu action; the user confirmed restored shortcuts after
+the debugger was removed. That observation is limited to the exercised build
+and scenarios, and does not establish every key/control matrix or another
+platform. No native interaction harness or diagnostic entry is maintained.
 
 ## Security And Web Capabilities
 

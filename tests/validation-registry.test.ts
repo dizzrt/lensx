@@ -85,6 +85,7 @@ describe('validation Gate registry and runner', () => {
     expect(focused?.argv.slice(0, 3)).toEqual(['exec', 'rstest', 'run']);
     expect(focused?.argv).toContain('tests/frame-aware-navigation-dependency-drift.test.ts');
     expect(focused?.argv).toContain('tests/launcher-action-search-ui.test.tsx');
+    expect(focused?.argv).toContain('tests/ordinary-plugin-editing-ui.test.ts');
     expect(plan.steps.every((item) => item.safety.readOnly && !item.safety.writesCommittedArtifacts)).toBe(true);
   });
 
@@ -138,7 +139,7 @@ describe('validation Gate registry and runner', () => {
         'utf8',
       ).matchAll(/^\s*'tao\/([^']+\.rs)'/gmu),
     ].map((match) => `vendor/frame-aware-navigation/tao/${match[1]}`);
-    expect(reviewedSources).toHaveLength(15);
+    expect(reviewedSources).toHaveLength(17);
     expect(taoFormat).toMatchObject({
       argv: ['--edition', '2021', '--config', 'tab_spaces=2', '--check', ...reviewedSources],
       platform: 'any',

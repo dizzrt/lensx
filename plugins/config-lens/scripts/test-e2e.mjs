@@ -108,6 +108,7 @@ for (const required of [
   '/editor/contrib/find/browser/findController.js',
   '/editor/contrib/contextmenu/browser/contextmenu.js',
   '/editor/contrib/gotoError/browser/gotoError.js',
+  '/editor/contrib/wordOperations/browser/wordOperations.js',
   '/nls/lang/zh-cn.js',
   '/languages/features/json/tokenization.js',
   '/languages/definitions/yaml/yaml.js',

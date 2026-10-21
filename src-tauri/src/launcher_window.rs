@@ -267,6 +267,11 @@ impl<R: Runtime> LauncherChildPresentation for PluginChildWebviewService<R> {
 mod child_key_equivalent_policy;
 
 #[cfg(test)]
+#[rustfmt::skip]
+#[path = "../../vendor/frame-aware-navigation/tao/src/platform_impl/macos/responder.rs"]
+mod descendant_command_policy;
+
+#[cfg(test)]
 fn execute_with_resolver<R: LauncherWindowResolver>(
     resolver: &R,
     action: LauncherWindowAction,
@@ -2065,6 +2070,148 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn reserved_commands_and_late_native_selectors_share_current_focus_eligibility() {
+        use super::descendant_command_policy::{self, CommandResponder, DescendantFocus};
+
+        struct NativeParent {
+            focus: DescendantFocus,
+            forwarded: Vec<*const &'static str>,
+        }
+
+        impl CommandResponder for NativeParent {
+            type Command = &'static str;
+
+            fn descendant_focus(&self) -> DescendantFocus {
+                self.focus
+            }
+
+            fn perform_super(&mut self, command: &Self::Command) {
+                self.forwarded.push(command);
+            }
+        }
+
+        for active in [false, true] {
+            for command_only in [false, true] {
+                // Sample event codes never select an editing command in production.
+                for code in [0, 3, 8, 7, 9, 6, 13, 12] {
+                    let mut parent = NativeParent {
+                        focus: DescendantFocus {
+                            attached_to_window: true,
+                            window_visible: true,
+                            window_is_key: active,
+                            view_visible: true,
+                            owns_focused_descendant: active,
+                        },
+                        forwarded: vec![],
+                    };
+                    let mut reserved = vec![];
+                    let consumed =
+                        dispatch_macos_local_key(active, command_only, code, |command| {
+                            reserved.push(command);
+                            parent.focus.view_visible = false;
+                        });
+
+                    // A saved native selector may arrive after Hide/Quit. Exercise
+                    // the actual parent policy rather than a second key dispatcher.
+                    let saved_command = "noop:";
+                    descendant_command_policy::do_command(&mut parent, &saved_command);
+                    assert_eq!(reserved.len(), usize::from(consumed));
+                    assert_eq!(parent.forwarded.len(), usize::from(active && !consumed));
+                    if let Some(forwarded) = parent.forwarded.first() {
+                        assert_eq!(*forwarded, &saved_command as *const _);
+                    }
+
+                    parent.focus.owns_focused_descendant = false;
+                    let count = parent.forwarded.len();
+                    descendant_command_policy::do_command(&mut parent, &saved_command);
+                    assert_eq!(parent.forwarded.len(), count);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn web_acceptance_and_native_command_propagation_are_separate_production_boundaries() {
+        use super::child_key_equivalent_policy::{self, ChildFocus, KeyEquivalent};
+        use super::descendant_command_policy::{self, CommandResponder, DescendantFocus};
+
+        struct NativePath {
+            current: bool,
+            accepted_events: usize,
+            forwarded_commands: usize,
+        }
+
+        impl KeyEquivalent for NativePath {
+            type Event = (u16, u64);
+
+            fn is_child(&self) -> bool {
+                true
+            }
+
+            fn child_focus(&self) -> ChildFocus {
+                ChildFocus {
+                    attached_to_window: true,
+                    window_visible: true,
+                    window_is_key: true,
+                    view_visible: true,
+                    owns_first_responder: self.current,
+                }
+            }
+
+            fn perform_super(&mut self, _event: &Self::Event) -> bool {
+                self.accepted_events += 1;
+                true
+            }
+        }
+
+        impl CommandResponder for NativePath {
+            type Command = &'static str;
+
+            fn descendant_focus(&self) -> DescendantFocus {
+                DescendantFocus {
+                    attached_to_window: true,
+                    window_visible: true,
+                    window_is_key: true,
+                    view_visible: true,
+                    owns_focused_descendant: self.current,
+                }
+            }
+
+            fn perform_super(&mut self, _command: &Self::Command) {
+                self.forwarded_commands += 1;
+            }
+        }
+
+        let mut path = NativePath {
+            current: true,
+            accepted_events: 0,
+            forwarded_commands: 0,
+        };
+        let event = (0, 1 << 20);
+        assert!(child_key_equivalent_policy::perform(&mut path, &event));
+        assert_eq!(path.accepted_events, 1);
+        // Synchronous WebKit acceptance does not run a parent command. This
+        // models the pending interval, not WebKit's private completion protocol.
+        assert_eq!(path.forwarded_commands, 0);
+
+        // Only a later native responder callback offers its original selector.
+        descendant_command_policy::do_command(&mut path, &"noop:");
+        assert_eq!(path.forwarded_commands, 1);
+        path.current = false;
+        descendant_command_policy::do_command(&mut path, &"noop:");
+        assert_eq!(path.forwarded_commands, 1);
+        assert!(!child_key_equivalent_policy::perform(&mut path, &event));
+        assert_eq!(path.accepted_events, 1);
+
+        // Restoring focus does not replay the earlier command; a new callback
+        // is needed. No queue or retained target exists in either policy.
+        path.current = true;
+        assert_eq!(path.forwarded_commands, 1);
+        descendant_command_policy::do_command(&mut path, &"customCommand:");
+        assert_eq!(path.forwarded_commands, 2);
     }
 
     #[test]

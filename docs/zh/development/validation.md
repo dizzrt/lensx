@@ -72,9 +72,10 @@ surface 状态、排队更新、回滚和 Host/Child 窗口生命周期。该 Ga
 之前构建公共 Contract。缺少的 package 构建输出会被准备，不使用源码 alias，也不重建
 根 `node_modules`。
 
-依赖 Gate 使用 `rustc --test` 编译并运行私有 Tao resizable 和文件拖放策略，以两空格
-格式检查所有受审 Tao Rust 文件，并在 macOS 上严格编译 Tao。Resizable 测试使用
-不与 AppKit 交互的假 responder，验证状态及调用边界，不证明真实输入法候选框行为。
+依赖 Gate 使用 `rustc --test` 编译并运行私有 Tao resizable、文件拖放和命令 responder
+策略，以两空格格式检查所有受审 Tao Rust 文件，并在 macOS 上严格编译 Tao。Fake
+adapter 不与 AppKit 交互，只验证状态、归属和调用边界，不证明真实输入法候选框行为
+或实际编辑交付。
 聚焦 Gate 成功仍需辅以完整 lifecycle 和 CI 验证。
 
 该 Gate 只读已审阅的 vendored 完整性基线。来源更新需先审阅，再显式执行 Generate：
@@ -104,9 +105,9 @@ cargo rustc --locked --manifest-path src-tauri/Cargo.toml -p tao --lib -- -D war
 Gate 失败。普通 Cargo check/build 仍覆盖完整应用依赖图。非 macOS 宿主无法完成其必需
 的 Darwin 步骤；可移植策略测试和 vendor 格式检查不证明 Windows、Linux 或 BSD 编译。
 
-两个生产策略模块都在忽略的构建目录中编译、运行，并在成功和失败时清理输出。格式检查
-覆盖所有受审 Tao Rust 文件，包括已有 resizable 策略和文件拖放 helper；仅运行应用
-workspace 格式检查无法覆盖此 vendored crate。Gate 永不更新基线；先审阅源码 diff，
+三个生产策略模块都在忽略的构建目录中编译、运行，并在成功和失败时清理输出。格式检查
+覆盖所有受审 Tao Rust 文件，包括 `resizable.rs`、`file_drop.rs`、`responder.rs` 和
+`view.rs` 原生 adapter；仅运行应用 workspace 格式检查无法覆盖此 vendored crate。Gate 永不更新基线；先审阅源码 diff，
 再显式执行上文的 Generate 命令，无需新增根脚本。
 
 Tao 保持固定为 `0.35.3`。诊断维护删除未使用的 macOS 实现残留和旧别名，同时保留
@@ -128,24 +129,50 @@ macOS 编译补充策略测试；仓库不维护原生交互验证入口。
 
 ## Vendored Wry 编辑快捷键验证
 
-同一个 `frame-aware-navigation-dependency-drift` Gate 通过私有 Wry policy runner，
-使用 `rustc --test` 编译并运行 `key_equivalent.rs`。成功、编译失败、测试失败、
-启动失败或信号结束后，均清理唯一的忽略输出目录并保留无关输出。Gate 使用稳定的
-两空格 rustfmt 配置显式检查 Wry class 模块、原生 adapter 与策略；应用 Cargo
-formatter 不负责 vendor 格式。两步均不写完整性基线，不增加根脚本、权限、依赖
-升级或环境验证入口。
+同一个 `frame-aware-navigation-dependency-drift` Gate 通过各自私有 runner 编译并运行
+生产 Wry `key_equivalent.rs` 与 Tao `responder.rs` 策略。成功、编译或测试失败、启动
+失败、信号结束后，均清理唯一的忽略输出目录。Gate 使用两空格 rustfmt 检查受审 Tao
+文件以及 Wry class 模块、原生 adapter 和策略。应用 Cargo formatter 不负责 vendor
+格式。这些步骤不写完整性基线，不增加根脚本、权限、依赖升级或环境验证入口。
 
-Fake adapter 验证原事件身份与修饰键、最多一次 superclass 委托、已处理／未处理
-结果、非 Child 行为，以及 attachment、可见性、key-window 状态和原生
-first-responder 归属下的 Child 资格。Host Cargo 测试将生产本地 `Cmd+W/Q` monitor
-与同一 Child 策略组合，并保留晚到事件与生命周期回归。Rstest 检查实际原生接线、
-公开边界、runner cleanup 和只读 registry metadata。Cargo check/build 编译真实
-Objective-C adapter；fake 结果不被宣称为真实键盘交互。
+Wry fake adapter 覆盖原事件身份和修饰键、每次原生回调一次 superclass 调用、两类
+同步返回值、非 Child 委托，以及 attachment、可见性、key-window 和 first-responder
+归属 guard。同步 BOOL 可能表示 Web 处理仍 pending，测试不会将其当作最终消费结果。
+Tao fake adapter 调用真实生产策略，验证原 selector 传播、所有焦点 guard、连续焦点
+变化，以及 Tao 自身 raw-input 焦点行为保留。Host Cargo 测试覆盖前台 W/Q monitor
+和原生生命周期组合。Rstest 检查 Objective-C 接线、公开边界、runner cleanup 和只读
+registry metadata；Cargo check/build 编译真实 adapter。
+
+`launcher-input-focus` Gate 在既有 Rstest step 中包含
+`tests/launcher-input-focus-ui.test.tsx` 与 `tests/ordinary-plugin-editing-ui.test.ts`，
+两者仍属于根 `tests/**/*.test.{ts,tsx}` discovery。外部 fixture 仅包含测试自有的
+`input`、`textarea` 和 `contenteditable` 控件，不安装到产品 Host，也不要求 SDK 或
+Manifest 改动。可取消的 DOM 事件进入真实 handler 后，显式纯文本默认原语再建模
+选择、剪贴板数据、编辑和历史。用例覆盖取消、只读／禁用和空状态、组合输入、焦点变化，
+以及英文／中文与明／暗主题，不替代原生焦点或 Child generation 策略测试。
+
+ConfigLens 测试使用真实 Monaco 正文 clipboard handler 和独立预置的 `DataTransfer`
+输入，检查选区输出、内容、callback 及 Undo/Redo。Find 仍使用真实查询控件；Happy DOM
+缺失的文本默认动作和历史被显式建模，其撤销归属与正文分开检查。这些用例通过既有
+plugin/workspace lifecycle 和 `ci-plugins` 运行，不增加根 alias。编辑器特有覆盖见
+[ConfigLens 指南](config-lens.md)。
+
+| 证据 | 能证明 | 不能证明 |
+| --- | --- | --- |
+| 生产 Rust 策略与 Host 组合 | 原生归属 guard、原事件／selector、调用次数、保留命令和 raw-input 行为保留 | 真实 AppKit 回调顺序或 WebKit 完成 |
+| 原生接线与 Cargo 检查／构建 | 生产 adapter 与固定依赖路径一起编译 | OS 编辑成功或系统剪贴板交付 |
+| Host／外部 Rstest 与 Monaco handler 测试 | 真实 handler 配合已声明 DOM 默认模型，验证剪贴板数据、选区／内容变化、焦点与撤销归属 | 浏览器原生默认行为、真实系统剪贴板访问或全部平台场景 |
+| 临时 macOS 调查与用户反馈 | 实际构建中的未处理命令传播、WebKit 回流、既有菜单 action 单次执行，以及移除调试器后用户报告的快捷键恢复 | 完整按键／控件矩阵、全部输入法或其他平台 |
+
+修正只恢复 Tao 命令传播，不增加菜单派发、`keyDown` 回退、pending 状态、队列、
+保留目标或 WebKit 完成 hook。最终 Web 取消行为和合法回流仍由 WebKit 所有。
+运行观察与确定性结果须分别记录；临时调查不是维护中的命令、Gate、GUI harness 或 CI 步骤。
 
 使用既有 `plugin-child-webview-runtime`、`plugin-child-webview-window-lifecycle`、
-`launcher-input-focus` 和 `frame-aware-webview-navigation-policy` Gate 执行对应
-生命周期与路由回归。先对照相同 Wry `0.55.1` release 审阅源码，再显式执行上文
-基线 Generate 命令。Host 原生交付与插件编辑代码各自承担发布责任。
+`launcher-input-focus` 和 `frame-aware-webview-navigation-policy` Gate 执行生命周期
+与路由回归。显式生成基线前，应对照固定的同版本 release（`tao 0.35.3`、`wry 0.55.1`）
+审阅实际变动的 vendor 源码。Host 原生交付和插件业务命令各自承担发布责任；既有合规
+外部插件无需重打包或增加剪贴板权限即可获得 Host 修正。
 
 ## 前端验证
 

@@ -394,3 +394,27 @@ Highlighting MUST handle incomplete input during editing and MUST NOT determine 
 - **WHEN** manual selection changes JSON to TOML or detection establishes another language, followed by a theme change
 - **THEN** the same model receives the new language and theme coloring without content or undo-history changes
 - **THEN** an older asynchronous language load cannot overwrite the current selection
+
+### Requirement: ConfigLens MUST support word selection in the focused editor body
+
+On macOS, when the ConfigLens editor body has text focus, `Option+Shift+Left` and `Option+Shift+Right` MUST extend the selection left or right according to the editor's existing word boundaries. Repeated and reverse operations MUST preserve a valid selection anchor and extend or shrink the range under the editor's normal rules. Selection MUST NOT change content, trigger formatting, emit content-change notifications, or clear or discard existing undo/redo history. Word selection MUST retain the editor's existing undo-grouping semantics, including ending the current typing group during navigation; selection itself is not a content edit.
+
+This behavior MUST remain consistent across English and Simplified Chinese interfaces and light and dark themes, while preserving normal selection behavior for empty documents, document boundaries, and read-only content. When Find, another input, or the Host owns focus, the body MUST NOT intercept the combination, change its own selection, or reclaim focus. The capability MUST use the plugin's ordinary editor facilities without new Host permissions, global shortcuts, or plugin-specific native patches.
+
+#### Scenario: Extend selection in either word direction
+
+- **WHEN** a macOS user presses Option+Shift+Left or Option+Shift+Right at a word boundary in the editor body
+- **THEN** the range follows the editor's word boundaries in that direction, and repeated or reverse operations correctly extend or shrink it while preserving the anchor
+- **THEN** content and content-change notifications remain unchanged, existing undo/redo remains available, and typing before and after selection follows the editor's normal grouping boundaries
+
+#### Scenario: Empty boundaries and read-only content remain safe
+
+- **WHEN** the document is empty, the cursor has reached a document boundary, or the body is read-only
+- **THEN** word selection retains valid editor ranges and read-only selection capability without content changes or errors
+- **THEN** the same selection contract applies in English and Simplified Chinese interfaces and light and dark themes
+
+#### Scenario: Non-body focus retains its selection ownership
+
+- **WHEN** the Find query or another input has focus and the user invokes the combination
+- **THEN** the ConfigLens body selection and content remain unchanged, and the current input retains focus
+- **THEN** returning text focus to the body permits normal word selection without creating another global handler

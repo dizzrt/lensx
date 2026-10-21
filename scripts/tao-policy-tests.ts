@@ -24,7 +24,7 @@ export const runTaoPolicyTests = ({
   mkdirSync(targetDir, { recursive: true });
   const outputDir = mkdtempSync(join(targetDir, 'tao-policy-tests-'));
   try {
-    for (const policy of ['resizable', 'file_drop']) {
+    for (const policy of ['resizable', 'file_drop', 'responder']) {
       const source = join(
         rootDir,
         'vendor',

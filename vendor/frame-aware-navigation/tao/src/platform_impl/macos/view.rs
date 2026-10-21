@@ -40,6 +40,7 @@ use crate::{
     app_state::AppState,
     event::{code_to_key, create_key_event, event_mods, get_scancode, EventWrapper},
     ffi::*,
+    responder::{self, CommandResponder, DescendantFocus},
     util::{self},
     window::get_window_id,
     DEVICE_ID,
@@ -554,45 +555,54 @@ extern "C" fn insert_text(
   trace!("Completed `insertText`");
 }
 
-extern "C" fn do_command_by_selector(_this: &Object, _sel: Sel, _command: Sel) {
+extern "C" fn do_command_by_selector(this: &Object, _sel: Sel, command: Sel) {
   trace!("Triggered `doCommandBySelector`");
-  // TODO: (Artur) all these inputs seem to trigger a key event with the correct text
-  // content so this is not needed anymore, it seems.
-
-  // Basically, we're sent this message whenever a keyboard event that doesn't generate a "human readable" character
-  // happens, i.e. newlines, tabs, and Ctrl+C.
-
-  // unsafe {
-  //     let state_ptr: *mut c_void = *this.get_ivar("taoState");
-  //     let state = &mut *(state_ptr as *mut ViewState);
-
-  //     let mut events = VecDeque::with_capacity(1);
-  //     if command == sel!(insertNewline:) {
-  //         // The `else` condition would emit the same character, but I'm keeping this here both...
-  //         // 1) as a reminder for how `doCommandBySelector` works
-  //         // 2) to make our use of carriage return explicit
-  //         events.push_back(EventWrapper::StaticEvent(Event::WindowEvent {
-  //             window_id: WindowId(get_window_id(&state.ns_window.load().unwrap())),
-  //             event: WindowEvent::ReceivedCharacter('\r'),
-  //         }));
-  //     } else {
-  //         let raw_characters = state.raw_characters.take();
-  //         if let Some(raw_characters) = raw_characters {
-  //             for character in raw_characters
-  //                 .chars()
-  //                 .filter(|c| !is_corporate_character(*c))
-  //             {
-  //                 events.push_back(EventWrapper::StaticEvent(Event::WindowEvent {
-  //                     window_id: WindowId(get_window_id(&state.ns_window.load().unwrap())),
-  //                     event: WindowEvent::ReceivedCharacter(character),
-  //                 }));
-  //             }
-  //         }
-  //     };
-  //     AppState::queue_events(events);
-  // }
-
+  responder::do_command(&mut NativeCommandResponder(this), &command);
   trace!("Completed `doCommandBySelector`");
+}
+
+// A focused child must keep the normal responder chain intact. Tao's own
+// raw-input focus still consumes commands through its existing keyDown path.
+struct NativeCommandResponder<'a>(&'a Object);
+
+impl CommandResponder for NativeCommandResponder<'_> {
+  type Command = Sel;
+
+  fn descendant_focus(&self) -> DescendantFocus {
+    let Some(parent) = self.0.downcast_ref::<NSView>() else {
+      return DescendantFocus::default();
+    };
+    unsafe {
+      let Some(window) = parent.window() else {
+        return DescendantFocus::default();
+      };
+      let owns_focused_descendant = window.firstResponder().is_some_and(|responder| {
+        responder.downcast_ref::<NSView>().is_some_and(|view| {
+          !std::ptr::eq(view, parent)
+            && view
+              .window()
+              .is_some_and(|owner| std::ptr::eq(&*owner, &*window))
+            && !view.isHiddenOrHasHiddenAncestor()
+            && view.isDescendantOf(parent)
+        })
+      });
+      DescendantFocus {
+        attached_to_window: true,
+        window_visible: window.isVisible(),
+        window_is_key: window.isKeyWindow(),
+        view_visible: !parent.isHiddenOrHasHiddenAncestor(),
+        owns_focused_descendant,
+      }
+    }
+  }
+
+  fn perform_super(&mut self, command: &Sel) {
+    let this = self.0;
+    unsafe {
+      let superclass = util::superclass(this);
+      let () = msg_send![super(this, superclass), doCommandBySelector: *command];
+    }
+  }
 }
 
 // Get characters

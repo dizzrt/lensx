@@ -15,7 +15,7 @@ const withFixture = (run: (rootDir: string) => void): void => {
 };
 
 describe('vendored Tao policy runner', () => {
-  test('runs both production modules in unique ignored directories and preserves unrelated output', () => {
+  test('runs all production modules in unique ignored directories and preserves unrelated output', () => {
     withFixture((rootDir) => {
       const targetDir = join(rootDir, 'src-tauri', 'target');
       mkdirSync(targetDir, { recursive: true });
@@ -47,9 +47,17 @@ describe('vendored Tao policy runner', () => {
           },
         });
         const sourceDir = join(rootDir, 'vendor', 'frame-aware-navigation', 'tao', 'src', 'platform_impl', 'macos');
-        expect(sources).toEqual([join(sourceDir, 'resizable.rs'), join(sourceDir, 'file_drop.rs')]);
+        expect(sources).toEqual([
+          join(sourceDir, 'resizable.rs'),
+          join(sourceDir, 'file_drop.rs'),
+          join(sourceDir, 'responder.rs'),
+        ]);
         const suffix = process.platform === 'win32' ? '.exe' : '';
-        expect(executions).toEqual([`resizable-tests${suffix}`, `file_drop-tests${suffix}`]);
+        expect(executions).toEqual([
+          `resizable-tests${suffix}`,
+          `file_drop-tests${suffix}`,
+          `responder-tests${suffix}`,
+        ]);
         expect(readdirSync(targetDir)).toEqual(['existing-output']);
       }
       expect(outputDirs.size).toBe(2);
@@ -126,11 +134,11 @@ describe('vendored Tao policy runner', () => {
         rootDir,
         runCommand: (executable) => {
           if (executable === 'rustc') compilations += 1;
-          else if (compilations === 2) rmSync(dirname(executable), { recursive: true, force: true });
+          else if (compilations === 3) rmSync(dirname(executable), { recursive: true, force: true });
           return { status: 0 };
         },
       });
-      expect(compilations).toBe(2);
+      expect(compilations).toBe(3);
       expect(readdirSync(join(rootDir, 'src-tauri', 'target'))).toEqual([]);
     });
   });

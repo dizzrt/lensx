@@ -128,12 +128,34 @@ query only. No document-wide selection handler takes focus from the language
 Select, Host inputs, or another native view. The
 [shared Child Runtime](../architecture/plugin-child-webview-runtime.md#native-editing-shortcuts)
 owns native macOS delivery; that fix ships with the Host and is independent of
-the plugin update.
+the plugin update. The shared native parent now preserves normal responder
+command propagation for the valid focused descendant, covering Host input and
+ordinary or Monaco-based Child documents. Existing compliant external plugins
+need no source change, repackaging, SDK update, or added clipboard permission to
+use the corrected Host. ConfigLens still owns Find and formatting commands;
+the Host does not implement those business operations on its behalf.
+
+On macOS, `Option+Shift+Left` and `Option+Shift+Right` extend the focused
+editor body's selection using Monaco's default word boundaries. Repeating or
+reversing direction extends or shrinks the range while preserving its selection
+anchor. Empty documents, document boundaries, and read-only content retain
+ordinary selection behavior. Selection creates no content edit or content-change
+notification and does not clear or discard existing undo/redo entries. It follows
+Monaco's grouping boundaries and may close the current typing group. When Find,
+another input, or the Host owns focus, the body does not handle the gesture, change its selection,
+or reclaim focus. Find's ordinary textarea word-selection defaults are outside
+this correction.
+
+ConfigLens loads Monaco's official `wordOperations` contribution through the
+existing initialization chain after document NLS is ready and before the first
+editor is created. Delivery requires an updated ConfigLens build. The shared
+Host native boundary remains unchanged, with no custom keybinding table,
+global handler, SDK or Manifest migration, or added permission.
 
 The first valid Runtime Context fixes the document's Monaco interface language.
-Package-owned NLS is initialized before the Monaco API, Find, context menu, and
-diagnostic contributions are first imported, using one shared loader for
-bootstrap preloading and editor initialization. English and Simplified Chinese
+Package-owned NLS is initialized before the Monaco API, Find, word operations,
+context menu, and diagnostic contributions are first imported, using one shared
+loader for bootstrap preloading and editor initialization. English and Simplified Chinese
 are supported. A later application locale change updates ConfigLens controls
 and the diagnostic messages supplied by ConfigLens immediately. Monaco's native
 Find, menu, and diagnostic-interaction framework text retains the opening
@@ -225,6 +247,38 @@ the initial graph free of heavy modules and extra language services. These are
 validation responsibilities, not a substitute for the actual command results.
 The checks do not sample target-environment latency, launch a browser or real
 WebView, or maintain rendering output.
+
+The editing cases mount the actual Monaco editor in both locales and themes.
+Body copy/cut/paste events reach Monaco's real listeners with test
+`DataTransfer` objects; paste data is independent of `localClipboard` memory.
+Assertions cover selected output, deletion/insertion, caret position,
+`onInput` counts, and the editor's actual keyboard Undo/Redo commands. Empty
+selection retains Monaco's configured whole-line clipboard behavior. Find
+query edits remain separate from the body's model and undo history.
+
+Word-selection cases send keyboard events through the actual Monaco commands
+loaded by production initialization. They assert range, anchor, selected text,
+repeated expansion and reverse contraction, empty/boundary/read-only behavior,
+and non-body focus isolation in both locales and themes, while checking that
+selection creates no content edit or `onInput` notification and preserves existing
+undo/redo entries. A typing → word selection → typing sequence checks Monaco's
+group boundary through actual Undo/Redo. The built-module inventory also checks
+that `wordOperations` remains in the delayed editor graph. These
+deterministic checks do not launch a GUI or establish operating-system delivery
+of the Option+Shift gesture.
+
+Find is an ordinary textarea: Happy DOM's missing clipboard defaults and
+`document.execCommand` selection/history primitives are explicitly modeled for
+that input. The tests still use the actual Find widget, focus transitions,
+command selection, and query handlers. Across the body and query cases,
+coverage includes cancellation, read-only or disabled targets, empty
+clipboard/history, composition recovery, and return of focus through Escape.
+Host and ordinary external-control tests use the same
+explicit distinction between handlers and modeled browser primitives. No
+synthetic `ClipboardEvent`, modeled history, or passing DOM assertion proves
+AppKit delivery or a cross-application system clipboard round trip. Runtime
+recovery reports are recorded separately and do not establish every platform,
+key combination, or target-environment latency.
 
 Run:
 

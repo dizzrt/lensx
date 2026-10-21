@@ -742,3 +742,78 @@ continue to follow the existing recoverable-hide contract.
   Child WebView through the existing unified boundary
 - **THEN** configuration focus preservation neither disables focus-loss hiding
   nor polls to reclaim foreground focus
+
+### Requirement: Accessory Launcher MUST deliver standard editing commands through the current native focus
+
+On macOS, the foreground lensX Accessory Launcher MUST use a native editing dispatch boundary shared by the Host and Child to let the current valid text focus handle Select All, Copy, Cut, Paste, Undo, and Redo according to the target control and native editing-command semantics. This behavior MUST cover Host search and other ordinary inputs, external-plugin `input`/`textarea`/`contenteditable` controls, and the Monaco body and Find input. User-initiated copy and paste MUST exchange text with other applications rather than only round-tripping through a plugin's private memory. Plugin business commands remain defined by their owning Page.
+
+Dispatch MUST preserve the original event, modifiers, current native focus, and single-execution semantics. When the Web document has handled the event or cancelled its default behavior under its input rules, the Host MUST NOT execute the corresponding standard editing command again. When handling is finally confirmed as unhandled, dispatch MUST continue native-menu and current-responder-chain semantics, execute an available command at most once, and continue propagating events that remain unhandled. The repair layer MUST NOT additionally synthesize or resend the same keyboard event, recursively invoke the editing chain, or unconditionally perform another DOM edit. WebKit's legal completion and unhandled-event reentry MUST be preserved and MUST NOT be treated as a new user gesture.
+
+While asynchronous handling is incomplete, the Host MUST preserve the native completion and reentry protocol. It MUST NOT interpret the synchronous native takeover result as final handling or confirmed non-handling, and MUST NOT unconditionally execute a menu command immediately after invoking the superclass. If the repair introduces delayed compensation, that compensation MUST be associated with the original gesture's initial Window, text target, and applicable Child generation, and MUST revalidate those identities and native focus before executing. A focus change, invalid target, or generation change during the wait MUST cancel that event's compensation rather than read a new first responder and redirect the old event to a new target. WebKit's own legal reentry MUST retain its existing mechanism.
+
+At dispatch time, the target MUST still belong to the current valid Window/WebView. A hidden, unfocused, removed, replaced, or unverifiable target MUST NOT consume the event, steal focus, reveal itself, or affect another input target. Read-only, disabled, empty-selection, empty-clipboard, and empty-undo states MUST retain the corresponding control and native-command semantics. The dispatch layer MUST NOT forcibly change content, clear the clipboard, or fabricate successful editing. Normal editing MUST resume when valid focus and input conditions are restored.
+
+`Cmd+A/C/X/V/Z` and `Cmd+Shift+Z` MUST be standard-editing acceptance samples rather than a production key-code allowlist. The Host MUST NOT select patches by plugin identity, Publisher, page index, DOM structure/selector, or editor type, and MUST NOT require existing compliant plugins to modify lensX source, update the SDK, or add platform adapters. The repair MUST NOT inject scripts, call `eval`, generate synthetic keyboard events, or add a programmatic Host clipboard API, plugin permission, generic Tauri capability, native handle, or global editing shortcut.
+
+The system MUST preserve Accessory policy, the absence of a Dock tile and ordinary visible application menu bar, the default global activation shortcut, and the existing Window lifecycle. `Cmd+W/Q` MUST continue to execute recoverable Hide and complete Quit respectively once, only within foreground lensX. When another application is foreground, lensX MUST NOT intercept that application's editing, close, or quit commands. Repairing the standard editing chain MUST NOT change unrelated non-editing behavior.
+
+#### Scenario: Edit text in the Host without a visible application menu bar
+
+- **WHEN** lensX is foreground, Host search or another ordinary input owns valid native focus, and the user invokes a standard editing shortcut
+- **THEN** Select All, Copy, Cut, Paste, Undo, and Redo affect the current selection, text, and undo history according to that input's existing semantics
+- **THEN** each gesture performs at most one edit, focus is preserved, and the application still has no Dock tile or ordinary visible menu bar
+
+#### Scenario: The same command follows the focused Child input
+
+- **WHEN** the current visible plugin's `input`, `textarea`, `contenteditable`, Monaco body, or Find input obtains native focus and receives a standard editing shortcut
+- **THEN** the command affects only the current text target; editing a Find query does not select or change the Monaco body, and Child editing does not affect Host search
+- **THEN** official, external, and Development Mode plugins share the same dispatch semantics without plugin-specific Host mappings or SDK changes
+
+#### Scenario: Copy and paste exchange text with another application
+
+- **WHEN** the user copies a copyable selection from the current valid text target and pastes it in another application, or copies text from another application and returns to a valid editable lensX target to paste
+- **THEN** native text-clipboard semantics deliver the user-selected text, inserting it once per paste
+- **THEN** a plugin-internal cache round trip does not replace this behavior, and the plugin gains no background clipboard-reading capability
+
+#### Scenario: Web content already handled or cancelled the event
+
+- **WHEN** the current Web document has handled the keyboard event or cancelled its default behavior under its editing rules
+- **THEN** the Host respects that result without additionally invoking the corresponding editing command, duplicating copy/paste, or changing undo history again
+- **THEN** the Page's existing business shortcuts, input, and composition semantics remain valid
+
+#### Scenario: An unhandled event continues through native editing semantics
+
+- **WHEN** the current target is confirmed not to have handled the event and the native menu and current responder chain provide an applicable standard editing command
+- **THEN** that command executes at most once and retains its actual handling result, without the repair layer additionally synthesizing or resending the same keyboard event
+- **THEN** when no handler is available or the command cannot handle the event, native propagation continues without marking it as a successful edit
+
+#### Scenario: Pending native handling completes without duplicate editing
+
+- **WHEN** the native WebView takes over an event while Web handling remains pending and later provides a result through legal completion or unhandled-event reentry
+- **THEN** the synchronous takeover result does not trigger early menu execution, and legal reentry is not treated as a new user gesture
+- **THEN** final handling or default cancellation does not edit again; only finally confirmed non-handling continues through the native menu and responder chain
+- **THEN** any repair-owned delayed compensation is bound to the original Window/target/Child generation and cancelled after a focus or generation change, without editing an old target, restoring old focus, or redirecting the old operation to a new target
+
+#### Scenario: Read-only disabled or empty editing state retains native semantics
+
+- **WHEN** the target is read-only or disabled, the selection or clipboard is empty, or no undo/redo content exists
+- **THEN** the current control and native command determine available operations and results; dispatch does not forcibly change text or clear the clipboard
+- **THEN** normal editing can continue after the user restores a valid selection, editable content, or available undo history
+
+#### Scenario: Focus changes or the previous target becomes invalid
+
+- **WHEN** focus moves from Host to Child or body to query, or the previous target is hidden, removed, replaced, or leaves the current Window
+- **THEN** subsequent commands use only the still-valid current native target, without retaining the old target or forcibly returning focus
+- **THEN** no valid target means no edit, hidden-window reveal, or invalidated-Page restoration
+
+#### Scenario: Reserved and background application commands retain their ownership
+
+- **WHEN** the user presses `Cmd+W/Q` while lensX is foreground, or uses editing, close, and quit shortcuts in another foreground application
+- **THEN** the former retain single Hide/Quit execution and the corresponding cleanup, while lensX does not consume the latter
+- **THEN** the default global activation shortcut, recovery entry point, and other non-editing Window behavior retain their existing contracts
+
+#### Scenario: Standard command coverage does not become a per-key or per-plugin patch
+
+- **WHEN** acceptance uses `Cmd+A/C/X/V/Z` and `Cmd+Shift+Z` samples across different native text targets
+- **THEN** commands follow unified native editing semantics without production key-code allowlists, plugin identity, page-index, or DOM branches that redispatch them
+- **THEN** compliant external plugins obtain this behavior through ordinary controls and the public Runtime, without new permissions, Host APIs, or script injection

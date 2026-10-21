@@ -2,6 +2,7 @@ import 'monaco-editor/editor/contrib/find/browser/findController.js';
 import 'monaco-editor/editor/contrib/contextmenu/browser/contextmenu.js';
 import 'monaco-editor/editor/contrib/hover/browser/hoverContribution.js';
 import 'monaco-editor/editor/contrib/gotoError/browser/gotoError.js';
+import 'monaco-editor/editor/contrib/wordOperations/browser/wordOperations.js';
 import type { editor, IDisposable } from 'monaco-editor';
 import { localize } from 'monaco-editor/nls.js';
 

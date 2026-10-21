@@ -3,6 +3,7 @@ import { act, fireEvent, render, waitFor, within } from '@testing-library/react'
 import { messagesFor } from '../src/catalog.js';
 import { MonacoSurface, replaceEditorContent } from '../src/editor/MonacoSurface.js';
 import { disposeMonacoWorkers, loadMonaco, waitForEditorWorkerReady } from '../src/editor/monaco.js';
+import { registerNativeEditingCases } from './monaco-editing-cases.js';
 import {
   bodyInput,
   EditorWorkerDouble,
@@ -12,6 +13,7 @@ import {
   queryInput,
   releaseWorkers,
 } from './monaco-fixture.js';
+import { registerWordSelectionCases } from './monaco-word-selection-cases.js';
 
 beforeEach(installWorkerDouble);
 afterEach(releaseWorkers);
@@ -311,3 +313,6 @@ test('pending initialization accepts only the latest props and ignores teardown 
   await readiness;
   expect(ready).toBe(true);
 });
+
+registerNativeEditingCases('en-US');
+registerWordSelectionCases('en-US');

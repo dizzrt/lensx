@@ -301,8 +301,10 @@ const taoRustFiles = [
   'src/platform_impl/macos/mod.rs',
   'src/platform_impl/macos/monitor.rs',
   'src/platform_impl/macos/resizable.rs',
+  'src/platform_impl/macos/responder.rs',
   'src/platform_impl/macos/util/async.rs',
   'src/platform_impl/macos/util/mod.rs',
+  'src/platform_impl/macos/view.rs',
   'src/platform_impl/macos/window.rs',
   'src/platform_impl/macos/window_delegate.rs',
   'src/window.rs',
@@ -345,7 +347,7 @@ gatesById.set('launcher-input-focus', {
   dependsOn: ['frame-aware-navigation-dependency-drift', 'plugin-child-webview-window-lifecycle'],
   steps: [
     internStep(
-      'pnpm exec rstest run tests/launcher-input-focus-ui.test.tsx tests/launcher-action-search-ui.test.tsx tests/launcher-surface-desktop-adapter.test.ts tests/index.test.tsx tests/frame-aware-navigation-dependency-drift.test.ts tests/validation-registry.test.ts tests/validation-governance.test.ts',
+      'pnpm exec rstest run tests/launcher-input-focus-ui.test.tsx tests/ordinary-plugin-editing-ui.test.ts tests/launcher-action-search-ui.test.tsx tests/launcher-surface-desktop-adapter.test.ts tests/index.test.tsx tests/frame-aware-navigation-dependency-drift.test.ts tests/validation-registry.test.ts tests/validation-governance.test.ts',
     ),
     internStep('cargo test --manifest-path src-tauri/Cargo.toml launcher_surface'),
     internStep('cargo test --manifest-path src-tauri/Cargo.toml launcher_window'),

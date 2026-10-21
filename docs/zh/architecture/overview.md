@@ -171,14 +171,22 @@ Rust 通过单一动作边界拥有全部 launcher 原生窗口操作：
 `hide` action 与 `install_menu` 操作阶段且不会终止进程，已经注册的恢复快捷键和原生生命周期 listener
 仍然可用。
 
-Accessory 模式保留隐藏的应用菜单 command graph，因此即使没有可见菜单栏，本地 key equivalent 仍然
-有效。恰好一个 application-local `Cmd+W` 自定义命令复用统一 Hide action，恰好一个
+Accessory 模式保留应用菜单 command graph，但不显示菜单栏。恰好一个 application-local `Cmd+W` 自定义命令复用统一 Hide action，恰好一个
 application-local `Cmd+Q` 自定义命令请求现有应用退出路径；后者通过 `RunEvent::Exit` teardown
 终止 current Child WebView 与 Host 资源。两个路由都会确认 lensX 位于前台，并且都不会进入
 global-shortcut plugin。由于目标 Accessory runtime 不能可靠分发隐藏菜单 key equivalent，Host setup
-会安装一个幂等、仅前台生效的 AppKit local event monitor 作为回退；它会先消费匹配事件，避免菜单路由
+会为前台 `Cmd+W/Q` 安装一个幂等的 AppKit local event monitor；它只先消费这两个匹配事件，避免菜单路由
 重复处理，并在应用退出时释放。如果默认恢复快捷键未就绪，菜单图以及 close/focus-loss hide 路径都会保持
 禁用，避免 Accessory 进程进入无法恢复的隐藏状态。
+
+标准编辑使用共享原生 responder 路径。启用 Tauri `unstable` 后，Host `main` WebView
+和插件 WebView 都作为 `WindowChild` 创建。Wry 检查当前原生焦点并委托原事件，其同步
+BOOL 不代表最终 Web 处理结果。当同一可见 key window 中的可见原生后代持有焦点时，
+Tao 父视图将原 command selector 交给 NSView superclass。WebKit 随后可识别未处理命令
+并回到自身正常事件路由，使既有菜单单次执行标准编辑 action。adapter 不增加菜单调用、
+pending 队列、延迟目标、编辑按键表、插件例外或剪贴板权限。Tao 自身 raw-input 焦点与
+保留 W/Q monitor 各自维持既有职责。Web 取消行为、外部插件兼容性和证据边界见
+[原生编辑快捷键](plugin-child-webview-runtime.md#原生编辑快捷键)。
 
 普通 Space 恢复与在其他应用的全屏 Space 上方恢复使用同一 action 路径。Accessory policy、完整原生
 Window identity、collection behavior 或应用激活无法建立或确认时，系统会报告安全的 setup/action

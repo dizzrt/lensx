@@ -92,10 +92,25 @@ CSP 修改。
 编辑器内的 `Cmd/Ctrl+A` 和可见 Select All 上下文菜单选择整个 model。Find 输入框
 聚焦时，全选只作用于查询。没有 document 全局全选 handler 从语言 Select、Host
 输入或另一原生 view 抢焦点。[共享 Child Runtime](../architecture/plugin-child-webview-runtime.md#原生编辑快捷键)
-负责 macOS 原生交付；该修复随 Host 发布，独立于插件更新。
+负责 macOS 原生交付；该修复随 Host 发布，独立于插件更新。共享原生父视图现在为有效、
+持有焦点的后代保留正常响应链命令传播，覆盖 Host 输入及普通或 Monaco Child 文档。
+既有合规外部插件无需修改源码、重新打包、更新 SDK 或增加剪贴板权限，即可使用修正后的
+Host。Find、格式化命令仍由 ConfigLens 负责，Host 不替插件实现这些业务操作。
+
+在 macOS 上，`Option+Shift+Left` 和 `Option+Shift+Right` 按 Monaco 默认词边界
+扩展持有焦点的正文选区。重复操作或反向操作会扩展或收缩范围，同时保留选择锚点。
+空文档、文档边界和只读内容保留正常选择行为。选择不产生内容编辑或内容变更通知，
+也不清空或丢失既有撤销／重做记录；它遵循 Monaco 的分组边界，可以结束当前输入分组。
+焦点属于 Find、其他输入或 Host 时，正文不处理该手势、不改变自身选区，
+也不抢回焦点。Find 普通 textarea 的默认词选择不属于本次修正范围。
+
+ConfigLens 通过既有初始化链加载 Monaco 官方 `wordOperations` contribution；加载发生
+在 document NLS 就绪后、首次 editor 创建前。该修正随更新的 ConfigLens 构建交付。
+共享 Host 原生边界保持不变，不增加自定义快捷键表、全局 handler、SDK 或 Manifest 迁移，
+也不增加权限。
 
 首个有效 Runtime Context 固定该 document 的 Monaco 界面语言。包内 NLS 在首次
-导入 Monaco API、Find、上下文菜单和诊断 contributions 之前初始化；bootstrap
+导入 Monaco API、Find、词操作、上下文菜单和诊断 contributions 之前初始化；bootstrap
 预加载与编辑器初始化共用同一 loader，支持英文和简体中文。随后切换应用 locale，
 ConfigLens 控件和它提供的诊断消息即时更新。Monaco 原生 Find、菜单及诊断交互
 框架文案保留打开时的语言，直到真正关闭并重开 ConfigLens。重建 editor 或同一
@@ -168,6 +183,27 @@ Rust 与 lifecycle 测试覆盖共享原生快捷键策略、同 attempt hide/re
 四语言 tokenizer 位于延迟图，初始图仍排除重模块和额外语言服务。这些是验证责任，
 不能替代实际命令结果。检查不采样目标环境时延，不启动浏览器或真实 WebView，
 也不维护渲染输出。
+
+编辑用例在两种 locale 和主题下挂载实际 Monaco editor。正文 copy/cut/paste 事件携带
+测试 `DataTransfer` 到达 Monaco 的真实 listener；paste 数据独立于 `localClipboard`
+内存。断言覆盖选区输出、删除／插入、光标位置、`onInput` 次数以及编辑器实际的键盘
+Undo／Redo 命令。空选区保留 Monaco 配置的整行剪贴板行为。Find 查询编辑与正文 model
+及撤销历史保持分离。
+
+词选择用例通过生产初始化加载的实际 Monaco 命令处理键盘事件，在两种 locale 和主题下
+断言范围、锚点、选中文本、重复扩展与反向收缩、空／边界／只读行为及非正文焦点隔离，
+同时检查选择不产生内容编辑或 `onInput` 通知，并保留既有撤销／重做记录。
+输入 → 词选择 → 输入的序列通过实际 Undo／Redo 检查 Monaco 的分组边界。
+产物模块清单另外检查 `wordOperations` 仍位于延后加载的 editor 图中。
+这些确定性检查不启动 GUI，也不证明操作系统已实际
+交付 Option+Shift 手势。
+
+Find 是普通 textarea：测试为该输入明确建模 Happy DOM 缺失的剪贴板默认编辑，以及
+`document.execCommand` 选择／历史原语。Find widget、焦点切换、命令选择和查询 handler
+仍使用真实实现。正文与查询用例合计覆盖取消、只读或禁用目标、空剪贴板／历史、组合输入
+后的恢复，以及 Escape 返回焦点。Host 与普通外部控件测试同样明确区分 handler 和建模的浏览器原语。
+合成 `ClipboardEvent`、建模的历史或通过的 DOM 断言都不能证明 AppKit 交付或跨应用系统
+剪贴板往返。运行恢复反馈单独记录，不代表全部平台、组合键或目标环境时延均已验收。
 
 运行：
 

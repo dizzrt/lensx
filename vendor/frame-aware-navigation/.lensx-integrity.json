@@ -19,8 +19,10 @@
     "tao/src/platform_impl/macos/mod.rs",
     "tao/src/platform_impl/macos/monitor.rs",
     "tao/src/platform_impl/macos/resizable.rs",
+    "tao/src/platform_impl/macos/responder.rs",
     "tao/src/platform_impl/macos/util/async.rs",
     "tao/src/platform_impl/macos/util/mod.rs",
+    "tao/src/platform_impl/macos/view.rs",
     "tao/src/platform_impl/macos/window.rs",
     "tao/src/platform_impl/macos/window_delegate.rs",
     "tao/src/window.rs",
@@ -41,7 +43,7 @@
   "files": [
     {
       "path": "README.md",
-      "sha256": "69b7e2ec8b98e02d8cc881ec61caf05ef7a3ecb4e88290acd38dd3afe1a0dbc7"
+      "sha256": "d6f0a7c463d10a52ca0ea0fa80ce34e1fb97ddb94973268039dd1d40ca811fb9"
     },
     {
       "path": "tao/.cargo_vcs_info.json",
@@ -409,7 +411,7 @@
     },
     {
       "path": "tao/src/platform_impl/macos/mod.rs",
-      "sha256": "2ac9f3435103389de72d250d324a3b123b12869e319d9bc419d3d21c6f7a963b"
+      "sha256": "7f03e799283651e153a458a40f3feb1042c9305b4238218f73ffa7e0f7d5aa40"
     },
     {
       "path": "tao/src/platform_impl/macos/monitor.rs",
@@ -428,6 +430,10 @@
       "sha256": "31837d3d8843d8107053a65be76633e7ff484a431f75dc0ccd62e81de9b200ef"
     },
     {
+      "path": "tao/src/platform_impl/macos/responder.rs",
+      "sha256": "809ba77a28825fc463bc2685bf9ca3101bc6bfe5579e0f584e85bfc95a865e9b"
+    },
+    {
       "path": "tao/src/platform_impl/macos/util/async.rs",
       "sha256": "3baa1b188eb00a62906b3497c40fa659591e8c1b890c5a719888f720fd905e27"
     },
@@ -441,7 +447,7 @@
     },
     {
       "path": "tao/src/platform_impl/macos/view.rs",
-      "sha256": "16f2970ee510b863eb7521b7ae6964efb902a99453399560b8e610fae15993db"
+      "sha256": "5536c3536b77cdf1aeb184525602dfbd82c8dd60d015f41b2622967c04a69077"
     },
     {
       "path": "tao/src/platform_impl/macos/window.rs",

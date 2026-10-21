@@ -16,11 +16,21 @@ The patch also adds a per-WebView isolated IPC mode used only by the Host-privat
 
 The Tao patch protects macOS `set_resizable` at its main-thread execution point. It stores the desired internal state, defers style edits during native fullscreen, and skips unchanged masks. Necessary edits retain the actual first responder and restore it only if it changed and still belongs to the same window. Nil, removed, or unverifiable targets are left alone; restoration refusal produces a bounded developer warning. It never redirects this setter to the original Tao view or activates the window. Other setters and fullscreen exit behavior retain their upstream implementation.
 
+The Tao native parent also preserves command propagation for a visible native
+descendant holding first-responder focus in the same visible key window. Its
+`doCommandBySelector:` forwards the original selector to the NSView superclass
+through the private `responder.rs` policy. Tao's own raw-input focus retains its
+existing command behavior. There is no selector or editing-key mapping, cached
+target, menu execution, or event replay in this command adapter. This lets the
+native responder chain report unhandled commands instead of stopping them at
+Tao's empty handler; WebKit continues to own completion and legal event reentry.
+
 The Wry patch restores macOS Child editing key equivalents only when the Child
 is attached to a visible key window, neither it nor its ancestors are hidden,
 and the current first responder is a visible native view in that Child's view
 subtree and the same window. A private pure Rust policy delegates the original
-event to WKWebView at most once and preserves its handled result. Unfocused,
+event to WKWebView at most once and preserves its synchronous return value;
+that return does not establish final Web handling. Unfocused,
 hidden, detached, replaced, or unverifiable targets remain inert; non-Child and
 iOS behavior is preserved. This does not inspect plugin identity or JavaScript,
 create public permissions, synthesize events, or focus/show any target. The Host
@@ -52,16 +62,18 @@ The reviewed source changes are limited to:
 - `tao/src/platform_impl/macos/mod.rs`
 - `tao/src/platform_impl/macos/monitor.rs`
 - `tao/src/platform_impl/macos/resizable.rs`
+- `tao/src/platform_impl/macos/responder.rs`
 - `tao/src/platform_impl/macos/util/async.rs`
 - `tao/src/platform_impl/macos/util/mod.rs`
+- `tao/src/platform_impl/macos/view.rs`
 - `tao/src/platform_impl/macos/window.rs`
 - `tao/src/platform_impl/macos/window_delegate.rs`
 - `tao/src/window.rs`
 
-No Windows or Linux adapter is included in the lensX patch. Remove this directory and the `[patch.crates-io]` entries after an audited upstream release provides equivalent frame context, isolated IPC, responder protection, and focus-owned Child key-equivalent delivery and passes the deterministic capability Gates.
+No Windows or Linux adapter is included in the lensX patch. Remove this directory and the `[patch.crates-io]` entries after an audited upstream release provides equivalent frame context, isolated IPC, responder protection, descendant command propagation, and focus-owned Child key-equivalent delivery and passes the deterministic capability Gates.
 
 `launcher-input-focus` reuses the dependency maintenance Gate to compile and run the private Tao and Wry policies without AppKit interaction; Cargo check/build validates the real adapter. These checks establish state and operation boundaries, not real input-method candidate-window behavior or Finder/AppKit dragging.
 
 Tao diagnostic maintenance removes unused macOS remnants and obsolete aliases, limits shared hit testing to its Windows/Linux/BSD consumers, and retains the validated RGBA payload with one documented field-level `allow(dead_code)`. Existing unrelated upstream lint exceptions remain. File dragging uses checked NSURL file-URL reads at Enter/Prepare/Drop, filters invalid candidates through the production `file_drop.rs` policy, preserves ordered per-file events and single Exit cancellation, and registers the correct NSDragOperation/BOOL callback types. Binding features are declared directly in the active manifest; original release metadata is unchanged.
 
-The read-only `frame-aware-navigation-dependency-drift` Gate checks versions, patch paths, and all vendored source-file hashes, excluding ignored `target` and `.gradle` build caches. It compares application/selected-package Tao paths, versions, and features before Darwin-only strict Tao compilation with `-D warnings`. Portable steps run the production resizable and file-drop policies with cleanup on success/failure and check every reviewed Tao Rust file and the three Wry key-equivalent files with two-space rustfmt. The Wry step uses a stable explicit configuration rather than the upstream nightly-only import setting. Review the same-version upstream diff before updating the baseline with `pnpm run generate -- frame-aware-navigation-dependency-drift --write`; validation never regenerates it.
+The read-only `frame-aware-navigation-dependency-drift` Gate checks versions, patch paths, and all vendored source-file hashes, excluding ignored `target` and `.gradle` build caches. It compares application/selected-package Tao paths, versions, and features before Darwin-only strict Tao compilation with `-D warnings`. Portable steps run the production resizable, file-drop, and responder policies with cleanup on success/failure and check every reviewed Tao Rust file and the three Wry key-equivalent files with two-space rustfmt. The Wry step uses a stable explicit configuration rather than the upstream nightly-only import setting. Command-policy tests establish current native-focus guards and original-selector propagation, not WebKit completion or actual editing results. Review the same-version upstream diff before updating the baseline with `pnpm run generate -- frame-aware-navigation-dependency-drift --write`; validation never regenerates it.

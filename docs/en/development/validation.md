@@ -76,11 +76,12 @@ Gate reuses `frame-aware-navigation-dependency-drift` and
 through the workspace build graph before UI consumers. Missing package build
 output is prepared without source aliases or rebuilding root `node_modules`.
 
-The dependency Gate compiles and runs the private Tao resizable and file-drop
-policies with `rustc --test`, checks all reviewed Tao Rust files with two-space
-formatting, and strictly compiles Tao on macOS. Resizable tests use fake
-responders without AppKit interaction. They verify state and call boundaries;
-they do not establish real input-method candidate-window behavior.
+The dependency Gate compiles and runs the private Tao resizable, file-drop,
+and command-responder policies with `rustc --test`, checks all reviewed Tao
+Rust files with two-space formatting, and strictly compiles Tao on macOS.
+The fake adapters establish state, ownership, and call boundaries without
+AppKit interaction; they do not establish real input-method candidate-window
+behavior or actual editing delivery.
 Focused Gate success supplements the complete lifecycle and CI validation.
 
 The Gate only reads the reviewed vendored integrity baseline. Source updates
@@ -115,10 +116,11 @@ still covers the complete application dependency graph. Hosts without macOS
 cannot complete its required Darwin steps; portable policy tests and vendor
 format checks do not establish compilation on Windows, Linux, or BSD.
 
-Both production policy modules compile and execute in ignored build output,
+All three production policy modules compile and execute in ignored build output,
 with cleanup on success and failure. The formatting check covers every reviewed
-Tao Rust file, including the existing resizable policy and the file-drop helper;
-the application workspace format check alone does not cover this vendored crate.
+Tao Rust file, including `resizable.rs`, `file_drop.rs`, `responder.rs`, and the
+`view.rs` native adapter; the application workspace format check alone does not
+cover this vendored crate.
 Gates never update the baseline; review the source diff before explicitly
 running the Generate command above. No additional root script is needed.
 
@@ -147,30 +149,66 @@ no native interaction validation entry is maintained.
 
 ## Vendored Wry Editing Shortcut Validation
 
-The same `frame-aware-navigation-dependency-drift` Gate compiles and runs
-`key_equivalent.rs` with `rustc --test` through the private Wry policy runner.
-It cleans its unique ignored output directory after success, compiler failure,
-test failure, launch failure, or signal, preserving unrelated output. The Gate
-explicitly checks formatting of the Wry class module, native adapter, and policy
-with stable two-space rustfmt configuration; the application Cargo formatter
-does not own vendored formatting. Neither step writes the integrity baseline or adds a root
-script, permission, dependency upgrade, or environment-validation entry.
+The same `frame-aware-navigation-dependency-drift` Gate compiles and runs the
+production Wry `key_equivalent.rs` policy and Tao `responder.rs` policy through
+their private runners. Unique ignored output is cleaned after success, compiler
+or test failure, launch failure, and signals. The Gate checks the reviewed Tao
+files and the Wry class module, native adapter, and policy with two-space
+rustfmt. Application Cargo formatting does not own vendored formatting. These
+steps neither write the integrity baseline nor introduce a root script,
+permission, dependency upgrade, or environment-validation entry.
 
-Fake adapters exercise original-event identity and modifiers, at-most-once
-superclass delegation, handled/unhandled results, non-Child behavior, and Child
-eligibility across attachment, visibility, key-window status, and native
-first-responder ownership. Host Cargo tests compose the production local
-`Cmd+W/Q` monitor with the same Child policy and retain late-event and lifecycle
-regressions. Rstest checks actual native wiring, public boundaries, runner
-cleanup, and read-only registry metadata. Cargo check/build compiles the real
-Objective-C adapter; no fake result is claimed as real keyboard interaction.
+Wry fake adapters cover original-event identity and modifiers, one superclass
+call per native callback, both synchronous return values, non-Child delegation,
+and attachment, visibility, key-window, and first-responder ownership guards.
+The synchronous BOOL can indicate Web processing is pending; tests do not treat
+it as final consumption. Tao fake adapters call the actual production policy
+for original-selector propagation, all focus guards, repeated focus changes,
+and preservation of Tao's own raw-input focus. Host Cargo tests cover the
+foreground W/Q monitor and native lifecycle composition. Rstest verifies
+Objective-C wiring, public boundaries, runner cleanup, and read-only registry
+metadata; Cargo check/build compiles the actual adapters.
 
-Run the existing `plugin-child-webview-runtime`,
+The `launcher-input-focus` Gate includes `tests/launcher-input-focus-ui.test.tsx`
+and `tests/ordinary-plugin-editing-ui.test.ts` in its existing Rstest step.
+Both remain in root `tests/**/*.test.{ts,tsx}` discovery. The external fixture
+contains only test-owned `input`, `textarea`, and `contenteditable` controls;
+it is not installed in the product Host and requires no SDK or Manifest change.
+Explicit plain-text defaults model selection, clipboard data, editing, and
+history after cancelable DOM events reach the real handlers. They cover
+cancellation, read-only/disabled and empty states, composition, focus changes,
+and English/Chinese with light/dark themes. They do not replace native focus
+or Child-generation policy tests.
+
+ConfigLens tests use actual Monaco body clipboard handlers and independently
+seeded `DataTransfer` input, checking selected output, content, callbacks, and
+Undo/Redo. Find remains a real query control; its missing Happy DOM text defaults
+and history are explicitly modeled, and its undo ownership is checked separately
+from the body. These tests run through the existing plugin/workspace lifecycle
+and `ci-plugins`, with no additional root alias. See the
+[ConfigLens guide](config-lens.md) for editor-specific coverage.
+
+| Evidence | What it establishes | What it does not establish |
+| --- | --- | --- |
+| Production Rust policies and Host composition | Native ownership guards, original event/selector, call counts, reserved commands, and retained raw-input behavior | Actual AppKit callback order or WebKit completion |
+| Native wiring and Cargo checks/builds | Production adapters and the pinned dependency path compile together | Successful OS editing or system clipboard delivery |
+| Host/external Rstest and Monaco handler tests | Real handlers plus declared DOM defaults, clipboard data, selection/content changes, focus and undo ownership | Browser-native defaults, real system clipboard access, or every platform scenario |
+| Temporary macOS investigation and user feedback | The exercised build's unhandled-command propagation, WebKit reentry, single existing-menu action, and reported shortcut recovery after debugger removal | The complete key/control matrix, all input methods, or other platforms |
+
+The correction restores Tao command propagation; it adds no menu dispatch,
+`keyDown` fallback, pending state, queue, retained target, or WebKit completion
+hook. Final Web cancellation and legal reentry remain WebKit responsibilities.
+Keep runtime observations separate from deterministic results. The temporary
+investigation is not a maintained command, Gate, GUI harness, or CI step.
+
+Use the existing `plugin-child-webview-runtime`,
 `plugin-child-webview-window-lifecycle`, `launcher-input-focus`, and
-`frame-aware-webview-navigation-policy` Gates for the corresponding lifecycle
-and routing regressions. Source review against the same Wry `0.55.1` release
-precedes the explicit baseline Generate command above. Host native delivery and
-plugin editing code have separate release responsibilities.
+`frame-aware-webview-navigation-policy` Gates for lifecycle and routing
+regressions. Review changed vendor sources against their pinned same-version
+release (`tao 0.35.3`, `wry 0.55.1`) before explicitly generating the baseline.
+Host native delivery and plugin business commands have separate release
+responsibilities; existing compliant external plugins do not need repackaging
+or added clipboard permissions to receive a Host correction.
 
 ## Frontend Validation
 
