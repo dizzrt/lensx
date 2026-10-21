@@ -184,6 +184,19 @@ Rust 与 lifecycle 测试覆盖共享原生快捷键策略、同 attempt hide/re
 不能替代实际命令结果。检查不采样目标环境时延，不启动浏览器或真实 WebView，
 也不维护渲染输出。
 
+语言选择用例使用真实 Semi Select。统一 helper 通过 combobox 的 `aria-controls`
+找到当前 listbox 及其所属 dialog，按完整可访问选项名称进行选择，并且只在同一 dialog
+仍处于退出阶段时发送 `animationend`。完成条件包括选中标签、弹层移除，以及恰好一个
+包含当前 source 与 input version、目标 selection 和递增 selection version 的新分析请求。
+空输入使先前工作失效，但不派发分析请求。
+
+专门回归在两种 locale 和主题下覆盖弹层定位前与定位后的选择。用例局部 fake timers
+推进已核对的 Semi 50ms 定位兜底任务，并确认动画状态。已定位分支证明，目标退出动画
+结束前，旧标签、请求数量及 selection version 均保持不变。清理时卸载 Page，仅执行
+剩余计时任务，检查计时器和弹层 portal 已移除，并在失败时也恢复真实计时器。
+这些显式 Happy DOM 事件建模的是 Select 生命周期与 Page 回调，不证明浏览器动画渲染
+或操作系统输入交付。
+
 编辑用例在两种 locale 和主题下挂载实际 Monaco editor。正文 copy/cut/paste 事件携带
 测试 `DataTransfer` 到达 Monaco 的真实 listener；paste 数据独立于 `localClipboard`
 内存。断言覆盖选区输出、删除／插入、光标位置、`onInput` 次数以及编辑器实际的键盘

@@ -248,6 +248,24 @@ validation responsibilities, not a substitute for the actual command results.
 The checks do not sample target-environment latency, launch a browser or real
 WebView, or maintain rendering output.
 
+Language-selection cases use the real Semi Select. A shared helper follows the
+combobox's `aria-controls` to its current listbox and owning dialog, selects by
+the complete accessible option name, and sends `animationend` only when that
+same dialog is still exiting. Completion requires the selected label, removal
+of the popup, and exactly one new analysis request with the current source and
+input version, intended selection, and incremented selection version. Empty
+input invalidates prior work without dispatching an analysis request.
+
+Focused regressions cover selection before and after popup positioning in both
+locales and themes. Test-local fake timers advance the reviewed Semi 50ms
+positioning fallback and confirm the animation state. The positioned branch
+proves that the old label, request count, and selection version remain unchanged
+until the target exit finishes. Cleanup unmounts the Page, drains only pending
+timer work, checks that timers and popup portals are gone, and restores real
+timers even after a failure. These explicit Happy DOM events model the Select
+lifecycle and Page callbacks; they do not establish browser animation rendering
+or operating-system input delivery.
+
 The editing cases mount the actual Monaco editor in both locales and themes.
 Body copy/cut/paste events reach Monaco's real listeners with test
 `DataTransfer` objects; paste data is independent of `localClipboard` memory.
