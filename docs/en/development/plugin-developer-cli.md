@@ -11,6 +11,20 @@ The CLI does not require a running Host, Tauri, Rust, a lensX checkout, or root
 `node_modules`. It is not a plugin Runtime dependency, and its package-format
 modules are internal rather than public JavaScript APIs.
 
+## Installation And Build Order
+
+The public bin points to the source-owned `bin/lensx-plugin.mjs`, which is also
+included in the tarball. Installation can therefore link `lensx-plugin` before
+workspace build outputs exist, including with `--ignore-scripts`. Build Contract
+and then CLI through the existing dependency order; the original installed
+command then forwards to `dist/src/bin.js` without another install or relink.
+
+An installed entry alone does not make an unbuilt source workspace runnable.
+Calling it before the required outputs exist fails with a nonzero exit; the
+entry never installs, downloads, builds, or executes TypeScript sources implicitly.
+Published tarballs include both the entry and its built runtime files. Existing
+command arguments, working-directory behavior, output, and exit codes are unchanged.
+
 ## Command Surface
 
 ```bash
@@ -157,8 +171,28 @@ pnpm --dir packages/plugin-cli run test:pack
 pnpm run gate -- plugin-developer-cli
 ```
 
-The root gate packs Contract, SDK, UI, Testkit, and CLI tarballs; installs them
+The root Gate first copies the current workspace manifests, configuration,
+lockfile, and required sources/templates into a system temporary directory,
+excluding dependencies, build outputs, and caches. With pnpm `11.17.0`, it runs
+one offline, frozen-lockfile, ignore-scripts installation while Contract and CLI
+have no `dist`. It checks Translation's initial command entry, missing-entry
+warnings, lockfile stability, and isolated package resolution, then builds
+Contract followed by CLI. The same entry runs help, version, public create, and
+JSON validation of a minimal compatible static payload without reinstalling or
+relinking. A separate negative installation proves an entry pointing to missing
+build output fails the initial entry check.
+
+Locked dependencies must already be cached in the machine-configured global
+pnpm store. Missing offline inputs fail the installation stage; the Gate does
+not retry online or borrow the checkout's dependencies. Inherited checkout
+executable and module paths are excluded. Success and failure clean up temporary
+resources, and the source stage verifies that checkout inputs, its lockfile,
+and root dependency directory remain unchanged.
+
+Separately, the Gate packs Contract, SDK, UI, Testkit, and CLI tarballs; installs them
 in system temporary consumers with the machine-configured global pnpm store;
 generates both templates; runs install, test, typecheck, build, validate,
 repeat pack, and inspect; audits lockfiles and module realpaths; and passes both
 packages to the Rust inspector and installer preparation boundary.
+The minimal source-stage payload establishes CLI availability; it does not
+replace these actual two-template builds and package-consumer checks.

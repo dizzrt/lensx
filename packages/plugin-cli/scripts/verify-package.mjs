@@ -31,13 +31,14 @@ try {
   if (packedSize > 3 * 1024 * 1024) throw new Error(`CLI tarball exceeds the 3 MiB baseline: ${packedSize}.`);
 
   const files = output.files.map(({ path }) => path).sort();
-  const expectedPrefixes = ['DEPENDENCIES.md', 'LICENSE', 'README.md', 'dist/', 'package.json'];
+  const expectedFiles = new Set(['bin/lensx-plugin.mjs', 'DEPENDENCIES.md', 'LICENSE', 'README.md', 'package.json']);
   for (const path of files) {
-    if (!expectedPrefixes.some((prefix) => path === prefix || path.startsWith(prefix))) {
+    if (!expectedFiles.has(path) && !path.startsWith('dist/')) {
       throw new Error(`Unexpected CLI tarball file: ${path}`);
     }
   }
   for (const required of [
+    'bin/lensx-plugin.mjs',
     'dist/src/bin.js',
     'dist/templates/framework-neutral/manifest.json',
     'dist/templates/framework-neutral/package.json',
@@ -55,15 +56,21 @@ try {
   if (
     packedMetadata.name !== '@lensx/plugin-cli' ||
     packedMetadata.license !== 'MIT' ||
-    packedMetadata.bin?.['lensx-plugin'] !== './dist/src/bin.js' ||
+    packedMetadata.bin?.['lensx-plugin'] !== './bin/lensx-plugin.mjs' ||
     JSON.stringify(Object.keys(packedMetadata.exports ?? {})) !== JSON.stringify(['.']) ||
     packedMetadata.dependencies?.['@lensx/plugin-contract'] !== '0.3.0' ||
     packedMetadata.dependencies?.['@structured-world/structured-zstd'] !== '0.0.49'
   ) {
     throw new Error('Packed CLI metadata, bin, exports, license, or runtime dependencies drifted.');
   }
-  const binMode = (await lstat(resolve(extractedRoot, 'dist/src/bin.js'))).mode;
+  const binMode = (await lstat(resolve(extractedRoot, 'bin/lensx-plugin.mjs'))).mode;
   if ((binMode & 0o111) === 0) throw new Error('Packed CLI bin is not executable.');
+  if (
+    (await readFile(resolve(extractedRoot, 'bin/lensx-plugin.mjs'), 'utf8')) !==
+    "#!/usr/bin/env node\nimport '../dist/src/bin.js';\n"
+  ) {
+    throw new Error('Packed CLI entry does not forward to the existing built runner.');
+  }
 
   await rm(extraction, { force: true, recursive: true });
   const textual = new Set(['.css', '.d.ts', '.html', '.js', '.json', '.less', '.md', '.mjs', '.ts', '.tsx']);

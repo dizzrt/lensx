@@ -368,3 +368,53 @@ Host-private source, a fixture generator, or an absolute path.
 #### Scenario: Legacy project is validated
 - **WHEN** the project contains Manifest `0.3.x` or older, `runtime.kind: "iframe"` or SDK `/iframe`
 - **THEN** CLI fails with bounded migration guidance and performs no automatic edit
+
+### Requirement: Public CLI installation MUST establish the executable before workspace build outputs exist
+
+`@lensx/plugin-cli` MUST provide a public `lensx-plugin` entry that already exists at installation time, so the supported package manager can establish consumer command entries when workspace build outputs are absent and install scripts are disabled. After dependencies have been built in their declared order, the entry established by the first installation MUST execute the existing public CLI commands. It MUST NOT require another installation, relinking, a global CLI, source aliases, or consumers directly invoking an internal build path. The published package MUST include both the entry and its required runtime files while preserving existing command arguments, JSON, and exit-code contracts.
+
+#### Scenario: Install a source workspace before building the CLI
+
+- **WHEN** a clean workspace has no CLI or public-dependency build outputs and uses the pinned package manager for a frozen-lockfile, ignore-scripts installation
+- **THEN** the consumer's `lensx-plugin` entry is established without missing-file warnings caused by the CLI entry target not having been built
+- **THEN** installation itself does not build the CLI or modify version-controlled files
+
+#### Scenario: Build after installation without relinking
+
+- **WHEN** the first installation has completed and the CLI and its public dependencies are subsequently built in their declared order without another installation or relinking
+- **THEN** the original consumer command entry executes `--help`, `--version`, and `validate --json` for compatible plugin artifacts
+- **THEN** JSON, result status, and exit codes retain their existing contracts without borrowing the original checkout's or a globally installed CLI
+
+#### Scenario: Invoke an unbuilt source workspace
+
+- **WHEN** a developer invokes the linked CLI entry while required build outputs are still absent
+- **THEN** the invocation fails with a nonzero status and does not report creation of the command entry as successful CLI validation
+- **THEN** the entry does not implicitly install, build, download dependencies, or execute source code as an alternative implementation
+
+#### Scenario: Consume the published package outside the repository
+
+- **WHEN** an external consumer installs the real CLI tarball and its declared dependencies and invokes a public command
+- **THEN** the entry and all runtime files resolve from installed packages without depending on a lensX checkout, root `node_modules`, or private paths
+- **THEN** existing create, build, validate, pack, inspect, locale-selection, and exit-code semantics remain unchanged
+
+### Requirement: CLI validation MUST cover source installation before build separately from tarball consumption
+
+CLI validation MUST include an independent clean source-workspace installation regression and the existing isolated consumption checks for prebuilt published packages. The clean-install regression MUST use the real supported package manager and the project's locked dependencies in a system temporary directory to prove that CLI build outputs are absent during installation, the initial command entry exists, and the same entry successfully invokes the CLI after subsequent builds. It MUST NOT substitute simulated directory creation, prebuilt tarballs, copied existing `node_modules`, or direct invocation of an internal entry for this evidence. Success and failure MUST clean up temporary resources and leave the current checkout's sources, lockfile, and root `node_modules` unchanged.
+
+#### Scenario: Existing developer artifacts could hide a missing entry
+
+- **WHEN** the current checkout already contains CLI build outputs and a usable command entry
+- **THEN** the clean-install regression still starts from an independent source workspace without those outputs
+- **THEN** it checks that command and dependency resolution remain inside the isolated workspace and cannot borrow the current checkout through inherited executable or module search paths
+
+#### Scenario: A regression points the install entry at missing build output
+
+- **WHEN** the CLI installation entry again depends on a build file absent at installation time
+- **THEN** the clean-install regression fails its entry check immediately after the first installation
+- **THEN** later successful prebuilt-tarball validation cannot offset that failure
+
+#### Scenario: A clean installation or command fails
+
+- **WHEN** installation, a build, or a public command invocation fails in the temporary workspace
+- **THEN** validation identifies the failed stage and returns a nonzero result
+- **THEN** the same cleanup boundary releases the temporary workspace while leaving the current checkout's dependencies and version-controlled files unchanged

@@ -79,6 +79,23 @@ Dependency preparation never trusts pre-existing `dist` directories and does
 not add source aliases. Plugins continue to consume only declared public
 package exports, never Host or Tauri private source.
 
+The CLI's source-owned entry is linked during the first dependency installation,
+including with install scripts disabled. After Contract and CLI build in the
+existing dependency order, that same `lensx-plugin` command is available to
+plugin checks in both `ci-plugins` and `plugin-host-http`, without another
+installation, relinking, or a global CLI.
+
+Run `pnpm run gate -- plugin-developer-cli` for separate source-install and
+published-tarball evidence. The source stage uses current workspace manifests
+and the frozen lockfile in a temporary copy without Contract/CLI outputs,
+installs offline with pnpm `11.17.0` and the global store, then builds and invokes
+the first installed command. Locked dependencies must already be cached;
+missing offline inputs fail the installation stage. It audits command identity,
+resolution isolation, lockfile stability, and cleanup while preserving the
+checkout's dependencies. Existing two-template builds, repeat packing,
+inspection, and Rust preparation remain separate checks. See the
+[CLI validation guide](plugin-developer-cli.md#validation) for coverage.
+
 Plugins CI does not launch browsers, real WebViews, GUI applications, Launch
 Services, or native interaction harnesses, and it does not maintain screenshots,
 pixel baselines, or target-environment performance output.

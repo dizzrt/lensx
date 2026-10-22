@@ -21,13 +21,14 @@
   "type": "module",
   "sideEffects": false,
   "files": [
+    "bin/lensx-plugin.mjs",
     "dist",
     "LICENSE",
     "README.md",
     "DEPENDENCIES.md"
   ],
   "bin": {
-    "lensx-plugin": "./dist/src/bin.js"
+    "lensx-plugin": "./bin/lensx-plugin.mjs"
   },
   "exports": {
     ".": {

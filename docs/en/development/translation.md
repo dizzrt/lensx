@@ -258,6 +258,25 @@ directory. It checks package/resource closure and repeatable bytes and cleans
 temporary output after success or failure. It uses neither private CLI modules
 nor a repository-local pnpm store.
 
+The check still invokes the real `lensx-plugin` command. It reports startup
+errors such as `ENOENT` or `EACCES`, signal termination, missing exit status,
+and nonzero exits before attempting to parse JSON. A zero exit with empty or
+invalid JSON, an invalid envelope, or an unexpected command status is a
+separate output-protocol failure. Every diagnostic names the executable and
+subcommand and includes the available error identifier, exit status, or
+signal. Each stdout/stderr summary is limited to 4 KiB including its truncation
+marker; missing output is shown as `<empty>`. These are engineering diagnostics,
+not changes to the public CLI JSON protocol or product copy. The pure result
+helper is covered by the existing package tests using constructed process
+results without spawning child processes or importing the E2E entry point.
+
+For a startup failure, first check the consumer command entry and installation
+result; for a missing build output, check the existing public dependency
+preparation. The separate source-install regression runs through
+`pnpm run gate -- plugin-developer-cli`; an existing local command entry or a
+successful prebuilt-tarball consumer does not prove clean installation works.
+After correcting a failure, rerun the failed stage and the affected Gate.
+
 The focused `plugin-host-http`, `workspace-boundaries`, `workspace-lifecycle`,
 and `plugin-developer-cli` Gates supplement complete root frontend/workspace and
 Rust validation; they do not replace that lifecycle. No Translation-specific

@@ -5,14 +5,13 @@ import { access, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, resolve, sep } from 'node:path';
 
+import { parseCliResult } from './cli-result.ts';
+
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
 const cli = (args) => {
   const result = spawnSync('lensx-plugin', [...args, '--json'], { cwd: root, encoding: 'utf8' });
-  assert.equal(result.status, 0, `CLI ${args[0]} failed: ${result.stdout || result.stderr}`);
-  const output = JSON.parse(result.stdout);
-  assert.equal(output.status, args[0] === 'pack' ? 'success' : 'compatible');
-  return output.result;
+  return parseCliResult(args[0], result);
 };
 const temporary = async (run) => {
   const directory = await mkdtemp(resolve(tmpdir(), 'lensx-translation-'));

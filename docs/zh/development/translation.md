@@ -197,6 +197,19 @@ pnpm --dir plugins/translation run test:e2e
 `pack --no-build` 和 `inspect`，验证包与资源闭包、重复打包字节，并在成功或失败后
 清理临时产物。它不使用 CLI 私有模块或仓库本地 pnpm store。
 
+检查仍调用真实的 `lensx-plugin` 命令。在尝试解析 JSON 之前，先报告
+`ENOENT`、`EACCES` 等启动错误、信号终止、缺少退出状态和非零退出。
+零退出但 JSON 为空或非法、envelope 结构错误、命令状态不符合预期，属于单独的
+输出协议失败。每条诊断包含可执行命令、子命令以及可用的错误标识、退出状态或信号。
+stdout/stderr 每路摘要包含截断标记在内最多 4 KiB；缺失输出显示为 `<empty>`。
+这些是工程诊断，不修改公共 CLI JSON 协议或产品文案。现有包内测试使用构造的
+进程结果覆盖纯结果辅助模块，不启动子进程，也不导入 E2E 入口。
+
+遇到启动失败时，先检查消费者命令入口和安装结果；遇到构建产物缺失时，检查既有
+公共依赖准备步骤。独立源码安装回归通过 `pnpm run gate -- plugin-developer-cli`
+运行；已有本地命令入口或预构建 tarball 消费者成功不能证明干净安装有效。
+修复失败后，重新运行失败阶段及受影响的 Gate。
+
 focused `plugin-host-http`、`workspace-boundaries`、`workspace-lifecycle` 和
 `plugin-developer-cli` Gate
 补充完整根前端/工作区与 Rust 验证，不替代完整 lifecycle。不需要翻译专用根脚本、

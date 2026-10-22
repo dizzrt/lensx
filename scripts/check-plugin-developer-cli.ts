@@ -4,6 +4,8 @@ import { cp, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'no
 import { tmpdir } from 'node:os';
 import { isAbsolute, resolve } from 'node:path';
 
+import { verifyPluginCliCleanInstall } from './plugin-cli-clean-install.ts';
+
 const repositoryRoot = resolve(import.meta.dirname, '..');
 const temporaryRoot = await mkdtemp(resolve(tmpdir(), 'lensx-plugin-cli-consumer-'));
 const publicPackages = ['plugin-contract', 'plugin-sdk', 'plugin-ui', 'plugin-testkit', 'plugin-cli'] as const;
@@ -96,6 +98,7 @@ const overridesFor = (packed: ReadonlyMap<string, string>) =>
 
 try {
   const pnpmStorePath = run('pnpm', ['store', 'path'], repositoryRoot).trim();
+  await verifyPluginCliCleanInstall(repositoryRoot, temporaryRoot, pnpmStorePath);
   const packed = new Map<string, string>();
   for (const packageDirectory of publicPackages) {
     const packageRoot = resolve(repositoryRoot, 'packages', packageDirectory);

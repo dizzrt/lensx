@@ -70,6 +70,17 @@ pnpm run gate -- ci-plugins
 依赖准备不会信任已有 `dist`，也不会增加源码 alias。插件仍只能消费声明的公共 package
 exports，不能消费 Host 或 Tauri 私有源码。
 
+CLI 随源码交付的入口在首次依赖安装时即被链接，包括禁用安装脚本的情况。Contract 和 CLI 按既有依赖顺序
+构建后，`ci-plugins` 与 `plugin-host-http` 的插件检查即可使用同一个 `lensx-plugin` 命令，
+无需再次安装、重链接或全局 CLI。
+
+运行 `pnpm run gate -- plugin-developer-cli` 可分别获得源码安装与发布 tarball 的证据。
+源码阶段在没有 Contract/CLI 产物的临时副本中使用当前 workspace manifest 和 frozen lockfile，
+以 pnpm `11.17.0` 和全局 store 离线安装，然后构建并调用首次安装的命令。锁定依赖必须已缓存；
+离线输入缺失会导致安装阶段失败。它审计命令身份、解析隔离、lockfile 稳定性及清理，并保持 checkout 的依赖
+不变。既有两模板构建、重复打包、检查和 Rust 准备仍是独立检查。
+覆盖范围见 [CLI 验证指南](plugin-developer-cli.md#验证)。
+
 Plugins CI 不启动浏览器、真实 WebView、GUI 应用、Launch Services 或原生交互 harness，
 也不维护截图、像素基线或目标环境性能输出。
 

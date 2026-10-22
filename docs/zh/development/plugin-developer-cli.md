@@ -9,6 +9,16 @@
 CLI 不要求运行中的 Host、Tauri、Rust、lensX checkout 或根 `node_modules`。它不是插件 Runtime dependency，
 其 package-format modules 属于 internal，不是公共 JavaScript API。
 
+## 安装与构建顺序
+
+公共 bin 指向随源码维护的 `bin/lensx-plugin.mjs`，该文件也包含在 tarball 中。因此安装可以在工作区构建产物
+尚不存在时链接 `lensx-plugin`，包括使用 `--ignore-scripts` 的情况。按既有依赖顺序先构建 Contract，再构建
+CLI；首次安装建立的命令随后转发到 `dist/src/bin.js`，无需再次安装或重链接。
+
+入口已安装不代表未构建的源码工作区可运行。所需产物缺失时调用会以非零状态失败；入口不会隐式安装、下载、
+构建或执行 TypeScript 源码。发布 tarball 同时包含入口及其构建后的运行文件。既有命令参数、工作目录行为、
+输出和退出码保持不变。
+
 ## 命令表面
 
 ```bash
@@ -117,6 +127,17 @@ pnpm --dir packages/plugin-cli run test:pack
 pnpm run gate -- plugin-developer-cli
 ```
 
-根门禁会打包 Contract、SDK、UI、Testkit 与 CLI tarball，在系统临时 consumer 中使用机器配置的全局 pnpm store
+根 Gate 首先把当前 workspace manifest、配置、lockfile 及必要源码/模板复制到系统临时目录，排除依赖、
+构建产物与缓存。它使用 pnpm `11.17.0`，在 Contract 和 CLI 都没有 `dist` 时执行一次 offline、
+frozen-lockfile、ignore-scripts 安装，检查 Translation 的初始命令入口、缺入口警告、lockfile 稳定性和包解析
+隔离，再依次构建 Contract 与 CLI。同一入口无需重装或重链接即可执行 help、version、公共 create 和最小兼容
+静态产物的 JSON validate。另一次独立的反向安装验证指向缺失构建产物的入口会在初始入口检查时失败。
+
+锁定依赖必须已缓存在机器配置的全局 pnpm store 中。离线输入缺失会导致安装阶段失败；Gate 不在线重试，
+也不借用 checkout 的依赖。继承的 checkout 可执行搜索路径与模块路径会被排除。成功和失败都会清理临时资源；
+源码阶段还核验 checkout 输入、lockfile 与根依赖目录保持不变。
+
+Gate 另行打包 Contract、SDK、UI、Testkit 与 CLI tarball，在系统临时 consumer 中使用机器配置的全局 pnpm store
 安装它们，生成两类模板，运行 install、test、typecheck、build、validate、重复 pack 与 inspect，审计 lockfile 与
 module realpath，并把两个包交给 Rust inspector 和 installer preparation boundary。
+源码阶段的最小产物只证明 CLI 可用性，不替代这些真实的两模板构建及包消费检查。

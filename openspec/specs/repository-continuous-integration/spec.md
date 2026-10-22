@@ -123,12 +123,13 @@ Plugins CI SHALL be selected by changes under `plugins/**` or by changes to its 
 
 ### Requirement: Plugins CI shall prepare public workspace dependencies from a clean checkout
 
-Plugins CI SHALL install dependencies in a clean runner and SHALL build every public workspace package required by the discovered plugins in transitive dependency order before executing plugin consumers. It SHALL derive that order from the workspace dependency graph, de-duplicate shared dependency builds, and SHALL NOT require pre-existing `dist` directories, source aliases, or imports from Host/Tauri private source.
+Plugins CI SHALL install dependencies in a clean runner and SHALL build every public workspace package required by the discovered plugins in transitive dependency order before executing plugin consumers. It SHALL derive that order from the workspace dependency graph, de-duplicate shared dependency builds, and SHALL NOT require pre-existing `dist` directories, source aliases, or imports from Host/Tauri private source. Public CLI commands required by plugins SHALL establish their entries during the first dependency installation and SHALL be callable after the existing dependency builds complete. This guarantee SHALL also apply to local `ci-plugins` and the CLI-consuming `plugin-host-http` Gate without extra workflow-only installation, relinking, or global tools.
 
 #### Scenario: Public package dist directories are absent
 
 - **WHEN** Plugins CI starts from a clean checkout with no prebuilt workspace output
 - **THEN** it SHALL build the required public package exports before any plugin consumes them
+- **THEN** the public CLI entry generated during installation SHALL be usable after dependency builds complete without another installation or relinking
 
 #### Scenario: Public packages have transitive build dependencies
 
@@ -149,6 +150,12 @@ Plugins CI SHALL install dependencies in a clean runner and SHALL build every pu
 
 - **WHEN** a plugin typechecks, tests, or builds in CI
 - **THEN** it SHALL consume project functionality only through declared public package exports
+
+#### Scenario: A local Gate uses the public CLI
+
+- **WHEN** a clean-installed workspace runs `ci-plugins` or `plugin-host-http`
+- **THEN** plugin artifact checks SHALL run through the real `lensx-plugin` command entry after public dependency builds complete
+- **THEN** the Gate SHALL NOT substitute internal-path invocation, global installation, or extra relinking for command availability
 
 ### Requirement: Plugins CI shall execute every required plugin validation stage
 
@@ -202,3 +209,31 @@ Repository-owned automated policy checks SHALL verify the two-workflow inventory
 
 - **WHEN** workflow behavior or local entry points change
 - **THEN** the English document, matching Simplified Chinese mirror, and both documentation indexes SHALL remain semantically aligned
+
+### Requirement: Plugin artifact checks MUST distinguish command startup failures from command results
+
+When invoking the public CLI, plugin artifact checks MUST distinguish a process that could not start, a process terminated by a signal, a normally started process that exits nonzero, and a successful exit with invalid output protocol. Failure diagnostics MUST identify the executable command and subcommand and provide the corresponding startup error code or name, exit status, or signal. Available stdout and stderr MUST be retained as bounded context, and missing output MUST have an explicit placeholder rather than displaying only `undefined`. JSON may be parsed and validated only after successful startup and exit. Checks MUST remain blocking and MUST NOT retry, skip, or misreport startup failure as incompatible plugin content. This requirement belongs to the validation caller and does not change the public CLI JSON protocol or product UI copy.
+
+#### Scenario: Public CLI executable cannot be started
+
+- **WHEN** the operating system refuses to start the public CLI because the command is missing or not executable
+- **THEN** the check MUST report the command, subcommand, and `ENOENT`, `EACCES`, or the actual available error identifier and fail
+- **THEN** even when stdout and stderr are both absent, diagnostics MUST identify startup failure and MUST NOT attempt JSON parsing
+
+#### Scenario: Public CLI exits unsuccessfully or by signal
+
+- **WHEN** a started CLI returns a nonzero status or is terminated by a signal
+- **THEN** the check MUST report the exit status or signal, respectively, with bounded output context
+- **THEN** the check MUST stop at that step and cannot treat an abnormal exit as a valid CLI result
+
+#### Scenario: Successful process returns invalid output
+
+- **WHEN** the CLI returns zero exit status but stdout is empty, is not valid JSON, or does not satisfy the current command's expected result status
+- **THEN** the check MUST fail with an output-protocol error and identify the failing subcommand
+- **THEN** that error MUST be distinguishable from process startup failure
+
+#### Scenario: Public CLI returns a valid successful result
+
+- **WHEN** the CLI exits normally and returns a validate, pack, or inspect result satisfying the existing contract
+- **THEN** the check MUST continue validating the original package contents, repeated-pack bytes, and digest consistency
+- **THEN** the added diagnostic logic MUST NOT relax existing assertions or report a missing-result state as success
