@@ -460,7 +460,7 @@ Child WebView sibling. The Host-private resolver cross-checks Page,
 Registration revision, Resource identity, isolated `entry_url`, route,
 generation, native source, and attempt. The closed bridge and Session become
 ready only for that current Child WebView. Close, retry, invalidation,
-replacement, and App teardown revoke it. Manifest `0.4.0` and Host API `0.2.0`
+replacement, and App teardown revoke it. Manifest `0.4.0` and Host API `0.3.0`
 expose neither native Window methods nor Child WebView identity.
 
 Settings is rendered in the existing `main` Tauri window. A controlled vertical

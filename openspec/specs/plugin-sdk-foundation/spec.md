@@ -222,24 +222,39 @@ The SDK package MUST declare meaningful `build`, `typecheck`, `test`, and `check
 - **THEN** neither language describes the SDK foundation as a Runtime that can already install, register, or execute plugins
 
 ### Requirement: SDK MUST expose an official zero-configuration WebView transport entry
-The package MUST export `@lensx/plugin-sdk/webview` and `createPluginWebviewTransport` as the only production Runtime transport factory. The root `PluginSdkTransport` abstraction MUST remain semantic, framework-neutral and usable without DOM/native types. The WebView entry MUST NOT expose or accept bridge globals, labels, handles, identities, origins, nonces, frame codecs, Tauri commands or Host adapters.
 
-#### Scenario: External plugin consumes SDK 0.3.0
-- **WHEN** a temporary external consumer imports the root and `/webview` entries from a packed SDK
-- **THEN** TypeScript and browser loading succeed without workspace sources or private modules
+The package MUST export `@lensx/plugin-sdk/webview` and `createPluginWebviewTransport` as the only production Runtime transport factory. The root `PluginSdkTransport` abstraction MUST remain semantic, framework-neutral, and usable without DOM/native types. The WebView entry MUST NOT expose or accept bridge globals, labels, handles, identities, origins, nonces, frame codecs, Tauri commands, or Host adapters. New `http.request` MUST reuse the same controlled typed request and WebView transport without adding plugin-importable Tauri/native HTTP entries.
+
+#### Scenario: External plugin consumes SDK 0.4.0
+- **WHEN** a temporary external consumer imports root and `/webview` entries from the packed SDK
+- **THEN** TypeScript and browser builds succeed without workspace sources or private modules
 - **THEN** the factory discovers only the Host-installed current bridge
 
-#### Scenario: Root SDK is imported outside a browser
-- **WHEN** a test imports the root package and injects a semantic fake transport
-- **THEN** no browser or native global is read and the normal SDK lifecycle remains testable
+#### Scenario: External plugin consumes SDK 0.3.0
+- **WHEN** an external plugin still bundles old SDK `0.3.0`
+- **THEN** its existing root and `/webview` contracts remain independent but MUST NOT be described as supporting new HTTP methods or Host API `0.3.0`
+- **THEN** the plugin must upgrade the SDK, check Manifest ranges, and repack to use new capabilities on the new Host
 
-### Requirement: SDK 0.3.0 MUST preserve the current Host API compatibility boundary
-The SDK version MUST be `0.3.0` while its Host API support range remains `>=0.2.0 <0.3.0`, sourced from the public Contract rather than a copied catalog. Initialization MUST reject an incompatible Runtime Context before entering ready.
+#### Scenario: Root SDK is imported outside a browser
+- **WHEN** tests import the root package and inject semantic fake transport
+- **THEN** no browser/native globals are read and normal SDK lifecycle remains testable
+
+### Requirement: SDK MUST preserve the declared Host API compatibility boundary
+
+The current SDK package version MUST be `0.4.0`, its Host API support range MUST be `>=0.2.0 <0.4.0`, and it MUST use the public Contract's current method/request/result/Context validation without copying an independent catalog. The minimum supported version MUST remain `0.2.0`; increasing the current Contract constant to `0.3.0` alone MUST NOT exclude old Hosts. Initialization MUST reject incompatible Runtime Context before ready. The SDK MUST allow `http.request` only when current Context declares it; missing HTTP on an old Host MUST produce explicit rejection, without implicit browser fetch or private native fallback.
+
+The existing support range and closed catalog of old SDK `0.3.0` MUST NOT be described as already supporting Host API `0.3.0`. Authors MUST rebuild and repack using the new SDK and corresponding Manifest ranges to use new capabilities, and the Host MUST NOT rewrite old plugin packages.
 
 #### Scenario: Compatible Host API initializes
-- **WHEN** Runtime Context reports Host API `0.2.x`
-- **THEN** SDK 0.3.0 may initialize after all other validation succeeds
+- **WHEN** Runtime Context reports valid Host API `0.2.x` or `0.3.x`
+- **THEN** SDK `0.4.0` may enter ready after other validation succeeds
+- **THEN** only Sessions whose actual Context includes `http.request` can invoke HTTP
 
 #### Scenario: Incompatible Host API initializes
-- **WHEN** Runtime Context falls outside the declared half-open range
+- **WHEN** Runtime Context falls outside the declared half-open support range
 - **THEN** initialization fails with the existing stable incompatibility error
+
+#### Scenario: HTTP request is cancelled or the SDK is disposed
+- **WHEN** callers cancel, the SDK is disposed, the Session disconnects, or the Runtime is replaced during HTTP
+- **THEN** existing cancellation and lifecycle semantics settle the call only once and late responses cannot revive old calls
+- **THEN** the SDK uses the same public cancellation boundary without exposing native request handles

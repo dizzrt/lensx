@@ -33,6 +33,8 @@ const BASE_IMPLEMENTED_METHODS = Object.freeze([
   'ui.close',
 ] as const satisfies readonly HostApiMethod[]);
 const baseImplementedMethodSet = new Set<HostApiMethod>(BASE_IMPLEMENTED_METHODS);
+const NATIVE_HTTP_METHODS = Object.freeze(['http.request'] as const satisfies readonly HostApiMethod[]);
+const nativeHttpMethodSet = new Set<HostApiMethod>(NATIVE_HTTP_METHODS);
 const storageMethodSet = new Set<HostApiMethod>(PLUGIN_SCOPED_STORAGE_METHODS);
 const catalogMethodSet = new Set<HostApiMethod>(HOST_API_METHOD_CATALOG.map(({ method }) => method));
 
@@ -71,6 +73,8 @@ export interface PluginHostApiDispatcherDependencies {
   readonly context: PluginHostApiContextSource;
   readonly navigation: PluginHostApiNavigation;
   readonly storage?: PluginScopedStorageProviderFactory;
+  /** True only in the production composition whose native dispatcher owns HTTP execution. */
+  readonly nativeHttpAvailable?: boolean;
 }
 
 export interface CreatePluginHostApiDispatcherBindingInput {
@@ -141,20 +145,28 @@ const invalidRequestError = (request: unknown): HostApiError => {
 const validateResult = (result: HostApiResult): HostApiResult | HostApiError =>
   validateHostApiResult(result).status === 'valid' ? result : errors.internal;
 
-const availableMethods = (storageAvailable: boolean): readonly HostApiMethod[] =>
+const availableMethods = (storageAvailable: boolean, nativeHttpAvailable: boolean): readonly HostApiMethod[] =>
   Object.freeze(
     HOST_API_METHOD_CATALOG.flatMap(({ method }) =>
-      baseImplementedMethodSet.has(method) || (storageAvailable && storageMethodSet.has(method)) ? [method] : [],
+      baseImplementedMethodSet.has(method) ||
+      (storageAvailable && storageMethodSet.has(method)) ||
+      (nativeHttpAvailable && nativeHttpMethodSet.has(method))
+        ? [method]
+        : [],
     ),
   );
 
-const createContextSnapshot = (source: PluginHostApiContextSource, storageAvailable: boolean): PluginRuntimeContext => {
+const createContextSnapshot = (
+  source: PluginHostApiContextSource,
+  storageAvailable: boolean,
+  nativeHttpAvailable: boolean,
+): PluginRuntimeContext => {
   const state = source.snapshot();
   const validation = validatePluginRuntimeContext({
     hostApiVersion: PLUGIN_HOST_API_VERSION,
     locale: state.locale,
     theme: state.theme,
-    capabilities: availableMethods(storageAvailable),
+    capabilities: availableMethods(storageAvailable, nativeHttpAvailable),
   });
   if (validation.status === 'invalid') throw new TypeError('Invalid Host-owned Runtime Context snapshot.');
   return validation.value;
@@ -178,7 +190,11 @@ export const createPluginHostApiDispatcherFactory = (
       const storage = dependencies.storage?.create({ identity, isCurrent });
 
       const readContext = (): PluginRuntimeContext => {
-        const context = createContextSnapshot(dependencies.context, storage?.available() ?? false);
+        const context = createContextSnapshot(
+          dependencies.context,
+          storage?.available() ?? false,
+          dependencies.nativeHttpAvailable === true,
+        );
         latestContext = context;
         return context;
       };
@@ -193,7 +209,11 @@ export const createPluginHostApiDispatcherFactory = (
         if (disposed || !isCurrent()) return;
         try {
           const previous = latestContext;
-          const next = createContextSnapshot(dependencies.context, storage?.available() ?? false);
+          const next = createContextSnapshot(
+            dependencies.context,
+            storage?.available() ?? false,
+            dependencies.nativeHttpAvailable === true,
+          );
           latestContext = next;
           if (previous && sameContext(previous, next)) return;
           emitter?.(Object.freeze({ event: 'runtime.context_changed', payload: next }));
@@ -214,6 +234,9 @@ export const createPluginHostApiDispatcherFactory = (
 
         try {
           switch (request.method) {
+            // Native source-bound RPC owns this method. Never fall back to browser fetch or invoke.
+            case 'http.request':
+              return errors.unavailable;
             case 'runtime.get_context': {
               const current = isAvailable(disposed, isCurrent, signal);
               if (current) return current;

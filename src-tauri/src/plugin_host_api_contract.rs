@@ -9,8 +9,9 @@ const VALID_FIXTURES: &str =
 const INVALID_FIXTURES: &str =
     include_str!("../../packages/plugin-contract/tests/fixtures/host-api/invalid/cases.json");
 
-const METHODS: [&str; 8] = [
+const METHODS: [&str; 9] = [
     "actions.open",
+    "http.request",
     "runtime.get_context",
     "storage.delete",
     "storage.get",
@@ -58,6 +59,8 @@ fn method_definition(method: &str, result: bool) -> Option<&'static str> {
     Some(match (method, result) {
         ("actions.open", false) => "ActionsOpenRequest",
         ("actions.open", true) => "ActionsOpenResult",
+        ("http.request", false) => "HttpRequestRequest",
+        ("http.request", true) => "HttpRequestResult",
         ("runtime.get_context", false) => "RuntimeGetContextRequest",
         ("runtime.get_context", true) => "RuntimeGetContextResult",
         ("storage.delete", false) => "StorageDeleteRequest",

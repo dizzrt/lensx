@@ -18,8 +18,9 @@ entry、Page、version、origin、resource generation 和 Runtime attempt 没有
 ## Context replacement
 
 每个 Child WebView attempt 只初始化一次 SDK。`runtime.get_context` 与后续 Context event 提供完整
-Host API 状态：版本、locale、theme 和当前非特权 method capabilities。一次状态变更中替换整个
-Context。Worker/network 支持不是 Host API method，也不会出现在 capability 列表中。
+Host API 状态：版本、locale、theme 和当前 Session-bound method capabilities。一次状态变更中替换
+整个 Context。普通浏览器 Worker/network 不是 Host API method；独立受控的 `http.request`
+只在对应 Host provider 可用时出现在 capability 列表中。
 
 ## 开放 Web 能力
 
@@ -31,6 +32,14 @@ storage。插件可在自身 HTML 中添加更严格的 CSP；浏览器会把它
 SharedWorker、ServiceWorker、脱离页面的后台执行和设备/原生 API 不在承诺范围内。相机、
 麦克风、定位、全屏和浏览器剪贴板可能因 WebView、Permissions Policy 或 OS 行为不可用。
 lensX 不会把浏览器结果重新解释为 grant 决策。
+
+## 受控 Host HTTP
+
+公共 `http.request` method 经 Rust 向公网 HTTPS 目的地发送有界 UTF-8 请求。它独立于浏览器
+Fetch，不以 CORS 响应头为条件，不关闭浏览器安全、不共享 Cookie 或系统凭据，也不允许访问
+本地/私有网络。DNS 校验及连接固定、TLS 校验、payload 限制、期限、并发、取消和 Runtime
+清理由 Host 负责。所有插件来源使用相同策略；服务签名和业务解释仍留在插件。详见
+[HTTP 参考](host-api.md#httprequest)。
 
 ## 失败与恢复
 

@@ -329,6 +329,27 @@ pnpm run gate -- open-isolated-plugin-runtime
 
 Run the normal ConfigLens package lifecycle. Its post-build pure Node check enforces the initial 256 KiB JavaScript budget, 64 KiB CSS budget, bootstrap order, one SDK client, Monaco single-flight behavior, Worker closure, package boundaries, and self-contained output.
 
+## Controlled Host HTTP Validation
+
+Run `pnpm run gate -- plugin-host-http` for public Contract/SDK coverage,
+native source-bound admission, fake DNS/transport policy, cancellation,
+deadlines, limits, and Translation integration. The checks cover both success
+and HTTP error results without contacting a real service. They do not start
+a browser, WebView, GUI, or native interaction harness. See the
+[Host API reference](../plugin-development/host-api.md#httprequest).
+
+## Translation Official Plugin Validation
+
+Translation uses the same plugin/workspace lifecycle and `ci-plugins` Gate.
+Controlled SDK storage, clocks, HTTP responses, fixed signing vectors, and
+real Semi controls cover configuration confirmation, text/IME scheduling,
+stale results, errors, locale/theme, focus, and teardown. Its pure Node
+post-build check uses the public CLI to validate, pack twice, and inspect
+self-contained output. Private module inventories stay outside the package.
+These checks do not call a real translation service or establish WebView
+network access, native IME behavior, or OS clipboard delivery. See the
+[Translation maintainer guide](translation.md) for commands and evidence bounds.
+
 ## Plugin Scoped Storage Validation
 
 ```bash

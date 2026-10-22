@@ -2,8 +2,8 @@
 
 ## Package matrix
 
-`@lensx/plugin-sdk` is currently version `0.3.0`; the other packages remain at
-`0.2.0`. The listed entries are the complete supported package exports; any
+`@lensx/plugin-contract` is version `0.3.0` and `@lensx/plugin-sdk` is version
+`0.4.0`; Plugin UI, Testkit, and CLI remain at `0.2.0`. The listed entries are the complete supported package exports; any
 other path is private even if a file happens to exist in a tarball.
 
 | Package | Public entries | Role |
@@ -14,8 +14,8 @@ other path is private even if a file happens to exist in a tarball.
 | `@lensx/plugin-testkit` | root | Contract fixtures, context fixtures, fake semantic transport, cancellation, and deferred helpers. |
 | `@lensx/plugin-cli` | root plus `lensx-plugin` bin | Portable authoring commands; not a Runtime API. |
 
-<!-- lensx-public-package {"name":"@lensx/plugin-contract","version":"0.2.0","exports":[".","./schema","./manifest.schema.json","./host-api-schema","./host-api.schema.json"]} -->
-<!-- lensx-public-package {"name":"@lensx/plugin-sdk","version":"0.3.0","exports":[".","./webview"]} -->
+<!-- lensx-public-package {"name":"@lensx/plugin-contract","version":"0.3.0","exports":[".","./schema","./manifest.schema.json","./host-api-schema","./host-api.schema.json"]} -->
+<!-- lensx-public-package {"name":"@lensx/plugin-sdk","version":"0.4.0","exports":[".","./webview"]} -->
 <!-- lensx-public-package {"name":"@lensx/plugin-ui","version":"0.2.0","exports":[".","./styles.css"]} -->
 <!-- lensx-public-package {"name":"@lensx/plugin-testkit","version":"0.2.0","exports":["."]} -->
 <!-- lensx-public-package {"name":"@lensx/plugin-cli","version":"0.2.0","exports":["."]} -->

@@ -2,15 +2,63 @@
 
 ## Authority 模型
 
-Host API `0.2.0` 是封闭的非特权 method catalog。公共 Contract 定义合法的
+Host API `0.3.0` 是封闭的 Session-bound method catalog。公共 Contract 定义合法的
 request、result、event 与稳定错误；当前 Host 组合 provider；最新的完整
 `PluginRuntimeContext.capabilities` 列表说明当前 Session 可调用哪些 method。
 
-Catalog 条目不等于 provider 可用性，也不会暴露 Tauri、Rust command、原生剪贴板、
-文件、Shell 或进程 authority。Worker、网络、远程资源、Blob/Data、WASM 和浏览器
-origin storage 属于普通 Web Runtime 能力，因此不会出现在该 method 列表中。
+Catalog 条目不等于 provider 可用性，也不会暴露 Tauri、任意 Rust command、原生剪贴板、
+文件、Shell 或进程 authority。普通浏览器 Worker/network、远程资源、Blob/Data、WASM
+和 origin storage 仍属于 Web Runtime 能力。独立的 `http.request` method 提供受控
+Host HTTPS 传输，不改变浏览器的 CORS 或 CSP。
 
 ## Method 参考
+
+### `http.request`
+
+参数为 `{ url, method, headers?, body?, timeoutMs? }`。header 为
+`{ name: string, value: string }`，headers 使用数组。结果为
+`{ status, headers, body }`，其中 `status` 为 100–599，`body` 为 UTF-8 文本。
+method 支持 `GET`、`HEAD`、`POST`、`PUT`、`PATCH`、`DELETE` 和 `OPTIONS`；
+GET/HEAD 必须省略 body。HTTP 3xx/4xx/5xx 作为普通结果交由插件解释。Host 不跟随
+重定向，也不依赖浏览器 CORS 响应头。
+
+仅支持公共 Internet HTTPS 443。URL 最多 4096 UTF-8 字节，不允许 userinfo 或
+fragment；拒绝本地、单标签、保留、回环、私网、链路本地、共享、多播、文档及特殊用途
+目的地。DNS 必须在总期限内返回 1–16 个地址；任一不允许的答案会拒绝整个请求。
+实际连接只使用已校验地址，TLS 仍校验原主机名。不支持系统/环境代理或跳过 TLS 校验。
+该方法不是访问本地服务或云元数据的通道。
+原生传输使用带有界 header parser 的 HTTP/1，不支持仅提供 HTTP/2 的 endpoint。
+
+| 限制 | 契约 |
+| --- | --- |
+| Headers | 最多 32 项；单个名称最多 128 字节、值最多 8192 字节，全部名称和值合计最多 16 KiB。 |
+| Header 语法 | ASCII HTTP-token 名称、ASCII U+0020–U+007E 值；请求名称忽略大小写后不得重复。 |
+| 请求/响应 body | 各自最多 1 MiB UTF-8 字节；无效 UTF-8 失败。 |
+| 序列化语义结果 | 最多 4 MiB，保持在既有 5 MiB carrier 限制内。 |
+| 请求期限 | `timeoutMs` 为 1–15000，默认 15000，覆盖 DNS 至响应读取。 |
+| RPC 期限 | HTTP 期限加 1000ms，最多 16000；其他方法保持 10000ms。 |
+| 并发请求 | 每 Runtime attempt 最多 4 个、全局最多 16 个；超额立即失败，不排队。 |
+| DNS worker | 全局最多 16 个，包含请求取消后仍在完成的 OS lookup。 |
+
+SDK 通用 operation timeout 仍默认 10000ms。允许更长 HTTP 请求时，需显式设置 operation
+`timeoutMs`，例如在 15000ms 原生请求外使用 16000ms；也可为完整业务操作采用更短的
+本地期限和 abort signal。
+
+请求 header 不允许设置 `Host`、`Content-Length`、`Connection`、`Transfer-Encoding`、
+`Cookie`、`Cookie2`、`Origin`、`Referer`、`Accept-Encoding`、`Upgrade`、`TE`、`Trailer`，
+以及以 `Proxy-`/`Sec-` 开头的名称。显式业务 header（包括 `Authorization`）仍由插件
+拥有；Host 不补充环境凭据。响应 header 遵循相同大小限制，保留普通重复字段，过滤
+Set-Cookie/Set-Cookie2 与 hop-by-hop 字段。Host 不共享 cookie jar 或 HTTP cache，
+不重试、不自动解压，拒绝非 identity Content-Encoding。超限响应整体失败，不截断。
+16 KiB header 限制约束读取 body 前已接受的语义 headers，不承诺 HTTP parser 不分配额外的
+有界缓冲区。
+
+取消使用 SDK 既有的 operation signal。取消、超时、断线或 Runtime 终止会停止请求等待、
+释放请求并发名额，并使晚到结果失效。已开始的 OS DNS lookup 不能中断，会持有独立的
+有界 worker 名额直到结束；随后丢弃结果，绝不为该取消请求继续连接。
+隐藏/恢复同一当前 Runtime 不会创建额外请求。
+URL query、headers、body、凭据、签名和原始网络异常不得进入日志或诊断。签名及服务
+特定响应解释属于插件。
 
 ### `actions.open`
 
@@ -62,6 +110,10 @@ Session 不能关闭更新的 attempt。
 | `not_found` | 刷新资源或显示空状态。 |
 | `timeout` | 结束 attempt，并在安全时提供显式重试。 |
 | `unavailable` | 降级功能并等待当前 provider。 |
+
+HTTP 的 `invalid_params` 表示参数或目的地拒绝，`limit_exceeded` 表示大小/并发限制，
+`timeout` 和 `cancelled` 表示终止，`unavailable` 覆盖网络、DNS、TLS 或不支持的响应。
+这些安全类别不推断底层网络原因。已完成的 HTTP 状态仍是结果，不是 Host error。
 
 ## 恢复
 

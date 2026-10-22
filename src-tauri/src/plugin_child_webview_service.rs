@@ -1007,6 +1007,21 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
         result
     }
 
+    pub(crate) fn is_rpc_dispatch_pending(
+        &self,
+        attempt: PluginChildWebviewAttempt,
+        source_label: &str,
+        request_id: &str,
+        method: &str,
+    ) -> bool {
+        self.lock_state().current.as_ref().is_some_and(|current| {
+            current.attempt == attempt
+                && current.source_label == source_label
+                && current.bridge_ready
+                && current.rpc.has_pending_request(request_id, method)
+        })
+    }
+
     pub(crate) fn settle_rpc_dispatch(
         &self,
         attempt: PluginChildWebviewAttempt,

@@ -28,7 +28,7 @@
     },
     "host_api": {
       "min_version": "0.2.0",
-      "max_version_exclusive": "0.3.0"
+      "max_version_exclusive": "0.4.0"
     }
   },
   "runtime": {

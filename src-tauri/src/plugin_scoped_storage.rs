@@ -988,7 +988,7 @@ mod tests {
     use crate::{
         plugin_installation_contract::LocalPluginInstallationResult,
         plugin_installer::CleanupDataPolicy,
-        plugin_manager::current_plugin_host_versions,
+        plugin_manifest::PluginHostVersions,
         plugin_registration::{PluginRegistrationChangedEvent, PluginRegistrationEventEmitter},
     };
     use serde::Deserialize;
@@ -1055,7 +1055,11 @@ mod tests {
         let directory = TestDirectory::new(name);
         let manager = PluginManager::recover(
             directory.0.join("config"),
-            current_plugin_host_versions("0.1.0"),
+            // This storage corpus predates Host API 0.3; keep its explicit compatibility baseline.
+            PluginHostVersions {
+                lensx: "0.1.0".to_owned(),
+                host_api: "0.2.0".to_owned(),
+            },
         );
         let installer = PluginInstaller::initialize(
             Ok(directory.0.join("local-data").join("plugins")),

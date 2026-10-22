@@ -28,6 +28,7 @@
   本地复现及 CI 策略。
 - [ConfigLens 官方插件](development/config-lens.md) — 四语言、Worker 隔离的配置
   格式化及其依赖与证据边界。
+- [翻译官方插件](development/translation.md) — 前台文本翻译、插件自身设置及服务与证据边界。
 - [插件开发模式](development/plugin-development-mode.md) — 在专用 Host 构建中手动注册、
   重新加载与移除未打包的 `dist/`。
 - [前端指南](development/frontend-guidelines.md) — React、Semi Design、样式、主题、

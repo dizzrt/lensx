@@ -23,9 +23,10 @@ does not replace the current Runtime.
 
 Initialize the SDK once per Child WebView attempt. `runtime.get_context` and later
 context events provide complete Host API state: version, locale, theme, and
-the current non-privileged method capabilities. Replace the whole context in
-one state transition. Worker/network support is not a Host API method and does
-not appear in the capability list.
+the current Session-bound method capabilities. Replace the whole context in
+one state transition. Ordinary browser Worker/network support is not a Host API
+method. The separate controlled `http.request` method appears only when its
+Host provider is available.
 
 ## Open Web capabilities
 
@@ -39,6 +40,17 @@ SharedWorker, ServiceWorker, detached background execution, and device/native
 APIs are not promised. Camera, microphone, geolocation, fullscreen, and browser
 clipboard may remain unavailable through WebView, Permissions Policy, or OS
 behavior. lensX does not reinterpret that browser result as a grant decision.
+
+## Controlled Host HTTP
+
+The public `http.request` method transfers bounded UTF-8 requests to public
+HTTPS destinations through Rust. It is separate from browser Fetch and is not
+conditioned on CORS response headers. It does not disable browser security,
+share cookies or system credentials, or permit local/private network access.
+DNS validation and connection pinning, TLS checks, payload limits, deadlines,
+concurrency, cancellation, and Runtime teardown remain Host-owned. Every plugin
+source uses the same policy; service signing and business interpretation stay
+in the plugin. See the [HTTP reference](host-api.md#httprequest).
 
 ## Failure and recovery
 

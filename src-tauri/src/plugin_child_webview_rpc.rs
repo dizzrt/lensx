@@ -277,6 +277,15 @@ impl PluginChildWebviewRpcSession {
         self.pending.len()
     }
 
+    pub(crate) fn has_pending_request(&self, request_id: &str, method: &str) -> bool {
+        self.connected
+            && !self.terminal
+            && self
+                .pending
+                .get(request_id)
+                .is_some_and(|request| request.method == method)
+    }
+
     fn receive_request(
         &mut self,
         object: &Map<String, Value>,
@@ -351,8 +360,16 @@ impl PluginChildWebviewRpcSession {
             );
             return self.request_error(request_id, limit_error());
         }
-        let Some(deadline_at_ms) = now_ms.checked_add(PLUGIN_CHILD_WEBVIEW_RPC_HOST_DEADLINE_MS)
-        else {
+        let deadline_ms = if method_text == "http.request" {
+            request["params"]["timeoutMs"]
+                .as_u64()
+                .unwrap_or(crate::plugin_http::DEFAULT_HTTP_TIMEOUT_MS)
+                .min(crate::plugin_http::DEFAULT_HTTP_TIMEOUT_MS)
+                + 1_000
+        } else {
+            PLUGIN_CHILD_WEBVIEW_RPC_HOST_DEADLINE_MS
+        };
+        let Some(deadline_at_ms) = now_ms.checked_add(deadline_ms) else {
             return self.request_error(request_id, internal_error());
         };
         self.pending.insert(
@@ -844,5 +861,57 @@ mod tests {
                 .result,
             PluginChildWebviewRpcIngressResult::SessionUnavailable
         );
+    }
+
+    #[test]
+    fn http_deadline_uses_requested_total_plus_margin_without_changing_other_methods() {
+        let mut session = PluginChildWebviewRpcSession::default();
+        session.connect();
+        assert_eq!(
+            session
+                .receive(
+                    &request(
+                        1,
+                        "http.request",
+                        json!({"url":"https://api.vendor.com/","method":"GET","timeoutMs":15000})
+                    ),
+                    0
+                )
+                .result,
+            PluginChildWebviewRpcIngressResult::Dispatched
+        );
+        session.receive(&request(2, "storage.get", json!({"key":"fixture"})), 0);
+        let at_ten = session.expire(10_000);
+        assert_eq!(
+            at_ten
+                .iter()
+                .filter(|effect| matches!(effect, PluginChildWebviewRpcEffect::Cancel(_)))
+                .count(),
+            1
+        );
+        assert!(at_ten.iter().any(|effect|matches!(effect,PluginChildWebviewRpcEffect::Cancel(value) if value.method=="storage.get")));
+        assert_eq!(session.pending_count(), 1);
+        assert!(session.expire(15_999).is_empty());
+        assert!(session.expire(16_000).iter().any(|effect|matches!(effect,PluginChildWebviewRpcEffect::Cancel(value) if value.method=="http.request")));
+        session.receive(
+            &request(
+                3,
+                "http.request",
+                json!({"url":"https://api.vendor.com/","method":"GET","timeoutMs":1}),
+            ),
+            20_000,
+        );
+        assert!(session.expire(21_000).is_empty());
+        assert_eq!(session.expire(21_001).len(), 2);
+        session.receive(
+            &request(
+                4,
+                "http.request",
+                json!({"url":"https://api.vendor.com/","method":"GET"}),
+            ),
+            30_000,
+        );
+        assert!(session.expire(45_999).is_empty());
+        assert_eq!(session.expire(46_000).len(), 2);
     }
 }

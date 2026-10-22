@@ -68,7 +68,7 @@ boundaries must have stable machine-readable codes and locations.
 
 ## Shipped Public Contract And Static Manifest
 
-lensX ships the publishable `@lensx/plugin-contract@0.2.0` workspace package.
+lensX ships the publishable `@lensx/plugin-contract@0.3.0` workspace package.
 Its root export provides Manifest and Host API versions, generated input types,
 normalized values, stable diagnostics, catalogs, and pure validators. Manifest
 Schema entries are `@lensx/plugin-contract/schema` and
@@ -174,7 +174,7 @@ Session and public semantic contract described below are now shipped.
 
 ## Shipped Public Host API Semantic Contract
 
-`@lensx/plugin-contract` now owns Host API protocol `0.2.0` as a closed Draft
+`@lensx/plugin-contract` now owns Host API protocol `0.3.0` as a closed Draft
 2020-12 Schema, generated TypeScript inputs, deeply frozen normalized values,
 immutable catalogs, and pure `unknown` validators. TypeScript and test-only Rust
 consumers read the same package-owned valid and invalid fixtures and agree on
@@ -187,6 +187,7 @@ The catalog contains exactly these methods:
 | Runtime | `runtime.get_context` |
 | Current Page and Action | `ui.close`, `actions.open` |
 | Plugin-private storage | `storage.get`, `storage.set`, `storage.delete`, `storage.list`, `storage.get_quota` |
+| Controlled HTTPS transport | `http.request` |
 
 `PluginRuntimeContext` is shared by Contract and SDK. It contains only
 `hostApiVersion`, locale, theme, and a sorted unique snapshot of currently
@@ -196,7 +197,9 @@ current Host support and implementation availability. Plugin identity, Page,
 source, Manifest data, paths, permission/grant facts, and executors are
 rejected as author-controlled Context or method fields. Ordinary Worker,
 network, remote-resource, Blob/Data, WASM, and browser-storage capabilities are
-not Host API methods and do not appear in Context.
+not Host API methods and do not appear in Context. The distinct native
+`http.request` method is advertised only when its controlled provider is
+available; it does not change browser network policies.
 
 Host API errors have stable closed codes and a bounded safe English message.
 They remain distinguishable from SDK lifecycle errors such as `disconnected`,
@@ -876,7 +879,7 @@ Manifest initial size. No size is persisted.
 
 ## Shipped Public Plugin SDK And WebView Transport
 
-lensX ships the framework-neutral `@lensx/plugin-sdk@0.3.0` workspace package.
+lensX ships the framework-neutral `@lensx/plugin-sdk@0.4.0` workspace package.
 The package has public root and `@lensx/plugin-sdk/webview` entries and depends only on
 `@lensx/plugin-contract` at Runtime. Undeclared deep imports are unsupported,
 and its public declarations do not require React, Semi Design, Tauri, DOM
@@ -888,8 +891,8 @@ version facts:
 
 | Export | Meaning |
 | --- | --- |
-| `PLUGIN_SDK_VERSION` | The SDK package and public API version, currently `0.3.0`. |
-| `PLUGIN_SDK_SUPPORTED_HOST_API_RANGE` | The half-open supported Host API range, currently `>=0.2.0 <0.3.0`. |
+| `PLUGIN_SDK_VERSION` | The SDK package and public API version, currently `0.4.0`. |
+| `PLUGIN_SDK_SUPPORTED_HOST_API_RANGE` | The half-open supported Host API range, currently `>=0.2.0 <0.4.0`. |
 | `PLUGIN_HOST_API_VERSION` | Not re-exported by the SDK; the current Host API version remains owned by `@lensx/plugin-contract`. |
 
 `createPluginSdk({ transport })` returns an isolated client rather than a
@@ -976,7 +979,7 @@ Contract validation and before every outbound delivery:
 | Visited values and object keys | 16,384 |
 | Requests per frame | 1 |
 | In-flight Handlers per Runtime Session | 32 |
-| Host execution deadline | 10,000 ms |
+| Host execution deadline | HTTP: native request deadline + 1,000 ms, at most 16,000 ms; other methods: 10,000 ms |
 
 The analyzer walks JSON-compatible input iteratively, accounts for UTF-8 and
 JSON escaping without first serializing the complete value, stops at the first
@@ -996,8 +999,9 @@ decreasing request IDs remain terminal protocol violations. A strictly
 increasing request-sequence high-water mark rejects replay without an
 ever-growing terminal-ID collection.
 
-Every admitted request owns one AbortController and 10,000 millisecond Host
-deadline. Completion, SDK cancellation, deadline, currentness loss and cleanup
+Every admitted request owns one AbortController and a bounded Host deadline.
+HTTP uses its requested/default native deadline plus 1,000 ms, capped at
+16,000 ms; other methods retain 10,000 ms. Completion, SDK cancellation, deadline, currentness loss and cleanup
 compete through one settlement. A winning Host deadline releases the slot,
 aborts the Handler and returns Contract-valid `timeout`; a winning SDK
 lifecycle timeout remains the SDK's distinct lifecycle `timeout` and sends at
@@ -1038,10 +1042,11 @@ Dispatcher, and Runtime currentness. The authenticated lease is the only source
 of plugin and Page identity. Requests cannot choose an owner, Page, provider,
 executor, route, Tauri command, or other Host object.
 
-`runtime.get_context` returns Host API `0.2.0`, the current `en-US | zh-CN`
+`runtime.get_context` returns Host API `0.3.0`, the current `en-US | zh-CN`
 locale, current `light | dark` theme, and the sorted frozen capability snapshot
-`actions.open`, `runtime.get_context`, all five `storage.*` methods, and
-`ui.close` while the scoped-storage provider is available. Complete
+`actions.open`, `runtime.get_context`, and `ui.close`, plus the five
+`storage.*` methods while storage is available and `http.request` while its
+native provider is available. Complete
 `runtime.context_changed` replacements are emitted only when the current
 locale, theme, or capability snapshot actually changes. Identity, Registration
 revision, Runtime attempt, source, Manifest data, paths, and
@@ -1060,6 +1065,17 @@ The Dispatcher injects that identity into a Host-private desktop provider and
 never accepts a plugin-selected namespace, path, plugin key, command, or
 executor. A confirmed damaged or blocked namespace produces one complete
 Context replacement without the five storage capabilities.
+
+HTTP is admitted at the source-bound native RPC boundary and runs through a
+controlled Rust provider. The TypeScript Dispatcher recognizes the public
+method but cannot execute native HTTP itself; without the native route it
+returns `unavailable`, never a browser or private fallback. Requests remain
+owned by the trusted current Session, with cancellation registered before
+asynchronous execution. See the [HTTP reference](../plugin-development/host-api.md#httprequest)
+for the bounded public contract.
+
+Run `pnpm run gate -- plugin-host-http` for fake DNS/transport policy, native
+admission/cancellation, public SDK, and Translation transport coverage.
 
 Run `pnpm run gate -- plugin-host-api-dispatcher` for the focused Dispatcher,
 Navigation, Action, Runtime, MessageChannel, public-tarball, export, dependency,
@@ -1080,8 +1096,9 @@ The trusted installation and replacement confirmations instead explain the
 open isolated Web Runtime trust decision. lensX isolates Host and other-plugin
 authority but does not inspect or individually authorize ordinary Worker,
 network, remote-resource, Blob/Data, WASM, or browser-origin storage behavior.
-Device/native capabilities remain unavailable unless a future explicit public
-Host boundary is designed. Run `pnpm run gate -- open-isolated-plugin-runtime`
+Unpublished device/native capabilities remain unavailable. Host API `0.3.0`
+adds only the explicit controlled HTTP boundary; it does not restore grants,
+clipboard, arbitrary commands, local-network authority, or browser mediation. Run `pnpm run gate -- open-isolated-plugin-runtime`
 for the negative authority scan and composed Runtime validation.
 
 ## Shipped Plugin-Scoped Storage
@@ -1366,7 +1383,7 @@ External runtime resources must resolve inside the installed plugin boundary.
 
 ## Host API
 
-The shipped public semantic contract defines the eight method IDs, exact
+The shipped public semantic contract defines the nine method IDs, exact
 params/results, `runtime.context_changed`, `PluginRuntimeContext`,
 errors, and capability/version rules described above. Contract validation alone
 does not send or execute a request. The public SDK client now exposes one
@@ -1375,18 +1392,18 @@ side-effect provider.
 
 The intended communication flow is:
 
-```text
-Child WebView
-  -> typed Plugin SDK over the source-bound bridge
-  -> private closed request/response/event/cancel wire
-  -> Host bridge adapter with Session-derived identity
-  -> Session-scoped Host-private Dispatcher
-  -> Context / matching Page close / current plugin Action / scoped storage
+```mermaid
+flowchart TD
+  P[Child WebView] --> S[Typed Plugin SDK]
+  S --> R[Source-bound native RPC and current Session]
+  R -->|http.request| H[Controlled Rust HTTP provider]
+  R -->|other methods| D[Session-scoped Dispatcher]
+  D --> B[Context / Page close / plugin Action / scoped storage]
 ```
 
 The bridge validates the actual message source and restricted origin. The
-public Host API has no native capability method; unknown or removed methods
-fail closed before dispatch.
+public Host API adds native transport only through controlled HTTP; arbitrary
+native capabilities remain absent, and unknown/removed methods fail closed.
 
 Host API methods remain small, typed, versioned, and independently testable.
 Plugins must not handcraft private transport messages when an official SDK

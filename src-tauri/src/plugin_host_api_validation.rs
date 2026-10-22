@@ -33,6 +33,7 @@ pub(crate) fn is_known_host_api_method(method: &str) -> bool {
     matches!(
         method,
         "actions.open"
+            | "http.request"
             | "runtime.get_context"
             | "storage.delete"
             | "storage.get"

@@ -1,6 +1,6 @@
 {
   "name": "@lensx/plugin-sdk",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Framework-neutral lensX plugin SDK lifecycle foundation.",
   "keywords": [
     "lensx",

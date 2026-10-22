@@ -36,6 +36,8 @@ url = "2"
 zstd = "=0.13.3"
 fs2 = "0.4"
 getrandom = "=0.3.4"
+reqwest = { version = "=0.13.4", default-features = false, features = ["rustls"] }
+tokio = { version = "=1.53.1", features = ["macros", "net", "rt", "sync", "time"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = { version = "=0.6.2" }
@@ -46,6 +48,7 @@ objc2-web-kit = { version = "=0.3.2", default-features = false, features = ["blo
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
+tokio = { version = "=1.53.1", features = ["test-util"] }
 
 [patch.crates-io]
 tao = { path = "../vendor/frame-aware-navigation/tao" }

@@ -291,6 +291,21 @@ pnpm run gate -- open-isolated-plugin-runtime
 
 运行 ConfigLens 的标准 package lifecycle。其 build 后纯 Node 检查约束初始 256 KiB JavaScript、64 KiB CSS、bootstrap 顺序、单一 SDK client、Monaco single-flight、Worker 闭包、package 边界和自包含输出。
 
+## 受控 Host HTTP 验证
+
+`pnpm run gate -- plugin-host-http` 覆盖公共 Contract/SDK、原生 source-bound
+接纳、假 DNS/transport 策略、取消、期限、限制与 Translation 集成。检查覆盖成功与 HTTP
+错误结果，不访问真实服务，也不启动浏览器、WebView、GUI 或原生交互 harness。
+详见 [Host API 参考](../plugin-development/host-api.md#httprequest)。
+
+## 翻译官方插件验证
+
+翻译使用相同的插件/工作区 lifecycle 和 `ci-plugins` Gate。受控 SDK 存储、clock、
+HTTP 响应、固定签名向量和真实 Semi 控件覆盖配置确认、文本/IME 调度、旧结果、错误、
+语言/主题、焦点及销毁。纯 Node 构建后检查通过公共 CLI 校验、两次打包并检查自包含产物。
+私有模块清单留在插件包之外。这些检查不调用真实翻译服务，也不证明 WebView 网络可用性、
+原生 IME 行为或 OS 剪贴板投递。命令与证据边界见[翻译维护者指南](translation.md)。
+
 ## Plugin Scoped Storage 验证
 
 ```bash

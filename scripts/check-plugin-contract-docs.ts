@@ -120,8 +120,8 @@ const rootManifest = JSON.parse(readFileSync(resolve(repositoryRoot, 'package.js
 const contractManifest = JSON.parse(
   readFileSync(resolve(repositoryRoot, 'packages/plugin-contract/package.json'), 'utf8'),
 ) as { version: string };
-if (rootManifest.version !== '0.1.0' || contractManifest.version !== '0.2.0') {
-  throw new Error('Root package must remain 0.1.0 and Contract package must match the 0.2.0 reset.');
+if (rootManifest.version !== '0.1.0' || contractManifest.version !== '0.3.0') {
+  throw new Error('Root package must remain 0.1.0 and Contract package must match the 0.3.0 Host HTTP extension.');
 }
 
 console.log(`Plugin Contract docs and version policy passed for ${englishPaths.length} bilingual documents.`);

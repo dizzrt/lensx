@@ -17,6 +17,8 @@ const checkOnly = process.argv.includes('--check');
 const definitions = [
   'ActionsOpenRequest',
   'ActionsOpenResult',
+  'HttpRequestRequest',
+  'HttpRequestResult',
   'RuntimeGetContextRequest',
   'RuntimeGetContextResult',
   'StorageDeleteRequest',

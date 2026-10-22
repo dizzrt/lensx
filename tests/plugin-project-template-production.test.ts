@@ -372,7 +372,7 @@ describe('plugin project templates through production Child WebView components',
         clients.push(client);
         const initialized = await client.initialize();
         attempt.markReady();
-        expect(initialized).toMatchObject({ hostApiVersion: '0.2.0', locale: 'zh-CN', theme: 'dark' });
+        expect(initialized).toMatchObject({ hostApiVersion: '0.3.0', locale: 'zh-CN', theme: 'dark' });
         return { attempt, bridge, client };
       };
 

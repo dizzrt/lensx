@@ -162,5 +162,96 @@
     "name": "error-internal",
     "kind": "error",
     "value": { "code": "internal_error", "message": "The Host operation failed." }
+  },
+  {
+    "name": "http-signed-request",
+    "kind": "request",
+    "value": {
+      "method": "http.request",
+      "params": {
+        "url": "https://example.com/api?encoded=%E4%B8%AD",
+        "method": "POST",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "fixture-signature"
+          },
+          {
+            "name": "X-Date",
+            "value": "20261022T000000Z"
+          }
+        ],
+        "body": " original 文本\n",
+        "timeoutMs": 15000
+      }
+    }
+  },
+  {
+    "name": "http-get-defaults",
+    "kind": "request",
+    "value": {
+      "method": "http.request",
+      "params": {
+        "url": "https://example.com/",
+        "method": "GET"
+      }
+    }
+  },
+  {
+    "name": "http-head-no-body",
+    "kind": "request",
+    "value": {
+      "method": "http.request",
+      "params": {
+        "url": "https://example.com/",
+        "method": "HEAD",
+        "headers": [],
+        "timeoutMs": 1
+      }
+    }
+  },
+  {
+    "name": "http-error-status-is-result",
+    "kind": "result",
+    "value": {
+      "method": "http.request",
+      "result": {
+        "status": 403,
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": "{\"error\":\"denied\"}"
+      }
+    }
+  },
+  {
+    "name": "http-redirect-is-result",
+    "kind": "result",
+    "value": {
+      "method": "http.request",
+      "result": {
+        "status": 302,
+        "headers": [
+          {
+            "name": "Location",
+            "value": "https://example.com/other"
+          }
+        ],
+        "body": ""
+      }
+    }
+  },
+  {
+    "name": "http-context-capability",
+    "kind": "context",
+    "value": {
+      "hostApiVersion": "0.3.0",
+      "locale": "en-US",
+      "theme": "light",
+      "capabilities": ["actions.open", "http.request", "runtime.get_context"]
+    }
   }
 ]

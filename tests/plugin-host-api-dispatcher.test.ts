@@ -29,7 +29,7 @@ const requestInput = (
     signal: options?.signal ?? new AbortController().signal,
   });
 
-const createFixture = () => {
+const createFixture = (nativeHttpAvailable = false) => {
   const context = createMutablePluginHostApiContextSource({ locale: 'en-US', theme: 'light' });
   const registry = new LauncherActionRegistry();
   const actionExecutor = rs.fn(async () => undefined);
@@ -53,6 +53,7 @@ const createFixture = () => {
   const factory = createPluginHostApiDispatcherFactory({
     actions: { registry, dispatcher: new LauncherActionDispatcher(registry) },
     context,
+    nativeHttpAvailable,
     navigation: {
       isActivePage: (target) => target.owner_id === activeTarget.owner_id && target.page_id === activeTarget.page_id,
       closePageIfMatches,
@@ -75,6 +76,31 @@ const createFixture = () => {
   };
 };
 
+test('advertises native HTTP only when composed and rejects accidental JS execution', async () => {
+  for (const available of [false, true]) {
+    const { binding, actionExecutor, closePageIfMatches } = createFixture(available);
+    const context = await requestInput(binding, { method: 'runtime.get_context', params: {} });
+    expect(context).toMatchObject({ method: 'runtime.get_context', result: { hostApiVersion: '0.3.0' } });
+    if (
+      context === null ||
+      typeof context !== 'object' ||
+      !('method' in context) ||
+      context.method !== 'runtime.get_context'
+    ) {
+      throw new Error('Expected the current Runtime Context result.');
+    }
+    const capabilities = context.result.capabilities;
+    expect(capabilities.includes('http.request')).toBe(available);
+    expect(capabilities).toEqual([...capabilities].sort());
+    await expect(
+      requestInput(binding, { method: 'http.request', params: { url: 'https://example.com/', method: 'GET' } }),
+    ).resolves.toMatchObject({ code: 'unavailable' });
+    expect(actionExecutor).not.toHaveBeenCalled();
+    expect(closePageIfMatches).not.toHaveBeenCalled();
+    binding.dispose();
+  }
+});
+
 describe('Host-private Plugin Host API dispatcher', () => {
   test('returns a frozen, sorted, identity-free Context with only implemented providers', async () => {
     const { binding } = createFixture();
@@ -83,7 +109,7 @@ describe('Host-private Plugin Host API dispatcher', () => {
     expect(output).toEqual({
       method: 'runtime.get_context',
       result: {
-        hostApiVersion: '0.2.0',
+        hostApiVersion: '0.3.0',
         locale: 'en-US',
         theme: 'light',
         capabilities: ['actions.open', 'runtime.get_context', 'ui.close'],
@@ -115,7 +141,7 @@ describe('Host-private Plugin Host API dispatcher', () => {
     expect(events[0]).toEqual({
       event: 'runtime.context_changed',
       payload: {
-        hostApiVersion: '0.2.0',
+        hostApiVersion: '0.3.0',
         locale: 'zh-CN',
         theme: 'dark',
         capabilities: ['actions.open', 'runtime.get_context', 'ui.close'],
@@ -305,7 +331,7 @@ describe('Host-private Plugin Host API dispatcher', () => {
       {
         event: 'runtime.context_changed',
         payload: {
-          hostApiVersion: '0.2.0',
+          hostApiVersion: '0.3.0',
           locale: 'en-US',
           theme: 'light',
           capabilities: ['actions.open', 'runtime.get_context', 'ui.close'],

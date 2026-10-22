@@ -76,7 +76,8 @@ const storage = read('src/app/plugins/storage/types.ts');
 const providers: Record<string, HostApiProvider> = {};
 for (const method of stringLiterals(dispatcher, 'BASE_IMPLEMENTED_METHODS')) providers[method] = 'base';
 for (const method of stringLiterals(storage, 'PLUGIN_SCOPED_STORAGE_METHODS')) providers[method] = 'storage';
-for (const marker of ['baseImplementedMethodSet', 'storageMethodSet']) {
+for (const method of stringLiterals(dispatcher, 'NATIVE_HTTP_METHODS')) providers[method] = 'http';
+for (const marker of ['baseImplementedMethodSet', 'storageMethodSet', 'nativeHttpMethodSet']) {
   if (!dispatcher.includes(marker)) throw new Error(`Production Dispatcher evidence is missing ${marker}.`);
 }
 

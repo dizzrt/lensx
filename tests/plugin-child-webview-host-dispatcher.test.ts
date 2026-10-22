@@ -116,7 +116,7 @@ describe('Child WebView Host dispatcher adapter', () => {
     expect(fixture.settlements[0]?.output).toEqual({
       method: 'runtime.get_context',
       result: {
-        hostApiVersion: '0.2.0',
+        hostApiVersion: '0.3.0',
         locale: 'en-US',
         theme: 'light',
         capabilities: [

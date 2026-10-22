@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://lensx.dev/schemas/plugin-host-api-0.2.0.schema.json",
+  "$id": "https://lensx.dev/schemas/plugin-host-api-0.3.0.schema.json",
   "title": "PluginHostApiInput",
-  "description": "Public semantic Host API 0.2.0 contract. This schema intentionally excludes private RPC transport and Host identity facts.",
+  "description": "Public semantic Host API 0.3.0 contract. This schema intentionally excludes private RPC transport and Host identity facts.",
   "oneOf": [
     { "$ref": "#/$defs/HostApiRequestInput" },
     { "$ref": "#/$defs/HostApiResultInput" },
@@ -16,6 +16,7 @@
       "type": "string",
       "enum": [
         "actions.open",
+        "http.request",
         "runtime.get_context",
         "storage.delete",
         "storage.get",
@@ -97,6 +98,61 @@
           "additionalProperties": { "$ref": "#/$defs/JsonValue" }
         }
       ]
+    },
+    "HttpHeader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$" },
+        "value": { "type": "string", "maxLength": 8192, "pattern": "^[\\u0020-\\u007E]*$" }
+      }
+    },
+    "HttpHeaders": {
+      "type": "array",
+      "maxItems": 32,
+      "items": { "$ref": "#/$defs/HttpHeader" }
+    },
+    "HttpRequestParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "method"],
+      "properties": {
+        "url": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "method": { "type": "string", "enum": ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] },
+        "headers": { "$ref": "#/$defs/HttpHeaders" },
+        "body": { "type": "string", "maxLength": 1048576 },
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 15000 }
+      },
+      "if": { "properties": { "method": { "enum": ["GET", "HEAD"] } } },
+      "then": { "not": { "required": ["body"], "properties": { "body": {} } } }
+    },
+    "HttpRequestRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "params"],
+      "properties": {
+        "method": { "const": "http.request" },
+        "params": { "$ref": "#/$defs/HttpRequestParams" }
+      }
+    },
+    "HttpRequestResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "result"],
+      "properties": {
+        "method": { "const": "http.request" },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "headers", "body"],
+          "properties": {
+            "status": { "type": "integer", "minimum": 100, "maximum": 599 },
+            "headers": { "$ref": "#/$defs/HttpHeaders" },
+            "body": { "type": "string", "maxLength": 1048576 }
+          }
+        }
+      }
     },
     "RuntimeGetContextRequest": {
       "type": "object",
@@ -203,6 +259,7 @@
     "HostApiRequestInput": {
       "oneOf": [
         { "$ref": "#/$defs/ActionsOpenRequest" },
+        { "$ref": "#/$defs/HttpRequestRequest" },
         { "$ref": "#/$defs/RuntimeGetContextRequest" },
         { "$ref": "#/$defs/StorageDeleteRequest" },
         { "$ref": "#/$defs/StorageGetRequest" },
@@ -346,6 +403,7 @@
     "HostApiResultInput": {
       "oneOf": [
         { "$ref": "#/$defs/ActionsOpenResult" },
+        { "$ref": "#/$defs/HttpRequestResult" },
         { "$ref": "#/$defs/RuntimeGetContextResult" },
         { "$ref": "#/$defs/StorageDeleteResult" },
         { "$ref": "#/$defs/StorageGetResult" },

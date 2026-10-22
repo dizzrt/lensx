@@ -7,8 +7,8 @@ package。workspace 为公共 package 和插件建立开发拓扑、lifecycle �
 可发布的 `@lensx/plugin-contract`、`@lensx/plugin-sdk`、`@lensx/plugin-testkit`、可选
 `@lensx/plugin-ui` 与 Node 作者工具 package `@lensx/plugin-cli`，但仓库验证不会执行 registry 发布操作。
 Host 已能安装/注册并打开受支持的本地插件，SDK 也提供 source-bound WebView transport；production Host 私有
-Dispatcher 已实现 `runtime.get_context`、`ui.close`、`actions.open` 与五个 plugin-scoped `storage.*` method。
-Contract package 独立交付完整八方法 Host API 语义 catalog 与 validator，不包含 native clipboard 或
+Dispatcher 提供 `runtime.get_context`、`ui.close`、`actions.open`、五个 plugin-scoped `storage.*` method
+与受控 `http.request` 传输。Contract package 独立交付完整九方法 Host API 语义 catalog 与 validator，不包含 native clipboard 或
 permission method。
 
 已经交付的静态 Manifest 契约仍然只负责验证。package 位于本 workspace 内，并不代表它
@@ -38,6 +38,10 @@ examples/plugins/*
 Monaco model 和包内 language Worker 支持 JSON、YAML 1.2、TOML 1.0 与 XML 1.0；
 Format 以一次可撤销操作直接替换编辑器内容，Compact 仅支持 JSON。官方仓库位置
 不会改变安装或 Runtime authority；参见 [ConfigLens 官方插件](config-lens.md)。
+
+独立成员 `plugins/translation`（`@lensx/official-translation`、
+`dev.lensx.translation`）提供前台火山引擎文本翻译。其自身配置使用公共
+插件专属存储边界；范围与交付证据边界见[翻译官方插件](translation.md)。
 
 每个实际成员都必须声明全部四个 lifecycle scripts：
 

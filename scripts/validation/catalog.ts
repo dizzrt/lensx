@@ -360,15 +360,40 @@ gatesById.set('isolated-plugin-runtime-origin', {
   steps: [],
 });
 
+gatesById.set('plugin-host-http', {
+  id: 'plugin-host-http',
+  description: 'Public typed HTTP contract, native public-address transport, cancellation and plugin integration',
+  legacyNames: [],
+  dependsOn: ['plugin-host-api-contract', 'plugin-child-webview-host-dispatcher', 'workspace-boundaries'],
+  steps: [
+    internStep('cargo test --manifest-path src-tauri/Cargo.toml plugin_http'),
+    internStep('cargo test --manifest-path src-tauri/Cargo.toml plugin_child_webview_rpc'),
+    internStep('cargo test --manifest-path src-tauri/Cargo.toml plugin_child_webview_host_dispatcher'),
+    internStep('pnpm --dir packages/plugin-sdk run test'),
+    internStep('pnpm --dir plugins/translation run test'),
+    internStep('pnpm --dir plugins/translation run typecheck'),
+    internStep('pnpm --dir plugins/translation run build'),
+    internStep('pnpm --dir plugins/translation run test:e2e'),
+  ],
+});
+prependWorkspaceBuildPreparation({
+  gateId: 'plugin-host-http',
+  targetPaths: ['packages/plugin-sdk', 'packages/plugin-testkit', 'packages/plugin-ui', 'packages/plugin-cli'],
+});
+
 const targetFromLegacy = (legacyName: string, writable: boolean): WritableTarget => {
   const command = legacyScripts[legacyName];
   if (command === undefined) throw new Error(`[validation/catalog] missing target command ${legacyName}.`);
+  const commands = splitCommand(command);
+  if (legacyName === 'generate:plugin-host-api-types') {
+    commands.push('node packages/plugin-contract/scripts/generate-plugin-host-api-validators.mjs');
+  }
   return Object.freeze({
     id: targetId(legacyName),
     description: `Migrated from ${legacyName}`,
     platform: platformFor(command),
     steps: Object.freeze(
-      splitCommand(command).map((segment) => {
+      commands.map((segment) => {
         const parsed = parseStep(segment, writable);
         return Object.freeze({ id: stepId(parsed), description: segment, ...parsed });
       }),

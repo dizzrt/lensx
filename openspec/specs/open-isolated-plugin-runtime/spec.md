@@ -21,17 +21,24 @@ The system MUST interpret installing, replacing, or development-registering a pl
 
 ### Requirement: The open Web Runtime must remain separate from Host-native authority
 
-The plugin Runtime MUST support ordinary Web content and connection capabilities within the target WebView baseline, including page-lifetime Dedicated Workers, network requests, remote resources, `blob:`, `data:`, WASM, and browser origin storage. These capabilities MUST NOT expose Tauri IPC, Host DOM, arbitrary Rust commands, filesystem, Shell, process, or an unpublished native provider, and MUST NOT promise SharedWorker, ServiceWorker, or background execution that outlives the current page lifecycle.
+The plugin Runtime MUST support ordinary Web content and connections within the target WebView baseline, including page-lifetime Dedicated Workers, browser network requests, remote resources, `blob:`, `data:`, WASM, and browser origin storage. Ordinary Web capabilities MUST NOT expose Tauri IPC, Host DOM, arbitrary Rust commands, filesystem, Shell, process, or unpublished native providers, and MUST NOT promise SharedWorker, ServiceWorker, or background execution beyond the page lifetime.
+
+The `http.request` method added in Host API `0.3.0` MUST be a separate, explicit, controlled public method invoked through the SDK and the current trusted Session. It does not change browser fetch CORS/CSP behavior or provide arbitrary native APIs. It MUST provide only restricted public Internet HTTPS transport on port 443, subject to the destination, DNS, header/body, deadline, concurrency, cancellation, and cleanup limits in the separate HTTP specification. Translation business logic and service signing MUST remain in the plugin; all plugins use the same HTTP boundary.
 
 #### Scenario: Plugin uses open Web capabilities
-- **WHEN** a current plugin page loads a remote subresource, creates a package, remote, or Blob Dedicated Worker, or opens a browser network connection
-- **THEN** the target WebView follows browser-standard behavior without consulting a lensX grant
-- **THEN** the Worker or network context still cannot obtain Tauri, a Host-private command, another plugin Session, or cross-origin data
+- **WHEN** a current plugin loads a remote subresource, creates a package, remote, or Blob Dedicated Worker, or uses a browser network connection
+- **THEN** the WebView follows browser-standard behavior without consulting a lensX grant
+- **THEN** the Worker or network context still cannot obtain Tauri, a Host-private command, another plugin Session, or cross-origin data prohibited by browser policy
 
 #### Scenario: Plugin requests an unpublished native capability
 - **WHEN** a plugin attempts to call Tauri, an arbitrary Rust command, Shell, filesystem, or a removed Host clipboard method
-- **THEN** the Host boundary rejects the call or provides no such call surface
-- **THEN** open Web behavior, official source, development source, and installation facts create no native authority
+- **THEN** the Host boundary rejects the call or provides no entry
+- **THEN** ordinary Web behavior, official or development provenance, and installation facts create no additional native authority
+
+#### Scenario: Plugin uses the published HTTP capability
+- **WHEN** the current Context includes `http.request` and the plugin sends a request satisfying the controlled HTTP contract through the public SDK
+- **THEN** Host transport can return bounded HTTP status and content without depending on browser CORS response headers
+- **THEN** the plugin cannot obtain Host cookies, files, private-network access, another Session, or general native execution
 
 ### Requirement: Every plugin and generation must remain an independent security domain
 
@@ -49,17 +56,17 @@ The Host MUST maintain an independent, author-unselectable origin, path scope, S
 
 ### Requirement: Source and community information must not change Runtime authority
 
-Official, external, and development plugins MUST use the same Web Runtime, Host isolation, Session, resource, and lifecycle boundaries. Publisher, repository, release digest, future scans, ratings, and community labels MAY inform display and selection, but MUST NOT relax Host isolation, grant native capability, or change cross-plugin conclusions.
+Official, external, and development plugins MUST use the same Web Runtime, Host isolation, Session, resource, and lifecycle boundaries. Availability and control policies for public `http.request` MUST apply equally to every plugin source and MUST NOT be bound to the Translation ID or official provenance. Publisher, repository, release digest, future scan, rating, or community labels MAY inform display and selection, but MUST NOT relax Host isolation, grant additional native capabilities, or change cross-plugin conclusions.
 
 #### Scenario: Official and external plugins perform the same behavior
-- **WHEN** official and external plugins each load the same kind of Worker, network, or remote resource
-- **THEN** the Runtime reaches the same allowed or failed conclusion from the current WebView and isolation baseline
-- **THEN** official source receives no Tauri, Host API, cross-plugin, or persistent-background exception
+- **WHEN** official and external plugins load the same Worker, network connection, or remote resource, or invoke the same public HTTP method
+- **THEN** they follow the same browser baseline or the same controlled HTTP provider policy respectively
+- **THEN** official provenance receives no Tauri, private Host API, cross-plugin, or persistent-background exception
 
 #### Scenario: Community information is absent or changes
 - **WHEN** a plugin has no rating, scan, or signature, or its community information changes later
 - **THEN** the installed Runtime's Host authority neither expands nor contracts because of that information
-- **THEN** the user can still control whether the plugin continues to run through Host-owned disable and uninstall operations
+- **THEN** users can still control whether the plugin continues running through Host disable and uninstall
 
 ### Requirement: Open Web baseline MUST execute in a top-level Child WebView context
 Dedicated Worker, package/remote HTTPS resources, WSS/HTTPS connections, Blob/Data, WASM and browser origin storage MUST be tested as ordinary Web capabilities of the current top-level Child WebView, without permission prompts. None MUST grant Host DOM, general Tauri, native command, another plugin, old generation or persistent background authority. Official, development and community sources MUST share this exact boundary.

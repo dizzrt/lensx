@@ -1,0 +1,77 @@
+{
+  "manifest_version": "0.4.0",
+  "plugin_id": "dev.lensx.translation",
+  "version": "0.1.0",
+  "display": {
+    "name": {
+      "en-US": "Translation",
+      "zh-CN": "翻译"
+    },
+    "description": {
+      "en-US": "Translate text with your Volcengine account.",
+      "zh-CN": "使用你的火山引擎账户翻译文本。"
+    }
+  },
+  "publisher": {
+    "author": "lensX contributors",
+    "homepage": "https://github.com/dizzrt/lensx",
+    "repository": "https://github.com/dizzrt/lensx"
+  },
+  "compatibility": {
+    "lensx": {
+      "min_version": "0.1.0",
+      "max_version_exclusive": "0.2.0"
+    },
+    "host_api": {
+      "min_version": "0.3.0",
+      "max_version_exclusive": "0.4.0"
+    }
+  },
+  "runtime": {
+    "kind": "webview",
+    "entry": "index.html"
+  },
+  "contributes": {
+    "pages": [
+      {
+        "id": "main",
+        "title": {
+          "en-US": "Translation",
+          "zh-CN": "翻译"
+        },
+        "route": "/",
+        "presentation": {
+          "initial_size": {
+            "width": 800,
+            "height": 600
+          },
+          "resizable": true
+        }
+      }
+    ],
+    "actions": [
+      {
+        "id": "open",
+        "title": {
+          "en-US": "Translation",
+          "zh-CN": "翻译"
+        },
+        "description": {
+          "en-US": "Translate text with your Volcengine account.",
+          "zh-CN": "使用你的火山引擎账户翻译文本。"
+        },
+        "default_keywords": {
+          "en-US": ["Translation", "translate", "language"],
+          "zh-CN": ["翻译", "语言", "translate"]
+        },
+        "target": {
+          "kind": "page",
+          "page_id": "main"
+        }
+      }
+    ],
+    "launcher": {
+      "default_action_id": "open"
+    }
+  }
+}

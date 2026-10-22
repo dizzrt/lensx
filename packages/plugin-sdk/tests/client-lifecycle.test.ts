@@ -88,7 +88,7 @@ describe('Plugin SDK client lifecycle', () => {
     expect(client.state).toBe('idle');
     expect(client.context).toBeUndefined();
 
-    transport.connectImplementation = async () => ({ ...validRuntimeContext(), hostApiVersion: '0.3.0' });
+    transport.connectImplementation = async () => ({ ...validRuntimeContext(), hostApiVersion: '0.4.0' });
     await expect(client.initialize()).rejects.toMatchObject({ code: 'incompatible_host_api' });
     expect(client.state).toBe('idle');
     expect(client.context).toBeUndefined();

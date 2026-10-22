@@ -16,6 +16,7 @@ import type {
 
 const methodFacts = [
   ['actions.open', 'ActionsOpenRequest', 'ActionsOpenResult'],
+  ['http.request', 'HttpRequestRequest', 'HttpRequestResult'],
   ['runtime.get_context', 'RuntimeGetContextRequest', 'RuntimeGetContextResult'],
   ['storage.delete', 'StorageDeleteRequest', 'StorageDeleteResult'],
   ['storage.get', 'StorageGetRequest', 'StorageGetResult'],
@@ -35,7 +36,7 @@ const deepFreeze = <Value>(value: Value): Value => {
   return value;
 };
 
-/** Closed Host API 0.2.0 semantic catalog; entries do not imply Runtime availability. */
+/** Closed Host API 0.3.0 semantic catalog; entries do not imply Runtime availability. */
 export const HOST_API_METHOD_CATALOG: readonly HostApiMethodCatalogEntry[] = deepFreeze(
   methodFacts.map(([method, params, result]) => ({
     deprecated: false,

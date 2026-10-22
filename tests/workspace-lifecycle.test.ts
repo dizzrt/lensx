@@ -37,6 +37,7 @@ describe('workspace lifecycle aggregation', () => {
         `@lensx/plugin-ui (packages/plugin-ui):${lifecycle}`,
         `@lensx/example-plugin-react-semi (examples/plugins/react-semi):${lifecycle}`,
         `@lensx/official-config-lens (plugins/config-lens):${lifecycle}`,
+        `@lensx/official-translation (plugins/translation):${lifecycle}`,
       ]);
     }
   });

@@ -217,8 +217,9 @@ const App = ({
         context: pluginHostApiContextSource,
         navigation: navigationService,
         storage: desktopPluginScopedStorageProviderFactory,
+        nativeHttpAvailable: enablePluginChildWebviewHostDispatcher,
       }),
-    [actionService, navigationService, pluginHostApiContextSource],
+    [actionService, navigationService, pluginHostApiContextSource, enablePluginChildWebviewHostDispatcher],
   );
   const effectivePluginHostApiDispatcherFactory =
     pluginHostApiDispatcherFactory ?? productionPluginHostApiDispatcherFactory;

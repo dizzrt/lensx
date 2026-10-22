@@ -136,6 +136,11 @@ Host DOM、其他插件与旧 generation 都不可用。top-level escape、popup
 detached execution、device access 与 native API 不在承诺范围内。Publisher、repository、
 provenance 与 CI 证据都不会增加 Runtime authority。
 
+独立的公共 `http.request` method 由 source-bound Rust provider 处理公网 HTTPS 文本请求。
+它复用当前 Session 及取消/终止边界，保留私有原生传输，并把服务签名与业务逻辑留在插件。
+浏览器 Fetch 继续遵循自身 CORS/CSP 规则，不关闭 WebKit 安全选项。目的地址、DNS 固定、
+header/body、期限和并发边界见 [Host HTTP 契约](../plugin-development/host-api.md#httprequest)。
+
 ## 开发与 CI
 
 external、development 与 official 插件都使用 Manifest `0.4.0`、

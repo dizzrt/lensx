@@ -80,6 +80,9 @@ member, the non-privileged ConfigLens plugin, through read-only Plugins CI.
 ConfigLens uses one editable Monaco model for explicit JSON, YAML, TOML, or XML
 formatting, with JSON-only Compact and one-operation undo; see the
 [maintainer reference](../development/config-lens.md).
+The independent Translation member operates under the same public
+boundaries; see its [maintainer reference](../development/translation.md) for
+scope and delivery evidence boundaries.
 The public packages are still not on npm. Do not invent package
 registry commands, product download URLs, automatic reload/update, signing,
 Marketplace, automatic publishing, or Host trust behavior.

@@ -354,44 +354,26 @@ and does not define a search ranking algorithm.
 
 ### Requirement: Compatibility status must be separate from Manifest validity
 
-The current LensX version MUST be `0.1.0` and the current Host API protocol
-version MUST be `0.2.0`.
-Their compatibility ranges MUST each contain valid SemVer
-`min_version` and `max_version_exclusive` values, and the minimum version MUST
-be strictly less than the exclusive maximum version. A dimension is compatible
-when its current version satisfies
-`min_version <= current_version < max_version_exclusive`. A structurally and
-semantically valid Manifest for which either current version is outside its
-range MUST return `incompatible` status rather than `invalid`. Compatibility
-MUST depend only on the declared ranges and current LensX `0.1.0` and Host API
-`0.2.0` baselines; the system MUST NOT recognize or convert an earlier
-experimental Host API version.
+The current LensX version MUST be `0.1.0`, and the current Host API protocol MUST be `0.3.0`. Both compatibility ranges MUST contain valid SemVer `min_version` and `max_version_exclusive` values, with the minimum strictly less than the exclusive maximum. A dimension is compatible only when `min_version <= current_version < max_version_exclusive`. A structurally and semantically valid Manifest whose ranges exclude either current version MUST return `incompatible` rather than `invalid`.
+
+Compatibility MUST depend only on declared ranges and current LensX `0.1.0` and Host API `0.3.0`. The Host MUST NOT silently negotiate old protocol catalogs, convert old packages, rewrite ranges, or bypass ranges using source or official identity. Existing packages declaring `max_version_exclusive: "0.3.0"` MUST be explicitly incompatible with the new Host; authors must update the SDK and declarations and repack. Maintained templates and ConfigLens MUST update their compatibility upper bound to `0.4.0`; Translation uses the new HTTP method and MUST declare minimum Host API `0.3.0`.
 
 #### Scenario: Initial current versions are within both ranges
-
-- **WHEN** the current LensX `0.1.0` and Host API `0.2.0` versions are each
-  within their declared half-open ranges
+- **WHEN** current LensX `0.1.0` and Host API `0.3.0` are both within their declared half-open ranges
 - **THEN** the system classifies the valid Manifest as `compatible`
 
 #### Scenario: A current version is outside its range
-
-- **WHEN** the current LensX `0.1.0` or Host API `0.2.0` is outside its
-  declared half-open range
+- **WHEN** current LensX `0.1.0` or Host API `0.3.0` is outside its declared range
 - **THEN** the system classifies the valid Manifest as `incompatible`
-- **THEN** the system does not use an alias or migration rule to satisfy the
-  range
+- **THEN** no alias, migration rule, or implicit catalog negotiation is used to satisfy the range
 
 #### Scenario: A current version equals its exclusive upper bound
-
-- **WHEN** the current LensX or Host API version equals its corresponding
-  `max_version_exclusive`
+- **WHEN** the current LensX or Host API version equals its corresponding `max_version_exclusive`
 - **THEN** the system classifies the valid Manifest as `incompatible`
-- **THEN** the system does not misreport the Manifest as structurally corrupt
+- **THEN** it does not misreport structural Manifest corruption
 
 #### Scenario: A compatibility range is empty or inverted
-
-- **WHEN** either range satisfies
-  `min_version >= max_version_exclusive`
+- **WHEN** either range has `min_version >= max_version_exclusive`
 - **THEN** the system classifies the Manifest as `invalid`
 - **THEN** the diagnostic points to the invalid compatibility range
 

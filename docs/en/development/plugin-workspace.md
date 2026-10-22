@@ -11,8 +11,9 @@ package `@lensx/plugin-cli`, but repository validation does not perform a
 registry publish. The Host can install/register and open a supported local
 plugin, the SDK supplies the source-bound WebView transport, and the production
 Host-private Dispatcher implements `runtime.get_context`, `ui.close`,
-`actions.open`, and the five plugin-scoped `storage.*` methods. The Contract
-package ships the complete eight-method semantic catalog and validators. It
+`actions.open`, the five plugin-scoped `storage.*` methods, and controlled `http.request`
+transport. The Contract package ships the complete nine-method semantic catalog
+and validators. It
 contains no native clipboard or permission method.
 
 The shipped static Manifest contract remains validation-only. A package being
@@ -47,6 +48,12 @@ through one editable Monaco model and package-owned language Workers. Format
 replaces the editor content as one undoable operation, and Compact is JSON-only.
 Its official location does not change installation or Runtime authority; see
 [ConfigLens Official Plugin](config-lens.md).
+
+The independent `plugins/translation` member (`@lensx/official-translation`,
+`dev.lensx.translation`) provides foreground Volcengine text
+translation. Its own configuration uses the public plugin-scoped storage
+boundary; see [Translation Official Plugin](translation.md) for scope and
+delivery evidence boundaries.
 
 Every actual member must declare all four lifecycle scripts:
 

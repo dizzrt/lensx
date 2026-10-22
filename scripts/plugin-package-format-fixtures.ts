@@ -14,6 +14,9 @@ import {
 const rootDir = join(import.meta.dirname, '..');
 const fixtureRoot = join(rootDir, 'fixtures/plugin-package-format');
 const writeMode = process.argv.includes('--write');
+// Keep the committed package/expectation corpus at its original Host API 0.2
+// baseline; verify current Host compatibility separately without regenerating it.
+const fixtureHostVersions = Object.freeze({ lensx: '0.1.0', host_api: '0.2.0' });
 const baseManifest = JSON.parse(
   readFileSync(join(rootDir, 'packages/plugin-contract/tests/fixtures/base.json'), 'utf8'),
 ) as Record<string, unknown>;
@@ -133,7 +136,12 @@ const drift: string[] = [];
 for (const fixture of fixtures) {
   const relativeFile = `${fixture.category}/${fixture.name}.lxp`;
   const absoluteFile = join(fixtureRoot, relativeFile);
-  const expected = await inspectPluginPackage(fixture.bytes);
+  const expected = await inspectPluginPackage(fixture.bytes, fixtureHostVersions);
+  const currentInspection = await inspectPluginPackage(fixture.bytes);
+  const currentStatus = expected.status === 'compatible' ? 'incompatible' : expected.status;
+  if (currentInspection.status !== currentStatus) {
+    throw new Error(`${fixture.name} current Host classification drifted: expected ${currentStatus}.`);
+  }
   expectations.push({ name: fixture.name, category: fixture.category, file: relativeFile, expected });
   if (writeMode) {
     mkdirSync(join(fixtureRoot, fixture.category), { recursive: true });

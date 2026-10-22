@@ -17,14 +17,16 @@ const expectations = JSON.parse(readFileSync(join(fixtureRoot, 'expectations.jso
 };
 
 describe('Plugin WebView Runtime package fixtures', () => {
-  test('keeps only current compatible top-level WebView packages', async () => {
+  test('preserves the historical WebView corpus and rejects its old Host API bound on the current Host', async () => {
     expect(expectations.fixture_version).toBe('0.3.0');
     expect(expectations.packages.map(({ kind }) => kind)).toEqual(['normal', 'malicious']);
     for (const fixture of expectations.packages) {
-      const inspection = await inspectPluginPackage(readFileSync(join(fixtureRoot, fixture.file)));
+      const bytes = readFileSync(join(fixtureRoot, fixture.file));
+      const inspection = await inspectPluginPackage(bytes, { lensx: '0.1.0', host_api: '0.2.0' });
       expect(inspection).toEqual(fixture.expected);
       expect(inspection.status).toBe('compatible');
       expect(fixture.expected.manifest.runtime.kind).toBe('webview');
+      expect((await inspectPluginPackage(bytes)).status).toBe('incompatible');
     }
   });
 

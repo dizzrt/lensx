@@ -418,9 +418,17 @@ mod tests {
         }
 
         fn write_valid_payload(&self) {
-            let manifest =
-                fs::read("../packages/plugin-contract/tests/fixtures/base.json").unwrap();
-            fs::write(self.0.join("manifest.json"), manifest).unwrap();
+            let mut manifest: Value = serde_json::from_slice(
+                &fs::read("../packages/plugin-contract/tests/fixtures/base.json").unwrap(),
+            )
+            .unwrap();
+            manifest["compatibility"]["host_api"]["max_version_exclusive"] =
+                serde_json::json!("0.4.0");
+            fs::write(
+                self.0.join("manifest.json"),
+                serde_json::to_vec(&manifest).unwrap(),
+            )
+            .unwrap();
             fs::create_dir_all(self.0.join("dist")).unwrap();
             fs::create_dir_all(self.0.join("assets")).unwrap();
             fs::write(self.0.join("dist/plugin.html"), b"<!doctype html>").unwrap();
@@ -509,7 +517,11 @@ mod tests {
                 match validate_unpacked_payload(
                     &manifest_bytes,
                     &files,
-                    &current_plugin_host_versions("0.1.0"),
+                    // This shared corpus retains its original Host API compatibility baseline.
+                    &crate::plugin_manifest::PluginHostVersions {
+                        lensx: "0.1.0".to_owned(),
+                        host_api: "0.2.0".to_owned(),
+                    },
                 ) {
                     UnpackedPayloadValidation::Invalid(_) => "invalid",
                     UnpackedPayloadValidation::IncompatibleProtocol(_) => "incompatible",

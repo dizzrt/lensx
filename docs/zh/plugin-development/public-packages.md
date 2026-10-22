@@ -2,7 +2,8 @@
 
 ## Package 矩阵
 
-`@lensx/plugin-sdk` 当前版本为 `0.3.0`，其余 package 仍为 `0.2.0`。下列入口是完整的受支持
+`@lensx/plugin-contract` 当前版本为 `0.3.0`，`@lensx/plugin-sdk` 为 `0.4.0`；
+Plugin UI、Testkit 和 CLI 仍为 `0.2.0`。下列入口是完整的受支持
 exports；即使某个文件存在于 tarball，只要没有声明为 export，就仍是私有路径。
 
 | Package | 公共入口 | 角色 |

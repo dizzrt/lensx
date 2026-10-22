@@ -478,9 +478,15 @@ mod tests {
             let source = self.0.join("dist");
             fs::create_dir_all(source.join("dist")).unwrap();
             fs::create_dir_all(source.join("assets")).unwrap();
+            let mut manifest: serde_json::Value = serde_json::from_slice(include_bytes!(
+                "../../packages/plugin-contract/tests/fixtures/base.json"
+            ))
+            .unwrap();
+            manifest["compatibility"]["host_api"]["max_version_exclusive"] =
+                serde_json::json!("0.4.0");
             fs::write(
                 source.join("manifest.json"),
-                include_bytes!("../../packages/plugin-contract/tests/fixtures/base.json"),
+                serde_json::to_vec(&manifest).unwrap(),
             )
             .unwrap();
             fs::write(source.join("dist/plugin.html"), b"<!doctype html>").unwrap();

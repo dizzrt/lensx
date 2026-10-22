@@ -1,5 +1,3 @@
-import { PLUGIN_HOST_API_VERSION } from '@lensx/plugin-contract';
-
 interface ParsedSemVer {
   readonly major: number;
   readonly minor: number;
@@ -67,8 +65,8 @@ export const compareSemVer = (left: ParsedSemVer, right: ParsedSemVer): number =
   return 0;
 };
 
-const minimumHostApiVersion = parseSemVer(PLUGIN_HOST_API_VERSION);
-const maximumHostApiVersion = parseSemVer('0.3.0');
+const minimumHostApiVersion = parseSemVer('0.2.0');
+const maximumHostApiVersion = parseSemVer('0.4.0');
 
 if (minimumHostApiVersion === undefined || maximumHostApiVersion === undefined) {
   throw new Error('The SDK Host API compatibility boundary is invalid.');

@@ -25,6 +25,7 @@ pub(crate) mod plugin_development_snapshot;
 #[cfg(test)]
 mod plugin_host_api_contract;
 pub(crate) mod plugin_host_api_validation;
+pub(crate) mod plugin_http;
 pub(crate) mod plugin_identity;
 pub mod plugin_installation_contract;
 pub mod plugin_installer;

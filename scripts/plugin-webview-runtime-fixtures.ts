@@ -6,6 +6,9 @@ import { inspectPluginPackage, packPluginPackage } from '../packages/plugin-cli/
 const root = join(import.meta.dirname, '..');
 const fixtureRoot = join(root, 'fixtures/plugin-webview-runtime');
 const writeMode = process.argv.includes('--write');
+// These byte-stable packages were accepted against the Host API 0.2 baseline.
+// A current Host 0.3 incompatibility must not rewrite the historical corpus.
+const fixtureHostVersions = Object.freeze({ lensx: '0.1.0', host_api: '0.2.0' });
 const bytes = (value: string): Uint8Array => Buffer.from(value, 'utf8');
 const manifestBytes = (value: unknown): Uint8Array => bytes(`${JSON.stringify(value)}\n`);
 
@@ -130,8 +133,12 @@ const outputs = new Map<string, Buffer>();
 const expectations = [];
 for (const fixture of fixtures) {
   const packed = await packPluginPackage(fixture.files);
-  const inspection = await inspectPluginPackage(packed.bytes);
+  const inspection = await inspectPluginPackage(packed.bytes, fixtureHostVersions);
   if (inspection.status !== 'compatible') throw new Error(`${fixture.kind} WebView fixture is incompatible.`);
+  const currentInspection = await inspectPluginPackage(packed.bytes);
+  if (currentInspection.status !== 'incompatible') {
+    throw new Error(`${fixture.kind} historical WebView fixture must be incompatible with the current Host API.`);
+  }
   outputs.set(fixture.file, Buffer.from(packed.bytes));
   expectations.push({
     kind: fixture.kind,

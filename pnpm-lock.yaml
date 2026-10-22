@@ -100,11 +100,11 @@ importers:
   examples/plugins/development-mode-smoke:
     dependencies:
       '@lensx/plugin-sdk':
-        specifier: ^0.3.0
+        specifier: ^0.4.0
         version: link:../../../packages/plugin-sdk
     devDependencies:
       '@lensx/plugin-contract':
-        specifier: ^0.2.0
+        specifier: ^0.3.0
         version: link:../../../packages/plugin-contract
       '@rsbuild/core':
         specifier: ^2.1.8
@@ -125,11 +125,11 @@ importers:
   examples/plugins/framework-neutral:
     dependencies:
       '@lensx/plugin-sdk':
-        specifier: ^0.3.0
+        specifier: ^0.4.0
         version: link:../../../packages/plugin-sdk
     devDependencies:
       '@lensx/plugin-contract':
-        specifier: ^0.2.0
+        specifier: ^0.3.0
         version: link:../../../packages/plugin-contract
       '@lensx/plugin-testkit':
         specifier: ^0.2.0
@@ -162,7 +162,7 @@ importers:
         specifier: ^2.101.1
         version: 2.101.1(@floating-ui/dom@1.8.0)(@tiptap/suggestion@3.29.2(@floating-ui/dom@1.8.0)(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))(@tiptap/pm@3.29.2))(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@lensx/plugin-sdk':
-        specifier: ^0.3.0
+        specifier: ^0.4.0
         version: link:../../../packages/plugin-sdk
       '@lensx/plugin-ui':
         specifier: ^0.2.0
@@ -175,7 +175,7 @@ importers:
         version: 19.2.8(react@19.2.8)
     devDependencies:
       '@lensx/plugin-contract':
-        specifier: ^0.2.0
+        specifier: ^0.3.0
         version: link:../../../packages/plugin-contract
       '@lensx/plugin-testkit':
         specifier: ^0.2.0
@@ -354,7 +354,7 @@ importers:
         specifier: ^2.101.1
         version: 2.101.1(@floating-ui/dom@1.8.0)(@tiptap/suggestion@3.29.2(@floating-ui/dom@1.8.0)(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))(@tiptap/pm@3.29.2))(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@lensx/plugin-sdk':
-        specifier: ^0.3.0
+        specifier: ^0.4.0
         version: link:../../packages/plugin-sdk
       '@lensx/plugin-ui':
         specifier: ^0.2.0
@@ -379,7 +379,7 @@ importers:
         version: 2.9.0
     devDependencies:
       '@lensx/plugin-contract':
-        specifier: ^0.2.0
+        specifier: ^0.3.0
         version: link:../../packages/plugin-contract
       '@lensx/plugin-testkit':
         specifier: ^0.2.0
@@ -408,6 +408,82 @@ importers:
       '@testing-library/react':
         specifier: ^16.3.2
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      happy-dom:
+        specifier: ^20.11.0
+        version: 20.11.1
+      less:
+        specifier: ^4.8.1
+        version: 4.8.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  plugins/translation:
+    dependencies:
+      '@douyinfe/semi-ui':
+        specifier: ^2.101.1
+        version: 2.101.1(@floating-ui/dom@1.8.0)(@tiptap/suggestion@3.29.2(@floating-ui/dom@1.8.0)(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))(@tiptap/pm@3.29.2))(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@lensx/plugin-contract':
+        specifier: ^0.3.0
+        version: link:../../packages/plugin-contract
+      '@lensx/plugin-sdk':
+        specifier: ^0.4.0
+        version: link:../../packages/plugin-sdk
+      '@lensx/plugin-ui':
+        specifier: ^0.2.0
+        version: link:../../packages/plugin-ui
+      '@noble/hashes':
+        specifier: 2.4.0
+        version: 2.4.0
+      react:
+        specifier: ^19.2.7
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.7
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.4.15
+        version: 2.4.15
+      '@lensx/plugin-cli':
+        specifier: ^0.2.0
+        version: link:../../packages/plugin-cli
+      '@lensx/plugin-testkit':
+        specifier: ^0.2.0
+        version: link:../../packages/plugin-testkit
+      '@rsbuild/core':
+        specifier: ^2.1.8
+        version: 2.1.9
+      '@rsbuild/plugin-less':
+        specifier: ^2.0.1
+        version: 2.0.1(@rsbuild/core@2.1.9)(@rspack/core@2.1.7(@swc/helpers@0.5.23))
+      '@rsbuild/plugin-react':
+        specifier: ^2.1.0
+        version: 2.1.0(@rsbuild/core@2.1.9)(@rspack/core@2.1.7(@swc/helpers@0.5.23))
+      '@rstest/adapter-rsbuild':
+        specifier: ^0.11.2
+        version: 0.11.4(@rsbuild/core@2.1.9)(@rstest/core@0.11.4(happy-dom@20.11.1))
+      '@rstest/core':
+        specifier: ^0.11.2
+        version: 0.11.4(happy-dom@20.11.1)
+      '@testing-library/dom':
+        specifier: ^10.4.1
+        version: 10.4.1
+      '@testing-library/jest-dom':
+        specifier: 6.9.1
+        version: 6.9.1
+      '@testing-library/react':
+        specifier: ^16.3.2
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
       '@types/react':
         specifier: ^19.2.17
         version: 19.2.17
@@ -627,6 +703,10 @@ packages:
     peerDependencies:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
+
+  '@noble/hashes@2.4.0':
+    resolution: {integrity: sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==}
+    engines: {node: '>= 20.19.0'}
 
   '@oxc-parser/binding-android-arm-eabi@0.131.0':
     resolution: {integrity: sha512-t2xicr9pfzkSRYx5aPqZqlLaayIwJTqgQ81Jor31Xep2nGyL2Aq3d0K5wOfeR7VevaSdxaS9dzSQP9xDwn8fDg==}
@@ -1098,6 +1178,10 @@ packages:
     deprecated: Incorrect minor release with breaking changes (Node >=22 and required @testing-library/dom peer). Use 6.9.1 for the 6.x line, or upgrade to 7.0.0.
     peerDependencies:
       '@testing-library/dom': '>=10 <11'
+
+  '@testing-library/jest-dom@6.9.1':
+    resolution: {integrity: sha512-zIcONa+hVtVSSep9UT3jZ5rizo2BsxgyDYU7WFD5eICBE7no3881HGeb/QkGfsJs6JTkY1aQhT7rIPC7e+0nnA==}
+    engines: {node: '>=14', npm: '>=6', yarn: '>=1'}
 
   '@testing-library/react@16.3.2':
     resolution: {integrity: sha512-XU5/SytQM+ykqMnAnvB2umaJNIOsLF3PVv//1Ew4CTcpz0/BRyy/af40qqrt7SjKpDdT1saBMc42CUok5gaw+g==}
@@ -2927,6 +3011,8 @@ snapshots:
       '@tybys/wasm-util': 0.10.3
     optional: true
 
+  '@noble/hashes@2.4.0': {}
+
   '@oxc-parser/binding-android-arm-eabi@0.131.0':
     optional: true
 
@@ -3239,6 +3325,15 @@ snapshots:
     dependencies:
       '@adobe/css-tools': 4.5.0
       '@testing-library/dom': 10.4.1
+      aria-query: 5.3.2
+      css.escape: 1.5.1
+      dom-accessibility-api: 0.6.3
+      picocolors: 1.1.1
+      redent: 3.0.0
+
+  '@testing-library/jest-dom@6.9.1':
+    dependencies:
+      '@adobe/css-tools': 4.5.0
       aria-query: 5.3.2
       css.escape: 1.5.1
       dom-accessibility-api: 0.6.3

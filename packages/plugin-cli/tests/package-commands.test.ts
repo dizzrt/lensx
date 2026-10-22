@@ -18,6 +18,8 @@ const roots: string[] = [];
 const baseManifest = JSON.parse(
   await readFile(resolve(import.meta.dirname, '../../plugin-contract/tests/fixtures/base.json'), 'utf8'),
 ) as PluginManifestInput;
+// The shared historical fixture targets Host API 0.2.x; current CLI cases model a rebuilt package.
+baseManifest.compatibility.host_api.max_version_exclusive = '0.4.0';
 
 const makeRoot = async () => {
   const root = await mkdtemp(resolve(tmpdir(), 'lensx-plugin-cli-pack-'));
@@ -55,8 +57,8 @@ const writeProject = async (input: { withDist?: boolean; build?: string } = {}) 
         test: 'node --test',
         check: 'node --check build.mjs',
       },
-      dependencies: { '@lensx/plugin-sdk': '^0.2.0' },
-      devDependencies: { '@lensx/plugin-contract': '^0.2.0' },
+      dependencies: { '@lensx/plugin-sdk': '^0.4.0' },
+      devDependencies: { '@lensx/plugin-contract': '^0.3.0' },
     })}\n`,
   );
   await mkdir(resolve(root, 'src'));
@@ -140,12 +142,25 @@ describe('transactional plugin packing', () => {
 
   test('does not expose an incompatible payload as a successful artifact', async () => {
     const incompatible = structuredClone(baseManifest);
-    incompatible.compatibility.host_api = { min_version: '0.3.0', max_version_exclusive: '0.4.0' };
+    incompatible.compatibility.host_api = { min_version: '0.4.0', max_version_exclusive: '0.5.0' };
     const project = await writeProject();
     await writeDist(project, incompatible);
     await expect(packPluginProject({ cwd: project, noBuild: true, json: true })).rejects.toMatchObject({
       status: 'incompatible',
     });
+    expect(await readdir(project)).not.toContain('artifacts');
+  });
+
+  test('keeps a previously packaged Host API 0.2.x range incompatible without rewriting it', async () => {
+    const legacy = structuredClone(baseManifest);
+    legacy.compatibility.host_api = { min_version: '0.2.0', max_version_exclusive: '0.3.0' };
+    const project = await writeProject();
+    await writeDist(project, legacy);
+    const before = await readFile(resolve(project, 'dist/manifest.json'), 'utf8');
+    await expect(packPluginProject({ cwd: project, noBuild: true, json: true })).rejects.toMatchObject({
+      status: 'incompatible',
+    });
+    expect(await readFile(resolve(project, 'dist/manifest.json'), 'utf8')).toBe(before);
     expect(await readdir(project)).not.toContain('artifacts');
   });
 

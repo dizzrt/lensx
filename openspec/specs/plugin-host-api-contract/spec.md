@@ -3,60 +3,61 @@
 ## Purpose
 
 Define the stable, bounded, and independently validatable public semantic
-contract for Host API `0.2.0` without claiming delivery of transport, dispatch,
+contract for Host API `0.3.0` without claiming delivery of transport, dispatch,
 permissions, or Host-side effects.
 ## Requirements
 ### Requirement: Host API v1 MUST expose one closed, versioned semantic catalog
 
-The public Host API MUST expose an independently versioned `0.2.0` closed semantic catalog containing only the current methods, requests, results, events, and bounded errors for `actions.open`, `runtime.get_context`, plugin-scoped storage, and `ui.close`. The catalog MUST NOT contain `clipboard.read`, `clipboard.write`, Host API permission types, permission-requirement mappings, or any Tauri or native executor. Unknown or removed methods MUST fail closed through the Contract and Dispatcher.
+The public Host API MUST expose an independently versioned `0.3.0` closed semantic catalog containing requests, results, events, and bounded errors for `actions.open`, `http.request`, `runtime.get_context`, five plugin-scoped `storage.*` methods, and `ui.close`. `http.request` MUST be generic HTTP transport with the same contract and control boundary for every plugin; translation business logic, language decisions, service signing, and credential configuration MUST remain in plugins. The catalog MUST NOT contain `clipboard.read`, `clipboard.write`, permission types, permission-requirement mappings, arbitrary Tauri commands, or general native executors. Unknown or removed methods MUST fail closed through the Contract and Dispatcher.
+
+#### Scenario: Consumer reads the Host API 0.3.0 catalog
+- **WHEN** an external consumer reads generated types and the runtime catalog
+- **THEN** it sees nine current Session-bound methods and an independent protocol version, with HTTP exposing only controlled transport semantics
+- **THEN** no clipboard method, permission catalog, grant helper, private transport type, or translation-specific native method exists
 
 #### Scenario: Consumer reads the Host API 0.2.0 catalog
-- **WHEN** an external consumer reads generated types and the runtime catalog
-- **THEN** it sees only current non-privileged, Session-bound methods and the independent version
-- **THEN** no clipboard method, permission catalog, grant helper, or private transport type exists
+- **WHEN** an existing consumer still uses the old Host API `0.2.0` eight-method closed catalog
+- **THEN** the new `http.request` MUST NOT be described as supported by that old catalog, and the consumer must upgrade Contract/SDK to understand the new catalog
+- **THEN** old packages outside the new Host version range are explicitly incompatible; silent catalog filtering does not bypass declarations
 
 #### Scenario: Legacy plugin calls clipboard
-- **WHEN** a plugin sends a `clipboard.read`, `clipboard.write`, or Host API `0.1.0` request
-- **THEN** the Contract or Dispatcher returns an incompatible, method-not-found, or stable unavailable result without a native effect
-- **THEN** installation facts do not automatically authorize the legacy call
+- **WHEN** a plugin sends `clipboard.read`, `clipboard.write`, or an incompatible old Host API request
+- **THEN** the Contract or Dispatcher returns an incompatible, method-not-found, or stable unavailable result without a native side effect
+- **THEN** installation facts do not automatically authorize the old call
 
 #### Scenario: Consumer requests an undeclared method
-
 - **WHEN** a consumer validates `system.open_external`, an arbitrary string, or another undeclared method
-- **THEN** the Contract rejects the method with stable `method_not_found` semantics
-- **THEN** an unknown method does not become a capability merely because it matches a naming convention
+- **THEN** the Contract rejects it with stable `method_not_found` semantics
+- **THEN** a method does not become a capability merely by matching a naming convention
 
 #### Scenario: Official provenance attempts to expand the catalog
-
 - **WHEN** a plugin's source, Publisher, or future signature state indicates official provenance
-- **THEN** its catalog and payload Schemas are exactly the same as those for an external plugin
-- **THEN** official provenance receives no hidden method or Host-authority bypass
+- **THEN** it uses the same method catalog, payload Schema, and HTTP control boundary as external plugins
+- **THEN** official provenance provides no hidden method, translation-specific native shortcut, or Host-authority bypass
 
 ### Requirement: Runtime Context MUST be the single capability-discovery snapshot
 
-`PluginRuntimeContext` MUST continue to contain the Host API version, locale, theme, and the complete, sorted, unique method-capability set actually composed for the current Session. Capabilities MUST derive only from the current trusted Session, provider availability, and Host facts. They MUST NOT contain permissions, grants, Manifest reasons, Publisher, source, network, Worker, or other ordinary Web capabilities. Ordinary Web capabilities are determined by the Runtime baseline and are not discovered through Host API Context.
+`PluginRuntimeContext` MUST contain the Host API version, locale, theme, and a complete, sorted, unique capability set of methods actually available to the current Session. Capabilities MUST derive only from the trusted current Session, provider availability, and Host facts; they MUST NOT contain permissions, grants, Manifest reasons, Publisher, source, or ordinary browser Worker/network capabilities. Browser capabilities remain determined by the Web Runtime. Public controlled `http.request` is a separate Host method and MUST appear in capabilities only when the current HTTP provider is available; it does not indicate a change to browser CORS policy.
 
-`runtime.get_context` MUST accept exact empty parameters and return a read-only, copied, and frozen Context. `runtime.context_changed` MUST carry a complete independently validatable Context replacement rather than a field patch. A change that invalidates trusted Session identity MUST terminate the old Session and MUST NOT reauthorize it through the event alone.
+`runtime.get_context` MUST accept exact empty parameters and return a readonly, copied, frozen Context. `runtime.context_changed` MUST carry a complete independently validatable Context replacement, not a partial patch. Invalidation of trusted Session identity MUST terminate the old Session and MUST NOT reauthorize it through an event alone.
 
 #### Scenario: New Session receives Context
 - **WHEN** the current plugin completes Session and SDK initialization
-- **THEN** Context returns Host API `0.2.0` and the current non-privileged method capabilities
-- **THEN** an empty capability set remains valid and does not mean that Worker, network, or other Web capabilities were denied
+- **THEN** Context returns Host API `0.3.0` and currently available methods, including `http.request` when available
+- **THEN** an empty capability set remains valid and does not mean ordinary browser Worker/network capabilities were denied
 
 #### Scenario: Provider or context changes
-- **WHEN** locale, theme, non-privileged provider availability, or Session currentness changes
-- **THEN** the Host sends a complete replacement Context or terminates the old Session
-- **THEN** no grant mutation or permission-driven hot injection exists
+- **WHEN** locale, theme, provider availability, or Session currentness changes
+- **THEN** the Host sends a complete Context replacement or terminates the old Session
+- **THEN** no grant mutation or permission-driven hot injection occurs
 
 #### Scenario: Locale or theme changes without invalidating identity
-
-- **WHEN** the current Session remains valid while the application locale or theme changes
-- **THEN** `runtime.context_changed` carries the complete new Context snapshot
-- **THEN** the plugin no longer treats a method omitted from the new snapshot as currently callable
+- **WHEN** the application locale or theme changes while the current Session remains valid
+- **THEN** `runtime.context_changed` carries the complete new Context
+- **THEN** the plugin no longer treats methods omitted from the new snapshot as callable capabilities
 
 #### Scenario: Plugin supplies trusted Context fields
-
-- **WHEN** parameters, an event, or another author-controlled payload attempts to submit identity, source, Host API version, locale, theme, or a capability override
+- **WHEN** parameters, events, or author-controlled payloads attempt to submit identity, source, Host API version, locale, theme, or capability overrides
 - **THEN** the exact Schema rejects extra fields or a Context from the wrong source
 - **THEN** plugin input cannot change Host-derived Runtime facts
 
@@ -208,75 +209,44 @@ error.
 
 ### Requirement: Host API errors MUST be stable, bounded and separate from SDK lifecycle errors
 
-Host API `0.2.0` MUST define the closed error-code set `invalid_request`,
-`invalid_params`, `method_not_found`, `not_found`,
-`conflict`, `limit_exceeded`, `unavailable`, `cancelled`, `timeout`, and
-`internal_error`. An error value MUST contain only a code and a stable,
-bounded, non-localized, safe message. It MUST NOT contain a raw exception,
-stack, URL, path, payload, grant, Host object, Rust object, Tauri object, or
-localized product copy.
+Host API `0.3.0` MUST preserve the closed error-code set `invalid_request`, `invalid_params`, `method_not_found`, `not_found`, `conflict`, `limit_exceeded`, `unavailable`, `cancelled`, `timeout`, and `internal_error`. Errors MUST contain only a code and a stable, bounded, non-localized, safe message; they MUST NOT contain raw exceptions, stacks, URLs, paths, payloads, request/response bodies, authorization headers, grants, Host/Rust/Tauri objects, or localized product copy. Completed non-2xx HTTP responses MUST follow the `http.request` result contract rather than be mistaken for Host transport errors.
 
-A Host API error MUST remain discriminable from SDK lifecycle errors such as
-`disposed`, `disconnected`, and `transport_failure`. A future transport MUST
-NOT collapse a valid Host API rejection into `transport_failure`.
+Host API errors MUST remain distinguishable from SDK lifecycle errors such as `disposed`, `disconnected`, and `transport_failure`. Transport MUST NOT collapse a valid Host API rejection into `transport_failure`.
 
 #### Scenario: Handler failure is exposed safely
-
-- **WHEN** a later Host handler throws an unknown exception or returns an
-  invalid internal value
+- **WHEN** a Host handler throws an unknown exception or returns an invalid internal value
 - **THEN** the plugin receives only `internal_error` and a safe message
-- **THEN** the original exception, stack, path, payload, and Host object do not
-  enter the public error
+- **THEN** raw exceptions, stacks, paths, payloads, and Host objects do not enter public errors
 
 #### Scenario: Consumer handles a stable rejection
-
 - **WHEN** a plugin catches `not_found`, `limit_exceeded`, or `unavailable`
-- **THEN** the plugin can branch on the code without matching message text
-- **THEN** the message language does not change with the application locale
+- **THEN** it can branch on the code without matching message text
+- **THEN** message language does not change with the application locale
 
 #### Scenario: Transport disconnects before a Host result exists
-
-- **WHEN** the Session or transport disconnects before a Host API success or
-  rejection exists
-- **THEN** the SDK preserves its `disconnected` lifecycle semantics rather than
-  inventing a Host API `internal_error`
+- **WHEN** the Session or transport disconnects before a Host API success or rejection exists
+- **THEN** the SDK preserves `disconnected` lifecycle semantics rather than inventing Host API `internal_error`
 - **THEN** the two error sources remain predictable
 
 ### Requirement: Host API evolution MUST use capability discovery and explicit deprecation
 
-The Host API protocol, SDK package, and lensX application MUST be versioned
-independently. The SDK MUST check its Host API support range using SemVer before
-accepting Runtime Context, and a plugin MUST call only methods declared in the
-current Context `capabilities`. A compatible new method MUST increase the Host
-API minor version and be exposed through capability discovery. An incompatible
-change to an existing payload or error behavior, or removal of a
-method, MUST increase the Host API major version. A deprecated method MUST
-retain its original semantics, be marked in the specification and
-machine-readable catalog, and remain for at least one compatible minor window
-before it can be removed in a major version.
+The Host API protocol, SDK package, and lensX application MUST be versioned independently. The SDK MUST check its supported range with SemVer before accepting Runtime Context; plugins MUST invoke only methods declared in current Context `capabilities`. Compatible new methods MUST increase the Host API minor version and be exposed through capability discovery. This controlled HTTP extension MUST use Host API `0.3.0` while preserving existing methods' payload and error semantics; Manifest and SDK support ranges MUST still be validated separately. Existing plugin packages outside those ranges MUST be explicitly incompatible and require authors to upgrade the SDK, update declarations, and repack. The Host MUST NOT silently negotiate an old catalog, hide new methods to impersonate an old protocol, or rewrite installed packages.
+
+Incompatible changes to existing payload/error behavior or method removal MUST increase the Host API major version. Deprecated methods MUST retain their semantics, be marked in specifications and the machine-readable catalog, and remain for at least one compatible minor window before removal in a major version.
 
 #### Scenario: New compatible method appears
-
-- **WHEN** a future Host API minor version adds a method and the SDK's support
-  range includes that version
-- **THEN** old plugins can continue using their known capabilities, and new
-  plugins call the new method only after Context declares it
-- **THEN** a package patch does not masquerade as a protocol addition
+- **WHEN** a new Host API minor version adds a method and both the plugin Manifest and SDK support ranges include that version
+- **THEN** existing methods retain their semantics, and the new method is invoked only after Context declares it available
+- **THEN** a package patch cannot masquerade as a protocol addition; consumers of an old closed catalog must upgrade to an SDK that understands the new catalog
 
 #### Scenario: Host version is incompatible
-
-- **WHEN** Runtime Context's Host API SemVer does not satisfy the SDK support
-  range
-- **THEN** SDK initialization fails with `incompatible_host_api` and does not
-  enter `ready`
-- **THEN** the capability snapshot cannot bypass version incompatibility
+- **WHEN** Runtime Context's Host API SemVer is outside the SDK support range
+- **THEN** SDK initialization fails with `incompatible_host_api` and does not enter ready
+- **THEN** a capability snapshot cannot bypass version incompatibility
 
 #### Scenario: Method is deprecated
-
 - **WHEN** a method is marked deprecated in a compatible minor version
-- **THEN** the catalog and maintained documentation provide a stable
-  replacement direction while preserving the method's params, result, and
-  error semantics
+- **THEN** the catalog and maintained documentation provide a stable replacement direction while preserving params, result, and error semantics
 - **THEN** removal occurs only in a declared incompatible major version
 
 ### Requirement: Contract delivery MUST prove cross-consumer drift without claiming execution

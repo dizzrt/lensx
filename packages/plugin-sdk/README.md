@@ -32,8 +32,17 @@ bridge. It does not accept identity, origin, label, handle, bridge adapter,
 wire codec, Tauri command, or Host executor configuration. The private request
 IDs and frames are not public API or supported deep imports.
 
-The production Host-private Dispatcher currently advertises and implements
-`runtime.get_context`, `ui.close`, and `actions.open`. Storage and clipboard
-methods are not advertised and remain unavailable until their dedicated Host
-providers ship. This package still does not expose the Dispatcher, permission
-decisions, Host services, plugin execution policy, or a public Testkit fake.
+SDK `0.4.0` supports Host API `>=0.2.0 <0.4.0`. The current Host API is
+`0.3.0`; older plugin bundles must update their SDK and Manifest compatibility
+range and be rebuilt/repackaged before using that Host. No implicit protocol
+negotiation or package rewriting is performed.
+
+The current Host advertises base navigation/Context, scoped storage, and
+controlled `http.request` only while each provider is available. HTTP uses
+public HTTPS text requests through the same typed operation and cancellation
+interface; signing and service logic remain plugin-owned. It provides no
+arbitrary Tauri/native API or browser-fetch fallback. The generic SDK operation
+timeout remains 10 seconds; explicitly choose a longer operation timeout when
+using the native HTTP maximum of 15 seconds. Clipboard remains unavailable.
+This package does not expose the Dispatcher, Host services, permission
+decisions, plugin execution policy, or a public Testkit fake.

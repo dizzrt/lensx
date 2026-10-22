@@ -169,6 +169,14 @@ capabilities, not Host grants. SharedWorker, ServiceWorker, detached execution,
 device access, and native APIs are not promised. Publisher, repository,
 provenance, and CI evidence never add Runtime authority.
 
+The separate public `http.request` method is handled by a source-bound Rust
+provider for public HTTPS text requests. It uses the same current Session and
+cancellation/teardown boundary, keeps native transport private, and leaves
+service signing and business logic in the plugin. Browser Fetch retains its
+own CORS/CSP rules; no WebKit security option is disabled. See the
+[Host HTTP contract](../plugin-development/host-api.md#httprequest) for destination,
+DNS pinning, header/body, deadline, and concurrency limits.
+
 ## Development And CI
 
 External, development, and official plugins use Manifest `0.4.0`,

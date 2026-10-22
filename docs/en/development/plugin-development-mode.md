@@ -150,7 +150,7 @@ Use a fresh lensX process and keep its terminal open throughout this sequence.
    **Unpacked**, and **Unsigned**. Its publisher remains unverified author text,
    and no permission or grant facts are present.
 3. Open the Launcher again and run **Open development-mode smoke A**. The real
-   plugin WebView must report generation A and Host API `0.2.0` capabilities.
+   plugin WebView must report generation A and Host API `0.3.0` capabilities.
 4. Without closing lensX, build and validate generation B in another terminal:
 
    ```bash

@@ -14,6 +14,7 @@ const app = read('src/App.tsx');
 
 for (const method of [
   'actions.open',
+  'http.request',
   'runtime.get_context',
   'storage.delete',
   'storage.get',

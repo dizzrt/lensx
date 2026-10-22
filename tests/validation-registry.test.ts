@@ -43,6 +43,31 @@ describe('validation Gate registry and runner', () => {
     expect(plan.steps.every((item) => item.safety.readOnly)).toBe(true);
   });
 
+  test('keeps Host HTTP validation cross-layer and deterministic', () => {
+    const plan = planGates(validationRegistry, ['plugin-host-http']);
+    expect(plan.gateIds).toContain('plugin-host-api-contract');
+    expect(plan.gateIds).toContain('plugin-child-webview-host-dispatcher');
+    expect(plan.gateIds).toContain('workspace-boundaries');
+    expect(plan.steps.some((item) => item.executable === 'cargo' && item.argv.at(-1) === 'plugin_http')).toBe(true);
+    expect(
+      plan.steps.some((item) => item.argv.includes('plugins/translation') && item.argv.at(-1) === 'test:e2e'),
+    ).toBe(true);
+    expect(
+      plan.steps.every(
+        (item) =>
+          item.safety.readOnly &&
+          !item.safety.writesCommittedArtifacts &&
+          !isProhibitedEnvironmentCommand(item.description),
+      ),
+    ).toBe(true);
+    const generate = validationRegistry.generateTargets.find((target) => target.id === 'plugin-host-api-types');
+    expect(
+      generate?.steps.some((item) =>
+        item.argv.includes('packages/plugin-contract/scripts/generate-plugin-host-api-validators.mjs'),
+      ),
+    ).toBe(true);
+  });
+
   test('plans launcher input focus with structured commands and shared native dependencies', () => {
     const gate = findGate('launcher-input-focus');
     expect(gate?.description).toBe(

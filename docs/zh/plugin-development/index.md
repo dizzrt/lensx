@@ -54,5 +54,7 @@ teardown 边界。
 仓库会验证公共 package tarball，并通过只读 Plugins CI 验证首个产品成员——
 不具特权的 ConfigLens 插件。ConfigLens 使用一个可编辑 Monaco model 显式处理 JSON、
 YAML、TOML 或 XML 格式化，Compact 仅支持 JSON，并提供一次操作 undo；参见
-[维护者参考](../development/config-lens.md)。公共 package 仍未进入 npm。不得虚构 package registry 命令、产品下载
+[维护者参考](../development/config-lens.md)。独立翻译成员遵循同样的公共边界，
+范围与交付证据边界见其[维护者参考](../development/translation.md)。
+公共 package 仍未进入 npm。不得虚构 package registry 命令、产品下载
 URL、自动 reload/update、自动发布、签名、Marketplace 或 Host trust 能力。

@@ -137,5 +137,328 @@
     "kind": "error",
     "value": { "code": "internal_error", "message": "failed", "path": "/private/plugin" },
     "expected": [{ "code": "additional_property", "path": "/path" }]
+  },
+  {
+    "name": "http-unknown-field",
+    "kind": "request",
+    "value": {
+      "method": "http.request",
+      "params": {
+        "url": "https://example.com/api?encoded=%E4%B8%AD",
+        "method": "POST",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "fixture-signature"
+          },
+          {
+            "name": "X-Date",
+            "value": "20261022T000000Z"
+          }
+        ],
+        "body": " original 文本\n",
+        "timeoutMs": 15000,
+        "pluginId": "forged"
+      }
+    },
+    "expected": [
+      {
+        "code": "additional_property",
+        "path": "/params/pluginId"
+      }
+    ]
+  },
+  {
+    "name": "http-missing-url",
+    "kind": "request",
+    "value": {
+      "method": "http.request",
+      "params": {
+        "method": "POST"
+      }
+    },
+    "expected": [
+      {
+        "code": "required",
+        "path": "/params/url"
+      }
+    ]
+  },
+  {
+    "name": "http-connect-method",
+    "kind": "request",
+    "value": {
+      "method": "http.request",
+      "params": {
+        "url": "https://example.com/api?encoded=%E4%B8%AD",
+        "method": "CONNECT",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "fixture-signature"
+          },
+          {
+            "name": "X-Date",
+            "value": "20261022T000000Z"
+          }
+        ],
+        "body": " original 文本\n",
+        "timeoutMs": 15000
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/params/method"
+      }
+    ]
+  },
+  {
+    "name": "http-get-body",
+    "kind": "request",
+    "value": {
+      "method": "http.request",
+      "params": {
+        "url": "https://example.com/",
+        "method": "GET",
+        "body": ""
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/params"
+      }
+    ]
+  },
+  {
+    "name": "http-head-body",
+    "kind": "request",
+    "value": {
+      "method": "http.request",
+      "params": {
+        "url": "https://example.com/",
+        "method": "HEAD",
+        "body": "x"
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/params"
+      }
+    ]
+  },
+  {
+    "name": "http-zero-timeout",
+    "kind": "request",
+    "value": {
+      "method": "http.request",
+      "params": {
+        "url": "https://example.com/api?encoded=%E4%B8%AD",
+        "method": "POST",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "fixture-signature"
+          },
+          {
+            "name": "X-Date",
+            "value": "20261022T000000Z"
+          }
+        ],
+        "body": " original 文本\n",
+        "timeoutMs": 0
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/params/timeoutMs"
+      }
+    ]
+  },
+  {
+    "name": "http-long-timeout",
+    "kind": "request",
+    "value": {
+      "method": "http.request",
+      "params": {
+        "url": "https://example.com/api?encoded=%E4%B8%AD",
+        "method": "POST",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "fixture-signature"
+          },
+          {
+            "name": "X-Date",
+            "value": "20261022T000000Z"
+          }
+        ],
+        "body": " original 文本\n",
+        "timeoutMs": 15001
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/params/timeoutMs"
+      }
+    ]
+  },
+  {
+    "name": "http-header-name",
+    "kind": "request",
+    "value": {
+      "method": "http.request",
+      "params": {
+        "url": "https://example.com/api?encoded=%E4%B8%AD",
+        "method": "POST",
+        "headers": [
+          {
+            "name": "bad name",
+            "value": "x"
+          }
+        ],
+        "body": " original 文本\n",
+        "timeoutMs": 15000
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/params/headers/0/name"
+      }
+    ]
+  },
+  {
+    "name": "http-header-newline",
+    "kind": "request",
+    "value": {
+      "method": "http.request",
+      "params": {
+        "url": "https://example.com/api?encoded=%E4%B8%AD",
+        "method": "POST",
+        "headers": [
+          {
+            "name": "X-Test",
+            "value": "a\nb"
+          }
+        ],
+        "body": " original 文本\n",
+        "timeoutMs": 15000
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/params/headers/0/value"
+      }
+    ]
+  },
+  {
+    "name": "http-header-unicode",
+    "kind": "request",
+    "value": {
+      "method": "http.request",
+      "params": {
+        "url": "https://example.com/api?encoded=%E4%B8%AD",
+        "method": "POST",
+        "headers": [
+          {
+            "name": "X-Test",
+            "value": "中文"
+          }
+        ],
+        "body": " original 文本\n",
+        "timeoutMs": 15000
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/params/headers/0/value"
+      }
+    ]
+  },
+  {
+    "name": "http-header-tab",
+    "kind": "request",
+    "value": {
+      "method": "http.request",
+      "params": {
+        "url": "https://example.com/api?encoded=%E4%B8%AD",
+        "method": "POST",
+        "headers": [
+          {
+            "name": "X-Test",
+            "value": "\t"
+          }
+        ],
+        "body": " original 文本\n",
+        "timeoutMs": 15000
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/params/headers/0/value"
+      }
+    ]
+  },
+  {
+    "name": "http-status-too-low",
+    "kind": "result",
+    "value": {
+      "method": "http.request",
+      "result": {
+        "status": 99,
+        "headers": [],
+        "body": ""
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/result/status"
+      }
+    ]
+  },
+  {
+    "name": "http-status-too-high",
+    "kind": "result",
+    "value": {
+      "method": "http.request",
+      "result": {
+        "status": 600,
+        "headers": [],
+        "body": ""
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/result/status"
+      }
+    ]
+  },
+  {
+    "name": "http-result-nontext",
+    "kind": "result",
+    "value": {
+      "method": "http.request",
+      "result": {
+        "status": 200,
+        "headers": [],
+        "body": {}
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_type",
+        "path": "/result/body"
+      }
+    ]
   }
 ]

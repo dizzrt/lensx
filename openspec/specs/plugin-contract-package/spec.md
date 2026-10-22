@@ -33,42 +33,24 @@ declared in package `exports` MUST NOT be public API.
 
 ### Requirement: Public validation and normalization must form one safe deterministic boundary
 
-`validatePluginManifest` MUST accept unknown author input and return either a
-successful validation result or deterministic invalid diagnostics.
-`normalizePluginManifest` MUST accept only a successful validation result and
-the current LensX and Host API versions, and MUST return a compatible or
-incompatible normalized Manifest. The functions MUST NOT mutate input or
-depend on React, Semi Design, Tauri, DOM APIs, Node filesystem APIs,
-environment variables, or Host-private state.
+`validatePluginManifest` MUST accept unknown author input and return either a successful validation result or deterministic invalid diagnostics. `normalizePluginManifest` MUST accept only a successful validation result and the current LensX and Host API versions, and return a compatible or incompatible normalized Manifest. The functions MUST NOT mutate input or depend on React, Semi Design, Tauri, DOM, Node filesystem, environment variables, or Host-private state.
 
 #### Scenario: Validate and normalize a valid Manifest
-
-- **WHEN** unknown input passes validation and its successful result is
-  normalized against current versions
-- **THEN** the API applies deterministic trimming and defaults, returns the
-  correct compatibility status, and leaves the original input unchanged
+- **WHEN** unknown input passes validation and is normalized against current versions
+- **THEN** the API applies deterministic trimming and defaults, returns the correct compatibility status, and leaves the original input unchanged
 
 #### Scenario: Validation rejects invalid unknown input
-
 - **WHEN** unknown input violates Schema or Manifest semantics
-- **THEN** validation returns stable `{code, path, message}` diagnostics sorted
-  by JSON Pointer path and code
-- **THEN** the caller cannot pass the failed result through the supported
-  normalization path
+- **THEN** validation returns stable `{code, path, message}` diagnostics sorted by JSON Pointer path and code
+- **THEN** callers cannot normalize a failed result through the supported path
 
 #### Scenario: Normalization rejects an unvalidated value
-
-- **WHEN** a caller passes an ordinary object or forged failure result to
-  normalization
-- **THEN** the runtime rejects it and the type declaration does not accept raw
-  `PluginManifestInput`
+- **WHEN** a caller passes an ordinary object or forged failure result to the normalizer
+- **THEN** the runtime rejects it and the type declaration does not accept raw `PluginManifestInput`
 
 #### Scenario: Valid input is outside a compatibility range
-
-- **WHEN** valid input excludes the current LensX `0.1.0` or Host API `0.2.0`
-  from a declared half-open range
-- **THEN** normalization returns `incompatible`, not `invalid`, while retaining
-  normalized author data and per-dimension compatibility
+- **WHEN** valid input's half-open range excludes current LensX `0.1.0` or Host API `0.3.0`
+- **THEN** the normalizer returns `incompatible` rather than `invalid`, retaining normalized author data and per-dimension compatibility information
 
 ### Requirement: Schema and shared fixtures must prevent cross-consumer contract drift
 
@@ -97,35 +79,20 @@ normalized, and incompatible fixtures.
 
 ### Requirement: Plugin platform versions must begin at 0.1.0 and evolve independently
 
-The package version, `PLUGIN_MANIFEST_VERSION`, `PLUGIN_HOST_API_VERSION`, and
-private root `lensx` package version MUST each begin at `0.1.0` and MUST evolve
-independently. The current Contract package, Manifest protocol, and Host API
-protocol versions MUST be `0.2.0`, while the current private root application
-version remains `0.1.0`. The current contract MUST NOT expose an earlier
-experimental Schema, symbol alias, deprecated export, converter, or
-compatibility branch.
+The package version, `PLUGIN_MANIFEST_VERSION`, `PLUGIN_HOST_API_VERSION`, and private root `lensx` version MUST each begin at `0.1.0` and evolve independently. The current Contract package MUST be `0.3.0`, the Manifest protocol MUST remain `0.4.0`, the Host API MUST be `0.3.0`, and the private root application MUST remain `0.1.0`. Adding generic HTTP MUST NOT change the `.lxp` package format or private WebView bridge carrier `0.2.0`. The current Contract MUST NOT expose earlier experimental Schemas, symbol aliases, deprecated exports, converters, or implicit compatibility branches.
 
 #### Scenario: Package implementation receives a patch release
-
-- **WHEN** implementation changes without changing public API or either wire
-  protocol
-- **THEN** the package patch may increase while Manifest and Host API versions
-  remain unchanged
+- **WHEN** implementation changes without changing the public API or either wire protocol
+- **THEN** the package patch may increase while the Manifest and Host API versions remain unchanged
 
 #### Scenario: A public breaking change occurs before 1.0
-
-- **WHEN** a public export, diagnostic code/path, normalized output, Manifest
-  wire format, or Host API protocol changes incompatibly
-- **THEN** the corresponding version dimension increases according to the
-  documented pre-1.0 SemVer policy
+- **WHEN** public exports, diagnostic codes or paths, normalized output, Manifest wire format, or the Host API protocol change incompatibly
+- **THEN** the corresponding version dimension increases according to the maintained pre-1.0 SemVer policy
 
 #### Scenario: Consumer looks for an earlier compatibility surface
-
-- **WHEN** a consumer imports an earlier symbol or Schema subpath, or calls a
-  migration alias
-- **THEN** the package does not provide that entry
-- **THEN** current maintained documentation describes only the contract that
-  begins at `0.1.0`
+- **WHEN** a consumer imports an old symbol or Schema subpath or calls a migration alias
+- **THEN** the package provides no such entry
+- **THEN** current maintained documentation describes the current independently evolving contracts that each began at `0.1.0` and explicit migration boundaries
 
 ### Requirement: Packed artifact must be consumable outside the workspace
 
@@ -177,32 +144,17 @@ implementation.
 
 ### Requirement: Public Contract package MUST expose the bounded Host API semantic contract
 
-`@lensx/plugin-contract` root entry MUST expose the Host API `0.2.0` method,
-event, and error literal unions; Schema-generated params, result,
-and payload input types; normalized read-only output types; pure unknown-input
-validators; and an immutable method catalog. A declared Host API
-Schema subpath MUST expose the raw Draft 2020-12 Schemas. These exports MUST
-reuse `PLUGIN_HOST_API_VERSION` and MUST NOT expose a permission union,
-permission catalog, removed clipboard method, private RPC envelope, request ID,
-Runtime Session identity, `Window`, `MessagePort`, a Host executor, React,
-Tauri, or Rust implementation value.
+The `@lensx/plugin-contract` root entry MUST expose Host API `0.3.0` method, event, and error literal unions; Schema-generated params, result, and payload input types; normalized readonly output types; pure unknown-input validators; and an immutable method catalog, including generic `http.request`. The declared Host API Schema subpath MUST expose the raw Draft 2020-12 Schema. Exports MUST reuse `PLUGIN_HOST_API_VERSION` and MUST NOT expose permission unions or catalogs, removed clipboard methods, private RPC envelopes, request IDs, Runtime Session identity, `Window`, `MessagePort`, Host executors, React, Tauri, or Rust implementation values.
 
 #### Scenario: External consumer imports the Host API contract
-
-- **WHEN** a no-DOM consumer installs the real Contract tarball and imports
-  only the root and declared Host API Schema subpath
-- **THEN** TypeScript compilation and ESM Runtime validation of every public
-  Host API semantic kind succeed
-- **THEN** the consumer does not need lensX source code, SDK internals, React,
-  DOM, Tauri, or Rust
+- **WHEN** a no-DOM consumer installs the real Contract tarball and imports only the root and declared Host API Schema subpath
+- **THEN** TypeScript compilation and ESM runtime validation of every public Host API semantic kind succeed
+- **THEN** the consumer does not need lensX source, SDK internals, React, DOM, Tauri, or Rust
 
 #### Scenario: Consumer attempts a private wire import
-
-- **WHEN** a consumer deep-imports an internal generated file, fixture, RPC
-  envelope, or Host Runtime module
+- **WHEN** a consumer deep-imports an internal generated file, fixture, RPC envelope, or Host Runtime module
 - **THEN** package resolution rejects the undeclared path
-- **THEN** private transport facts do not become public because the package
-  also owns semantic Host API Schemas
+- **THEN** owning Host API Schema does not make private transport facts public
 
 ### Requirement: Host API Schema, generated types, catalog and shared fixtures MUST remain one fact chain
 
@@ -264,14 +216,14 @@ scripts, and Host-private source.
 - **THEN** the artifact is not considered publishable
 
 ### Requirement: Contract package MUST publish the WebView Manifest boundary as one fact chain
-`@lensx/plugin-contract` MUST publish the `0.3.0` Manifest Schema, generated types, normal and malicious fixtures, validator and normalizer for the WebView Runtime. Public declarations and packed files MUST NOT retain iframe Runtime authoring types or expose Child WebView, Tauri, bridge, label, origin token or Host-private Session facts.
+
+`@lensx/plugin-contract` MUST continue publishing the Manifest `0.4.0` Schema, generated types, normal and malicious fixtures, validator, and normalizer, preserving the WebView Runtime and existing Page presentation contracts. Public declarations and packed files MUST NOT retain iframe Runtime authoring types or expose Child WebView, Tauri, bridge, label, origin token, or Host-private Session facts. The Host HTTP extension MUST NOT add Manifest network permissions, private transport configuration, or direct native entries.
 
 #### Scenario: An external consumer installs the packed Contract
-- **WHEN** a temporary consumer validates the canonical WebView and legacy iframe fixtures from the packed tarball
+- **WHEN** a temporary consumer uses the packed Contract to validate canonical WebView and legacy iframe fixtures
 - **THEN** the WebView fixture succeeds and the iframe fixture receives the same stable incompatible result as the Host
 - **THEN** no workspace source import or private Runtime declaration is required
 
 #### Scenario: Contract artifacts drift
-- **WHEN** Schema, generated types, fixtures, validator, normalizer or Rust consumer disagree about the Runtime kind or protocol version
+- **WHEN** Schema, generated types, fixtures, validator, normalizer, or Rust consumers disagree on Runtime kind or protocol version
 - **THEN** the contract drift gate fails before publication
-

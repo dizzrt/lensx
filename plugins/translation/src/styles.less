@@ -1,0 +1,26 @@
+html, body, #root { height: 100%; margin: 0; }
+.translation {
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  overflow: auto;
+  color: var(--lensx-plugin-color-text);
+  background: var(--lensx-plugin-color-background);
+  font: 14px/1.5 system-ui, sans-serif;
+  &__toolbar, &__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+  &__toolbar > div { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 150px; }
+  &__texts { display: grid; grid-template-rows: minmax(100px, 1fr) minmax(100px, 1fr); gap: 12px; min-height: 230px; flex: 1; }
+  &__text { min-height: 0; display: flex; flex-direction: column; gap: 4px; }
+  &__text .semi-input-textarea-wrapper { min-height: 0; flex: 1; }
+  &__text textarea { box-sizing: border-box; height: 100%; overflow: auto; overflow-wrap: anywhere; }
+  &__feedback { display: flex; flex-direction: column; gap: 6px; }
+  &__notice { margin: 0; color: var(--lensx-plugin-color-text-secondary); }
+  &__settings { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--lensx-plugin-color-border); background: var(--lensx-plugin-color-surface); }
+  &__settings h2 { margin: 0; font-size: 16px; }
+  [role='alert'] { color: var(--lensx-plugin-color-danger); }
+  :focus-visible { outline: 2px solid var(--lensx-plugin-color-focus); outline-offset: 2px; }
+}

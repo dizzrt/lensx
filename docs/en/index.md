@@ -33,6 +33,8 @@ English is the maintained documentation baseline declared in
   macOS LensX and direct-plugin validation, local reproduction, and CI policy.
 - [ConfigLens Official Plugin](development/config-lens.md) — four-language,
   Worker-isolated configuration formatting and its dependency/evidence bounds.
+- [Translation Official Plugin](development/translation.md) — foreground text
+  translation, plugin-owned settings, and service/evidence boundaries.
 - [Plugin Development Mode](development/plugin-development-mode.md) — manually
   register, reload, and remove an unpacked `dist/` in a dedicated Host build.
 - [Frontend Guidelines](development/frontend-guidelines.md) — React, Semi

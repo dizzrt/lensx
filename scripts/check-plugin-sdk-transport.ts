@@ -69,7 +69,7 @@ const metadata = JSON.parse(readFileSync(join(root, 'packages/plugin-sdk/package
   exports?: Record<string, unknown>;
   dependencies?: Record<string, string>;
 };
-if (metadata.version !== '0.3.0') fail('SDK package version is not 0.3.0');
+if (metadata.version !== '0.4.0') fail('SDK package version is not 0.4.0');
 if (Object.keys(metadata.exports ?? {}).join('\0') !== '.\0./webview') {
   fail('public exports are not root plus WebView');
 }

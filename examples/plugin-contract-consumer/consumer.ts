@@ -41,7 +41,7 @@ if (
   result.status !== 'compatible' ||
   manifestSchema.$id !== rawManifestSchema.$id ||
   hostApiSchema.$id !== rawHostApiSchema.$id ||
-  HOST_API_METHOD_CATALOG.length !== 8 ||
+  HOST_API_METHOD_CATALOG.length !== 9 ||
   validateHostApiMethod('runtime.get_context').status !== 'valid' ||
   validatePluginRuntimeContext(runtimeContext).status !== 'valid' ||
   validateHostApiRequest({ method: 'runtime.get_context', params: {} }).status !== 'valid' ||
@@ -49,7 +49,7 @@ if (
   validateHostApiEvent({ event: 'runtime.context_changed', payload: runtimeContext }).status !== 'valid' ||
   validateHostApiError({ code: 'unavailable', message: 'The capability is unavailable.' }).status !== 'valid'
 ) {
-  throw new TypeError('Packed Contract package did not expose a coherent Manifest 0.4.0 / Host API 0.2.0 contract.');
+  throw new TypeError('Packed Contract package did not expose a coherent Manifest 0.4.0 / Host API 0.3.0 contract.');
 }
 
 export const exampleResult = `${result.manifest.plugin_id}:${result.status}`;

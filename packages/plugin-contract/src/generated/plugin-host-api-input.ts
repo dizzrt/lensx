@@ -6,7 +6,7 @@
  */
 
 /**
- * Public semantic Host API 0.2.0 contract. This schema intentionally excludes private RPC transport and Host identity facts.
+ * Public semantic Host API 0.3.0 contract. This schema intentionally excludes private RPC transport and Host identity facts.
  */
 export type PluginHostApiInput =
   | HostApiRequestInput
@@ -17,6 +17,7 @@ export type PluginHostApiInput =
   | HostApiEventNameInput;
 export type HostApiRequestInput =
   | ActionsOpenRequest
+  | HttpRequestRequest
   | RuntimeGetContextRequest
   | StorageDeleteRequest
   | StorageGetRequest
@@ -25,6 +26,10 @@ export type HostApiRequestInput =
   | StorageSetRequest
   | UiCloseRequest;
 export type LocalActionId = string;
+/**
+ * @maxItems 32
+ */
+export type HttpHeaders = HttpHeader[];
 export type StorageKey = string;
 export type OpaqueCursor = string;
 export type JsonValue =
@@ -38,6 +43,7 @@ export type JsonValue =
     };
 export type HostApiResultInput =
   | ActionsOpenResult
+  | HttpRequestResult
   | RuntimeGetContextResult
   | StorageDeleteResult
   | StorageGetResult
@@ -48,6 +54,7 @@ export type HostApiResultInput =
 export type Semver = string;
 export type HostApiMethodInput =
   | 'actions.open'
+  | 'http.request'
   | 'runtime.get_context'
   | 'storage.delete'
   | 'storage.get'
@@ -73,6 +80,21 @@ export interface ActionsOpenRequest {
   params: {
     actionId: LocalActionId;
   };
+}
+export interface HttpRequestRequest {
+  method: 'http.request';
+  params: HttpRequestParams;
+}
+export interface HttpRequestParams {
+  url: string;
+  method: 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
+  headers?: HttpHeaders;
+  body?: string;
+  timeoutMs?: number;
+}
+export interface HttpHeader {
+  name: string;
+  value: string;
 }
 export interface RuntimeGetContextRequest {
   method: 'runtime.get_context';
@@ -117,6 +139,14 @@ export interface ActionsOpenResult {
   method: 'actions.open';
   result: {
     opened: true;
+  };
+}
+export interface HttpRequestResult {
+  method: 'http.request';
+  result: {
+    status: number;
+    headers: HttpHeaders;
+    body: string;
   };
 }
 export interface RuntimeGetContextResult {

@@ -6,17 +6,25 @@ Track these dimensions independently:
 
 | Dimension | Current baseline | Meaning |
 | --- | --- | --- |
-| Contract/UI/Testkit packages | `0.2.0` | Public semantic contracts, UI, and test helpers. |
-| SDK package | `0.3.0` | Root semantic client plus the `/webview` production transport. |
+| Contract package | `0.3.0` | Public Manifest and Host API semantic contracts. |
+| UI/Testkit/CLI packages | `0.2.0` | UI, test helpers, and authoring tools. |
+| SDK package | `0.4.0` | Root semantic client plus the `/webview` production transport. |
 | Manifest protocol | `0.4.0` | Author input and normalized WebView Manifest wire contract. |
-| Host API protocol | `0.2.0` | Semantic methods, results, events, errors, and context. |
+| Host API protocol | `0.3.0` | Semantic methods, results, events, errors, and context. |
 | Private bridge carrier | `0.2.0` | Closed Host/native-to-plugin transport frames; not a Host API. |
 | lensX application | `0.1.0` | Host compatibility range checked by the Manifest. |
 | `.lxp` package format | `0.1.0` | Canonical archive and checksums profile. |
 
 A package patch does not automatically change a protocol. The Manifest declares
 half-open compatibility ranges for lensX and Host API. The SDK supports Host
-API `>=0.2.0 <0.3.0` and rejects an incompatible context before ready.
+API `>=0.2.0 <0.4.0` and rejects an incompatible context before ready. An older
+Host can initialize the new SDK without offering `http.request`; always check
+current capabilities. The current Host reports `0.3.0`. Old bundles whose
+Manifest excludes `0.3.0` are incompatible, and old SDK `0.3.0` cannot accept
+the new method catalog. Upgrade the public dependencies, update the Manifest,
+rebuild, and repackage; no implicit protocol negotiation or package rewriting
+is performed. Maintained templates and ConfigLens use an exclusive upper bound
+of `0.4.0`; Translation requires at least Host API `0.3.0`.
 
 ## Validation outcomes
 

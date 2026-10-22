@@ -313,7 +313,7 @@ Page 标题。Host Page 使用受保护 Host icon token；在 scoped resource re
 同时由 Rust 创建 current native Child WebView sibling。Host 私有 resolver 会交叉检查 Page、
 Registration revision、Resource identity、isolated `entry_url`、route、generation、native source
 与 attempt。closed bridge 和 Session 只会为该 current Child WebView 进入 ready。close、retry、
-invalidation、replacement 与 App teardown 都会撤销它。Manifest `0.4.0` 与 Host API `0.2.0`
+invalidation、replacement 与 App teardown 都会撤销它。Manifest `0.4.0` 与 Host API `0.3.0`
 既不暴露 native Window method，也不暴露 Child WebView identity。
 
 设置在现有 `main` Tauri 窗口中渲染。左侧受控纵向导航只包含“偏好”和“插件”，默认选择“偏好”；

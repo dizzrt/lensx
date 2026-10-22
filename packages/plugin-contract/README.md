@@ -14,9 +14,14 @@ import { validatePluginRuntimeContext } from '@lensx/plugin-contract';
 declare const unknownContext: unknown;
 const result = validatePluginRuntimeContext(unknownContext);
 if (result.status === 'valid' && result.value.capabilities.includes('storage.get')) {
-  // A future typed SDK may offer storage.get for this current Context.
+  // The typed SDK may call storage.get while this current Context declares it.
 }
 ```
 
 Declared Schema entries are `/schema`, `/manifest.schema.json`,
 `/host-api-schema`, and `/host-api.schema.json`. Other deep imports are private.
+
+Contract `0.3.0` owns Manifest `0.4.0` and Host API `0.3.0`, including the
+bounded `http.request` semantic contract. It performs no network I/O. A
+current capability snapshot and compatible SDK/Manifest are still required
+before a plugin may call a real Host provider.

@@ -9,6 +9,7 @@ use crate::{
         PluginChildWebviewRpcDispatchFacts, PluginChildWebviewRpcDispatcher,
         PluginChildWebviewService,
     },
+    plugin_http::{HostHttpExecutor, PluginHttpProvider},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -18,6 +19,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tauri::{AppHandle, Emitter, EventTarget, Manager, Runtime, State};
+use tokio::sync::watch;
 
 pub(crate) const PLUGIN_CHILD_WEBVIEW_HOST_DISPATCH_EVENT: &str =
     "plugin-child-webview-host-dispatch";
@@ -118,10 +120,16 @@ struct HostDispatcherState {
     dispatches: HashMap<String, HostDispatchBinding>,
 }
 
+struct NativeHttpPending {
+    cancel: watch::Sender<bool>,
+}
+
 pub(crate) struct PluginChildWebviewHostDispatcher<H: PluginChildWebviewNativeHandle> {
     service: Arc<PluginChildWebviewRegistry<H>>,
     emitter: Arc<dyn PluginChildWebviewHostEmitter>,
     state: Mutex<HostDispatcherState>,
+    http: Arc<dyn HostHttpExecutor>,
+    http_pending: Arc<Mutex<HashMap<(String, String), Arc<NativeHttpPending>>>>,
 }
 
 impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewHostDispatcher<H> {
@@ -129,11 +137,90 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewHostDispatcher<H> {
         service: Arc<PluginChildWebviewRegistry<H>>,
         emitter: Arc<dyn PluginChildWebviewHostEmitter>,
     ) -> Self {
+        Self::with_http(service, emitter, Arc::new(PluginHttpProvider::new()))
+    }
+
+    fn with_http(
+        service: Arc<PluginChildWebviewRegistry<H>>,
+        emitter: Arc<dyn PluginChildWebviewHostEmitter>,
+        http: Arc<dyn HostHttpExecutor>,
+    ) -> Self {
         Self {
             service,
             emitter,
             state: Mutex::new(HostDispatcherState::default()),
+            http,
+            http_pending: Arc::default(),
         }
+    }
+
+    fn dispatch_http(&self, facts: &PluginChildWebviewRpcDispatchFacts) -> bool {
+        let attempt_id = facts.attempt.opaque_id();
+        let key = (attempt_id.clone(), facts.request_id.clone());
+        let (cancel, cancelled) = watch::channel(false);
+        let operation = Arc::new(NativeHttpPending { cancel });
+        {
+            let mut pending = self
+                .http_pending
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if pending.contains_key(&key) {
+                return false;
+            }
+            // Register before spawn: cancellation cannot race ahead of ownership publication.
+            pending.insert(key.clone(), Arc::clone(&operation));
+        }
+        // The source can terminate between the registry's dispatch check and registration.
+        // Recheck after registration: earlier cancellation is now visible in RPC state,
+        // and any later cancellation is guaranteed to find our registered handle.
+        if !self.service.is_rpc_dispatch_pending(
+            facts.attempt,
+            &facts.source_label,
+            &facts.request_id,
+            "http.request",
+        ) {
+            let _ = operation.cancel.send(true);
+            let mut pending = self
+                .http_pending
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if pending
+                .get(&key)
+                .is_some_and(|value| Arc::ptr_eq(value, &operation))
+            {
+                pending.remove(&key);
+            }
+            return false;
+        }
+        let provider = Arc::clone(&self.http);
+        let pending = Arc::clone(&self.http_pending);
+        let service = Arc::clone(&self.service);
+        let attempt = facts.attempt;
+        let source = facts.source_label.clone();
+        let request_id = facts.request_id.clone();
+        let params = facts.request["params"].clone();
+        tauri::async_runtime::spawn(async move {
+            let output = provider.execute(attempt_id, params, cancelled).await;
+            let current = {
+                let mut pending = pending
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                if pending
+                    .get(&key)
+                    .is_some_and(|value| Arc::ptr_eq(value, &operation))
+                {
+                    pending.remove(&key);
+                    true
+                } else {
+                    false
+                }
+            };
+            if current {
+                // Native registry independently checks current attempt/source and pending request.
+                service.settle_rpc_dispatch(attempt, &source, &request_id, output);
+            }
+        });
+        true
     }
 
     pub(crate) fn settle(&self, dispatch_id: &str, output: Value) -> bool {
@@ -199,6 +286,9 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRpcDispatcher
     for PluginChildWebviewHostDispatcher<H>
 {
     fn dispatch(&self, facts: &PluginChildWebviewRpcDispatchFacts) -> bool {
+        if facts.method == "http.request" {
+            return self.dispatch_http(facts);
+        }
         let session_id = opaque_identifier(
             b"lensx-plugin-child-webview-host-session-v1\0",
             &[
@@ -258,6 +348,18 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRpcDispatcher
     }
 
     fn cancel(&self, facts: &PluginChildWebviewRpcCancellationFacts) {
+        if facts.method == "http.request" {
+            let key = (facts.attempt.opaque_id(), facts.request_id.clone());
+            if let Some(operation) = self
+                .http_pending
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .remove(&key)
+            {
+                let _ = operation.cancel.send(true);
+            }
+            return;
+        }
         let removed = {
             let mut state = self
                 .state
@@ -286,6 +388,18 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRpcDispatcher
     }
 
     fn disconnect(&self, attempt: PluginChildWebviewAttempt, plugin_id: &str) {
+        let attempt_id = attempt.opaque_id();
+        self.http_pending
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .retain(|(candidate, _), operation| {
+                if candidate == &attempt_id {
+                    let _ = operation.cancel.send(true);
+                    false
+                } else {
+                    true
+                }
+            });
         let session_ids = {
             let mut state = self
                 .state
@@ -520,14 +634,31 @@ mod tests {
         PluginChildWebviewAttempt,
         Arc<Mutex<Vec<Value>>>,
     ) {
+        setup_with_http(Arc::new(PluginHttpProvider::new()), None)
+    }
+
+    fn setup_with_http(
+        http: Arc<dyn HostHttpExecutor>,
+        delayed: Option<Arc<HeldDispatch>>,
+    ) -> (
+        Arc<PluginChildWebviewRegistry<FakeHandle>>,
+        Arc<PluginChildWebviewHostDispatcher<FakeHandle>>,
+        Arc<FakeEmitter>,
+        PluginChildWebviewAttempt,
+        Arc<Mutex<Vec<Value>>>,
+    ) {
         let service = Arc::new(PluginChildWebviewRegistry::<FakeHandle>::default());
         assert!(service.attach_ready_dispatcher(Arc::new(AcceptReady)));
         let emitter = Arc::new(FakeEmitter::default());
-        let dispatcher = Arc::new(PluginChildWebviewHostDispatcher::new(
+        let dispatcher = Arc::new(PluginChildWebviewHostDispatcher::with_http(
             Arc::clone(&service),
             emitter.clone(),
+            http,
         ));
-        assert!(service.attach_rpc_dispatcher(dispatcher.clone()));
+        assert!(service.attach_rpc_dispatcher(match delayed {
+            Some(delayed) => delayed,
+            None => dispatcher.clone(),
+        }));
         let identity = PluginChildWebviewIdentity::new(
             "plugin-a",
             "page-a",
@@ -684,5 +815,210 @@ mod tests {
             }),
         ));
         assert_eq!(deliveries.lock().expect("deliveries should lock").len(), 1);
+    }
+
+    #[derive(Default)]
+    struct HeldDispatch {
+        facts: Mutex<Vec<PluginChildWebviewRpcDispatchFacts>>,
+    }
+    impl PluginChildWebviewRpcDispatcher for HeldDispatch {
+        fn dispatch(&self, facts: &PluginChildWebviewRpcDispatchFacts) -> bool {
+            self.facts.lock().unwrap().push(facts.clone());
+            true
+        }
+        fn cancel(&self, _facts: &PluginChildWebviewRpcCancellationFacts) {}
+        fn disconnect(&self, _attempt: PluginChildWebviewAttempt, _plugin_id: &str) {}
+    }
+
+    struct NativeCall {
+        attempt: String,
+        params: Value,
+        cancelled: watch::Receiver<bool>,
+        complete: tokio::sync::oneshot::Sender<Value>,
+    }
+    struct QueuedHttp {
+        calls: tokio::sync::mpsc::UnboundedSender<NativeCall>,
+    }
+    impl HostHttpExecutor for QueuedHttp {
+        fn execute(
+            self: Arc<Self>,
+            attempt: String,
+            params: Value,
+            cancelled: watch::Receiver<bool>,
+        ) -> crate::plugin_http::HttpExecutionFuture {
+            let (complete, response) = tokio::sync::oneshot::channel();
+            self.calls
+                .send(NativeCall {
+                    attempt,
+                    params,
+                    cancelled,
+                    complete,
+                })
+                .unwrap();
+            // Deliberately non-cooperative transport proves late-completion protection independently of abort.
+            Box::pin(async move {
+                response
+                    .await
+                    .unwrap_or_else(|_| crate::plugin_http::HttpFailure::Cancelled.output())
+            })
+        }
+    }
+    fn queued_http() -> (
+        Arc<QueuedHttp>,
+        tokio::sync::mpsc::UnboundedReceiver<NativeCall>,
+    ) {
+        let (calls, receiver) = tokio::sync::mpsc::unbounded_channel();
+        (Arc::new(QueuedHttp { calls }), receiver)
+    }
+    fn http_params() -> Value {
+        serde_json::json!({"url":"https://api.vendor.com/","method":"POST","headers":[{"name":"Authorization","value":"synthetic"}],"body":"fixture"})
+    }
+    fn http_result(body: &str) -> Value {
+        serde_json::json!({"method":"http.request","result":{"status":200,"headers":[],"body":body}})
+    }
+    fn cancel_body(id: u64) -> String {
+        serde_json::json!({"contract_version":"0.2.0","type":"lensx.plugin_bridge.cancel","request_id":format!("request_{id:016x}")}).to_string()
+    }
+    async fn wait_until(condition: impl Fn() -> bool) {
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while !condition() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("native task completes");
+    }
+
+    #[tokio::test]
+    async fn http_requests_execute_natively_and_return_without_host_js_or_cors() {
+        let (http, mut calls) = queued_http();
+        let (service, dispatcher, emitter, attempt, deliveries) = setup_with_http(http, None);
+        assert_eq!(
+            service.accept_rpc_ingress(
+                attempt,
+                "wrong-source",
+                &rpc_request(1, "http.request", http_params())
+            ),
+            PluginChildWebviewRpcIngressResult::SessionUnavailable
+        );
+        assert_eq!(
+            service.accept_rpc_ingress(
+                attempt,
+                "child",
+                &rpc_request(1, "http.request", http_params())
+            ),
+            PluginChildWebviewRpcIngressResult::Dispatched
+        );
+        let call = calls.recv().await.unwrap();
+        assert_eq!(call.attempt, attempt.opaque_id());
+        assert_eq!(call.params, http_params());
+        assert!(emitter.dispatches.lock().unwrap().is_empty());
+        assert!(!*call.cancelled.borrow());
+        call.complete
+            .send(http_result("actual response without CORS"))
+            .unwrap();
+        wait_until(|| !deliveries.lock().unwrap().is_empty()).await;
+        assert_eq!(
+            deliveries.lock().unwrap()[0]["result"]["result"]["body"],
+            "actual response without CORS"
+        );
+        assert!(dispatcher.http_pending.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn http_cancel_and_teardown_abort_native_handles_and_drop_late_results() {
+        let (http, mut calls) = queued_http();
+        let (service, dispatcher, emitter, attempt, deliveries) = setup_with_http(http, None);
+        service.accept_rpc_ingress(
+            attempt,
+            "child",
+            &rpc_request(1, "http.request", http_params()),
+        );
+        let first = calls.recv().await.unwrap();
+        assert_eq!(
+            service.accept_rpc_ingress(attempt, "child", &cancel_body(1)),
+            PluginChildWebviewRpcIngressResult::Cancelled
+        );
+        assert!(*first.cancelled.borrow());
+        assert!(dispatcher.http_pending.lock().unwrap().is_empty());
+        first.complete.send(http_result("late cancelled")).unwrap();
+        service.accept_rpc_ingress(
+            attempt,
+            "child",
+            &rpc_request(2, "http.request", http_params()),
+        );
+        let second = calls.recv().await.unwrap();
+        service.compare_current_teardown(attempt).unwrap();
+        assert!(*second.cancelled.borrow());
+        assert!(dispatcher.http_pending.lock().unwrap().is_empty());
+        second.complete.send(http_result("late destroyed")).unwrap();
+        // Both completions are retired even if their injected transport ignores abort.
+        tokio::task::yield_now().await;
+        assert!(deliveries
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|frame| frame.get("result").is_none()));
+        assert!(emitter.dispatches.lock().unwrap().is_empty());
+        assert!(emitter.cancels.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn cancellation_or_teardown_before_native_registration_never_starts_http() {
+        for teardown in [false, true] {
+            let held = Arc::new(HeldDispatch::default());
+            let (http, mut calls) = queued_http();
+            let (service, dispatcher, _emitter, attempt, _deliveries) =
+                setup_with_http(http, Some(held.clone()));
+            service.accept_rpc_ingress(
+                attempt,
+                "child",
+                &rpc_request(1, "http.request", http_params()),
+            );
+            let facts = held.facts.lock().unwrap()[0].clone();
+            if teardown {
+                service.compare_current_teardown(attempt).unwrap();
+            } else {
+                service.accept_rpc_ingress(attempt, "child", &cancel_body(1));
+            }
+            assert!(!dispatcher.dispatch(&facts));
+            assert!(dispatcher.http_pending.lock().unwrap().is_empty());
+            assert!(calls.try_recv().is_err());
+        }
+    }
+
+    #[tokio::test]
+    async fn late_native_cleanup_cannot_remove_a_new_operation_even_if_internal_key_is_reused() {
+        let held = Arc::new(HeldDispatch::default());
+        let (http, mut calls) = queued_http();
+        let (service, dispatcher, _emitter, attempt, deliveries) =
+            setup_with_http(http, Some(held.clone()));
+        service.accept_rpc_ingress(
+            attempt,
+            "child",
+            &rpc_request(1, "http.request", http_params()),
+        );
+        let facts = held.facts.lock().unwrap()[0].clone();
+        assert!(dispatcher.dispatch(&facts));
+        let first = calls.recv().await.unwrap();
+        dispatcher.cancel(&PluginChildWebviewRpcCancellationFacts {
+            attempt,
+            plugin_id: "plugin-a".to_owned(),
+            request_id: facts.request_id.clone(),
+            method: "http.request".to_owned(),
+        });
+        assert!(dispatcher.dispatch(&facts));
+        let second = calls.recv().await.unwrap();
+        first.complete.send(http_result("stale")).unwrap();
+        tokio::task::yield_now().await;
+        assert_eq!(dispatcher.http_pending.lock().unwrap().len(), 1);
+        assert!(deliveries.lock().unwrap().is_empty());
+        second.complete.send(http_result("current")).unwrap();
+        wait_until(|| !deliveries.lock().unwrap().is_empty()).await;
+        assert_eq!(deliveries.lock().unwrap().len(), 1);
+        assert_eq!(
+            deliveries.lock().unwrap()[0]["result"]["result"]["body"],
+            "current"
+        );
     }
 }

@@ -124,7 +124,7 @@ raw native errors 或 private Manager facts。
    **Development**、**Unpacked**、**Unsigned** 文本标签。Publisher 必须仍是
    未验证的作者文本，并且不存在 permission 或 grant facts。
 3. 再次打开 Launcher，执行 **打开开发模式 Smoke A**。真实插件 WebView 必须显示
-   A 代版本与 Host API `0.2.0` capabilities。
+   A 代版本与 Host API `0.3.0` capabilities。
 4. 不关闭 lensX，在另一个 terminal 构建并校验 B 代版本：
 
    ```bash
