@@ -10,20 +10,7 @@ results, and built-in launcher actions.
 
 ### Requirement: Launcher actions must use validatable, serializable descriptors
 
-The system MUST provide a plain-data descriptor for every Launcher Action. The
-descriptor MUST contain at least `action_id`, `owner_id`, localized `title`,
-optional localized `description`, locale-keyed `default_keywords`, and
-`enabled`, and MAY contain an optional Host-owned display `icon`. When present,
-the icon MUST be serializable plain data made of a fixed `kind` and a validated,
-stable token. It MUST NOT be a ReactNode, function, arbitrary URL, unvalidated
-file path, or Provider-private object.
-
-A descriptor MUST be serializable and MUST NOT contain an executor, function,
-React state, Tauri window, Rust internal type, or any other non-serializable
-value. Before registration, the system MUST validate unknown input and return
-structured diagnostics sorted by JSON Pointer path and stable code. Registry
-lookup, cloning, and snapshots MUST preserve valid icon metadata while
-continuing to isolate the executor.
+Launcher Actions MUST use validated serializable plain-data descriptors with localized metadata and optional safe Host icons. Executors and internal objects MUST remain private, with deterministic structured validation diagnostics.
 
 #### Scenario: Accept a valid descriptor
 
@@ -69,6 +56,25 @@ continuing to isolate the executor.
 - **THEN** the diagnostics use deterministic path and code ordering
 - **THEN** callers do not need to inspect diagnostic messages to determine
   error types
+
+#### Scenario: Validate Action display metadata and optional icon
+- **WHEN** unknown input is supplied as a Launcher Action descriptor
+- **THEN** The system MUST provide a plain-data descriptor for every Launcher Action. The
+  descriptor MUST contain at least `action_id`, `owner_id`, localized `title`,
+  optional localized `description`, locale-keyed `default_keywords`, and
+  `enabled`, and MAY contain an optional Host-owned display `icon`. When present,
+  the icon MUST be serializable plain data made of a fixed `kind` and a validated,
+  stable token. It MUST NOT be a ReactNode, function, arbitrary URL, unvalidated
+  file path, or Provider-private object.
+
+#### Scenario: Publish a descriptor without exposing execution internals
+- **WHEN** the registry validates, clones, looks up, or snapshots Action metadata
+- **THEN** A descriptor MUST be serializable and MUST NOT contain an executor, function,
+  React state, Tauri window, Rust internal type, or any other non-serializable
+  value. Before registration, the system MUST validate unknown input and return
+  structured diagnostics sorted by JSON Pointer path and stable code. Registry
+  lookup, cloning, and snapshots MUST preserve valid icon metadata while
+  continuing to isolate the executor.
 
 ### Requirement: Action IDs must express stable owner relationships
 
@@ -138,20 +144,7 @@ application message resources.
 
 ### Requirement: The Host registry must register atomically and provide deterministic immutable snapshots
 
-One trusted Host application service MUST own the running launcher action
-registry. The registry MUST support single and batch registration, lookup by
-`action_id`, descriptor snapshots sorted in ascending `action_id` order, and
-trusted provider-scoped replacement or unregistration of one owner's complete
-Action batch. Batch registration and provider replacement MUST be atomic. If
-any descriptor is invalid, duplicates an existing Action owned by another
-provider, duplicates another Action in the batch, or does not belong to the
-declared provider owner, the registry MUST reject the entire batch. A failed
-provider replacement MUST preserve the complete pre-call Registry state. A
-successful provider replacement MUST remove the provider's previous batch and
-commit the new complete batch in one transition; an empty provider batch MUST
-unregister only that provider's Actions. Public descriptors and snapshots MUST
-be isolated from caller input and MUST NOT expose or allow mutation of internal
-executors or provider bookkeeping.
+One trusted Host registry MUST provide atomic Action registration and owner replacement with deterministic immutable snapshots. Invalid batches MUST preserve the old state and public descriptors MUST not expose executors or bookkeeping.
 
 #### Scenario: Register a valid action batch
 
@@ -214,16 +207,26 @@ executors or provider bookkeeping.
 - **THEN** the Registry preserves every Action and executor owned by another
   provider
 
+#### Scenario: Atomically register replace or remove an owner Action batch
+- **WHEN** the trusted Action registry is initialized, mutated, looked up, or read as a snapshot
+- **THEN** One trusted Host application service MUST own the running launcher action
+  registry. The registry MUST support single and batch registration, lookup by
+  `action_id`, descriptor snapshots sorted in ascending `action_id` order, and
+  trusted provider-scoped replacement or unregistration of one owner's complete
+  Action batch. Batch registration and provider replacement MUST be atomic. If
+  any descriptor is invalid, duplicates an existing Action owned by another
+  provider, duplicates another Action in the batch, or does not belong to the
+  declared provider owner, the registry MUST reject the entire batch. A failed
+  provider replacement MUST preserve the complete pre-call Registry state. A
+  successful provider replacement MUST remove the provider's previous batch and
+  commit the new complete batch in one transition; an empty provider batch MUST
+  unregister only that provider's Actions. Public descriptors and snapshots MUST
+  be isolated from caller input and MUST NOT expose or allow mutation of internal
+  executors or provider bookkeeping.
+
 ### Requirement: The dispatcher must execute actions uniformly and return typed results
 
-The system MUST use one dispatcher to resolve and execute an action by
-`action_id`. On every execution, the dispatcher MUST check whether the action
-exists and is enabled, and it MUST invoke the corresponding Host executor at
-most once. The dispatcher MUST return a typed result containing `ok` and
-`action_id`. Failure results MUST use stable codes to distinguish
-`action_not_found`, `action_unavailable`, and `action_execution_failed`. When
-an executor throws or rejects, the dispatcher MUST contain the internal error
-and MUST NOT expose a stack, Tauri window, or Rust internal type to the caller.
+The unified dispatcher MUST resolve current enabled Actions, invoke at most one Host executor, and return typed results with stable safe failure codes without leaking internal exceptions.
 
 #### Scenario: Execute an available action
 
@@ -251,6 +254,17 @@ and MUST NOT expose a stack, Tauri window, or Rust internal type to the caller.
   `action_execution_failed`
 - **THEN** the public result contains no internal exception stack or privileged
   object
+
+#### Scenario: Dispatch an Action ID and contain executor failures
+- **WHEN** a caller executes a Launcher Action through the shared dispatcher
+- **THEN** The system MUST use one dispatcher to resolve and execute an action by
+  `action_id`. On every execution, the dispatcher MUST check whether the action
+  exists and is enabled, and it MUST invoke the corresponding Host executor at
+  most once. The dispatcher MUST return a typed result containing `ok` and
+  `action_id`. Failure results MUST use stable codes to distinguish
+  `action_not_found`, `action_unavailable`, and `action_execution_failed`. When
+  an executor throws or rejects, the dispatcher MUST contain the internal error
+  and MUST NOT expose a stack, Tauri window, or Rust internal type to the caller.
 
 ### Requirement: Descriptors and executors must preserve the Host trust boundary
 
@@ -321,19 +335,7 @@ the native window hide operation directly.
 
 ### Requirement: The default registry must contain the Host settings Action
 
-The default Action service MUST register the enabled
-`lensx.core.open_settings` Action with owner `lensx.core`. Its English and
-Simplified Chinese title, description, and search keywords MUST come from
-application message resources. Its titles MUST be `Settings` and `设置`,
-respectively. The public descriptor MUST continue to contain
-only serializable metadata and MUST NOT contain a page target or executable
-function.
-
-The trusted Host executor MUST preserve the existing
-`LauncherActionExecutor = () => Promise<void> | void` contract and MUST request
-the `lensx.core/settings` Host page through a framework-independent application
-navigation service. React result components MUST continue to dispatch only the
-Action ID.
+The default service MUST register localized lensX Settings metadata as an enabled Host Action. Its private executor MUST use framework-independent page navigation while React dispatches only the Action ID.
 
 #### Scenario: Create the default Action service
 
@@ -372,6 +374,24 @@ Action ID.
 - **THEN** the executor reports an execution failure
 - **THEN** the Dispatcher returns `action_execution_failed`
 - **THEN** the public Action and Dispatcher contracts remain unchanged
+
+#### Scenario: Register the localized Host Settings Action
+- **WHEN** the default Action service initializes
+- **THEN** The default Action service MUST register the enabled
+  `lensx.core.open_settings` Action with owner `lensx.core`. Its English and
+  Simplified Chinese title, description, and search keywords MUST come from
+  application message resources. Its titles MUST be `Settings` and `设置`,
+  respectively. The public descriptor MUST continue to contain
+  only serializable metadata and MUST NOT contain a page target or executable
+  function.
+
+#### Scenario: Navigate from the Settings executor without exposing a page target
+- **WHEN** the Settings Action is presented for execution or dispatched to its private Host executor
+- **THEN** The trusted Host executor MUST preserve the existing
+  `LauncherActionExecutor = () => Promise<void> | void` contract and MUST request
+  the `lensx.core/settings` Host page through a framework-independent application
+  navigation service. React result components MUST continue to dispatch only the
+  Action ID.
 
 ### Requirement: Action titles MUST express user-facing entry names
 

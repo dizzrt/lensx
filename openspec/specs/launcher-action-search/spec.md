@@ -10,18 +10,7 @@ interaction, and Dispatcher-based execution behavior.
 
 ### Requirement: Action Search must consume Host Registry snapshots uniformly
 
-The system MUST accept a query, an application locale for presentation, a
-positive integer result limit, and a read-only Action descriptor snapshot, and
-return deterministically sorted serializable results. Search text MUST come
-only from explicitly declared Action `title` and `default_keywords` values in
-all supported languages. `enabled` MUST control filtering, `action_id` MUST
-provide identity and tie-breaking, and `owner_id` MUST provide owner identity.
-Descriptions, plugin names, Page titles, and private metadata MUST NOT affect
-matching or scoring. All sources MUST use the same rules. Icons and Recent or
-Pinned state MAY accompany display data but MUST NOT affect matching, scoring,
-or ordering. Results MUST retain identity, localized display text, scores, and
-optional safe icons, and MUST NOT contain executors, functions, mutable Registry
-internals, React state, Tauri objects, or Rust objects.
+The system MUST accept a query, an application locale for presentation, a positive integer result limit, and a read-only Action descriptor snapshot, and return deterministically sorted serializable results.
 
 #### Scenario: Search a built-in Action
 
@@ -60,15 +49,18 @@ internals, React state, Tauri objects, or Rust objects.
 - **THEN** those fields do not cause the Action to enter results
 - **THEN** their contents do not affect scores of other matching Actions
 
+#### Scenario: Build serializable results from declared Action fields
+- **WHEN** search evaluates a read-only Registry snapshot with a query, locale, and result limit
+- **THEN** Search text MUST come only from explicitly declared Action `title` and `default_keywords` values in all supported languages.
+- **THEN** `enabled` MUST control filtering, `action_id` MUST provide identity and tie-breaking, and `owner_id` MUST provide owner identity.
+- **THEN** Descriptions, plugin names, Page titles, and private metadata MUST NOT affect matching or scoring.
+- **THEN** All sources MUST use the same rules.
+- **THEN** Icons and Recent or Pinned state MAY accompany display data but MUST NOT affect matching, scoring, or ordering.
+- **THEN** Results MUST retain identity, localized display text, scores, and optional safe icons, and MUST NOT contain executors, functions, mutable Registry internals, React state, Tauri objects, or Rust objects.
+
 ### Requirement: Queries must be normalized and tokenized deterministically
 
-Queries and each searchable text MUST use the same locale-independent
-normalization: Unicode NFKC, locale-independent lowercase conversion, trimming,
-and collapsing consecutive Unicode whitespace to one ASCII space. Queries MUST
-be split on whitespace into non-empty tokens, and fields MUST be normalized
-independently. Empty queries MUST return no results and MUST NOT simulate
-recommendations from Registry order. Independent Home content MAY show existing
-Action collections; search MUST NOT generate or order those collections.
+Queries and each searchable text MUST use the same locale-independent normalization: Unicode NFKC, locale-independent lowercase conversion, trimming, and collapsing consecutive Unicode whitespace to one ASCII space.
 
 #### Scenario: Normalize case and whitespace
 
@@ -90,17 +82,15 @@ Action collections; search MUST NOT generate or order those collections.
 - **THEN** search creates no such synthetic exact, prefix, or substring match
 - **THEN** only separate query tokens may independently match different fields
 
+#### Scenario: Normalize tokens without inventing Home recommendations
+- **WHEN** search normalizes the query and each declared searchable field
+- **THEN** Queries MUST be split on whitespace into non-empty tokens, and fields MUST be normalized independently.
+- **THEN** Empty queries MUST return no results and MUST NOT simulate recommendations from Registry order.
+- **THEN** Independent Home content MAY show existing Action collections; search MUST NOT generate or order those collections.
+
 ### Requirement: Matching and ranking must be explainable and deterministic
 
-Search MUST match explicitly declared Action titles and keywords from all
-supported languages without filtering text by interface locale. Every query
-token MUST match at least one title or keyword of the same Action; otherwise
-the Action MUST be excluded. Matching MUST use only exact, prefix, and substring
-relationships. Token priority MUST be title exact, keyword exact, title prefix,
-keyword prefix, title substring, then keyword substring. Interface locale and
-descriptions MUST NOT affect scores. Equal scores MUST sort by ascending
-`action_id`. Search MUST NOT add edit-distance, pinyin, translation, semantic,
-or personalized matching.
+Search MUST match explicitly declared Action titles and keywords from all supported languages without filtering text by interface locale.
 
 #### Scenario: A title match outranks a description match
 
@@ -152,6 +142,15 @@ or personalized matching.
 - **THEN** the same query produces identical matches, relevance scores, and order
 - **THEN** descriptions remain available as independent display metadata
 
+#### Scenario: Rank every token using the same declared-field rules
+- **WHEN** search compares candidate Actions with a normalized multi-token query
+- **THEN** Every query token MUST match at least one title or keyword of the same Action; otherwise the Action MUST be excluded.
+- **THEN** Matching MUST use only exact, prefix, and substring relationships.
+- **THEN** Token priority MUST be title exact, keyword exact, title prefix, keyword prefix, title substring, then keyword substring.
+- **THEN** Interface locale and descriptions MUST NOT affect scores.
+- **THEN** Equal scores MUST sort by ascending `action_id`.
+- **THEN** Search MUST NOT add edit-distance, pinyin, translation, semantic, or personalized matching.
+
 ### Requirement: Search must filter unavailable Actions and limit result count
 
 Search MUST exclude Actions with `enabled = false`. The result limit MUST be a
@@ -180,25 +179,7 @@ Actions.
 
 ### Requirement: The App Shell must present real Action Search state
 
-The React App Shell MUST connect its controlled launcher input to the default
-Host Action Service and run unified search for the committed query against the
-current Registry snapshot. Ordinary text edits MUST update the committed query
-immediately. Draft text during IME composition MUST be used only for input
-display and MUST NOT replace the committed query or change the search results,
-selection, or window presentation determined by that query.
-
-For an empty committed query, the App Shell MUST display neither a search-result
-collection nor a search empty state and MUST return to the independent home
-presentation. For a non-empty committed query with matches, it MUST display a
-fixed four-column grid of at most eight real Action tiles in one localized
-Search Results section. It MUST NOT display an additional Matches,
-Recommendations, Marketplace, or source section. For a non-empty committed query
-without matches, it MUST display a localized empty state.
-
-Results MUST show the resolved Action title and a valid icon or stable fallback
-icon and MAY show the description, but MUST NOT expose the owner, internal score,
-or executor as ordinary product copy. The interface MUST NOT automatically
-change the native launcher window height based on result count.
+The React App Shell MUST connect its controlled launcher input to the default Host Action Service and run unified search for the committed query against the current Registry snapshot.
 
 #### Scenario: A query matches the built-in Action
 
@@ -261,27 +242,26 @@ change the native launcher window height based on result count.
   presentation while the query and Registry have not changed independently
 - **THEN** the system does not announce the unconfirmed draft as a new query
 
+#### Scenario: Separate displayed drafts from committed search state
+- **WHEN** the user edits the controlled launcher input with or without IME composition
+- **THEN** Ordinary text edits MUST update the committed query immediately.
+- **THEN** Draft text during IME composition MUST be used only for input display and MUST NOT replace the committed query or change the search results, selection, or window presentation determined by that query.
+
+#### Scenario: Render Home, matched results, or an empty search state
+- **WHEN** the committed query changes between empty, matching, and non-matching values
+- **THEN** For an empty committed query, the App Shell MUST display neither a search-result collection nor a search empty state and MUST return to the independent home presentation.
+- **THEN** For a non-empty committed query with matches, it MUST display a fixed four-column grid of at most eight real Action tiles in one localized Search Results section.
+- **THEN** It MUST NOT display an additional Matches, Recommendations, Marketplace, or source section.
+- **THEN** For a non-empty committed query without matches, it MUST display a localized empty state.
+
+#### Scenario: Present safe result text without deriving window dimensions
+- **WHEN** the App Shell renders Action results from the current Host Service
+- **THEN** Results MUST show the resolved Action title and a valid icon or stable fallback icon and MAY show the description, but MUST NOT expose the owner, internal score, or executor as ordinary product copy.
+- **THEN** The interface MUST NOT automatically change the native launcher window height based on result count.
+
 ### Requirement: Users must be able to select and execute results with keyboard or pointer
 
-When the result set is non-empty, the App Shell MUST select the first result by
-default. When the committed query or result set changes, selection MUST reset to
-the new first result. When no result exists, selection MUST be cleared. The
-input MUST retain focus during navigation.
-
-The launcher MUST give priority to IME composition and candidate operations.
-While a composition session is active, or the input system marks the current
-key as a composition or confirmation key, the launcher MUST NOT execute an
-Action, clear the query, change result selection, or prevent default IME
-handling in response to Enter, Escape, or arrow keys. This rule MUST cover a
-composition-end event arriving before the marked confirmation key.
-
-Outside IME handling, `ArrowLeft` and `ArrowRight` MUST move between adjacent
-results without wrapping. `ArrowUp` and `ArrowDown` MUST move by the fixed
-four-column offset and MUST preserve the current selection when the target
-does not exist. `Enter` MUST pass the selected `action_id` to the existing Host
-Dispatcher. Pointer activation MUST use the same dispatch path. `Escape` MUST
-clear the query, results, and selection and restore input focus. While one
-dispatch is pending, the same interaction MUST NOT start a duplicate execution.
+When the result set is non-empty, the App Shell MUST select the first result by default.
 
 #### Scenario: Select results horizontally
 
@@ -362,15 +342,30 @@ dispatch is pending, the same interaction MUST NOT start a duplicate execution.
 - **THEN** the key does not execute an Action, clear the query, or move result
   selection
 
+#### Scenario: Reset result selection while retaining input focus
+- **WHEN** the committed query or current result set changes
+- **THEN** When the committed query or result set changes, selection MUST reset to the new first result.
+- **THEN** When no result exists, selection MUST be cleared.
+- **THEN** The input MUST retain focus during navigation.
+
+#### Scenario: Give composition confirmation keys priority
+- **WHEN** the input system has an active composition or marks a key as composition or confirmation
+- **THEN** The launcher MUST give priority to IME composition and candidate operations.
+- **THEN** While a composition session is active, or the input system marks the current key as a composition or confirmation key, the launcher MUST NOT execute an Action, clear the query, change result selection, or prevent default IME handling in response to Enter, Escape, or arrow keys.
+- **THEN** This rule MUST cover a composition-end event arriving before the marked confirmation key.
+
+#### Scenario: Navigate and dispatch current results without duplicates
+- **WHEN** the user navigates or activates results outside input-method handling
+- **THEN** Outside IME handling, `ArrowLeft` and `ArrowRight` MUST move between adjacent results without wrapping.
+- **THEN** `ArrowUp` and `ArrowDown` MUST move by the fixed four-column offset and MUST preserve the current selection when the target does not exist.
+- **THEN** `Enter` MUST pass the selected `action_id` to the existing Host Dispatcher.
+- **THEN** Pointer activation MUST use the same dispatch path.
+- **THEN** `Escape` MUST clear the query, results, and selection and restore input focus.
+- **THEN** While one dispatch is pending, the same interaction MUST NOT start a duplicate execution.
+
 ### Requirement: Execution outcomes and failures must recover safely
 
-After a successful dispatch, the App Shell MUST clear the current query,
-results, and selection. The Action's Host executor decides whether to hide the
-window or perform another controlled behavior. An `action_not_found`,
-`action_unavailable`, or `action_execution_failed` result MUST display
-localized, diagnosable feedback without leaking internal exceptions and MUST
-preserve the current query and recoverable selection. Asynchronous search or
-dispatch failure MUST NOT prevent later launcher input use.
+After a successful dispatch, the App Shell MUST clear the current query, results, and selection.
 
 #### Scenario: Execute Hide Launcher successfully
 
@@ -395,23 +390,15 @@ dispatch failure MUST NOT prevent later launcher input use.
 - **THEN** the product interface does not display an exception stack, native
   object, or executor detail
 
+#### Scenario: Recover after failed or successful Action dispatch
+- **WHEN** the current search dispatch resolves successfully or with a safe Action error
+- **THEN** The Action's Host executor decides whether to hide the window or perform another controlled behavior.
+- **THEN** An `action_not_found`, `action_unavailable`, or `action_execution_failed` result MUST display localized, diagnosable feedback without leaking internal exceptions and MUST preserve the current query and recoverable selection.
+- **THEN** Asynchronous search or dispatch failure MUST NOT prevent later launcher input use.
+
 ### Requirement: Search interaction must be accessible, localized, and theme-aware
 
-The launcher input and result collection MUST follow accessible combobox and
-listbox interaction semantics. The input MUST expose expanded state, the result
-container relationship, and the current active descendant. Every result MUST
-have a stable option identity, selected state, and visible highlight. The CSS
-four-column layout MUST NOT change listbox and option semantics. Result count,
-no-results, executing, success, and failure states MUST be provided through an
-appropriate live region and MUST NOT rely on color alone.
-
-All user-visible copy MUST use application i18n, default to `en-US`, and provide
-a semantically aligned `zh-CN` resource. Search Results MUST be the only visible
-result-section title. Results, icon fallback, selection, hover, pending, focus,
-and feedback MUST use Semi Design-supported light and dark theme tokens. Simple
-grid and spacing MUST use UnoCSS, while complex selection, scrolling, theme,
-and interaction states MUST use Less. The result container and individual
-results MUST NOT depend on prominent borders or per-item dividers for hierarchy.
+The launcher input and result collection MUST follow accessible combobox and listbox interaction semantics.
 
 #### Scenario: A screen reader navigates results
 
@@ -446,28 +433,24 @@ results MUST NOT depend on prominent borders or per-item dividers for hierarchy.
 - **THEN** focus is not captured by the non-interactive avatar or All
   placeholder
 
+#### Scenario: Expose listbox state and announcements through the search input
+- **WHEN** the search interface displays options or changes execution and result state
+- **THEN** The input MUST expose expanded state, the result container relationship, and the current active descendant.
+- **THEN** Every result MUST have a stable option identity, selected state, and visible highlight.
+- **THEN** The CSS four-column layout MUST NOT change listbox and option semantics.
+- **THEN** Result count, no-results, executing, success, and failure states MUST be provided through an appropriate live region and MUST NOT rely on color alone.
+
+#### Scenario: Localize and theme the single result section
+- **WHEN** the Host renders search with either supported locale and theme
+- **THEN** All user-visible copy MUST use application i18n, default to `en-US`, and provide a semantically aligned `zh-CN` resource.
+- **THEN** Search Results MUST be the only visible result-section title.
+- **THEN** Results, icon fallback, selection, hover, pending, focus, and feedback MUST use Semi Design-supported light and dark theme tokens.
+- **THEN** Simple grid and spacing MUST use UnoCSS, while complex selection, scrolling, theme, and interaction states MUST use Less.
+- **THEN** The result container and individual results MUST NOT depend on prominent borders or per-item dividers for hierarchy.
+
 ### Requirement: Launcher search MUST commit composition results without duplicate or stale transitions
 
-At composition end, the launcher MUST update the committed query from the final
-complete input value supplied by the input system and MUST NOT infer the final
-query from a pinyin draft or displayed candidate text. One end notification and
-its immediately following equivalent input notification MUST produce only one
-semantic query update and at most one necessary presentation-target transition.
-When cancellation discards the draft and returns the final value to the prior
-query, the prior query MUST be preserved. Committing an empty value MUST return
-to home.
-
-An explicit Host query clear, reset after successful execution, navigation away
-from the page containing the search input, or unmount MUST invalidate the old
-composition session. Late events from an invalidated session MUST NOT restore
-the old query, search results, or window presentation. Subsequent new input MUST
-be able to begin normally.
-
-This interaction MUST preserve the same input semantics under the `en-US` and
-`zh-CN` application locales and light and dark themes. Committed results,
-no-results feedback, and error feedback MUST follow the existing localization,
-combobox/listbox, live-region, and failure-recovery contracts. Drafts MUST NOT
-introduce an additional result section or falsely announce final query state.
+At composition end, the launcher MUST update the committed query from the final complete input value supplied by the input system and MUST NOT infer the final query from a pinyin draft or displayed candidate text.
 
 #### Scenario: Commit selected Chinese text once
 
@@ -525,6 +508,24 @@ introduce an additional result section or falsely announce final query state.
   semantics are the same
 - **THEN** results and feedback use the current locale, and focus and selection
   follow the existing theme and accessibility semantics
+
+#### Scenario: Commit one final input-method query
+- **WHEN** composition ends and an equivalent trailing input notification may follow
+- **THEN** One end notification and its immediately following equivalent input notification MUST produce only one semantic query update and at most one necessary presentation-target transition.
+- **THEN** When cancellation discards the draft and returns the final value to the prior query, the prior query MUST be preserved.
+- **THEN** Committing an empty value MUST return to home.
+
+#### Scenario: Invalidate retired composition sessions
+- **WHEN** the Host clears the query, completes execution, navigates away, or unmounts the input
+- **THEN** An explicit Host query clear, reset after successful execution, navigation away from the page containing the search input, or unmount MUST invalidate the old composition session.
+- **THEN** Late events from an invalidated session MUST NOT restore the old query, search results, or window presentation.
+- **THEN** Subsequent new input MUST be able to begin normally.
+
+#### Scenario: Preserve localized search feedback during composition
+- **WHEN** composition occurs in either supported locale and theme
+- **THEN** This interaction MUST preserve the same input semantics under the `en-US` and `zh-CN` application locales and light and dark themes.
+- **THEN** Committed results, no-results feedback, and error feedback MUST follow the existing localization, combobox/listbox, live-region, and failure-recovery contracts.
+- **THEN** Drafts MUST NOT introduce an additional result section or falsely announce final query state.
 
 ### Requirement: Cross-language duplicate matches MUST contribute relevance only once
 

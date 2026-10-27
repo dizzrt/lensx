@@ -10,12 +10,7 @@ evidence.
 ### Requirement: The system MUST provide two formal plugin project templates that share public platform boundaries
 
 Within the supported example-plugin workspace, the system MUST provide one
-framework-neutral TypeScript template and one React/Semi template. Both
-templates MUST be direct workspace members that can be built, type-checked,
-tested, and statically checked independently, MUST use distinct namespaced
-plugin IDs, and MUST serve as common starting points for official and
-third-party plugins. Official origin MUST NOT grant a template different SDK,
-Runtime, CSP, permission, Host API, or workspace dependency rules.
+framework-neutral TypeScript template and one React/Semi template.
 
 #### Scenario: Developer selects the framework-neutral template
 
@@ -44,16 +39,17 @@ Runtime, CSP, permission, Host API, or workspace dependency rules.
 - **THEN** a missing script or validation failure in either template causes the
   root command to fail
 
+#### Scenario: Build a template as an independent workspace member
+
+- **WHEN** either maintained template is used as an official or third-party starting point
+- **THEN** Both templates MUST be direct workspace members that can be built, type-checked, tested, and statically checked independently, MUST use distinct namespaced plugin IDs, and MUST serve as common starting points for official and third-party plugins.
+- **THEN** Official origin MUST NOT grant a template different SDK, Runtime, CSP, permission, Host API, or workspace dependency rules.
+
 ### Requirement: Each template MUST contain a complete, minimal, permissionless runnable plugin
 
 Each template MUST contain a Manifest accepted by the real Contract, one Page,
 one Action targeting that Page, one package-local WebView Runtime entry, and all
-build resources referenced by the Manifest. The examples MUST use Manifest
-`0.3.0` without legacy permission fields, MUST NOT call an unpublished native
-Host API, and MUST NOT claim trusted origin through
-publisher text or an official repository location. The build output MUST be a
-self-contained package payload that does not depend on remote scripts, inline
-scripts, `eval`, an external network, a Host bundle, or repository source code.
+build resources referenced by the Manifest.
 
 #### Scenario: Minimal Manifest and resource graph are valid
 
@@ -80,15 +76,17 @@ scripts, `eval`, an external network, a Host bundle, or repository source code.
   stable diagnostic
 - **THEN** the invalid output does not enter the production Runtime smoke test
 
+#### Scenario: Validate minimal template resources and authority
+
+- **WHEN** the minimal template Manifest and built Runtime payload are inspected
+- **THEN** The examples MUST use Manifest `0.3.0` without legacy permission fields, MUST NOT call an unpublished native Host API, and MUST NOT claim trusted origin through publisher text or an official repository location.
+- **THEN** The build output MUST be a self-contained package payload that does not depend on remote scripts, inline scripts, `eval`, an external network, a Host bundle, or repository source code.
+
 ### Requirement: Template Runtime MUST demonstrate the real SDK lifecycle and Runtime context adaptation
 
 Both templates MUST use the official `@lensx/plugin-sdk/webview` transport and
 an instantiated SDK client, MUST wait for and validate the real Runtime context
-before becoming ready, and MUST handle complete context replacement. The
-templates MUST use `en-US` as the default copy and provide semantically aligned
-`zh-CN` copy, MUST respond to the `light | dark` theme, MUST provide accessible
-loading, ready, error, and retry states, and MUST use one idempotent termination
-path to cancel subscriptions, unmount the view, and dispose the current client.
+before becoming ready, and MUST handle complete context replacement.
 
 #### Scenario: English light context initializes successfully
 
@@ -126,16 +124,15 @@ path to cancel subscriptions, unmount the view, and dispose the current client.
 - **THEN** repeated or late cleanup does not restore the old view, reuse its
   transport, or affect the new attempt
 
+#### Scenario: Adapt template presentation and terminate its client
+
+- **WHEN** either template initializes, renders, receives Runtime Context, recovers from failure, or terminates
+- **THEN** The templates MUST use `en-US` as the default copy and provide semantically aligned `zh-CN` copy, MUST respond to the `light | dark` theme, MUST provide accessible loading, ready, error, and retry states, and MUST use one idempotent termination path to cancel subscriptions, unmount the view, and dispose the current client.
+
 ### Requirement: Templates MUST consume only public packages and portable project dependencies
 
 Template source code and package metadata MUST consume Plugin Contract, SDK,
-optional UI, and Testkit only through declared public package exports. A
-template MUST NOT depend on the private lensX root package, `src/app/**`,
-`tools/**`, a Tauri package or adapter, Host styles, a cross-member source path,
-or an unexported deep path. Template dependencies on lensX packages MUST use
-publishable ordinary SemVer ranges; source templates MUST NOT contain
-`workspace:`, `file:`, `link:`, absolute-path, or repository-relative
-dependencies.
+optional UI, and Testkit only through declared public package exports.
 
 #### Scenario: Template is installed outside the repository
 
@@ -163,6 +160,12 @@ dependencies.
 - **THEN** the template gate fails and identifies the disallowed dependency
 - **THEN** the React/Semi template's optional technology stack does not become a
   transitive requirement of the framework-neutral template
+
+#### Scenario: Resolve template dependencies outside lensX
+
+- **WHEN** template source imports or package dependencies are resolved
+- **THEN** A template MUST NOT depend on the private lensX root package, `src/app/**`, `tools/**`, a Tauri package or adapter, Host styles, a cross-member source path, or an unexported deep path.
+- **THEN** Template dependencies on lensX packages MUST use publishable ordinary SemVer ranges; source templates MUST NOT contain `workspace:`, `file:`, `link:`, absolute-path, or repository-relative dependencies.
 
 ### Requirement: Template tests MUST use the real Contract and SDK while keeping Testkit as the author-side testing boundary
 
@@ -196,12 +199,7 @@ permission decision, or plugin execution.
 
 The system MUST provide a root-level template validation entry point that
 validates both templates independently in a system temporary directory using
-real tarballs of the current public packages. The gate MUST use the Host-private
-reference packer to produce a canonical `.lxp` from each built, self-contained
-payload, MUST inspect it again as compatible, and MUST prove that repeated
-packing of identical input is byte-for-byte identical. A template MUST NOT
-import that packer, expose a public package-format API, or claim to provide a
-public `pack` CLI before Task 6.4.
+real tarballs of the current public packages.
 
 #### Scenario: Both external templates pass the complete gate
 
@@ -230,9 +228,15 @@ public `pack` CLI before Task 6.4.
 - **THEN** the public create, validate, inspect, build, and pack workflow remains
   owned by Task 6.4
 
+#### Scenario: Pack and inspect isolated template output
+
+- **WHEN** the template gate packages a built self-contained template payload
+- **THEN** The gate MUST use the Host-private reference packer to produce a canonical `.lxp` from each built, self-contained payload, MUST inspect it again as compatible, and MUST prove that repeated packing of identical input is byte-for-byte identical.
+- **THEN** A template MUST NOT import that packer, expose a public package-format API, or claim to provide a public `pack` CLI before Task 6.4.
+
 ### Requirement: The production-boundary smoke test MUST connect template output to the real Host main path
 
-The template gate MUST use actual built and inspected template payloads to cover the current Host's package acceptance, Registration, Page and Action projection, resource and Runtime resolution, Runtime Session, public SDK WebView transport codec, Host bridge adapter, RPC validation, Dispatcher `runtime.get_context`, and terminal cleanup through deterministic production-composition tests. This smoke test MUST NOT inject `FakePluginSdkTransport` or treat author-side Testkit as the production Host. It MUST NOT depend on an existing browser, WebView, GUI, native harness, or target-environment prerequisite.
+The template gate MUST use actual built and inspected template payloads to cover the current Host's package acceptance, Registration, Page and Action projection, resource and Runtime resolution, Runtime Session, public SDK WebView transport codec, Host bridge adapter, RPC validation, Dispatcher `runtime.get_context`, and terminal cleanup through deterministic production-composition tests.
 
 #### Scenario: Framework-neutral template passes through the production composition
 
@@ -252,18 +256,19 @@ The template gate MUST use actual built and inspected template payloads to cover
 - **THEN** the dedicated deterministic gate fails
 - **THEN** a template cannot be declared connected to production composition solely because it compiles and passes author-side unit tests
 
+#### Scenario: Exercise production composition without author fakes
+
+- **WHEN** the production-boundary smoke test connects a built template to the Host main path
+- **THEN** This smoke test MUST NOT inject `FakePluginSdkTransport` or treat author-side Testkit as the production Host.
+- **THEN** It MUST NOT depend on an existing browser, WebView, GUI, native harness, or target-environment prerequisite.
+
 ### Requirement: The template capability MUST have narrowly scoped bilingual documentation and complete validation
 
 The system MUST document template selection, public dependencies,
 Manifest/Page/Action/Runtime structure, lifecycle commands, isolation
 validation, and current limitations in canonical English engineering
 documentation and MUST provide a semantically aligned Simplified Chinese mirror
-at the same relative path. The documentation MUST state explicitly that the
-templates are not a public CLI, Development Mode, a native-authority tutorial, or a
-complete plugin development tutorial. The dedicated gate, standard frontend
-gates, and Rust gates MUST jointly cover this capability; every introduced
-warning or error MUST be fixed before rerunning the failed command and the final
-validation set.
+at the same relative path.
 
 #### Scenario: External developer reads the template documentation
 
@@ -285,8 +290,15 @@ validation set.
 - **THEN** roadmap Task 6.3 is marked complete only after that validation and the
   bilingual documentation are complete
 
+#### Scenario: Document template limitations and complete validation
+
+- **WHEN** the template reference is read or delivery validation is evaluated
+- **THEN** The documentation MUST state explicitly that the templates are not a public CLI, Development Mode, a native-authority tutorial, or a complete plugin development tutorial.
+- **THEN** The dedicated gate, standard frontend gates, and Rust gates MUST jointly cover this capability; every introduced warning or error MUST be fixed before rerunning the failed command and the final validation set.
+
 ### Requirement: Maintained templates MUST author and execute only the WebView Runtime
-Framework-neutral and React/Semi templates MUST emit Manifest `0.4.0` with `runtime.kind: "webview"`, import `@lensx/plugin-sdk/webview`, initialize one SDK client through `createPluginWebviewTransport`, and dispose it with the Page lifecycle. Default generated Pages MUST omit presentation and therefore normalize to fixed `650×600`; maintained guidance or fixtures MAY demonstrate an explicit bounded initial size and `resizable` opt-in. Templates MUST contain no iframe bootstrap, parent messaging, MessagePort, Tauri, Host source import, native Window configuration, runtime resize setter, or user-size persistence.
+
+Framework-neutral and React/Semi templates MUST emit Manifest `0.4.0` with `runtime.kind: "webview"`, import `@lensx/plugin-sdk/webview`, initialize one SDK client through `createPluginWebviewTransport`, and dispose it with the Page lifecycle.
 
 #### Scenario: Either template is generated and packed
 - **WHEN** an external consumer builds, tests, validates and packs a fresh template
@@ -301,9 +313,15 @@ Framework-neutral and React/Semi templates MUST emit Manifest `0.4.0` with `runt
 - **WHEN** its page is loaded without the Host bridge
 - **THEN** SDK initialization fails safely without probing legacy, presentation, or native fallbacks
 
+#### Scenario: Apply default or opted-in Page presentation
+
+- **WHEN** a maintained template emits a default Page or demonstrates explicit bounded presentation
+- **THEN** Default generated Pages MUST omit presentation and therefore normalize to fixed `650×600`; maintained guidance or fixtures MAY demonstrate an explicit bounded initial size and `resizable` opt-in.
+- **THEN** Templates MUST contain no iframe bootstrap, parent messaging, MessagePort, Tauri, Host source import, native Window configuration, runtime resize setter, or user-size persistence.
+
 ### Requirement: React/Semi template MUST pass deterministic accessibility, locale, and theme validation
 
-The React/Semi template MUST use locale and theme mechanisms supported by Plugin UI and Semi Design. Rstest component and state tests MUST cover `en-US` and `zh-CN`, light and dark semantic theme state, loading, error and ready states, long text, keyboard-operated retry, visible focus semantics, and key public theme tokens without browser rendering, screenshots, pixel comparison, or computed-style capture. Template-owned user-visible copy MUST be available in English and semantically aligned Simplified Chinese, with English as default and fallback.
+The React/Semi template MUST use locale and theme mechanisms supported by Plugin UI and Semi Design.
 
 #### Scenario: Four locale and theme states are validated
 
@@ -316,6 +334,16 @@ The React/Semi template MUST use locale and theme mechanisms supported by Plugin
 - **WHEN** the React template is in an initialization error state and retry is operated through keyboard events
 - **THEN** the retry control exposes visible-focus state and starts a new attempt
 - **THEN** loading, error, and ready states remain understandable through appropriate accessibility semantics or a live region
+
+#### Scenario: Validate the React/Semi presentation matrix
+
+- **WHEN** deterministic tests exercise the React/Semi template user interface
+- **THEN** Rstest component and state tests MUST cover `en-US` and `zh-CN`, light and dark semantic theme state, loading, error and ready states, long text, keyboard-operated retry, visible focus semantics, and key public theme tokens without browser rendering, screenshots, pixel comparison, or computed-style capture.
+
+#### Scenario: Present template-owned product copy
+
+- **WHEN** the React/Semi template presents user-visible copy in a default or selected locale
+- **THEN** Template-owned user-visible copy MUST be available in English and semantically aligned Simplified Chinese, with English as default and fallback.
 
 ### Requirement: Template entry Action titles MUST use destination names
 

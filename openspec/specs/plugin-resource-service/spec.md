@@ -11,19 +11,19 @@ facts.
 ## Requirements
 ### Requirement: The Host MUST resolve the current plugin entry URL through an independent private contract
 
-The system MUST provide an independently versioned Host-private Plugin Resource
-Contract and allow only the trusted lensX root application to query a plugin
-entry URL through `resolve_plugin_resource_entry`. A request MUST contain
-exactly `contract_version`, `entry_id`, and `expected_revision`; the caller MUST
-NOT submit or receive an installation path, package digest, record key, file
-handle, package bytes, origin, scope, generation, or Manager object. A
-successful result MUST contain exactly the contract version, entry ID, current
-revision, Host-resolved plugin ID and version, and one opaque isolated-origin
-`entry_url`. Rust and TypeScript MUST strictly validate requests, successful
-results, and errors from untrusted boundary values and MUST reject a shared
-host, unknown URL shape, or an origin and path scope mismatch. The contract
-MUST NOT become a capability that the Manifest, public plugin packages, iframe
-Runtime, or other plugins can import or invoke.
+The system MUST provide an independently versioned Host-private Plugin Resource Contract and allow only the trusted lensX root application to query a plugin entry URL through `resolve_plugin_resource_entry`.
+
+#### Scenario: The root application resolves an opaque entry URL
+
+- **WHEN** a resource-entry request, success result, or error crosses the private contract boundary
+- **THEN** A request MUST contain exactly `contract_version`, `entry_id`, and `expected_revision`; the caller MUST NOT submit or receive an installation path, package digest, record key, file handle, package bytes, origin, scope, generation, or Manager object.
+- **THEN** A successful result MUST contain exactly the contract version, entry ID, current revision, Host-resolved plugin ID and version, and one opaque isolated-origin `entry_url`.
+- **THEN** Rust and TypeScript MUST strictly validate requests, successful results, and errors from untrusted boundary values and MUST reject a shared host, unknown URL shape, or an origin and path scope mismatch.
+
+#### Scenario: An untrusted consumer seeks the resource contract
+
+- **WHEN** a Manifest, public package, iframe Runtime, or another plugin attempts to import or invoke resource resolution
+- **THEN** The contract MUST NOT become a capability that the Manifest, public plugin packages, iframe Runtime, or other plugins can import or invoke.
 
 #### Scenario: The trusted application resolves the current entry
 
@@ -55,24 +55,23 @@ Runtime, or other plugins can import or invoke.
 
 ### Requirement: Scope issuance MUST derive from a current and provably safe registration
 
-The Host MUST validate the expected revision and resolve, in one atomic Plugin
-Manager read projection, a healthy registration, process-local resource
-generation, enabled intent, both compatibility dimensions, normalized Manifest,
-and strict payload variant. For an installed payload, the Host MUST prove that
-the installation path is the sole currently active installer-owned payload at
-`packages/<plugin-key>/<package-sha256>` and that its package digest matches
-exactly. For a development payload, the Host MUST prove that the snapshot root
-is the sole current generation atomically published by the Development
-coordinator under the current process cache and session, that its snapshot
-identity matches exactly, and that the Resource service never falls back to
-the author's source directory.
+The Host MUST validate the expected revision and resolve, in one atomic Plugin Manager read projection, a healthy registration, process-local resource generation, enabled intent, both compatibility dimensions, normalized Manifest, and strict payload variant.
 
-The Host MUST issue a URL only when the Manager is not degraded, the
-registration is healthy, enabled, and compatible, and ownership of the
-corresponding payload can be proven. Host source, Publisher text, remote
-behavior, and Runtime `inactive` MUST NOT by themselves grant or deny
-resource access; the Host MUST fail closed when managed payload ownership
-cannot be proven.
+#### Scenario: An installed payload requests resource authority
+
+- **WHEN** the Host resolves resource eligibility for an installed Registration
+- **THEN** For an installed payload, the Host MUST prove that the installation path is the sole currently active installer-owned payload at `packages/<plugin-key>/<package-sha256>` and that its package digest matches exactly.
+
+#### Scenario: A development payload requests resource authority
+
+- **WHEN** the Host resolves resource eligibility for a development Registration
+- **THEN** For a development payload, the Host MUST prove that the snapshot root is the sole current generation atomically published by the Development coordinator under the current process cache and session, that its snapshot identity matches exactly, and that the Resource service never falls back to the author's source directory.
+
+#### Scenario: Resource eligibility is decided from managed ownership
+
+- **WHEN** the Host decides whether a current Registration may receive a resource URL
+- **THEN** The Host MUST issue a URL only when the Manager is not degraded, the registration is healthy, enabled, and compatible, and ownership of the corresponding payload can be proven.
+- **THEN** Host source, Publisher text, remote behavior, and Runtime `inactive` MUST NOT by themselves grant or deny resource access; the Host MUST fail closed when managed payload ownership cannot be proven.
 
 #### Scenario: A current managed registration can receive a scope
 
@@ -124,13 +123,13 @@ cannot be proven.
 
 ### Requirement: Development snapshot retirement MUST revoke resource authority before cleanup
 
-A successful development reload, remove, disable, or Development Mode shutdown
-MUST revoke the old scope through the Manager currentness, revision, and
-resource-generation transition before it MAY clean up the old snapshot.
-Successful, failed, or delayed cleanup MUST NOT make the old snapshot current
-again. The Resource cache MUST distinguish installed and development bytes by
-entry identity, payload variant, and generation, and MUST NOT reuse a revoked
-scope because the plugin ID, version, or snapshot identity is unchanged.
+A successful development reload, remove, disable, or Development Mode shutdown MUST revoke the old scope through the Manager currentness, revision, and resource-generation transition before it MAY clean up the old snapshot.
+
+#### Scenario: A retired snapshot remains in cleanup or cache
+
+- **WHEN** cleanup succeeds, fails, or is delayed after a development scope is revoked
+- **THEN** Successful, failed, or delayed cleanup MUST NOT make the old snapshot current again.
+- **THEN** The Resource cache MUST distinguish installed and development bytes by entry identity, payload variant, and generation, and MUST NOT reuse a revoked scope because the plugin ID, version, or snapshot identity is unchanged.
 
 #### Scenario: Successful manual reload retires the old snapshot
 
@@ -151,18 +150,20 @@ scope because the plugin ID, version, or snapshot identity is unchanged.
 
 ### Requirement: Resource scopes MUST be unguessable, process-local, and bound to exactly one payload generation
 
-The system MUST use an operating-system CSPRNG to generate at least 128 bits of
-entropy for each scope and MUST NOT use time, process ID, an incrementing
-sequence, a path, or an unkeyed plain hash as a bearer token. Each current
-`(entry_id, resource_generation)` MUST map to at most one scope, and repeated
-queries MUST reuse it. The scope MUST serve as both the isolated browser-origin
-key and the path-authorization key, and the authority scope and path scope MUST
-match exactly. A scope MUST reside only in process memory and MUST NOT be
-persisted, sent in a changed event, written to logs, or returned as a standalone
-field. For every protocol request, the system MUST re-confirm the scope, entry,
-generation, plugin identity, version, digest, and payload root against the
-current Manager projection. Readable fields in the URL and a browser
-same-origin result MUST NOT replace authorization by the opaque scope.
+The system MUST use an operating-system CSPRNG to generate at least 128 bits of entropy for each scope and MUST NOT use time, process ID, an incrementing sequence, a path, or an unkeyed plain hash as a bearer token.
+
+#### Scenario: The Host issues or reuses a current resource scope
+
+- **WHEN** a current entry and resource generation is resolved to a scope
+- **THEN** Each current `(entry_id, resource_generation)` MUST map to at most one scope, and repeated queries MUST reuse it.
+- **THEN** The scope MUST serve as both the isolated browser-origin key and the path-authorization key, and the authority scope and path scope MUST match exactly.
+- **THEN** A scope MUST reside only in process memory and MUST NOT be persisted, sent in a changed event, written to logs, or returned as a standalone field.
+
+#### Scenario: A scoped URL authorizes a protocol read
+
+- **WHEN** a protocol request presents an opaque scope and readable URL fields
+- **THEN** For every protocol request, the system MUST re-confirm the scope, entry, generation, plugin identity, version, digest, and payload root against the current Manager projection.
+- **THEN** Readable fields in the URL and a browser same-origin result MUST NOT replace authorization by the opaque scope.
 
 #### Scenario: The same generation is resolved repeatedly
 
@@ -200,21 +201,20 @@ same-origin result MUST NOT replace authorization by the opaque scope.
 
 ### Requirement: Protocol requests MUST be restricted to a package-relative regular file bound to the scope
 
-The Resource handler MUST accept only a fixed-version `lensx-plugin` URL
-envelope whose authority contains the canonical isolated-origin scope and whose
-path repeats the same scope byte-for-byte. The old shared host and any
-translated form that does not preserve the origin key MUST fail closed. In
-Rust, the handler MUST apply strict lexical validation of the package-relative
-path, reject symlinks or reparse points at every component, enforce canonical
-root containment, require a regular file, revalidate identity after opening,
-and perform a bounded read. Paths MUST follow the package protocol's portable
-ASCII segment constraints. Absolute paths, empty segments, `.` and `..`, `%`,
-backslashes, NUL, queries, fragments, userinfo, ports, non-UTF-8 input, paths
-that are too long or deep, directories, metadata records, targets in another
-payload, and origin and path scope mismatches MUST fail closed. Successful reads
-MUST stay within the existing 64 MiB single-file limit, and the handler MUST NOT
-enumerate directories, rewrite HTML, add wildcard or null CORS, or implicitly
-map a root-relative URL back into the scope.
+The Resource handler MUST accept only a fixed-version `lensx-plugin` URL envelope whose authority contains the canonical isolated-origin scope and whose path repeats the same scope byte-for-byte.
+
+#### Scenario: A resource URL is checked for canonical shape
+
+- **WHEN** the handler receives a resource URL for lexical and scope validation
+- **THEN** The old shared host and any translated form that does not preserve the origin key MUST fail closed.
+- **THEN** Paths MUST follow the package protocol's portable ASCII segment constraints.
+- **THEN** Absolute paths, empty segments, `.` and `..`, `%`, backslashes, NUL, queries, fragments, userinfo, ports, non-UTF-8 input, paths that are too long or deep, directories, metadata records, targets in another payload, and origin and path scope mismatches MUST fail closed.
+
+#### Scenario: A validated resource path is opened and read
+
+- **WHEN** the Rust resource handler resolves a package-relative file
+- **THEN** In Rust, the handler MUST apply strict lexical validation of the package-relative path, reject symlinks or reparse points at every component, enforce canonical root containment, require a regular file, revalidate identity after opening, and perform a bounded read.
+- **THEN** Successful reads MUST stay within the existing 64 MiB single-file limit, and the handler MUST NOT enumerate directories, rewrite HTML, add wildcard or null CORS, or implicitly map a root-relative URL back into the scope.
 
 #### Scenario: Read a valid relative resource from the current plugin
 
@@ -271,21 +271,21 @@ map a root-relative URL back into the scope.
 
 ### Requirement: Methods, MIME types, and response headers MUST be fixed and content sniffing MUST be prohibited
 
-Protocol v0 MUST support only `GET` and `HEAD`, and MUST NOT support Range,
-conditional requests, content negotiation, directory indexes, or arbitrary
-downloads. Based only on a fixed ASCII case-insensitive table keyed by the final
-extension, the Host MUST return exact MIME types for HTML, JavaScript or ES
-modules, CSS, JSON, Wasm, PNG, JPEG, GIF, WebP, AVIF, SVG, ICO, WOFF2
-(`font/woff2`), and TrueType (`.ttf`, `font/ttf`). An unknown extension MUST NOT
-fall back to `application/octet-stream`. A successful
-response MUST contain accurate `Content-Type` and `Content-Length`,
-`X-Content-Type-Options: nosniff`, and `Cache-Control: no-store`, and MUST NOT
-add wildcard CORS. Every successful current scoped HTML response MUST also
-contain the exact Host-owned Plugin Runtime Content Security Policy; GET and
-HEAD MUST return identical security headers. Non-HTML resources, failures,
-stale scopes, author metadata, request headers, query input, source and
-publisher facts MUST NOT select, omit or relax that policy. The handler MUST
-serve the validated bytes unchanged and MUST NOT rewrite HTML to inject CSP.
+Protocol v0 MUST support only `GET` and `HEAD`, and MUST NOT support Range, conditional requests, content negotiation, directory indexes, or arbitrary downloads.
+
+#### Scenario: A resource response chooses MIME and fixed headers
+
+- **WHEN** the handler selects the MIME type and fixed headers for any resource protocol request
+- **THEN** Based only on a fixed ASCII case-insensitive table keyed by the final extension, the Host MUST return exact MIME types for HTML, JavaScript or ES modules, CSS, JSON, Wasm, PNG, JPEG, GIF, WebP, AVIF, SVG, ICO, WOFF2 (`font/woff2`), and TrueType (`.ttf`, `font/ttf`).
+- **THEN** An unknown extension MUST NOT fall back to `application/octet-stream`.
+- **THEN** A successful response MUST contain accurate `Content-Type` and `Content-Length`, `X-Content-Type-Options: nosniff`, and `Cache-Control: no-store`, and MUST NOT add wildcard CORS.
+
+#### Scenario: A current HTML response carries the Host isolation policy
+
+- **WHEN** the resource handler prepares security headers for scoped HTML or evaluates inputs that could influence that policy
+- **THEN** Every successful current scoped HTML response MUST also contain the exact Host-owned Plugin Runtime Content Security Policy; GET and HEAD MUST return identical security headers.
+- **THEN** Non-HTML resources, failures, stale scopes, author metadata, request headers, query input, source and publisher facts MUST NOT select, omit or relax that policy.
+- **THEN** The handler MUST serve the validated bytes unchanged and MUST NOT rewrite HTML to inject CSP.
 
 #### Scenario: GET returns a known resource type
 
@@ -347,14 +347,14 @@ serve the validated bytes unchanged and MUST NOT rewrite HTML to inject CSP.
 
 ### Requirement: Lifecycle commits MUST invalidate old scopes precisely for the affected plugin
 
-The resource generation MUST change on a successful state transition that
-affects the target plugin's resource eligibility and MUST preserve scopes for
-unrelated plugins. Disable, replacement, uninstall, quarantine or incompatible
-recovery, and new requests after process termination MUST cause the old scope
-to fail; re-enable and reinstall MUST use a new scope. A failed or cancelled
-lifecycle or replacement transition MUST preserve the original registration,
-generation, and scope. Once logical uninstall commits, whether physical payload
-cleanup completes MUST NOT affect the revocation decision.
+The resource generation MUST change on a successful state transition that affects the target plugin's resource eligibility and MUST preserve scopes for unrelated plugins.
+
+#### Scenario: Lifecycle outcomes determine old-scope eligibility
+
+- **WHEN** a lifecycle, replacement, recovery, or process transition determines whether an old resource scope remains eligible
+- **THEN** Disable, replacement, uninstall, quarantine or incompatible recovery, and new requests after process termination MUST cause the old scope to fail; re-enable and reinstall MUST use a new scope.
+- **THEN** A failed or cancelled lifecycle or replacement transition MUST preserve the original registration, generation, and scope.
+- **THEN** Once logical uninstall commits, whether physical payload cleanup completes MUST NOT affect the revocation decision.
 
 #### Scenario: Disable or uninstall succeeds
 
@@ -393,16 +393,18 @@ cleanup completes MUST NOT affect the revocation decision.
 ### Requirement: Caching and errors MUST fail closed and MUST NOT create a Host information oracle
 
 All successful and error responses in v0 MUST use `Cache-Control: no-store`.
-The protocol MUST present unknown or expired scopes, identity or generation
-mismatches, out-of-bounds or nonexistent paths, metadata, unknown MIME types,
-disabled, incompatible, quarantined, or uninstalled registrations, and unsafe
-payloads as the same fixed external `404` response. Methods other than GET and
-HEAD MUST use a fixed `405`; only the inability to obtain managed state or an
-unclassifiable internal failure may use a fixed `500`. Responses and logs MUST
-NOT contain a scope, entry or plugin identity, version, digest, record key,
-absolute path, raw I/O error, stack, file content, or existence distinction. A
-Host-private command MAY return a stable typed code, but its message MUST be
-canonical safe text.
+
+#### Scenario: Protocol failures select a bounded status
+
+- **WHEN** resource eligibility, method validation, or managed-state access fails
+- **THEN** The protocol MUST present unknown or expired scopes, identity or generation mismatches, out-of-bounds or nonexistent paths, metadata, unknown MIME types, disabled, incompatible, quarantined, or uninstalled registrations, and unsafe payloads as the same fixed external `404` response.
+- **THEN** Methods other than GET and HEAD MUST use a fixed `405`; only the inability to obtain managed state or an unclassifiable internal failure may use a fixed `500`.
+
+#### Scenario: Resource responses and diagnostics cross an observable boundary
+
+- **WHEN** the protocol or a Host-private resource command returns a response or records a diagnostic
+- **THEN** Responses and logs MUST NOT contain a scope, entry or plugin identity, version, digest, record key, absolute path, raw I/O error, stack, file content, or existence distinction.
+- **THEN** A Host-private command MAY return a stable typed code, but its message MUST be canonical safe text.
 
 #### Scenario: Two different rejection reasons are probed
 
@@ -430,9 +432,25 @@ canonical safe text.
   uninstalling cannot allow continued reads through an old cache
 
 ### Requirement: Host resource byte caching MUST remain bounded, generation-bound and revocable
-The Resource Service MUST provide a Host-owned byte cache and MAY reuse only immutable plugin package bytes that already passed the complete path, regular-file, size, file-identity, payload-ownership and final revalidation rules. The Host byte cache MUST be process-local, MUST retain at most 32 MiB and 256 entries, and MUST keep the existing per-file size limit. A cache key MUST include entry identity, installed-or-development payload variant identity, resource generation and normalized relative resource path; plugin ID, version, digest or path alone MUST NOT identify a reusable value.
+The Resource Service MUST provide a Host-owned byte cache and MAY reuse only immutable plugin package bytes that already passed the complete path, regular-file, size, file-identity, payload-ownership and final revalidation rules.
 
-Before every cache lookup and before delivering cached bytes, the Host MUST validate the opaque scope, current Manager projection, payload ownership, resource generation, Runtime attempt and actual current Child WebView source. Replacement, reload, disable, uninstall, development retirement and shutdown MUST revoke cache eligibility before payload cleanup and MUST make in-flight old-generation lookup results unusable. Browser responses MUST retain `Cache-Control: no-store`; a Host memory cache MUST NOT create browser authority or allow an old URL or WebView to avoid a new current-source check. Cached values MUST contain only immutable package bytes, fixed MIME and bounded length and MUST NOT contain user content, URL, scope, attempt, WebView label, nonce, raw error or Host-private token.
+#### Scenario: Resource bytes enter the bounded Host cache
+
+- **WHEN** validated immutable resource bytes are considered for cache retention
+- **THEN** The Host byte cache MUST be process-local, MUST retain at most 32 MiB and 256 entries, and MUST keep the existing per-file size limit.
+- **THEN** A cache key MUST include entry identity, installed-or-development payload variant identity, resource generation and normalized relative resource path; plugin ID, version, digest or path alone MUST NOT identify a reusable value.
+- **THEN** Cached values MUST contain only immutable package bytes, fixed MIME and bounded length and MUST NOT contain user content, URL, scope, attempt, WebView label, nonce, raw error or Host-private token.
+
+#### Scenario: Cached resource bytes are looked up or delivered
+
+- **WHEN** the Host services a request using its memory cache
+- **THEN** Before every cache lookup and before delivering cached bytes, the Host MUST validate the opaque scope, current Manager projection, payload ownership, resource generation, Runtime attempt and actual current Child WebView source.
+- **THEN** Browser responses MUST retain `Cache-Control: no-store`; a Host memory cache MUST NOT create browser authority or allow an old URL or WebView to avoid a new current-source check.
+
+#### Scenario: Payload lifecycle revokes cache eligibility
+
+- **WHEN** replacement, reload, disable, uninstall, development retirement, or shutdown invalidates a payload generation
+- **THEN** Replacement, reload, disable, uninstall, development retirement and shutdown MUST revoke cache eligibility before payload cleanup and MUST make in-flight old-generation lookup results unusable.
 
 #### Scenario: Current generation reopens after a real Page close
 - **WHEN** a new Runtime attempt for the same still-current resource generation requests a previously verified package resource

@@ -11,9 +11,21 @@ validation.
 
 ### Requirement: Host and plugin documents MUST run under distinct Host-owned Content Security Policies
 
-The production Host main document and every eligible plugin Runtime document MUST use non-empty, mutually independent Content Security Policies controlled by lensX. The Host policy MUST continue to allow only the validated Host bundle, Tauri IPC, and current plugin document class. The plugin policy MUST enforce only trusted Host ancestry, Host and cross-plugin isolation, and Runtime boundaries that an author cannot relax. It MUST NOT treat Worker, network, remote HTTPS or WSS resources, `blob:`, `data:`, WASM, or browser origin storage as lensX permission-gated content categories. A plugin's own policy MAY narrow its content sources further, but Manifest, HTML, or remote content MUST NOT relax isolation policy in the Host header.
+The production Host main document and every eligible plugin Runtime document MUST use non-empty, mutually independent Content Security Policies controlled by lensX.
 
-The Host main policy MUST NOT change because the plugin Web Runtime is open. Both policies MUST prevent a plugin from obtaining Host Tauri authority, using the plugin document as the Host main document, reusing an origin across plugins, or embedding through a wildcard ancestor.
+#### Scenario: Host and plugin documents apply separate content policies
+
+- **WHEN** production Host and plugin Runtime documents load content
+- **THEN** The Host policy MUST continue to allow only the validated Host bundle, Tauri IPC, and current plugin document class.
+- **THEN** The plugin policy MUST enforce only trusted Host ancestry, Host and cross-plugin isolation, and Runtime boundaries that an author cannot relax.
+- **THEN** It MUST NOT treat Worker, network, remote HTTPS or WSS resources, `blob:`, `data:`, WASM, or browser origin storage as lensX permission-gated content categories.
+- **THEN** A plugin's own policy MAY narrow its content sources further, but Manifest, HTML, or remote content MUST NOT relax isolation policy in the Host header.
+
+#### Scenario: An open plugin Runtime retains Host isolation
+
+- **WHEN** ordinary plugin Web capabilities are available under the Host-owned policies
+- **THEN** The Host main policy MUST NOT change because the plugin Web Runtime is open.
+- **THEN** Both policies MUST prevent a plugin from obtaining Host Tauri authority, using the plugin document as the Host main document, reusing an origin across plugins, or embedding through a wildcard ancestor.
 
 #### Scenario: Plugin uses open content capability
 
@@ -40,7 +52,13 @@ The Host main policy MUST NOT change because the plugin Web Runtime is open. Bot
 - **THEN** inability to justify that minimum exception prevents completion rather than enabling a general unsafe policy
 
 ### Requirement: Every Runtime attempt MUST have one idempotent generation-aware terminal cleanup
-Every explicit open, retry or committed development reload MUST create a fresh process-local attempt. Close, navigation away, disable, uninstall, replacement, reload, disconnect, failure, breaker, Host reload, App unmount and process exit MUST converge on one idempotent coordinator that rejects new ingress, aborts work, removes bridge/Session/resource/navigation authority, hides and destroys the Child WebView, and clears bounds, focus, listeners, timers and caches. Every late callback MUST compare current attempt before publishing state.
+Every explicit open, retry or committed development reload MUST create a fresh process-local attempt.
+
+#### Scenario: A Runtime attempt reaches terminal cleanup
+
+- **WHEN** a terminal trigger or late callback occurs for a Runtime attempt
+- **THEN** Close, navigation away, disable, uninstall, replacement, reload, disconnect, failure, breaker, Host reload, App unmount and process exit MUST converge on one idempotent coordinator that rejects new ingress, aborts work, removes bridge/Session/resource/navigation authority, hides and destroys the Child WebView, and clears bounds, focus, listeners, timers and caches.
+- **THEN** Every late callback MUST compare current attempt before publishing state.
 
 #### Scenario: User closes a ready plugin Page
 - **WHEN** the current external Page closes
@@ -69,7 +87,19 @@ Every explicit open, retry or committed development reload MUST create a fresh p
 
 ### Requirement: Repeated Runtime failures MUST open a bounded process-local circuit breaker without automatic restart
 
-The Host MUST count qualifying failures by trusted entry identity and current resource generation. Load timeout, handshake timeout, an unexpected ready-Session/WebView disconnect, or a supported WebView process-failure signal MUST qualify; user close, navigation, relevant Registration invalidation, replacement and graceful Host exit MUST NOT. The third qualifying failure within a rolling 60,000 milliseconds MUST open a 30,000 millisecond cooldown before any new Runtime resource, lease, iframe or Session is created. Cooldown expiry MUST NOT launch automatically. A new resource generation or 30,000 milliseconds of continuous ready state MUST clear that key's failure history, and all breaker state MUST disappear at process exit.
+The Host MUST count qualifying failures by trusted entry identity and current resource generation.
+
+#### Scenario: Runtime events are classified for circuit breaking
+
+- **WHEN** a Runtime lifecycle event is evaluated for failure accounting or cooldown
+- **THEN** Load timeout, handshake timeout, an unexpected ready-Session/WebView disconnect, or a supported WebView process-failure signal MUST qualify; user close, navigation, relevant Registration invalidation, replacement and graceful Host exit MUST NOT.
+- **THEN** The third qualifying failure within a rolling 60,000 milliseconds MUST open a 30,000 millisecond cooldown before any new Runtime resource, lease, iframe or Session is created.
+- **THEN** Cooldown expiry MUST NOT launch automatically.
+
+#### Scenario: Breaker history becomes obsolete
+
+- **WHEN** resource generation changes, readiness remains continuous, or the process exits
+- **THEN** A new resource generation or 30,000 milliseconds of continuous ready state MUST clear that key's failure history, and all breaker state MUST disappear at process exit.
 
 #### Scenario: Plugin fails three times quickly
 
@@ -91,7 +121,14 @@ The Host MUST count qualifying failures by trusted entry identity and current re
 
 ### Requirement: Runtime security failures MUST remain bounded, accessible, localized and non-oracular
 
-The Host MUST map Runtime security and lifecycle failures to stable Host-private codes including at least `runtime_load_timeout`, `runtime_handshake_timeout`, `runtime_session_disconnected`, `runtime_security_policy_failure`, `runtime_crash_loop`, and `runtime_unavailable`. User feedback MUST use the application i18n layer with canonical English and semantically aligned Simplified Chinese, preserve alert/status semantics, keyboard interaction, focus restoration and the supported light/dark themes, and MUST NOT display author HTML or raw browser/native errors. Logs, plugin responses and evidence MUST NOT expose complete URLs, blocked URIs, origin/scope tokens, nonce, Port contents, installation paths, grant lists, payloads, raw exceptions or stacks. No remote CSP reporting channel is introduced.
+The Host MUST map Runtime security and lifecycle failures to stable Host-private codes including at least `runtime_load_timeout`, `runtime_handshake_timeout`, `runtime_session_disconnected`, `runtime_security_policy_failure`, `runtime_crash_loop`, and `runtime_unavailable`.
+
+#### Scenario: A Runtime failure is presented and recorded
+
+- **WHEN** security or lifecycle failure feedback reaches users, logs, plugin responses, or validation evidence
+- **THEN** User feedback MUST use the application i18n layer with canonical English and semantically aligned Simplified Chinese, preserve alert/status semantics, keyboard interaction, focus restoration and the supported light/dark themes, and MUST NOT display author HTML or raw browser/native errors.
+- **THEN** Logs, plugin responses and evidence MUST NOT expose complete URLs, blocked URIs, origin/scope tokens, nonce, Port contents, installation paths, grant lists, payloads, raw exceptions or stacks.
+- **THEN** No remote CSP reporting channel is introduced.
 
 #### Scenario: Trustworthy CSP failure signal is available
 
@@ -144,7 +181,14 @@ The Launcher MUST contain at most one external plugin Child WebView. Switching t
 
 ### Requirement: Plugin CSP MUST be delivered by current scoped resource responses and deterministically validated
 
-The Host MUST attach the current plugin isolation CSP as a response header to every successful current scoped HTML response and preserve matching security headers for GET and HEAD. The policy MUST use the exact trusted Host ancestor and operate with scope, generation, path, MIME, `nosniff`, `no-store`, and no-Host-CORS guarantees. It MUST NOT rely on author meta, HTML rewriting, reflected Host origin, shared plugin origin, or removal of negative cases. Deterministic response, resource-graph, header, CSP parsing, Session, and boundary tests MUST cover supported content categories and Host/Tauri, cross-plugin, stale-generation, popup, top-navigation, and persistent-background denial.
+The Host MUST attach the current plugin isolation CSP as a response header to every successful current scoped HTML response and preserve matching security headers for GET and HEAD.
+
+#### Scenario: Scoped response delivery and validation preserve isolation
+
+- **WHEN** the Host serves or deterministically validates current scoped HTML responses and their resource graph
+- **THEN** The policy MUST use the exact trusted Host ancestor and operate with scope, generation, path, MIME, `nosniff`, `no-store`, and no-Host-CORS guarantees.
+- **THEN** It MUST NOT rely on author meta, HTML rewriting, reflected Host origin, shared plugin origin, or removal of negative cases.
+- **THEN** Deterministic response, resource-graph, header, CSP parsing, Session, and boundary tests MUST cover supported content categories and Host/Tauri, cross-plugin, stale-generation, popup, top-navigation, and persistent-background denial.
 
 #### Scenario: Current open resource graph is validated
 
@@ -160,7 +204,13 @@ The Host MUST attach the current plugin isolation CSP as a response header to ev
 
 ### Requirement: Delivery MUST deterministically prove CSP and terminal lifecycle
 
-Delivery MUST combine Rust response tests, deterministic TypeScript state/race tests, React accessibility/i18n/theme tests, canonical normal and malicious packages, package-boundary checks, and production configuration drift tests. It MUST cover allowed and forbidden content classes, no Host/Tauri access, load/bridge deadlines as state logic, circuit breaking, exactly one current Child WebView model, terminal triggers, cleanup calls, late-event inertness, unrelated-plugin stability, and zero privileged handler hits. It MUST NOT require browser, real WebView, GUI, native harness, or environment evidence.
+Delivery MUST combine Rust response tests, deterministic TypeScript state/race tests, React accessibility/i18n/theme tests, canonical normal and malicious packages, package-boundary checks, and production configuration drift tests.
+
+#### Scenario: Security lifecycle validation evaluates delivery evidence
+
+- **WHEN** the deterministic CSP and terminal-lifecycle suite runs
+- **THEN** It MUST cover allowed and forbidden content classes, no Host/Tauri access, load/bridge deadlines as state logic, circuit breaking, exactly one current Child WebView model, terminal triggers, cleanup calls, late-event inertness, unrelated-plugin stability, and zero privileged handler hits.
+- **THEN** It MUST NOT require browser, real WebView, GUI, native harness, or environment evidence.
 
 #### Scenario: Complete deterministic security lifecycle gate passes
 

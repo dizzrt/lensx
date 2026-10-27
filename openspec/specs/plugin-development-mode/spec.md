@@ -11,14 +11,7 @@ boundaries.
 ### Requirement: Development Mode MUST require build capability and explicit per-process opt-in
 
 The system MUST expose development controls only when both the native and
-frontend builds explicitly include the Plugin Development Mode capability. An
-explicit per-process opt-in MUST come from a user action in trusted Host
-settings or from the dedicated `pnpm run dev:plugin-development-mode` startup
-command. The dedicated command MUST enable the native state before the frontend
-reads the capability. Native commands MUST independently check the build
-capability and the current process-local switch; frontend visibility MUST NOT
-establish authority. Production builds MUST NOT register development Tauri
-commands, managed state, or frontend operation entry points.
+frontend builds explicitly include the Plugin Development Mode capability.
 
 #### Scenario: User enables Development Mode in a capable build
 
@@ -58,18 +51,19 @@ commands, managed state, or frontend operation entry points.
 - **THEN** a manually constructed frontend request still cannot enable the
   mode, select a directory, register, reload, or remove a development plugin
 
+#### Scenario: Authorize process-local Development Mode
+
+- **WHEN** a production or development build is prepared, or a Development Mode control or native command is invoked
+- **THEN** An explicit per-process opt-in MUST come from a user action in trusted Host settings or from the dedicated `pnpm run dev:plugin-development-mode` startup command.
+- **THEN** The dedicated command MUST enable the native state before the frontend reads the capability.
+- **THEN** Native commands MUST independently check the build capability and the current process-local switch; frontend visibility MUST NOT establish authority.
+- **THEN** Production builds MUST NOT register development Tauri commands, managed state, or frontend operation entry points.
+
 ### Requirement: Development registration MUST accept only one explicitly selected self-contained dist directory
 
 The interactive registration operation MUST obtain one user-authorized
 directory through a Host-owned native folder picker and MUST treat its root as a
-self-contained `dist/`. The interactive operation and the dedicated startup's
-Host-owned bootstrap discovery MUST remain independent. For picker and
-bootstrap input alike, the Host MUST read only regular files without following
-symlinks and MUST check portable paths, case collisions, file-count, per-file
-and total-size limits, `manifest.json`, Manifest semantics, current
-compatibility, and the completeness of every referenced resource. The Host MUST
-NOT search a candidate `dist/` parent, read project metadata, execute a build
-script, accept a remote URL, or treat a frontend-supplied path as authority.
+self-contained `dist/`.
 
 #### Scenario: Register a valid compatible dist interactively
 
@@ -107,17 +101,18 @@ script, accept a remote URL, or treat a frontend-supplied path as authority.
   result and publishes no mixed generation
 - **THEN** any existing development registration and Runtime remain current
 
+#### Scenario: Read an interactive or bootstrap dist candidate
+
+- **WHEN** the Host evaluates picker-selected or startup-discovered plugin build content
+- **THEN** The interactive operation and the dedicated startup's Host-owned bootstrap discovery MUST remain independent.
+- **THEN** For picker and bootstrap input alike, the Host MUST read only regular files without following symlinks and MUST check portable paths, case collisions, file-count, per-file and total-size limits, `manifest.json`, Manifest semantics, current compatibility, and the completeness of every referenced resource.
+- **THEN** The Host MUST NOT search a candidate `dist/` parent, read project metadata, execute a build script, accept a remote URL, or treat a frontend-supplied path as authority.
+
 ### Requirement: Dedicated development startup MUST discover and register repository plugin builds without opening them
 
 The dedicated `pnpm run dev:plugin-development-mode` command MUST use the
 repository `plugins/` directory as its default startup root and MUST support one
-optional `--plugins-root <path>` override. The Host MUST inspect only non-hidden
-direct child directories of that root in deterministic order and MUST treat
-only an existing `<member>/dist` as a candidate. A member without `dist/` MUST
-be treated as not yet built and ignored. Each successful candidate MUST be
-published as a process-local, enabled, `source=development`, Runtime-inactive
-immutable snapshot registration. Bootstrap MUST NOT execute a Launcher Action,
-open a Page, create a Runtime, build, install, watch, or reload a plugin.
+optional `--plugins-root <path>` override.
 
 #### Scenario: Default repository plugins are ready
 
@@ -175,15 +170,20 @@ open a Page, create a Runtime, build, install, watch, or reload a plugin.
 - **THEN** the UI does not present an enabled mode whose authority cannot be
   registered or revoked safely
 
+#### Scenario: Discover direct startup-root members
+
+- **WHEN** dedicated Development Mode startup enumerates the selected root
+- **THEN** The Host MUST inspect only non-hidden direct child directories of that root in deterministic order and MUST treat only an existing `<member>/dist` as a candidate.
+- **THEN** A member without `dist/` MUST be treated as not yet built and ignored.
+- **THEN** Each successful candidate MUST be published as a process-local, enabled, `source=development`, Runtime-inactive immutable snapshot registration.
+- **THEN** Bootstrap MUST NOT execute a Launcher Action, open a Page, create a Runtime, build, install, watch, or reload a plugin.
+
 ### Requirement: Host MUST publish only an immutable validated development snapshot
 
 The Host MUST copy the authorized directory into a unique Host-owned staging
 generation, complete all content validation against the staging bytes, and
 publish an immutable snapshot by an atomic same-filesystem rename only after
-success. The snapshot identity MUST be a domain-separated SHA-256 over sorted
-portable paths and bytes and MUST remain distinct from an `.lxp` package digest.
-The Plugin Resource service and Runtime MUST read only the current published
-snapshot and MUST NOT read the author's changing directory directly.
+success.
 
 #### Scenario: Initial snapshot commits successfully
 
@@ -212,16 +212,17 @@ snapshot and MUST NOT read the author's changing directory directly.
 - **THEN** the Host records a bounded cleanup diagnostic and retries only in
   bounded recovery for the current process's development cache
 
+#### Scenario: Publish and resolve a development snapshot
+
+- **WHEN** a development snapshot identity is computed, a validated staging generation is committed, or Resource or Runtime services resolve it
+- **THEN** The snapshot identity MUST be a domain-separated SHA-256 over sorted portable paths and bytes and MUST remain distinct from an `.lxp` package digest.
+- **THEN** The Plugin Resource service and Runtime MUST read only the current published snapshot and MUST NOT read the author's changing directory directly.
+
 ### Requirement: Development identity and source MUST remain Host-owned, process-local, and non-authoritative
 
 A development registration MUST use its Manifest plugin ID in the same global
 uniqueness check as builtin, external, quarantine, and other development
-entries. The Host MUST generate the `development` source; Manifest publisher or
-other author-controlled fields MUST NOT set source or establish official,
-verified, signed, installed, trusted, or additional Host-authority conclusions.
-Development registrations, source-directory capabilities, and snapshots MUST
-exist only in the current process and MUST NOT be written to the
-Plugin Manager Store.
+entries.
 
 #### Scenario: The same plugin ID already exists
 
@@ -250,17 +251,17 @@ Plugin Manager Store.
 - **THEN** bounded cache cleanup may remove residue proven to belong to an old
   development session but MUST NOT guess or delete another path
 
+#### Scenario: Classify and retain development source facts
+
+- **WHEN** the Host creates, classifies, or retains a development registration
+- **THEN** The Host MUST generate the `development` source; Manifest publisher or other author-controlled fields MUST NOT set source or establish official, verified, signed, installed, trusted, or additional Host-authority conclusions.
+- **THEN** Development registrations, source-directory capabilities, and snapshots MUST exist only in the current process and MUST NOT be written to the Plugin Manager Store.
+
 ### Requirement: Manual reload MUST be atomic, revision-bound, and force a fresh Runtime generation
 
 Reload MUST accept only the current development entry's opaque identity and
 expected Registration revision and MUST create a complete new snapshot through
-the Host-held source-directory capability. A successful reload MUST preserve
-the plugin ID, atomically replace the complete Manifest and payload facts,
-force the affected plugin's Registration revision and resource generation to
-advance, terminate the old Runtime attempt, and create a fresh attempt when the
-page remains the current navigation target. An explicit reload MUST NOT be
-treated as a no-op even when the snapshot bytes are unchanged. The system MUST
-NOT automatically watch, reload, or retry indefinitely.
+the Host-held source-directory capability.
 
 #### Scenario: Modified development plugin reloads successfully
 
@@ -307,6 +308,17 @@ NOT automatically watch, reload, or retry indefinitely.
   register
 - **THEN** the current entry, snapshot, scope, and Runtime remain unchanged
 
+#### Scenario: Commit a manual development reload
+
+- **WHEN** a current development entry is explicitly reloaded
+- **THEN** A successful reload MUST preserve the plugin ID, atomically replace the complete Manifest and payload facts, force the affected plugin's Registration revision and resource generation to advance, terminate the old Runtime attempt, and create a fresh attempt when the page remains the current navigation target.
+- **THEN** An explicit reload MUST NOT be treated as a no-op even when the snapshot bytes are unchanged.
+
+#### Scenario: Keep source changes explicit between reloads
+
+- **WHEN** development source changes or a reload fails without a further explicit user request
+- **THEN** The system MUST NOT automatically watch, reload, or retry indefinitely.
+
 ### Requirement: Disable and remove MUST quiesce development authority without deleting plugin data
 
 Disabling Development Mode MUST remove every current-process development
@@ -335,7 +347,8 @@ pinned collections, production packages, or another plugin's content.
   and the frontend does not prematurely claim all authority was revoked
 
 ### Requirement: Development execution MUST use the production Child WebView path
-Development registration and manual reload MUST use the same Manifest `0.4.0`, bounded Page presentation normalization, native surface coordinator, Child WebView registry, origin/resource binding, navigation, bridge, Session, RPC, Host API and teardown boundaries as installed plugins. Development source MUST grant no alternate Tauri command, bridge, bounds, CSP, Host authority, runtime resize setter, or user-size persistence. A development Page's valid presentation MUST receive the same fixed/resizable behavior, work-area fitting, same-attempt retention and actual-close reset as an installed Page.
+
+Development registration and manual reload MUST use the same Manifest `0.4.0`, bounded Page presentation normalization, native surface coordinator, Child WebView registry, origin/resource binding, navigation, bridge, Session, RPC, Host API and teardown boundaries as installed plugins.
 
 #### Scenario: Development Page opens
 - **WHEN** an opted-in validated development snapshot with an explicit Page presentation becomes current
@@ -347,9 +360,15 @@ Development registration and manual reload MUST use the same Manifest `0.4.0`, b
 - **THEN** old Child WebView teardown completes and a fresh attempt/WebView uses the new snapshot's Manifest initial size
 - **THEN** uncommitted reload failure leaves the current WebView and its transient current size unchanged
 
+#### Scenario: Execute a development Page with validated presentation
+
+- **WHEN** a development registration or its Page is resolved, presented, resized, hidden, restored, reloaded, or closed
+- **THEN** Development source MUST grant no alternate Tauri command, bridge, bounds, CSP, Host authority, runtime resize setter, or user-size persistence.
+- **THEN** A development Page's valid presentation MUST receive the same fixed/resizable behavior, work-area fitting, same-attempt retention and actual-close reset as an installed Page.
+
 ### Requirement: Delivery MUST deterministically prove safe directory handling, atomic reload, production exclusion, and lifecycle revocation
 
-Delivery MUST combine Rust directory, snapshot, Manager, Resource, and lifecycle tests; TypeScript contract/service/state tests; React accessibility, localization, and theme tests; the shared directory corpus; workspace and release boundary checks; and production-build source policy. Validation MUST cover valid, invalid, incompatible, cancelled, source-race, link, limit, collision, reload success/failure/conflict, unchanged reload, legacy-contract rejection, disable/remove, cleanup failure, process restart, production exclusion, and old-generation authority revocation without requiring real WebView teardown evidence.
+Delivery MUST combine Rust directory, snapshot, Manager, Resource, and lifecycle tests; TypeScript contract/service/state tests; React accessibility, localization, and theme tests; the shared directory corpus; workspace and release boundary checks; and production-build source policy.
 
 #### Scenario: Focused deterministic Development Mode validation passes
 
@@ -362,3 +381,8 @@ Delivery MUST combine Rust directory, snapshot, Manager, Resource, and lifecycle
 - **WHEN** validation cannot establish directory currentness, snapshot atomicity, source distinction, Host-authority non-escalation, lifecycle revocation, production exclusion, or cross-layer contract consistency
 - **THEN** the capability remains incomplete while specification, design, or implementation is corrected
 - **THEN** validation does not relax Runtime policy, hide failures, remove negative cases, or reintroduce real WebView evidence as a compatibility Gate
+
+#### Scenario: Evaluate deterministic Development Mode coverage
+
+- **WHEN** delivery validation exercises directory, reload, exclusion, and lifecycle cases
+- **THEN** Validation MUST cover valid, invalid, incompatible, cancelled, source-race, link, limit, collision, reload success/failure/conflict, unchanged reload, legacy-contract rejection, disable/remove, cleanup failure, process restart, production exclusion, and old-generation authority revocation without requiring real WebView teardown evidence.

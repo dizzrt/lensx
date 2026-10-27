@@ -45,11 +45,7 @@ quarantine state, Runtime state, or Host authority through author input.
 
 ### Requirement: Registration facts MUST have explicit persistence lifetimes
 
-The Plugin Manager MUST continue to distinguish durable installed records, process-local development entries, derived Runtime state, diagnostics, and resource generations. The current record format MUST NOT store `granted_permission_ids`, permission decisions, permission reasons, or permission history. Manifest `0.1.0` and grant data in an old record format MUST NOT produce new Host authority. Recovery MUST place such records into a stable incompatible or quarantined state, preserve program and data for explicit management, and MUST NOT fabricate Manifest `0.4.0`.
-
-An installed record MUST persist the normalized Manifest, installation location, algorithm-tagged package digest, Host-controlled source, enabled intent, and recent bounded diagnostics. A development entry MUST use a distinct development-snapshot payload variant with `source=development`, remain process-local, and MUST NOT write, delete, or masquerade as a Plugin Manager Store record.
-
-Compatibility for both durable and process-local lifetimes MUST derive from the respective current Manifest ranges and current lensX and Host API versions. Runtime state MUST remain process-local. A development entry, source-directory capability, immutable snapshot, diagnostics, and Runtime state MUST NOT recover in a new process.
+The Plugin Manager MUST continue to distinguish durable installed records, process-local development entries, derived Runtime state, diagnostics, and resource generations.
 
 #### Scenario: Current-format record recovers
 - **WHEN** the Host starts and reads a valid current record
@@ -84,17 +80,31 @@ Compatibility for both durable and process-local lifetimes MUST derive from the 
 - **THEN** the new Plugin Manager process recovers none of those development facts
 - **THEN** installed records, quarantine evidence, and Store revision preserve their existing recovery semantics
 
+#### Scenario: Recover current or legacy stored authority facts
+
+- **WHEN** the Manager reads or writes a durable record, or recovers a current or legacy record
+- **THEN** The current record format MUST NOT store `granted_permission_ids`, permission decisions, permission reasons, or permission history.
+- **THEN** Manifest `0.1.0` and grant data in an old record format MUST NOT produce new Host authority.
+- **THEN** Recovery MUST place such records into a stable incompatible or quarantined state, preserve program and data for explicit management, and MUST NOT fabricate Manifest `0.4.0`.
+
+#### Scenario: Persist an installed record or retain development entries
+
+- **WHEN** the Manager stores installed registration facts or retains development payload facts
+- **THEN** An installed record MUST persist the normalized Manifest, installation location, algorithm-tagged package digest, Host-controlled source, enabled intent, and recent bounded diagnostics.
+- **THEN** A development entry MUST use a distinct development-snapshot payload variant with `source=development`, remain process-local, and MUST NOT write, delete, or masquerade as a Plugin Manager Store record.
+
+#### Scenario: Derive compatibility and Runtime state after startup
+
+- **WHEN** the Manager evaluates registrations against current versions, maintains Runtime state, or starts a new process
+- **THEN** Compatibility for both durable and process-local lifetimes MUST derive from the respective current Manifest ranges and current lensX and Host API versions.
+- **THEN** Runtime state MUST remain process-local.
+- **THEN** A development entry, source-directory capability, immutable snapshot, diagnostics, and Runtime state MUST NOT recover in a new process.
+
 ### Requirement: Development entries MUST share Manager identity and revision authority without becoming Store records
 
 The Plugin Manager MUST combine installed and process-local development entries
 in one atomic read projection and MUST enforce the same plugin ID uniqueness
-across builtin, external, development, and quarantine identities. Successful
-development register, reload, enabled, and remove operations
-MUST use the same compare-current revision, affected-plugin resource generation,
-and changed-event semantics, but MUST NOT call Store write or delete. Development
-payload facts MUST be a strict Host-owned variant and MUST NOT allow a Manifest
-author to submit source, snapshot path or identity, enabled intent, or
-Runtime state.
+across builtin, external, development, and quarantine identities.
 
 #### Scenario: Development entry joins the current snapshot
 
@@ -123,6 +133,12 @@ Runtime state.
   advances the affected plugin's revision and resource generation
 - **THEN** the Manager deletes no plugin data, installed payload, Launcher
   collection, or Store record
+
+#### Scenario: Mutate a process-local development entry
+
+- **WHEN** a development register, reload, enabled, or remove operation is attempted
+- **THEN** Successful development register, reload, enabled, and remove operations MUST use the same compare-current revision, affected-plugin resource generation, and changed-event semantics, but MUST NOT call Store write or delete.
+- **THEN** Development payload facts MUST be a strict Host-owned variant and MUST NOT allow a Manifest author to submit source, snapshot path or identity, enabled intent, or Runtime state.
 
 ### Requirement: Plugin records MUST persist independently and atomically
 
@@ -253,11 +269,6 @@ retain its current isolation reason.
 
 The Plugin Manager MUST expose its Manager, Store, recovery report, lifecycle
 transitions and revision-bound lifecycle mutation only to trusted Host services.
-It MUST NOT expose raw Manager state or a general mutation boundary to plugins,
-the public Registration Contract, or frontend product code. This capability
-MUST NOT by itself claim delivery of a frontend query or management UI, Action
-or Page projection, package installation, iframe Runtime, public Host API, or
-user-facing native-authority workflow.
 
 #### Scenario: A consumer inspects the public application boundary
 
@@ -273,18 +284,17 @@ user-facing native-authority workflow.
 - **THEN** recovery does not read plugin UI, create an iframe, project an
   Action or Page, or execute plugin code
 
+#### Scenario: Inspect Manager exposure to application consumers
+
+- **WHEN** plugins, Registration consumers, or frontend product code inspect the available Manager boundary
+- **THEN** It MUST NOT expose raw Manager state or a general mutation boundary to plugins, the public Registration Contract, or frontend product code.
+- **THEN** This capability MUST NOT by itself claim delivery of a frontend query or management UI, Action or Page projection, package installation, iframe Runtime, public Host API, or user-facing native-authority workflow.
+
 ### Requirement: Plugin Manager must remove healthy and quarantine records atomically
 
 The Plugin Manager MUST provide trusted Host callers with an internal
 transition that removes a healthy record or quarantine Store record by its
-current entry identity. Before removal, the Manager MUST validate the target,
-the complete Store state, and the caller's revision. It MUST persist and flush
-the record's absence before removing the entry from the in-memory snapshot and
-committing a new revision. Failure during record deletion or directory syncing
-MUST preserve the original on-disk record, the original in-memory healthy or
-quarantine entry, and the original revision. Manager removal MUST NOT delete
-the installation payload, plugin data, Launcher collections, or any other
-provider record.
+current entry identity.
 
 #### Scenario: A healthy record is removed successfully
 
@@ -312,15 +322,19 @@ provider record.
 - **THEN** the revision does not increment and the Host does not publish a
   Registration changed event
 
+#### Scenario: Remove a revision-bound Store record
+
+- **WHEN** a trusted caller attempts to remove a healthy or quarantine record
+- **THEN** Before removal, the Manager MUST validate the target, the complete Store state, and the caller's revision.
+- **THEN** It MUST persist and flush the record's absence before removing the entry from the in-memory snapshot and committing a new revision.
+- **THEN** Failure during record deletion or directory syncing MUST preserve the original on-disk record, the original in-memory healthy or quarantine entry, and the original revision.
+- **THEN** Manager removal MUST NOT delete the installation payload, plugin data, Launcher collections, or any other provider record.
+
 ### Requirement: Plugin Manager enabled and removal transitions must preserve no-op and revision semantics
 
 `set_enabled` MUST return a no-op when the target healthy record already has
 the requested intent and MUST NOT write the record, commit a revision, or
-produce a changed event. A real enabled transition and a real removal
-transition MUST each commit exactly one revision, and only after persistence
-and in-memory snapshot publication have both completed. A missing healthy
-identity, an enabled transition targeting quarantine, a stale revision, or a
-degraded Store MUST produce a stable rejection without modifying state.
+produce a changed event.
 
 #### Scenario: Enabled intent already matches the requested value
 
@@ -345,3 +359,9 @@ degraded Store MUST produce a stable rejection without modifying state.
   overwriting unreadable evidence
 - **THEN** the application can still read the degraded Registration conclusion
   and continue Host functions that do not depend on plugins
+
+#### Scenario: Commit or reject a real lifecycle mutation
+
+- **WHEN** an enabled or removal transition changes state or encounters an invalid identity, revision, or Store
+- **THEN** A real enabled transition and a real removal transition MUST each commit exactly one revision, and only after persistence and in-memory snapshot publication have both completed.
+- **THEN** A missing healthy identity, an enabled transition targeting quarantine, a stale revision, or a degraded Store MUST produce a stable rejection without modifying state.

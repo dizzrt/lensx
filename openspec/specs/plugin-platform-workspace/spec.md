@@ -8,7 +8,7 @@ Define the repository workspace topology, dependency boundaries, aggregate lifec
 
 ### Requirement: The repository must provide an explicit plugin-platform workspace topology
 
-The repository MUST keep the root lensX application as the private workspace root and MUST recognize direct child directories containing package manifests under `packages/*`, `plugins/*`, and `examples/plugins/*` as supported workspace members. Every direct `plugins/*` member MUST be a product official plugin; non-official examples MUST remain under `examples/plugins/*`, and release fixtures MUST NOT enter product `plugins/*`. This topology MUST NOT require moving the root application to `apps/desktop`, and it MUST NOT implicitly include packages in other locations or at deeper nesting levels.
+The repository MUST keep the root lensX application as the private workspace root and MUST recognize direct child directories containing package manifests under `packages/*`, `plugins/*`, and `examples/plugins/*` as supported workspace members.
 
 #### Scenario: Recognize a member in a supported location
 
@@ -39,9 +39,14 @@ The repository MUST keep the root lensX application as the private workspace roo
 - **THEN** the new workspace topology does not recognize it as a direct official plugin member
 - **THEN** maintainers MUST migrate the product plugin to `plugins/<slug>` instead of retaining both discovery rules
 
+#### Scenario: Discover direct official and example workspace members
+- **WHEN** the workspace resolves package manifests under supported member roots
+- **THEN** Every direct `plugins/*` member MUST be a product official plugin; non-official examples MUST remain under `examples/plugins/*`, and release fixtures MUST NOT enter product `plugins/*`.
+- **THEN** This topology MUST NOT require moving the root application to `apps/desktop`, and it MUST NOT implicitly include packages in other locations or at deeper nesting levels.
+
 ### Requirement: Workspace members must obey one-way public dependency boundaries
 
-The root Host application MUST be able to consume public workspace packages through declared package dependencies. Public packages, official plugins, and example plugins MUST NOT depend on the private root package, `src/app/**`, Host Tauri adapters, or internal root style entry points. Plugin source MUST NOT depend on `@tauri-apps/*`. A workspace member consuming another member MUST use the dependency's declared package name and public exports and MUST NOT import its source through a cross-member relative path. Official plugins MUST obey the same boundaries as example plugins.
+The root Host application MUST be able to consume public workspace packages through declared package dependencies.
 
 #### Scenario: Establish an allowed dependency through a public package export
 
@@ -65,9 +70,16 @@ The root Host application MUST be able to consume public workspace packages thro
 - **THEN** the workspace dependency check rejects the import
 - **THEN** the consumer must use the dependency's declared package name and public export
 
+#### Scenario: Resolve workspace dependencies only through public package exports
+- **WHEN** a public package, official plugin, or example imports another workspace member
+- **THEN** Public packages, official plugins, and example plugins MUST NOT depend on the private root package, `src/app/**`, Host Tauri adapters, or internal root style entry points.
+- **THEN** Plugin source MUST NOT depend on `@tauri-apps/*`.
+- **THEN** A workspace member consuming another member MUST use the dependency's declared package name and public exports and MUST NOT import its source through a cross-member relative path.
+- **THEN** Official plugins MUST obey the same boundaries as example plugins.
+
 ### Requirement: Dependency boundaries must be enforced by a deterministic repository check
 
-The repository MUST provide a dependency-boundary check runnable from the root and MUST include it in the standard root `check` command. The check MUST cover workspace member locations, required lifecycle scripts, package dependencies, and source module references. A violation MUST cause a non-zero exit status and MUST produce deterministic diagnostics sufficient to identify the violating file, reference, and rule. The repository MUST use valid and invalid fixtures to test allowed and prohibited boundaries automatically.
+The repository MUST provide a dependency-boundary check runnable from the root and MUST include it in the standard root `check` command.
 
 #### Scenario: A valid dependency graph passes the check
 
@@ -87,9 +99,15 @@ The repository MUST provide a dependency-boundary check runnable from the root a
 - **THEN** a fixture using a valid public import is accepted
 - **THEN** negative fixtures for a private Host import, a Tauri import, and a cross-member relative source import are each rejected
 
+#### Scenario: Reject invalid workspace member and import boundaries
+- **WHEN** the standard root check validates workspace membership and module references
+- **THEN** The check MUST cover workspace member locations, required lifecycle scripts, package dependencies, and source module references.
+- **THEN** A violation MUST cause a non-zero exit status and MUST produce deterministic diagnostics sufficient to identify the violating file, reference, and rule.
+- **THEN** The repository MUST use valid and invalid fixtures to test allowed and prohibited boundaries automatically.
+
 ### Requirement: Standard root commands must fully validate all workspace members
 
-The root `build`, `typecheck`, `test`, and `check` commands MUST each execute the corresponding lifecycle script for the root application and every actual workspace member. Every member MUST declare all four scripts, and aggregate commands MUST NOT silently skip a member with a missing script. A root application or member command failure MUST cause the aggregate command to return a non-zero status. The root application's `dev`, `preview`, and Tauri/Rust-specific commands MUST retain their existing purposes. Root package scripts MUST remain a governed stable interface: package-local lifecycle scripts MUST remain discoverable through the standard aggregate commands, while focused cross-layer capability validation MUST be selected through the unified Gate registry rather than by adding per-test, per-change, or forwarding scripts to the root manifest.
+The root `build`, `typecheck`, `test`, and `check` commands MUST each execute the corresponding lifecycle script for the root application and every actual workspace member.
 
 #### Scenario: An aggregate command covers the root application and members
 
@@ -120,6 +138,13 @@ The root `build`, `typecheck`, `test`, and `check` commands MUST each execute th
 - **WHEN** a workspace or plugin capability requires validation beyond the four package-local lifecycle scripts
 - **THEN** the root invokes that validation through a stable Gate registry identifier
 - **THEN** no root script is added solely for a test subset, OpenSpec Change, or forwarding alias
+
+#### Scenario: Run every actual member through governed lifecycle commands
+- **WHEN** the root invokes build, typecheck, test, or check for the workspace
+- **THEN** Every member MUST declare all four scripts, and aggregate commands MUST NOT silently skip a member with a missing script.
+- **THEN** A root application or member command failure MUST cause the aggregate command to return a non-zero status.
+- **THEN** The root application's `dev`, `preview`, and Tauri/Rust-specific commands MUST retain their existing purposes.
+- **THEN** Root package scripts MUST remain a governed stable interface: package-local lifecycle scripts MUST remain discoverable through the standard aggregate commands, while focused cross-layer capability validation MUST be selected through the unified Gate registry rather than by adding per-test, per-change, or forwarding scripts to the root manifest.
 
 ### Requirement: The workspace foundation must not change delivered product behavior or contracts
 

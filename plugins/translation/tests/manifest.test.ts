@@ -16,7 +16,7 @@ describe('Translation public Manifest', () => {
     expect(normalized.manifest.contributes.pages).toHaveLength(1);
     expect(normalized.manifest.contributes.pages[0]).toMatchObject({
       id: 'main',
-      presentation: { initial_size: { width: 800, height: 600 }, resizable: true },
+      presentation: { initial_size: { width: 800, height: 480 }, resizable: true },
     });
     expect(normalized.manifest.contributes.actions).toHaveLength(1);
     expect(normalized.manifest.contributes.actions[0]).toMatchObject({

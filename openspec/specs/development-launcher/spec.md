@@ -47,12 +47,7 @@ desktop process orchestration.
 
 The launcher MUST encode the actual port as the run's only
 `http://localhost:<port>/` App target and pass it through Tauri runtime
-configuration. The Rust Host MUST validate and obtain the exact target from that
-configuration. The main-window navigation policy and the plugin Runtime
-`frame-ancestors` directive MUST consume the same fact and MUST NOT derive it
-from the Manifest, a plugin request, a frontend message, an HTTP header, logs,
-or a separate port environment variable. Release builds MUST continue to use
-`tauri://localhost` and MUST NOT start a local HTTP server.
+configuration.
 
 #### Scenario: Dynamic origin is propagated completely
 
@@ -81,16 +76,22 @@ or a separate port environment variable. Release builds MUST continue to use
 - **THEN** the unified development launcher, dynamic port, and development
   `devUrl` do not enter release Runtime authority
 
+#### Scenario: Consume the resolved development App target
+
+- **WHEN** the Rust Host validates development configuration and binds navigation and CSP consumers
+- **THEN** The Rust Host MUST validate and obtain the exact target from that configuration.
+- **THEN** The main-window navigation policy and the plugin Runtime `frame-ancestors` directive MUST consume the same fact and MUST NOT derive it from the Manifest, a plugin request, a frontend message, an HTTP header, logs, or a separate port environment variable.
+
+#### Scenario: Start the released application without a development server
+
+- **WHEN** a release build starts its Host application document
+- **THEN** Release builds MUST continue to use `tauri://localhost` and MUST NOT start a local HTTP server.
+
 ### Requirement: Ordinary and Plugin Development modes MUST compose over the same launcher
 
 Ordinary desktop development and the stable `dev:plugin-development-mode`
 command MUST reuse the same server, Tauri configuration, child lifecycle, and
-cleanup implementation. Ordinary mode MUST NOT enable the Plugin Development
-Mode frontend composition, Rust feature, startup root, or process-local switch.
-Plugin Development Mode MUST enable the existing build capability before
-creating the Rsbuild configuration and Tauri child, MUST preserve the default
-repository `plugins/` root and one `--plugins-root <path>` override, and MUST NOT
-change existing bootstrap, snapshot, Registration, or Runtime semantics.
+cleanup implementation.
 
 #### Scenario: Ordinary desktop development starts
 
@@ -119,6 +120,12 @@ change existing bootstrap, snapshot, Registration, or Runtime semantics.
   Rsbuild server or Tauri child
 - **THEN** the diagnostic does not disclose absolute plugin paths, environment
   contents, raw exception stacks, or private Host state
+
+#### Scenario: Select ordinary or plugin development composition
+
+- **WHEN** the unified launcher resolves its mode and optional plugin-root override
+- **THEN** Ordinary mode MUST NOT enable the Plugin Development Mode frontend composition, Rust feature, startup root, or process-local switch.
+- **THEN** Plugin Development Mode MUST enable the existing build capability before creating the Rsbuild configuration and Tauri child, MUST preserve the default repository `plugins/` root and one `--plugins-root <path>` override, and MUST NOT change existing bootstrap, snapshot, Registration, or Runtime semantics.
 
 ### Requirement: Launcher-owned processes MUST converge through one terminal lifecycle
 
@@ -156,13 +163,7 @@ cleanup MUST have no effect.
 ### Requirement: Delivery MUST use deterministic governed validation and bilingual documentation
 
 Delivery MUST provide a stable `development-launcher` Gate in the typed Gate
-registry. Rstest, Rust unit tests, static policy, and bilingual documentation
-checks MUST cover port resolution and propagation, mode isolation,
-configuration rejection, spawn, exit, and signal races, idempotent cleanup,
-production invariance, and the public boundary. The Gate MUST be read-only and
-MUST NOT add a Change-specific root alias or launch the Tauri GUI, an Rsbuild
-listener, a browser, a real WebView, a native harness, screenshots, visual
-baselines, or a target-environment performance flow.
+registry.
 
 #### Scenario: Stable Gate passes completely
 
@@ -182,3 +183,9 @@ baselines, or a target-environment performance flow.
 - **THEN** validation governance rejects the step
 - **THEN** the missing assertion is redesigned as a pure function, fake
   lifecycle, Rust policy, static check, or a future independent Change
+
+#### Scenario: Evaluate deterministic development-launcher delivery
+
+- **WHEN** the stable development-launcher Gate or its bilingual documentation checks run
+- **THEN** Rstest, Rust unit tests, static policy, and bilingual documentation checks MUST cover port resolution and propagation, mode isolation, configuration rejection, spawn, exit, and signal races, idempotent cleanup, production invariance, and the public boundary.
+- **THEN** The Gate MUST be read-only and MUST NOT add a Change-specific root alias or launch the Tauri GUI, an Rsbuild listener, a browser, a real WebView, a native harness, screenshots, visual baselines, or a target-environment performance flow.

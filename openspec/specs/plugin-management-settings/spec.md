@@ -11,9 +11,7 @@ behavior.
 
 ### Requirement: Host settings MUST display the current plugin list and details
 
-Host Settings MUST display plugin identity, localized metadata, Publisher and source, version, enabled and effective availability, compatibility, quarantine and Runtime diagnostics, and lifecycle, replacement, data, and development controls from the current Registration snapshot and detail. Details MUST NOT display requested permissions, grants, risk, permission methods, or grant and revoke controls. Installation source and future community or review information MAY be displayed, but MUST be identified as selection information rather than Host authority.
-
-The selected detail MUST match the current snapshot identity and revision. A quarantined entry MUST display only identity and bounded safe diagnostic facts the Host can prove and MUST NOT infer Manifest, source, compatibility, or Runtime facts.
+Host Settings MUST present current Registration facts and controls without permission-grant UI. Detail identity and revision MUST match the snapshot, and quarantine presentation MUST use only provable bounded facts.
 
 #### Scenario: Healthy current plugin is selected
 - **WHEN** the user selects a current healthy plugin
@@ -31,15 +29,17 @@ The selected detail MUST match the current snapshot identity and revision. A qua
 - **THEN** the list and detail display only provable identity and bounded safe diagnostic facts
 - **THEN** the page does not fabricate a name, version, compatibility, or Runtime state
 
+#### Scenario: Render management facts for the current selection
+- **WHEN** the Host renders the plugin list and selected detail
+- **THEN** Host Settings MUST display plugin identity, localized metadata, Publisher and source, version, enabled and effective availability, compatibility, quarantine and Runtime diagnostics, and lifecycle, replacement, data, and development controls from the current Registration snapshot and detail. Details MUST NOT display requested permissions, grants, risk, permission methods, or grant and revoke controls. Installation source and future community or review information MAY be displayed, but MUST be identified as selection information rather than Host authority.
+
+#### Scenario: Resolve selected detail against a current or quarantined entry
+- **WHEN** the selected entry is matched to its Registration snapshot
+- **THEN** The selected detail MUST match the current snapshot identity and revision. A quarantined entry MUST display only identity and bounded safe diagnostic facts the Host can prove and MUST NOT infer Manifest, source, compatibility, or Runtime facts.
+
 ### Requirement: The management page MUST fail closed for empty, loading, degraded, and stale states
 
-The management page MUST initialize from a complete snapshot and MUST perform
-a complete reread after a Registration invalidation. An empty available Manager
-MUST produce a real empty state and local installation entry point. Manager
-degradation, snapshot or detail read failure, and detail revision mismatch MUST
-produce a retryable state without mixing an old list with new detail or hiding
-degradation as an empty list. Selection MUST bind to the current snapshot by
-opaque `entry_id` and recover deterministically when an entry disappears.
+Plugin management MUST initialize and recover from complete snapshots, expose real empty or retryable degraded states, and bind selection to current opaque identities without mixing revisions.
 
 #### Scenario: No plugins are installed
 
@@ -65,24 +65,19 @@ opaque `entry_id` and recover deterministically when an entry disappears.
 - **THEN** the page neither displays cross-revision detail nor permits a write
   from stale confirmation state
 
+#### Scenario: Refresh management selection after Registration invalidation
+- **WHEN** management initializes, rereads Registration, or reconciles a removed selection
+- **THEN** The management page MUST initialize from a complete snapshot and MUST perform
+  a complete reread after a Registration invalidation. An empty available Manager
+  MUST produce a real empty state and local installation entry point. Manager
+  degradation, snapshot or detail read failure, and detail revision mismatch MUST
+  produce a retryable state without mixing an old list with new detail or hiding
+  degradation as an empty list. Selection MUST bind to the current snapshot by
+  opaque `entry_id` and recover deterministically when an entry disappears.
+
 ### Requirement: Lifecycle, installation, and local replacement MUST execute only through typed Host services
 
-The management page MUST execute prepared local installation, enable, disable,
-replacement, uninstall, and data-clear operations through root-private typed
-services. Every installed-entry mutation MUST bind the current opaque entry ID
-and expected Registration revision. At most one mutation or durable-operation
-confirmation MAY be active at a time, and pending state MUST prevent duplicate
-or conflicting submission. After success, the service MUST wait for every
-returned revision to converge with the shared snapshot and detail. A conflict
-MUST cancel or close stale preparation or confirmation, refresh state, and
-require a new user decision; the service MUST NOT replay a destructive action
-automatically.
-
-Prepared installation and replacement MUST display bounded identity, version,
-classification, Publisher, and installation-trust facts and MUST NOT collect a
-permission selection, compute a permission diff, create a grant snapshot, or
-run post-commit authority work. Durable commit MUST use only the current opaque
-preparation token and current Host facts.
+Installation and installed-entry mutations MUST use typed Host-private services, current revisions, serialized confirmation, and convergence. Prepared commits MUST use opaque current preparations without permission or grant operations.
 
 #### Scenario: Disable a current plugin
 
@@ -118,15 +113,30 @@ preparation token and current Host facts.
   conflict feedback
 - **THEN** the page does not apply the old action to the refreshed plugin state
 
+#### Scenario: Submit and converge a revision-bound management mutation
+- **WHEN** a local installation or installed-entry operation is prepared, confirmed, submitted, pending, or reconciled
+- **THEN** The management page MUST execute prepared local installation, enable, disable,
+  replacement, uninstall, and data-clear operations through root-private typed
+  services. Every installed-entry mutation MUST bind the current opaque entry ID
+  and expected Registration revision. At most one mutation or durable-operation
+  confirmation MAY be active at a time, and pending state MUST prevent duplicate
+  or conflicting submission. After success, the service MUST wait for every
+  returned revision to converge with the shared snapshot and detail. A conflict
+  MUST cancel or close stale preparation or confirmation, refresh state, and
+  require a new user decision; the service MUST NOT replay a destructive action
+  automatically.
+
+#### Scenario: Confirm a prepared installation or replacement
+- **WHEN** a prepared installation or replacement is displayed or durably committed
+- **THEN** Prepared installation and replacement MUST display bounded identity, version,
+  classification, Publisher, and installation-trust facts and MUST NOT collect a
+  permission selection, compute a permission diff, create a grant snapshot, or
+  run post-commit authority work. Durable commit MUST use only the current opaque
+  preparation token and current Host facts.
+
 ### Requirement: Uninstall MUST make data policy explicit and distinguish logical success from cleanup
 
-Uninstall confirmation MUST explicitly offer `retain_data` and `delete_data`
-and MUST default to `retain_data`. Both choices MUST explain their different
-effects on Registration, program payload, diagnostics, and private
-data. The management page MUST use the lifecycle service's real result. When
-`cleanup_pending=true`, it MUST explain that the plugin is logically uninstalled
-and controlled Host recovery will continue cleanup; it MUST NOT present pending
-cleanup as either an uninstall failure or complete cleanup success.
+Uninstall MUST default to explicit data retention, explain both data policies, and report logical uninstall separately from pending payload cleanup using the actual lifecycle result.
 
 #### Scenario: Uninstall retains data by default
 
@@ -145,6 +155,16 @@ cleanup as either an uninstall failure or complete cleanup success.
   uninstall is effective while controlled recovery continues cleanup
 - **THEN** the page neither claims all data is deleted nor displays an internal
   path or cleanup evidence
+
+#### Scenario: Choose an uninstall data policy and inspect cleanup outcome
+- **WHEN** an uninstall confirmation is presented or its lifecycle result is processed
+- **THEN** Uninstall confirmation MUST explicitly offer `retain_data` and `delete_data`
+  and MUST default to `retain_data`. Both choices MUST explain their different
+  effects on Registration, program payload, diagnostics, and private
+  data. The management page MUST use the lifecycle service's real result. When
+  `cleanup_pending=true`, it MUST explain that the plugin is logically uninstalled
+  and controlled Host recovery will continue cleanup; it MUST NOT present pending
+  cleanup as either an uninstall failure or complete cleanup success.
 
 ### Requirement: Clearing data MUST preserve installation and require a disabled current identity
 
@@ -173,23 +193,7 @@ Installer-degraded, or ownership-unsafe target MUST fail closed.
 
 ### Requirement: The management page MUST support both locales, themes, keyboard use, and deterministic focus recovery
 
-All user-visible copy MUST use English as canonical and provide a semantically
-aligned Simplified Chinese translation. The page MUST reuse application i18n,
-message schema, Semi Design locale and theme, and the fixed Host page surface.
-List selection, installation prepare, confirm and cancel, retry, enable,
-disable, replacement, uninstall, data clear, confirmation, and cancellation
-MUST be operable with only a keyboard, with visible focus and accessible names.
-Publisher-unverified, installation trust, pending, error, compatibility,
-quarantine, and enabled state MUST use text and semantics and MUST NOT rely on
-color or icon alone.
-
-Every Modal MUST have an accessible title and description, deterministic
-initial focus, pending duplicate and close protection, and explicit confirm and
-cancel semantics. Closing, cancelling, succeeding, failing, or invalidating an
-installation, replacement, lifecycle, uninstall, or data confirmation MUST
-return focus to the still-current trigger or a deterministic adjacent valid
-entry. Fixed `650×600` viewport content MUST remain scrollable and readable
-for both locales and themes.
+Management MUST support bilingual themed keyboard interaction, meaningful state semantics, accessible confirmations, deterministic focus recovery, and readable scrolling in the fixed Host viewport.
 
 #### Scenario: Cancel a destructive confirmation with the keyboard
 
@@ -226,11 +230,31 @@ for both locales and themes.
 - **THEN** the fixed native viewport has no critical truncation, lost contrast,
   overlap, or status conveyed only through hard-coded color
 
+#### Scenario: Navigate and operate management in either locale and theme
+- **WHEN** plugin list, detail, or operation controls render or receive user interaction
+- **THEN** All user-visible copy MUST use English as canonical and provide a semantically
+  aligned Simplified Chinese translation. The page MUST reuse application i18n,
+  message schema, Semi Design locale and theme, and the fixed Host page surface.
+  List selection, installation prepare, confirm and cancel, retry, enable,
+  disable, replacement, uninstall, data clear, confirmation, and cancellation
+  MUST be operable with only a keyboard, with visible focus and accessible names.
+  Publisher-unverified, installation trust, pending, error, compatibility,
+  quarantine, and enabled state MUST use text and semantics and MUST NOT rely on
+  color or icon alone.
+
+#### Scenario: Resolve a management confirmation and restore focus
+- **WHEN** the management page or a confirmation is rendered, operated, resolved, or invalidated in the fixed settings viewport
+- **THEN** Every Modal MUST have an accessible title and description, deterministic
+  initial focus, pending duplicate and close protection, and explicit confirm and
+  cancel semantics. Closing, cancelling, succeeding, failing, or invalidating an
+  installation, replacement, lifecycle, uninstall, or data confirmation MUST
+  return focus to the still-current trigger or a deterministic adjacent valid
+  entry. Fixed `650×600` viewport content MUST remain scrollable and readable
+  for both locales and themes.
+
 ### Requirement: Plugin management MUST remain Host-private and have a focused delivery gate
 
-Plugin-management composition, installation, replacement, lifecycle, data and development mutations, and interaction state MUST remain root-private, typed, and revision-bound. Public packages, plugin documents, and plugin messages MUST NOT invoke trusted management operations or open a Host modal. Focused deterministic validation MUST prove that permission services and UI no longer exist while verifying the remaining list and detail views, operations, bilingual behavior, themes, keyboard and focus behavior, StrictMode lifecycle, and boundaries without screenshots, computed-style capture, browser rendering, or native evidence.
-
-Management contracts, adapters, services, view models, installation preparations, and lifecycle, replacement, and data command clients MUST NOT be exported through `@lensx/plugin-contract`, `@lensx/plugin-sdk`, `@lensx/plugin-ui`, `@lensx/plugin-testkit`, an official or example plugin, or the Runtime document boundary.
+Plugin management MUST remain root-private, typed, and revision-bound. Focused deterministic validation MUST prove management behavior and the absence of permission surfaces without environment-based acceptance.
 
 #### Scenario: Plugin attempts to open management authority
 
@@ -250,16 +274,17 @@ Management contracts, adapters, services, view models, installation preparations
 - **THEN** complete frontend and Rust final validation is still required before delivery is complete
 - **THEN** no screenshot, pixel, browser, computed-style capture, or native evidence path is retained
 
+#### Scenario: Validate private management operations and UI boundaries
+- **WHEN** management operations or UI state are constructed, invoked, or deterministically validated
+- **THEN** Plugin-management composition, installation, replacement, lifecycle, data and development mutations, and interaction state MUST remain root-private, typed, and revision-bound. Public packages, plugin documents, and plugin messages MUST NOT invoke trusted management operations or open a Host modal. Focused deterministic validation MUST prove that permission services and UI no longer exist while verifying the remaining list and detail views, operations, bilingual behavior, themes, keyboard and focus behavior, StrictMode lifecycle, and boundaries without screenshots, computed-style capture, browser rendering, or native evidence.
+
+#### Scenario: Reject management authority across public package boundaries
+- **WHEN** a public package or Runtime document attempts to expose trusted management contracts or clients
+- **THEN** Management contracts, adapters, services, view models, installation preparations, and lifecycle, replacement, and data command clients MUST NOT be exported through `@lensx/plugin-contract`, `@lensx/plugin-sdk`, `@lensx/plugin-ui`, `@lensx/plugin-testkit`, an official or example plugin, or the Runtime document boundary.
+
 ### Requirement: Plugin settings MUST gate and explain Development Mode explicitly
 
-Plugins settings MUST display the Development Mode section only when both the
-frontend compile-time capability and native capability are available. While the
-current-process switch is disabled, the page MUST explain that development
-directory content is Unpacked and Unsigned, gains no official, trust, or native
-authority exception, and does not survive restart. Only an explicit enable
-control may activate it. Disabling MUST update the UI only after the Host
-confirms that development entries were quiesced and removed; it MUST NOT merely
-hide controls or claim success early.
+Development Mode MUST be visible only when both compile-time and native capabilities exist, require explicit process-local enablement, explain unsigned directory boundaries, and confirm quiesced removal before reporting disablement.
 
 #### Scenario: Development capability is absent
 
@@ -287,6 +312,17 @@ hide controls or claim success early.
 - **THEN** development controls and entries disappear after success and focus
   returns to a stable settings control; after failure, the remaining actual
   state stays visible
+
+#### Scenario: Enable or disable the process-local development section
+- **WHEN** Plugins settings evaluates Development Mode availability or changes its enabled state
+- **THEN** Plugins settings MUST display the Development Mode section only when both the
+  frontend compile-time capability and native capability are available. While the
+  current-process switch is disabled, the page MUST explain that development
+  directory content is Unpacked and Unsigned, gains no official, trust, or native
+  authority exception, and does not survive restart. Only an explicit enable
+  control may activate it. Disabling MUST update the UI only after the Host
+  confirms that development entries were quiesced and removed; it MUST NOT merely
+  hide controls or claim success early.
 
 ### Requirement: Development registrations MUST be visually and semantically distinct
 
@@ -316,15 +352,7 @@ semantics, not color or an icon alone.
 
 ### Requirement: Development register, reload, and remove MUST use typed current operations
 
-The management UI MUST execute register, reload, and remove only through the
-typed Host-private Development service. Register MUST use a pathless native
-folder picker; reload and remove MUST use the opaque current entry identity and
-expected revision. Only a current `source=development` entry may display reload
-or remove; builtin, external, and quarantine entries MUST NOT gain those
-operations. A pending request MUST prevent duplicate submission and MUST reread
-the complete current snapshot and detail after cancellation, success, invalid,
-incompatible, source-changed, conflict, cleanup-pending, or convergence-failure
-results.
+Development register, reload, and remove MUST use typed current Host services and permitted source identities, prevent duplicate work, and converge through complete snapshot and detail rereads after every operation outcome.
 
 #### Scenario: Register a compatible development directory
 
@@ -362,16 +390,21 @@ results.
 - **THEN** copy states that plugin data and Launcher collections were retained
   and does not claim a production uninstall
 
+#### Scenario: Submit a current development-directory operation
+- **WHEN** development-entry actions are rendered, submitted, pending, or reconciled after an operation result
+- **THEN** The management UI MUST execute register, reload, and remove only through the
+  typed Host-private Development service. Register MUST use a pathless native
+  folder picker; reload and remove MUST use the opaque current entry identity and
+  expected revision. Only a current `source=development` entry may display reload
+  or remove; builtin, external, and quarantine entries MUST NOT gain those
+  operations. A pending request MUST prevent duplicate submission and MUST reread
+  the complete current snapshot and detail after cancellation, success, invalid,
+  incompatible, source-changed, conflict, cleanup-pending, or convergence-failure
+  results.
+
 ### Requirement: Development controls MUST preserve localization, themes, keyboard access, and focus
 
-All visible Development Mode copy MUST use canonical English i18n with a
-semantically aligned Simplified Chinese locale. Controls, labels, diagnostics,
-confirmations, and live feedback MUST use Semi Design's supported light and dark
-themes, and the fixed `650×600` viewport MUST remain scrollable without critical
-truncation. Enable, disable, register, reload, remove, confirm, and cancel MUST
-work with the keyboard alone and provide accessible names, visible focus,
-deterministic initial focus, and post-operation focus recovery. A Modal MUST
-provide an accessible title and description and prevent closing while pending.
+Development controls MUST preserve bilingual themes, fixed-viewport readability, keyboard access, accessible confirmation, pending protection, and deterministic focus recovery.
 
 #### Scenario: Keyboard user reloads a development entry
 
@@ -389,3 +422,14 @@ provide an accessible title and description and prevent closing while pending.
   feedback use the current locale and supported theme tokens
 - **THEN** the fixed viewport has no critical truncation, overlap, lost
   contrast, or status conveyed by color alone
+
+#### Scenario: Operate development controls and confirmations in a fixed viewport
+- **WHEN** development controls or confirmations are displayed, navigated, submitted, or resolved
+- **THEN** All visible Development Mode copy MUST use canonical English i18n with a
+  semantically aligned Simplified Chinese locale. Controls, labels, diagnostics,
+  confirmations, and live feedback MUST use Semi Design's supported light and dark
+  themes, and the fixed `650×600` viewport MUST remain scrollable without critical
+  truncation. Enable, disable, register, reload, remove, confirm, and cancel MUST
+  work with the keyboard alone and provide accessible names, visible focus,
+  deterministic initial focus, and post-operation focus recovery. A Modal MUST
+  provide an accessible title and description and prevent closing while pending.

@@ -7,7 +7,14 @@ Define the stable public `@lensx/plugin-testkit` package for testing the shipped
 
 ### Requirement: The system MUST provide a constrained, framework-neutral public Plugin Testkit package
 
-The system MUST provide the independently buildable, testable, and packable `@lensx/plugin-testkit@0.1.0` workspace package. The package MUST depend only on the public root entries of `@lensx/plugin-contract` and `@lensx/plugin-sdk`. Its public Runtime and type entries MUST NOT depend on the private root Host, `src/app/**`, React, Semi Design, Tauri, DOM global types, Node filesystem APIs, Host-internal styles, or any test-runner API. Paths that are not declared in the package exports MUST NOT become public APIs.
+The system MUST provide the independently buildable, testable, and packable `@lensx/plugin-testkit@0.1.0` workspace package.
+
+#### Scenario: A consumer imports the public Testkit package
+
+- **WHEN** the Testkit Runtime and type entry points are resolved outside the private Host
+- **THEN** The package MUST depend only on the public root entries of `@lensx/plugin-contract` and `@lensx/plugin-sdk`.
+- **THEN** Its public Runtime and type entries MUST NOT depend on the private root Host, `src/app/**`, React, Semi Design, Tauri, DOM global types, Node filesystem APIs, Host-internal styles, or any test-runner API.
+- **THEN** Paths that are not declared in the package exports MUST NOT become public APIs.
 
 #### Scenario: An external consumer uses the Testkit root entry
 
@@ -26,7 +33,19 @@ The system MUST provide the independently buildable, testable, and packable `@le
 
 ### Requirement: Testkit MUST use the real Contract to create and transform Manifest fixtures
 
-Testkit MUST provide a Manifest author-input fixture factory that returns a fresh, minimal, complete input satisfying the current Manifest Contract on every call. Testkit MUST use public `@lensx/plugin-contract` types and current-version constants, and its baseline MUST be checked with the real validator and normalizer. Testkit MUST NOT duplicate the Manifest Schema, diagnostic ordering, compatibility, or normalization algorithms. Testkit MUST also provide a JSON Pointer based helper that explicitly applies ordered `set` and `remove` mutations to a deep copy and returns `unknown`. The helper MUST NOT modify caller input or implicitly deep-merge arrays or objects.
+Testkit MUST provide a Manifest author-input fixture factory that returns a fresh, minimal, complete input satisfying the current Manifest Contract on every call.
+
+#### Scenario: A fixture factory uses current Contract semantics
+
+- **WHEN** Testkit produces and validates a baseline Manifest fixture
+- **THEN** Testkit MUST use public `@lensx/plugin-contract` types and current-version constants, and its baseline MUST be checked with the real validator and normalizer.
+- **THEN** Testkit MUST NOT duplicate the Manifest Schema, diagnostic ordering, compatibility, or normalization algorithms.
+
+#### Scenario: Ordered JSON Pointer mutations transform a fixture
+
+- **WHEN** a consumer applies set or remove mutations to Manifest author input
+- **THEN** Testkit MUST also provide a JSON Pointer based helper that explicitly applies ordered `set` and `remove` mutations to a deep copy and returns `unknown`.
+- **THEN** The helper MUST NOT modify caller input or implicitly deep-merge arrays or objects.
 
 #### Scenario: A current valid Manifest fixture is created
 
@@ -53,7 +72,14 @@ Testkit MUST provide a Manifest author-input fixture factory that returns a fres
 
 ### Requirement: Testkit MUST create Runtime context fixtures that express only the current SDK boundary
 
-Testkit MUST provide a Runtime context fixture factory whose defaults use the Contract's current Host API version, the `en-US` locale, the `light` theme, and an empty capability list. Consumers MUST be able to replace the Host API version, locale, theme, and complete capability list. Every result and its capability list MUST be copied and frozen. The fixture MUST NOT accept or add plugin identity, Page identity, installation source, Manifest permission requests, user authorization, or session grants.
+Testkit MUST provide a Runtime context fixture factory whose defaults use the Contract's current Host API version, the `en-US` locale, the `light` theme, and an empty capability list.
+
+#### Scenario: A consumer overrides a Runtime Context fixture
+
+- **WHEN** Testkit constructs a Context with selected version, locale, theme, and capabilities
+- **THEN** Consumers MUST be able to replace the Host API version, locale, theme, and complete capability list.
+- **THEN** Every result and its capability list MUST be copied and frozen.
+- **THEN** The fixture MUST NOT accept or add plugin identity, Page identity, installation source, Manifest permission requests, user authorization, or session grants.
 
 #### Scenario: A default Runtime context is created
 
@@ -78,7 +104,20 @@ Testkit MUST provide a Runtime context fixture factory whose defaults use the Co
 
 ### Requirement: The fake transport MUST be scriptable and provide controlled observations
 
-Testkit MUST provide a semantic fake transport implementing the public `PluginSdkTransport`. By default, the fake MUST connect with a fresh valid Runtime context. Consumers MUST be able to configure explicit connect and request handlers, emit abstract events, notify disconnection, and keep operations pending. Handlers MUST receive the structural cancellation signal supplied by the SDK. The fake MUST expose read-only observation snapshots for connection attempts, requests, signals, subscriptions, and disposal. It MUST NOT expose or require an RPC envelope, request ID, nonce, origin, `Window`, `MessagePort`, `postMessage`, Host object, or trusted identity field.
+Testkit MUST provide a semantic fake transport implementing the public `PluginSdkTransport`.
+
+#### Scenario: A fake transport executes controlled SDK operations
+
+- **WHEN** the fake transport is initialized, configured, or used for an SDK connection or request operation
+- **THEN** By default, the fake MUST connect with a fresh valid Runtime context.
+- **THEN** Consumers MUST be able to configure explicit connect and request handlers, emit abstract events, notify disconnection, and keep operations pending.
+- **THEN** Handlers MUST receive the structural cancellation signal supplied by the SDK.
+
+#### Scenario: A test observes semantic transport activity
+
+- **WHEN** a consumer reads the fake transport observation snapshots
+- **THEN** The fake MUST expose read-only observation snapshots for connection attempts, requests, signals, subscriptions, and disposal.
+- **THEN** It MUST NOT expose or require an RPC envelope, request ID, nonce, origin, `Window`, `MessagePort`, `postMessage`, Host object, or trusted identity field.
 
 #### Scenario: The default fake initializes the SDK
 
@@ -127,7 +166,13 @@ Testkit MUST provide a cancellation controller implementing `PluginSdkCancellati
 
 ### Requirement: Testkit MUST verify only the current public SDK lifecycle without inventing future Host capabilities
 
-Testkit MUST support tests for successful initialization, explicit retry, invalid or incompatible contexts, cancellation, timeout, transport failure, Host disconnection, event unsubscription, and idempotent disposal. The initial Testkit MUST NOT add an arbitrary string-based call method to `PluginSdkClient`, define real Host API method or error Schemas, provide a permission harness or authorization result, implement an iframe transport, Runtime session, Page Runtime, or plugin execution path. The transport's abstract `request` MUST NOT be described as a delivered Host API call.
+Testkit MUST support tests for successful initialization, explicit retry, invalid or incompatible contexts, cancellation, timeout, transport failure, Host disconnection, event unsubscription, and idempotent disposal.
+
+#### Scenario: Lifecycle tests inspect their delivered API boundary
+
+- **WHEN** a consumer uses Testkit to verify the public SDK lifecycle
+- **THEN** The initial Testkit MUST NOT add an arbitrary string-based call method to `PluginSdkClient`, define real Host API method or error Schemas, provide a permission harness or authorization result, implement an iframe transport, Runtime session, Page Runtime, or plugin execution path.
+- **THEN** The transport's abstract `request` MUST NOT be described as a delivered Host API call.
 
 #### Scenario: Initialization is explicitly retried after failure
 
@@ -151,7 +196,18 @@ Testkit MUST support tests for successful initialization, explicit retry, invali
 
 ### Requirement: Testkit MUST participate in complete workspace, release, and documentation validation
 
-The Testkit package MUST declare meaningful `build`, `typecheck`, `test`, `check`, and real-tarball validation scripts. Root aggregate commands and a dedicated Testkit gate MUST cover those scripts. The real-tarball gate MUST validate the release file allowlist, root entry, public declarations, and dependency metadata, and MUST install real Contract, SDK, and Testkit tarballs in an isolated consumer outside the workspace. Canonical English architecture and development documentation and their Simplified Chinese mirrors at the same relative paths MUST describe Testkit usage, boundaries, and validation and MUST state that Testkit does not deliver a real Host API, permission system, native plugin Runtime, or plugin execution.
+The Testkit package MUST declare meaningful `build`, `typecheck`, `test`, `check`, and real-tarball validation scripts.
+
+#### Scenario: Workspace validation packages Testkit for an isolated consumer
+
+- **WHEN** root validation or the Testkit gate runs package and real-tarball checks
+- **THEN** Root aggregate commands and a dedicated Testkit gate MUST cover those scripts.
+- **THEN** The real-tarball gate MUST validate the release file allowlist, root entry, public declarations, and dependency metadata, and MUST install real Contract, SDK, and Testkit tarballs in an isolated consumer outside the workspace.
+
+#### Scenario: Testkit usage and limitations are documented
+
+- **WHEN** canonical Testkit architecture and development documentation is maintained
+- **THEN** Canonical English architecture and development documentation and their Simplified Chinese mirrors at the same relative paths MUST describe Testkit usage, boundaries, and validation and MUST state that Testkit does not deliver a real Host API, permission system, native plugin Runtime, or plugin execution.
 
 #### Scenario: Root commands cover Testkit
 
@@ -176,7 +232,13 @@ The Testkit package MUST declare meaningful `build`, `typecheck`, `test`, `check
 
 ### Requirement: Testkit MUST remain a semantic fake across the Child WebView migration
 
-The public Testkit MUST model SDK lifecycle, Runtime Context, Contract requests/results/events, cancellation, and asynchronous control through `PluginSdkTransport`. It MUST NOT simulate a Child WebView, native bridge, WebView label, bounds, Tauri ACL, navigation policy, or process isolation. Maintained repository validation MUST treat Testkit only as deterministic author-side behavior support and MUST NOT delegate real Runtime completion claims to a target macOS Gate or any replacement environment-evidence path.
+The public Testkit MUST model SDK lifecycle, Runtime Context, Contract requests/results/events, cancellation, and asynchronous control through `PluginSdkTransport`.
+
+#### Scenario: Child WebView validation uses the semantic fake
+
+- **WHEN** repository validation uses Testkit during the Child WebView migration
+- **THEN** It MUST NOT simulate a Child WebView, native bridge, WebView label, bounds, Tauri ACL, navigation policy, or process isolation.
+- **THEN** Maintained repository validation MUST treat Testkit only as deterministic author-side behavior support and MUST NOT delegate real Runtime completion claims to a target macOS Gate or any replacement environment-evidence path.
 
 #### Scenario: Plugin author tests business behavior
 

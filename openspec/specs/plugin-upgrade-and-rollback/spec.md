@@ -9,9 +9,7 @@ user-selectable rollback history.
 ## Requirements
 ### Requirement: Plugin replacement MUST use a private two-stage Host contract
 
-Replacement MUST use an independent Host-private contract `0.2.0` with prepare and token, commit, and cancel stages for the current healthy identity. Payloads MUST be strict, versioned, and bounded and contain no permission diff, grant selection, permission reason, or post-commit authority. The version MUST be independent of Manifest, Host API, installation, Registration, Manager record, and application versions.
-
-Prepare, commit, and cancel MUST be exposed only to the trusted lensX root application through strict Tauri commands. Rust and TypeScript MUST fully validate requests, results, and errors from `unknown`. The contract MUST NOT become a Manifest, public plugin package, iframe Runtime, or SDK capability.
+Replacement MUST use an independent strict Host-private 0.2.0 prepare/commit/cancel contract, validated across Rust and TypeScript, without permission authority or public plugin exposure.
 
 #### Scenario: Current replacement contract succeeds
 - **WHEN** a trusted management service prepares and commits a matching compatible candidate
@@ -35,11 +33,17 @@ Prepare, commit, and cancel MUST be exposed only to the trusted lensX root appli
 - **THEN** the corresponding boundary rejects the complete payload and returns a stable safe error
 - **THEN** the Manager, Registry, filesystem, revision, and changed event remain unchanged
 
+#### Scenario: Prepare replacement using the independent versioned contract
+- **WHEN** the trusted root application prepares, commits, or cancels replacement for the current healthy identity
+- **THEN** Replacement MUST use an independent Host-private contract `0.2.0` with prepare and token, commit, and cancel stages for the current healthy identity. Payloads MUST be strict, versioned, and bounded and contain no permission diff, grant selection, permission reason, or post-commit authority. The version MUST be independent of Manifest, Host API, installation, Registration, Manager record, and application versions.
+
+#### Scenario: Validate replacement calls at the trusted Tauri boundary
+- **WHEN** a prepare, commit, or cancel request crosses between the root application and Rust
+- **THEN** Prepare, commit, and cancel MUST be exposed only to the trusted lensX root application through strict Tauri commands. Rust and TypeScript MUST fully validate requests, results, and errors from `unknown`. The contract MUST NOT become a Manifest, public plugin package, iframe Runtime, or SDK capability.
+
 ### Requirement: Preparation MUST inspect one immutable local package without changing active state
 
-Prepare MUST read one `.lxp` through a Rust-owned pathless picker, reuse capped-read, package, Manifest, resource, checksum, digest, and compatibility checks, and verify that the candidate ID matches the current healthy registration. Only a compatible Manifest `0.4.0` candidate may enter staging. Prepare MUST NOT change the Manager, active payload, Registry, revision, event, or plugin data, and MUST return an opaque token, entry, current and candidate versions, and replacement classification without a permission diff.
-
-Picker cancellation MUST return the ordinary `cancelled` result without creating staging or mutation facts.
+Preparation MUST inspect one immutable compatible same-plugin local package without mutating active state. Cancellation MUST remain an ordinary result with no staging or mutation.
 
 #### Scenario: Compatible candidate is prepared
 - **WHEN** a candidate is valid, compatible, identity-matched, and current revision can be verified
@@ -57,16 +61,17 @@ Picker cancellation MUST return the ordinary `cancelled` result without creating
 - **THEN** the Host returns `cancelled` rather than an error
 - **THEN** no commit token, staging, Manager mutation, revision, or event is created
 
+#### Scenario: Inspect a candidate through the pathless local picker
+- **WHEN** the user selects a local replacement package for preparation
+- **THEN** Prepare MUST read one `.lxp` through a Rust-owned pathless picker, reuse capped-read, package, Manifest, resource, checksum, digest, and compatibility checks, and verify that the candidate ID matches the current healthy registration. Only a compatible Manifest `0.4.0` candidate may enter staging. Prepare MUST NOT change the Manager, active payload, Registry, revision, event, or plugin data, and MUST return an opaque token, entry, current and candidate versions, and replacement classification without a permission diff.
+
+#### Scenario: Cancel replacement package selection
+- **WHEN** the native picker is cancelled before a candidate is prepared
+- **THEN** Picker cancellation MUST return the ordinary `cancelled` result without creating staging or mutation facts.
+
 ### Requirement: Version ordering MUST classify but not forbid explicit local replacement
 
-The system MUST classify the operation from the current and candidate package
-identities. The same complete package digest MUST be `duplicate`; a higher
-candidate SemVer MUST be `upgrade`; a lower candidate SemVer MUST be
-`downgrade`; and the same SemVer with a different digest MUST be `reinstall`.
-A valid, compatible, same-plugin local package explicitly selected by the user
-MUST be allowed to proceed to commit as an upgrade, downgrade, or reinstall.
-Version ordering MUST NOT be a rejection condition. Conflicting identity or
-storage evidence MUST NOT be represented as a reinstall.
+Replacement classification MUST distinguish duplicate, upgrade, downgrade, and reinstall by digest and SemVer. Explicit compatible same-plugin downgrades and reinstalls MUST remain permitted, while conflicting identity evidence MUST fail closed.
 
 #### Scenario: Exact package is selected again
 
@@ -92,17 +97,20 @@ storage evidence MUST NOT be represented as a reinstall.
 - **THEN** the Host returns a stable identity or unsafe-state error and preserves the anomalous evidence
 - **THEN** the conflict cannot be committed as an upgrade, downgrade, reinstall, or quarantine repair
 
+#### Scenario: Classify a user-selected local candidate
+- **WHEN** the Host compares the current package and candidate identities
+- **THEN** The system MUST classify the operation from the current and candidate package
+  identities. The same complete package digest MUST be `duplicate`; a higher
+  candidate SemVer MUST be `upgrade`; a lower candidate SemVer MUST be
+  `downgrade`; and the same SemVer with a different digest MUST be `reinstall`.
+  A valid, compatible, same-plugin local package explicitly selected by the user
+  MUST be allowed to proceed to commit as an upgrade, downgrade, or reinstall.
+  Version ordering MUST NOT be a rejection condition. Conflicting identity or
+  storage evidence MUST NOT be represented as a reinstall.
+
 ### Requirement: Preparation tokens MUST be bounded, opaque, and revision-bound
 
-Each Host process MUST hold at most one valid preparation. The Host MUST
-generate the token and bind it only to the target entry, expected revision,
-candidate staging, and inspected facts in the current process. The token MUST
-NOT survive a restart. A new preparation, explicit cancel, failed commit, or
-service destruction MUST make a best effort to clean the previous preparation.
-Startup recovery MUST remove valid staging abandoned by a crash. Commit MUST
-revalidate the token, current revision, identity, staging type, and content
-while holding the shared lock and MUST NOT rely on a stale conclusion obtained
-outside that lock.
+Preparation tokens MUST be opaque, process-local, bounded to one preparation, and tied to inspected current facts. Cleanup and commit validation MUST respect revision and shared-lock boundaries.
 
 #### Scenario: Another preparation already exists
 
@@ -122,17 +130,21 @@ outside that lock.
 - **THEN** the token is invalid in the new process and startup recovery removes conforming abandoned staging
 - **THEN** the old active record and payload continue to recover without a fabricated revision or partial replacement
 
+#### Scenario: Create supersede or commit a replacement preparation
+- **WHEN** a replacement preparation is created, superseded, cancelled, committed, invalidated, destroyed, or recovered after process restart
+- **THEN** Each Host process MUST hold at most one valid preparation. The Host MUST
+  generate the token and bind it only to the target entry, expected revision,
+  candidate staging, and inspected facts in the current process. The token MUST
+  NOT survive a restart. A new preparation, explicit cancel, failed commit, or
+  service destruction MUST make a best effort to clean the previous preparation.
+  Startup recovery MUST remove valid staging abandoned by a crash. Commit MUST
+  revalidate the token, current revision, identity, staging type, and content
+  while holding the shared lock and MUST NOT rely on a stale conclusion obtained
+  outside that lock.
+
 ### Requirement: Commit MUST atomically replace the single active registration
 
-Commit MUST share the same in-process and cross-process serialization boundary
-as installation, enable, disable, uninstall, and recovery. The Host MUST first
-revalidate the preparation, atomically move the candidate from staging to a
-new canonical digest sibling under the same plugin key and flush it, then
-atomically replace the complete Manager record for the same `plugin_id`, entry,
-and expected revision. The Manifest, installation path, and package digest in
-the Manager record MUST remain the only active pointer. The Host MUST NOT add a
-second active pointer, publish a staging path, or publish multiple healthy
-versions simultaneously.
+Replacement commit MUST serialize with other installer operations and atomically update one canonical active Manager record after staging validation and flush. It MUST NOT publish staging or multiple active versions.
 
 #### Scenario: Replacement commits successfully
 
@@ -152,11 +164,21 @@ versions simultaneously.
 - **THEN** concurrent commit waits in the defined serial order or returns stable `busy`
 - **THEN** it does not clean, replace, or register another operation's staging, payload, data, or Manager state
 
+#### Scenario: Commit a prepared payload under the installer lock
+- **WHEN** a replacement commit is attempted for the current entry and revision
+- **THEN** Commit MUST share the same in-process and cross-process serialization boundary
+  as installation, enable, disable, uninstall, and recovery. The Host MUST first
+  revalidate the preparation, atomically move the candidate from staging to a
+  new canonical digest sibling under the same plugin key and flush it, then
+  atomically replace the complete Manager record for the same `plugin_id`, entry,
+  and expected revision. The Manifest, installation path, and package digest in
+  the Manager record MUST remain the only active pointer. The Host MUST NOT add a
+  second active pointer, publish a staging path, or publish multiple healthy
+  versions simultaneously.
+
 ### Requirement: Replacement MUST preserve and safely narrow Host-owned state
 
-A replacement commit MUST preserve only Host-owned enabled intent, plugin-data ownership, Launcher references, and current safe diagnostics that still apply to the same identity, and MUST publish a new payload, Manifest, resource generation, and revision. It MUST NOT retain, compare, create, or restore permission grants, and no grant facts from an old record may enter the new registration. Candidate Publisher, official source, and open Web behavior MUST NOT change Host source or trust.
-
-Compatibility MUST be recomputed from the candidate Manifest and current lensX and Host API versions, Runtime MUST publish as `inactive`, and replacement MUST preserve the independent `data/<plugin-key>` subtree unchanged.
+Replacement MUST inherit only applicable Host-owned state, recompute compatibility, reset Runtime, preserve plugin data, and publish fresh payload facts without carrying permission grants or changing source trust.
 
 #### Scenario: Upgrade replaces a legacy permission plugin
 - **WHEN** a current legacy registration is explicitly replaced by a compatible Manifest `0.4.0` package
@@ -180,11 +202,17 @@ Compatibility MUST be recomputed from the candidate Manifest and current lensX a
 - **THEN** the next registration remains disabled and projects no Action or Page
 - **THEN** replacement does not interpret local package selection as an enable operation
 
+#### Scenario: Inherit Host state across a payload replacement
+- **WHEN** a replacement commits for the same plugin identity
+- **THEN** A replacement commit MUST preserve only Host-owned enabled intent, plugin-data ownership, Launcher references, and current safe diagnostics that still apply to the same identity, and MUST publish a new payload, Manifest, resource generation, and revision. It MUST NOT retain, compare, create, or restore permission grants, and no grant facts from an old record may enter the new registration. Candidate Publisher, official source, and open Web behavior MUST NOT change Host source or trust.
+
+#### Scenario: Recompute compatibility while retaining plugin data
+- **WHEN** the new Manifest and resource generation replace the current payload
+- **THEN** Compatibility MUST be recomputed from the candidate Manifest and current lensX and Host API versions, Runtime MUST publish as `inactive`, and replacement MUST preserve the independent `data/<plugin-key>` subtree unchanged.
+
 ### Requirement: Trusted application MUST quiesce and converge plugin surfaces around commit
 
-The trusted application MUST serialize management operations around a replacement commit, quiesce the current Page, Action, and Runtime, and converge through a complete Registration snapshot and detail after commit. Confirmation UI MUST display candidate identity, version, classification, and installation-trust guidance and MUST NOT display a permission diff, grant selection, or partial-grant result. The interaction MUST preserve both locales, themes, keyboard operation, focus, and bounded feedback.
-
-Before Rust commit, the service MUST validate the target entry and revision against the current snapshot and withdraw providers through Surface Projection in Action-then-Page order; Page withdrawal MUST close an active plugin Page. Quiescence failure MUST prevent commit. After commit failure, the service MUST restore the original revision in Page-then-Action order. After successful commit, it MUST refresh and await Page-then-Action projection at the committed revision.
+The trusted application MUST quiesce and converge plugin surfaces around replacement, present bounded accessible confirmation, and recover projection in the required order when commit fails or succeeds.
 
 #### Scenario: User confirms upgrade
 - **WHEN** the user confirms a current prepared upgrade
@@ -220,17 +248,17 @@ Before Rust commit, the service MUST validate the target entry and revision agai
 - **THEN** the new registration remains durably active and the service returns a safe convergence diagnostic containing the committed revision while surfaces fail closed
 - **THEN** a complete refresh, listener recovery, or Launcher activation can converge, and the Host does not revert to the removed old version because of a frontend failure
 
+#### Scenario: Confirm a replacement through the trusted application
+- **WHEN** replacement confirmation or operation state is presented or advanced by the trusted application
+- **THEN** The trusted application MUST serialize management operations around a replacement commit, quiesce the current Page, Action, and Runtime, and converge through a complete Registration snapshot and detail after commit. Confirmation UI MUST display candidate identity, version, classification, and installation-trust guidance and MUST NOT display a permission diff, grant selection, or partial-grant result. The interaction MUST preserve both locales, themes, keyboard operation, focus, and bounded feedback.
+
+#### Scenario: Withdraw and restore providers around durable commit
+- **WHEN** the application prepares surface quiescence and handles the Rust commit result
+- **THEN** Before Rust commit, the service MUST validate the target entry and revision against the current snapshot and withdraw providers through Surface Projection in Action-then-Page order; Page withdrawal MUST close an active plugin Page. Quiescence failure MUST prevent commit. After commit failure, the service MUST restore the original revision in Page-then-Action order. After successful commit, it MUST refresh and await Page-then-Action projection at the committed revision.
+
 ### Requirement: Successful replacement MUST remove the old payload without retaining rollback history
 
-After Manager replacement succeeds, the Host MUST attempt to delete the old
-canonical payload and MUST NOT create a previous pointer, rollback catalog,
-version history, or multiple-active-version state. An immediate deletion
-failure MUST return committed success with `cleanup_pending` rather than report
-the durable replacement as failed. Later trusted installer operations and
-startup recovery MUST delete only canonical non-active siblings proven to be
-owned by neither the current healthy record nor a quarantine identity.
-Anomalous or unsafe evidence MUST be preserved and MUST cause related writes to
-fail closed.
+Successful replacement MUST clean only proven non-active payloads without retaining rollback history. Pending cleanup MUST preserve committed success, and unsafe evidence MUST be retained while related writes fail closed.
 
 #### Scenario: Old payload cleanup succeeds
 
@@ -250,18 +278,21 @@ fail closed.
 - **THEN** the Host neither follows nor deletes it and does not guess its ownership, and records a bounded safe diagnostic
 - **THEN** replacement, installation, or lifecycle writes that might overwrite the evidence fail closed
 
+#### Scenario: Clean the old canonical payload after replacement
+- **WHEN** Manager replacement has committed and old payload cleanup or recovery runs
+- **THEN** After Manager replacement succeeds, the Host MUST attempt to delete the old
+  canonical payload and MUST NOT create a previous pointer, rollback catalog,
+  version history, or multiple-active-version state. An immediate deletion
+  failure MUST return committed success with `cleanup_pending` rather than report
+  the durable replacement as failed. Later trusted installer operations and
+  startup recovery MUST delete only canonical non-active siblings proven to be
+  owned by neither the current healthy record nor a quarantine identity.
+  Anomalous or unsafe evidence MUST be preserved and MUST cause related writes to
+  fail closed.
+
 ### Requirement: Task 3.4 MUST not deliver later update, trust, Runtime, permission UI, or rollback capabilities
 
-This capability MUST deliver only local package prepare, commit, and cancel;
-arbitrary-version classification; single-active-record replacement; pre-commit
-failure recovery; Host fact inheritance; surface convergence; and cleanup of
-the old payload after success. It MUST NOT download remote packages,
-automatically check for updates, provide user-initiated rollback or version
-history, execute candidate code, roll back based on Runtime health, migrate
-plugin data, grant native authority, display complete management or
-authorization UI, verify real signatures, or repair quarantine. The current
-unsigned local policy MUST continue to treat source, Publisher text, package
-digest, and legacy permission claims as independent facts.
+Local replacement MUST remain limited to prepared package replacement, Host-state inheritance, surface recovery, and cleanup. It MUST NOT add remote updates, Runtime-driven rollback, authority, data migration, signature verification, or quarantine repair.
 
 #### Scenario: Local replacement completes before later milestones
 
@@ -274,6 +305,19 @@ digest, and legacy permission claims as independent facts.
 - **WHEN** candidate Manifest Publisher text claims an official or verified identity
 - **THEN** replacement retains the current Host-owned local external source policy and applies the same package, identity, compatibility, and cleanup checks
 - **THEN** the claim creates no signature status, trusted provenance, grant, or lifecycle exception
+
+#### Scenario: Evaluate a proposed local-replacement operation
+- **WHEN** local replacement is offered or an update, trust, execution, data-migration, or rollback operation is proposed through it
+- **THEN** This capability MUST deliver only local package prepare, commit, and cancel;
+  arbitrary-version classification; single-active-record replacement; pre-commit
+  failure recovery; Host fact inheritance; surface convergence; and cleanup of
+  the old payload after success. It MUST NOT download remote packages,
+  automatically check for updates, provide user-initiated rollback or version
+  history, execute candidate code, roll back based on Runtime health, migrate
+  plugin data, grant native authority, display complete management or
+  authorization UI, verify real signatures, or repair quarantine. The current
+  unsigned local policy MUST continue to treat source, Publisher text, package
+  digest, and legacy permission claims as independent facts.
 
 ### Requirement: Replacement MUST NOT bridge legacy iframe and current WebView authority
 Preparation MAY classify an installed legacy registration or selected legacy package for user feedback, but commit MUST publish only a current WebView-compatible registration. Runtime quiescence MUST destroy the old container and authority before replacement publication. Host MUST NOT run an iframe compatibility adapter, reuse a MessagePort Session or silently rewrite package bytes; rollback history MUST NOT retain executable old Runtime authority.

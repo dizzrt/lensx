@@ -10,14 +10,7 @@ for popups, downloads, stale targets, and unsafe platform input.
 
 ### Requirement: Every document navigation MUST be classified by frame before commit
 
-On macOS WKWebView, the system MUST classify every document-navigation attempt
-as targeting the Host main frame or a descendant frame before commit and MUST
-send the structured target to the single Host-owned navigation policy. If the
-frame class is unavailable, the URL cannot be parsed, the callback fails, or
-the WKWebView adapter cannot guarantee pre-commit cancellation, the system MUST
-fail closed. Plugin scripts, DOM listeners, author-asserted identity, and URL
-randomness MUST NOT be used to classify or reject navigation. This capability
-MUST NOT claim Windows or Linux support.
+On macOS WKWebView, the system MUST classify every document-navigation attempt as targeting the Host main frame or a descendant frame before commit and MUST send the structured target to the single Host-owned navigation policy.
 
 #### Scenario: Classify a Host main-frame navigation
 
@@ -36,6 +29,12 @@ MUST NOT claim Windows or Linux support.
   diagnostic
 - **THEN** the system does not represent that platform or attempt as safely
   handled
+
+#### Scenario: Classify a WKWebView navigation before commit
+- **WHEN** a macOS document-navigation callback targets the Host main frame or a descendant
+- **THEN** If the frame class is unavailable, the URL cannot be parsed, the callback fails, or the WKWebView adapter cannot guarantee pre-commit cancellation, the system MUST fail closed.
+- **THEN** Plugin scripts, DOM listeners, author-asserted identity, and URL randomness MUST NOT be used to classify or reject navigation.
+- **THEN** This capability MUST NOT claim Windows or Linux support.
 
 ### Requirement: Host main frame and descendant frames MUST use disjoint allowlists
 
@@ -72,7 +71,7 @@ MUST match only that target's exact entry document and Host-derived fragment.
 
 ### Requirement: Trusted Tauri initialization MUST execute only in the Host main frame
 
-The system MUST enforce Tauri `for_main_frame_only` initialization semantics on macOS WKWebView. The Host App main frame MUST retain its existing `isTauri`, `__TAURI_INTERNALS__`, metadata, invoke initialization, and IPC bootstrap. All descendant frames MUST lack those surfaces before the earliest author script executes, and a representative descendant invoke MUST NOT reach the Rust handler. A sandbox, an opaque origin, an author's choice not to import an API, or a stored but unverified main-frame-only flag MUST NOT count as isolation. Maintained validation SHALL cover configuration, dependency behavior, policy classification, bridge denial, and zero-handler-hit semantics through deterministic source, unit, integration, and boundary tests without requiring a real WebView evidence run.
+The system MUST enforce Tauri `for_main_frame_only` initialization semantics on macOS WKWebView.
 
 #### Scenario: Host main frame retains its bootstrap
 
@@ -97,6 +96,13 @@ The system MUST enforce Tauri `for_main_frame_only` initialization semantics on 
 - **WHEN** dependency configuration, policy logic, or boundary tests cannot establish main-frame-only bootstrap and zero descendant handler hits
 - **THEN** the capability remains incomplete
 - **THEN** the team updates the native dependency patch or platform design rather than bypassing the invariant through DOM cleanup, author scripts, or removal of a negative case
+
+#### Scenario: Deny privileged bootstrap to descendant documents
+- **WHEN** a descendant frame begins loading author script under the macOS WKWebView adapter
+- **THEN** The Host App main frame MUST retain its existing `isTauri`, `__TAURI_INTERNALS__`, metadata, invoke initialization, and IPC bootstrap.
+- **THEN** All descendant frames MUST lack those surfaces before the earliest author script executes, and a representative descendant invoke MUST NOT reach the Rust handler.
+- **THEN** A sandbox, an opaque origin, an author's choice not to import an API, or a stored but unverified main-frame-only flag MUST NOT count as isolation.
+- **THEN** Maintained validation SHALL cover configuration, dependency behavior, policy classification, bridge denial, and zero-handler-hit semantics through deterministic source, unit, integration, and boundary tests without requiring a real WebView evidence run.
 
 ### Requirement: New windows, popups, and downloads MUST fail closed independently
 
@@ -126,14 +132,7 @@ rejected request to the Tauri opener.
 
 ### Requirement: Navigation decisions and diagnostics MUST remain Host-private and bounded
 
-The decision, active lease, platform callback, target normalization, and
-diagnostic MUST remain inside the Rust and Tauri Host-private boundary.
-Diagnostics MUST use fixed bounded codes and operations and MUST NOT contain a
-raw URL, scope, plugin identity, entry ID, revision, digest, installation or
-system path, native error, stack, file content, or capability token. This
-capability MUST NOT add a plugin-callable command, public TypeScript or package
-export, Manifest field, Runtime Session, SDK transport, Host API, or permission
-semantics.
+The decision, active lease, platform callback, target normalization, and diagnostic MUST remain inside the Rust and Tauri Host-private boundary.
 
 #### Scenario: A navigation is denied safely
 
@@ -151,6 +150,11 @@ semantics.
   active lease, Tauri or Wry patch, or test-harness internals
 - **THEN** this capability adds no public Runtime, Session, or API export
 
+#### Scenario: Report navigation decisions without exposing native authority
+- **WHEN** the Rust or Tauri policy records a navigation decision or bounded diagnostic
+- **THEN** Diagnostics MUST use fixed bounded codes and operations and MUST NOT contain a raw URL, scope, plugin identity, entry ID, revision, digest, installation or system path, native error, stack, file content, or capability token.
+- **THEN** This capability MUST NOT add a plugin-callable command, public TypeScript or package export, Manifest field, Runtime Session, SDK transport, Host API, or permission semantics.
+
 ### Requirement: Trusted Host navigation policy MUST contain no plugin document exception
 The Host main WebView policy MUST classify and protect its own top-level and descendant navigations, but MUST NOT issue or honor a descendant plugin target lease. Plugin documents MUST be loaded only as the top-level document of the current Child WebView under `plugin-child-webview-runtime`; Tauri initialization MUST remain limited to the trusted Host main frame.
 
@@ -165,7 +169,7 @@ The Host main WebView policy MUST classify and protect its own top-level and des
 
 ### Requirement: Delivery MUST deterministically validate frame-aware navigation boundaries
 
-Delivery MUST combine Rust policy and integration tests, TypeScript contract and source-policy tests, fixed dependency revision checks, and canonical normal and malicious navigation fixtures. Validation MUST cover main-frame and descendant classification, current target and lifecycle state, Host, external and cross-plugin rejection, dangerous schemes, popup/download denial, retained Host bootstrap, absent descendant bootstrap, and zero privileged handler hits. It MUST NOT claim that these deterministic checks constitute a real target-WebView run.
+Delivery MUST combine Rust policy and integration tests, TypeScript contract and source-policy tests, fixed dependency revision checks, and canonical normal and malicious navigation fixtures.
 
 #### Scenario: Deterministic navigation matrix passes
 
@@ -178,3 +182,8 @@ Delivery MUST combine Rust policy and integration tests, TypeScript contract and
 - **WHEN** completion requires a browser, real WebView, GUI application, native harness, or committed environment evidence
 - **THEN** validation governance rejects the prerequisite
 - **THEN** the requirement must be redesigned through a future OpenSpec change rather than restored as an optional Gate
+
+#### Scenario: Validate canonical normal and malicious navigation fixtures
+- **WHEN** deterministic delivery checks exercise the frame-aware policy and its pinned adapters
+- **THEN** Validation MUST cover main-frame and descendant classification, current target and lifecycle state, Host, external and cross-plugin rejection, dangerous schemes, popup/download denial, retained Host bootstrap, absent descendant bootstrap, and zero privileged handler hits.
+- **THEN** It MUST NOT claim that these deterministic checks constitute a real target-WebView run.

@@ -8,7 +8,7 @@ validation required for the lensX Plugin Developer Preview.
 ## Requirements
 ### Requirement: Plugin development documentation MUST provide an external-developer-first bilingual information architecture
 
-The system MUST provide the canonical English developer hub under `docs/en/plugin-development/` and a semantically equivalent Simplified Chinese mirror under the identical relative paths in `docs/zh/plugin-development/`. Both top-level documentation indexes MUST link to their language-specific hub. The hub MUST distinguish getting-started tutorials, public package reference, tooling and installation, Host API, Runtime/permissions/security, and compatibility/errors, and MUST identify capabilities as shipped, conditionally available, or not delivered. External documentation MUST NOT require readers to inspect, import, or understand Host-private source, Tauri payloads, private wire formats, internal tool entry points, or workspace-only deep imports.
+The system MUST provide the canonical English developer hub under `docs/en/plugin-development/` and a semantically equivalent Simplified Chinese mirror under the identical relative paths in `docs/zh/plugin-development/`.
 
 #### Scenario: A new developer chooses a learning path from either language index
 
@@ -25,9 +25,15 @@ The system MUST provide the canonical English developer hub under `docs/en/plugi
 - **WHEN** English/Chinese document paths, required headings, code, identifiers, relative links, or index entries are missing or inconsistent
 - **THEN** the documentation gate fails with deterministic diagnostics that contain no absolute Host paths
 
+#### Scenario: Navigate the external developer documentation hub
+- **WHEN** an external developer follows the English or Simplified Chinese documentation index
+- **THEN** Both top-level documentation indexes MUST link to their language-specific hub.
+- **THEN** The hub MUST distinguish getting-started tutorials, public package reference, tooling and installation, Host API, Runtime/permissions/security, and compatibility/errors, and MUST identify capabilities as shipped, conditionally available, or not delivered.
+- **THEN** External documentation MUST NOT require readers to inspect, import, or understand Host-private source, Tauri payloads, private wire formats, internal tool entry points, or workspace-only deep imports.
+
 ### Requirement: Both tutorials MUST independently complete the development loop from create to an installable package
 
-The system MUST provide independently executable framework-neutral and React/Semi tutorials. Each tutorial MUST state the supported Node/pnpm and public tarball prerequisites, use the real `lensx-plugin create` command to create a project outside the repository, and cover dependency installation, Manifest Page/Action/resource declarations, SDK initialization, Testkit tests, typecheck, build, validate, explicit Development Mode register/manual reload, pack, inspect, local installation through Settings, and controlled execution. The tutorials MUST explicitly state that the current public packages are not published to npm, Development Mode does not install an `.lxp`, and CLI acceptance does not grant Host authority. They MUST NOT use the repository root `node_modules`, workspace links, private imports, or automatic permission grants.
+The system MUST provide independently executable framework-neutral and React/Semi tutorials.
 
 #### Scenario: An external developer completes the framework-neutral tutorial
 
@@ -49,9 +55,15 @@ The system MUST provide independently executable framework-neutral and React/Sem
 - **WHEN** the current Contract, SDK, UI, Testkit, or CLI version is not published to the npm registry
 - **THEN** the tutorials declare prebuilt real tarballs as an explicit prerequisite and validation input, and MUST NOT invent registry commands, download URLs, publication promises, or private-source fallback paths
 
+#### Scenario: Run either tutorial outside the repository
+- **WHEN** a developer follows the framework-neutral or React/Semi tutorial from prerequisites to controlled execution
+- **THEN** Each tutorial MUST state the supported Node/pnpm and public tarball prerequisites, use the real `lensx-plugin create` command to create a project outside the repository, and cover dependency installation, Manifest Page/Action/resource declarations, SDK initialization, Testkit tests, typecheck, build, validate, explicit Development Mode register/manual reload, pack, inspect, local installation through Settings, and controlled execution.
+- **THEN** The tutorials MUST explicitly state that the current public packages are not published to npm, Development Mode does not install an `.lxp`, and CLI acceptance does not grant Host authority.
+- **THEN** They MUST NOT use the repository root `node_modules`, workspace links, private imports, or automatic permission grants.
+
 ### Requirement: The public package reference MUST define stable entry points, responsibilities, and lifecycle boundaries
 
-The system MUST document the public package/version, supported exports, authoring/runtime dependency role, framework dependencies, typical lifecycle, and explicit non-goals for Contract, SDK, optional UI, Testkit, and CLI. The reference MUST use real packed contents, public declarations, package metadata, and stable specifications as its sources of truth. It MUST NOT present a Testkit fake as the Host, the UI package as shared Host React, the CLI as Runtime authority, or Contract validation as installation or authorization.
+The system MUST document the public package/version, supported exports, authoring/runtime dependency role, framework dependencies, typical lifecycle, and explicit non-goals for Contract, SDK, optional UI, Testkit, and CLI.
 
 #### Scenario: A developer chooses the minimum dependency set
 
@@ -63,9 +75,14 @@ The system MUST document the public package/version, supported exports, authorin
 - **WHEN** a documented import, bin, version, or package role no longer matches the real tarball, public declaration, or package metadata
 - **THEN** the aggregate documentation gate fails instead of letting an external consumer discover the drift late in the tutorial
 
+#### Scenario: Interpret packed public package responsibilities
+- **WHEN** a developer uses the public package reference to choose authoring and runtime dependencies
+- **THEN** The reference MUST use real packed contents, public declarations, package metadata, and stable specifications as its sources of truth.
+- **THEN** It MUST NOT present a Testkit fake as the Host, the UI package as shared Host React, the CLI as Runtime authority, or Contract validation as installation or authorization.
+
 ### Requirement: The Host API reference MUST distinguish public contract, Host provider, and session capability
 
-The bilingual Host API reference MUST document the request, result, stable errors, version, provider condition, Session capability, and recovery for every Host API `0.2.0` method. It MUST make clear that the public catalog is not the current provider and that a provider is not arbitrary Host authority. The complete current `PluginRuntimeContext.capabilities` describes only the non-privileged methods actually available to the Session. The documentation MUST no longer describe Manifest permissions, grants, a clipboard provider, or permission-denied flows, and MUST distinguish Host API methods from ordinary Web capabilities that require no Context enumeration.
+The bilingual Host API reference MUST document the request, result, stable errors, version, provider condition, Session capability, and recovery for every Host API `0.2.0` method.
 
 #### Scenario: Developer looks up current Host methods
 - **WHEN** a developer looks up a context, navigation, storage, or close method
@@ -82,9 +99,15 @@ The bilingual Host API reference MUST document the request, result, stable error
 - **WHEN** Runtime Context capabilities are empty or omit a method the plugin wants to call
 - **THEN** the documentation requires the plugin to present an unavailable or degraded state or skip the call instead of manually constructing requests or assuming that the public catalog equals current Session capability
 
+#### Scenario: Distinguish documented methods from current session authority
+- **WHEN** a developer reads the bilingual Host API reference and inspects current Context capabilities
+- **THEN** It MUST make clear that the public catalog is not the current provider and that a provider is not arbitrary Host authority.
+- **THEN** The complete current `PluginRuntimeContext.capabilities` describes only the non-privileged methods actually available to the Session.
+- **THEN** The documentation MUST no longer describe Manifest permissions, grants, a clipboard provider, or permission-denied flows, and MUST distinguish Host API methods from ordinary Web capabilities that require no Context enumeration.
+
 ### Requirement: Runtime, permission, and security guidance MUST cover success, error, and recovery lifecycles
 
-Runtime and security guidance MUST explain the complete lifecycle from isolated iframe, Session and Port, SDK initialization, Context, ready, request and cancel through close, reload, replacement, and destroy. It MUST cover successful open Worker, network, remote, Blob, and Data behavior; unsupported browser APIs; transport, deadline, and breaker behavior; Host and cross-plugin isolation; and old-generation inertness. The documentation MUST describe installation as the current trust decision for plugin behavior and explain that lensX does not individually authorize or review ordinary Web behavior, without describing the open Web as Tauri or native authority.
+Runtime and security guidance MUST explain the complete lifecycle from isolated iframe, Session and Port, SDK initialization, Context, ready, request and cancel through close, reload, replacement, and destroy.
 
 #### Scenario: Developer builds an open Web plugin
 - **WHEN** a tutorial plugin uses a Dedicated Worker, network connection, or remote resource
@@ -121,9 +144,14 @@ Runtime and security guidance MUST explain the complete lifecycle from isolated 
 - **WHEN** documentation or examples recommend bypassing CSP, Session source validation, deadline or breaker behavior, teardown, or the canonical Host API for Development Mode
 - **THEN** the security coverage gate fails and requires the development source to use the formal Runtime path
 
+#### Scenario: Explain open Web behavior across runtime transitions
+- **WHEN** the Runtime guide describes initialization, requests, cancellation, replacement, and destruction
+- **THEN** It MUST cover successful open Worker, network, remote, Blob, and Data behavior; unsupported browser APIs; transport, deadline, and breaker behavior; Host and cross-plugin isolation; and old-generation inertness.
+- **THEN** The documentation MUST describe installation as the current trust decision for plugin behavior and explain that lensX does not individually authorize or review ordinary Web behavior, without describing the open Web as Tauri or native authority.
+
 ### Requirement: Every runnable documentation example MUST be automatically built or typechecked
 
-The system MUST require every TypeScript, TSX, JSON, and shell code block described as copyable or runnable to carry machine-readable validation metadata. A source-bound block MUST remain consistent with maintained template or public package source. A compiled block MUST be extracted into the corresponding external tutorial consumer and pass typecheck or build. JSON MUST pass the relevant public Schema/validator. A command block MUST match real CLI help, package scripts, or a supported Host launch command. Non-executable explanatory pseudocode MUST be explicitly classified and MUST NOT carry a tutorial operation step.
+The system MUST require every TypeScript, TSX, JSON, and shell code block described as copyable or runnable to carry machine-readable validation metadata.
 
 #### Scenario: Runnable examples match maintained source
 
@@ -140,13 +168,21 @@ The system MUST require every TypeScript, TSX, JSON, and shell code block descri
 - **WHEN** a maintainer corrects a failed block, metadata, or source binding and reruns the focused gate
 - **THEN** the gate re-extracts and validates from canonical source without depending on generated files or cached results from the previous run
 
+#### Scenario: Validate each runnable documentation block by its declared kind
+- **WHEN** the documentation gate encounters source-bound, compiled, JSON, command, or pseudocode blocks
+- **THEN** A source-bound block MUST remain consistent with maintained template or public package source.
+- **THEN** A compiled block MUST be extracted into the corresponding external tutorial consumer and pass typecheck or build.
+- **THEN** JSON MUST pass the relevant public Schema/validator.
+- **THEN** A command block MUST match real CLI help, package scripts, or a supported Host launch command.
+- **THEN** Non-executable explanatory pseudocode MUST be explicitly classified and MUST NOT carry a tutorial operation step.
+
 ### Requirement: The external consumer gate MUST prove the tutorials do not depend on the private lensX workspace
 
-The system MUST pack real Contract, SDK, UI, Testkit, and CLI tarballs in a system temporary directory, use the real CLI to create both templates, and install them in isolation with consumer-owned dependency overrides and the machine-configured global pnpm store. The gate MUST run the tutorial's test, typecheck, build, validate, repeat pack, and inspect commands; audit the lockfile, module realpaths, bundle, package bytes, and private imports; and pass each `.lxp` to the existing TypeScript/Rust inspection and local-installation preparation boundaries. The temporary consumer MUST be removed after success or failure, and repository-root commands MUST NOT use `--store-dir` to rewrite root workspace store metadata.
+The system MUST pack real Contract, SDK, UI, Testkit, and CLI tarballs in a system temporary directory, use the real CLI to create both templates, and install them in isolation with consumer-owned dependency overrides and the machine-configured global pnpm store.
 
 #### Scenario: Both temporary consumers complete the documented loop
 
-- **WHEN** `check:plugin-development-documentation` runs in a supported environment with prebuilt tarballs and the machine global store
+- **WHEN** `pnpm run gate -- plugin-development-documentation` runs in a supported environment with prebuilt tarballs and the machine global store
 - **THEN** neither consumer resolves to repository root `node_modules`, both complete every automated tutorial step, repeat packing is byte-identical, and each package receives a Host-acceptable preparation result
 
 #### Scenario: A tutorial hides a workspace or private dependency
@@ -159,9 +195,14 @@ The system MUST pack real Contract, SDK, UI, Testkit, and CLI tarballs in a syst
 - **WHEN** a consumer fails only because sandbox write permission or the machine store is unavailable
 - **THEN** validation distinguishes the environment failure from a source/documentation failure and permits rerunning in an approved system temporary directory with the same machine global store, without creating a repository-local store
 
+#### Scenario: Complete isolated tutorial consumers and clean them up
+- **WHEN** the external consumer gate builds the two CLI templates from real public tarballs
+- **THEN** The gate MUST run the tutorial's test, typecheck, build, validate, repeat pack, and inspect commands; audit the lockfile, module realpaths, bundle, package bytes, and private imports; and pass each `.lxp` to the existing TypeScript/Rust inspection and local-installation preparation boundaries.
+- **THEN** The temporary consumer MUST be removed after success or failure, and repository-root commands MUST NOT use `--store-dir` to rewrite root workspace store metadata.
+
 ### Requirement: Developer documentation MUST present ConfigLens as public-boundary dogfood
 
-The canonical English plugin developer hub and its path-matched Simplified Chinese mirror MUST identify `ConfigLens` as the first product official plugin after Task 7.2 validation completes. The documentation MUST describe its JSON, YAML, TOML and XML scope, Monaco and package-owned Worker use, ordinary `.lxp` installation, open isolated Web Runtime and closed Host boundary. It MUST NOT describe ConfigLens as built into the Host, pre-trusted, signed, automatically updated, Marketplace-delivered, permission-granted or allowed to import private source.
+The canonical English plugin developer hub and its path-matched Simplified Chinese mirror MUST identify `ConfigLens` as the first product official plugin after Task 7.2 validation completes.
 
 #### Scenario: Developer inspects the official example
 - **WHEN** a reader follows the official-plugin reference from either language's developer hub
@@ -173,9 +214,14 @@ The canonical English plugin developer hub and its path-matched Simplified Chine
 - **THEN** the documentation drift gate fails with a stable repository-relative diagnostic
 - **THEN** Task 7.2 status cannot conceal or override that failure
 
+#### Scenario: Describe ConfigLens without granting official provenance extra authority
+- **WHEN** a developer reads the official-plugin example in either language hub
+- **THEN** The documentation MUST describe its JSON, YAML, TOML and XML scope, Monaco and package-owned Worker use, ordinary `.lxp` installation, open isolated Web Runtime and closed Host boundary.
+- **THEN** It MUST NOT describe ConfigLens as built into the Host, pre-trusted, signed, automatically updated, Marketplace-delivered, permission-granted or allowed to import private source.
+
 ### Requirement: Task 6.6 completion MUST depend on complete validation evidence
 
-`check:plugin-development-documentation` MUST cover bilingual structure and links, runnable blocks, external consumers, public packages, CLI and templates, Development Mode, the open isolated Runtime, Host API `0.2.0`, canonical installation and every currently delivered product official plugin. Historical Task 6.6 status MAY remain complete only while documentation agrees with current source and specs. Legacy permission or clipboard claims and stale official-plugin capability status MUST fail the gate.
+`pnpm run gate -- plugin-development-documentation` MUST cover bilingual structure and links, runnable blocks, external consumers, public packages, CLI and templates, Development Mode, the open isolated Runtime, Host API `0.2.0`, canonical installation and every currently delivered product official plugin.
 
 #### Scenario: Updated documentation gate passes
 - **WHEN** the focused documentation gate, complete frontend and Rust validation, and strict OpenSpec validation all succeed after ConfigLens delivery
@@ -197,8 +243,14 @@ The canonical English plugin developer hub and its path-matched Simplified Chine
 - **WHEN** bilingual documentation, an example, an external consumer, API coverage, an existing security boundary, an official product plugin or final validation has a failure, warning, or unverified assumption
 - **THEN** Task 6.6 does not remain complete, the Roadmap does not claim an unsupported Plugin Developer Preview state, and the failed command and complete final validation set are rerun after correction
 
+#### Scenario: Reassess documentation completion against current delivery
+- **WHEN** the documentation gate evaluates historical Task 6.6 completion after a product or contract update
+- **THEN** Historical Task 6.6 status MAY remain complete only while documentation agrees with current source and specs.
+- **THEN** Legacy permission or clipboard claims and stale official-plugin capability status MUST fail the gate.
+
 ### Requirement: Bilingual developer documentation MUST describe the Child WebView public boundary
-Canonical English documentation and identical-path Simplified Chinese mirrors MUST teach Manifest `0.4.0`, SDK `/webview`, bounded per-Page presentation, top-level Web semantics, Host-controlled slot/navigation, current bridge lifecycle, safe recovery and public package flow. They MUST explain logical initial size, the fixed `650×600` default, `resizable` user opt-in, Contract/work-area bounds, same-attempt hide/restore retention, actual-close reset, first-version non-persistence, and the distinction between normal Web viewport observation and forbidden plugin native setters. They MUST explain that ordinary Web capabilities are open, native Host authority is closed, official/development provenance grants no extra power, and OS process isolation is not guaranteed. Current guides and runnable examples MUST NOT instruct iframe, MessagePort, Tauri Window, runtime resize, position, monitor, maximize or fullscreen usage except in explicit migration/security notes.
+
+Canonical English documentation and identical-path Simplified Chinese mirrors MUST teach Manifest `0.4.0`, SDK `/webview`, bounded per-Page presentation, top-level Web semantics, Host-controlled slot/navigation, current bridge lifecycle, safe recovery and public package flow.
 
 #### Scenario: External developer follows either tutorial
 - **WHEN** the developer uses only published package references, Manifest `0.4.0`, and documented commands
@@ -213,3 +265,9 @@ Canonical English documentation and identical-path Simplified Chinese mirrors MU
 #### Scenario: Documentation drift gate runs
 - **WHEN** examples, exports, Manifest Schema, CLI output, Runtime terminology, Page presentation defaults, or authority boundaries diverge
 - **THEN** automated documentation validation fails in both languages
+
+#### Scenario: Teach current Child WebView sizing and security boundaries
+- **WHEN** an external developer follows current bilingual guides and runnable examples for a plugin Page
+- **THEN** They MUST explain logical initial size, the fixed `650×600` default, `resizable` user opt-in, Contract/work-area bounds, same-attempt hide/restore retention, actual-close reset, first-version non-persistence, and the distinction between normal Web viewport observation and forbidden plugin native setters.
+- **THEN** They MUST explain that ordinary Web capabilities are open, native Host authority is closed, official/development provenance grants no extra power, and OS process isolation is not guaranteed.
+- **THEN** Current guides and runnable examples MUST NOT instruct iframe, MessagePort, Tauri Window, runtime resize, position, monitor, maximize or fullscreen usage except in explicit migration/security notes.

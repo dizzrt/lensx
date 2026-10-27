@@ -8,7 +8,18 @@ permissions, or Host-side effects.
 ## Requirements
 ### Requirement: Host API v1 MUST expose one closed, versioned semantic catalog
 
-The public Host API MUST expose an independently versioned `0.3.0` closed semantic catalog containing requests, results, events, and bounded errors for `actions.open`, `http.request`, `runtime.get_context`, five plugin-scoped `storage.*` methods, and `ui.close`. `http.request` MUST be generic HTTP transport with the same contract and control boundary for every plugin; translation business logic, language decisions, service signing, and credential configuration MUST remain in plugins. The catalog MUST NOT contain `clipboard.read`, `clipboard.write`, permission types, permission-requirement mappings, arbitrary Tauri commands, or general native executors. Unknown or removed methods MUST fail closed through the Contract and Dispatcher.
+The public Host API MUST expose an independently versioned `0.3.0` closed semantic catalog containing requests, results, events, and bounded errors for `actions.open`, `http.request`, `runtime.get_context`, five plugin-scoped `storage.*` methods, and `ui.close`.
+
+#### Scenario: Public HTTP remains generic plugin transport
+
+- **WHEN** a plugin invokes the public http.request method
+- **THEN** `http.request` MUST be generic HTTP transport with the same contract and control boundary for every plugin; translation business logic, language decisions, service signing, and credential configuration MUST remain in plugins.
+
+#### Scenario: The public catalog and dispatcher exclude prohibited methods
+
+- **WHEN** the public Host API catalog is inspected or any Host method request is dispatched
+- **THEN** The catalog MUST NOT contain `clipboard.read`, `clipboard.write`, permission types, permission-requirement mappings, arbitrary Tauri commands, or general native executors.
+- **THEN** Unknown or removed methods MUST fail closed through the Contract and Dispatcher.
 
 #### Scenario: Consumer reads the Host API 0.3.0 catalog
 - **WHEN** an external consumer reads generated types and the runtime catalog
@@ -37,9 +48,21 @@ The public Host API MUST expose an independently versioned `0.3.0` closed semant
 
 ### Requirement: Runtime Context MUST be the single capability-discovery snapshot
 
-`PluginRuntimeContext` MUST contain the Host API version, locale, theme, and a complete, sorted, unique capability set of methods actually available to the current Session. Capabilities MUST derive only from the trusted current Session, provider availability, and Host facts; they MUST NOT contain permissions, grants, Manifest reasons, Publisher, source, or ordinary browser Worker/network capabilities. Browser capabilities remain determined by the Web Runtime. Public controlled `http.request` is a separate Host method and MUST appear in capabilities only when the current HTTP provider is available; it does not indicate a change to browser CORS policy.
+`PluginRuntimeContext` MUST contain the Host API version, locale, theme, and a complete, sorted, unique capability set of methods actually available to the current Session.
 
-`runtime.get_context` MUST accept exact empty parameters and return a readonly, copied, frozen Context. `runtime.context_changed` MUST carry a complete independently validatable Context replacement, not a partial patch. Invalidation of trusted Session identity MUST terminate the old Session and MUST NOT reauthorize it through an event alone.
+#### Scenario: The Host constructs the current capability set
+
+- **WHEN** a Runtime Context is created from current Session and provider facts
+- **THEN** Capabilities MUST derive only from the trusted current Session, provider availability, and Host facts; they MUST NOT contain permissions, grants, Manifest reasons, Publisher, source, or ordinary browser Worker/network capabilities.
+- **THEN** Browser capabilities remain determined by the Web Runtime.
+- **THEN** Public controlled `http.request` is a separate Host method and MUST appear in capabilities only when the current HTTP provider is available; it does not indicate a change to browser CORS policy.
+
+#### Scenario: Context retrieval or replacement crosses a Session boundary
+
+- **WHEN** runtime.get_context or runtime.context_changed supplies Context or trusted Session identity is invalidated
+- **THEN** `runtime.get_context` MUST accept exact empty parameters and return a readonly, copied, frozen Context.
+- **THEN** `runtime.context_changed` MUST carry a complete independently validatable Context replacement, not a partial patch.
+- **THEN** Invalidation of trusted Session identity MUST terminate the old Session and MUST NOT reauthorize it through an event alone.
 
 #### Scenario: New Session receives Context
 - **WHEN** the current plugin completes Session and SDK initialization
@@ -63,18 +86,20 @@ The public Host API MUST expose an independently versioned `0.3.0` closed semant
 
 ### Requirement: Session-scoped UI and Action methods MUST NOT become general Host executors
 
-`ui.close` MUST accept exact empty params and can only request that the current
-plugin Page Session that made the call be closed. It MUST complete the
-transport handoff of the `{ accepted: true }` success result before scheduling
-Host-owned terminal teardown. It MUST NOT accept a window, Page, plugin, route,
-or application target.
+`ui.close` MUST accept exact empty params and can only request that the current plugin Page Session that made the call be closed.
 
-`actions.open` MUST accept only a plugin-local `actionId` that follows the
-caller's Manifest Action ID rules, and MUST return `{ opened: true }`. The Host
-MUST derive the global Action ID from the trusted Session plugin ID and can
-only resolve a currently available, Page-only Action in the current Registry
-that belongs to that plugin. It MUST NOT invoke `lensx.core`, another plugin's
-Action, an unknown or disabled Action, or a plugin-supplied executor.
+#### Scenario: The current Session requests closure
+
+- **WHEN** a plugin invokes ui.close
+- **THEN** It MUST complete the transport handoff of the `{ accepted: true }` success result before scheduling Host-owned terminal teardown.
+- **THEN** It MUST NOT accept a window, Page, plugin, route, or application target.
+
+#### Scenario: A Session opens its own Page Action
+
+- **WHEN** a plugin invokes actions.open
+- **THEN** `actions.open` MUST accept only a plugin-local `actionId` that follows the caller's Manifest Action ID rules, and MUST return `{ opened: true }`.
+- **THEN** The Host MUST derive the global Action ID from the trusted Session plugin ID and can only resolve a currently available, Page-only Action in the current Registry that belongs to that plugin.
+- **THEN** It MUST NOT invoke `lensx.core`, another plugin's Action, an unknown or disabled Action, or a plugin-supplied executor.
 
 #### Scenario: Current plugin closes its own Page
 
@@ -112,21 +137,23 @@ Action, an unknown or disabled Action, or a plugin-supplied executor.
 
 ### Requirement: Private storage methods MUST derive namespace from trusted Session identity
 
-Host API v1 MUST define `storage.get`, `storage.set`, `storage.delete`,
-`storage.list`, and `storage.get_quota`. A key MUST be a bounded, non-empty
-string. A value MUST be JSON-compatible and MUST NOT accept a function, symbol,
-bigint, cyclic object, DOM object, Tauri object, or Host object. Storage params
-MUST NOT accept a plugin ID, namespace, path, or installation location.
+Host API v1 MUST define `storage.get`, `storage.set`, `storage.delete`, `storage.list`, and `storage.get_quota`.
 
-`storage.get` MUST distinguish `{ found: false }` from
-`{ found: true, value }`. `storage.delete` MUST report whether an existing key
-was deleted.
-`storage.list` MUST return keys in stable, paginated order with an opaque
-continuation cursor and MUST NOT return values in bulk. `storage.get_quota`
-MUST return a non-negative safe-integer `usedBytes` and a positive safe-integer
-`limitBytes` for the current namespace. A later storage capability defines
-concrete persistence, total capacity, per-value byte limits, and corruption
-recovery, but MUST NOT change these v1 discriminated structures.
+#### Scenario: Storage parameters remain namespace-neutral JSON
+
+- **WHEN** a public storage request is validated
+- **THEN** A key MUST be a bounded, non-empty string.
+- **THEN** A value MUST be JSON-compatible and MUST NOT accept a function, symbol, bigint, cyclic object, DOM object, Tauri object, or Host object.
+- **THEN** Storage params MUST NOT accept a plugin ID, namespace, path, or installation location.
+
+#### Scenario: Storage results preserve discriminated semantics
+
+- **WHEN** a storage read, delete, list, or quota result is returned or persistence evolves
+- **THEN** `storage.get` MUST distinguish `{ found: false }` from `{ found: true, value }`.
+- **THEN** `storage.delete` MUST report whether an existing key was deleted.
+- **THEN** `storage.list` MUST return keys in stable, paginated order with an opaque continuation cursor and MUST NOT return values in bulk.
+- **THEN** `storage.get_quota` MUST return a non-negative safe-integer `usedBytes` and a positive safe-integer `limitBytes` for the current namespace.
+- **THEN** A later storage capability defines concrete persistence, total capacity, per-value byte limits, and corruption recovery, but MUST NOT change these v1 discriminated structures.
 
 #### Scenario: Plugin stores and reads JSON data
 
@@ -171,17 +198,13 @@ recovery, but MUST NOT change these v1 discriminated structures.
 
 ### Requirement: Semantic payload Schemas MUST be exact, paired and independently validatable
 
-The system MUST provide Draft 2020-12 JSON Schemas and corresponding generated
-TypeScript types for every method's params and result, every event payload,
-and the Host API error. Objects MUST reject unknown fields, methods MUST pair
-only with their declared params and results, and validators MUST accept
-`unknown`, leave input unchanged, and return either frozen canonical values or
-bounded diagnostics in a stable sort order by JSON Pointer path and code.
+The system MUST provide Draft 2020-12 JSON Schemas and corresponding generated TypeScript types for every method's params and result, every event payload, and the Host API error.
 
-Public semantic Schemas MUST NOT contain request IDs, nonces, origins,
-`Window`, `MessagePort`, `postMessage`, a JSON-RPC envelope, plugin identity,
-Registration revision, a resource token, a Tauri command, or a Host-private
-error.
+#### Scenario: A semantic payload is validated without transport authority
+
+- **WHEN** a method, result, event, or error is checked against its public Schema
+- **THEN** Objects MUST reject unknown fields, methods MUST pair only with their declared params and results, and validators MUST accept `unknown`, leave input unchanged, and return either frozen canonical values or bounded diagnostics in a stable sort order by JSON Pointer path and code.
+- **THEN** Public semantic Schemas MUST NOT contain request IDs, nonces, origins, `Window`, `MessagePort`, `postMessage`, a JSON-RPC envelope, plugin identity, Registration revision, a resource token, a Tauri command, or a Host-private error.
 
 #### Scenario: Valid method payload round-trips through validators
 
@@ -209,9 +232,19 @@ error.
 
 ### Requirement: Host API errors MUST be stable, bounded and separate from SDK lifecycle errors
 
-Host API `0.3.0` MUST preserve the closed error-code set `invalid_request`, `invalid_params`, `method_not_found`, `not_found`, `conflict`, `limit_exceeded`, `unavailable`, `cancelled`, `timeout`, and `internal_error`. Errors MUST contain only a code and a stable, bounded, non-localized, safe message; they MUST NOT contain raw exceptions, stacks, URLs, paths, payloads, request/response bodies, authorization headers, grants, Host/Rust/Tauri objects, or localized product copy. Completed non-2xx HTTP responses MUST follow the `http.request` result contract rather than be mistaken for Host transport errors.
+Host API `0.3.0` MUST preserve the closed error-code set `invalid_request`, `invalid_params`, `method_not_found`, `not_found`, `conflict`, `limit_exceeded`, `unavailable`, `cancelled`, `timeout`, and `internal_error`.
 
-Host API errors MUST remain distinguishable from SDK lifecycle errors such as `disposed`, `disconnected`, and `transport_failure`. Transport MUST NOT collapse a valid Host API rejection into `transport_failure`.
+#### Scenario: A failed operation is classified for public transport
+
+- **WHEN** an operation fails or completes with a non-2xx HTTP response
+- **THEN** Errors MUST contain only a code and a stable, bounded, non-localized, safe message; they MUST NOT contain raw exceptions, stacks, URLs, paths, payloads, request/response bodies, authorization headers, grants, Host/Rust/Tauri objects, or localized product copy.
+- **THEN** Completed non-2xx HTTP responses MUST follow the `http.request` result contract rather than be mistaken for Host transport errors.
+
+#### Scenario: Transport preserves a valid Host rejection
+
+- **WHEN** an SDK consumer receives a Host API error alongside lifecycle failures
+- **THEN** Host API errors MUST remain distinguishable from SDK lifecycle errors such as `disposed`, `disconnected`, and `transport_failure`.
+- **THEN** Transport MUST NOT collapse a valid Host API rejection into `transport_failure`.
 
 #### Scenario: Handler failure is exposed safely
 - **WHEN** a Host handler throws an unknown exception or returns an invalid internal value
@@ -230,9 +263,22 @@ Host API errors MUST remain distinguishable from SDK lifecycle errors such as `d
 
 ### Requirement: Host API evolution MUST use capability discovery and explicit deprecation
 
-The Host API protocol, SDK package, and lensX application MUST be versioned independently. The SDK MUST check its supported range with SemVer before accepting Runtime Context; plugins MUST invoke only methods declared in current Context `capabilities`. Compatible new methods MUST increase the Host API minor version and be exposed through capability discovery. This controlled HTTP extension MUST use Host API `0.3.0` while preserving existing methods' payload and error semantics; Manifest and SDK support ranges MUST still be validated separately. Existing plugin packages outside those ranges MUST be explicitly incompatible and require authors to upgrade the SDK, update declarations, and repack. The Host MUST NOT silently negotiate an old catalog, hide new methods to impersonate an old protocol, or rewrite installed packages.
+The Host API protocol, SDK package, and lensX application MUST be versioned independently.
 
-Incompatible changes to existing payload/error behavior or method removal MUST increase the Host API major version. Deprecated methods MUST retain their semantics, be marked in specifications and the machine-readable catalog, and remain for at least one compatible minor window before removal in a major version.
+#### Scenario: A compatible Host API extension is introduced
+
+- **WHEN** the SDK checks a Runtime Context or the Host introduces a compatible method
+- **THEN** The SDK MUST check its supported range with SemVer before accepting Runtime Context; plugins MUST invoke only methods declared in current Context `capabilities`.
+- **THEN** Compatible new methods MUST increase the Host API minor version and be exposed through capability discovery.
+- **THEN** This controlled HTTP extension MUST use Host API `0.3.0` while preserving existing methods' payload and error semantics; Manifest and SDK support ranges MUST still be validated separately.
+- **THEN** Existing plugin packages outside those ranges MUST be explicitly incompatible and require authors to upgrade the SDK, update declarations, and repack.
+- **THEN** The Host MUST NOT silently negotiate an old catalog, hide new methods to impersonate an old protocol, or rewrite installed packages.
+
+#### Scenario: An existing method is deprecated changed or removed
+
+- **WHEN** Host API evolution changes an existing payload or error contract or removes a method
+- **THEN** Incompatible changes to existing payload/error behavior or method removal MUST increase the Host API major version.
+- **THEN** Deprecated methods MUST retain their semantics, be marked in specifications and the machine-readable catalog, and remain for at least one compatible minor window before removal in a major version.
 
 #### Scenario: New compatible method appears
 - **WHEN** a new Host API minor version adds a method and both the plugin Manifest and SDK support ranges include that version
@@ -251,18 +297,13 @@ Incompatible changes to existing payload/error behavior or method removal MUST i
 
 ### Requirement: Contract delivery MUST prove cross-consumer drift without claiming execution
 
-Delivery MUST include a Schema and generated-type drift gate; valid and
-invalid fixtures covering every method, result, event, and error;
-TypeScript and Rust shared-fixture agreement; package boundary tests; an
-outside-the-repository no-DOM consumer of real Contract and SDK tarballs; and
-maintained English and Chinese documentation with equivalent semantics. Gates
-MUST prove that public exports do not leak Host-private types and that
-`PluginSdkClient` still has no raw method entry or concrete Host API execution
-capability.
+Delivery MUST include a Schema and generated-type drift gate; valid and invalid fixtures covering every method, result, event, and error; TypeScript and Rust shared-fixture agreement; package boundary tests; an outside-the-repository no-DOM consumer of real Contract and SDK tarballs; and maintained English and Chinese documentation with equivalent semantics.
 
-This capability MUST NOT register a Tauri command, send a MessagePort request,
-execute Action, close, native clipboard, or storage side effects, create Host authority,
-or claim that the Milestone 5 Runtime call chain has been delivered.
+#### Scenario: Contract gates report their execution boundary
+
+- **WHEN** semantic Contract delivery is validated independently of concrete Host execution
+- **THEN** Gates MUST prove that public exports do not leak Host-private types and that `PluginSdkClient` still has no raw method entry or concrete Host API execution capability.
+- **THEN** This capability MUST NOT register a Tauri command, send a MessagePort request, execute Action, close, native clipboard, or storage side effects, create Host authority, or claim that the Milestone 5 Runtime call chain has been delivered.
 
 #### Scenario: Complete contract gate passes
 

@@ -11,18 +11,14 @@ semantics.
 
 ### Requirement: Plugin storage MUST derive one private namespace from trusted current identity
 
-The system MUST derive a plugin storage namespace only from the Host-owned
-identity of an authenticated Runtime Session and MUST revalidate the current
-Plugin Manager record for every Host-private storage operation. A public
-request, plugin code, Manifest, SDK, or wire payload MUST NOT select or override
-a plugin ID, plugin key, namespace, real path, Registration, provider, or Tauri
-command.
+The system MUST derive a plugin storage namespace only from the Host-owned identity of an authenticated Runtime Session and MUST revalidate the current Plugin Manager record for every Host-private storage operation.
 
-Rust MUST use the Installer's canonical v1 plugin-key derivation and constrain
-the namespace to a real, non-symlink subtree under
-`app_local_data_dir()/plugins/data/<plugin-key>`. Host application preferences,
-program payloads, cleanup evidence, other plugin namespaces, and browser-origin
-storage MUST remain inaccessible.
+#### Scenario: Storage access resolves its canonical namespace
+
+- **WHEN** a Runtime storage operation derives its namespace from trusted identity
+- **THEN** A public request, plugin code, Manifest, SDK, or wire payload MUST NOT select or override a plugin ID, plugin key, namespace, real path, Registration, provider, or Tauri command.
+- **THEN** Rust MUST use the Installer's canonical v1 plugin-key derivation and constrain the namespace to a real, non-symlink subtree under `app_local_data_dir()/plugins/data/<plugin-key>`.
+- **THEN** Host application preferences, program payloads, cleanup evidence, other plugin namespaces, and browser-origin storage MUST remain inaccessible.
 
 #### Scenario: Two plugins write the same key
 
@@ -54,18 +50,14 @@ storage MUST remain inaccessible.
 
 ### Requirement: Storage methods MUST implement the existing Host API 0.2.0 semantics
 
-The system MUST implement `storage.get`, `storage.set`, `storage.delete`,
-`storage.list`, and `storage.get_quota` without changing the public Host API
-`0.2.0` payloads. Inputs and values MUST pass existing Contract validation, and
-Rust MUST again reject unknown fields, invalid keys, non-JSON values, and
-payloads that do not match the Host-private contract version.
+The system MUST implement `storage.get`, `storage.set`, `storage.delete`, `storage.list`, and `storage.get_quota` without changing the public Host API `0.2.0` payloads.
 
-`storage.get` MUST distinguish `{ found: false }` from
-`{ found: true, value }`; a successful `storage.set` MUST return
-`{ stored: true }`; and `storage.delete` MUST accurately report whether an
-existing key was deleted. A returned JSON value MUST be an independent,
-Contract-valid copy of the current persisted value and MUST NOT contain a Rust,
-Tauri, DOM, or Host object.
+#### Scenario: Storage requests cross validation and persistence boundaries
+
+- **WHEN** a plugin invokes a storage method and receives its result
+- **THEN** Inputs and values MUST pass existing Contract validation, and Rust MUST again reject unknown fields, invalid keys, non-JSON values, and payloads that do not match the Host-private contract version.
+- **THEN** `storage.get` MUST distinguish `{ found: false }` from `{ found: true, value }`; a successful `storage.set` MUST return `{ stored: true }`; and `storage.delete` MUST accurately report whether an existing key was deleted.
+- **THEN** A returned JSON value MUST be an independent, Contract-valid copy of the current persisted value and MUST NOT contain a Rust, Tauri, DOM, or Host object.
 
 #### Scenario: JSON value survives a restart
 
@@ -97,22 +89,20 @@ Tauri, DOM, or Host object.
 
 ### Requirement: Storage limits MUST be concrete, deterministic and enforced in Rust
 
-Version 1 storage MUST enforce these fixed limits: a Contract-valid key has
-1–256 Unicode code points and no C0 or DEL control character; a JSON root has
-depth 0 and maximum nesting depth 32; one value's deterministic compact JSON
-UTF-8 representation is at most 262144 bytes; one namespace contains at most
-1024 entries and at most 1048576 logical bytes.
+Version 1 storage MUST enforce these fixed limits: a Contract-valid key has 1–256 Unicode code points and no C0 or DEL control character; a JSON root has depth 0 and maximum nesting depth 32; one value's deterministic compact JSON UTF-8 representation is at most 262144 bytes; one namespace contains at most 1024 entries and at most 1048576 logical bytes.
 
-Logical usage MUST equal the sum of every key's UTF-8 bytes and its compact JSON
-value bytes. Rust MUST compute depth and bytes from validated candidate state
-and MUST NOT trust a size reported by a plugin, SDK, or TypeScript. Replacing an
-existing key MUST subtract the old entry usage before checking candidate total
-usage, and failure MUST preserve the old value.
+#### Scenario: Rust accounts for a candidate storage mutation
 
-Shape, key, or cursor-format failures MUST map to `invalid_params`; depth,
-single-value, entry-count, or namespace-usage violations MUST map to
-`limit_exceeded`. Errors MUST NOT echo a key, value, usage breakdown, path, or
-raw payload.
+- **WHEN** a new or replacement entry is checked against storage limits
+- **THEN** Logical usage MUST equal the sum of every key's UTF-8 bytes and its compact JSON value bytes.
+- **THEN** Rust MUST compute depth and bytes from validated candidate state and MUST NOT trust a size reported by a plugin, SDK, or TypeScript.
+- **THEN** Replacing an existing key MUST subtract the old entry usage before checking candidate total usage, and failure MUST preserve the old value.
+
+#### Scenario: Storage validation rejects invalid input or excess usage
+
+- **WHEN** a storage operation returns a validation, limit, or other error
+- **THEN** Shape, key, or cursor-format failures MUST map to `invalid_params`; depth, single-value, entry-count, or namespace-usage violations MUST map to `limit_exceeded`.
+- **THEN** Errors MUST NOT echo a key, value, usage breakdown, path, or raw payload.
 
 #### Scenario: Write remains within every limit
 
@@ -142,17 +132,20 @@ raw payload.
 
 ### Requirement: Quota and listing MUST expose only bounded logical namespace facts
 
-`storage.get_quota` MUST return `{ usedBytes, limitBytes }` for the current
-trusted namespace, where an empty namespace has `usedBytes: 0` and `limitBytes`
-is always `1048576`. The result MUST NOT include physical file size, filesystem
-capacity, another plugin's usage, or application-preference usage.
+`storage.get_quota` MUST return `{ usedBytes, limitBytes }` for the current trusted namespace, where an empty namespace has `usedBytes: 0` and `limitBytes` is always `1048576`.
 
-`storage.list` MUST return only unique keys in stable Unicode code-point order.
-An omitted limit MUST default to 100, and an explicit limit MUST be within
-1–1000. When another page exists, the Host MUST return an opaque continuation
-cursor of at most 1024 characters. The cursor MUST be bound to the current
-namespace revision and next position and MUST pass a Host-private integrity
-check.
+#### Scenario: Quota omits unrelated capacity information
+
+- **WHEN** the Host returns quota for the current namespace
+- **THEN** The result MUST NOT include physical file size, filesystem capacity, another plugin's usage, or application-preference usage.
+
+#### Scenario: Key enumeration creates a bounded continuation
+
+- **WHEN** a plugin lists its current namespace with an omitted or explicit limit
+- **THEN** `storage.list` MUST return only unique keys in stable Unicode code-point order.
+- **THEN** An omitted limit MUST default to 100, and an explicit limit MUST be within 1–1000.
+- **THEN** When another page exists, the Host MUST return an opaque continuation cursor of at most 1024 characters.
+- **THEN** The cursor MUST be bound to the current namespace revision and next position and MUST pass a Host-private integrity check.
 
 #### Scenario: List an empty namespace
 
@@ -189,17 +182,19 @@ check.
 
 ### Requirement: Durable mutations MUST use bounded canonical data and atomic replacement
 
-Each namespace MUST use one strict version-1 canonical store containing a
-monotonic namespace revision and entries in canonical order. Reads MUST reject
-unknown fields, duplicate keys, non-canonical order, invalid values, incorrect
-usage, unsupported versions, and content above the physical read limit.
+Each namespace MUST use one strict version-1 canonical store containing a monotonic namespace revision and entries in canonical order.
 
-A successful mutation MUST use a create-new temporary file, bounded write,
-file flush, `sync_all`, atomic rename, and parent-directory sync within the same
-canonical data subtree. The Rust atomic rename MUST be the sole durable commit
-point. Validation, quota, write, or sync failure before commit MUST preserve the
-old canonical store; after commit the Host MUST NOT fake rollback by deleting
-the new store.
+#### Scenario: A canonical store is read
+
+- **WHEN** the storage service validates persisted namespace content
+- **THEN** Reads MUST reject unknown fields, duplicate keys, non-canonical order, invalid values, incorrect usage, unsupported versions, and content above the physical read limit.
+
+#### Scenario: A canonical mutation crosses the rename commit point
+
+- **WHEN** the Host writes a storage mutation or encounters a failure before or after rename
+- **THEN** A successful mutation MUST use a create-new temporary file, bounded write, file flush, `sync_all`, atomic rename, and parent-directory sync within the same canonical data subtree.
+- **THEN** The Rust atomic rename MUST be the sole durable commit point.
+- **THEN** Validation, quota, write, or sync failure before commit MUST preserve the old canonical store; after commit the Host MUST NOT fake rollback by deleting the new store.
 
 #### Scenario: Write fails before commit
 
@@ -230,21 +225,24 @@ the new store.
 
 ### Requirement: Storage and plugin lifecycle MUST share one data ownership boundary
 
-Storage reads and writes, installation, replacement, uninstall, cleanup
-recovery, and same-identity reinstall MUST share the Host-private data
-coordinator and existing cross-process install serialization boundary, or a
-proven equivalent single-serialization model. A storage operation MUST validate
-live Manager identity inside that boundary, and lifecycle cleanup MUST continue
-to delete only a canonical data subtree proven to belong to the target plugin
-key.
+Storage reads and writes, installation, replacement, uninstall, cleanup recovery, and same-identity reinstall MUST share the Host-private data coordinator and existing cross-process install serialization boundary, or a proven equivalent single-serialization model.
 
-An upgrade or compatible same-identity replacement MUST preserve the store.
-Disable MUST terminate current Runtime access but retain data. An uninstall
-with `retain_data` MUST retain the store and make it inaccessible without a
-Registration; after a successful same-identity reinstall with no cleanup
-conflict it MUST become visible again. An uninstall with `delete_data` MUST
-persist the existing cleanup intent and eventually delete the entire canonical
-data subtree; a call after logical uninstall MUST NOT recreate it.
+#### Scenario: Storage and lifecycle revalidate shared ownership
+
+- **WHEN** an operation enters the shared data coordinator
+- **THEN** A storage operation MUST validate live Manager identity inside that boundary, and lifecycle cleanup MUST continue to delete only a canonical data subtree proven to belong to the target plugin key.
+
+#### Scenario: Replacement or disable retains plugin data
+
+- **WHEN** a plugin is upgraded, compatibly replaced, or disabled
+- **THEN** An upgrade or compatible same-identity replacement MUST preserve the store.
+- **THEN** Disable MUST terminate current Runtime access but retain data.
+
+#### Scenario: Uninstall applies its selected data policy
+
+- **WHEN** a plugin is uninstalled with retain_data or delete_data and later access or reinstallation is attempted
+- **THEN** An uninstall with `retain_data` MUST retain the store and make it inaccessible without a Registration; after a successful same-identity reinstall with no cleanup conflict it MUST become visible again.
+- **THEN** An uninstall with `delete_data` MUST persist the existing cleanup intent and eventually delete the entire canonical data subtree; a call after logical uninstall MUST NOT recreate it.
 
 #### Scenario: Read retained data after plugin upgrade
 
@@ -283,19 +281,20 @@ data subtree; a call after logical uninstall MUST NOT recreate it.
 
 ### Requirement: Corruption MUST degrade only the affected namespace
 
-The Host MUST NOT fail startup because one plugin store is absent, oversized,
-malformed, non-canonical, unsupported, symlinked, or unreadable. The storage
-service MUST defer bounded metadata, reads, and strict validation until the
-namespace is accessed and MUST mark a proven corrupt or abnormal namespace as
-degraded. It MUST NOT scan values into logs or guess, overwrite, or clear
-canonical evidence.
+The Host MUST NOT fail startup because one plugin store is absent, oversized, malformed, non-canonical, unsupported, symlinked, or unreadable.
 
-Storage methods for a degraded namespace MUST return stable `unavailable`, and
-their capabilities MUST be removed from later Context snapshots for that
-identity after the Host confirms the state. The Host, application preferences,
-Registration, other plugin namespaces, and non-storage Host APIs MUST continue
-working. Only existing `delete_data` lifecycle cleanup may delete corrupt
-evidence after proving subtree ownership.
+#### Scenario: Namespace access preserves canonical evidence
+
+- **WHEN** the Host accesses a plugin namespace and evaluates whether its persisted state is corrupt or abnormal
+- **THEN** The storage service MUST defer bounded metadata, reads, and strict validation until the namespace is accessed and MUST mark a proven corrupt or abnormal namespace as degraded.
+- **THEN** It MUST NOT scan values into logs or guess, overwrite, or clear canonical evidence.
+
+#### Scenario: Degradation isolates the affected storage capability
+
+- **WHEN** a plugin namespace has been confirmed degraded
+- **THEN** Storage methods for a degraded namespace MUST return stable `unavailable`, and their capabilities MUST be removed from later Context snapshots for that identity after the Host confirms the state.
+- **THEN** The Host, application preferences, Registration, other plugin namespaces, and non-storage Host APIs MUST continue working.
+- **THEN** Only existing `delete_data` lifecycle cleanup may delete corrupt evidence after proving subtree ownership.
 
 #### Scenario: One plugin store is corrupt
 
@@ -327,24 +326,26 @@ evidence after proving subtree ownership.
 
 ### Requirement: Storage delivery MUST preserve public package and documentation boundaries
 
-The public Contract, SDK, and Testkit MUST continue to expose only the existing
-Host API `0.2.0` semantic methods and types. They MUST NOT export a Host-private
-storage request, cursor codec, data model, path, Tauri command, provider, or
-Rust error. Official and third-party plugins MUST use the same public
-SDK/Contract storage boundary; official provenance MUST NOT bypass namespace or
-limits.
+The public Contract, SDK, and Testkit MUST continue to expose only the existing Host API `0.2.0` semantic methods and types.
 
-Delivery MUST include evidence for the Rust store and command, TypeScript
-adapter and provider, Dispatcher, Runtime, MessageChannel, cross-plugin
-isolation, restart, fault injection, lifecycle races, and an isolated public
-tarball consumer. English architecture and validation documentation and their
-same-path Simplified Chinese mirrors MUST be updated. The Roadmap MUST mark only
-Task 5.4 complete and MUST NOT claim Task 5.5, Task 5.6, or Milestone 5 is
-complete.
+#### Scenario: Public storage consumers share one boundary
 
-This capability adds no product UI, visible copy, theme-aware component, or
-interaction surface, so it MUST NOT create a placeholder settings page.
-Existing accessibility, locale, and theme behavior MUST remain regression-free.
+- **WHEN** official or third-party plugins consume the public Contract, SDK, or Testkit packages
+- **THEN** They MUST NOT export a Host-private storage request, cursor codec, data model, path, Tauri command, provider, or Rust error.
+- **THEN** Official and third-party plugins MUST use the same public SDK/Contract storage boundary; official provenance MUST NOT bypass namespace or limits.
+
+#### Scenario: Storage delivery records bounded completion evidence
+
+- **WHEN** the storage capability is validated and documented for delivery
+- **THEN** Delivery MUST include evidence for the Rust store and command, TypeScript adapter and provider, Dispatcher, Runtime, MessageChannel, cross-plugin isolation, restart, fault injection, lifecycle races, and an isolated public tarball consumer.
+- **THEN** English architecture and validation documentation and their same-path Simplified Chinese mirrors MUST be updated.
+- **THEN** The Roadmap MUST mark only Task 5.4 complete and MUST NOT claim Task 5.5, Task 5.6, or Milestone 5 is complete.
+
+#### Scenario: Storage delivery preserves existing interaction surfaces
+
+- **WHEN** the storage capability is integrated with the application
+- **THEN** This capability adds no product UI, visible copy, theme-aware component, or interaction surface, so it MUST NOT create a placeholder settings page.
+- **THEN** Existing accessibility, locale, and theme behavior MUST remain regression-free.
 
 #### Scenario: External plugin uses storage through the public SDK
 
@@ -366,20 +367,20 @@ Existing accessibility, locale, and theme behavior MUST remain regression-free.
 
 ### Requirement: Trusted Host management MUST clear a disabled plugin namespace through a private contract
 
-The system MUST provide a versioned Host-private data-management contract that
-allows only the trusted root application to clear the complete logical scoped
-storage namespace of one current healthy disabled Registration. The request
-MUST contain only the contract version, opaque Registration entry identity and
-exact expected Registration revision. The result MUST report whether data
-changed and the still-current Registration revision, and MUST NOT expose a
-path, plugin key, namespace revision, entry count, quota usage, storage key,
-value, payload, raw error, exception or stack.
+The system MUST provide a versioned Host-private data-management contract that allows only the trusted root application to clear the complete logical scoped storage namespace of one current healthy disabled Registration.
 
-The operation MUST reject an enabled, quarantined, missing, stale, degraded or
-unprovable target with a stable bounded error. It MUST remain private to Rust,
-Tauri and the lensX root application and MUST NOT become a public Host API,
-Manifest field, SDK method, Testkit behavior or iframe capability. Current
-request and result payloads MUST contain no permission or grant facts.
+#### Scenario: Trusted management exchanges a clear request and result
+
+- **WHEN** the root application invokes the private namespace-clear contract
+- **THEN** The request MUST contain only the contract version, opaque Registration entry identity and exact expected Registration revision.
+- **THEN** The result MUST report whether data changed and the still-current Registration revision, and MUST NOT expose a path, plugin key, namespace revision, entry count, quota usage, storage key, value, payload, raw error, exception or stack.
+- **THEN** Current request and result payloads MUST contain no permission or grant facts.
+
+#### Scenario: Namespace clear rejects ineligible or public callers
+
+- **WHEN** the namespace-clear contract is exposed to a consumer or authorizes any clear request
+- **THEN** The operation MUST reject an enabled, quarantined, missing, stale, degraded or unprovable target with a stable bounded error.
+- **THEN** It MUST remain private to Rust, Tauri and the lensX root application and MUST NOT become a public Host API, Manifest field, SDK method, Testkit behavior or iframe capability.
 
 #### Scenario: Clear a current disabled namespace
 
@@ -410,20 +411,21 @@ request and result payloads MUST contain no permission or grant facts.
 
 ### Requirement: Namespace clear MUST share ownership, serialization and atomic durability rules
 
-The clear operation MUST execute inside the existing Host-private data
-coordinator and cross-process installation serialization boundary. Inside that
-boundary it MUST revalidate the current Manager identity, expected Registration
-revision, disabled intent, canonical real data root, canonical plugin namespace
-and fixed store entry. It MUST use a bounded canonical empty version-1 store,
-create-new temporary file, file flush, `sync_all`, atomic same-directory rename
-and parent-directory sync; the rename MUST be the sole durable commit point.
+The clear operation MUST execute inside the existing Host-private data coordinator and cross-process installation serialization boundary.
 
-A missing namespace or canonical empty store MUST be an idempotent no-op. A
-corrupt fixed store MAY be replaced only when its directory, regular-file type
-and ownership are still provable. Unknown entries, symlinks, root escapes or
-ambiguous ownership MUST be preserved as evidence and rejected. Failure before
-rename MUST preserve the previous store; failure or response loss after rename
-MUST preserve the committed empty store and MUST NOT fabricate rollback.
+#### Scenario: Namespace clear revalidates and commits empty data
+
+- **WHEN** a clear operation enters the shared serialization boundary
+- **THEN** Inside that boundary it MUST revalidate the current Manager identity, expected Registration revision, disabled intent, canonical real data root, canonical plugin namespace and fixed store entry.
+- **THEN** It MUST use a bounded canonical empty version-1 store, create-new temporary file, file flush, `sync_all`, atomic same-directory rename and parent-directory sync; the rename MUST be the sole durable commit point.
+
+#### Scenario: Clear encounters empty damaged or interrupted state
+
+- **WHEN** namespace clear finds absent, empty, corrupt, ambiguous, or interrupted persisted state
+- **THEN** A missing namespace or canonical empty store MUST be an idempotent no-op.
+- **THEN** A corrupt fixed store MAY be replaced only when its directory, regular-file type and ownership are still provable.
+- **THEN** Unknown entries, symlinks, root escapes or ambiguous ownership MUST be preserved as evidence and rejected.
+- **THEN** Failure before rename MUST preserve the previous store; failure or response loss after rename MUST preserve the committed empty store and MUST NOT fabricate rollback.
 
 #### Scenario: Clear fails before durable commit
 

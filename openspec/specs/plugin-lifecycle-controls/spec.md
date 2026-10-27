@@ -12,15 +12,7 @@ Runtime, permission decisions, upgrades, or a public plugin lifecycle API.
 
 ### Requirement: Lifecycle writes must use a private versioned Host contract
 
-The system MUST provide a separately versioned Host-private Plugin Lifecycle
-Contract and expose `set_plugin_enabled` and `uninstall_plugin` through strict
-Tauri commands only to the trusted lensX root application. Requests, successful
-results, and errors MUST be validated from `unknown` on both the Rust and
-TypeScript sides. The contract MUST NOT become a public entry point importable
-by an author Manifest, `@lensx/plugin-contract`, `@lensx/plugin-sdk`, the iframe
-Runtime, or another plugin. The Registration Contract MUST remain separate and
-read-only and MUST remain the sole fact boundary for state reads and revision
-invalidation.
+The system MUST provide a separately versioned Host-private Plugin Lifecycle Contract and expose `set_plugin_enabled` and `uninstall_plugin` through strict Tauri commands only to the trusted lensX root application.
 
 #### Scenario: The trusted application changes enabled intent
 
@@ -41,18 +33,15 @@ invalidation.
 - **THEN** the Manager, Registry, filesystem, revision, and changed event remain
   unchanged
 
+#### Scenario: Validate private lifecycle writes without widening public imports
+- **WHEN** the trusted root application submits an enable or uninstall command
+- **THEN** Requests, successful results, and errors MUST be validated from `unknown` on both the Rust and TypeScript sides.
+- **THEN** The contract MUST NOT become a public entry point importable by an author Manifest, `@lensx/plugin-contract`, `@lensx/plugin-sdk`, the iframe Runtime, or another plugin.
+- **THEN** The Registration Contract MUST remain separate and read-only and MUST remain the sole fact boundary for state reads and revision invalidation.
+
 ### Requirement: Lifecycle operations must enforce revision preconditions and idempotent outcomes
 
-Every lifecycle request MUST bind an opaque `entry_id` to the current process's
-`expected_revision`. Before any persistence or deletion, the Host MUST validate
-both the revision and target identity. A stale request MUST return a conflict
-and require a complete refresh. An operation whose enabled target is already
-met MUST return `unchanged` and MUST NOT write to disk, increment the
-Registration revision, or publish a changed event. Uninstall MUST use a
-persistent cleanup identity to recognize retries. A request for an identity
-that has already been logically uninstalled MUST return `unchanged` or continue
-its pending cleanup and MUST NOT affect a later reinstallation. Concurrent
-lifecycle and installation requests for the same plugin MUST be serialized.
+Every lifecycle request MUST bind an opaque `entry_id` to the current process's `expected_revision`.
 
 #### Scenario: A disabled plugin is disabled again
 
@@ -81,16 +70,18 @@ lifecycle and installation requests for the same plugin MUST be serialized.
   established a different revision, the old request cannot delete the new
   record or payload
 
+#### Scenario: Apply idempotent writes against the current entry revision
+- **WHEN** a lifecycle request races another write or repeats a previously completed operation
+- **THEN** Before any persistence or deletion, the Host MUST validate both the revision and target identity.
+- **THEN** A stale request MUST return a conflict and require a complete refresh.
+- **THEN** An operation whose enabled target is already met MUST return `unchanged` and MUST NOT write to disk, increment the Registration revision, or publish a changed event.
+- **THEN** Uninstall MUST use a persistent cleanup identity to recognize retries.
+- **THEN** A request for an identity that has already been logically uninstalled MUST return `unchanged` or continue its pending cleanup and MUST NOT affect a later reinstallation.
+- **THEN** Concurrent lifecycle and installation requests for the same plugin MUST be serialized.
+
 ### Requirement: Enabled intent, effective availability, compatibility, and quarantine must remain distinct
 
 Lifecycle operations MUST persist only the enabled intent of a healthy record.
-Effective availability MUST be derived from registered, enabled,
-two-dimensional compatibility, and non-quarantine facts and MUST NOT become a
-second persisted state. An incompatible healthy record MAY retain
-`enabled=true` intent but MUST NOT project executable Actions or Pages. Enable
-and disable operations MUST reject quarantine entries and MUST NOT interpret
-quarantine as disabled, uninstalled, or repaired. Host source, Publisher text,
-and official claims MUST NOT automatically alter enable or disable rules.
 
 #### Scenario: The user enables a currently incompatible healthy plugin
 
@@ -117,18 +108,16 @@ and official claims MUST NOT automatically alter enable or disable rules.
 - **THEN** the claim creates no lifecycle exemption, permission grant,
   signature, or trusted provenance
 
+#### Scenario: Keep intent separate from compatibility and quarantine
+- **WHEN** the user enables or disables a healthy, incompatible, or quarantined plugin registration
+- **THEN** Effective availability MUST be derived from registered, enabled, two-dimensional compatibility, and non-quarantine facts and MUST NOT become a second persisted state.
+- **THEN** An incompatible healthy record MAY retain `enabled=true` intent but MUST NOT project executable Actions or Pages.
+- **THEN** Enable and disable operations MUST reject quarantine entries and MUST NOT interpret quarantine as disabled, uninstalled, or repaired.
+- **THEN** Host source, Publisher text, and official claims MUST NOT automatically alter enable or disable rules.
+
 ### Requirement: Disable and uninstall must quiesce current plugin surfaces before durable transition
 
-Before a disable or uninstall command, the trusted `PluginLifecycleService`
-MUST revoke the target provider from the same current snapshot and revision,
-first as a complete Action batch and then as a complete Page batch. Page
-revocation MUST use the existing Host navigation invalidation to close an
-active plugin page, return Home, and restore a safe Launcher state. If either
-Registry revocation fails, the service MUST NOT invoke the Rust lifecycle
-command. If Rust persistence, the revision precondition, or Manager removal
-fails, the service MUST completely refresh current Registration facts and
-reproject from the last confirmed facts. It MUST NOT leave an enabled plugin
-permanently missing its surfaces.
+Before a disable or uninstall command, the trusted `PluginLifecycleService` MUST revoke the target provider from the same current snapshot and revision, first as a complete Action batch and then as a complete Page batch.
 
 #### Scenario: A plugin with an open page is disabled
 
@@ -155,17 +144,16 @@ permanently missing its surfaces.
 - **THEN** the service fully refreshes and restores Page projection followed by
   Action projection from the original current facts
 
+#### Scenario: Revoke current surfaces before durable disable or uninstall
+- **WHEN** the trusted lifecycle service prepares a target plugin for removal or disablement
+- **THEN** Page revocation MUST use the existing Host navigation invalidation to close an active plugin page, return Home, and restore a safe Launcher state.
+- **THEN** If either Registry revocation fails, the service MUST NOT invoke the Rust lifecycle command.
+- **THEN** If Rust persistence, the revision precondition, or Manager removal fails, the service MUST completely refresh current Registration facts and reproject from the last confirmed facts.
+- **THEN** It MUST NOT leave an enabled plugin permanently missing its surfaces.
+
 ### Requirement: Enable must commit intent before converging Page and Action projection
 
-Enable MUST first persist `enabled=true` atomically and publish a readable
-target Registration revision. The trusted service MUST then refresh actively
-and wait for the existing Surface Projection to converge on that revision.
-Eligible providers MUST be published as a Page batch followed by an Action
-batch. A user-visible enable operation MUST wait until the current application
-session has observed the target revision and projection is idle. Projection
-failure MUST preserve enabled intent, keep surfaces failed closed, and report a
-bounded diagnostic. It MUST NOT roll back the durable user choice because of a
-temporary frontend failure.
+Enable MUST first persist `enabled=true` atomically and publish a readable target Registration revision.
 
 #### Scenario: A compatible plugin is enabled successfully
 
@@ -185,21 +173,17 @@ temporary frontend failure.
 - **THEN** the service returns a safe convergence diagnostic and permits
   recovery through a full refresh or Launcher activation
 
+#### Scenario: Converge projection on confirmed enabled intent
+- **WHEN** an enable operation commits a readable Registration revision
+- **THEN** The trusted service MUST then refresh actively and wait for the existing Surface Projection to converge on that revision.
+- **THEN** Eligible providers MUST be published as a Page batch followed by an Action batch.
+- **THEN** A user-visible enable operation MUST wait until the current application session has observed the target revision and projection is idle.
+- **THEN** Projection failure MUST preserve enabled intent, keep surfaces failed closed, and report a bounded diagnostic.
+- **THEN** It MUST NOT roll back the durable user choice because of a temporary frontend failure.
+
 ### Requirement: Uninstall must separate logical removal, program cleanup, and data policy
 
-`uninstall_plugin` MUST require an explicit `retain_data` or `delete_data`
-policy, and the product default MUST be `retain_data`. Uninstall MUST always
-remove the target healthy or quarantine Registration and Manager diagnostics
-in a healthy record. It MUST always eventually delete a managed
-program payload whose ownership is provable. `retain_data` MUST preserve the
-separate data subtree, while `delete_data` MUST persist that intent and
-eventually delete the subtree. Manager record removal MUST occur before any
-destructive program cleanup that could leave a healthy record pointing to a
-missing payload. A Host registration whose managed payload ownership cannot be
-proved MUST return `operation_not_supported`; that conclusion MUST NOT rely
-solely on builtin or external source or on Publisher text. Uninstall MUST NOT
-read, delete, or restore current permission or grant authority; a legacy grant
-field MUST fail closed only as incompatible data.
+`uninstall_plugin` MUST require an explicit `retain_data` or `delete_data` policy, and the product default MUST be `retain_data`.
 
 #### Scenario: A plugin is uninstalled while its data is retained
 
@@ -236,18 +220,18 @@ field MUST fail closed only as incompatible data.
 - **THEN** the reason is the Host's inability to own a safe physical uninstall
   target, not the registration's source, Publisher, or official identity
 
+#### Scenario: Separate uninstall data choice from managed program cleanup
+- **WHEN** the user uninstalls a healthy or quarantine record with an explicit data policy
+- **THEN** Uninstall MUST always remove the target healthy or quarantine Registration and Manager diagnostics in a healthy record.
+- **THEN** It MUST always eventually delete a managed program payload whose ownership is provable.
+- **THEN** `retain_data` MUST preserve the separate data subtree, while `delete_data` MUST persist that intent and eventually delete the subtree.
+- **THEN** Manager record removal MUST occur before any destructive program cleanup that could leave a healthy record pointing to a missing payload.
+- **THEN** A Host registration whose managed payload ownership cannot be proved MUST return `operation_not_supported`; that conclusion MUST NOT rely solely on builtin or external source or on Publisher text.
+- **THEN** Uninstall MUST NOT read, delete, or restore current permission or grant authority; a legacy grant field MUST fail closed only as incompatible data.
+
 ### Requirement: Pending cleanup must recover conservatively across failures and restarts
 
-Lifecycle handling MUST use a restricted, versioned, Host-private cleanup
-record per plugin identity within the installer-owned root. The record MUST
-capture recoverable conclusions for program cleanup, data policy, and data
-cleanup. Installation and lifecycle operations MUST share the in-process mutex
-and cross-process lock. If file cleanup fails after logical Manager removal,
-the operation MUST return a successful cleanup-pending conclusion; startup
-recovery and retries for the same target MUST continue under the lock. An
-abnormal cleanup record, symbolic link, path outside the root, unknown entry,
-or uncertain ownership MUST preserve the original evidence and degrade related
-writes. Recovery MUST NOT guess in order to finish deletion.
+Lifecycle handling MUST use a restricted, versioned, Host-private cleanup record per plugin identity within the installer-owned root.
 
 #### Scenario: Program deletion fails after Manager removal
 
@@ -276,16 +260,17 @@ writes. Recovery MUST NOT guess in order to finish deletion.
 - **THEN** unaffected plugins remain readable while installation and lifecycle
   writes that could contaminate the evidence are rejected
 
+#### Scenario: Recover pending cleanup under the shared lock
+- **WHEN** startup or a repeated lifecycle request encounters a pending or abnormal cleanup record
+- **THEN** The record MUST capture recoverable conclusions for program cleanup, data policy, and data cleanup.
+- **THEN** Installation and lifecycle operations MUST share the in-process mutex and cross-process lock.
+- **THEN** If file cleanup fails after logical Manager removal, the operation MUST return a successful cleanup-pending conclusion; startup recovery and retries for the same target MUST continue under the lock.
+- **THEN** An abnormal cleanup record, symbolic link, path outside the root, unknown entry, or uncertain ownership MUST preserve the original evidence and degrade related writes.
+- **THEN** Recovery MUST NOT guess in order to finish deletion.
+
 ### Requirement: Disabled or uninstalled Actions must disappear without erasing Launcher preferences
 
-After disable or uninstall converges, the target plugin's Actions MUST be
-absent from the unified Launcher Registry and therefore MUST NOT appear in
-Action Search, Recent, or Pinned. The system MUST NOT create a plugin-specific
-search branch or a disabled placeholder. Recent and Pinned persistence MUST
-continue to store only stable Action IDs and MUST NOT delete target IDs
-automatically because of disable or uninstall. After re-enable or reinstallation
-of the same global Action ID, existing unified resolution MAY display the real
-Action again.
+After disable or uninstall converges, the target plugin's Actions MUST be absent from the unified Launcher Registry and therefore MUST NOT appear in Action Search, Recent, or Pinned.
 
 #### Scenario: Search targets an Action from a disabled plugin
 
@@ -310,6 +295,12 @@ Action again.
   not-found failure without invoking the executor
 - **THEN** the application preserves the recoverable query and displays safe,
   localized feedback
+
+#### Scenario: Resolve launcher preferences after plugin availability changes
+- **WHEN** disable, uninstall, re-enable, or reinstallation changes a plugin Action availability
+- **THEN** The system MUST NOT create a plugin-specific search branch or a disabled placeholder.
+- **THEN** Recent and Pinned persistence MUST continue to store only stable Action IDs and MUST NOT delete target IDs automatically because of disable or uninstall.
+- **THEN** After re-enable or reinstallation of the same global Action ID, existing unified resolution MAY display the real Action again.
 
 ### Requirement: Task 3.3 must not claim later runtime, permission, upgrade, or management UI capabilities
 

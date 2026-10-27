@@ -38,16 +38,7 @@ Native finished-load MUST establish only `loaded`. A single-use current bridge-r
 
 ### Requirement: Relevant current-fact changes MUST revoke only the affected Session
 
-The Host MUST refresh and compare facts for the current plugin after
-Registration invalidation. A missing entry, disabled, quarantined, or
-incompatible state, identity or Page mismatch, resource origin or generation
-change, Runtime attempt, retry, or replacement change MUST revoke the affected
-Session. A global Registration revision is only a race
-detector and invalidation hint. If a change belongs only to another plugin and
-the current Session's entry, Page, version, origin, generation, and attempt
-remain the same, the Host MUST retain the current iframe and Session. If
-the Host cannot prove that the relevant facts remain current, it MUST fail
-closed.
+Current-fact invalidation MUST revoke only the affected Session and fail closed when its facts cannot be proven current. Unrelated Registration revisions MUST preserve an unchanged current iframe and Session.
 
 #### Scenario: Same-version plugin is replaced
 
@@ -84,16 +75,22 @@ closed.
 - **THEN** the system does not fall back to cached detail, an old descriptor,
   author identity, or a relaxed origin
 
+#### Scenario: Reconcile the current Session after Registration invalidation
+- **WHEN** the Host receives a Registration invalidation while a plugin Session exists
+- **THEN** The Host MUST refresh and compare facts for the current plugin after
+  Registration invalidation. A missing entry, disabled, quarantined, or
+  incompatible state, identity or Page mismatch, resource origin or generation
+  change, Runtime attempt, retry, or replacement change MUST revoke the affected
+  Session. A global Registration revision is only a race
+  detector and invalidation hint. If a change belongs only to another plugin and
+  the current Session's entry, Page, version, origin, generation, and attempt
+  remain the same, the Host MUST retain the current iframe and Session. If
+  the Host cannot prove that the relevant facts remain current, it MUST fail
+  closed.
+
 ### Requirement: Runtime Session MUST remain Host-private and process-local
 
-The Runtime Session contract, parser, window and Port adapters, identity, and
-state MUST remain inside the trusted lensX Host frontend. They MUST NOT become
-Manifest input, Plugin Registration payload, or public API from
-`@lensx/plugin-contract`, `@lensx/plugin-sdk`, `@lensx/plugin-ui`,
-`@lensx/plugin-testkit`, or a plugin workspace. A Session, nonce, Port, window
-reference, and call state MUST NOT be persisted. After application recovery,
-the Plugin Manager and Registration Contract MUST continue to begin at
-`inactive` and MUST NOT infer or restore a Session from the prior process.
+Runtime Session implementation and state MUST remain Host-private and process-local, never persisted or exported to plugin packages. Recovery MUST start inactive without restoring a prior Session.
 
 #### Scenario: Application restarts after a ready Session
 
@@ -115,16 +112,20 @@ the Plugin Manager and Registration Contract MUST continue to begin at
 - **THEN** the public SDK transport interface still exposes no nonce, identity,
   origin, Window, MessagePort, or private envelope
 
+#### Scenario: Recover process state without exporting Session internals
+- **WHEN** a Session contract or state is used, stored, or exposed during the running process or application recovery
+- **THEN** The Runtime Session contract, parser, window and Port adapters, identity, and
+  state MUST remain inside the trusted lensX Host frontend. They MUST NOT become
+  Manifest input, Plugin Registration payload, or public API from
+  `@lensx/plugin-contract`, `@lensx/plugin-sdk`, `@lensx/plugin-ui`,
+  `@lensx/plugin-testkit`, or a plugin workspace. A Session, nonce, Port, window
+  reference, and call state MUST NOT be persisted. After application recovery,
+  the Plugin Manager and Registration Contract MUST continue to begin at
+  `inactive` and MUST NOT infer or restore a Session from the prior process.
+
 ### Requirement: Invalid Session input and diagnostics MUST fail closed without becoming an oracle
 
-Every cross-iframe Session payload MUST be validated from `unknown` against an
-exact versioned shape, field types, length limits, and allowed values. An
-unrelated window message from the wrong source MUST be ignored; malformed or
-unknown-version input on the current transferred Port MUST disconnect that
-Session. User UI, plugin responses, log fixtures, and test evidence MUST NOT
-expose a nonce, Port content, expected origin token, complete capability URL,
-entry ID, grants, raw plugin payload, private exception, stack, Tauri object, or
-Rust object.
+Session ingress MUST validate exact bounded versioned payloads, ignore wrong sources, disconnect malformed current Ports, and suppress secrets and internal values from all feedback and diagnostics.
 
 #### Scenario: Cross-plugin forged message
 
@@ -145,6 +146,17 @@ Rust object.
 - **THEN** underlying exceptions and untrusted content reach neither
   user-visible feedback nor a later Session
 
+#### Scenario: Validate a window or transferred-Port Session payload
+- **WHEN** Session ingress or its diagnostics are parsed, logged, presented, or recorded as test evidence
+- **THEN** Every cross-iframe Session payload MUST be validated from `unknown` against an
+  exact versioned shape, field types, length limits, and allowed values. An
+  unrelated window message from the wrong source MUST be ignored; malformed or
+  unknown-version input on the current transferred Port MUST disconnect that
+  Session. User UI, plugin responses, log fixtures, and test evidence MUST NOT
+  expose a nonce, Port content, expected origin token, complete capability URL,
+  entry ID, grants, raw plugin payload, private exception, stack, Tauri object, or
+  Rust object.
+
 ### Requirement: Host MUST bootstrap one source-authenticated native bridge Session
 Before loading the plugin document, Host MUST install the minimal versioned bridge for that Child WebView and create at least 128 bits of unpredictable, single-use attempt freshness. Host MUST accept ready only from the native callback of the actual current WebView and exact freshness value. The bridge MUST NOT fall back to `window.parent`, `postMessage`, `MessageChannel`, a global event bus or a plugin-selected Tauri command.
 
@@ -158,7 +170,7 @@ Before loading the plugin document, Host MUST install the minimal versioned brid
 
 ### Requirement: Delivery MUST deterministically validate Runtime Session source binding
 
-Delivery MUST use pure TypeScript state/parser tests, React lifecycle tests, canonical normal and malicious `.lxp` fixtures, bridge-adapter integration tests, and production composition checks to verify exact source and origin validation, cryptographic single-use nonce semantics, MessagePort transfer handling, ready, disconnect, disposal, cross-plugin forgery, replay, retry/replacement, old-Port invalidation, current-fact invalidation, unrelated Registration stability, and zero privileged Tauri hits. Validation MUST NOT claim a real WebView source or Port transfer was observed.
+Runtime Session delivery MUST use deterministic source-binding, parser, lifecycle, fixture, bridge, and production-composition checks without claiming observed real-WebView source or Port transfer.
 
 #### Scenario: Deterministic Session security matrix passes
 
@@ -171,3 +183,7 @@ Delivery MUST use pure TypeScript state/parser tests, React lifecycle tests, can
 - **WHEN** completion requires a target WebView, native harness, or committed Session evidence
 - **THEN** validation governance rejects the path
 - **THEN** the system does not weaken source binding or retain an environment compatibility Gate
+
+#### Scenario: Run deterministic Session binding and lifecycle acceptance
+- **WHEN** deterministic Session source-binding acceptance is planned, executed, or reported
+- **THEN** Delivery MUST use pure TypeScript state/parser tests, React lifecycle tests, canonical normal and malicious `.lxp` fixtures, bridge-adapter integration tests, and production composition checks to verify exact source and origin validation, cryptographic single-use nonce semantics, MessagePort transfer handling, ready, disconnect, disposal, cross-plugin forgery, replay, retry/replacement, old-Port invalidation, current-fact invalidation, unrelated Registration stability, and zero privileged Tauri hits. Validation MUST NOT claim a real WebView source or Port transfer was observed.

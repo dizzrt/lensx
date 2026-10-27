@@ -9,9 +9,7 @@ restoration across repeated launcher activations.
 
 ### Requirement: The launcher main window must use a compact native window shape
 
-The system MUST configure the main window labeled `main` as an undecorated, non-fullscreen, transparent, always-on-top Launcher Window with initial logical size `650×320`. Home, Search, and Host Page states MUST remain non-resizable and use fixed logical sizes `650×320`, `650×480`, and `650×600`, respectively. A plugin Page MUST use its current validated Page presentation, whose effective initial size is bounded by Contract hard limits and the current monitor work area and whose native user resizing is enabled only when `resizable: true`.
-
-Through a Rust-validated tagged boundary, the Host MUST distinguish `home`, `search`, `host_page`, and identity-bound `plugin_page` targets. Only `plugin_page` MAY carry validated initial size and resizable data. The system MUST NOT accept dimensions from plugin Runtime messages, Host API, DOM measurement, collection/result counts, or arbitrary unbound frontend input. Every transition MUST address the complete native `main` Window while a plugin Child WebView is attached and MUST NOT depend on asynchronous Child WebView teardown completing first.
+The system MUST configure the main window labeled `main` as an undecorated, non-fullscreen, transparent, always-on-top Launcher Window with initial logical size `650×320`.
 
 #### Scenario: Start the desktop application
 - **WHEN** lensX creates the main Window and enters `home`
@@ -68,15 +66,21 @@ Through a Rust-validated tagged boundary, the Host MUST distinguish `home`, `sea
 - **THEN** the command returns a serializable error containing a stable code, target kind, operation, and safe message
 - **THEN** the Host retains or restores the last complete safe presentation rather than leaving mixed target/previous state
 
+#### Scenario: Choose native shape for the current launcher surface
+- **WHEN** the Host applies a Home, Search, Host Page, or plugin Page presentation
+- **THEN** Home, Search, and Host Page states MUST remain non-resizable and use fixed logical sizes `650×320`, `650×480`, and `650×600`, respectively.
+- **THEN** A plugin Page MUST use its current validated Page presentation, whose effective initial size is bounded by Contract hard limits and the current monitor work area and whose native user resizing is enabled only when `resizable: true`.
+
+#### Scenario: Validate a tagged native presentation transition
+- **WHEN** a frontend presentation target reaches the native main Window boundary
+- **THEN** Through a Rust-validated tagged boundary, the Host MUST distinguish `home`, `search`, `host_page`, and identity-bound `plugin_page` targets.
+- **THEN** Only `plugin_page` MAY carry validated initial size and resizable data.
+- **THEN** The system MUST NOT accept dimensions from plugin Runtime messages, Host API, DOM measurement, collection/result counts, or arbitrary unbound frontend input.
+- **THEN** Every transition MUST address the complete native `main` Window while a plugin Child WebView is attached and MUST NOT depend on asynchronous Child WebView teardown completing first.
+
 ### Requirement: Launcher MUST separate native Window and Host WebView identities
 
-The system MUST treat the native `main` Window, the trusted Host WebView, and
-the plugin Child WebView as distinct identities. Native sizing, visibility,
-show, hide, focus, window-event, and native-dialog parent operations MUST
-always target the complete native `main` Window and MUST remain resolvable
-before and after a Child WebView is attached or removed. Host activation events
-MUST target only the trusted Host WebView and MUST NOT be broadcast to plugin
-Child WebViews as a consequence of native Window operations.
+The system MUST treat the native `main` Window, the trusted Host WebView, and the plugin Child WebView as distinct identities.
 
 #### Scenario: Resolve the native parent after attaching a Child WebView
 
@@ -102,22 +106,14 @@ Child WebViews as a consequence of native Window operations.
 - **THEN** the dialog guard continues to suppress focus-loss hiding throughout
   the dialog lifecycle without changing Child WebView authority
 
+#### Scenario: Route native operations and activation to distinct surfaces
+- **WHEN** the Host sizes, shows, hides, focuses, or parents a dialog while a Child WebView may be attached
+- **THEN** Native sizing, visibility, show, hide, focus, window-event, and native-dialog parent operations MUST always target the complete native `main` Window and MUST remain resolvable before and after a Child WebView is attached or removed.
+- **THEN** Host activation events MUST target only the trusted Host WebView and MUST NOT be broadcast to plugin Child WebViews as a consequence of native Window operations.
+
 ### Requirement: The unified launcher top region must support native window dragging
 
-The system MUST allow the user to initiate native main-window dragging with
-the primary mouse button from the complete unified launcher top region in the
-`home`, `search`, and `page` presentation states. The region MUST span the
-window width and extend from the top edge through the lower edge of the shared
-top slot, including top blank space, the search input, non-interactive page
-context, and the decorative avatar. Dragging MUST execute through a constrained
-Host window boundary and MUST NOT allow the frontend to submit window
-coordinates, arbitrary dimensions, resize requests, or maximize requests.
-
-The page-context close control and every explicitly excluded interactive
-control MUST NOT initiate window dragging. Auxiliary mouse buttons and keyboard
-events MUST NOT initiate window dragging. Whether dragging succeeds or fails,
-it MUST NOT change the current presentation state, query, Action selection,
-active page, or fixed window shape.
+The system MUST allow the user to initiate native main-window dragging with the primary mouse button from the complete unified launcher top region in the `home`, `search`, and `page` presentation states.
 
 #### Scenario: Move the window from blank top space in home
 
@@ -174,6 +170,17 @@ active page, or fixed window shape.
   page remain unchanged
 - **THEN** the failure is available for developer diagnosis without exposing
   native error details to the user
+
+#### Scenario: Delegate dragging across the unified top region
+- **WHEN** the user presses the primary mouse button within the launcher top region
+- **THEN** The region MUST span the window width and extend from the top edge through the lower edge of the shared top slot, including top blank space, the search input, non-interactive page context, and the decorative avatar.
+- **THEN** Dragging MUST execute through a constrained Host window boundary and MUST NOT allow the frontend to submit window coordinates, arbitrary dimensions, resize requests, or maximize requests.
+
+#### Scenario: Exclude interactive controls and preserve launcher state
+- **WHEN** a pointer or keyboard event occurs on a close control or another excluded top-region control
+- **THEN** The page-context close control and every explicitly excluded interactive control MUST NOT initiate window dragging.
+- **THEN** Auxiliary mouse buttons and keyboard events MUST NOT initiate window dragging.
+- **THEN** Whether dragging succeeds or fails, it MUST NOT change the current presentation state, query, Action selection, active page, or fixed window shape.
 
 ### Requirement: Rust must execute launcher window actions through one boundary
 
@@ -254,31 +261,7 @@ is running.
 
 ### Requirement: A recoverable launcher must hide on close and focus loss
 
-After the default global shortcut is registered successfully, the system MUST
-prevent a main-window close request from terminating the application and MUST
-route the request to `hide`. On macOS, the system MUST provide exactly one
-application-local `Cmd+W` window-close shortcut entry point. When the
-undecorated main window cannot produce a close event through the native close
-command, that entry point MUST still route to `hide` through the unified action
-boundary. The system MUST NOT register `Cmd+W` as a system-wide global
-shortcut. The system MUST route main-window focus loss to `hide`. Window events
-emitted after a system-initiated hide MUST NOT cause an action loop or terminate
-the application.
-
-The application-local macOS `Cmd+W` entry point MUST be enabled only after the
-default global shortcut is registered successfully. If menu-event installation
-or routing fails, or if the hide operation fails, the system MUST make failure
-information available for developer diagnosis, MUST NOT expose native error
-details to the user, and MUST NOT terminate the application process because of
-the failure.
-
-When a current Child WebView exists, the hide boundary MUST resolve the
-complete native main Window before changing Child presentation. It MUST hide
-the Child WebView before the native parent to prevent overlay leakage, and MUST
-either hide both surfaces or restore the still-current Child presentation when
-native parent hide fails. A failed hide MUST NOT leave the Host window visible
-with only the plugin content blank. Restore MUST show and focus the native
-parent before restoring and focusing the same current Child WebView.
+After the default global shortcut is registered successfully, the system MUST prevent a main-window close request from terminating the application and MUST route the request to `hide`.
 
 #### Scenario: Close a ready launcher window
 
@@ -372,6 +355,26 @@ parent before restoring and focusing the same current Child WebView.
 - **THEN** the user can restore the window and same equivalent attempt with the
   default global shortcut
 
+#### Scenario: Route ready close and blur events to recoverable hide
+- **WHEN** the recovery shortcut is registered and the main Window receives a close or focus-loss event
+- **THEN** On macOS, the system MUST provide exactly one application-local `Cmd+W` window-close shortcut entry point.
+- **THEN** When the undecorated main window cannot produce a close event through the native close command, that entry point MUST still route to `hide` through the unified action boundary.
+- **THEN** The system MUST NOT register `Cmd+W` as a system-wide global shortcut.
+- **THEN** The system MUST route main-window focus loss to `hide`.
+- **THEN** Window events emitted after a system-initiated hide MUST NOT cause an action loop or terminate the application.
+
+#### Scenario: Handle unavailable local close routing
+- **WHEN** the Host installs or executes the application-local macOS close shortcut
+- **THEN** The application-local macOS `Cmd+W` entry point MUST be enabled only after the default global shortcut is registered successfully.
+- **THEN** If menu-event installation or routing fails, or if the hide operation fails, the system MUST make failure information available for developer diagnosis, MUST NOT expose native error details to the user, and MUST NOT terminate the application process because of the failure.
+
+#### Scenario: Coordinate Child and native parent hide or restore
+- **WHEN** the Host hides or restores a Window with a current Child WebView
+- **THEN** When a current Child WebView exists, the hide boundary MUST resolve the complete native main Window before changing Child presentation.
+- **THEN** It MUST hide the Child WebView before the native parent to prevent overlay leakage, and MUST either hide both surfaces or restore the still-current Child presentation when native parent hide fails.
+- **THEN** A failed hide MUST NOT leave the Host window visible with only the plugin content blank.
+- **THEN** Restore MUST show and focus the native parent before restoring and focusing the same current Child WebView.
+
 ### Requirement: Launcher activation must restore input focus
 
 The system MUST focus the launcher input when the main window first renders.
@@ -408,12 +411,8 @@ unmounts.
 - **THEN** later events do not invoke focus logic for the unmounted interface
 
 ### Requirement: Launcher lifecycle MUST coordinate Host and Child WebView surfaces atomically
-Hide, restore, resize, scale-factor change, focus, blur, shortcut activation, close and application teardown MUST update the native Child WebView through the current revisioned presentation binding. Semantic hide/restore MUST preserve the same attempt; Page close or application teardown MUST destroy it. Host-owned overlay or unavailable slot MUST hide the Child WebView before trusted DOM interaction is exposed.
 
-The complete native Window and current Child WebView MUST NOT settle in
-contradictory presentation states after an operation reports failure. All
-rollback or teardown work MUST remain compare-current so an old attempt cannot
-reveal, focus, resize, or destroy a replacement.
+Hide, restore, resize, scale-factor change, focus, blur, shortcut activation, close and application teardown MUST update the native Child WebView through the current revisioned presentation binding.
 
 #### Scenario: Launcher hides and restores
 - **WHEN** the current plugin facts remain equivalent across temporary Launcher hide and restore
@@ -444,22 +443,19 @@ reveal, focus, resize, or destroy a replacement.
 - **WHEN** the app unmounts or exits
 - **THEN** Child WebView teardown joins the existing root lifecycle and leaves no native surface or bridge binding
 
+#### Scenario: Apply lifecycle changes to the current presentation binding
+- **WHEN** a launcher lifecycle event updates a current Child WebView
+- **THEN** Semantic hide/restore MUST preserve the same attempt; Page close or application teardown MUST destroy it.
+- **THEN** Host-owned overlay or unavailable slot MUST hide the Child WebView before trusted DOM interaction is exposed.
+
+#### Scenario: Keep failed surface transitions compare-current
+- **WHEN** an operation fails or completes rollback after the Child attempt may have changed
+- **THEN** The complete native Window and current Child WebView MUST NOT settle in contradictory presentation states after an operation reports failure.
+- **THEN** All rollback or teardown work MUST remain compare-current so an old attempt cannot reveal, focus, resize, or destroy a replacement.
+
 ### Requirement: macOS Host MUST run as an accessory Launcher without a Dock tile
 
-On macOS, the system MUST configure lensX as a programmatically activatable
-accessory application from the observable start of the packaged application.
-While lensX is running, it MUST NOT show a Dock tile or ordinary application
-menu bar, MUST NOT use the prohibited activation policy that prevents Window
-creation or activation, and MUST keep the process and default global shortcut
-available after the Launcher Window is hidden. This policy MUST belong only to
-the trusted Rust Host. React, plugin Runtimes, plugin Host APIs, and public Host
-APIs MUST NOT receive authority to change the application activation policy or
-Dock visibility.
-
-If the Host cannot establish or confirm the required accessory policy, startup
-MUST fail before presenting an ordinary Dock application and MUST provide a
-safe, diagnosable setup stage. The system MUST NOT silently fall back to the
-Regular policy.
+On macOS, the system MUST configure lensX as a programmatically activatable accessory application from the observable start of the packaged application.
 
 #### Scenario: Launch the packaged macOS application
 
@@ -493,24 +489,20 @@ Regular policy.
 - **THEN** the system provides no such operation boundary
 - **THEN** the Host retains its confirmed accessory policy
 
+#### Scenario: Keep accessory policy within trusted native ownership
+- **WHEN** the macOS application starts or remains running with its Launcher Window hidden
+- **THEN** While lensX is running, it MUST NOT show a Dock tile or ordinary application menu bar, MUST NOT use the prohibited activation policy that prevents Window creation or activation, and MUST keep the process and default global shortcut available after the Launcher Window is hidden.
+- **THEN** This policy MUST belong only to the trusted Rust Host.
+- **THEN** React, plugin Runtimes, plugin Host APIs, and public Host APIs MUST NOT receive authority to change the application activation policy or Dock visibility.
+
+#### Scenario: Fail safely when accessory startup cannot be established
+- **WHEN** the Rust Host cannot establish or confirm accessory activation policy
+- **THEN** If the Host cannot establish or confirm the required accessory policy, startup MUST fail before presenting an ordinary Dock application and MUST provide a safe, diagnosable setup stage.
+- **THEN** The system MUST NOT silently fall back to the Regular policy.
+
 ### Requirement: macOS Launcher MUST restore over another application's full-screen Space
 
-The complete native macOS `main` Window MUST participate in all Spaces and MUST
-be configured to coexist with another application's full-screen Window.
-Always-on-top, cross-Space, and full-screen auxiliary behavior MUST be
-established by the trusted Rust Host, MUST preserve the Launcher's existing
-non-full-screen semantics, and MUST NOT be exposed as native setters controlled
-by the frontend, plugins, DOM measurement, or Runtime messages.
-
-When the Launcher is hidden and the user presses the default global shortcut
-while another application occupies the current full-screen Space, the system
-MUST use the unified `toggle`/`show` action boundary to activate the accessory
-application, restore and show the complete native Window, request keyboard
-focus, and then send the Host activation event. The Launcher MUST appear above
-the full-screen content in the user's current full-screen Space. The system
-MUST NOT switch the user back to the Launcher's previous ordinary Space or
-exit, minimize, or otherwise change the foreground application's full-screen
-state.
+The complete native macOS `main` Window MUST participate in all Spaces and MUST be configured to coexist with another application's full-screen Window.
 
 #### Scenario: Restore from another application's full-screen Space
 
@@ -567,17 +559,19 @@ state.
   the previous Space, or weakening visibility assertions
 - **THEN** developer diagnostics identify the safe native setup stage
 
+#### Scenario: Configure full-screen auxiliary participation
+- **WHEN** the trusted Rust Host configures the native macOS main Window
+- **THEN** Always-on-top, cross-Space, and full-screen auxiliary behavior MUST be established by the trusted Rust Host, MUST preserve the Launcher's existing non-full-screen semantics, and MUST NOT be exposed as native setters controlled by the frontend, plugins, DOM measurement, or Runtime messages.
+
+#### Scenario: Restore through the native action boundary in the active Space
+- **WHEN** the hidden launcher is activated while another application occupies the current full-screen Space
+- **THEN** When the Launcher is hidden and the user presses the default global shortcut while another application occupies the current full-screen Space, the system MUST use the unified `toggle`/`show` action boundary to activate the accessory application, restore and show the complete native Window, request keyboard focus, and then send the Host activation event.
+- **THEN** The Launcher MUST appear above the full-screen content in the user's current full-screen Space.
+- **THEN** The system MUST NOT switch the user back to the Launcher's previous ordinary Space or exit, minimize, or otherwise change the foreground application's full-screen state.
+
 ### Requirement: Accessory Launcher MUST retain application-local close and quit shortcuts
 
-When the macOS accessory policy removes the ordinary application menu bar, the
-system MUST continue to provide exactly one lensX application-local `Cmd+W`
-entry point and exactly one lensX application-local `Cmd+Q` entry point.
-`Cmd+W` MUST follow the existing recoverable-hide requirement and enter the
-unified Hide action. `Cmd+Q` MUST terminate the lensX process after performing
-the existing application teardown. Both entry points MUST handle keys only
-while lensX is the foreground application, MUST NOT be registered as
-system-wide global shortcuts, and MUST NOT intercept the corresponding commands
-for another foreground application.
+When the macOS accessory policy removes the ordinary application menu bar, the system MUST continue to provide exactly one lensX application-local `Cmd+W` entry point and exactly one lensX application-local `Cmd+Q` entry point.
 
 #### Scenario: Press Cmd+W without a visible application menu bar
 
@@ -612,40 +606,15 @@ for another foreground application.
 - **THEN** the visible Window retains an exit path and the system does not leave
   a hidden process without a Dock tile or recovery entry point
 
+#### Scenario: Dispatch local close and quit only for foreground lensX
+- **WHEN** the user invokes Cmd+W or Cmd+Q while the accessory application has no ordinary visible menu bar
+- **THEN** `Cmd+W` MUST follow the existing recoverable-hide requirement and enter the unified Hide action.
+- **THEN** `Cmd+Q` MUST terminate the lensX process after performing the existing application teardown.
+- **THEN** Both entry points MUST handle keys only while lensX is the foreground application, MUST NOT be registered as system-wide global shortcuts, and MUST NOT intercept the corresponding commands for another foreground application.
+
 ### Requirement: Launcher presentation transitions MUST preserve the valid text input responder
 
-Launcher size, constraint, and resizable configuration MUST preserve the
-currently valid text input target. Fixed-size transitions between home and
-search MUST NOT change the keyboard responder or interrupt continued input
-after committed text by reapplying unchanged window configuration. When actual
-window configuration has not changed, the system MUST avoid redundant style
-changes that could disturb focus.
-
-Necessary macOS window style changes MUST preserve the currently valid
-responder belonging to the complete Window within a controlled native boundary
-and MUST NOT unconditionally replace a WebView text responder with the original
-window view. When no valid responder exists, configuration MUST NOT activate a
-Window, restore an invalidated responder, or force focus onto Host or plugin
-content.
-
-This constraint MUST apply to ordinary presentation transitions, environment
-constraint refreshes, and failure rollback. Failures in existing observable
-window-state reads, message submission, size, constraint, or rollback operations
-MUST preserve or restore the last complete safe presentation and follow the
-typed safe native error boundary. When the native system refuses responder
-restoration, the system MUST retain a safe state and provide bounded developer
-diagnostics. It MUST NOT unconditionally fall back to the original window view,
-activate the Window, or restore an invalidated page. Successful message
-submission MUST NOT be interpreted as confirmed native responder restoration.
-Late restoration MUST NOT focus a removed page or replace the current valid
-input target.
-
-The identity boundaries between the native Window, Host WebView, and Child
-WebView MUST remain distinct. Actual resizable-state changes for valid plugin
-Pages MUST continue to take effect. Presentation configuration MUST NOT
-broadcast Host activation events, grant native authority to plugins, or change
-compare-current lifecycle semantics. Genuine main-window focus loss MUST
-continue to follow the existing recoverable-hide contract.
+Launcher size, constraint, and resizable configuration MUST preserve the currently valid text input target.
 
 #### Scenario: Enter the first ordinary search character
 
@@ -743,19 +712,35 @@ continue to follow the existing recoverable-hide contract.
 - **THEN** configuration focus preservation neither disables focus-loss hiding
   nor polls to reclaim foreground focus
 
+#### Scenario: Avoid redundant configuration during text entry
+- **WHEN** a fixed-size presentation transition applies unchanged native window configuration
+- **THEN** Fixed-size transitions between home and search MUST NOT change the keyboard responder or interrupt continued input after committed text by reapplying unchanged window configuration.
+- **THEN** When actual window configuration has not changed, the system MUST avoid redundant style changes that could disturb focus.
+
+#### Scenario: Preserve only a valid responder during native style changes
+- **WHEN** a necessary macOS window style change is applied
+- **THEN** Necessary macOS window style changes MUST preserve the currently valid responder belonging to the complete Window within a controlled native boundary and MUST NOT unconditionally replace a WebView text responder with the original window view.
+- **THEN** When no valid responder exists, configuration MUST NOT activate a Window, restore an invalidated responder, or force focus onto Host or plugin content.
+
+#### Scenario: Handle failed configuration and late responder restoration
+- **WHEN** an ordinary transition, environment refresh, or rollback encounters a native failure or delayed restoration
+- **THEN** This constraint MUST apply to ordinary presentation transitions, environment constraint refreshes, and failure rollback.
+- **THEN** Failures in existing observable window-state reads, message submission, size, constraint, or rollback operations MUST preserve or restore the last complete safe presentation and follow the typed safe native error boundary.
+- **THEN** When the native system refuses responder restoration, the system MUST retain a safe state and provide bounded developer diagnostics.
+- **THEN** It MUST NOT unconditionally fall back to the original window view, activate the Window, or restore an invalidated page.
+- **THEN** Successful message submission MUST NOT be interpreted as confirmed native responder restoration.
+- **THEN** Late restoration MUST NOT focus a removed page or replace the current valid input target.
+
+#### Scenario: Keep responder repair within existing Window boundaries
+- **WHEN** the Host applies presentation configuration while a plugin Page or Child WebView may be current
+- **THEN** The identity boundaries between the native Window, Host WebView, and Child WebView MUST remain distinct.
+- **THEN** Actual resizable-state changes for valid plugin Pages MUST continue to take effect.
+- **THEN** Presentation configuration MUST NOT broadcast Host activation events, grant native authority to plugins, or change compare-current lifecycle semantics.
+- **THEN** Genuine main-window focus loss MUST continue to follow the existing recoverable-hide contract.
+
 ### Requirement: Accessory Launcher MUST deliver standard editing commands through the current native focus
 
-On macOS, the foreground lensX Accessory Launcher MUST use a native editing dispatch boundary shared by the Host and Child to let the current valid text focus handle Select All, Copy, Cut, Paste, Undo, and Redo according to the target control and native editing-command semantics. This behavior MUST cover Host search and other ordinary inputs, external-plugin `input`/`textarea`/`contenteditable` controls, and the Monaco body and Find input. User-initiated copy and paste MUST exchange text with other applications rather than only round-tripping through a plugin's private memory. Plugin business commands remain defined by their owning Page.
-
-Dispatch MUST preserve the original event, modifiers, current native focus, and single-execution semantics. When the Web document has handled the event or cancelled its default behavior under its input rules, the Host MUST NOT execute the corresponding standard editing command again. When handling is finally confirmed as unhandled, dispatch MUST continue native-menu and current-responder-chain semantics, execute an available command at most once, and continue propagating events that remain unhandled. The repair layer MUST NOT additionally synthesize or resend the same keyboard event, recursively invoke the editing chain, or unconditionally perform another DOM edit. WebKit's legal completion and unhandled-event reentry MUST be preserved and MUST NOT be treated as a new user gesture.
-
-While asynchronous handling is incomplete, the Host MUST preserve the native completion and reentry protocol. It MUST NOT interpret the synchronous native takeover result as final handling or confirmed non-handling, and MUST NOT unconditionally execute a menu command immediately after invoking the superclass. If the repair introduces delayed compensation, that compensation MUST be associated with the original gesture's initial Window, text target, and applicable Child generation, and MUST revalidate those identities and native focus before executing. A focus change, invalid target, or generation change during the wait MUST cancel that event's compensation rather than read a new first responder and redirect the old event to a new target. WebKit's own legal reentry MUST retain its existing mechanism.
-
-At dispatch time, the target MUST still belong to the current valid Window/WebView. A hidden, unfocused, removed, replaced, or unverifiable target MUST NOT consume the event, steal focus, reveal itself, or affect another input target. Read-only, disabled, empty-selection, empty-clipboard, and empty-undo states MUST retain the corresponding control and native-command semantics. The dispatch layer MUST NOT forcibly change content, clear the clipboard, or fabricate successful editing. Normal editing MUST resume when valid focus and input conditions are restored.
-
-`Cmd+A/C/X/V/Z` and `Cmd+Shift+Z` MUST be standard-editing acceptance samples rather than a production key-code allowlist. The Host MUST NOT select patches by plugin identity, Publisher, page index, DOM structure/selector, or editor type, and MUST NOT require existing compliant plugins to modify lensX source, update the SDK, or add platform adapters. The repair MUST NOT inject scripts, call `eval`, generate synthetic keyboard events, or add a programmatic Host clipboard API, plugin permission, generic Tauri capability, native handle, or global editing shortcut.
-
-The system MUST preserve Accessory policy, the absence of a Dock tile and ordinary visible application menu bar, the default global activation shortcut, and the existing Window lifecycle. `Cmd+W/Q` MUST continue to execute recoverable Hide and complete Quit respectively once, only within foreground lensX. When another application is foreground, lensX MUST NOT intercept that application's editing, close, or quit commands. Repairing the standard editing chain MUST NOT change unrelated non-editing behavior.
+On macOS, the foreground lensX Accessory Launcher MUST use a native editing dispatch boundary shared by the Host and Child to let the current valid text focus handle Select All, Copy, Cut, Paste, Undo, and Redo according to the target control and native editing-command semantics.
 
 #### Scenario: Edit text in the Host without a visible application menu bar
 
@@ -817,3 +802,46 @@ The system MUST preserve Accessory policy, the absence of a Dock tile and ordina
 - **WHEN** acceptance uses `Cmd+A/C/X/V/Z` and `Cmd+Shift+Z` samples across different native text targets
 - **THEN** commands follow unified native editing semantics without production key-code allowlists, plugin identity, page-index, or DOM branches that redispatch them
 - **THEN** compliant external plugins obtain this behavior through ordinary controls and the public Runtime, without new permissions, Host APIs, or script injection
+
+#### Scenario: Deliver editing to supported native text controls
+- **WHEN** the user invokes a standard editing command in the current foreground Host or plugin text control
+- **THEN** This behavior MUST cover Host search and other ordinary inputs, external-plugin `input`/`textarea`/`contenteditable` controls, and the Monaco body and Find input.
+- **THEN** User-initiated copy and paste MUST exchange text with other applications rather than only round-tripping through a plugin's private memory.
+- **THEN** Plugin business commands remain defined by their owning Page.
+
+#### Scenario: Complete handled and unhandled editing exactly once
+- **WHEN** the original editing event enters dispatch, is processed by the Web document, and completes as handled or unhandled
+- **THEN** Dispatch MUST preserve the original event, modifiers, current native focus, and single-execution semantics.
+- **THEN** When the Web document has handled the event or cancelled its default behavior under its input rules, the Host MUST NOT execute the corresponding standard editing command again.
+- **THEN** When handling is finally confirmed as unhandled, dispatch MUST continue native-menu and current-responder-chain semantics, execute an available command at most once, and continue propagating events that remain unhandled.
+- **THEN** The repair layer MUST NOT additionally synthesize or resend the same keyboard event, recursively invoke the editing chain, or unconditionally perform another DOM edit.
+- **THEN** WebKit's legal completion and unhandled-event reentry MUST be preserved and MUST NOT be treated as a new user gesture.
+
+#### Scenario: Preserve asynchronous editing completion ownership
+- **WHEN** native editing dispatch is awaiting WebKit completion or a delayed compensation path
+- **THEN** While asynchronous handling is incomplete, the Host MUST preserve the native completion and reentry protocol.
+- **THEN** It MUST NOT interpret the synchronous native takeover result as final handling or confirmed non-handling, and MUST NOT unconditionally execute a menu command immediately after invoking the superclass.
+- **THEN** If the repair introduces delayed compensation, that compensation MUST be associated with the original gesture's initial Window, text target, and applicable Child generation, and MUST revalidate those identities and native focus before executing.
+- **THEN** A focus change, invalid target, or generation change during the wait MUST cancel that event's compensation rather than read a new first responder and redirect the old event to a new target.
+- **THEN** WebKit's own legal reentry MUST retain its existing mechanism.
+
+#### Scenario: Reject stale or ineligible editing targets
+- **WHEN** dispatch considers any candidate editing target, including a current, hidden, unfocused, removed, replaced, unverifiable, ineligible, or restored target
+- **THEN** At dispatch time, the target MUST still belong to the current valid Window/WebView.
+- **THEN** A hidden, unfocused, removed, replaced, or unverifiable target MUST NOT consume the event, steal focus, reveal itself, or affect another input target.
+- **THEN** Read-only, disabled, empty-selection, empty-clipboard, and empty-undo states MUST retain the corresponding control and native-command semantics.
+- **THEN** The dispatch layer MUST NOT forcibly change content, clear the clipboard, or fabricate successful editing.
+- **THEN** Normal editing MUST resume when valid focus and input conditions are restored.
+
+#### Scenario: Keep editing repair independent of plugin implementation
+- **WHEN** the Host supplies standard editing support to an existing compliant plugin
+- **THEN** `Cmd+A/C/X/V/Z` and `Cmd+Shift+Z` MUST be standard-editing acceptance samples rather than a production key-code allowlist.
+- **THEN** The Host MUST NOT select patches by plugin identity, Publisher, page index, DOM structure/selector, or editor type, and MUST NOT require existing compliant plugins to modify lensX source, update the SDK, or add platform adapters.
+- **THEN** The repair MUST NOT inject scripts, call `eval`, generate synthetic keyboard events, or add a programmatic Host clipboard API, plugin permission, generic Tauri capability, native handle, or global editing shortcut.
+
+#### Scenario: Preserve accessory activation and local lifecycle shortcuts
+- **WHEN** editing dispatch runs while lensX or another application owns foreground focus
+- **THEN** The system MUST preserve Accessory policy, the absence of a Dock tile and ordinary visible application menu bar, the default global activation shortcut, and the existing Window lifecycle.
+- **THEN** `Cmd+W/Q` MUST continue to execute recoverable Hide and complete Quit respectively once, only within foreground lensX.
+- **THEN** When another application is foreground, lensX MUST NOT intercept that application's editing, close, or quit commands.
+- **THEN** Repairing the standard editing chain MUST NOT change unrelated non-editing behavior.

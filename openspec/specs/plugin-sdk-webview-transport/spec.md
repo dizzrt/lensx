@@ -36,7 +36,8 @@ Host bridge ingress MUST carry the actual native WebView label or handle and com
 - **THEN** diagnostics reveal no target label, generation, nonce, method payload, or Host object
 
 ### Requirement: WebView private wire MUST remain closed, bounded and carrier-independent
-The private carrier MUST use a versioned closed union for ready, request, cancel, response, event, and disconnect while preserving strict request IDs, concurrency, cancellation, Host execution deadline, exactly-once settlement, Contract-valid result, error, and event values, and bounded diagnostics. Public SDK declarations MUST NOT expose frame types, codec, bridge global, Tauri or Wry types, WebView label, identity, or Host adapter. The Host implementation MAY choose explicitly ACL-scoped Tauri IPC or a per-WebView Wry handler, but public semantics and negative evidence MUST be identical.
+
+The private carrier MUST use a versioned closed union for ready, request, cancel, response, event, and disconnect while preserving strict request IDs, concurrency, cancellation, Host execution deadline, exactly-once settlement, Contract-valid result, error, and event values, and bounded diagnostics.
 
 #### Scenario: Requests complete out of order
 - **WHEN** one current transport sends multiple valid requests and the Host completes them in a different order
@@ -48,6 +49,12 @@ The private carrier MUST use a versioned closed union for ready, request, cancel
 - **THEN** the Runtime Authority or bridge adapter rejects the call before the handler with zero privileged side effects
 - **THEN** the closed lensX transport bridge remains the only reachable native surface
 
+#### Scenario: Inspect carrier-independent transport exposure
+
+- **WHEN** a consumer inspects SDK declarations or the Host selects a private transport carrier
+- **THEN** Public SDK declarations MUST NOT expose frame types, codec, bridge global, Tauri or Wry types, WebView label, identity, or Host adapter.
+- **THEN** The Host implementation MAY choose explicitly ACL-scoped Tauri IPC or a per-WebView Wry handler, but public semantics and negative evidence MUST be identical.
+
 ### Requirement: Transport cleanup MUST terminate both plugin and Host endpoints exactly once
 SDK disposal, Session disconnect, Child WebView destroy, Page close, disable, uninstall, replacement, Host reload, bridge message error, fatal codec error, and explicit disconnect MUST converge on idempotent cleanup. Cleanup MUST reject new requests, terminate pending operations, abort Host handlers, remove bridge listeners, clear request and subscription state, send at most one bounded disconnect, and make every late native callback inert.
 
@@ -58,7 +65,7 @@ SDK disposal, Session disconnect, Child WebView destroy, Page close, disable, un
 
 ### Requirement: WebView transport delivery MUST prove public packaging and deterministic bridge isolation
 
-Focused deterministic validation MUST cover SDK lifecycle, private codec, production bridge-adapter composition, RPC validation, drift tests, malicious frames, replacement, and terminal cleanup. A real tarball consumer MUST prove that the root entry needs no DOM or native types, `/webview` is consumable by an ordinary external plugin, and private modules cannot be deep-imported. Adapter integration MUST cover handshake state, roundtrip, concurrency, cancel, events, stable errors, forged source, malformed frame, replacement, cleanup, and zero generic Tauri authority hits without launching a real Child WebView.
+Focused deterministic validation MUST cover SDK lifecycle, private codec, production bridge-adapter composition, RPC validation, drift tests, malicious frames, replacement, and terminal cleanup.
 
 #### Scenario: Complete deterministic transport matrix passes
 
@@ -71,3 +78,9 @@ Focused deterministic validation MUST cover SDK lifecycle, private codec, produc
 - **WHEN** only deterministic adapter and package validation has run
 - **THEN** completion MUST NOT claim real native or WebView isolation evidence
 - **THEN** the supported deterministic transport and boundary conclusions remain reportable
+
+#### Scenario: Validate the tarball and production bridge adapter
+
+- **WHEN** transport delivery is evaluated through external-consumer or adapter-integration checks
+- **THEN** A real tarball consumer MUST prove that the root entry needs no DOM or native types, `/webview` is consumable by an ordinary external plugin, and private modules cannot be deep-imported.
+- **THEN** Adapter integration MUST cover handshake state, roundtrip, concurrency, cancel, events, stable errors, forged source, malformed frame, replacement, cleanup, and zero generic Tauri authority hits without launching a real Child WebView.

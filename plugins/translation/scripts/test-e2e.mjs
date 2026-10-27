@@ -45,7 +45,7 @@ const manifest = JSON.parse(await readFile(resolve(dist, 'manifest.json'), 'utf8
 assert.equal(manifest.plugin_id, 'dev.lensx.translation');
 assert.equal(manifest.manifest_version, '0.4.0');
 assert.deepEqual(manifest.contributes.pages[0].presentation, {
-  initial_size: { width: 800, height: 600 },
+  initial_size: { width: 800, height: 480 },
   resizable: true,
 });
 const html = await readFile(resolve(dist, 'index.html'), 'utf8');

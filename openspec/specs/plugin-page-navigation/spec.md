@@ -9,15 +9,7 @@ executing plugin Runtime code.
 ## Requirements
 ### Requirement: Plugin Pages must project into stable Host-owned descriptors
 
-The system MUST project normalized Manifest Pages from current, validated Plugin
-Registration details into Host-private Page descriptors. Each Plugin Page's
-stable global identity MUST be
-`{ owner_id: manifest.plugin_id, page_id: plugin-local Page ID }`; the system
-MUST NOT create a second author-controlled or concatenated Page identity. A
-descriptor MUST retain the locale-resolvable Page title, plugin-private route,
-same-owner parent target, and Host-derived availability. Routes, Publisher data, installation paths, and
-Runtime entries MUST NOT enter `ActivePage`, Launcher Action descriptors, or
-presentation props.
+Plugin Pages MUST project from current validated Registration into stable Host-private descriptors with the structured owner/Page identity, safe presentation metadata, and no leaked routes or Runtime internals.
 
 #### Scenario: Project a plugin Page graph
 
@@ -38,16 +30,21 @@ presentation props.
   executors, and Host objects do not enter Launcher snapshots, React
   presentation props, or public errors
 
+#### Scenario: Project a normalized Page into its Host descriptor
+- **WHEN** the Host projects current validated Registration Page details
+- **THEN** The system MUST project normalized Manifest Pages from current, validated Plugin
+  Registration details into Host-private Page descriptors. Each Plugin Page's
+  stable global identity MUST be
+  `{ owner_id: manifest.plugin_id, page_id: plugin-local Page ID }`; the system
+  MUST NOT create a second author-controlled or concatenated Page identity. A
+  descriptor MUST retain the locale-resolvable Page title, plugin-private route,
+  same-owner parent target, and Host-derived availability. Routes, Publisher data, installation paths, and
+  Runtime entries MUST NOT enter `ActivePage`, Launcher Action descriptors, or
+  presentation props.
+
 ### Requirement: Plugin Page Registry must replace provider batches atomically
 
-The system MUST provide a trusted Host-owned Page Registry that atomically
-replaces or unregisters one complete descriptor batch per plugin owner and uses
-the same unified lookup as protected Host Pages. The Registry MUST validate the
-declared owner, every target, parent ownership, duplicate identities,
-descriptor fields, and `lensx.core` isolation. Any invalid input MUST reject the
-complete batch and preserve the pre-call state. Snapshots and lookups MUST
-return immutable copies in deterministic owner-ID and Page-ID order, and MUST
-NOT expose provider bookkeeping or mutation APIs to plugins.
+The Host Page Registry MUST atomically replace or remove validated owner batches, preserve state on invalid input, and return deterministic immutable snapshots without exposing mutation authority.
 
 #### Scenario: Replace one plugin Page batch
 
@@ -73,11 +70,20 @@ NOT expose provider bookkeeping or mutation APIs to plugins.
 - **THEN** the Registry removes only that owner's Plugin Page descriptors
 - **THEN** other providers and protected Host Pages remain available
 
+#### Scenario: Validate and replace an owner Page batch
+- **WHEN** a trusted provider submits a Page batch or a caller reads a Registry lookup or snapshot
+- **THEN** The system MUST provide a trusted Host-owned Page Registry that atomically
+  replaces or unregisters one complete descriptor batch per plugin owner and uses
+  the same unified lookup as protected Host Pages. The Registry MUST validate the
+  declared owner, every target, parent ownership, duplicate identities,
+  descriptor fields, and `lensx.core` isolation. Any invalid input MUST reject the
+  complete batch and preserve the pre-call state. Snapshots and lookups MUST
+  return immutable copies in deterministic owner-ID and Page-ID order, and MUST
+  NOT expose provider bookkeeping or mutation APIs to plugins.
+
 ### Requirement: Page availability must fail closed from current Registration facts
 
-Plugin Page availability MUST derive from the current healthy Registration, enabled intent, compatibility, quarantine state, current descriptor, and resource and Runtime prerequisites. It MUST NOT read `required_permissions`, a grant snapshot, or a permission service. Open Web behavior, Publisher or source, and remote content MUST NOT change Host-owned Page identity, route, or availability. Invalid, disabled, incompatible, quarantined, stale, or removed entries MUST continue to fail closed.
-
-The system MUST retain a Page provider only when snapshot and detail identities and revisions match. Action publication MUST exclude Actions whose target Page is currently unavailable.
+Page availability MUST derive only from matching current Registration and Runtime/resource facts, fail closed for ineligible entries, and exclude unavailable targets from Action publication.
 
 #### Scenario: Healthy permissionless Page is available
 - **WHEN** a current Manifest `0.4.0` Page belongs to a healthy, enabled, compatible Registration and Runtime prerequisites are available
@@ -94,17 +100,17 @@ The system MUST retain a Page provider only when snapshot and detail identities 
 - **THEN** the Page immediately disappears from the current registry and a matching active Page closes
 - **THEN** open network, Worker, or remote code cannot preserve the old descriptor
 
+#### Scenario: Evaluate current Page eligibility without permission grants
+- **WHEN** the Host derives availability for a registered Plugin Page
+- **THEN** Plugin Page availability MUST derive from the current healthy Registration, enabled intent, compatibility, quarantine state, current descriptor, and resource and Runtime prerequisites. It MUST NOT read `required_permissions`, a grant snapshot, or a permission service. Open Web behavior, Publisher or source, and remote content MUST NOT change Host-owned Page identity, route, or availability. Invalid, disabled, incompatible, quarantined, stale, or removed entries MUST continue to fail closed.
+
+#### Scenario: Bind Page providers and Actions to the same current revision
+- **WHEN** snapshot and detail are matched before provider or Action publication
+- **THEN** The system MUST retain a Page provider only when snapshot and detail identities and revisions match. Action publication MUST exclude Actions whose target Page is currently unavailable.
+
 ### Requirement: Page and Action projection must converge from one Registration revision
 
-Production MUST use one serial coordinator to generate Plugin Page and Action
-batches from the same complete Registration snapshot and same-revision detail.
-For additions or replacements, it MUST commit the Page batch before publishing
-the Action batch filtered to available Pages. For invalidation or removal, it
-MUST unregister the Action batch before unregistering the Page batch. Stale
-details, identity or revision mismatches, mapping failures, Registry failures,
-or results arriving after destruction MUST NOT publish partial provider state.
-A failure MUST fail closed only the corresponding provider and produce a
-bounded diagnostic without sensitive values.
+One serial coordinator MUST derive Page and Action batches from the same Registration revision, publish and withdraw them in the required order, and fail closed per provider on stale or failed work.
 
 #### Scenario: Publish a current plugin surface
 
@@ -143,16 +149,21 @@ bounded diagnostic without sensitive values.
 - **THEN** asynchronous results arriving after destruction cannot recommit any
   Page or Action
 
+#### Scenario: Commit or withdraw a revision-consistent plugin surface
+- **WHEN** the serial coordinator processes Registration snapshot or detail work, commits or withdraws provider batches, or is destroyed with work pending
+- **THEN** Production MUST use one serial coordinator to generate Plugin Page and Action
+  batches from the same complete Registration snapshot and same-revision detail.
+  For additions or replacements, it MUST commit the Page batch before publishing
+  the Action batch filtered to available Pages. For invalidation or removal, it
+  MUST unregister the Action batch before unregistering the Page batch. Stale
+  details, identity or revision mismatches, mapping failures, Registry failures,
+  or results arriving after destruction MUST NOT publish partial provider state.
+  A failure MUST fail closed only the corresponding provider and produce a
+  bounded diagnostic without sensitive values.
+
 ### Requirement: Plugin Page navigation must remain framework-neutral and Host-controlled
 
-The system MUST use the unified framework-neutral application navigation
-service to accept `{ owner_id, page_id }` and an opening Action ID. Before
-notifying the one App Shell handler, the service MUST look up a currently
-available descriptor in the Page Registry. Unknown, unavailable, or removed
-Pages MUST be rejected with stable, safe `page_unavailable` semantics. Plugins,
-Manifests, Action descriptors, and projection payloads MUST NOT receive a React
-setter, navigation handler, route executor, Registry mutation API, Tauri API,
-or Page renderer.
+Plugin Page opening MUST use the framework-neutral Host navigation service and current Registry availability, returning safe rejection without exposing renderers, setters, routes, or privileged APIs to plugins.
 
 #### Scenario: Open an available Plugin Page
 
@@ -175,16 +186,20 @@ or Page renderer.
 - **THEN** the public result does not distinguish internal failure causes that
   could enumerate plugin state
 
+#### Scenario: Resolve a navigation request through the current Page Registry
+- **WHEN** an Action requests opening a Plugin Page by structured target identity
+- **THEN** The system MUST use the unified framework-neutral application navigation
+  service to accept `{ owner_id, page_id }` and an opening Action ID. Before
+  notifying the one App Shell handler, the service MUST look up a currently
+  available descriptor in the Page Registry. Unknown, unavailable, or removed
+  Pages MUST be rejected with stable, safe `page_unavailable` semantics. Plugins,
+  Manifests, Action descriptors, and projection payloads MUST NOT receive a React
+  setter, navigation handler, route executor, Registry mutation API, Tauri API,
+  or Page renderer.
+
 ### Requirement: Plugin Page presentation must resolve current localized metadata safely
 
-Before rendering shared Page context, the system MUST resolve serializable
-presentation information from the current Page descriptor, current locale, and
-Launcher Registry snapshot. A plugin Owner name MUST use the Registration
-display name with `zh-CN` to `en-US` fallback. When the opening Action exists,
-the system MUST use its current localized title; when it is missing, the system
-MUST fall back to the Page title. Until a safe resource resolver ships, a plugin
-Owner icon MUST use the stable generic-provider fallback and MUST NOT use the
-opening Action icon, a Manifest asset path, or Publisher identity.
+Page context MUST resolve current localized Owner and opening-Action metadata with safe Page-title and generic-icon fallbacks, without treating Publisher or asset paths as Owner presentation authority.
 
 #### Scenario: Resolve a Plugin Page context
 
@@ -210,6 +225,17 @@ opening Action icon, a Manifest asset path, or Publisher identity.
   Registry
 - **THEN** the system closes the active Page and returns Home instead of
   displaying a raw owner ID, route, or stale author text
+
+#### Scenario: Resolve safe localized Page-context presentation
+- **WHEN** the App Shell prepares shared context for a Plugin Page
+- **THEN** Before rendering shared Page context, the system MUST resolve serializable
+  presentation information from the current Page descriptor, current locale, and
+  Launcher Registry snapshot. A plugin Owner name MUST use the Registration
+  display name with `zh-CN` to `en-US` fallback. When the opening Action exists,
+  the system MUST use its current localized title; when it is missing, the system
+  MUST fall back to the Page title. Until a safe resource resolver ships, a plugin
+  Owner icon MUST use the stable generic-provider fallback and MUST NOT use the
+  opening Action icon, a Manifest asset path, or Publisher identity.
 
 ### Requirement: Active Plugin Pages must close when their descriptor becomes unavailable
 

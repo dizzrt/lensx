@@ -9,14 +9,18 @@ contract, and the minimal settings entry point.
 ## Requirements
 ### Requirement: Users must select `.lxp` packages through a trusted local installation entry point
 
-The system MUST provide a Host-owned entry point for installing a plugin from a
-local file in lensX settings and MUST receive `.lxp` packages through a native
-single-file selection flow. The UI MUST present "local" as the installation
-source rather than a plugin category. Selection and file reading MUST be owned
-by the trusted Rust Host; requests and responses MUST NOT expose the source
-absolute path, file handle, or package bytes to React, public plugin packages,
-or the plugin Runtime. The filename extension MUST be only a selection filter,
-and final acceptance MUST depend on the package content protocol.
+The system MUST provide a Host-owned entry point for installing a plugin from a local file in lensX settings and MUST receive `.lxp` packages through a native single-file selection flow.
+
+#### Scenario: Local installation is identified as a source
+
+- **WHEN** the user views the local installation entry point
+- **THEN** The UI MUST present "local" as the installation source rather than a plugin category.
+
+#### Scenario: Selected local files cross the trusted boundary
+
+- **WHEN** a local package is selected for acceptance
+- **THEN** Selection and file reading MUST be owned by the trusted Rust Host; requests and responses MUST NOT expose the source absolute path, file handle, or package bytes to React, public plugin packages, or the plugin Runtime.
+- **THEN** The filename extension MUST be only a selection filter, and final acceptance MUST depend on the package content protocol.
 
 #### Scenario: User selects a local package
 
@@ -44,13 +48,13 @@ and final acceptance MUST depend on the package content protocol.
 
 ### Requirement: Installation must consume the same bounded and fully validated package bytes
 
-The Rust Host MUST enforce the compressed-package size limit before and during
-the read and MUST make package inspection and controlled extraction consume the
-same immutable bytes. The system MUST reuse the current Zstandard/TAR,
-checksum, Manifest, asset, path, and hard-limit rules; it MUST NOT reopen the
-source path after inspection and MUST NOT use permissive unpacking behavior
-that allows links, extended entries, path traversal, or implicit path
-normalization. Only a `compatible` result may enter staging extraction.
+The Rust Host MUST enforce the compressed-package size limit before and during the read and MUST make package inspection and controlled extraction consume the same immutable bytes.
+
+#### Scenario: Validated bytes enter controlled extraction
+
+- **WHEN** the installer evaluates an inspected candidate for staging extraction
+- **THEN** The system MUST reuse the current Zstandard/TAR, checksum, Manifest, asset, path, and hard-limit rules; it MUST NOT reopen the source path after inspection and MUST NOT use permissive unpacking behavior that allows links, extended entries, path traversal, or implicit path normalization.
+- **THEN** Only a `compatible` result may enter staging extraction.
 
 #### Scenario: Valid compatible package passes installation inspection
 
@@ -89,15 +93,14 @@ normalization. Only a `compatible` result may enter staging extraction.
 
 ### Requirement: The Host must own a single-registration digest installation layout
 
-The system MUST derive a Host-owned `plugins` root from Tauri
-`app_local_data_dir` and MUST store committed payloads at
-`packages/<plugin-key>/<package-sha256>`. The `plugin-key` MUST encode the
-normalized `plugin_id` deterministically as a platform-safe identity, and
-`package-sha256` MUST be the 64-character lowercase hexadecimal SHA-256 of the
-complete `.lxp` bytes. The installation layout MUST NOT create `versions` or
-persistent `transactions` directories. Each `plugin_id` MUST have at most one
-current healthy registration, and the Plugin Manager record's installation
-path MUST be the sole active payload pointer.
+The system MUST derive a Host-owned `plugins` root from Tauri `app_local_data_dir` and MUST store committed payloads at `packages/<plugin-key>/<package-sha256>`.
+
+#### Scenario: The Host derives a committed package location
+
+- **WHEN** the installer allocates the canonical location and active pointer for a plugin payload
+- **THEN** The `plugin-key` MUST encode the normalized `plugin_id` deterministically as a platform-safe identity, and `package-sha256` MUST be the 64-character lowercase hexadecimal SHA-256 of the complete `.lxp` bytes.
+- **THEN** The installation layout MUST NOT create `versions` or persistent `transactions` directories.
+- **THEN** Each `plugin_id` MUST have at most one current healthy registration, and the Plugin Manager record's installation path MUST be the sole active payload pointer.
 
 #### Scenario: First installation creates a committed payload
 
@@ -140,14 +143,14 @@ When first registering a compatible package, the Host MUST use the normalized Ma
 
 ### Requirement: Payload commit and registration publication must remain recoverably consistent
 
-The system MUST serialize installation commits across threads and processes. It
-MUST completely write, verify, and flush the payload in a unique
-`.staging/<random-id>`, then MUST atomically move it to the committed digest
-directory on the same Host-owned filesystem. The system may persist and publish
-the Plugin Manager record only after the committed payload exists, and may
-return `installed` only after record persistence and in-memory publication
-succeed. The system MUST NOT publish a registration that points to staging or a
-missing path.
+The system MUST serialize installation commits across threads and processes.
+
+#### Scenario: A serialized installation reaches durable publication
+
+- **WHEN** an installation commit writes its payload and publishes its Registration
+- **THEN** It MUST completely write, verify, and flush the payload in a unique `.staging/<random-id>`, then MUST atomically move it to the committed digest directory on the same Host-owned filesystem.
+- **THEN** The system may persist and publish the Plugin Manager record only after the committed payload exists, and may return `installed` only after record persistence and in-memory publication succeed.
+- **THEN** The system MUST NOT publish a registration that points to staging or a missing path.
 
 #### Scenario: Installation succeeds completely
 
@@ -215,16 +218,18 @@ The system MUST treat a healthy registration with the same `plugin_id`, or the c
 
 ### Requirement: Startup recovery must clean deterministic residue and handle ambiguous ownership conservatively
 
-After Plugin Manager record recovery completes, the installer MUST inspect its
-root while holding the exclusive installation lock. It MUST remove incomplete
-staging entries that satisfy installer naming constraints and MUST delete as an
-orphan only a structurally valid digest directory inside the packages root that
-is neither referenced by any healthy installation path nor owned by a
-quarantined plugin key. Recovery MUST NOT follow links, delete a path outside
-the root, delete a healthy payload, delete a quarantined subtree, or guess
-ownership of an abnormal entry. Cleanup failure MUST NOT panic application
-startup, but MUST stop the installer from accepting a new installation that it
-cannot commit safely and expose a bounded safe diagnostic.
+After Plugin Manager record recovery completes, the installer MUST inspect its root while holding the exclusive installation lock.
+
+#### Scenario: Recovery classifies staging and package residue
+
+- **WHEN** the installer examines residue after Manager recovery while holding its lock
+- **THEN** It MUST remove incomplete staging entries that satisfy installer naming constraints and MUST delete as an orphan only a structurally valid digest directory inside the packages root that is neither referenced by any healthy installation path nor owned by a quarantined plugin key.
+- **THEN** Recovery MUST NOT follow links, delete a path outside the root, delete a healthy payload, delete a quarantined subtree, or guess ownership of an abnormal entry.
+
+#### Scenario: Recovery cleanup cannot safely complete
+
+- **WHEN** startup cleanup fails for installer-owned residue
+- **THEN** Cleanup failure MUST NOT panic application startup, but MUST stop the installer from accepting a new installation that it cannot commit safely and expose a bounded safe diagnostic.
 
 #### Scenario: Previous process crashed in staging
 
@@ -260,11 +265,34 @@ cannot commit safely and expose a bounded safe diagnostic.
 
 ### Requirement: The installation command contract must be strict, private, and minimally disclosing
 
-The local installation boundary MUST use an independent, Host-private, strict contract `0.3.0` with separate `prepare`, `commit`, and `cancel` operations. A `prepared` result MUST contain only an opaque token and the bounded candidate identity, Manifest version, localized display name, and Publisher display facts required by trusted confirmation UI. It MUST NOT contain permission candidates or reasons, grants, paths, digests, package bytes, staging facts, the complete Manifest, source authority, raw errors, or Host objects. `commit` MUST accept only the current token and return the installed identity, version, and revision.
+The local installation boundary MUST use an independent, Host-private, strict contract `0.3.0` with separate `prepare`, `commit`, and `cancel` operations.
 
-Every result, cancellation, and error payload MUST carry the exact contract version and operation. The version MUST evolve independently from the Manifest, package protocol, Registration Contract, Plugin Manager Store, and application version. Rust and TypeScript MUST reject an unknown contract version, unknown field, unknown variant, invalid value, or cross-operation payload. `prepare` MUST distinguish `cancelled | prepared`; `cancel` MUST invalidate the current token without creating Registration facts; and failures MUST use finite codes, operations, and stable safe messages.
+#### Scenario: Preparation and commit expose bounded candidate facts
 
-The former select-and-immediately-install production operation MUST NOT remain as a trusted UI bypass. Each process MUST hold at most one preparation. A new prepare, explicit cancel, failed commit, service destruction, or process restart MUST invalidate the old token and make a best effort to clean its owned staging. Commit MUST reuse the exact inspected candidate without reopening the user-selected source path and MUST revalidate the token, staging, package facts, compatibility, and identity absence before durable commit.
+- **WHEN** the trusted UI exchanges prepared-candidate and commit payloads
+- **THEN** A `prepared` result MUST contain only an opaque token and the bounded candidate identity, Manifest version, localized display name, and Publisher display facts required by trusted confirmation UI.
+- **THEN** It MUST NOT contain permission candidates or reasons, grants, paths, digests, package bytes, staging facts, the complete Manifest, source authority, raw errors, or Host objects.
+- **THEN** `commit` MUST accept only the current token and return the installed identity, version, and revision.
+
+#### Scenario: Installation operations cross the private contract boundary
+
+- **WHEN** a prepare, commit, or cancel request or response is validated
+- **THEN** Every result, cancellation, and error payload MUST carry the exact contract version and operation.
+- **THEN** The version MUST evolve independently from the Manifest, package protocol, Registration Contract, Plugin Manager Store, and application version.
+- **THEN** Rust and TypeScript MUST reject an unknown contract version, unknown field, unknown variant, invalid value, or cross-operation payload.
+- **THEN** `prepare` MUST distinguish `cancelled | prepared`; `cancel` MUST invalidate the current token without creating Registration facts; and failures MUST use finite codes, operations, and stable safe messages.
+
+#### Scenario: A preparation is superseded or terminated
+
+- **WHEN** a preparation is created, replaced, cancelled, fails to commit, or loses its owning service or process
+- **THEN** The former select-and-immediately-install production operation MUST NOT remain as a trusted UI bypass.
+- **THEN** Each process MUST hold at most one preparation.
+- **THEN** A new prepare, explicit cancel, failed commit, service destruction, or process restart MUST invalidate the old token and make a best effort to clean its owned staging.
+
+#### Scenario: A current preparation reaches durable commit
+
+- **WHEN** the Host attempts to commit a prepared candidate
+- **THEN** Commit MUST reuse the exact inspected candidate without reopening the user-selected source path and MUST revalidate the token, staging, package facts, compatibility, and identity absence before durable commit.
 
 #### Scenario: Frontend receives a prepared candidate
 - **WHEN** Rust completes inspection and staging of a valid compatible candidate
@@ -307,11 +335,25 @@ The former select-and-immediately-install production operation MUST NOT remain a
 
 ### Requirement: The settings installation entry point must be accessible, localized, and theme-compatible
 
-Plugins Settings MUST use the existing internationalization and Semi Design theme systems to provide installation guidance, an accessible entry point, prepared-candidate confirmation, and asynchronous feedback. Confirmation MUST explain that installation trusts the plugin to process data the user gives it inside an isolated Web Runtime, while lensX does not individually authorize or endorse its Worker, network, or remote-resource behavior. The UI MUST NOT display a permission checklist, grant state, partial-grant feedback, or post-commit permission work.
+Plugins Settings MUST use the existing internationalization and Semi Design theme systems to provide installation guidance, an accessible entry point, prepared-candidate confirmation, and asynchronous feedback.
 
-The interface MUST prevent incompatible reentry while prepare, confirm, commit, cancel, or Registration-convergence work is pending. All copy MUST have canonical English and semantically aligned Chinese versions and remain usable in light and dark themes, the fixed viewport, keyboard operation, and focus recovery.
+#### Scenario: Confirmation explains the isolated Runtime trust decision
 
-Native picker cancellation MUST restore idle state without an error. Success and failure MUST use live-status or alert semantics that do not rely only on color, and the prepared confirmation MUST remain readable, scrollable, and focusable at the fixed viewport.
+- **WHEN** the trusted UI displays a prepared candidate for confirmation
+- **THEN** Confirmation MUST explain that installation trusts the plugin to process data the user gives it inside an isolated Web Runtime, while lensX does not individually authorize or endorse its Worker, network, or remote-resource behavior.
+- **THEN** The UI MUST NOT display a permission checklist, grant state, partial-grant feedback, or post-commit permission work.
+
+#### Scenario: Installation controls remain usable across presentation and pending states
+
+- **WHEN** the installation entry point, confirmation, or feedback is rendered in an idle or pending phase in any supported locale or theme
+- **THEN** The interface MUST prevent incompatible reentry while prepare, confirm, commit, cancel, or Registration-convergence work is pending.
+- **THEN** All copy MUST have canonical English and semantically aligned Chinese versions and remain usable in light and dark themes, the fixed viewport, keyboard operation, and focus recovery.
+
+#### Scenario: Picker and installation outcomes restore usable feedback
+
+- **WHEN** the native picker is cancelled or installation preparation completes with success or failure
+- **THEN** Native picker cancellation MUST restore idle state without an error.
+- **THEN** Success and failure MUST use live-status or alert semantics that do not rely only on color, and the prepared confirmation MUST remain readable, scrollable, and focusable at the fixed viewport.
 
 #### Scenario: Keyboard user confirms installation
 - **WHEN** a keyboard user selects a valid package and opens confirmation
@@ -343,9 +385,18 @@ Native picker cancellation MUST restore idle state without an error. Success and
 
 ### Requirement: Local installation must not deliver later plugin capabilities early
 
-This capability MUST deliver only preparation and first installation of a local compatible `.lxp`, its entry point, Registration notification, and recovery cleanup. It MUST NOT download a remote package, execute a plugin, create a Runtime, expose a Tauri or native capability, replace or uninstall a plugin, or implement a Marketplace. A trusted management page MAY compose independent lifecycle, replacement, and data services, but MUST NOT compose a permission service, pass grants into commit, or interpret successful installation as native Host authority.
+This capability MUST deliver only preparation and first installation of a local compatible `.lxp`, its entry point, Registration notification, and recovery cleanup.
 
-It also MUST NOT accept a development directory, upgrade or downgrade, enable or disable a plugin, delete or clear plugin data, verify signatures or official provenance, serve plugin resources, create an iframe or Runtime Session, or invoke the Host API.
+#### Scenario: First installation exposes only its own operations
+
+- **WHEN** a caller uses the local first-install capability
+- **THEN** It MUST NOT download a remote package, execute a plugin, create a Runtime, expose a Tauri or native capability, replace or uninstall a plugin, or implement a Marketplace.
+- **THEN** It also MUST NOT accept a development directory, upgrade or downgrade, enable or disable a plugin, delete or clear plugin data, verify signatures or official provenance, serve plugin resources, create an iframe or Runtime Session, or invoke the Host API.
+
+#### Scenario: Management composes independent plugin services
+
+- **WHEN** a trusted management page combines installation with other management operations
+- **THEN** A trusted management page MAY compose independent lifecycle, replacement, and data services, but MUST NOT compose a permission service, pass grants into commit, or interpret successful installation as native Host authority.
 
 #### Scenario: Plugin finishes installation
 - **WHEN** a local `.lxp` is written and registered successfully
@@ -359,14 +410,14 @@ It also MUST NOT accept a development directory, upgrade or downgrade, enable or
 
 ### Requirement: Installer-owned program, data, and cleanup roots must remain separated
 
-The Host-owned `app_local_data_dir()/plugins` root MUST keep program payloads,
-plugin-private data, and lifecycle cleanup evidence separate. Program payloads
-MUST continue to use `packages/<plugin-key>/<package-sha256>`, the data boundary
-MUST use `data/<plugin-key>`, and each cleanup record MUST reside in a separate
-restricted root and be unique to a safe plugin identity. First installation
-MUST NOT create an empty data directory merely to establish that boundary. An
-author Manifest, React caller, public plugin package, or Runtime MUST NOT
-provide or receive a real root, plugin key, digest path, or cleanup path.
+The Host-owned `app_local_data_dir()/plugins` root MUST keep program payloads, plugin-private data, and lifecycle cleanup evidence separate.
+
+#### Scenario: Installation separates payload and data ownership facts
+
+- **WHEN** the Host manages canonical program, data, or cleanup roots during installation or lifecycle operations
+- **THEN** Program payloads MUST continue to use `packages/<plugin-key>/<package-sha256>`, the data boundary MUST use `data/<plugin-key>`, and each cleanup record MUST reside in a separate restricted root and be unique to a safe plugin identity.
+- **THEN** First installation MUST NOT create an empty data directory merely to establish that boundary.
+- **THEN** An author Manifest, React caller, public plugin package, or Runtime MUST NOT provide or receive a real root, plugin key, digest path, or cleanup path.
 
 #### Scenario: First installation has no existing plugin data
 
@@ -387,14 +438,13 @@ provide or receive a real root, plugin key, digest path, or cleanup path.
 
 ### Requirement: Installation and lifecycle commits must share one serialization boundary
 
-Plugin installation, enabled and uninstall commits, cleanup recovery, and
-reinstallation of the same identity MUST share the existing in-process mutex
-and cross-process installer lock, or an equivalent single serialization
-boundary. Code holding the lock MUST reread Manager, cleanup, and canonical
-filesystem facts before mutation and MUST NOT rely on stale preflight results
-obtained outside the lock. Concurrent requests MUST wait in a defined bounded
-order or return a stable busy or conflict result, and MUST NOT clean or
-overwrite another request's staging area, payload, data, or cleanup record.
+Plugin installation, enabled and uninstall commits, cleanup recovery, and reinstallation of the same identity MUST share the existing in-process mutex and cross-process installer lock, or an equivalent single serialization boundary.
+
+#### Scenario: Concurrent mutations enter the shared installer lock
+
+- **WHEN** installation and lifecycle requests compete for the serialization boundary
+- **THEN** Code holding the lock MUST reread Manager, cleanup, and canonical filesystem facts before mutation and MUST NOT rely on stale preflight results obtained outside the lock.
+- **THEN** Concurrent requests MUST wait in a defined bounded order or return a stable busy or conflict result, and MUST NOT clean or overwrite another request's staging area, payload, data, or cleanup record.
 
 #### Scenario: Installation races with uninstall
 
@@ -417,16 +467,14 @@ overwrite another request's staging area, payload, data, or cleanup record.
 
 ### Requirement: Startup recovery must reconcile lifecycle cleanup before accepting new writes
 
-After Plugin Manager recovery and before accepting new installation or
-lifecycle writes, the Host MUST read and strictly validate versioned cleanup
-records while holding the shared lock. When the Manager no longer contains the
-target entry, recovery MAY delete only the canonical package subtree whose
-ownership the cleanup record proves and MAY delete the canonical data subtree
-only for `delete_data`. When the Manager still contains the target healthy or
-quarantine entry, recovery MUST preserve its active evidence and MUST NOT let
-cleanup leave a missing payload. A damaged record, symbolic link, abnormal
-name, root escape, or ambiguous ownership MUST be preserved and produce a
-bounded degraded diagnostic.
+After Plugin Manager recovery and before accepting new installation or lifecycle writes, the Host MUST read and strictly validate versioned cleanup records while holding the shared lock.
+
+#### Scenario: Cleanup recovery reconciles current ownership
+
+- **WHEN** the Host examines a cleanup record and its target Manager entry before accepting writes
+- **THEN** When the Manager no longer contains the target entry, recovery MAY delete only the canonical package subtree whose ownership the cleanup record proves and MAY delete the canonical data subtree only for `delete_data`.
+- **THEN** When the Manager still contains the target healthy or quarantine entry, recovery MUST preserve its active evidence and MUST NOT let cleanup leave a missing payload.
+- **THEN** A damaged record, symbolic link, abnormal name, root escape, or ambiguous ownership MUST be preserved and produce a bounded degraded diagnostic.
 
 #### Scenario: Restart recovers pending program cleanup
 

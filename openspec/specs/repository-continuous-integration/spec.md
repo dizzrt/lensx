@@ -41,7 +41,14 @@ The repository SHALL contain exactly two files under `.github/workflows/`: one L
 
 ### Requirement: LensX CI shall validate the complete main project
 
-LensX CI SHALL provide required macOS jobs that validate the LensX frontend and Rust desktop workspace without using plugin failures as a proxy for LensX validation. Frontend validation SHALL include formatting/static analysis, TypeScript type checking, unit tests, and a production build. Rust validation SHALL include formatting, static checking, tests, and a workspace build. These stages SHALL be deterministic repository checks and SHALL NOT launch a browser, WebView, GUI application, Launch Services, or an interactive native harness.
+LensX CI SHALL provide required macOS jobs that validate the LensX frontend and Rust desktop workspace without using plugin failures as a proxy for LensX validation.
+
+#### Scenario: The main-project CI jobs execute their validation stages
+
+- **WHEN** LensX frontend and Rust CI run
+- **THEN** Frontend validation SHALL include formatting/static analysis, TypeScript type checking, unit tests, and a production build.
+- **THEN** Rust validation SHALL include formatting, static checking, tests, and a workspace build.
+- **THEN** These stages SHALL be deterministic repository checks and SHALL NOT launch a browser, WebView, GUI application, Launch Services, or an interactive native harness.
 
 #### Scenario: All LensX validation stages pass
 
@@ -65,7 +72,12 @@ LensX CI SHALL provide required macOS jobs that validate the LensX frontend and 
 
 ### Requirement: LensX frontend CI shall prepare public workspace dependencies from a clean checkout
 
-LensX frontend CI MUST derive the transitive public workspace build dependencies required by its validation consumers and MUST build those dependencies in topological order before the first consumer executes. The maintained `ci-lensx-frontend` Gate MUST own this preparation for both GitHub Actions and local reproduction, MUST de-duplicate shared build steps within one invocation, and MUST NOT depend on pre-existing `dist` directories, source aliases, workflow-only preparation, or recursive dependency builds inside an individual package.
+LensX frontend CI MUST derive the transitive public workspace build dependencies required by its validation consumers and MUST build those dependencies in topological order before the first consumer executes.
+
+#### Scenario: The frontend Gate prepares clean-checkout consumers
+
+- **WHEN** ci-lensx-frontend is invoked locally or by GitHub Actions
+- **THEN** The maintained `ci-lensx-frontend` Gate MUST own this preparation for both GitHub Actions and local reproduction, MUST de-duplicate shared build steps within one invocation, and MUST NOT depend on pre-existing `dist` directories, source aliases, workflow-only preparation, or recursive dependency builds inside an individual package.
 
 #### Scenario: Public package outputs are absent
 
@@ -123,7 +135,14 @@ Plugins CI SHALL be selected by changes under `plugins/**` or by changes to its 
 
 ### Requirement: Plugins CI shall prepare public workspace dependencies from a clean checkout
 
-Plugins CI SHALL install dependencies in a clean runner and SHALL build every public workspace package required by the discovered plugins in transitive dependency order before executing plugin consumers. It SHALL derive that order from the workspace dependency graph, de-duplicate shared dependency builds, and SHALL NOT require pre-existing `dist` directories, source aliases, or imports from Host/Tauri private source. Public CLI commands required by plugins SHALL establish their entries during the first dependency installation and SHALL be callable after the existing dependency builds complete. This guarantee SHALL also apply to local `ci-plugins` and the CLI-consuming `plugin-host-http` Gate without extra workflow-only installation, relinking, or global tools.
+Plugins CI SHALL install dependencies in a clean runner and SHALL build every public workspace package required by the discovered plugins in transitive dependency order before executing plugin consumers.
+
+#### Scenario: Plugin Gates prepare shared dependencies and CLI entries
+
+- **WHEN** Plugins CI, local ci-plugins, or plugin-host-http prepares its consumers
+- **THEN** It SHALL derive that order from the workspace dependency graph, de-duplicate shared dependency builds, and SHALL NOT require pre-existing `dist` directories, source aliases, or imports from Host/Tauri private source.
+- **THEN** Public CLI commands required by plugins SHALL establish their entries during the first dependency installation and SHALL be callable after the existing dependency builds complete.
+- **THEN** This guarantee SHALL also apply to local `ci-plugins` and the CLI-consuming `plugin-host-http` Gate without extra workflow-only installation, relinking, or global tools.
 
 #### Scenario: Public package dist directories are absent
 
@@ -183,7 +202,12 @@ For every discovered direct plugin, Plugins CI SHALL run its declared `typecheck
 
 ### Requirement: CI policy and documentation shall prevent workflow drift
 
-Repository-owned automated policy checks SHALL verify the two-workflow inventory, macOS runners, event path rules, minimum permissions, pinned third-party action revisions, required deterministic validation entry points, non-overlapping plugin lifecycle stages, and absence of automatic publishing or environment-validation behavior. Canonical English CI documentation and its Simplified Chinese mirror SHALL describe the trigger matrix, local reproduction commands, failure recovery, supported validation categories, and intentionally unsupported publishing and environment-evidence behavior.
+Repository-owned automated policy checks SHALL verify the two-workflow inventory, macOS runners, event path rules, minimum permissions, pinned third-party action revisions, required deterministic validation entry points, non-overlapping plugin lifecycle stages, and absence of automatic publishing or environment-validation behavior.
+
+#### Scenario: CI behavior is documented in both maintained languages
+
+- **WHEN** canonical CI documentation and its Simplified Chinese mirror are updated
+- **THEN** Canonical English CI documentation and its Simplified Chinese mirror SHALL describe the trigger matrix, local reproduction commands, failure recovery, supported validation categories, and intentionally unsupported publishing and environment-evidence behavior.
 
 #### Scenario: A third workflow or release mutation is introduced
 
@@ -212,7 +236,20 @@ Repository-owned automated policy checks SHALL verify the two-workflow inventory
 
 ### Requirement: Plugin artifact checks MUST distinguish command startup failures from command results
 
-When invoking the public CLI, plugin artifact checks MUST distinguish a process that could not start, a process terminated by a signal, a normally started process that exits nonzero, and a successful exit with invalid output protocol. Failure diagnostics MUST identify the executable command and subcommand and provide the corresponding startup error code or name, exit status, or signal. Available stdout and stderr MUST be retained as bounded context, and missing output MUST have an explicit placeholder rather than displaying only `undefined`. JSON may be parsed and validated only after successful startup and exit. Checks MUST remain blocking and MUST NOT retry, skip, or misreport startup failure as incompatible plugin content. This requirement belongs to the validation caller and does not change the public CLI JSON protocol or product UI copy.
+When invoking the public CLI, plugin artifact checks MUST distinguish a process that could not start, a process terminated by a signal, a normally started process that exits nonzero, and a successful exit with invalid output protocol.
+
+#### Scenario: Artifact checks report bounded process diagnostics
+
+- **WHEN** a public CLI invocation cannot start, exits unsuccessfully, terminates by signal, or returns invalid output after successful exit
+- **THEN** Failure diagnostics MUST identify the executable command and subcommand and provide the corresponding startup error code or name, exit status, or signal.
+- **THEN** Available stdout and stderr MUST be retained as bounded context, and missing output MUST have an explicit placeholder rather than displaying only `undefined`.
+
+#### Scenario: Artifact checks classify CLI output after process completion
+
+- **WHEN** a plugin artifact check evaluates a public CLI invocation
+- **THEN** JSON may be parsed and validated only after successful startup and exit.
+- **THEN** Checks MUST remain blocking and MUST NOT retry, skip, or misreport startup failure as incompatible plugin content.
+- **THEN** This requirement belongs to the validation caller and does not change the public CLI JSON protocol or product UI copy.
 
 #### Scenario: Public CLI executable cannot be started
 

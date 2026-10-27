@@ -10,19 +10,7 @@ accessible home-surface interactions.
 
 ### Requirement: Launcher Action collections must use bounded ordered Action identities
 
-The system MUST provide Host-owned `recent_action_ids` and
-`pinned_action_ids` collections. Each collection MUST contain only unique,
-valid, ordered `action_id` values and MUST store at most eight items. Recent
-Actions MUST be ordered from newest to oldest successful use, and pinned
-Actions MUST preserve the order in which the user pinned them. Collections
-MUST NOT store executors, React state, Registry internals, Action titles,
-icons, or other derived display data.
-
-The App Shell MUST resolve collection IDs against the current Action Registry
-snapshot, display only real Actions that remain registered and enabled, and
-preserve collection order. Missing, disabled, or unresolved IDs MUST NOT be
-displayed and MUST NOT be replaced with Actions from Registry default order,
-simulated Actions, or recommendations.
+The system MUST provide Host-owned `recent_action_ids` and `pinned_action_ids` collections.
 
 #### Scenario: Read a valid collection snapshot
 
@@ -49,15 +37,20 @@ simulated Actions, or recommendations.
 - **THEN** the App Shell does not display fabricated Actions, recommendations,
   or Registry default order
 
+#### Scenario: Store bounded ordered Recent and Pinned identities
+- **WHEN** the Host updates Launcher Action collections after successful use or a pin operation
+- **THEN** Each collection MUST contain only unique, valid, ordered `action_id` values and MUST store at most eight items.
+- **THEN** Recent Actions MUST be ordered from newest to oldest successful use, and pinned Actions MUST preserve the order in which the user pinned them.
+- **THEN** Collections MUST NOT store executors, React state, Registry internals, Action titles, icons, or other derived display data.
+
+#### Scenario: Resolve current collection entries without replacements
+- **WHEN** the App Shell projects stored collection IDs against the current Registry snapshot
+- **THEN** The App Shell MUST resolve collection IDs against the current Action Registry snapshot, display only real Actions that remain registered and enabled, and preserve collection order.
+- **THEN** Missing, disabled, or unresolved IDs MUST NOT be displayed and MUST NOT be replaced with Actions from Registry default order, simulated Actions, or recommendations.
+
 ### Requirement: Launcher Action collections must persist through a typed Rust boundary
 
-Rust MUST own a serializable, versioned Launcher Action collections snapshot
-and MUST provide typed Tauri commands to read it, record successful use, and
-set pinned state. A missing file MUST return empty collections. Reads and
-mutations MUST validate fields, version, Action IDs, uniqueness, order, and the
-eight-item limit. Persistence MUST use an atomic write process that cannot
-leave a partial file. Errors MUST return a stable code, operation, and safe
-message and MUST NOT expose file contents, absolute paths, or internal errors.
+Rust MUST own a serializable, versioned Launcher Action collections snapshot and MUST provide typed Tauri commands to read it, record successful use, and set pinned state.
 
 #### Scenario: The collections file is absent on first launch
 
@@ -87,6 +80,13 @@ message and MUST NOT expose file contents, absolute paths, or internal errors.
 - **THEN** Rust returns a stable and safe write error
 - **THEN** the last confirmed persisted snapshot is not partially overwritten
 - **THEN** the frontend continues to allow Action search and execution
+
+#### Scenario: Validate and atomically persist collection snapshots
+- **WHEN** Rust reads or mutates the versioned Launcher Action collections
+- **THEN** A missing file MUST return empty collections.
+- **THEN** Reads and mutations MUST validate fields, version, Action IDs, uniqueness, order, and the eight-item limit.
+- **THEN** Persistence MUST use an atomic write process that cannot leave a partial file.
+- **THEN** Errors MUST return a stable code, operation, and safe message and MUST NOT expose file contents, absolute paths, or internal errors.
 
 ### Requirement: Successful Action execution must update recent use without changing dispatch semantics
 
@@ -129,20 +129,7 @@ an Action execution failure.
 
 ### Requirement: Home must present pinned collections as read-only while management is deferred
 
-Launcher Home MUST continue to resolve Host-owned `pinned_action_ids` and
-display real, current, enabled Actions in confirmed order. Recent and Pinned
-tiles MUST expose only their primary Action operation and MUST NOT display or
-expose pin, unpin, more-menu, or another replacement management entry point.
-
-The localized All label beside the Pinned heading MUST remain only a visual
-placeholder and MUST NOT become a button, link, menu trigger, or focusable
-element. When no pinned Actions can be resolved, the page MUST use a neutral,
-localized empty state that explains that pinned Actions appear in the section
-and MUST NOT claim that users can currently pin an Action from its tile.
-
-Removing the visible entry point MUST NOT delete, migrate, reorder, or
-fabricate existing pinned IDs, and it MUST NOT change the Rust/Tauri collection
-read, write, capacity, or safe-error contracts.
+Launcher Home MUST continue to resolve Host-owned `pinned_action_ids` and display real, current, enabled Actions in confirmed order.
 
 #### Scenario: Display existing pinned Actions
 
@@ -176,16 +163,22 @@ read, write, capacity, or safe-error contracts.
 - **THEN** the All placeholder has no button, link, menu-trigger, or keyboard-
   focus semantics
 
+#### Scenario: Expose only each current tile primary action
+- **WHEN** Home renders Recent or Pinned tiles from confirmed identities
+- **THEN** Recent and Pinned tiles MUST expose only their primary Action operation and MUST NOT display or expose pin, unpin, more-menu, or another replacement management entry point.
+
+#### Scenario: Keep All and empty Pinned presentation non-actionable
+- **WHEN** the Home Pinned heading or an empty Pinned collection is displayed
+- **THEN** The localized All label beside the Pinned heading MUST remain only a visual placeholder and MUST NOT become a button, link, menu trigger, or focusable element.
+- **THEN** When no pinned Actions can be resolved, the page MUST use a neutral, localized empty state that explains that pinned Actions appear in the section and MUST NOT claim that users can currently pin an Action from its tile.
+
+#### Scenario: Preserve stored collection contracts when controls are removed
+- **WHEN** the visible pin-management entry point is removed from Home
+- **THEN** Removing the visible entry point MUST NOT delete, migrate, reorder, or fabricate existing pinned IDs, and it MUST NOT change the Rust/Tauri collection read, write, capacity, or safe-error contracts.
+
 ### Requirement: Home Action collections must remain accessible, localized, and theme-aware
 
-Recent and Pinned sections, empty states, Action titles, and collection-read
-feedback MUST use application i18n with `en-US` as the default and a
-semantically aligned `zh-CN` resource. The primary operation of each visible
-Action tile MUST work with keyboard and pointer input and MUST have a visible
-focus state. Tiles MUST NOT expose a pin or unpin accessible name, focus
-target, or visual-only control. In light and dark themes, tiles, selection,
-hover, focus, empty states, and feedback MUST use Semi Design-supported theme
-tokens and MUST NOT communicate state through color alone.
+Recent and Pinned sections, empty states, Action titles, and collection-read feedback MUST use application i18n with `en-US` as the default and a semantically aligned `zh-CN` resource.
 
 #### Scenario: Operate home Actions with the keyboard only
 
@@ -209,3 +202,9 @@ tokens and MUST NOT communicate state through color alone.
 - **THEN** both collections, their tiles, primary operations, and feedback use the
   corresponding theme tokens
 - **THEN** text, focus, and interaction states remain distinguishable
+
+#### Scenario: Present collection actions with localized accessible theme states
+- **WHEN** the user views or operates Recent and Pinned sections in either locale or theme
+- **THEN** The primary operation of each visible Action tile MUST work with keyboard and pointer input and MUST have a visible focus state.
+- **THEN** Tiles MUST NOT expose a pin or unpin accessible name, focus target, or visual-only control.
+- **THEN** In light and dark themes, tiles, selection, hover, focus, empty states, and feedback MUST use Semi Design-supported theme tokens and MUST NOT communicate state through color alone.

@@ -8,7 +8,7 @@ Define the governed root command surface, the separation between Rstest and cros
 
 ### Requirement: Root package scripts must be a governed stable interface
 
-The repository MUST restrict root `package.json` scripts to standard lifecycle commands, required internal lifecycle commands, development, formatting, desktop operations, and the unified read-only Gate and governed Generate dispatchers, each with a documented long-term repository purpose. The repository MUST NOT expose an Evidence dispatcher or add root test, check, run, refresh, visual, browser, native-harness, or equivalent aliases for an individual test, a test subset, a temporary acceptance step, an environment proof, or an active or archived OpenSpec Change. A new root entry MUST be impossible to express through an existing stable entry or dispatcher and MUST update semantic policy, automated tests, and canonical documentation together.
+Root scripts MUST remain a documented stable interface for supported lifecycles and Gate/Generate dispatchers. Per-test, per-Change, forwarding, Evidence, and environment-proof aliases MUST remain prohibited.
 
 #### Scenario: A standard root entry is allowed
 
@@ -34,9 +34,13 @@ The repository MUST restrict root `package.json` scripts to standard lifecycle c
 - **THEN** root-script policy rejects the entry
 - **THEN** normal tests use Rstest discovery and focused selection exists only in the Gate registry
 
+#### Scenario: Review a proposed root command against stable interfaces
+- **WHEN** a root package script is declared or changed
+- **THEN** The repository MUST restrict root `package.json` scripts to standard lifecycle commands, required internal lifecycle commands, development, formatting, desktop operations, and the unified read-only Gate and governed Generate dispatchers, each with a documented long-term repository purpose. The repository MUST NOT expose an Evidence dispatcher or add root test, check, run, refresh, visual, browser, native-harness, or equivalent aliases for an individual test, a test subset, a temporary acceptance step, an environment proof, or an active or archived OpenSpec Change. A new root entry MUST be impossible to express through an existing stable entry or dispatcher and MUST update semantic policy, automated tests, and canonical documentation together.
+
 ### Requirement: Rstest and cross-layer Gates must have separate responsibilities without reducing coverage
 
-Every side-effect-free TypeScript or TSX unit, component, contract, documentation, source-policy, and drift assertion MUST be in the Rstest discovery range and MUST run through the standard root test lifecycle. Capability acceptance that needs Cargo, builds, packaging, temporary consumers, or other deterministic multi-stage command-line work MUST be orchestrated by the Gate registry and MUST NOT be forced into Rstest. Maintained validation MUST NOT require browsers, visual comparison, real WebViews, GUI applications, native interaction harnesses, or target-environment evidence. A focused Gate MUST supplement rather than replace the complete frontend, workspace, Rust, documentation, and OpenSpec validation applicable to a Change.
+Rstest MUST own deterministic repository assertions, while stable Gates own cross-layer command-line acceptance. Neither environment-only phases nor replacement of complete Change validation by a focused Gate is permitted.
 
 #### Scenario: Repository policy assertions run automatically
 
@@ -62,9 +66,13 @@ Every side-effect-free TypeScript or TSX unit, component, contract, documentatio
 - **THEN** Change completion still requires all applicable standard frontend, workspace, Rust, documentation, build, and OpenSpec validation
 - **THEN** Gate success is not reported as complete repository validation
 
+#### Scenario: Assign validation work to Rstest or a cross-layer Gate
+- **WHEN** a repository assertion or capability validation phase is added, selected, or run
+- **THEN** Every side-effect-free TypeScript or TSX unit, component, contract, documentation, source-policy, and drift assertion MUST be in the Rstest discovery range and MUST run through the standard root test lifecycle. Capability acceptance that needs Cargo, builds, packaging, temporary consumers, or other deterministic multi-stage command-line work MUST be orchestrated by the Gate registry and MUST NOT be forced into Rstest. Maintained validation MUST NOT require browsers, visual comparison, real WebViews, GUI applications, native interaction harnesses, or target-environment evidence. A focused Gate MUST supplement rather than replace the complete frontend, workspace, Rust, documentation, and OpenSpec validation applicable to a Change.
+
 ### Requirement: The Gate registry must be declarative, deterministic, and de-duplicated
 
-The repository MUST provide one private typed Gate registry and one unified read-only Gate CLI. Every Gate MUST have a unique stable capability ID that is not a Change ID and MUST declare a description, Gate dependencies, and structured executable steps with stable step IDs. Each step MUST declare executable, argument vector, working directory, environment, platform, and read-only and committed-write safety metadata. Browser, native-application, visual, environment-evidence, and committed-write steps MUST be rejected. Before starting any command, the runner MUST reject unknown or duplicate IDs, missing dependencies or steps, and cycles. It MUST expand the complete DAG in deterministic topological order, execute a shared step ID once per invocation, run serially by default, and propagate a locatable non-zero failure.
+The typed Gate registry and read-only CLI MUST validate unique stable identities and a complete acyclic graph, reject unsafe steps, and execute the deterministic plan once per shared step with locatable failures.
 
 #### Scenario: Shared dependencies execute once
 
@@ -84,9 +92,13 @@ The repository MUST provide one private typed Gate registry and one unified read
 - **THEN** the runner stops and returns non-zero
 - **THEN** output identifies the requested Gate, failed step, status, and completed prefix
 
+#### Scenario: Plan and execute a registered validation graph
+- **WHEN** the Gate CLI receives capability IDs and builds or executes a validation plan
+- **THEN** The repository MUST provide one private typed Gate registry and one unified read-only Gate CLI. Every Gate MUST have a unique stable capability ID that is not a Change ID and MUST declare a description, Gate dependencies, and structured executable steps with stable step IDs. Each step MUST declare executable, argument vector, working directory, environment, platform, and read-only and committed-write safety metadata. Browser, native-application, visual, environment-evidence, and committed-write steps MUST be rejected. Before starting any command, the runner MUST reject unknown or duplicate IDs, missing dependencies or steps, and cycles. It MUST expand the complete DAG in deterministic topological order, execute a shared step ID once per invocation, run serially by default, and propagate a locatable non-zero failure.
+
 ### Requirement: Agent, OpenSpec, documentation, and automated policy must jointly enforce governance
 
-Root AGENTS.md MUST prohibit unplanned root-script expansion and MUST link the canonical English validation documentation. openspec/config.yaml MUST require planning artifacts to reuse or design stable capability Gates, prohibit Change-specific root scripts, record complete validation, and scan stale entries before synchronization or archive. Every relevant English engineering document MUST have a semantically aligned Simplified Chinese mirror. Standard Rstest validation MUST automatically check root-script policy, the Gate graph, Change-name conflicts, no-dual-entry rules, and documentation Gate references without a dedicated root policy script.
+Agent rules, OpenSpec, mirrored documentation, and normal Rstest discovery MUST jointly enforce root-script policy, stable Gate references, complete validation, and stale-entry checks.
 
 #### Scenario: An Agent plans focused validation
 
@@ -106,9 +118,13 @@ Root AGENTS.md MUST prohibit unplanned root-script expansion and MUST link the c
 - **THEN** archive validation fails
 - **THEN** the entry must be removed or migrated to a designed stable capability Gate
 
+#### Scenario: Enforce command policy during planning and normal tests
+- **WHEN** Agent instructions, OpenSpec guidance, or documentation are maintained, or standard tests enforce command policy
+- **THEN** Root AGENTS.md MUST prohibit unplanned root-script expansion and MUST link the canonical English validation documentation. openspec/config.yaml MUST require planning artifacts to reuse or design stable capability Gates, prohibit Change-specific root scripts, record complete validation, and scan stale entries before synchronization or archive. Every relevant English engineering document MUST have a semantically aligned Simplified Chinese mirror. Standard Rstest validation MUST automatically check root-script policy, the Gate graph, Change-name conflicts, no-dual-entry rules, and documentation Gate references without a dedicated root policy script.
+
 ### Requirement: Legacy validation entries must migrate atomically without dual paths
 
-The repository MUST maintain a complete machine-readable mapping of legacy root validation, generation, evidence, recursive calls, CI, documentation, and specification references. Change-specific, test-subset, forwarding, shell-chain, visual, browser, native-harness, and Evidence entries retired by the governed migration MUST be removed, and all maintained callers MUST migrate in the same Change. The migration MUST preserve every supported Rstest, Cargo, static, build, pack, deterministic consumer, and boundary phase, while intentionally deleting environment-only phases and their assets. Automated coverage and stale-entry comparison MUST distinguish those two outcomes.
+Legacy validation migration MUST atomically remove retired entry paths and update callers while mapping every supported deterministic phase and intentionally deleting environment-only phases and assets.
 
 #### Scenario: A legacy entry is fully migrated
 
@@ -134,9 +150,13 @@ The repository MUST maintain a complete machine-readable mapping of legacy root 
 - **THEN** no-dual-entry and stale-environment policy fail
 - **THEN** maintainers delete the entry and its maintained assets
 
+#### Scenario: Migrate legacy commands and their maintained callers
+- **WHEN** a governed migration replaces legacy validation, generation, or evidence entries
+- **THEN** The repository MUST maintain a complete machine-readable mapping of legacy root validation, generation, evidence, recursive calls, CI, documentation, and specification references. Change-specific, test-subset, forwarding, shell-chain, visual, browser, native-harness, and Evidence entries retired by the governed migration MUST be removed, and all maintained callers MUST migrate in the same Change. The migration MUST preserve every supported Rstest, Cargo, static, build, pack, deterministic consumer, and boundary phase, while intentionally deleting environment-only phases and their assets. Automated coverage and stale-entry comparison MUST distinguish those two outcomes.
+
 ### Requirement: Gate and Generate MUST keep deterministic read and write authority separate
 
-Gate CLI MUST remain read-only with respect to committed source, fixtures, generated outputs, and package artifacts. Deterministic generated artifacts MUST use the governed Generate dispatcher with one listed target and an explicit write flag; a corresponding read-only test or Gate MUST detect missing or stale output. Generate MUST NOT expose visual baselines, screenshots, browser output, native harness output, target-environment evidence, or a compatibility alias for the removed Evidence dispatcher.
+Gates MUST remain read-only for committed artifacts. Generate MUST require a listed deterministic target and explicit write authority, with drift detection and no recreation of removed environment-evidence paths.
 
 #### Scenario: A read-only Gate observes generated drift
 
@@ -155,3 +175,7 @@ Gate CLI MUST remain read-only with respect to committed source, fixtures, gener
 - **WHEN** a Generate target attempts to write a screenshot, visual baseline, browser result, native harness result, or target-environment evidence
 - **THEN** registry policy rejects that target
 - **THEN** the removed Evidence model is not recreated under another name
+
+#### Scenario: Request validation or deterministic artifact generation
+- **WHEN** Gate or Generate targets are registered, selected, or executed against maintained artifacts
+- **THEN** Gate CLI MUST remain read-only with respect to committed source, fixtures, generated outputs, and package artifacts. Deterministic generated artifacts MUST use the governed Generate dispatcher with one listed target and an explicit write flag; a corresponding read-only test or Gate MUST detect missing or stale output. Generate MUST NOT expose visual baselines, screenshots, browser output, native harness output, target-environment evidence, or a compatibility alias for the removed Evidence dispatcher.

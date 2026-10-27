@@ -8,9 +8,7 @@ plugin boundaries, Runtime lifecycle, and the evidence required for Task 7.2.
 
 ### Requirement: ConfigLens MUST be a normal public-boundary official plugin
 
-The system MUST provide the product named `ConfigLens` in both `en-US` and `zh-CN` as the independent package `@lensx/official-config-lens` under the canonical source location `plugins/config-lens`, with plugin identity `dev.lensx.config-lens`. Its Manifest MUST use Contract `0.4.0`, contribute exactly one WebView Page and one Launcher Action targeting that Page, and declare that Page with `initial_size: 800×600` logical pixels and `resizable: true`. The declaration MUST use the same public Page presentation contract as external plugins and MUST request no Host permission, Runtime native setter, or unpublished capability. The plugin MUST consume only public plugin package exports and ordinary browser dependencies, and the Host MUST NOT import its source or grant authority based on its official repository location.
-
-The Action's `title.en-US` and `title.zh-CN` MUST both be `ConfigLens`. The title change MUST preserve the `dev.lensx.config-lens.open` execution identity, the `main` Page target, and existing functional keywords. It MUST NOT append `Open ConfigLens`, `打开 ConfigLens`, or compatibility opening prefixes as search keywords.
+The system MUST provide the product named `ConfigLens` in both `en-US` and `zh-CN` as the independent package `@lensx/official-config-lens` under the canonical source location `plugins/config-lens`, with plugin identity `dev.lensx.config-lens`.
 
 #### Scenario: User opens ConfigLens from the Launcher
 - **WHEN** the installed ConfigLens Action is found and activated on a work area that can contain its requested size
@@ -38,11 +36,23 @@ The Action's `title.en-US` and `title.zh-CN` MUST both be `ConfigLens`. The titl
 - **THEN** search returns the Action with identity `dev.lensx.config-lens.open` and display name `ConfigLens` under the same rules
 - **THEN** its keyword set remains the existing functional keywords without compatibility aliases added for this title change
 
+#### Scenario: Inspect the ConfigLens Manifest and package boundary
+
+- **WHEN** the ConfigLens Manifest and package dependencies are inspected
+- **THEN** Its Manifest MUST use Contract `0.4.0`, contribute exactly one WebView Page and one Launcher Action targeting that Page, and declare that Page with `initial_size: 800×600` logical pixels and `resizable: true`.
+- **THEN** The declaration MUST use the same public Page presentation contract as external plugins and MUST request no Host permission, Runtime native setter, or unpublished capability.
+- **THEN** The plugin MUST consume only public plugin package exports and ordinary browser dependencies, and the Host MUST NOT import its source or grant authority based on its official repository location.
+
+#### Scenario: Render the ConfigLens Launcher entry
+
+- **WHEN** the ConfigLens Launcher Action title and search keywords are presented in either locale
+- **THEN** The Action's `title.en-US` and `title.zh-CN` MUST both be `ConfigLens`.
+- **THEN** The title change MUST preserve the `dev.lensx.config-lens.open` execution identity, the `main` Page target, and existing functional keywords.
+- **THEN** It MUST NOT append `Open ConfigLens`, `打开 ConfigLens`, or compatibility opening prefixes as search keywords.
+
 ### Requirement: ConfigLens MUST provide direct and reversible editor operations
 
-The Page MUST provide exactly one editable Monaco model. It MUST NOT add a formatting preview model, Diff Editor, `Apply result` action, old/new result comparison, or a separate result-application workflow. Format and JSON-only Compact MUST use the effective language and replace the content through one undoable edit only while the original input, automatic/manual selection mode, effective language, input version, and current operation generation still match. Invalid, unsupported, limited, timed-out, malformed, or superseded results MUST preserve the existing content.
-
-Format and Compact MUST NOT transform content while the input is empty, a current operation is processing, automatic analysis for the current input is unsettled, or automatic mode has no effective language. Compact MUST be available only when the current input has passed strict JSON validation and the effective language is JSON. The same disabled conditions MUST govern buttons and keyboard shortcuts.
+The Page MUST provide exactly one editable Monaco model.
 
 #### Scenario: User formats valid content
 
@@ -68,17 +78,23 @@ Format and Compact MUST NOT transform content while the input is empty, a curren
 - **THEN** Format and Compact do not transform content, and the language selector retains the localized `Auto` label without a detection-state suffix
 - **THEN** the user can continue editing or select a language manually while search and text selection remain available
 
+#### Scenario: Apply an explicit editor operation
+
+- **WHEN** the Page presents its editor operations, an operation is invoked, or its result becomes available
+- **THEN** It MUST NOT add a formatting preview model, Diff Editor, `Apply result` action, old/new result comparison, or a separate result-application workflow.
+- **THEN** Format and JSON-only Compact MUST use the effective language and replace the content through one undoable edit only while the original input, automatic/manual selection mode, effective language, input version, and current operation generation still match.
+- **THEN** Invalid, unsupported, limited, timed-out, malformed, or superseded results MUST preserve the existing content.
+
+#### Scenario: Evaluate editor operation availability
+
+- **WHEN** editor operation availability is evaluated initially or after input, processing, or language-analysis changes
+- **THEN** Format and Compact MUST NOT transform content while the input is empty, a current operation is processing, automatic analysis for the current input is unsettled, or automatic mode has no effective language.
+- **THEN** Compact MUST be available only when the current input has passed strict JSON validation and the effective language is JSON.
+- **THEN** The same disabled conditions MUST govern buttons and keyboard shortcuts.
+
 ### Requirement: Language choice MUST remain explicit across ambiguous configuration syntaxes
 
-A new Page MUST default to automatic mode. The compact visible language selector MUST display manual options as `JSON`, `YAML`, `TOML`, and `XML` without version suffixes; supported syntax versions MUST remain JSON, YAML 1.2, TOML 1.0, and XML 1.0. While automatic mode is selected, its label MUST remain `Auto` in English or `自动` in Simplified Chinese for empty, pending, detected, and unresolved input, without a detection-result or unresolved suffix. The editor MUST precede the selector and visible operation controls.
-
-The selector MUST use a bounded compact width and permit shrinking in constrained layouts rather than expand to fill the row. This presentation MUST preserve keyboard and focus behavior and the existing 40/72-logical-pixel Footer heights.
-
-Automatic detection MUST combine structural configuration evidence with bounded syntax analysis rather than select a language solely because a parser accepts the input. Input with clear XML, JSON, or TOML structure MUST NOT fall back to a YAML scalar because its syntax is incomplete or invalid. Strict JSON objects and arrays MUST take precedence over overlapping YAML syntax. Unstructured plain text, isolated scalars, and ordinary comments alone MUST NOT establish an initial reliable detection.
-
-Without an initial reliable candidate, the editor MUST use an unrecognized plaintext state. If an effective language already exists in automatic mode and a later nonempty edit is temporarily ambiguous, the last automatically effective language MUST be retained; clear structure for another language MUST permit detection to change. Clearing automatic-mode content MUST clear the detection result. A manual choice MUST lock that language across content changes and clearing, and only an explicit return to automatic mode may resume detection.
-
-Detection and selection changes MUST synchronize highlighting, subsequent validation, and the language used for explicit operations, but MUST NOT rewrite content, trigger automatic formatting, or change undo history. Late detection results MUST NOT overwrite newer input versions, manual choices, or Runtime context.
+A new Page MUST default to automatic mode.
 
 #### Scenario: User explicitly selects a language
 
@@ -124,13 +140,44 @@ Detection and selection changes MUST synchronize highlighting, subsequent valida
 - **THEN** the late response cannot overwrite the TOML selection, highlighting, or diagnostics
 - **THEN** after the user explicitly returns to automatic mode, only a new result for the current input can take effect
 
+#### Scenario: Display the language selector
+
+- **WHEN** a new or current ConfigLens Page presents its language choices
+- **THEN** The compact visible language selector MUST display manual options as `JSON`, `YAML`, `TOML`, and `XML` without version suffixes; supported syntax versions MUST remain JSON, YAML 1.2, TOML 1.0, and XML 1.0.
+- **THEN** While automatic mode is selected, its label MUST remain `Auto` in English or `自动` in Simplified Chinese for empty, pending, detected, and unresolved input, without a detection-result or unresolved suffix.
+- **THEN** The editor MUST precede the selector and visible operation controls.
+
+#### Scenario: Constrain the language selector width
+
+- **WHEN** the language selector is laid out at any supported viewport width
+- **THEN** The selector MUST use a bounded compact width and permit shrinking in constrained layouts rather than expand to fill the row.
+- **THEN** This presentation MUST preserve keyboard and focus behavior and the existing 40/72-logical-pixel Footer heights.
+
+#### Scenario: Resolve an automatic language candidate
+
+- **WHEN** automatic detection examines configuration structure and parser results
+- **THEN** Automatic detection MUST combine structural configuration evidence with bounded syntax analysis rather than select a language solely because a parser accepts the input.
+- **THEN** Input with clear XML, JSON, or TOML structure MUST NOT fall back to a YAML scalar because its syntax is incomplete or invalid.
+- **THEN** Strict JSON objects and arrays MUST take precedence over overlapping YAML syntax.
+- **THEN** Unstructured plain text, isolated scalars, and ordinary comments alone MUST NOT establish an initial reliable detection.
+
+#### Scenario: Edit content under automatic or manual mode
+
+- **WHEN** automatic or manual mode is entered, or the user edits or clears content with or without an established effective language
+- **THEN** Without an initial reliable candidate, the editor MUST use an unrecognized plaintext state.
+- **THEN** If an effective language already exists in automatic mode and a later nonempty edit is temporarily ambiguous, the last automatically effective language MUST be retained; clear structure for another language MUST permit detection to change.
+- **THEN** Clearing automatic-mode content MUST clear the detection result.
+- **THEN** A manual choice MUST lock that language across content changes and clearing, and only an explicit return to automatic mode may resume detection.
+
+#### Scenario: Accept a detection or selection update
+
+- **WHEN** a detection result arrives or the user changes language selection
+- **THEN** Detection and selection changes MUST synchronize highlighting, subsequent validation, and the language used for explicit operations, but MUST NOT rewrite content, trigger automatic formatting, or change undo history.
+- **THEN** Late detection results MUST NOT overwrite newer input versions, manual choices, or Runtime context.
+
 ### Requirement: Language operations MUST use bounded Worker execution and safe diagnostics
 
-Automatic detection, validation, formatting, and compaction MUST execute through a package-owned, page-lifetime Dedicated Worker and a typed language boundary. Input exceeding 2 MiB UTF-8 or 100,000 lines MUST be rejected before dispatch. One complete detection and its associated validation MUST share a deadline of at most five seconds rather than restart five seconds for each candidate; explicit operations MUST also have a five-second deadline. Results MUST contain at most 200 diagnostics.
-
-Responses MUST bind to the request generation, input version, and automatic/manual selection version, and receipt MUST validate their shape, supported language, result state, and diagnostic bounds. Late or malformed results MUST become inert. Diagnostics MUST contain only stable codes, severity, bounded locations, localized message keys, and restricted arguments; they MUST NOT include complete input, absolute paths, raw exceptions, stacks, secrets, or dependency-internal objects.
-
-Language resolution and input validity MUST be represented separately: identifying XML does not establish valid XML. Syntax errors, limits, unsupported constructs, timeouts, and Worker failures MUST appear through editor-local markers and accessible diagnostic feedback. Operation errors without precise locations MUST use a stable position within the editor. The Footer MUST NOT regain a diagnostic summary, status text, or error area. Processing MUST be expressed through operation controls' busy/disabled states and accessible semantics.
+Automatic detection, validation, formatting, and compaction MUST execute through a package-owned, page-lifetime Dedicated Worker and a typed language boundary.
 
 #### Scenario: Valid operation completes within bounds
 
@@ -155,6 +202,29 @@ Language resolution and input validity MUST be represented separately: identifyi
 - **WHEN** automatic mode needs to examine several possible languages
 - **THEN** candidate analysis and associated validation share one request deadline and diagnostic limit
 - **THEN** cancellation, manual selection, context changes, and Page close invalidate the entire request
+
+#### Scenario: Dispatch bounded language processing
+
+- **WHEN** a detection, validation, formatting, or compaction request is prepared, executed, or returns a result
+- **THEN** Input exceeding 2 MiB UTF-8 or 100,000 lines MUST be rejected before dispatch.
+- **THEN** One complete detection and its associated validation MUST share a deadline of at most five seconds rather than restart five seconds for each candidate; explicit operations MUST also have a five-second deadline.
+- **THEN** Results MUST contain at most 200 diagnostics.
+
+#### Scenario: Receive a language Worker response
+
+- **WHEN** a Worker returns a language result or diagnostics
+- **THEN** Responses MUST bind to the request generation, input version, and automatic/manual selection version, and receipt MUST validate their shape, supported language, result state, and diagnostic bounds.
+- **THEN** Late or malformed results MUST become inert.
+- **THEN** Diagnostics MUST contain only stable codes, severity, bounded locations, localized message keys, and restricted arguments; they MUST NOT include complete input, absolute paths, raw exceptions, stacks, secrets, or dependency-internal objects.
+
+#### Scenario: Present language diagnostics and processing state
+
+- **WHEN** language analysis or an explicit operation produces processing state or a diagnostic
+- **THEN** Language resolution and input validity MUST be represented separately: identifying XML does not establish valid XML.
+- **THEN** Syntax errors, limits, unsupported constructs, timeouts, and Worker failures MUST appear through editor-local markers and accessible diagnostic feedback.
+- **THEN** Operation errors without precise locations MUST use a stable position within the editor.
+- **THEN** The Footer MUST NOT regain a diagnostic summary, status text, or error area.
+- **THEN** Processing MUST be expressed through operation controls' busy/disabled states and accessible semantics.
 
 ### Requirement: JSON processing MUST preserve lexical data while formatting and compacting
 
@@ -200,7 +270,7 @@ TOML validation and formatting MUST enforce TOML 1.0 syntax and MUST preserve co
 
 ### Requirement: XML processing MUST preserve text whitespace and reject external expansion paths
 
-XML validation and formatting MUST enforce XML 1.0 well-formedness while preserving declaration, namespace, element, attribute, text, CDATA, comment and processing-instruction order. Formatting MAY insert indentation only at element-only structural boundaries and MUST preserve text and mixed-content whitespace exactly. DOCTYPE, entity declarations, XInclude or any construct requiring external resolution MUST return an unsupported diagnostic without resolving or fetching it. ConfigLens MUST NOT expose XML Compact.
+XML validation and formatting MUST enforce XML 1.0 well-formedness while preserving declaration, namespace, element, attribute, text, CDATA, comment and processing-instruction order.
 
 #### Scenario: XML contains namespaces and mixed content
 - **WHEN** valid XML contains namespaces, attributes, comments, CDATA, processing instructions or mixed text and child elements
@@ -212,13 +282,16 @@ XML validation and formatting MUST enforce XML 1.0 well-formedness while preserv
 - **THEN** ConfigLens preserves the input, performs no network or external resource access and does not replace the editor content
 - **THEN** it shows a stable localized unsupported-feature diagnostic rather than expanding or partially formatting the document
 
+#### Scenario: Offer and execute XML operations
+
+- **WHEN** ConfigLens offers or executes XML formatting or encounters a construct requiring external resolution
+- **THEN** Formatting MAY insert indentation only at element-only structural boundaries and MUST preserve text and mixed-content whitespace exactly.
+- **THEN** DOCTYPE, entity declarations, XInclude or any construct requiring external resolution MUST return an unsupported diagnostic without resolving or fetching it.
+- **THEN** ConfigLens MUST NOT expose XML Compact.
+
 ### Requirement: ConfigLens MUST keep user content ephemeral and release all Runtime resources
 
-ConfigLens MUST retain content, search queries, match state, automatic/manual language mode, and detection results only in the current Page's memory. It MUST NOT transmit them through network uploads, browser storage, logs, Host persistence, or Host clipboard APIs. Native text operations through ordinary editing shortcuts MUST NOT add programmatic clipboard permission for the plugin.
-
-Hiding and restoring the Launcher MUST NOT count as closing the Page. While entry, Page, version, origin, resource generation, and Runtime attempt are unchanged, the same Child WebView, Session, Monaco model, Workers, content, undo history, language mode, and current search state MUST be preserved. Global Registration revisions MUST remain revalidation hints and changes to other plugins MUST NOT revoke the current Page.
-
-Close, navigation, disable, replacement, upgrade, uninstall, development reload, SDK retry, React unmount, and document teardown MUST idempotently release the SDK, editor instances and model, diagnostic ownership, observers, subscriptions, timers, search resources, and all Workers. Reopening after an actual close MUST create a new Child WebView attempt, model, Worker, and Session with default automatic mode, no detected language, and an empty query. Host immutable-package-byte caches MUST NOT restore user state.
+ConfigLens MUST retain content, search queries, match state, automatic/manual language mode, and detection results only in the current Page's memory.
 
 #### Scenario: Hidden Launcher restores the current ConfigLens Page
 
@@ -238,17 +311,29 @@ Close, navigation, disable, replacement, upgrade, uninstall, development reload,
 - **THEN** a new generation cannot restore old input, manual mode, or search queries
 - **THEN** upgrade uses the new package's public Runtime resources and uninstall requires no browser-storage migration
 
+#### Scenario: Handle content and native editing within a Page
+
+- **WHEN** ConfigLens holds current content or handles ordinary native text operations
+- **THEN** It MUST NOT transmit them through network uploads, browser storage, logs, Host persistence, or Host clipboard APIs.
+- **THEN** Native text operations through ordinary editing shortcuts MUST NOT add programmatic clipboard permission for the plugin.
+
+#### Scenario: Restore a semantically unchanged Page
+
+- **WHEN** Launcher visibility changes or Registration revisions affect other plugins while the current execution identity remains unchanged
+- **THEN** Hiding and restoring the Launcher MUST NOT count as closing the Page.
+- **THEN** While entry, Page, version, origin, resource generation, and Runtime attempt are unchanged, the same Child WebView, Session, Monaco model, Workers, content, undo history, language mode, and current search state MUST be preserved.
+- **THEN** Global Registration revisions MUST remain revalidation hints and changes to other plugins MUST NOT revoke the current Page.
+
+#### Scenario: Terminate and reopen a ConfigLens attempt
+
+- **WHEN** an actual Page or Runtime termination occurs or the user opens a new ConfigLens attempt
+- **THEN** Close, navigation, disable, replacement, upgrade, uninstall, development reload, SDK retry, React unmount, and document teardown MUST idempotently release the SDK, editor instances and model, diagnostic ownership, observers, subscriptions, timers, search resources, and all Workers.
+- **THEN** Reopening after an actual close MUST create a new Child WebView attempt, model, Worker, and Session with default automatic mode, no detected language, and an empty query.
+- **THEN** Host immutable-package-byte caches MUST NOT restore user state.
+
 ### Requirement: ConfigLens UI MUST be bilingual, theme-aware, keyboard-operable and automatically verifiable
 
-All product copy except the `ConfigLens` brand MUST provide English-default and semantically aligned Simplified Chinese localization, including the automatic-mode label, operation entries, editor search controls, and accessible names. ConfigLens-owned controls, diagnostic messages, and their accessible names MUST adopt the current locale immediately. Native Monaco UI copy for search, related menus, and the diagnostic interaction framework MUST use the locale from the current document's first valid Runtime Context and adopt a new locale after the user actually closes and reopens ConfigLens. Updating native copy MUST NOT automatically reload the Page or discard content. The Page MUST NOT repeat the Host's main title or subtitle and MUST retain an accessible work-area name. The ready layout MUST consist of exactly one flexible `content` region followed by a semantic `footer`; the single editor MUST fill the content region without outer padding, a content/Footer gap, card border, or radius.
-
-The Footer MUST contain only the language selector, Format, and Compact; it MUST NOT include a Search button. It MUST NOT render empty, valid, or processing status text or a dedicated status placeholder. Language and operation controls MUST be vertically centered in the normal viewport, with the Footer fixed to the bottom at 40 logical pixels high. A viewport no wider than 520 or no taller than 260 logical pixels MAY use a fixed 72-logical-pixel two-row arrangement. State, long copy, diagnostics, and search MUST NOT change those heights or move the Footer.
-
-Validation diagnostics MUST remain inside the editor and MUST NOT add a Footer count, summary, list, extra row, third top-level region, or external diagnostic overlay. The editor's own search widget is not a prohibited diagnostic overlay but MUST remain within the content region. Removing status text MUST preserve button busy/disabled behavior, diagnostic recovery, and accessible semantics.
-
-The Page MUST respond to complete light/dark and locale replacements, subject to the native-copy lifecycle exception above, while preserving content, language mode, the current model, undo history, search state, Runtime attempt, user size, and the two-region layout. Theme changes MUST apply immediately to native search. The visible Select All editor-menu entry MUST provide an accessible alternative to its shortcut, and both MUST target the current text focus. Before Runtime Context is ready, normal startup MUST remain visually empty with accessible busy semantics; a startup failure MAY show a focusable recovery entry.
-
-Deterministic component, state, style-contract, and built-output checks MUST cover absence of repeated headings, adjacency of the two regions, fixed Footer geometry, absence of status/diagnostic regions, both locales and themes, long copy, constrained dimensions, keyboard focus, empty/valid/invalid/unrecognized/limited/recovered states, search, and highlighting. Screenshots, pixel comparisons, browser acceptance, and native visual acceptance MUST NOT substitute for these checks.
+All product copy except the `ConfigLens` brand MUST provide English-default and semantically aligned Simplified Chinese localization, including the automatic-mode label, operation entries, editor search controls, and accessible names.
 
 #### Scenario: Ready ConfigLens fills the available Page body
 
@@ -292,9 +377,55 @@ Deterministic component, state, style-contract, and built-output checks MUST cov
 - **THEN** the new document's native Monaco search panel, menus, and diagnostic interaction framework use Simplified Chinese
 - **THEN** the Page follows existing close semantics with empty content, default automatic mode, and an empty query rather than restoring the closed Page's content
 
+#### Scenario: Initialize and localize the ready editor
+
+- **WHEN** ConfigLens becomes ready or receives a locale change
+- **THEN** ConfigLens-owned controls, diagnostic messages, and their accessible names MUST adopt the current locale immediately.
+- **THEN** Native Monaco UI copy for search, related menus, and the diagnostic interaction framework MUST use the locale from the current document's first valid Runtime Context and adopt a new locale after the user actually closes and reopens ConfigLens.
+- **THEN** Updating native copy MUST NOT automatically reload the Page or discard content.
+- **THEN** The Page MUST NOT repeat the Host's main title or subtitle and MUST retain an accessible work-area name.
+- **THEN** The ready layout MUST consist of exactly one flexible `content` region followed by a semantic `footer`; the single editor MUST fill the content region without outer padding, a content/Footer gap, card border, or radius.
+
+#### Scenario: Lay out the Footer in normal and constrained viewports
+
+- **WHEN** ConfigLens lays out its language and operation controls for the current viewport
+- **THEN** The Footer MUST contain only the language selector, Format, and Compact; it MUST NOT include a Search button.
+- **THEN** It MUST NOT render empty, valid, or processing status text or a dedicated status placeholder.
+- **THEN** Language and operation controls MUST be vertically centered in the normal viewport, with the Footer fixed to the bottom at 40 logical pixels high.
+- **THEN** A viewport no wider than 520 or no taller than 260 logical pixels MAY use a fixed 72-logical-pixel two-row arrangement.
+- **THEN** State, long copy, diagnostics, and search MUST NOT change those heights or move the Footer.
+
+#### Scenario: Present validation and search inside the editor
+
+- **WHEN** validation diagnostics, search, or operation state is presented
+- **THEN** Validation diagnostics MUST remain inside the editor and MUST NOT add a Footer count, summary, list, extra row, third top-level region, or external diagnostic overlay.
+- **THEN** The editor's own search widget is not a prohibited diagnostic overlay but MUST remain within the content region.
+- **THEN** Removing status text MUST preserve button busy/disabled behavior, diagnostic recovery, and accessible semantics.
+
+#### Scenario: Replace presentation context while editing
+
+- **WHEN** the Host replaces locale or theme for a current ConfigLens document
+- **THEN** The Page MUST respond to complete light/dark and locale replacements, subject to the native-copy lifecycle exception above, while preserving content, language mode, the current model, undo history, search state, Runtime attempt, user size, and the two-region layout.
+- **THEN** Theme changes MUST apply immediately to native search.
+#### Scenario: Activate the visible Select All alternative
+
+- **WHEN** the editor presents its Select All menu entry or the user invokes that entry or its shortcut
+- **THEN** The visible Select All editor-menu entry MUST provide an accessible alternative to its shortcut, and both MUST target the current text focus.
+
+#### Scenario: Present startup before Runtime readiness
+
+- **WHEN** the first Runtime Context is still unavailable or startup fails
+- **THEN** Before Runtime Context is ready, normal startup MUST remain visually empty with accessible busy semantics; a startup failure MAY show a focusable recovery entry.
+
+#### Scenario: Validate deterministic ConfigLens presentation
+
+- **WHEN** component, state, style-contract, and built-output checks evaluate ConfigLens presentation
+- **THEN** Deterministic component, state, style-contract, and built-output checks MUST cover absence of repeated headings, adjacency of the two regions, fixed Footer geometry, absence of status/diagnostic regions, both locales and themes, long copy, constrained dimensions, keyboard focus, empty/valid/invalid/unrecognized/limited/recovered states, search, and highlighting.
+- **THEN** Screenshots, pixel comparisons, browser acceptance, and native visual acceptance MUST NOT substitute for these checks.
+
 ### Requirement: Task 7.2 completion MUST use the immutable official candidate through the full product lifecycle
 
-The same canonical ConfigLens `.lxp` bytes MUST pass plugin unit, integration, type, static, build, and supported deterministic built-artifact checks; two byte-identical packs; TypeScript and Rust inspection; and ordinary local-install preparation. Deterministic lifecycle tests MUST cover install projection, Action search, open state, SDK-ready state, package-owned Monaco and Worker resource resolution, four-language processing, Launcher hide/shortcut restore state, close, reopen, disable, upgrade, and uninstall without requiring browser, WebView, GUI, or target macOS execution. Task 7.2 completion MUST require focused deterministic ConfigLens and official release gates, complete frontend/shared and Rust validation, bilingual documentation drift checks, and strict OpenSpec validation.
+The same canonical ConfigLens `.lxp` bytes MUST pass plugin unit, integration, type, static, build, and supported deterministic built-artifact checks; two byte-identical packs; TypeScript and Rust inspection; and ordinary local-install preparation.
 
 #### Scenario: Complete candidate succeeds
 
@@ -307,6 +438,12 @@ The same canonical ConfigLens `.lxp` bytes MUST pass plugin unit, integration, t
 - **WHEN** one supported language, fidelity invariant, Worker boundary, installation preparation, modeled lifecycle path, or final validation command fails
 - **THEN** Task 7.2 remains incomplete and ConfigLens MUST NOT be described as fully validated under the maintained deterministic scope
 - **THEN** after correction, the failed command and complete final validation set MUST run again without reusing an invalid candidate
+
+#### Scenario: Validate the immutable candidate lifecycle
+
+- **WHEN** the canonical ConfigLens candidate is assessed for Task 7.2 completion
+- **THEN** Deterministic lifecycle tests MUST cover install projection, Action search, open state, SDK-ready state, package-owned Monaco and Worker resource resolution, four-language processing, Launcher hide/shortcut restore state, close, reopen, disable, upgrade, and uninstall without requiring browser, WebView, GUI, or target macOS execution.
+- **THEN** Task 7.2 completion MUST require focused deterministic ConfigLens and official release gates, complete frontend/shared and Rust validation, bilingual documentation drift checks, and strict OpenSpec validation.
 
 ### Requirement: ConfigLens MUST consume the same Child WebView Runtime as external plugins
 ConfigLens Manifest, Page presentation, SDK initialization, package candidate, installation and Page execution MUST use the public `0.4.0` WebView contract, `@lensx/plugin-sdk/webview` and the production Child WebView service. Repository location, Publisher and official release metadata MUST NOT select a privileged bridge, direct Host import, alternate WebView configuration, native Window method or retained iframe path.
@@ -321,7 +458,7 @@ ConfigLens Manifest, Page presentation, SDK initialization, package candidate, i
 
 ### Requirement: ConfigLens bootstrap and editor resources MUST remain deterministically bounded
 
-ConfigLens MUST use a minimal HTML-referenced bootstrap graph that starts the public `@lensx/plugin-sdk/webview` transport before importing or mounting React, React DOM, Semi Design, Plugin UI, Monaco, or language adapters. Built HTML-referenced JavaScript MUST total at most 256 KiB and HTML-referenced CSS MUST total at most 64 KiB. After valid Runtime Context arrives, ConfigLens MUST load the complete React/Semi UI and Monaco without creating a second SDK client or Session. Monaco loading MUST remain single-flight, the package-owned editor Worker MUST resolve from the candidate, and the language Worker MAY remain demand-created. Deterministic bundle inspection, unit tests, and resource-resolution tests SHALL enforce these properties without target-environment timing claims.
+ConfigLens MUST use a minimal HTML-referenced bootstrap graph that starts the public `@lensx/plugin-sdk/webview` transport before importing or mounting React, React DOM, Semi Design, Plugin UI, Monaco, or language adapters.
 
 #### Scenario: Minimal bootstrap bundle is inspected
 
@@ -335,15 +472,17 @@ ConfigLens MUST use a minimal HTML-referenced bootstrap graph that starts the pu
 - **THEN** deterministic build or package validation fails
 - **THEN** completion does not substitute a historical timing record or real-environment sample
 
+#### Scenario: Load the editor after minimal bootstrap
+
+- **WHEN** the package bootstrap is inspected or a valid first Runtime Context arrives
+- **THEN** Built HTML-referenced JavaScript MUST total at most 256 KiB and HTML-referenced CSS MUST total at most 64 KiB.
+- **THEN** After valid Runtime Context arrives, ConfigLens MUST load the complete React/Semi UI and Monaco without creating a second SDK client or Session.
+- **THEN** Monaco loading MUST remain single-flight, the package-owned editor Worker MUST resolve from the candidate, and the language Worker MAY remain demand-created.
+- **THEN** Deterministic bundle inspection, unit tests, and resource-resolution tests SHALL enforce these properties without target-environment timing claims.
+
 ### Requirement: ConfigLens MUST provide editor-local search and focus-correct selection
 
-When the current editor has text focus, `Cmd/Ctrl+A` MUST select the complete model content; when the search input has focus, the same shortcut MUST select only the query text. `Cmd/Ctrl+F` MUST open the editor-local search widget without moving to Host search or browser Page find. Search MUST support query entry, forward/backward match navigation, and localized no-result feedback. Opening, navigating, and closing search MUST NOT change content or undo history.
-
-Native Find icons MUST use the package-owned font, with bytes matching the locked editor dependency. Emitted CSS resource references MUST resolve relative to their stylesheet within the plugin package. These resources MUST NOT require remote loading, additional Host permissions, or a relaxed CSP.
-
-Within ConfigLens, native Find buttons MUST remain vertically aligned. When Find or expanded Replace is open and the editor is scrolled to the top, the widget MUST NOT obscure the first content line. Closing the widget MUST release its native reserved space. This layout correction MUST remain local to ConfigLens and preserve the shared Plugin UI reset, native editor padding, and Monaco's existing reserved-space behavior.
-
-The search close control and Escape inside its widget MUST close search and restore focus to the original editor without closing the Page. Editor Select All MUST NOT steal focus from the external language selector, buttons, or Host input. Search state MUST belong to current-Page memory and follow the existing cleanup and language/theme contracts.
+When the current editor has text focus, `Cmd/Ctrl+A` MUST select the complete model content; when the search input has focus, the same shortcut MUST select only the query text.
 
 #### Scenario: Find and navigate inside the editor
 
@@ -371,11 +510,42 @@ The search close control and Escape inside its widget MUST close search and rest
 - **THEN** search hides and focus returns to the original editor while the Page, content, and undo history remain intact
 - **THEN** reopening search creates neither a second widget nor duplicate shortcut listeners
 
+#### Scenario: Operate editor-local search without content edits
+
+- **WHEN** the user opens, edits, navigates, or closes editor-local search
+- **THEN** `Cmd/Ctrl+F` MUST open the editor-local search widget without moving to Host search or browser Page find.
+- **THEN** Search MUST support query entry, forward/backward match navigation, and localized no-result feedback.
+- **THEN** Opening, navigating, and closing search MUST NOT change content or undo history.
+
+#### Scenario: Resolve native Find resources
+
+- **WHEN** the built plugin loads native Find icons and CSS resources
+- **THEN** Native Find icons MUST use the package-owned font, with bytes matching the locked editor dependency.
+- **THEN** Emitted CSS resource references MUST resolve relative to their stylesheet within the plugin package.
+- **THEN** These resources MUST NOT require remote loading, additional Host permissions, or a relaxed CSP.
+
+#### Scenario: Open or close Find at the top of the editor
+
+- **WHEN** Find or expanded Replace is displayed, laid out, or closed at any editor scroll position
+- **THEN** Within ConfigLens, native Find buttons MUST remain vertically aligned.
+- **THEN** When Find or expanded Replace is open and the editor is scrolled to the top, the widget MUST NOT obscure the first content line.
+- **THEN** Closing the widget MUST release its native reserved space.
+- **THEN** This layout correction MUST remain local to ConfigLens and preserve the shared Plugin UI reset, native editor padding, and Monaco's existing reserved-space behavior.
+
+#### Scenario: Close search or change text focus
+
+- **WHEN** the search widget closes or text focus belongs to another input or control
+- **THEN** The search close control and Escape inside its widget MUST close search and restore focus to the original editor without closing the Page.
+- **THEN** Editor Select All MUST NOT steal focus from the external language selector, buttons, or Host input.
+
+#### Scenario: Retain and release editor search state
+
+- **WHEN** search state is created, updated, retained, or released
+- **THEN** Search state MUST belong to current-Page memory and follow the existing cleanup and language/theme contracts.
+
 ### Requirement: ConfigLens MUST highlight all supported configuration languages
 
-When the effective language is JSON, YAML 1.2, TOML 1.0, or XML 1.0, the editor MUST distinguish that language's main lexical categories, including applicable keys, strings, numbers, booleans, comments, tags, attributes, and TOML tables/dates. Automatic detection, manual selection, and theme changes MUST update coloring on the current model without changing content or undo history. Unrecognized automatic mode MUST use plaintext presentation.
-
-Highlighting MUST handle incomplete input during editing and MUST NOT determine input validity; strict validation, formatting, and fidelity requirements remain independently applicable. Language resources MUST ship in the plugin package without CDN use, remote services, or new Host permissions, and MUST respect existing resource budgets.
+When the effective language is JSON, YAML 1.2, TOML 1.0, or XML 1.0, the editor MUST distinguish that language's main lexical categories, including applicable keys, strings, numbers, booleans, comments, tags, attributes, and TOML tables/dates.
 
 #### Scenario: Four-language content has meaningful token categories
 
@@ -395,11 +565,21 @@ Highlighting MUST handle incomplete input during editing and MUST NOT determine 
 - **THEN** the same model receives the new language and theme coloring without content or undo-history changes
 - **THEN** an older asynchronous language load cannot overwrite the current selection
 
+#### Scenario: Update highlighting on the current model
+
+- **WHEN** the editor presents an effective or unrecognized language, or receives an automatic-detection, manual-selection, or theme update
+- **THEN** Automatic detection, manual selection, and theme changes MUST update coloring on the current model without changing content or undo history.
+- **THEN** Unrecognized automatic mode MUST use plaintext presentation.
+
+#### Scenario: Highlight incomplete input using packaged resources
+
+- **WHEN** the editor highlights incomplete input or loads language resources
+- **THEN** Highlighting MUST handle incomplete input during editing and MUST NOT determine input validity; strict validation, formatting, and fidelity requirements remain independently applicable.
+- **THEN** Language resources MUST ship in the plugin package without CDN use, remote services, or new Host permissions, and MUST respect existing resource budgets.
+
 ### Requirement: ConfigLens MUST support word selection in the focused editor body
 
-On macOS, when the ConfigLens editor body has text focus, `Option+Shift+Left` and `Option+Shift+Right` MUST extend the selection left or right according to the editor's existing word boundaries. Repeated and reverse operations MUST preserve a valid selection anchor and extend or shrink the range under the editor's normal rules. Selection MUST NOT change content, trigger formatting, emit content-change notifications, or clear or discard existing undo/redo history. Word selection MUST retain the editor's existing undo-grouping semantics, including ending the current typing group during navigation; selection itself is not a content edit.
-
-This behavior MUST remain consistent across English and Simplified Chinese interfaces and light and dark themes, while preserving normal selection behavior for empty documents, document boundaries, and read-only content. When Find, another input, or the Host owns focus, the body MUST NOT intercept the combination, change its own selection, or reclaim focus. The capability MUST use the plugin's ordinary editor facilities without new Host permissions, global shortcuts, or plugin-specific native patches.
+On macOS, when the ConfigLens editor body has text focus, `Option+Shift+Left` and `Option+Shift+Right` MUST extend the selection left or right according to the editor's existing word boundaries.
 
 #### Scenario: Extend selection in either word direction
 
@@ -418,3 +598,17 @@ This behavior MUST remain consistent across English and Simplified Chinese inter
 - **WHEN** the Find query or another input has focus and the user invokes the combination
 - **THEN** the ConfigLens body selection and content remain unchanged, and the current input retains focus
 - **THEN** returning text focus to the body permits normal word selection without creating another global handler
+
+#### Scenario: Repeat or reverse word-selection navigation
+
+- **WHEN** the focused editor body receives any word-selection operation, including a first, repeated, or reverse operation
+- **THEN** Repeated and reverse operations MUST preserve a valid selection anchor and extend or shrink the range under the editor's normal rules.
+- **THEN** Selection MUST NOT change content, trigger formatting, emit content-change notifications, or clear or discard existing undo/redo history.
+- **THEN** Word selection MUST retain the editor's existing undo-grouping semantics, including ending the current typing group during navigation; selection itself is not a content edit.
+
+#### Scenario: Respect word-selection focus and document boundaries
+
+- **WHEN** word-selection shortcuts are used across locales, themes, document states, or focus targets
+- **THEN** This behavior MUST remain consistent across English and Simplified Chinese interfaces and light and dark themes, while preserving normal selection behavior for empty documents, document boundaries, and read-only content.
+- **THEN** When Find, another input, or the Host owns focus, the body MUST NOT intercept the combination, change its own selection, or reclaim focus.
+- **THEN** The capability MUST use the plugin's ordinary editor facilities without new Host permissions, global shortcuts, or plugin-specific native patches.

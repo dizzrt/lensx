@@ -38,17 +38,7 @@ paths as public APIs.
 `create` MUST require an explicit target directory, a
 `framework-neutral | react-semi` template, a valid plugin ID, and a project
 name, and MUST generate the project from validated assets packaged in the CLI
-tarball and kept aligned with the Task 6.3 canonical examples. The generated
-project MUST use only public lensX packages and ordinary publishable
-dependencies, MUST pass Contract validation, and the command MUST NOT download
-dependencies, initialize Git, install the plugin, or run the plugin.
-
-Entry Actions generated from either template MUST retain the `title` field,
-with `title.en-US` and `title.zh-CN` set directly to the `--name` value accepted
-by existing validation. The generator MUST NOT add `Open ` or `打开 ` prefixes,
-trim words from the name, or synthesize legacy-title compatibility keywords.
-Existing accepted name inputs, package naming rules, Action and Page identities,
-targets, and template functional keywords MUST remain unchanged.
+tarball and kept aligned with the Task 6.3 canonical examples.
 
 #### Scenario: Create a framework-neutral project
 
@@ -103,15 +93,25 @@ targets, and template functional keywords MUST remain unchanged.
 - **THEN** the CLI does not automatically rewrite the existing project, title,
   or keywords
 
+#### Scenario: Generate a portable project without installing it
+
+- **WHEN** create generates either supported project template
+- **THEN** The generated project MUST use only public lensX packages and ordinary publishable dependencies, MUST pass Contract validation, and the command MUST NOT download dependencies, initialize Git, install the plugin, or run the plugin.
+
+#### Scenario: Generate Action titles from the supplied name
+
+- **WHEN** create substitutes the accepted --name value into a template
+- **THEN** Entry Actions generated from either template MUST retain the `title` field, with `title.en-US` and `title.zh-CN` set directly to the `--name` value accepted by existing validation.
+- **THEN** The generator MUST NOT add `Open ` or `打开 ` prefixes, trim words from the name, or synthesize legacy-title compatibility keywords.
+- **THEN** Existing accepted name inputs, package naming rules, Action and Page identities, targets, and template functional keywords MUST remain unchanged.
+
 ### Requirement: Build MUST execute only the explicit supported project lifecycle
 
 `build` MUST resolve one plugin project from an explicit `--project` or the
 current working directory, MUST validate package metadata, a supported pnpm
 package manager, and a nonrecursive `build` script, and MUST then execute that
 script from the project root using an argument array without shell command
-composition. A successful result MUST contain a self-contained
-`dist/manifest.json` and all referenced resources. The CLI MUST classify a
-missing script, failed process, or missing output as a controlled failure.
+composition.
 
 #### Scenario: Build a generated project
 
@@ -139,6 +139,12 @@ missing script, failed process, or missing output as a controlled failure.
   summary
 - **THEN** JSON output is not contaminated by arbitrary child-process stdout,
   a stack trace, or a raw error
+
+#### Scenario: Classify the project build result
+
+- **WHEN** a build command is attempted, succeeds, or fails
+- **THEN** A successful result MUST contain a self-contained `dist/manifest.json` and all referenced resources.
+- **THEN** The CLI MUST classify a missing script, failed process, or missing output as a controlled failure.
 
 ### Requirement: Validate MUST provide a read-only project and payload gate
 
@@ -185,12 +191,7 @@ the payload can be packaged and MUST clearly distinguish `valid compatible`,
 ### Requirement: Pack MUST create a canonical reproducible package transactionally
 
 By default, `pack` MUST compose build, validate, canonical pack, and
-self-inspect; `--no-build` MUST skip build and no other stage. The command MUST
-generate the canonical checksums and `.lxp` required by package protocol
-`0.1.0` from a validated `dist/`, MUST reject an output location inside the
-payload, and MUST prevent partial output through a temporary file in the target
-directory, flush, and atomic commit. Repeatedly packing the same payload MUST
-produce byte-for-byte identical `.lxp` files and whole-package SHA-256 digests.
+self-inspect; `--no-build` MUST skip build and no other stage.
 
 #### Scenario: Pack a generated project with one command
 
@@ -223,6 +224,12 @@ produce byte-for-byte identical `.lxp` files and whole-package SHA-256 digests.
 - **THEN** both `.lxp` byte sequences, checksums, build-summary content facts,
   and digests are identical
 - **THEN** source metadata does not enter the canonical package
+
+#### Scenario: Commit canonical package output
+
+- **WHEN** pack validates, writes, or commits a package output
+- **THEN** The command MUST generate the canonical checksums and `.lxp` required by package protocol `0.1.0` from a validated `dist/`, MUST reject an output location inside the payload, and MUST prevent partial output through a temporary file in the target directory, flush, and atomic commit.
+- **THEN** Repeatedly packing the same payload MUST produce byte-for-byte identical `.lxp` files and whole-package SHA-256 digests.
 
 ### Requirement: Inspect MUST classify an existing package without installation or execution
 
@@ -259,14 +266,7 @@ create a Runtime Session, or execute the payload.
 
 ### Requirement: Human and machine output MUST be deterministic, safe, and automation-ready
 
-Every command MUST support human output and `--json`. Human output MUST default
-to `en-US` and support explicit `zh-CN`, and CLI-owned copy MUST come from
-semantically aligned message catalogs. JSON MUST be independent of locale and
-MUST emit exactly one document containing `schema_version`, `command`,
-`status`, `result`, and sorted, deduplicated `diagnostics`. A diagnostic MUST
-use a stable code, bounded path, message key, and structured arguments, and
-MUST NOT contain an absolute Host path, file contents, stack trace, nonce,
-grant, environment secret, or raw error.
+Every command MUST support human output and `--json`.
 
 #### Scenario: CI requests JSON for success and failure
 
@@ -294,17 +294,19 @@ grant, environment secret, or raw error.
 - **THEN** the process respectively returns `0`, `1`, `2`, or `3`
 - **THEN** `--help` and `--version` return `0`
 
+#### Scenario: Render localized or machine-readable diagnostics
+
+- **WHEN** a command emits human output or --json output
+- **THEN** Human output MUST default to `en-US` and support explicit `zh-CN`, and CLI-owned copy MUST come from semantically aligned message catalogs.
+- **THEN** JSON MUST be independent of locale and MUST emit exactly one document containing `schema_version`, `command`, `status`, `result`, and sorted, deduplicated `diagnostics`.
+- **THEN** A diagnostic MUST use a stable code, bounded path, message key, and structured arguments, and MUST NOT contain an absolute Host path, file contents, stack trace, nonce, grant, environment secret, or raw error.
+
 ### Requirement: CLI and Host MUST agree on package-content classification while preserving Host-private authority
 
 For the same package bytes, current lensX and Host API versions, and committed
 corpus, the CLI TypeScript inspector and Host Rust inspector MUST return the
 same three-state status, normalized Manifest, compatibility, file facts,
-whole-package digest, and sorted diagnostic codes and paths. The Host installer
-MUST continue to revalidate untrusted bytes independently and MAY additionally
-reject them because of Host-private conditions such as source file identity,
-races, installation storage, Manager state, or lifecycle state. A CLI result
-MUST NOT claim installation authorization, source trust, signature status, or
-Host authority.
+whole-package digest, and sorted diagnostic codes and paths.
 
 #### Scenario: Shared corpus is evaluated in both languages
 
@@ -324,16 +326,17 @@ Host authority.
 - **THEN** CLI success means only that content is compatible, not that it is
   trusted, authorized, or promised to be installable
 
+#### Scenario: Separate content compatibility from Host authorization
+
+- **WHEN** the CLI reports a package classification or the Host considers installing package bytes
+- **THEN** The Host installer MUST continue to revalidate untrusted bytes independently and MAY additionally reject them because of Host-private conditions such as source file identity, races, installation storage, Manager state, or lifecycle state.
+- **THEN** A CLI result MUST NOT claim installation authorization, source trust, signature status, or Host authority.
+
 ### Requirement: Public tarball validation MUST prove isolated end-to-end consumption
 
 The system MUST provide a CLI package gate and root aggregate gate that verify
 metadata, license, bin and exports, template assets, the exact allowed-file
-set, dependencies, and size limits. In system temporary directories, the gates
-MUST use real public package tarballs to run create, dependency installation,
-build, validate, two packs, inspect, and Rust preparation for both project
-types. Validation MUST audit dependency resolution and artifacts to prevent
-links from a consumer or tarball back to the checkout or root `node_modules`,
-Host-private source, a fixture generator, or an absolute path.
+set, dependencies, and size limits.
 
 #### Scenario: Both templates complete the external CLI workflow
 
@@ -353,8 +356,15 @@ Host-private source, a fixture generator, or an absolute path.
 - **THEN** the package gate fails
 - **THEN** the tarball cannot be treated as a publishable Task 6.4 artifact
 
+#### Scenario: Consume public CLI tarballs in isolation
+
+- **WHEN** the CLI package and aggregate gates exercise either template in a system temporary directory
+- **THEN** In system temporary directories, the gates MUST use real public package tarballs to run create, dependency installation, build, validate, two packs, inspect, and Rust preparation for both project types.
+- **THEN** Validation MUST audit dependency resolution and artifacts to prevent links from a consumer or tarball back to the checkout or root `node_modules`, Host-private source, a fixture generator, or an absolute path.
+
 ### Requirement: CLI MUST generate and validate the current WebView protocol only
-`create` MUST generate the maintained Manifest `0.4.0` and SDK `/webview` lifecycle. Templates MUST default to an omitted presentation that normalizes to fixed `650×600`, while documented author edits MAY add the bounded Page presentation contract. `validate`, `build`, `pack` and `inspect` MUST share current Contract/package presentation normalization, reject Manifest `0.3.x` and older or iframe authoring with a stable incompatible diagnostic, and MUST NOT rewrite old projects, execute plugin code, persist user size, or expose native Window operations during inspection.
+
+`create` MUST generate the maintained Manifest `0.4.0` and SDK `/webview` lifecycle.
 
 #### Scenario: New project completes the CLI loop
 - **WHEN** an external user runs create, build, validate, pack and inspect without adding presentation
@@ -369,9 +379,15 @@ Host-private source, a fixture generator, or an absolute path.
 - **WHEN** the project contains Manifest `0.3.x` or older, `runtime.kind: "iframe"` or SDK `/iframe`
 - **THEN** CLI fails with bounded migration guidance and performs no automatic edit
 
+#### Scenario: Validate current and legacy project presentation
+
+- **WHEN** the CLI generates, builds, validates, packs, or inspects a plugin project
+- **THEN** Templates MUST default to an omitted presentation that normalizes to fixed `650×600`, while documented author edits MAY add the bounded Page presentation contract.
+- **THEN** `validate`, `build`, `pack` and `inspect` MUST share current Contract/package presentation normalization, reject Manifest `0.3.x` and older or iframe authoring with a stable incompatible diagnostic, and MUST NOT rewrite old projects, execute plugin code, persist user size, or expose native Window operations during inspection.
+
 ### Requirement: Public CLI installation MUST establish the executable before workspace build outputs exist
 
-`@lensx/plugin-cli` MUST provide a public `lensx-plugin` entry that already exists at installation time, so the supported package manager can establish consumer command entries when workspace build outputs are absent and install scripts are disabled. After dependencies have been built in their declared order, the entry established by the first installation MUST execute the existing public CLI commands. It MUST NOT require another installation, relinking, a global CLI, source aliases, or consumers directly invoking an internal build path. The published package MUST include both the entry and its required runtime files while preserving existing command arguments, JSON, and exit-code contracts.
+`@lensx/plugin-cli` MUST provide a public `lensx-plugin` entry that already exists at installation time, so the supported package manager can establish consumer command entries when workspace build outputs are absent and install scripts are disabled.
 
 #### Scenario: Install a source workspace before building the CLI
 
@@ -397,9 +413,20 @@ Host-private source, a fixture generator, or an absolute path.
 - **THEN** the entry and all runtime files resolve from installed packages without depending on a lensX checkout, root `node_modules`, or private paths
 - **THEN** existing create, build, validate, pack, inspect, locale-selection, and exit-code semantics remain unchanged
 
+#### Scenario: Execute the initially installed CLI entry after builds
+
+- **WHEN** workspace dependencies finish their declared build order after initial installation
+- **THEN** After dependencies have been built in their declared order, the entry established by the first installation MUST execute the existing public CLI commands.
+- **THEN** It MUST NOT require another installation, relinking, a global CLI, source aliases, or consumers directly invoking an internal build path.
+
+#### Scenario: Inspect the published CLI executable package
+
+- **WHEN** the CLI package is published, installed, or its executable is invoked
+- **THEN** The published package MUST include both the entry and its required runtime files while preserving existing command arguments, JSON, and exit-code contracts.
+
 ### Requirement: CLI validation MUST cover source installation before build separately from tarball consumption
 
-CLI validation MUST include an independent clean source-workspace installation regression and the existing isolated consumption checks for prebuilt published packages. The clean-install regression MUST use the real supported package manager and the project's locked dependencies in a system temporary directory to prove that CLI build outputs are absent during installation, the initial command entry exists, and the same entry successfully invokes the CLI after subsequent builds. It MUST NOT substitute simulated directory creation, prebuilt tarballs, copied existing `node_modules`, or direct invocation of an internal entry for this evidence. Success and failure MUST clean up temporary resources and leave the current checkout's sources, lockfile, and root `node_modules` unchanged.
+CLI validation MUST include an independent clean source-workspace installation regression and the existing isolated consumption checks for prebuilt published packages.
 
 #### Scenario: Existing developer artifacts could hide a missing entry
 
@@ -418,3 +445,10 @@ CLI validation MUST include an independent clean source-workspace installation r
 - **WHEN** installation, a build, or a public command invocation fails in the temporary workspace
 - **THEN** validation identifies the failed stage and returns a nonzero result
 - **THEN** the same cleanup boundary releases the temporary workspace while leaving the current checkout's dependencies and version-controlled files unchanged
+
+#### Scenario: Exercise clean source installation with real dependencies
+
+- **WHEN** CLI validation runs the independent source-workspace installation regression
+- **THEN** The clean-install regression MUST use the real supported package manager and the project's locked dependencies in a system temporary directory to prove that CLI build outputs are absent during installation, the initial command entry exists, and the same entry successfully invokes the CLI after subsequent builds.
+- **THEN** It MUST NOT substitute simulated directory creation, prebuilt tarballs, copied existing `node_modules`, or direct invocation of an internal entry for this evidence.
+- **THEN** Success and failure MUST clean up temporary resources and leave the current checkout's sources, lockfile, and root `node_modules` unchanged.

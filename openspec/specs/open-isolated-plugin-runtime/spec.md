@@ -7,7 +7,13 @@ Define the current open Web execution baseline for installed plugins while prese
 
 ### Requirement: Installation must be the sole current trust decision for plugin behavior
 
-The system MUST interpret installing, replacing, or development-registering a plugin as the user's decision to allow that plugin to run inside its own isolated Web Runtime. It MUST NOT create lensX permission requests, grants, or per-capability authorization interactions for Workers, network access, remote resources, `blob:`, `data:`, WASM, or browser origin storage. Trusted Host installation UI MUST explain that lensX isolates the Host and other plugins but does not review, endorse, or continuously monitor how a plugin processes data the user deliberately gives it.
+The system MUST interpret installing, replacing, or development-registering a plugin as the user's decision to allow that plugin to run inside its own isolated Web Runtime.
+
+#### Scenario: Installation communicates the plugin trust boundary
+
+- **WHEN** a plugin is installed, replaced, or registered for development
+- **THEN** It MUST NOT create lensX permission requests, grants, or per-capability authorization interactions for Workers, network access, remote resources, `blob:`, `data:`, WASM, or browser origin storage.
+- **THEN** Trusted Host installation UI MUST explain that lensX isolates the Host and other plugins but does not review, endorse, or continuously monitor how a plugin processes data the user deliberately gives it.
 
 #### Scenario: User installs a plugin that uses network and Worker
 - **WHEN** the user confirms installation of a valid compatible plugin whose Runtime creates a Dedicated Worker and accesses a remote service
@@ -21,9 +27,20 @@ The system MUST interpret installing, replacing, or development-registering a pl
 
 ### Requirement: The open Web Runtime must remain separate from Host-native authority
 
-The plugin Runtime MUST support ordinary Web content and connections within the target WebView baseline, including page-lifetime Dedicated Workers, browser network requests, remote resources, `blob:`, `data:`, WASM, and browser origin storage. Ordinary Web capabilities MUST NOT expose Tauri IPC, Host DOM, arbitrary Rust commands, filesystem, Shell, process, or unpublished native providers, and MUST NOT promise SharedWorker, ServiceWorker, or background execution beyond the page lifetime.
+The plugin Runtime MUST support ordinary Web content and connections within the target WebView baseline, including page-lifetime Dedicated Workers, browser network requests, remote resources, `blob:`, `data:`, WASM, and browser origin storage.
 
-The `http.request` method added in Host API `0.3.0` MUST be a separate, explicit, controlled public method invoked through the SDK and the current trusted Session. It does not change browser fetch CORS/CSP behavior or provide arbitrary native APIs. It MUST provide only restricted public Internet HTTPS transport on port 443, subject to the destination, DNS, header/body, deadline, concurrency, cancellation, and cleanup limits in the separate HTTP specification. Translation business logic and service signing MUST remain in the plugin; all plugins use the same HTTP boundary.
+#### Scenario: Ordinary Web capabilities remain unprivileged
+
+- **WHEN** plugin content uses browser capabilities within the page lifetime
+- **THEN** Ordinary Web capabilities MUST NOT expose Tauri IPC, Host DOM, arbitrary Rust commands, filesystem, Shell, process, or unpublished native providers, and MUST NOT promise SharedWorker, ServiceWorker, or background execution beyond the page lifetime.
+
+#### Scenario: The SDK invokes controlled Host HTTP
+
+- **WHEN** a current trusted Session uses Host API 0.3.0 http.request
+- **THEN** The `http.request` method added in Host API `0.3.0` MUST be a separate, explicit, controlled public method invoked through the SDK and the current trusted Session.
+- **THEN** It does not change browser fetch CORS/CSP behavior or provide arbitrary native APIs.
+- **THEN** It MUST provide only restricted public Internet HTTPS transport on port 443, subject to the destination, DNS, header/body, deadline, concurrency, cancellation, and cleanup limits in the separate HTTP specification.
+- **THEN** Translation business logic and service signing MUST remain in the plugin; all plugins use the same HTTP boundary.
 
 #### Scenario: Plugin uses open Web capabilities
 - **WHEN** a current plugin loads a remote subresource, creates a package, remote, or Blob Dedicated Worker, or uses a browser network connection
@@ -56,7 +73,13 @@ The Host MUST maintain an independent, author-unselectable origin, path scope, S
 
 ### Requirement: Source and community information must not change Runtime authority
 
-Official, external, and development plugins MUST use the same Web Runtime, Host isolation, Session, resource, and lifecycle boundaries. Availability and control policies for public `http.request` MUST apply equally to every plugin source and MUST NOT be bound to the Translation ID or official provenance. Publisher, repository, release digest, future scan, rating, or community labels MAY inform display and selection, but MUST NOT relax Host isolation, grant additional native capabilities, or change cross-plugin conclusions.
+Official, external, and development plugins MUST use the same Web Runtime, Host isolation, Session, resource, and lifecycle boundaries.
+
+#### Scenario: Source labels accompany public HTTP and Runtime behavior
+
+- **WHEN** plugins from any source execute Web Runtime or public HTTP behavior, or provenance or community information is displayed or changes
+- **THEN** Availability and control policies for public `http.request` MUST apply equally to every plugin source and MUST NOT be bound to the Translation ID or official provenance.
+- **THEN** Publisher, repository, release digest, future scan, rating, or community labels MAY inform display and selection, but MUST NOT relax Host isolation, grant additional native capabilities, or change cross-plugin conclusions.
 
 #### Scenario: Official and external plugins perform the same behavior
 - **WHEN** official and external plugins load the same Worker, network connection, or remote resource, or invoke the same public HTTP method

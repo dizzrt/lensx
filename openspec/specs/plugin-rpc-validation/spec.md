@@ -7,9 +7,7 @@ Define bounded, fail-closed validation and resource controls for plugin Runtime 
 
 ### Requirement: The Host MUST enforce one immutable RPC v1 budget before recursive Contract validation
 
-The Host MUST apply one Host-private, frozen RPC v1 policy to every value received from or sent to a plugin Runtime Session. The policy MUST allow at most 5,242,880 bytes of canonical JSON-compatible cost per private frame, a semantic payload nesting depth of 32, a total private-frame depth of 36, and 16,384 visited values and object keys. The private wire MUST remain single-request: one frame MUST contain at most one request, and a batch or array envelope MUST NOT be accepted.
-
-Inbound analysis MUST begin after only the fixed outer envelope fields needed for safe correlation have been classified and MUST finish before recursive public Contract validation or Handler invocation. It MUST use bounded, early-terminating traversal without first serializing the complete value. A Manifest, plugin source, legacy permission or grant claim, SDK option, payload field, or public API MUST NOT increase or disable a production limit.
+The Host MUST apply one Host-private, frozen RPC v1 policy to every value received from or sent to a plugin Runtime Session.
 
 #### Scenario: A valid bounded request reaches Contract validation
 
@@ -29,11 +27,26 @@ Inbound analysis MUST begin after only the fixed outer envelope fields needed fo
 - **THEN** the Host accepts zero batched requests because the v1 batch limit is one
 - **THEN** an uncorrelatable batch is treated as a protocol violation and cannot produce any Handler invocation
 
+#### Scenario: Apply the immutable private-frame budget
+
+- **WHEN** the Host evaluates an inbound or outbound RPC frame
+- **THEN** The policy MUST allow at most 5,242,880 bytes of canonical JSON-compatible cost per private frame, a semantic payload nesting depth of 32, a total private-frame depth of 36, and 16,384 visited values and object keys.
+- **THEN** The private wire MUST remain single-request: one frame MUST contain at most one request, and a batch or array envelope MUST NOT be accepted.
+
+#### Scenario: Analyze ingress before recursive validation
+
+- **WHEN** the Host has classified fixed envelope fields for safe request correlation
+- **THEN** Inbound analysis MUST begin after only the fixed outer envelope fields needed for safe correlation have been classified and MUST finish before recursive public Contract validation or Handler invocation.
+- **THEN** It MUST use bounded, early-terminating traversal without first serializing the complete value.
+
+#### Scenario: Attempt to alter the production RPC budget
+
+- **WHEN** a plugin-controlled declaration, request, option, or API usage attempts to affect a production RPC limit
+- **THEN** A Manifest, plugin source, legacy permission or grant claim, SDK option, payload field, or public API MUST NOT increase or disable a production limit.
+
 ### Requirement: Recoverable request failures and terminal protocol violations MUST remain distinct
 
-The Host MUST classify a request failure as recoverable only when the private version, request frame type, and bounded request ID are trustworthy enough to correlate exactly one response. A correlatable malformed Host API request MUST return `invalid_request`; a declared method with invalid or mismatched params MUST return `invalid_params`; an undeclared method MUST retain `method_not_found`; and a budget rejection MUST return `limit_exceeded`. These request-level rejections MUST terminal only that request ID, MUST NOT consume an execution slot, and MUST NOT disconnect an otherwise current Session.
-
-An unsupported private version, unknown frame type, invalid or reused request ID, extra private envelope authority field, non-JSON frame, stale lease, or another value that cannot be correlated safely MUST fail closed through the existing Session terminal path. Contract-valid errors produced by the current Dispatcher MUST retain their Contract code and MUST NOT be reclassified as transport failures.
+The Host MUST classify a request failure as recoverable only when the private version, request frame type, and bounded request ID are trustworthy enough to correlate exactly one response.
 
 #### Scenario: Known method carries invalid params
 
@@ -53,11 +66,25 @@ An unsupported private version, unknown frame type, invalid or reused request ID
 - **THEN** the Host treats the frame as a protocol violation and terminates only the affected Session
 - **THEN** it sends no request-level parsing oracle and performs no privileged effect
 
+#### Scenario: Reject a safely correlated request
+
+- **WHEN** a request has trustworthy private version, frame type, and bounded request ID but fails semantic or budget validation
+- **THEN** A correlatable malformed Host API request MUST return `invalid_request`; a declared method with invalid or mismatched params MUST return `invalid_params`; an undeclared method MUST retain `method_not_found`; and a budget rejection MUST return `limit_exceeded`.
+- **THEN** These request-level rejections MUST terminal only that request ID, MUST NOT consume an execution slot, and MUST NOT disconnect an otherwise current Session.
+
+#### Scenario: Terminate uncorrelatable protocol violations
+
+- **WHEN** a frame cannot be correlated safely
+- **THEN** An unsupported private version, unknown frame type, invalid or reused request ID, extra private envelope authority field, non-JSON frame, stale lease, or another value that cannot be correlated safely MUST fail closed through the existing Session terminal path.
+
+#### Scenario: Return a valid Dispatcher rejection
+
+- **WHEN** the current Dispatcher produces a Contract-valid error
+- **THEN** Contract-valid errors produced by the current Dispatcher MUST retain their Contract code and MUST NOT be reclassified as transport failures.
+
 ### Requirement: Every Session MUST have bounded in-flight state and a Host-owned execution deadline
 
-The Host MUST accept at most 32 in-flight Handler requests for one Runtime Session and MUST reject each additional correlatable request with `limit_exceeded` without invoking its Handler. Official SDK request IDs MUST remain strictly increasing fixed-width sequences, and the Host MUST enforce a high-water mark so a completed, cancelled, rejected, or timed-out ID cannot be replayed without retaining an unbounded terminal-ID collection.
-
-Every admitted request MUST have one Host-owned 10,000 millisecond execution deadline. Host deadline, plugin cancellation, Session invalidation, adapter cleanup, and Handler completion MUST compete through one exactly-once settlement. A Host deadline that wins MUST abort the Handler signal, release the pending slot, return one Contract-valid `timeout`, suppress every late completion and post-response effect, and leave an otherwise healthy Session available. An SDK lifecycle timeout that wins first MUST remain an SDK timeout and MUST NOT be relabeled as a Host API error.
+The Host MUST accept at most 32 in-flight Handler requests for one Runtime Session and MUST reject each additional correlatable request with `limit_exceeded` without invoking its Handler.
 
 #### Scenario: The per-Session concurrency budget is full
 
@@ -83,11 +110,22 @@ Every admitted request MUST have one Host-owned 10,000 millisecond execution dea
 - **THEN** the Host treats the replay as a protocol violation and invokes no Handler
 - **THEN** the adapter does not require an ever-growing terminal request-ID set to reject it
 
+#### Scenario: Track admission and terminal request identities
+
+- **WHEN** the SDK allocates a request ID or the Host considers request admission or replay
+- **THEN** Official SDK request IDs MUST remain strictly increasing fixed-width sequences, and the Host MUST enforce a high-water mark so a completed, cancelled, rejected, or timed-out ID cannot be replayed without retaining an unbounded terminal-ID collection.
+
+#### Scenario: Settle an admitted request under competing terminal events
+
+- **WHEN** a Handler request is admitted or later completes, is cancelled, reaches its deadline, or loses its Session
+- **THEN** Every admitted request MUST have one Host-owned 10,000 millisecond execution deadline.
+- **THEN** Host deadline, plugin cancellation, Session invalidation, adapter cleanup, and Handler completion MUST compete through one exactly-once settlement.
+- **THEN** A Host deadline that wins MUST abort the Handler signal, release the pending slot, return one Contract-valid `timeout`, suppress every late completion and post-response effect, and leave an otherwise healthy Session available.
+- **THEN** An SDK lifecycle timeout that wins first MUST remain an SDK timeout and MUST NOT be relabeled as a Host API error.
+
 ### Requirement: Host results, errors, events, and post-response effects MUST pass bounded egress validation
 
-Before posting a result, error, or event, the Host MUST apply the same byte, depth, node, JSON-compatibility, exact-shape, and public Contract validation used by the RPC v1 policy. A result MUST match the original request method. A Handler throw, rejected promise, non-JSON value, over-budget value, invalid error, invalid result, or method/result mismatch MUST become exactly one fixed safe `internal_error` for the affected request; the original value, exception, stack, URL, path, payload, permission, identity, provider, executor, Rust object, Tauri object, or Host object MUST NOT cross the Port.
-
-An invalid or over-budget Host event MUST be suppressed and diagnosed without notifying an SDK subscriber. A private post-response effect MUST run at most once and only after its paired Contract-valid, within-budget response is posted successfully while the request and Session remain current. A failed Port operation, message error, or lost currentness MUST continue to use terminal cleanup.
+Before posting a result, error, or event, the Host MUST apply the same byte, depth, node, JSON-compatibility, exact-shape, and public Contract validation used by the RPC v1 policy.
 
 #### Scenario: Handler returns a mismatched or private value
 
@@ -107,11 +145,26 @@ An invalid or over-budget Host event MUST be suppressed and diagnosed without no
 - **THEN** its effect does not execute
 - **THEN** a late callback cannot close or mutate a replacement Page or Session
 
+#### Scenario: Validate a Handler response before posting
+
+- **WHEN** a Handler returns or rejects with a result or error for a current request
+- **THEN** A result MUST match the original request method.
+- **THEN** A Handler throw, rejected promise, non-JSON value, over-budget value, invalid error, invalid result, or method/result mismatch MUST become exactly one fixed safe `internal_error` for the affected request; the original value, exception, stack, URL, path, payload, permission, identity, provider, executor, Rust object, Tauri object, or Host object MUST NOT cross the Port.
+
+#### Scenario: Post events and paired private effects
+
+- **WHEN** the Host emits an event or considers a post-response effect
+- **THEN** An invalid or over-budget Host event MUST be suppressed and diagnosed without notifying an SDK subscriber.
+- **THEN** A private post-response effect MUST run at most once and only after its paired Contract-valid, within-budget response is posted successfully while the request and Session remain current.
+
+#### Scenario: Lose the current Port or Session boundary
+
+- **WHEN** a Port operation fails, a message error occurs, or the Session loses currentness
+- **THEN** A failed Port operation, message error, or lost currentness MUST continue to use terminal cleanup.
+
 ### Requirement: RPC diagnostics MUST be bounded, private, and non-authoritative
 
-The Host MUST offer an optional observational diagnostic sink whose immutable records contain only the trusted Session plugin ID, an already validated catalog method when available, an `ingress`, `execution`, or `egress` stage, one closed diagnostic code, and a fixed safe English message. A record MUST NOT contain a request ID, params, result, event or error payload, raw value, URL, path, origin, resource token, grant, exception, stack, MessagePort, provider, executor, Rust object, Tauri object, or Host object.
-
-Diagnostic delivery failure MUST NOT change request settlement, Host authority, provider effects, Session currentness, or cleanup. This capability MUST NOT persist diagnostic history or expose it to plugins or public packages.
+The Host MUST offer an optional observational diagnostic sink whose immutable records contain only the trusted Session plugin ID, an already validated catalog method when available, an `ingress`, `execution`, or `egress` stage, one closed diagnostic code, and a fixed safe English message.
 
 #### Scenario: Resource rejection is diagnosed safely
 
@@ -124,6 +177,21 @@ Diagnostic delivery failure MUST NOT change request settlement, Host authority, 
 - **WHEN** the optional diagnostic sink throws while observing an RPC failure
 - **THEN** the adapter swallows the observational failure and completes the predetermined request or terminal action
 - **THEN** no request is settled twice and no Handler gains authority from diagnostic behavior
+
+#### Scenario: Produce a bounded observational diagnostic
+
+- **WHEN** the Host emits a diagnostic record for an RPC stage
+- **THEN** A record MUST NOT contain a request ID, params, result, event or error payload, raw value, URL, path, origin, resource token, grant, exception, stack, MessagePort, provider, executor, Rust object, Tauri object, or Host object.
+
+#### Scenario: Handle diagnostic sink failure
+
+- **WHEN** the diagnostic sink rejects delivery or throws
+- **THEN** Diagnostic delivery failure MUST NOT change request settlement, Host authority, provider effects, Session currentness, or cleanup.
+
+#### Scenario: Retain or expose RPC diagnostic observations
+
+- **WHEN** diagnostic observations are retained or a plugin or public-package consumer attempts to access them
+- **THEN** This capability MUST NOT persist diagnostic history or expose it to plugins or public packages.
 
 ### Requirement: RPC validation MUST accept frames only from the current WebView bridge binding
 The existing closed RPC budgets, validators, cancellation, deadline, exactly-once and egress rules MUST execute only after native bridge ingress proves the actual current Child WebView Session. Carrier decoding MUST treat input as `unknown`; a malformed, oversized, stale or wrong-source frame MUST NOT reach Dispatcher or reveal expected identity. Valid responses and events MUST be encoded and delivered only to the same current WebView.
@@ -138,7 +206,7 @@ The existing closed RPC budgets, validators, cancellation, deadline, exactly-onc
 
 ### Requirement: Delivery MUST deterministically prove RPC limits without expanding the public plugin platform
 
-Delivery MUST include deterministic shared valid and malicious fixtures, policy/analyzer unit tests, Host adapter race tests, real Contract and SDK MessageChannel integration, public tarball and workspace-boundary checks. Tests MUST cover exact-limit acceptance and over-limit rejection for bytes, depth, node count, concurrency, execution deadline, monotonic request IDs, cancellation races, invalid Handler output, invalid events, safe diagnostics, post-response effects, current bridge binding, and zero Handler hits for rejected input. Validation MUST use the stable `plugin-rpc-validation` capability Gate and MUST add no public SDK option/export, Host API method/error code, Tauri command, Rust authority, runtime dependency, browser, WebView, native harness, or environment evidence.
+Delivery MUST include deterministic shared valid and malicious fixtures, policy/analyzer unit tests, Host adapter race tests, real Contract and SDK MessageChannel integration, public tarball and workspace-boundary checks.
 
 #### Scenario: Focused RPC validation gate passes
 
@@ -157,3 +225,9 @@ Delivery MUST include deterministic shared valid and malicious fixtures, policy/
 - **WHEN** the root manifest, CI, documentation, or specs use a dedicated legacy RPC alias or require target-environment evidence
 - **THEN** no-dual-entry or environment policy fails
 - **THEN** callers migrate to the deterministic registry Gate without changing RPC coverage
+
+#### Scenario: Run the focused RPC validation matrix
+
+- **WHEN** the stable plugin-rpc-validation Gate assesses RPC delivery
+- **THEN** Tests MUST cover exact-limit acceptance and over-limit rejection for bytes, depth, node count, concurrency, execution deadline, monotonic request IDs, cancellation races, invalid Handler output, invalid events, safe diagnostics, post-response effects, current bridge binding, and zero Handler hits for rejected input.
+- **THEN** Validation MUST use the stable `plugin-rpc-validation` capability Gate and MUST add no public SDK option/export, Host API method/error code, Tauri command, Rust authority, runtime dependency, browser, WebView, native harness, or environment evidence.

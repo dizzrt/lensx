@@ -11,15 +11,14 @@ and the existing unified search and collection behavior.
 
 ### Requirement: Plugin Action projection must consume only current Host registration facts
 
-The system MUST use complete snapshots and corresponding details published by
-the Plugin Registration Adapter as the only source of plugin registration facts
-for Plugin Action projection. Only entries whose `kind` is `registered`, whose
-`enabled` state is `true`, whose `compatibility.lensx` and
-`compatibility.host_api` values are both `true`, and whose details belong to the
-same current revision MAY contribute Launcher Actions. Installation `source`,
-publisher declarations, remote behavior, and legacy permission claims MUST NOT
-bypass these eligibility conditions. Current Registration and Manifest `0.4.0`
-facts contain no grant authority.
+The system MUST use complete snapshots and corresponding details published by the Plugin Registration Adapter as the only source of plugin registration facts for Plugin Action projection.
+
+#### Scenario: Registration facts determine Action eligibility
+
+- **WHEN** a complete registration snapshot and matching details are projected
+- **THEN** Only entries whose `kind` is `registered`, whose `enabled` state is `true`, whose `compatibility.lensx` and `compatibility.host_api` values are both `true`, and whose details belong to the same current revision MAY contribute Launcher Actions.
+- **THEN** Installation `source`, publisher declarations, remote behavior, and legacy permission claims MUST NOT bypass these eligibility conditions.
+- **THEN** Current Registration and Manifest `0.4.0` facts contain no grant authority.
 
 #### Scenario: A healthy eligible plugin becomes a projection candidate
 
@@ -48,14 +47,13 @@ facts contain no grant authority.
 
 ### Requirement: Plugin Actions must map deterministically into the existing Launcher descriptor contract
 
-The system MUST map every normalized Manifest Action to an existing Launcher
-Action descriptor whose `owner_id` equals `plugin_id`, whose global `action_id`
-equals `<plugin_id>.<local_action_id>`, whose localized `title`, optional
-`description`, and locale-keyed `default_keywords` preserve their normalized
-values, and whose `enabled` value is `true`. The generated descriptor MUST pass
-the existing Launcher descriptor validation. Manifest Page targets, routes,
-executors, functions, and other provider-private data MUST NOT appear in a
-descriptor, Registry snapshot, or search result.
+The system MUST map every normalized Manifest Action to an existing Launcher Action descriptor whose `owner_id` equals `plugin_id`, whose global `action_id` equals `<plugin_id>.<local_action_id>`, whose localized `title`, optional `description`, and locale-keyed `default_keywords` preserve their normalized values, and whose `enabled` value is `true`.
+
+#### Scenario: A projected descriptor crosses the Registry boundary
+
+- **WHEN** a normalized plugin Action becomes a public Launcher descriptor
+- **THEN** The generated descriptor MUST pass the existing Launcher descriptor validation.
+- **THEN** Manifest Page targets, routes, executors, functions, and other provider-private data MUST NOT appear in a descriptor, Registry snapshot, or search result.
 
 #### Scenario: Project a valid Action
 
@@ -111,15 +109,15 @@ fallback. The Action title MUST remain its accessible name.
 
 ### Requirement: Plugin Action provider lifecycle must be revision-aware, atomic per plugin, and fail closed
 
-The system MUST subscribe to the existing Registration Adapter's complete
-snapshot recovery flow and MUST use one `plugin_id` complete Action batch as
-the projection commit and failure-isolation unit. A detail response MUST match
-the candidate snapshot's revision, entry identity, and plugin identity. If a
-newer revision is observed during asynchronous processing, an older result MUST
-NOT be committed. If projection, detail reading, or Registry replacement fails,
-the system MUST unregister the plugin's old batch and produce a safe diagnostic
-that exposes no path, stack, raw exception, or Host object. One plugin failure
-MUST NOT unregister or block other plugins or Host built-in Actions.
+The system MUST subscribe to the existing Registration Adapter's complete snapshot recovery flow and MUST use one `plugin_id` complete Action batch as the projection commit and failure-isolation unit.
+
+#### Scenario: Asynchronous projection races newer facts or failure
+
+- **WHEN** an initial or refreshed projection receives details or commits a Registry batch, including a stale result or failure
+- **THEN** A detail response MUST match the candidate snapshot's revision, entry identity, and plugin identity.
+- **THEN** If a newer revision is observed during asynchronous processing, an older result MUST NOT be committed.
+- **THEN** If projection, detail reading, or Registry replacement fails, the system MUST unregister the plugin's old batch and produce a safe diagnostic that exposes no path, stack, raw exception, or Host object.
+- **THEN** One plugin failure MUST NOT unregister or block other plugins or Host built-in Actions.
 
 #### Scenario: One plugin's Action set changes
 
@@ -157,18 +155,20 @@ MUST NOT unregister or block other plugins or Host built-in Actions.
 
 ### Requirement: Plugin Action execution must remain Host-owned and use the unified Dispatcher
 
-The system MUST synthesize a Host-owned executor for every Page-only Manifest
-target that is eligible for publication. The executor MUST pass only a frozen
-`{ owner_id: plugin_id, page_id: local_page_id }` target and the global opening
-`action_id` to a narrow Host Page opener. A projected Action MUST execute through
-the existing Registry lookup and Dispatcher, and successful, not-found,
-unavailable, and execution-failure outcomes MUST preserve the existing typed
-dispatch semantics. A plugin MUST NOT submit, read, or directly invoke an
-executor. Production publication MUST use the current Registration revision,
-MUST occur only after the target Plugin Page batch has been committed, and MUST
-exclude Actions whose target Page is currently unavailable. Provider removal or
-invalidation MUST unregister the provider's Action batch before unregistering
-its Page batch.
+The system MUST synthesize a Host-owned executor for every Page-only Manifest target that is eligible for publication.
+
+#### Scenario: A projected Action is dispatched to its Page
+
+- **WHEN** a projected Action is resolved or dispatched, or a plugin attempts to access its executor
+- **THEN** The executor MUST pass only a frozen `{ owner_id: plugin_id, page_id: local_page_id }` target and the global opening `action_id` to a narrow Host Page opener.
+- **THEN** A projected Action MUST execute through the existing Registry lookup and Dispatcher, and successful, not-found, unavailable, and execution-failure outcomes MUST preserve the existing typed dispatch semantics.
+- **THEN** A plugin MUST NOT submit, read, or directly invoke an executor.
+
+#### Scenario: Action publication follows Page availability
+
+- **WHEN** production publishes or invalidates a plugin provider batch
+- **THEN** Production publication MUST use the current Registration revision, MUST occur only after the target Plugin Page batch has been committed, and MUST exclude Actions whose target Page is currently unavailable.
+- **THEN** Provider removal or invalidation MUST unregister the provider's Action batch before unregistering its Page batch.
 
 #### Scenario: The Dispatcher executes a projected Action
 
@@ -214,16 +214,20 @@ its Page batch.
 
 ### Requirement: Projected Actions must reuse search and collections without provider-specific behavior
 
-Successfully projected Plugin Actions MUST enter search, execution, and
-collection resolution only through the unified Launcher Registry snapshot.
-Host and Plugin Actions MUST use the same matching, duplicate-safe scoring,
-ordering, enabled filtering, and limit over Action titles and keywords in all
-supported languages. Descriptions MUST NOT match or score. Locale fallback
-MUST serve presentation only; interface locale MUST NOT affect matching or
-ordering. Search MUST NOT create plugin sections, source boosts,
-recommendations, or Marketplace results. Recent and Pinned MUST persist only
-stable global Action IDs, hiding temporarily unregistered Actions without
-deleting their persisted IDs.
+Successfully projected Plugin Actions MUST enter search, execution, and collection resolution only through the unified Launcher Registry snapshot.
+
+#### Scenario: Unified search ranks projected plugin Actions
+
+- **WHEN** the Launcher evaluates any query against registered Host and plugin Actions
+- **THEN** Host and Plugin Actions MUST use the same matching, duplicate-safe scoring, ordering, enabled filtering, and limit over Action titles and keywords in all supported languages.
+- **THEN** Descriptions MUST NOT match or score.
+- **THEN** Locale fallback MUST serve presentation only; interface locale MUST NOT affect matching or ordering.
+- **THEN** Search MUST NOT create plugin sections, source boosts, recommendations, or Marketplace results.
+
+#### Scenario: Collections retain stable projected identities
+
+- **WHEN** Recent or Pinned persists or resolves a projected Action, including a temporarily unregistered Action
+- **THEN** Recent and Pinned MUST persist only stable global Action IDs, hiding temporarily unregistered Actions without deleting their persisted IDs.
 
 #### Scenario: One query matches a Host Action and a Plugin Action
 

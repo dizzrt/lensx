@@ -10,35 +10,7 @@ and removal of unused scaffold behavior.
 
 ### Requirement: The application must provide a product-owned React root interface
 
-The frontend application MUST render a product-owned, semantic, and accessible
-Launcher App Shell. It MUST NOT continue to display build-tool welcome copy,
-example interactions, presentation-layer mock features, a standalone product
-title, or product-description copy. In a unified top region, the App Shell
-MUST display either the search input or page context and MUST display a circular
-avatar placeholder at the far right. The avatar MUST be a non-interactive
-decorative element and MUST NOT provide account, menu, notification, click,
-hover, focus, or accessible-action semantics.
-
-When no page is active, an empty normalized query MUST select the `home`
-presentation state, and a non-empty normalized query MUST select the `search`
-presentation state. In its shared content region, `home` MUST display the real
-Recent and Pinned Action collections in that order and MUST display a
-non-interactive All placeholder beside the Pinned heading. It MUST NOT populate
-collections with simulated Actions, Registry default order, recommendations, or
-marketplace content. `search` MUST display and operate a single Search Results
-grid of real registered Actions. The App Shell MUST request the fixed height for
-the current presentation state through a typed Host boundary so the shared
-content region remains visible. It MUST NOT resize the window from DOM
-measurements or Action and search-result counts.
-
-When a validated page is active, the `page` presentation state MUST take
-precedence over the query. A non-searchable page-context bar in the same top
-slot as the search input MUST replace the editable launcher input, and the
-shared content region MUST display the active page. In the current locale, the
-context bar MUST identify the owner and the name of the Action that opened the
-page and MUST provide an accessible close icon button that returns to `home`.
-The App Shell MUST NOT present the avatar, All placeholder, plugin entry points,
-or other unimplemented capabilities as actionable features.
+The React App Shell MUST present real Home, Search, or validated Page content with a unified top slot and decorative avatar. It MUST use typed fixed-state sizing and preserve non-actionable placeholders without mock features.
 
 #### Scenario: Start the application
 
@@ -128,24 +100,45 @@ or other unimplemented capabilities as actionable features.
   accepted Launcher Action collections
 - **THEN** the page does not describe planned capabilities as implemented
 
+#### Scenario: Render the product-owned Launcher shell
+- **WHEN** the root React interface renders or updates its Launcher top region
+- **THEN** The frontend application MUST render a product-owned, semantic, and accessible
+  Launcher App Shell. It MUST NOT continue to display build-tool welcome copy,
+  example interactions, presentation-layer mock features, a standalone product
+  title, or product-description copy. In a unified top region, the App Shell
+  MUST display either the search input or page context and MUST display a circular
+  avatar placeholder at the far right. The avatar MUST be a non-interactive
+  decorative element and MUST NOT provide account, menu, notification, click,
+  hover, focus, or accessible-action semantics.
+
+#### Scenario: Choose Home or Search from the normalized query
+- **WHEN** no page is active and the Launcher renders Home or Search content from its normalized query
+- **THEN** When no page is active, an empty normalized query MUST select the `home`
+  presentation state, and a non-empty normalized query MUST select the `search`
+  presentation state. In its shared content region, `home` MUST display the real
+  Recent and Pinned Action collections in that order and MUST display a
+  non-interactive All placeholder beside the Pinned heading. It MUST NOT populate
+  collections with simulated Actions, Registry default order, recommendations, or
+  marketplace content. `search` MUST display and operate a single Search Results
+  grid of real registered Actions. The App Shell MUST request the fixed height for
+  the current presentation state through a typed Host boundary so the shared
+  content region remains visible. It MUST NOT resize the window from DOM
+  measurements or Action and search-result counts.
+
+#### Scenario: Present a validated active page in the shared shell
+- **WHEN** a validated page is active in the shared App Shell
+- **THEN** When a validated page is active, the `page` presentation state MUST take
+  precedence over the query. A non-searchable page-context bar in the same top
+  slot as the search input MUST replace the editable launcher input, and the
+  shared content region MUST display the active page. In the current locale, the
+  context bar MUST identify the owner and the name of the Action that opened the
+  page and MUST provide an accessible close icon button that returns to `home`.
+  The App Shell MUST NOT present the avatar, All placeholder, plugin entry points,
+  or other unimplemented capabilities as actionable features.
+
 ### Requirement: The unified top drag region must preserve App Shell interaction semantics
 
-The App Shell MUST treat the complete top surface shared by the `home`,
-`search`, and `page` presentation states as one consistent window drag region
-while preserving the existing product semantics, accessibility, and keyboard
-behavior of elements within that region. A stationary primary-mouse click on
-the search input MUST continue to focus the input and permit caret placement.
-A primary-mouse drag MUST initiate window movement and MUST NOT modify the
-query. Keyboard input, IME composition, and keyboard text selection MUST NOT
-initiate window dragging.
-
-The page close control MUST remain an accessible button and MUST be excluded
-from drag gestures. The avatar MUST remain a non-clickable, non-focusable
-decorative element hidden from assistive technology; allowing a drag to start
-from the avatar MUST NOT give it button, link, menu, or account semantics. This
-behavior MUST remain consistent in English and Simplified Chinese and in light
-and dark themes, and MUST NOT introduce new user-visible copy or persistent
-visual fills.
+The unified top surface MUST support native dragging without changing search editing, IME, keyboard, close-button, or decorative-avatar semantics. The behavior MUST remain consistent across supported locales and themes.
 
 #### Scenario: Click the search input without moving the pointer
 
@@ -204,6 +197,27 @@ visual fills.
   state are not cleared
 - **THEN** the App Shell remains usable through its existing keyboard and
   pointer interactions
+
+#### Scenario: Distinguish top-surface dragging from search editing
+- **WHEN** the user clicks, drags, types, composes, or selects within the unified top region
+- **THEN** The App Shell MUST treat the complete top surface shared by the `home`,
+  `search`, and `page` presentation states as one consistent window drag region
+  while preserving the existing product semantics, accessibility, and keyboard
+  behavior of elements within that region. A stationary primary-mouse click on
+  the search input MUST continue to focus the input and permit caret placement.
+  A primary-mouse drag MUST initiate window movement and MUST NOT modify the
+  query. Keyboard input, IME composition, and keyboard text selection MUST NOT
+  initiate window dragging.
+
+#### Scenario: Keep close and avatar semantics within the drag surface
+- **WHEN** the page close control or decorative avatar is rendered or receives pointer or keyboard interaction in the unified top region
+- **THEN** The page close control MUST remain an accessible button and MUST be excluded
+  from drag gestures. The avatar MUST remain a non-clickable, non-focusable
+  decorative element hidden from assistive technology; allowing a drag to start
+  from the avatar MUST NOT give it button, link, menu, or account semantics. This
+  behavior MUST remain consistent in English and Simplified Chinese and in light
+  and dark themes, and MUST NOT introduce new user-visible copy or persistent
+  visual fills.
 
 ### Requirement: Active pages must isolate content failures and preserve navigation
 
@@ -402,34 +416,7 @@ It MUST preserve the functioning React, Tauri, testing, and styling toolchain.
 
 ### Requirement: The shared page context must use a compact segmented control
 
-When the App Shell displays an active page, it MUST present the page context as
-a continuous, content-sized segmented capsule constrained by the available
-width. In visual order, the capsule MUST contain an Owner segment, the opening
-Action segment, and a close icon button adjacent to the Action. The Owner and
-Action segments MUST use decorative diagonal separation and theme-aware
-hierarchical fills; they MUST NOT use visible `/` text as a substitute for the
-segmented structure.
-
-The Owner segment MUST display the Owner name resolved for the current locale
-and an Owner icon. If the Owner icon is missing or cannot be resolved, the
-system MUST display a stable generic-provider fallback, and the view component
-MUST NOT hard-code icon branches based on Owner IDs. The Action segment MUST
-display the name of the Action that opened the current page. The system MUST
-NOT use an Action icon as the Owner icon.
-
-The Owner and Action segments MUST remain non-interactive and non-focusable and
-MUST NOT expose button, link, menu, or breadcrumb-navigation semantics. The
-close icon button MUST remain visible, support pointer and keyboard operation,
-have an accessible name in the current locale, and remain excluded from native
-window dragging. The complete page-context slot outside the segmented capsule
-MUST continue to support window dragging.
-
-The segmented capsule MUST use application theme tokens and preserve clear
-text, icons, hierarchical fills, hover states, and keyboard-focus states in
-English, Simplified Chinese, light theme, and dark theme. When an Owner or
-Action name exceeds the available width, the system MUST constrain and elide
-the text while preserving the complete close button and the non-interactive
-avatar placeholder at the right.
+Active-page context MUST use a themed, constrained segmented capsule with localized Owner and opening Action metadata, a safe Owner-icon fallback, and an always-operable close button while preserving drag and decorative semantics.
 
 #### Scenario: Display a page context
 
@@ -479,23 +466,46 @@ avatar placeholder at the right.
   keyboard-focus states
 - **THEN** the top drag surface outside the capsule gains no persistent fill
 
+#### Scenario: Compose a constrained Owner Action and close capsule
+- **WHEN** the App Shell renders an active page context
+- **THEN** When the App Shell displays an active page, it MUST present the page context as
+  a continuous, content-sized segmented capsule constrained by the available
+  width. In visual order, the capsule MUST contain an Owner segment, the opening
+  Action segment, and a close icon button adjacent to the Action. The Owner and
+  Action segments MUST use decorative diagonal separation and theme-aware
+  hierarchical fills; they MUST NOT use visible `/` text as a substitute for the
+  segmented structure.
+
+#### Scenario: Resolve localized Owner and opening Action metadata
+- **WHEN** the page context resolves its current Owner icon and Action title
+- **THEN** The Owner segment MUST display the Owner name resolved for the current locale
+  and an Owner icon. If the Owner icon is missing or cannot be resolved, the
+  system MUST display a stable generic-provider fallback, and the view component
+  MUST NOT hard-code icon branches based on Owner IDs. The Action segment MUST
+  display the name of the Action that opened the current page. The system MUST
+  NOT use an Action icon as the Owner icon.
+
+#### Scenario: Operate the page close button beside decorative segments
+- **WHEN** the page-context slot is displayed or receives pointer or keyboard input
+- **THEN** The Owner and Action segments MUST remain non-interactive and non-focusable and
+  MUST NOT expose button, link, menu, or breadcrumb-navigation semantics. The
+  close icon button MUST remain visible, support pointer and keyboard operation,
+  have an accessible name in the current locale, and remain excluded from native
+  window dragging. The complete page-context slot outside the segmented capsule
+  MUST continue to support window dragging.
+
+#### Scenario: Fit localized context within the themed header
+- **WHEN** the page-context capsule initially renders or its locale, theme, or available width changes
+- **THEN** The segmented capsule MUST use application theme tokens and preserve clear
+  text, icons, hierarchical fills, hover states, and keyboard-focus states in
+  English, Simplified Chinese, light theme, and dark theme. When an Owner or
+  Action name exceeds the available width, the system MUST constrain and elide
+  the text while preserving the complete close button and the non-interactive
+  avatar placeholder at the right.
+
 ### Requirement: Launcher Action tiles must keep a square interaction surface
 
-Action tiles in Recent, Pinned, and Search MUST contain their icon and title
-within one interaction surface whose width and height are equal. The complete
-surface MUST activate the primary operation, and hover, focus, and selected
-states MUST follow the same square boundary and corner radius. Title length
-and state changes MUST NOT alter tile dimensions or neighboring tile positions
-and MUST NOT scale the icon.
-
-Home MUST retain eight columns per collection and display at most eight valid
-Actions in their confirmed order; Search MUST retain four columns, at most
-eight results, and at most two rows. Square side lengths MAY differ between
-surfaces according to their column widths, but MUST be uniform within the same
-grid. Remaining row height MUST NOT stretch tiles into rectangles, and text
-or item count MUST NOT change native window dimensions. Idle tiles MUST retain
-the continuous surface background; only existing interaction states use theme
-fills.
+Action tiles MUST keep a single square interaction surface with stable dimensions, icon size, and state boundaries. Home and Search MUST retain their existing grid limits without affecting native window sizing.
 
 #### Scenario: Home collections contain their maximum number of Actions
 
@@ -526,28 +536,29 @@ fills.
 - **THEN** the interface does not fabricate Actions or name tooltips to occupy
   square positions
 
+#### Scenario: Render an Action tile across its interaction states
+- **WHEN** an Action tile is initially displayed or its title or interaction state changes
+- **THEN** Action tiles in Recent, Pinned, and Search MUST contain their icon and title
+  within one interaction surface whose width and height are equal. The complete
+  surface MUST activate the primary operation, and hover, focus, and selected
+  states MUST follow the same square boundary and corner radius. Title length
+  and state changes MUST NOT alter tile dimensions or neighboring tile positions
+  and MUST NOT scale the icon.
+
+#### Scenario: Populate Home and Search grids within fixed limits
+- **WHEN** Recent, Pinned, or Search collections render their current Actions
+- **THEN** Home MUST retain eight columns per collection and display at most eight valid
+  Actions in their confirmed order; Search MUST retain four columns, at most
+  eight results, and at most two rows. Square side lengths MAY differ between
+  surfaces according to their column widths, but MUST be uniform within the same
+  grid. Remaining row height MUST NOT stretch tiles into rectangles, and text
+  or item count MUST NOT change native window dimensions. Idle tiles MUST retain
+  the continuous surface background; only existing interaction states use theme
+  fills.
+
 ### Requirement: Launcher Action titles must adapt within a bounded single-line font size
 
-Every Action title MUST remain on one line and MUST use the complete current
-localized title as its fitting input. A title that fits completely at `14px`
-MUST use `14px`; otherwise, the system MUST use actual text and available
-width measurements to select the largest fitting font size in the continuous
-`12–14px` range, allowing bounded fractional precision error. The system MUST
-NOT choose font sizes solely by character count or restrict output to
-predefined integer-size steps.
-
-Only when the complete title still exceeds the available width at `12px` MUST
-the system keep `12px` and display trailing ellipsis. The system MUST NOT
-automatically rewrite, remove words from, or permanently truncate title data.
-The icon, title line height, and alignment MUST remain stable, and the
-accessible name MUST always contain the complete current title.
-
-The system MUST recalculate fitting when the title, display language, font
-metrics, or effective available width changes, including restoring `14px`
-after a smaller size. When valid dimensions are temporarily unavailable, the
-interface MUST retain an operable single-line fallback and the complete
-accessible name. It MUST recalculate fitting after valid dimensions recover
-and MUST NOT retain stale measurement results.
+Action titles MUST fit the complete localized text on one line using measured continuous 12–14px sizing, ellipsis only at the minimum, and complete accessible names. Fitting MUST recover when text, metrics, or width changes.
 
 #### Scenario: The title fits at the maximum size
 
@@ -593,38 +604,36 @@ and MUST NOT retain stale measurement results.
 - **THEN** valid dimensions trigger fitting recovery without persistent tile
   movement caused by measurement retries
 
+#### Scenario: Measure and choose a bounded title font size
+- **WHEN** the current complete localized Action title is fitted to its available width
+- **THEN** Every Action title MUST remain on one line and MUST use the complete current
+  localized title as its fitting input. A title that fits completely at `14px`
+  MUST use `14px`; otherwise, the system MUST use actual text and available
+  width measurements to select the largest fitting font size in the continuous
+  `12–14px` range, allowing bounded fractional precision error. The system MUST
+  NOT choose font sizes solely by character count or restrict output to
+  predefined integer-size steps.
+
+#### Scenario: Elide a title only after reaching the minimum size
+- **WHEN** a title is displayed at any fitted size or still exceeds the available width at 12px
+- **THEN** Only when the complete title still exceeds the available width at `12px` MUST
+  the system keep `12px` and display trailing ellipsis. The system MUST NOT
+  automatically rewrite, remove words from, or permanently truncate title data.
+  The icon, title line height, and alignment MUST remain stable, and the
+  accessible name MUST always contain the complete current title.
+
+#### Scenario: Recalculate after title metrics or width changes
+- **WHEN** title fitting inputs change or measurements become unavailable or recover
+- **THEN** The system MUST recalculate fitting when the title, display language, font
+  metrics, or effective available width changes, including restoring `14px`
+  after a smaller size. When valid dimensions are temporarily unavailable, the
+  interface MUST retain an operable single-line fallback and the complete
+  accessible name. It MUST recalculate fitting after valid dimensions recover
+  and MUST NOT retain stale measurement results.
+
 ### Requirement: Truncated Action names must remain available to pointer and keyboard users
 
-When a title is actually elided at the minimum font size, the system MUST
-provide a name tooltip showing the complete current title. Home MUST provide
-the tooltip when the pointer hovers over an Action or its primary button has
-keyboard focus. Search MUST provide it when the pointer hovers over a result
-or the input retains focus and that result is selected, including the default
-first selection. A fully displayed title MUST NOT trigger a completion tooltip
-merely because its font size was reduced.
-
-The same Home or Search surface MUST display at most one name tooltip;
-Home's Recent and Pinned collections MUST share this limit. The pointer's
-hovered item MUST take precedence over the keyboard-focused or selected item;
-leaving it MUST restore a still-valid keyboard tooltip candidate. A tooltip
-MUST always correspond to the current triggering tile instance, even when the
-same Action appears in both Recent and Pinned.
-
-Tooltips MUST NOT introduce a Tab stop, take focus, modify the query, change
-Action selection, or trigger execution. Search input focus, active descendant,
-status association, arrow keys, Enter, Escape clearing, and IME priority MUST
-retain their existing semantics. Home users MUST be able to dismiss a tooltip
-with Escape without executing an Action, and it MUST NOT automatically reopen
-until the trigger conditions are re-established.
-
-Tooltips MUST show the complete text, permit long names to wrap, and avoid
-clipping by tiles within the current window. They MUST use existing language
-resolution and light/dark themes; the overlay itself MUST NOT introduce
-operation buttons or new product copy. An invalid trigger, query clearing,
-surface transition, or title that is no longer truncated MUST close the old
-tooltip; keyboard blur MUST clear the keyboard candidate. Moving the pointer
-from a tile into its tooltip MUST keep the name readable until the pointer
-leaves both or the tooltip is explicitly dismissed.
+Actually truncated Action titles MUST remain readable through one non-focusable tooltip per surface with pointer precedence, current-instance identity, keyboard and IME preservation, and deterministic dismissal and stale-trigger cleanup.
 
 #### Scenario: Read a truncated Home title with the pointer
 
@@ -700,20 +709,48 @@ leaves both or the tooltip is explicitly dismissed.
   tooltip remains visible
 - **THEN** accessible naming, focus, and execution semantics remain usable
 
+#### Scenario: Reveal an actually elided Home or Search title
+- **WHEN** a Home or Search title is evaluated for a pointer or keyboard tooltip trigger
+- **THEN** When a title is actually elided at the minimum font size, the system MUST
+  provide a name tooltip showing the complete current title. Home MUST provide
+  the tooltip when the pointer hovers over an Action or its primary button has
+  keyboard focus. Search MUST provide it when the pointer hovers over a result
+  or the input retains focus and that result is selected, including the default
+  first selection. A fully displayed title MUST NOT trigger a completion tooltip
+  merely because its font size was reduced.
+
+#### Scenario: Arbitrate concurrent tooltip candidates on one surface
+- **WHEN** one or more pointer or keyboard tooltip candidates exist on a Home or Search surface
+- **THEN** The same Home or Search surface MUST display at most one name tooltip;
+  Home's Recent and Pinned collections MUST share this limit. The pointer's
+  hovered item MUST take precedence over the keyboard-focused or selected item;
+  leaving it MUST restore a still-valid keyboard tooltip candidate. A tooltip
+  MUST always correspond to the current triggering tile instance, even when the
+  same Action appears in both Recent and Pinned.
+
+#### Scenario: Preserve Launcher keyboard ownership while a tooltip is open
+- **WHEN** a name tooltip is displayed or Launcher input is processed while the tooltip is open
+- **THEN** Tooltips MUST NOT introduce a Tab stop, take focus, modify the query, change
+  Action selection, or trigger execution. Search input focus, active descendant,
+  status association, arrow keys, Enter, Escape clearing, and IME priority MUST
+  retain their existing semantics. Home users MUST be able to dismiss a tooltip
+  with Escape without executing an Action, and it MUST NOT automatically reopen
+  until the trigger conditions are re-established.
+
+#### Scenario: Keep long tooltip text readable and retire stale triggers
+- **WHEN** a name tooltip is displayed, updated, dismissed, or loses a valid trigger
+- **THEN** Tooltips MUST show the complete text, permit long names to wrap, and avoid
+  clipping by tiles within the current window. They MUST use existing language
+  resolution and light/dark themes; the overlay itself MUST NOT introduce
+  operation buttons or new product copy. An invalid trigger, query clearing,
+  surface transition, or title that is no longer truncated MUST close the old
+  tooltip; keyboard blur MUST clear the keyboard candidate. Moving the pointer
+  from a tile into its tooltip MUST keep the name readable until the pointer
+  leaves both or the tooltip is explicitly dismissed.
+
 ### Requirement: Launcher outer surfaces must use consistent rounded corners and shadows
 
-The shared Launcher outer surface MUST preserve its existing rounded outline,
-content clipping, and theme background across Home, Search, Host Pages, and
-plugin Pages. The frontend MUST NOT add a CSS shadow to this outer surface.
-The macOS desktop window MUST retain its existing native window shadow so
-frontend shadows do not add edge artifacts at transparent rounded corners and
-window boundaries.
-
-This policy MUST remain consistent in `en-US`, `zh-CN`, and light and dark
-themes. Shadow changes MUST NOT alter logical window dimensions, content
-layout, dragging, keyboard navigation, focus restoration, or native resize
-permissions for plugin Pages. They MUST NOT alter shadows belonging to inner
-controls or overlays.
+Launcher outer surfaces MUST preserve rounded clipping and theme backgrounds without frontend CSS shadows, retain the native macOS shadow, and leave layout, interactions, resize permissions, and inner-control shadows unchanged.
 
 #### Scenario: Display Home and Search surfaces
 
@@ -750,3 +787,20 @@ controls or overlays.
   theme background remain effective
 - **THEN** the macOS native shadow is not disabled, and no additional product
   copy, focus target, or substitute border is introduced
+
+#### Scenario: Render a rounded Launcher surface with native shadow
+- **WHEN** Home, Search, a Host page, or a plugin page uses the shared outer surface
+- **THEN** The shared Launcher outer surface MUST preserve its existing rounded outline,
+  content clipping, and theme background across Home, Search, Host Pages, and
+  plugin Pages. The frontend MUST NOT add a CSS shadow to this outer surface.
+  The macOS desktop window MUST retain its existing native window shadow so
+  frontend shadows do not add edge artifacts at transparent rounded corners and
+  window boundaries.
+
+#### Scenario: Switch presentation without changing layout or interaction
+- **WHEN** outer-surface shadow policy is applied in any supported locale, theme, or page transition
+- **THEN** This policy MUST remain consistent in `en-US`, `zh-CN`, and light and dark
+  themes. Shadow changes MUST NOT alter logical window dimensions, content
+  layout, dragging, keyboard navigation, focus restoration, or native resize
+  permissions for plugin Pages. They MUST NOT alter shadows belonging to inner
+  controls or overlays.

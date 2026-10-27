@@ -60,9 +60,7 @@ The system MUST create mutually isolated SDK clients through an explicit factory
 
 ### Requirement: The SDK client MUST expose only Contract-closed Host API requests and events
 
-`PluginSdkClient` MUST provide a request operation whose input is the `@lensx/plugin-contract` `HostApiRequest` discriminated union and whose resolved result is derived from the same request method's `HostApiResult`. The client MUST validate and freeze the request before calling its semantic transport, MUST accept the existing SDK cancellation and timeout options, and MUST reject communication unless the client is ready. It MUST NOT provide a call surface accepting an arbitrary string, a private method, an unpaired params object, plugin identity, legacy permission or grant state, Host authority, origin, Port, envelope, Host executor or Tauri command.
-
-The client MUST provide typed subscription only for declared `HostApiEventName` values and MUST validate every event before notifying a consumer. A valid `runtime.context_changed` MUST replace the client's read-only Runtime context before notification. SDK request and event types and validators MUST come from the Contract public entry; the SDK MUST NOT copy the Host API catalog, Schema, current Host API version or error definitions.
+`PluginSdkClient` MUST provide a request operation whose input is the `@lensx/plugin-contract` `HostApiRequest` discriminated union and whose resolved result is derived from the same request method's `HostApiResult`.
 
 #### Scenario: A ready client sends a declared request
 
@@ -87,9 +85,26 @@ The client MUST provide typed subscription only for declared `HostApiEventName` 
 - **THEN** it installs the copied and frozen complete context before notifying active typed subscribers
 - **THEN** invalid, unknown, late or post-disposal events neither change context nor notify a consumer
 
+#### Scenario: Submit a semantic Host API operation
+
+- **WHEN** a consumer calls PluginSdkClient request
+- **THEN** The client MUST validate and freeze the request before calling its semantic transport, MUST accept the existing SDK cancellation and timeout options, and MUST reject communication unless the client is ready.
+- **THEN** It MUST NOT provide a call surface accepting an arbitrary string, a private method, an unpaired params object, plugin identity, legacy permission or grant state, Host authority, origin, Port, envelope, Host executor or Tauri command.
+
+#### Scenario: Deliver a declared SDK event
+
+- **WHEN** the SDK receives an event for a typed subscription
+- **THEN** The client MUST provide typed subscription only for declared `HostApiEventName` values and MUST validate every event before notifying a consumer.
+- **THEN** A valid `runtime.context_changed` MUST replace the client's read-only Runtime context before notification.
+
+#### Scenario: Define and consume SDK request and event facts
+
+- **WHEN** SDK public request or event declarations and validators are defined or consumed
+- **THEN** SDK request and event types and validators MUST come from the Contract public entry; the SDK MUST NOT copy the Host API catalog, Schema, current Host API version or error definitions.
+
 ### Requirement: The SDK MUST unify cancellation, timeout, event, and late-result semantics
 
-The system MUST apply a configurable, positive, finite timeout to initialization and SDK-managed requests, and the default timeout MUST be 10000 milliseconds. Cancellation input MUST accept a signal that is structurally compatible with native `AbortSignal` without requiring a DOM type library. Event subscriptions MUST return an idempotent unsubscribe function. Results and events that arrive after an operation is cancelled, times out, is disconnected, or is disposed MUST NOT change client state or notify a consumer again.
+The system MUST apply a configurable, positive, finite timeout to initialization and SDK-managed requests, and the default timeout MUST be 10000 milliseconds.
 
 #### Scenario: An operation completes normally
 
@@ -117,19 +132,18 @@ The system MUST apply a configurable, positive, finite timeout to initialization
 - **WHEN** a consumer calls the unsubscribe function returned by an event subscription one or more times
 - **THEN** the listener receives no subsequent events, and repeated unsubscribe calls have no side effects
 
+#### Scenario: Cancel an operation or unsubscribe from an event
+
+- **WHEN** a consumer supplies cancellation input, subscribes, unsubscribes, or a managed operation terminates
+- **THEN** Cancellation input MUST accept a signal that is structurally compatible with native `AbortSignal` without requiring a DOM type library.
+- **THEN** Event subscriptions MUST return an idempotent unsubscribe function.
+- **THEN** Results and events that arrive after an operation is cancelled, times out, is disconnected, or is disposed MUST NOT change client state or notify a consumer again.
+
 ### Requirement: Runtime context MUST be read-only, versioned, and validated at Runtime
 
 The system MUST define `PluginRuntimeContext` separately from the client
 lifecycle state and MUST derive its public shape and validation facts from the
-Host API Contract rather than maintaining a second SDK-owned definition. The
-first context version MUST contain a Host API SemVer, an `en-US | zh-CN`
-locale, a `light | dark` theme, and a read-only capability snapshot whose
-values are sorted, unique Host API method IDs. An empty capability snapshot
-MUST be valid. Before a client enters `ready`, the SDK MUST validate through
-the shared Contract facts, copy, and freeze the context. The context MUST NOT
-accept plugin-provided identity, authority, source, installation, or Host
-lifecycle facts, and a capability MUST NOT be invented from Manifest requests
-or the complete method catalog.
+Host API Contract rather than maintaining a second SDK-owned definition.
 
 #### Scenario: A valid Runtime context is accepted
 
@@ -171,9 +185,17 @@ or the complete method catalog.
 - **THEN** this foundation still exposes no raw Host method call or private RPC
   envelope
 
+#### Scenario: Accept a candidate Runtime Context
+
+- **WHEN** the SDK defines, receives, validates, or replaces a Runtime Context
+- **THEN** The first context version MUST contain a Host API SemVer, an `en-US | zh-CN` locale, a `light | dark` theme, and a read-only capability snapshot whose values are sorted, unique Host API method IDs.
+- **THEN** An empty capability snapshot MUST be valid.
+- **THEN** Before a client enters `ready`, the SDK MUST validate through the shared Contract facts, copy, and freeze the context.
+- **THEN** The context MUST NOT accept plugin-provided identity, authority, source, installation, or Host lifecycle facts, and a capability MUST NOT be invented from Manifest requests or the complete method catalog.
+
 ### Requirement: The SDK MUST expose stable, safe SDK-level errors
 
-The system MUST provide a discriminated `PluginSdkError` and stable `PluginSdkErrorCode` values that cover at least `cancelled`, `timeout`, `disconnected`, `disposed`, `incompatible_host_api`, `invalid_runtime_context`, `invalid_argument`, and `transport_failure`. Errors MUST provide safe, predictable messages but MUST NOT expose raw transport exceptions, stacks, Host objects, or private wire data to consumers. Specific Host API method, parameter, domain, and internal errors MUST remain owned by `@lensx/plugin-contract`, stay discriminable from SDK lifecycle errors, and MUST NOT be duplicated or silently collapsed into `transport_failure`.
+The system MUST provide a discriminated `PluginSdkError` and stable `PluginSdkErrorCode` values that cover at least `cancelled`, `timeout`, `disconnected`, `disposed`, `incompatible_host_api`, `invalid_runtime_context`, `invalid_argument`, and `transport_failure`.
 
 #### Scenario: An unknown transport failure is mapped
 
@@ -200,9 +222,15 @@ The system MUST provide a discriminated `PluginSdkError` and stable `PluginSdkEr
   it to `transport_failure`
 - **THEN** raw private envelope, exception, stack, path, payload, grant and Host values remain hidden
 
+#### Scenario: Expose an SDK or Host API failure
+
+- **WHEN** a consumer receives a lifecycle, transport, or Host API failure
+- **THEN** Errors MUST provide safe, predictable messages but MUST NOT expose raw transport exceptions, stacks, Host objects, or private wire data to consumers.
+- **THEN** Specific Host API method, parameter, domain, and internal errors MUST remain owned by `@lensx/plugin-contract`, stay discriminable from SDK lifecycle errors, and MUST NOT be duplicated or silently collapsed into `transport_failure`.
+
 ### Requirement: The SDK package MUST participate in complete workspace, release, and documentation validation
 
-The SDK package MUST declare meaningful `build`, `typecheck`, `test`, and `check` scripts, and the root aggregate commands MUST cover them. The repository MUST validate the contents, exports, declarations, and Runtime consumption of a real tarball, and MUST exclude tests, fixtures, build scripts, and Host-private source code. Canonical English architecture and development documentation and their Simplified Chinese mirrors at the same relative paths MUST describe the SDK public boundary and MUST explicitly state that the SDK alone does not deliver the Host Runtime, Host API execution, native authority, plugin execution, or a public Testkit fake.
+The SDK package MUST declare meaningful `build`, `typecheck`, `test`, and `check` scripts, and the root aggregate commands MUST cover them.
 
 #### Scenario: Root commands cover the SDK package
 
@@ -221,9 +249,15 @@ The SDK package MUST declare meaningful `build`, `typecheck`, `test`, and `check
 - **THEN** both languages describe SDK initialization, context, versioning, errors, and the transport injection boundary with equivalent semantics
 - **THEN** neither language describes the SDK foundation as a Runtime that can already install, register, or execute plugins
 
+#### Scenario: Inspect the SDK tarball and documentation
+
+- **WHEN** release validation or a consumer examines the public SDK package and its bilingual reference
+- **THEN** The repository MUST validate the contents, exports, declarations, and Runtime consumption of a real tarball, and MUST exclude tests, fixtures, build scripts, and Host-private source code.
+- **THEN** Canonical English architecture and development documentation and their Simplified Chinese mirrors at the same relative paths MUST describe the SDK public boundary and MUST explicitly state that the SDK alone does not deliver the Host Runtime, Host API execution, native authority, plugin execution, or a public Testkit fake.
+
 ### Requirement: SDK MUST expose an official zero-configuration WebView transport entry
 
-The package MUST export `@lensx/plugin-sdk/webview` and `createPluginWebviewTransport` as the only production Runtime transport factory. The root `PluginSdkTransport` abstraction MUST remain semantic, framework-neutral, and usable without DOM/native types. The WebView entry MUST NOT expose or accept bridge globals, labels, handles, identities, origins, nonces, frame codecs, Tauri commands, or Host adapters. New `http.request` MUST reuse the same controlled typed request and WebView transport without adding plugin-importable Tauri/native HTTP entries.
+The package MUST export `@lensx/plugin-sdk/webview` and `createPluginWebviewTransport` as the only production Runtime transport factory.
 
 #### Scenario: External plugin consumes SDK 0.4.0
 - **WHEN** a temporary external consumer imports root and `/webview` entries from the packed SDK
@@ -239,11 +273,16 @@ The package MUST export `@lensx/plugin-sdk/webview` and `createPluginWebviewTran
 - **WHEN** tests import the root package and inject semantic fake transport
 - **THEN** no browser/native globals are read and normal SDK lifecycle remains testable
 
+#### Scenario: Consume the semantic root or WebView transport
+
+- **WHEN** an external consumer imports SDK transport exports or invokes HTTP through them
+- **THEN** The root `PluginSdkTransport` abstraction MUST remain semantic, framework-neutral, and usable without DOM/native types.
+- **THEN** The WebView entry MUST NOT expose or accept bridge globals, labels, handles, identities, origins, nonces, frame codecs, Tauri commands, or Host adapters.
+- **THEN** New `http.request` MUST reuse the same controlled typed request and WebView transport without adding plugin-importable Tauri/native HTTP entries.
+
 ### Requirement: SDK MUST preserve the declared Host API compatibility boundary
 
-The current SDK package version MUST be `0.4.0`, its Host API support range MUST be `>=0.2.0 <0.4.0`, and it MUST use the public Contract's current method/request/result/Context validation without copying an independent catalog. The minimum supported version MUST remain `0.2.0`; increasing the current Contract constant to `0.3.0` alone MUST NOT exclude old Hosts. Initialization MUST reject incompatible Runtime Context before ready. The SDK MUST allow `http.request` only when current Context declares it; missing HTTP on an old Host MUST produce explicit rejection, without implicit browser fetch or private native fallback.
-
-The existing support range and closed catalog of old SDK `0.3.0` MUST NOT be described as already supporting Host API `0.3.0`. Authors MUST rebuild and repack using the new SDK and corresponding Manifest ranges to use new capabilities, and the Host MUST NOT rewrite old plugin packages.
+The current SDK package version MUST be `0.4.0`, its Host API support range MUST be `>=0.2.0 <0.4.0`, and it MUST use the public Contract's current method/request/result/Context validation without copying an independent catalog.
 
 #### Scenario: Compatible Host API initializes
 - **WHEN** Runtime Context reports valid Host API `0.2.x` or `0.3.x`
@@ -258,3 +297,16 @@ The existing support range and closed catalog of old SDK `0.3.0` MUST NOT be des
 - **WHEN** callers cancel, the SDK is disposed, the Session disconnects, or the Runtime is replaced during HTTP
 - **THEN** existing cancellation and lifecycle semantics settle the call only once and late responses cannot revive old calls
 - **THEN** the SDK uses the same public cancellation boundary without exposing native request handles
+
+#### Scenario: Initialize a compatible SDK and gate HTTP
+
+- **WHEN** the current SDK initializes against a Host or handles an HTTP capability request
+- **THEN** The minimum supported version MUST remain `0.2.0`; increasing the current Contract constant to `0.3.0` alone MUST NOT exclude old Hosts.
+- **THEN** Initialization MUST reject incompatible Runtime Context before ready.
+- **THEN** The SDK MUST allow `http.request` only when current Context declares it; missing HTTP on an old Host MUST produce explicit rejection, without implicit browser fetch or private native fallback.
+
+#### Scenario: Migrate an older SDK package to new capabilities
+
+- **WHEN** a plugin using SDK 0.3.0 is documented, executed, or upgraded to new capabilities
+- **THEN** The existing support range and closed catalog of old SDK `0.3.0` MUST NOT be described as already supporting Host API `0.3.0`.
+- **THEN** Authors MUST rebuild and repack using the new SDK and corresponding Manifest ranges to use new capabilities, and the Host MUST NOT rewrite old plugin packages.

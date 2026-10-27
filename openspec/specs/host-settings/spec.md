@@ -10,19 +10,7 @@ persistence boundary for application preferences.
 
 ### Requirement: Settings must be provided as a Host-owned capability
 
-The application MUST implement settings as a Host page with owner
-`lensx.core` and page ID `settings`. Settings MUST render in the shared content
-region of the existing Tauri main window. It MUST NOT create a separate Tauri
-settings window and MUST NOT register, label, or execute settings as a plugin.
-
-While settings is active, the App Shell MUST replace the launcher input in the
-unified top slot with a non-searchable page-context bar. In the current locale,
-the context bar MUST display the Host owner name and the name of the Action that
-opened the page, and MUST provide an accessible close icon button. It MUST NOT
-display the former standalone settings title, opening-source description, or
-text Close button. The avatar placeholder on the right MUST remain visible and
-non-interactive. The existing preferences and plugins content and the
-PageErrorBoundary MUST remain in the shared content region.
+Settings MUST remain a Host-owned page in the existing main-window shared content region. Its active state MUST use the common non-searchable page context, accessible close control, and decorative avatar.
 
 #### Scenario: Open the settings page
 
@@ -64,29 +52,27 @@ PageErrorBoundary MUST remain in the shared content region.
 - **THEN** the settings page provider and execution entry point remain inside
   the trusted Host boundary
 
+#### Scenario: Open the Host settings page in the existing window
+- **WHEN** the Host opens or renders settings within the existing main-window content region
+- **THEN** The application MUST implement settings as a Host page with owner
+  `lensx.core` and page ID `settings`. Settings MUST render in the shared content
+  region of the existing Tauri main window. It MUST NOT create a separate Tauri
+  settings window and MUST NOT register, label, or execute settings as a plugin.
+
+#### Scenario: Replace the Launcher input with settings page context
+- **WHEN** the settings page is active in the shared App Shell
+- **THEN** While settings is active, the App Shell MUST replace the launcher input in the
+  unified top slot with a non-searchable page-context bar. In the current locale,
+  the context bar MUST display the Host owner name and the name of the Action that
+  opened the page, and MUST provide an accessible close icon button. It MUST NOT
+  display the former standalone settings title, opening-source description, or
+  text Close button. The avatar placeholder on the right MUST remain visible and
+  non-interactive. The existing preferences and plugins content and the
+  PageErrorBoundary MUST remain in the shared content region.
+
 ### Requirement: The first settings version must contain preferences and plugins sections
 
-The settings page MUST provide localized and accessible top-level
-`Preferences` and `Plugins` sections in a vertical navigation on the left.
-`Preferences` MUST be selected by default when settings opens, and the right
-pane MUST display only the currently selected section. The navigation MUST
-expose a localized accessible name, the current selection, and visible focus,
-and it MUST support keyboard and pointer selection.
-
-`Preferences` MUST contain color-theme and language settings. Each setting
-MUST use an accessible single-select control instead of displaying every
-option persistently side by side. User-visible descriptions MUST explain only
-the observable purpose of each setting and MUST NOT expose the Host, a
-component library, or another internal implementation detail. In every
-interface locale, the language select MUST display `en-US` as `English` and
-`zh-CN` as `简体中文`; language names MUST NOT be translated according to the
-current interface locale.
-
-`Plugins` MUST provide the Host-owned local plugin management capability from
-the `plugin-management-settings` specification and MUST render only current
-Registration facts and operations exposed by trusted typed services. It MUST
-NOT display fabricated plugin data, expose plugin management to plugin code,
-or provide marketplace and remote-distribution operations.
+Settings MUST provide accessible left-side Preferences and Plugins navigation, default to Preferences, use localized single-select preference controls, and expose only current trusted plugin-management facts and operations.
 
 #### Scenario: View the default Preferences section
 
@@ -147,22 +133,37 @@ or provide marketplace and remote-distribution operations.
   settings content update together to the new locale
 - **THEN** the current section and keyboard-focus semantics remain stable
 
+#### Scenario: Choose a top-level settings section
+- **WHEN** settings opens or the user navigates between Preferences and Plugins
+- **THEN** The settings page MUST provide localized and accessible top-level
+  `Preferences` and `Plugins` sections in a vertical navigation on the left.
+  `Preferences` MUST be selected by default when settings opens, and the right
+  pane MUST display only the currently selected section. The navigation MUST
+  expose a localized accessible name, the current selection, and visible focus,
+  and it MUST support keyboard and pointer selection.
+
+#### Scenario: Present theme and language preference choices
+- **WHEN** the Preferences section displays its selectable settings
+- **THEN** `Preferences` MUST contain color-theme and language settings. Each setting
+  MUST use an accessible single-select control instead of displaying every
+  option persistently side by side. User-visible descriptions MUST explain only
+  the observable purpose of each setting and MUST NOT expose the Host, a
+  component library, or another internal implementation detail. In every
+  interface locale, the language select MUST display `en-US` as `English` and
+  `zh-CN` as `简体中文`; language names MUST NOT be translated according to the
+  current interface locale.
+
+#### Scenario: Render the Plugins section from trusted Registration state
+- **WHEN** the Plugins section is active
+- **THEN** `Plugins` MUST provide the Host-owned local plugin management capability from
+  the `plugin-management-settings` specification and MUST render only current
+  Registration facts and operations exposed by trusted typed services. It MUST
+  NOT display fabricated plugin data, expose plugin management to plugin code,
+  or provide marketplace and remote-distribution operations.
+
 ### Requirement: Settings must separate the shared header, navigation, and content with themed boundaries
 
-When the `lensx.core/settings` Host page is active, the App Shell MUST display
-a horizontal boundary across the content width between the shared page-context
-header and the settings content. Settings MUST use a left top-level navigation
-and a right current-section pane, separated by a vertical boundary that extends
-from below the header to the bottom of the content. The boundaries MUST use
-supported application theme tokens, remain distinguishable in light and dark
-themes, and MUST NOT present the header, navigation, or content as separate
-persistent cards.
-
-The layout MUST retain the fixed `650×600` Host page presentation. The right
-pane MUST scroll independently within its available height, and long content
-MUST NOT enlarge the native window, cover the shared header, or move the left
-navigation outside the available area. The settings-specific layout MUST NOT
-change Home, Search, another Host page, or a Plugin page.
+Settings MUST separate shared header, left navigation, and right content with themed boundaries. The fixed 650×600 layout MUST scroll its content independently without resizing the window or changing other pages.
 
 #### Scenario: Open settings
 
@@ -198,6 +199,25 @@ change Home, Search, another Host page, or a Plugin page.
 - **THEN** the settings-specific split-layout modifier is not applied
 - **THEN** those surfaces retain their existing layout and presentation
   semantics
+
+#### Scenario: Render settings boundaries under the shared header
+- **WHEN** the Host settings page is active
+- **THEN** When the `lensx.core/settings` Host page is active, the App Shell MUST display
+  a horizontal boundary across the content width between the shared page-context
+  header and the settings content. Settings MUST use a left top-level navigation
+  and a right current-section pane, separated by a vertical boundary that extends
+  from below the header to the bottom of the content. The boundaries MUST use
+  supported application theme tokens, remain distinguishable in light and dark
+  themes, and MUST NOT present the header, navigation, or content as separate
+  persistent cards.
+
+#### Scenario: Scroll long settings content within the fixed viewport
+- **WHEN** settings content is laid out or scrolled within the available height
+- **THEN** The layout MUST retain the fixed `650×600` Host page presentation. The right
+  pane MUST scroll independently within its available height, and long content
+  MUST NOT enlarge the native window, cover the shared header, or move the left
+  navigation outside the available area. The settings-specific layout MUST NOT
+  change Home, Search, another Host page, or a Plugin page.
 
 ### Requirement: Preferences must use supported theme and locale values
 
@@ -284,17 +304,7 @@ values, and writes MUST avoid leaving a partial file.
 
 ### Requirement: The Host settings context must use lensX Owner presentation
 
-When the Host settings page is active, the page-context Owner segment MUST
-display the lensX Host name for the current locale and the Host-controlled
-lensX Owner icon. The Action segment MUST display the name of the Action that
-opened settings, and the close icon button MUST be adjacent to the Action. The
-system MUST present lensX as the Host Owner of the settings page and MUST NOT
-represent settings as a plugin or depend on plugin Manifest presentation data.
-
-The settings page context MUST reuse the shared segmented page context's Owner
-icon fallback, theme, localization, text-constraint, accessibility, and window-
-dragging rules. The settings-gear Action icon MUST NOT replace the lensX Owner
-icon.
+Settings context MUST identify lensX as the Host Owner with its controlled icon and opening Action title. It MUST reuse shared context semantics and never substitute plugin presentation or the gear Action icon for Owner identity.
 
 #### Scenario: Open Host settings from its Action
 
@@ -328,3 +338,19 @@ icon.
   interaction
 - **THEN** the settings-gear Action icon is not presented as the lensX Owner
   icon
+
+#### Scenario: Resolve lensX Owner presentation for settings
+- **WHEN** the shared page context resolves the active Host settings page
+- **THEN** When the Host settings page is active, the page-context Owner segment MUST
+  display the lensX Host name for the current locale and the Host-controlled
+  lensX Owner icon. The Action segment MUST display the name of the Action that
+  opened settings, and the close icon button MUST be adjacent to the Action. The
+  system MUST present lensX as the Host Owner of the settings page and MUST NOT
+  represent settings as a plugin or depend on plugin Manifest presentation data.
+
+#### Scenario: Apply shared context behavior to the settings capsule
+- **WHEN** the settings Owner and Action segments render or receive presentation updates
+- **THEN** The settings page context MUST reuse the shared segmented page context's Owner
+  icon fallback, theme, localization, text-constraint, accessibility, and window-
+  dragging rules. The settings-gear Action icon MUST NOT replace the lensX Owner
+  icon.

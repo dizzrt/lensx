@@ -10,9 +10,20 @@ between author data and Host-owned state.
 ## Requirements
 ### Requirement: Plugin author Manifests must be strict and versioned inputs
 
-Plugin author Manifests MUST be strict, versioned, JSON Schema-driven inputs, with current version `0.4.0`. The Schema MUST reject unknown fields, including legacy `requested_permissions`, Page `required_permissions`, Host source, grants, trust, signatures, lifecycle, sandbox, CSP, Host bridge configuration, and native Window configuration outside the bounded Page presentation contract. Manifest, Host API, package protocol, and application versions MUST evolve independently.
+Plugin author Manifests MUST be strict, versioned, JSON Schema-driven inputs, with current version `0.4.0`.
 
-The Manifest MUST contain `plugin_id`, `version`, `display`, `publisher`, `compatibility`, `runtime`, and `contributes` at the top level. Every explicit `null` MUST be rejected. The system MUST NOT accept another Manifest protocol through a compatibility alias, fallback Schema, or implicit migration path.
+#### Scenario: Manifest versions and authority fields are validated
+
+- **WHEN** an author Manifest or an independent protocol version is defined or validated
+- **THEN** The Schema MUST reject unknown fields, including legacy `requested_permissions`, Page `required_permissions`, Host source, grants, trust, signatures, lifecycle, sandbox, CSP, Host bridge configuration, and native Window configuration outside the bounded Page presentation contract.
+- **THEN** Manifest, Host API, package protocol, and application versions MUST evolve independently.
+
+#### Scenario: A Manifest supplies its required top-level shape
+
+- **WHEN** the current Manifest Schema validates required fields and null or legacy input
+- **THEN** The Manifest MUST contain `plugin_id`, `version`, `display`, `publisher`, `compatibility`, `runtime`, and `contributes` at the top level.
+- **THEN** Every explicit `null` MUST be rejected.
+- **THEN** The system MUST NOT accept another Manifest protocol through a compatibility alias, fallback Schema, or implicit migration path.
 
 #### Scenario: Accept current Manifest
 - **WHEN** author input declares `manifest_version: "0.4.0"` and satisfies the current strict Schema
@@ -51,13 +62,15 @@ The Manifest MUST contain `plugin_id`, `version`, `display`, `publisher`, `compa
 
 ### Requirement: Plugin identity and version must be stable and validatable
 
-`plugin_id` MUST contain at least two dot-separated namespace segments. Each
-segment MUST begin with an ASCII lowercase letter and MUST contain only ASCII
-lowercase letters, digits, underscores, or hyphens. Each segment MUST NOT
-exceed 64 characters, and the complete ID MUST NOT exceed 255 characters. The
-plugin `version` MUST be valid SemVer. A published `plugin_id` MUST NOT be
-reused for a plugin with different semantics, and the plugin version MUST NOT
-become part of a Page or Action's stable identity.
+`plugin_id` MUST contain at least two dot-separated namespace segments.
+
+#### Scenario: A published plugin identity and version are checked
+
+- **WHEN** an author declares or reuses a plugin ID and version
+- **THEN** Each segment MUST begin with an ASCII lowercase letter and MUST contain only ASCII lowercase letters, digits, underscores, or hyphens.
+- **THEN** Each segment MUST NOT exceed 64 characters, and the complete ID MUST NOT exceed 255 characters.
+- **THEN** The plugin `version` MUST be valid SemVer.
+- **THEN** A published `plugin_id` MUST NOT be reused for a plugin with different semantics, and the plugin version MUST NOT become part of a Page or Action's stable identity.
 
 #### Scenario: Accept a stable plugin identity
 
@@ -175,9 +188,25 @@ and symbolic links do not escape the plugin package.
 
 ### Requirement: Page contributions must form a valid plugin-local navigation graph
 
-Every external plugin MUST contribute at least one Page. Each Page MUST contain a unique local `id`, localized `title`, and plugin-internal `route`, MAY contain `parent_page_id`, an asset icon, and one bounded `presentation`, and MUST NOT contain `required_permissions` or another grant gate. Local IDs, routes, parent references, the acyclic graph, and presentation values MUST continue to satisfy the current plugin-local rules.
+Every external plugin MUST contribute at least one Page.
 
-A local ID MUST be one segment that satisfies Launcher Action local-segment character and length rules. A route MUST begin with exactly one `/` and MUST NOT be an external URL or contain a backslash, parent traversal, query, or fragment. A parent Page reference MUST point to a different Page in the same plugin, and the Page parent graph MUST be acyclic. If present, `presentation` MUST contain exactly integer logical `initial_size.width` in `320..=4096`, integer logical `initial_size.height` in `180..=4096`, and boolean `resizable`; if absent, it MUST normalize to `650×600` and `resizable: false`.
+#### Scenario: A Page contribution supplies its public fields
+
+- **WHEN** a Manifest contributes a Page for normalization and validation
+- **THEN** Each Page MUST contain a unique local `id`, localized `title`, and plugin-internal `route`, MAY contain `parent_page_id`, an asset icon, and one bounded `presentation`, and MUST NOT contain `required_permissions` or another grant gate.
+- **THEN** Local IDs, routes, parent references, the acyclic graph, and presentation values MUST continue to satisfy the current plugin-local rules.
+
+#### Scenario: Page routes and parent links are validated
+
+- **WHEN** the plugin-local navigation graph is checked
+- **THEN** A local ID MUST be one segment that satisfies Launcher Action local-segment character and length rules.
+- **THEN** A route MUST begin with exactly one `/` and MUST NOT be an external URL or contain a backslash, parent traversal, query, or fragment.
+- **THEN** A parent Page reference MUST point to a different Page in the same plugin, and the Page parent graph MUST be acyclic.
+
+#### Scenario: A Page presentation is supplied or omitted
+
+- **WHEN** a Page contribution is normalized with or without presentation preferences
+- **THEN** If present, `presentation` MUST contain exactly integer logical `initial_size.width` in `320..=4096`, integer logical `initial_size.height` in `180..=4096`, and boolean `resizable`; if absent, it MUST normalize to `650×600` and `resizable: false`.
 
 #### Scenario: Accept multiple permissionless Pages
 - **WHEN** a Manifest declares `home` and `settings` Pages, makes `home` the parent of `settings`, and gives them different valid presentations
@@ -226,20 +255,21 @@ A local ID MUST be one segment that satisfies Launcher Action local-segment char
 
 ### Requirement: A plugin can contribute multiple Page-only Actions
 
-`contributes.actions` MAY be absent or empty. Each Action MUST contain a local
-`id` unique within the same plugin, a localized `title`, and a `target`. An
-Action MAY contain a localized `description`, locale-keyed
-`default_keywords`, and an asset icon. In the first version, `target.kind`
-MUST allow only `page`, and `target.page_id` MUST reference a Page contributed
-by the same plugin. An Action MUST NOT contain an executor, function, route,
-URL, Command Target, or author-controlled `enabled` state.
+`contributes.actions` MAY be absent or empty. Each Action MUST contain a local `id` unique within the same plugin, a localized `title`, and a `target`.
 
-`title` MUST express the author's user-facing display name rather than require
-a verb phrase. Page-entry authoring rules MUST favor distinguishable destination
-names, but this copy convention MUST NOT become a protocol rule that rejects
-or rewrites valid localized strings based on an `Open` / `打开` prefix. Field
-names, existing localized-text validation, and version compatibility boundaries
-MUST remain unchanged.
+#### Scenario: An Action declares a Page-only target
+
+- **WHEN** a plugin contributes a non-empty Action entry
+- **THEN** An Action MAY contain a localized `description`, locale-keyed `default_keywords`, and an asset icon.
+- **THEN** In the first version, `target.kind` MUST allow only `page`, and `target.page_id` MUST reference a Page contributed by the same plugin.
+- **THEN** An Action MUST NOT contain an executor, function, route, URL, Command Target, or author-controlled `enabled` state.
+
+#### Scenario: Action titles are checked without verb-prefix rewriting
+
+- **WHEN** a localized Page-entry Action title is authored or validated
+- **THEN** `title` MUST express the author's user-facing display name rather than require a verb phrase.
+- **THEN** Page-entry authoring rules MUST favor distinguishable destination names, but this copy convention MUST NOT become a protocol rule that rejects or rewrites valid localized strings based on an `Open` / `打开` prefix.
+- **THEN** Field names, existing localized-text validation, and version compatibility boundaries MUST remain unchanged.
 
 #### Scenario: A plugin contributes multiple Actions
 
@@ -354,9 +384,22 @@ and does not define a search ranking algorithm.
 
 ### Requirement: Compatibility status must be separate from Manifest validity
 
-The current LensX version MUST be `0.1.0`, and the current Host API protocol MUST be `0.3.0`. Both compatibility ranges MUST contain valid SemVer `min_version` and `max_version_exclusive` values, with the minimum strictly less than the exclusive maximum. A dimension is compatible only when `min_version <= current_version < max_version_exclusive`. A structurally and semantically valid Manifest whose ranges exclude either current version MUST return `incompatible` rather than `invalid`.
+The current LensX version MUST be `0.1.0`, and the current Host API protocol MUST be `0.3.0`.
 
-Compatibility MUST depend only on declared ranges and current LensX `0.1.0` and Host API `0.3.0`. The Host MUST NOT silently negotiate old protocol catalogs, convert old packages, rewrite ranges, or bypass ranges using source or official identity. Existing packages declaring `max_version_exclusive: "0.3.0"` MUST be explicitly incompatible with the new Host; authors must update the SDK and declarations and repack. Maintained templates and ConfigLens MUST update their compatibility upper bound to `0.4.0`; Translation uses the new HTTP method and MUST declare minimum Host API `0.3.0`.
+#### Scenario: Compatibility ranges classify a valid Manifest
+
+- **WHEN** the current LensX and Host API versions are checked against declared ranges
+- **THEN** Both compatibility ranges MUST contain valid SemVer `min_version` and `max_version_exclusive` values, with the minimum strictly less than the exclusive maximum.
+- **THEN** A dimension is compatible only when `min_version <= current_version < max_version_exclusive`.
+- **THEN** A structurally and semantically valid Manifest whose ranges exclude either current version MUST return `incompatible` rather than `invalid`.
+
+#### Scenario: Packages cross the controlled HTTP protocol boundary
+
+- **WHEN** any plugin package or maintained authoring template is evaluated against the current LensX and Host API version boundaries
+- **THEN** Compatibility MUST depend only on declared ranges and current LensX `0.1.0` and Host API `0.3.0`.
+- **THEN** The Host MUST NOT silently negotiate old protocol catalogs, convert old packages, rewrite ranges, or bypass ranges using source or official identity.
+- **THEN** Existing packages declaring `max_version_exclusive: "0.3.0"` MUST be explicitly incompatible with the new Host; authors must update the SDK and declarations and repack.
+- **THEN** Maintained templates and ConfigLens MUST update their compatibility upper bound to `0.4.0`; Translation uses the new HTTP method and MUST declare minimum Host API `0.3.0`.
 
 #### Scenario: Initial current versions are within both ranges
 - **WHEN** current LensX `0.1.0` and Host API `0.3.0` are both within their declared half-open ranges
@@ -379,15 +422,15 @@ Compatibility MUST depend only on declared ranges and current LensX `0.1.0` and 
 
 ### Requirement: Normalization and diagnostics must be deterministic and cross-language consistent
 
-The system MUST normalize absent `contributes.actions` and Action
-`default_keywords` to empty collections while preserving the non-empty
-constraint for required `contributes.pages`. Legacy `requested_permissions`
-and Page `required_permissions` MUST be rejected rather than normalized. Public diagnostics MUST use a
-stable `{code, path, message}` structure, and `path` MUST be a JSON Pointer.
-Diagnostics that can be aggregated safely MUST be returned together and sorted
-by `path` and then by `code`. The Schema, TypeScript, and Rust MUST maintain the
-same classification, normalized values, and diagnostic codes and paths for
-shared valid, invalid, normalized, and incompatible fixtures.
+The system MUST normalize absent `contributes.actions` and Action `default_keywords` to empty collections while preserving the non-empty constraint for required `contributes.pages`.
+
+#### Scenario: Normalization rejects legacy authority and orders diagnostics
+
+- **WHEN** any author Manifest is normalized or diagnosed by the Schema, TypeScript, or Rust
+- **THEN** Legacy `requested_permissions` and Page `required_permissions` MUST be rejected rather than normalized.
+- **THEN** Public diagnostics MUST use a stable `{code, path, message}` structure, and `path` MUST be a JSON Pointer.
+- **THEN** Diagnostics that can be aggregated safely MUST be returned together and sorted by `path` and then by `code`.
+- **THEN** The Schema, TypeScript, and Rust MUST maintain the same classification, normalized values, and diagnostic codes and paths for shared valid, invalid, normalized, and incompatible fixtures.
 
 #### Scenario: Normalize absent collections
 
@@ -446,7 +489,14 @@ MUST NOT be written back or presented as author declarations.
   plugin Actions
 
 ### Requirement: External Runtime authoring MUST use the WebView protocol exclusively
-Manifest Contract `0.4.0` MUST accept exactly `runtime.kind: "webview"` for an external Page Runtime and MUST keep `runtime.entry` as a safe package-relative HTML reference. It MUST reject `runtime.kind: "iframe"`, Manifest `0.3.x` or older, unknown Runtime kinds, native labels, bridge configuration, WebView options and permissions. Bounded Page presentation MUST remain declarative Host input and MUST NOT become Runtime configuration. Validation MUST remain deterministic across TypeScript and Rust.
+Manifest Contract `0.4.0` MUST accept exactly `runtime.kind: "webview"` for an external Page Runtime and MUST keep `runtime.entry` as a safe package-relative HTML reference.
+
+#### Scenario: External Runtime declarations are validated across consumers
+
+- **WHEN** a Manifest declares an external Runtime or bounded Page presentation
+- **THEN** It MUST reject `runtime.kind: "iframe"`, Manifest `0.3.x` or older, unknown Runtime kinds, native labels, bridge configuration, WebView options and permissions.
+- **THEN** Bounded Page presentation MUST remain declarative Host input and MUST NOT become Runtime configuration.
+- **THEN** Validation MUST remain deterministic across TypeScript and Rust.
 
 #### Scenario: A current WebView Manifest is normalized
 - **WHEN** an author Manifest declares protocol `0.4.0`, `runtime.kind: "webview"` and a valid package-relative entry

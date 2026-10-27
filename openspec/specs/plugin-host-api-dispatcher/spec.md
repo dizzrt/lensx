@@ -10,9 +10,7 @@ public Contract boundaries.
 
 ### Requirement: Production Host MUST route requests through a closed Dispatcher bound to a trusted Session
 
-The production Host MUST route Host API `0.3.0` requests through a closed Dispatcher bound to the current trusted Runtime Session identity. The Dispatcher MUST compose base navigation/Context, plugin-scoped storage, and the public controlled HTTP provider; it MUST NOT compose permission services, grant sources, native clipboard, arbitrary Tauri commands, or implicit proxies for ordinary browser Worker/network behavior. `http.request` MUST be an explicit public method executing generic HTTPS transport without translation, signing, or credential-management business logic. Every request MUST pass strict Contract validation, identity/currentness checks, cancellation, deadlines, and bounded response validation.
-
-Plugins or wire payloads MUST NOT choose or override plugin ID, Page ID, Registration revision, Runtime attempt, origin, provider, executor, Tauri command, storage namespace, paths, or other Host objects. Unknown or malformed methods MUST be rejected before a handler; defensive direct dispatch MUST return stable `method_not_found`, while declared methods without an available current provider MUST return stable `unavailable` without side effects.
+The production Host MUST route Host API `0.3.0` requests through a closed Dispatcher bound to the current trusted Runtime Session identity.
 
 #### Scenario: Current Session calls a non-privileged method
 - **WHEN** the current plugin invokes a navigation, Context, storage, HTTP, or close method that belongs to the catalog and is actually composed
@@ -34,11 +32,20 @@ Plugins or wire payloads MUST NOT choose or override plugin ID, Page ID, Registr
 - **THEN** stable `method_not_found` or `unavailable` is returned respectively
 - **THEN** the Dispatcher invokes no fallback storage, browser fetch, arbitrary native executor, or other implicit fallback
 
+#### Scenario: Compose only current public providers in production
+- **WHEN** a ready trusted Runtime Session receives a Host API request
+- **THEN** The Dispatcher MUST compose base navigation/Context, plugin-scoped storage, and the public controlled HTTP provider; it MUST NOT compose permission services, grant sources, native clipboard, arbitrary Tauri commands, or implicit proxies for ordinary browser Worker/network behavior.
+- **THEN** `http.request` MUST be an explicit public method executing generic HTTPS transport without translation, signing, or credential-management business logic.
+- **THEN** Every request MUST pass strict Contract validation, identity/currentness checks, cancellation, deadlines, and bounded response validation.
+
+#### Scenario: Reject wire-selected Host identities and targets
+- **WHEN** a plugin sends an unknown, malformed, unavailable, or identity-overriding request
+- **THEN** Plugins or wire payloads MUST NOT choose or override plugin ID, Page ID, Registration revision, Runtime attempt, origin, provider, executor, Tauri command, storage namespace, paths, or other Host objects.
+- **THEN** Unknown or malformed methods MUST be rejected before a handler; defensive direct dispatch MUST return stable `method_not_found`, while declared methods without an available current provider MUST return stable `unavailable` without side effects.
+
 ### Requirement: Runtime Context MUST derive from current Host facts and real provider availability
 
-The Dispatcher MUST derive complete Context from the current Host API `0.3.0` catalog, Session identity, locale/theme sources, and actually composed providers. It MUST NOT read Manifest permission requests, persisted grants, permission catalogs, or clipboard availability, and MUST NOT list ordinary browser capabilities as Host API methods. Context MUST list the separate `http.request` method only when the controlled HTTP provider is currently available.
-
-`runtime.get_context` MUST accept exact `{}` and return complete, Contract-valid, copied, frozen Context. Real locale, theme, or provider-availability changes in the same Session MUST publish one complete `runtime.context_changed` replacement; identical snapshots MUST NOT be published repeatedly. Invalidation of identity, Registration revision, resource generation, or Runtime attempt MUST terminate the old Session and MUST NOT reauthorize it through events.
+The Dispatcher MUST derive complete Context from the current Host API `0.3.0` catalog, Session identity, locale/theme sources, and actually composed providers.
 
 #### Scenario: Only base and storage providers are available
 - **WHEN** the current Session binds only base and scoped-storage providers
@@ -75,21 +82,20 @@ The Dispatcher MUST derive complete Context from the current Host API `0.3.0` ca
 - **THEN** the old Session terminates and its old Context cannot authorize subsequent provider calls
 - **THEN** `runtime.context_changed` cannot grant new identity to or reauthorize the old Session
 
+#### Scenario: Derive available methods from actually composed providers
+- **WHEN** the Dispatcher constructs Context for a current Session
+- **THEN** It MUST NOT read Manifest permission requests, persisted grants, permission catalogs, or clipboard availability, and MUST NOT list ordinary browser capabilities as Host API methods.
+- **THEN** Context MUST list the separate `http.request` method only when the controlled HTTP provider is currently available.
+
+#### Scenario: Publish complete Context replacements and retire invalid identities
+- **WHEN** a runtime.get_context call or Host fact change occurs
+- **THEN** `runtime.get_context` MUST accept exact `{}` and return complete, Contract-valid, copied, frozen Context.
+- **THEN** Real locale, theme, or provider-availability changes in the same Session MUST publish one complete `runtime.context_changed` replacement; identical snapshots MUST NOT be published repeatedly.
+- **THEN** Invalidation of identity, Registration revision, resource generation, or Runtime attempt MUST terminate the old Session and MUST NOT reauthorize it through events.
+
 ### Requirement: ui.close MUST close only the calling Session's current Page after delivering a successful response
 
-`ui.close` MUST accept exact `{}` only. The Dispatcher MUST derive the sole
-target `{ owner_id: plugin_id, page_id }` from trusted Session identity and
-MUST NOT accept a window, route, plugin, Page, or other close target. A call may
-return `{ accepted: true }` only while that target is still the active Plugin
-Page and the Runtime attempt and current Session remain valid.
-
-The Host transport MUST validate and successfully deliver the Contract result
-and terminal the request before executing at most one Host-owned close effect.
-The close effect MUST recheck currentness and the target match. If the Page or
-Session was replaced while the response was pending, the call was cancelled,
-or the adapter terminated, the effect MUST NOT close any Page. Closing MUST use
-the narrow App Navigation boundary and join the existing iframe, Session,
-Port, pending-request, and listener cleanup.
+`ui.close` MUST accept exact `{}` only.
 
 #### Scenario: Current plugin closes its own Page
 
@@ -117,20 +123,21 @@ Port, pending-request, and listener cleanup.
 - **THEN** the Contract rejects the request with stable `invalid_params`
 - **THEN** no current or other Page is closed
 
+#### Scenario: Derive the close target only from current Session identity
+- **WHEN** the calling plugin requests ui.close
+- **THEN** The Dispatcher MUST derive the sole target `{ owner_id: plugin_id, page_id }` from trusted Session identity and MUST NOT accept a window, route, plugin, Page, or other close target.
+- **THEN** A call may return `{ accepted: true }` only while that target is still the active Plugin Page and the Runtime attempt and current Session remain valid.
+
+#### Scenario: Deliver the close response before a compare-current effect
+- **WHEN** the Host transport completes or loses a pending ui.close result
+- **THEN** The Host transport MUST validate and successfully deliver the Contract result and terminal the request before executing at most one Host-owned close effect.
+- **THEN** The close effect MUST recheck currentness and the target match.
+- **THEN** If the Page or Session was replaced while the response was pending, the call was cancelled, or the adapter terminated, the effect MUST NOT close any Page.
+- **THEN** Closing MUST use the narrow App Navigation boundary and join the existing iframe, Session, Port, pending-request, and listener cleanup.
+
 ### Requirement: actions.open MUST be limited to the calling plugin's currently available local Action
 
-`actions.open` MUST accept only a Contract-valid plugin-local `actionId`. The
-Dispatcher MUST derive the global Action ID using the trusted Session
-`plugin_id` and the existing projection rule, and MUST resolve and execute it
-through the current Launcher Action Registry and Dispatcher. A plugin MUST NOT
-submit a global ID, owner, Page route, or executor.
-
-Only an enabled, available, executable Page-only Action owned by the calling
-plugin in the current Registry may return `{ opened: true }`. An unknown,
-disabled, incompatible, uninstalled, `lensx.core`, or other-plugin target MUST
-fail with stable `not_found`. An unknown executor failure MUST map to safe
-`internal_error`. No error MUST expose an executor, Registry record, route,
-original exception, or Host object.
+`actions.open` MUST accept only a Contract-valid plugin-local `actionId`.
 
 #### Scenario: Plugin opens its own current Action
 
@@ -160,21 +167,21 @@ original exception, or Host object.
 - **THEN** a cached descriptor or old capability snapshot does not execute a
   stale executor
 
+#### Scenario: Resolve a plugin-local Action through the unified Registry
+- **WHEN** the calling plugin submits an actions.open request
+- **THEN** The Dispatcher MUST derive the global Action ID using the trusted Session `plugin_id` and the existing projection rule, and MUST resolve and execute it through the current Launcher Action Registry and Dispatcher.
+- **THEN** A plugin MUST NOT submit a global ID, owner, Page route, or executor.
+
+#### Scenario: Reject unavailable or foreign Action targets safely
+- **WHEN** the requested local Action is unavailable or its Host executor fails
+- **THEN** Only an enabled, available, executable Page-only Action owned by the calling plugin in the current Registry may return `{ opened: true }`.
+- **THEN** An unknown, disabled, incompatible, uninstalled, `lensx.core`, or other-plugin target MUST fail with stable `not_found`.
+- **THEN** An unknown executor failure MUST map to safe `internal_error`.
+- **THEN** No error MUST expose an executor, Registry record, route, original exception, or Host object.
+
 ### Requirement: Dispatcher MUST preserve stable error, cancellation, and terminal lifecycle semantics
 
-Dispatcher providers MUST produce only a Contract-valid Host API result, a
-Contract-valid Host API error, or a Host-private post-response effect that
-never crosses the wire. Known domain failures MUST map to closed error codes.
-An unknown throw, invalid provider output, or internal failure MUST become
-`internal_error` with a fixed safe English message. An original exception,
-stack, URL, path, payload, grant, identity, executor, Tauri, Rust, or Host object
-MUST NOT enter a plugin-observable result, error, event, or diagnostic.
-
-Every provider MUST check Host cancellation and Session currentness before a
-side effect and again after an asynchronous boundary. Cancellation, timeout,
-disconnect, Page replacement, disable, uninstall, Host reload, or disposal
-MUST prevent every side effect that has not yet occurred. A late result, event,
-or effect MUST be dropped and MUST NOT affect a replacement Session.
+Dispatcher providers MUST produce only a Contract-valid Host API result, a Contract-valid Host API error, or a Host-private post-response effect that never crosses the wire.
 
 #### Scenario: Provider throws an unknown exception
 
@@ -201,6 +208,18 @@ or effect MUST be dropped and MUST NOT affect a replacement Session.
 - **THEN** other plugin Sessions, Registrations, permissions, and application
   service state are not modified as collateral effects
 
+#### Scenario: Keep provider failures inside the safe wire contract
+- **WHEN** a Dispatcher provider returns, throws, or prepares a post-response effect
+- **THEN** Known domain failures MUST map to closed error codes.
+- **THEN** An unknown throw, invalid provider output, or internal failure MUST become `internal_error` with a fixed safe English message.
+- **THEN** An original exception, stack, URL, path, payload, grant, identity, executor, Tauri, Rust, or Host object MUST NOT enter a plugin-observable result, error, event, or diagnostic.
+
+#### Scenario: Cancel stale asynchronous provider work
+- **WHEN** an operation crosses an asynchronous boundary or its Session is cancelled or invalidated
+- **THEN** Every provider MUST check Host cancellation and Session currentness before a side effect and again after an asynchronous boundary.
+- **THEN** Cancellation, timeout, disconnect, Page replacement, disable, uninstall, Host reload, or disposal MUST prevent every side effect that has not yet occurred.
+- **THEN** A late result, event, or effect MUST be dropped and MUST NOT affect a replacement Session.
+
 ### Requirement: Dispatcher authority MUST derive only from the current Child WebView Session
 Production dispatch MUST accept a request only after native source binding and RPC validation identify the current Child WebView Session. Dispatcher MUST continue to derive plugin/Page/capability/storage namespace from trusted Session facts and MUST receive no plugin-provided WebView label, native handle, origin token, bridge object or Tauri command.
 
@@ -214,7 +233,7 @@ Production dispatch MUST accept a request only after native source binding and R
 
 ### Requirement: Delivery MUST prove deterministic production composition without absorbing later capabilities
 
-Production `PluginRuntimeSlot` MUST install a real Session-scoped Dispatcher for the current ready lease instead of a fixed unavailable handler; tests retain explicit fake/unavailable binding injection. Delivery MUST cover Dispatcher, production composition, Navigation/Action regressions, five scoped-storage methods, controlled HTTP, SDK codec/bridge adapters, concurrency, cancellation, replacement, cleanup, malicious/stale identity, complete Context, response-before-close, storage restart, bounded diagnostics, and unsupported clipboard, permission mutation, arbitrary Tauri, and removed/private methods. HTTP validation MUST use deterministic DNS/transport fakes covering control policies and lifecycle without invoking real paid services. Public tarballs and workspace-boundary checks MUST prove Host-private modules cannot be imported; maintained acceptance MUST NOT require browser, WebView, GUI, or environment evidence.
+Production `PluginRuntimeSlot` MUST install a real Session-scoped Dispatcher for the current ready lease instead of a fixed unavailable handler; tests retain explicit fake/unavailable binding injection.
 
 #### Scenario: Production Dispatcher composition and storage loops pass
 - **WHEN** deterministic production-composition tests connect public Contract/SDK to the current Dispatcher Session
@@ -230,3 +249,9 @@ Production `PluginRuntimeSlot` MUST install a real Session-scoped Dispatcher for
 - **WHEN** only deterministic tests and package checks have run
 - **THEN** conclusions may confirm maintained production composition and boundary coverage
 - **THEN** they MUST NOT claim real WebView, real-account HTTP, or native roundtrips were executed
+
+#### Scenario: Validate real production composition with controlled providers
+- **WHEN** deterministic delivery checks exercise the production Runtime Dispatcher and public package boundaries
+- **THEN** Delivery MUST cover Dispatcher, production composition, Navigation/Action regressions, five scoped-storage methods, controlled HTTP, SDK codec/bridge adapters, concurrency, cancellation, replacement, cleanup, malicious/stale identity, complete Context, response-before-close, storage restart, bounded diagnostics, and unsupported clipboard, permission mutation, arbitrary Tauri, and removed/private methods.
+- **THEN** HTTP validation MUST use deterministic DNS/transport fakes covering control policies and lifecycle without invoking real paid services.
+- **THEN** Public tarballs and workspace-boundary checks MUST prove Host-private modules cannot be imported; maintained acceptance MUST NOT require browser, WebView, GUI, or environment evidence.

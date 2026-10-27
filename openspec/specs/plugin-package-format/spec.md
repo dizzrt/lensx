@@ -9,16 +9,7 @@ boundary between author-controlled package bytes and Host-owned facts.
 ## Requirements
 ### Requirement: Plugin packages must use an independently versioned `.lxp` content protocol
 
-The system MUST define `.lxp` as the user-visible extension for lensX plugin
-packages and MUST identify its contents as the restricted canonical TAR over
-Zstandard profile for package protocol `0.1.0`. The package protocol MUST be
-versioned independently from npm package versions, the Manifest protocol, the
-Host API, the Registration Contract, the Plugin Manager Store, and the lensX
-application version. The system MUST determine the format from the contents,
-required records, and the package protocol version in `checksums.json`; it MUST
-NOT accept an input solely from its filename or extension and MUST NOT provide
-an implicit alias, fallback, or migration path for legacy ZIP or
-`.lensx-plugin` inputs.
+The system MUST define `.lxp` as the user-visible extension for lensX plugin packages and MUST identify its contents as the restricted canonical TAR over Zstandard profile for package protocol `0.1.0`.
 
 #### Scenario: Accept the current `.lxp` package protocol
 
@@ -45,24 +36,14 @@ an implicit alias, fallback, or migration path for legacy ZIP or
 - **THEN** neither inspector continues by applying a compatibility alias or
   guessing another package version
 
+#### Scenario: Identify package protocol from canonical contents
+- **WHEN** the inspector receives an input named as a plugin package
+- **THEN** The package protocol MUST be versioned independently from npm package versions, the Manifest protocol, the Host API, the Registration Contract, the Plugin Manager Store, and the lensX application version.
+- **THEN** The system MUST determine the format from the contents, required records, and the package protocol version in `checksums.json`; it MUST NOT accept an input solely from its filename or extension and MUST NOT provide an implicit alias, fallback, or migration path for legacy ZIP or `.lensx-plugin` inputs.
+
 ### Requirement: `.lxp` must contain a restricted and deterministic canonical TAR payload
 
-The Zstandard output MUST be a canonical TAR stream expressible as ustar. The
-TAR MUST contain regular files only and MUST NOT contain explicit directories,
-symbolic links, hard links, devices, FIFOs, sparse files, PAX or GNU extensions,
-xattrs, ACLs, or any other special entry. The first entry MUST be root
-`manifest.json`, the second MUST be root `checksums.json`, and all remaining
-entries MUST be in strict ascending UTF-8 path-byte order with each path
-appearing exactly once. Every regular-file header MUST use `uid=0`, `gid=0`, an
-empty owner and group name, `mtime=0`, and mode `0644`, and MUST NOT preserve
-source-filesystem metadata.
-
-Each entry path MUST be an NFC UTF-8 relative path that uses `/` separators,
-is at most 100 UTF-8 bytes long, and has at most 16 segments. Each segment MUST
-contain only ASCII letters, digits, periods, underscores, or hyphens; MUST
-start and end with a letter or digit; and MUST NOT be empty, `.`, `..`, a
-Windows reserved basename, or a name that creates an ASCII case-insensitive
-collision.
+The Zstandard output MUST be a canonical TAR stream expressible as ustar.
 
 #### Scenario: Accept canonical TAR entries
 
@@ -90,6 +71,17 @@ collision.
   normalizing the input
 - **THEN** partially read content does not become an installation or
   registration fact
+
+#### Scenario: Read canonical TAR entry order and metadata
+- **WHEN** the inspector enumerates regular entries in the decompressed TAR stream
+- **THEN** The TAR MUST contain regular files only and MUST NOT contain explicit directories, symbolic links, hard links, devices, FIFOs, sparse files, PAX or GNU extensions, xattrs, ACLs, or any other special entry.
+- **THEN** The first entry MUST be root `manifest.json`, the second MUST be root `checksums.json`, and all remaining entries MUST be in strict ascending UTF-8 path-byte order with each path appearing exactly once.
+- **THEN** Every regular-file header MUST use `uid=0`, `gid=0`, an empty owner and group name, `mtime=0`, and mode `0644`, and MUST NOT preserve source-filesystem metadata.
+
+#### Scenario: Validate each canonical entry path
+- **WHEN** the inspector encounters a payload entry path
+- **THEN** Each entry path MUST be an NFC UTF-8 relative path that uses `/` separators, is at most 100 UTF-8 bytes long, and has at most 16 segments.
+- **THEN** Each segment MUST contain only ASCII letters, digits, periods, underscores, or hyphens; MUST start and end with a letter or digit; and MUST NOT be empty, `.`, `..`, a Windows reserved basename, or a name that creates an ASCII case-insensitive collision.
 
 ### Requirement: `.lxp` must use one restricted Zstandard frame
 
@@ -127,18 +119,7 @@ MUST NOT preallocate the entire declared output from an untrusted frame header.
 
 ### Requirement: `checksums.json` must completely describe package regular files
 
-Root `checksums.json` MUST be canonical UTF-8 JSON without a BOM, use LF line
-endings, and end with exactly one newline. It MUST contain only the fixed-order
-`package_format_version`, `algorithm`, and `files` fields, MUST declare
-`package_format_version: "0.1.0"` and `algorithm: "sha256"`, and MUST reject
-unknown, missing, duplicate, or incorrectly typed fields.
-
-`files` MUST be in strict ascending path-byte order and MUST contain exactly
-one `{ path, size, sha256 }` record for every TAR regular file other than
-`checksums.json` itself. `size` MUST equal the actual decompressed byte count,
-and `sha256` MUST be the lowercase 64-character hexadecimal SHA-256 of those
-bytes. An extra, missing, duplicate, or mismatched checksum record MUST make
-the entire package invalid.
+Root `checksums.json` MUST be canonical UTF-8 JSON without a BOM, use LF line endings, and end with exactly one newline.
 
 #### Scenario: Checksums match every file
 
@@ -165,16 +146,19 @@ the entire package invalid.
 - **THEN** the Zstandard frame checksum, per-file SHA-256 values, and package
   digest do not replace one another or enter the author Manifest
 
+#### Scenario: Parse canonical checksum metadata
+- **WHEN** the inspector reads the root checksums.json record
+- **THEN** It MUST contain only the fixed-order `package_format_version`, `algorithm`, and `files` fields, MUST declare `package_format_version: "0.1.0"` and `algorithm: "sha256"`, and MUST reject unknown, missing, duplicate, or incorrectly typed fields.
+
+#### Scenario: Match checksums to every payload file
+- **WHEN** the inspector compares the files array with canonical TAR contents
+- **THEN** `files` MUST be in strict ascending path-byte order and MUST contain exactly one `{ path, size, sha256 }` record for every TAR regular file other than `checksums.json` itself.
+- **THEN** `size` MUST equal the actual decompressed byte count, and `sha256` MUST be the lowercase 64-character hexadecimal SHA-256 of those bytes.
+- **THEN** An extra, missing, duplicate, or mismatched checksum record MUST make the entire package invalid.
+
 ### Requirement: Package inspection must enforce consistent resource limits
 
-The system MUST enforce the same first-version hard limits in TypeScript and
-Rust: a compressed `.lxp` no larger than 64 MiB, a Zstandard window no larger
-than 64 MiB, a canonical decompressed TAR stream no larger than 256 MiB, no
-more than 4096 regular files, no single file larger than 64 MiB,
-`manifest.json` no larger than 1 MiB, `checksums.json` no larger than 4 MiB,
-and an entry path no longer than 100 UTF-8 bytes or 16 segments. When a limit
-would be violated, the inspector MUST fail closed before allocating, hashing,
-or reading additional payload beyond the authorized bound.
+The system MUST enforce the same first-version hard limits in TypeScript and Rust: a compressed `.lxp` no larger than 64 MiB, a Zstandard window no larger than 64 MiB, a canonical decompressed TAR stream no larger than 256 MiB, no more than 4096 regular files, no single file larger than 64 MiB, `manifest.json` no larger than 1 MiB, `checksums.json` no larger than 4 MiB, and an entry path no longer than 100 UTF-8 bytes or 16 segments.
 
 #### Scenario: A package is within every limit
 
@@ -201,20 +185,13 @@ or reading additional payload beyond the authorized bound.
 - **THEN** the system does not create an empty plugin, placeholder plugin, or
   default Runtime file
 
+#### Scenario: Stop package inspection before crossing a resource bound
+- **WHEN** any declared package resource limit would be exceeded
+- **THEN** When a limit would be violated, the inspector MUST fail closed before allocating, hashing, or reading additional payload beyond the authorized bound.
+
 ### Requirement: Package inspection must reuse the Manifest Contract and resolve every resource reference
 
-The package inspector MUST pass `manifest.json` bytes as unknown author input
-to the existing Manifest validation and normalization API or its Rust
-counterpart, and MUST NOT duplicate or relax the Manifest Schema, semantics,
-defaults, compatibility algorithm, or diagnostics. Only a Manifest whose
-checksums have been verified may enter Manifest validation.
-
-The Manifest `runtime.entry` and every display, Page, and Action asset path
-MUST resolve as an exact package path to a checksummed regular payload file.
-Path matching MUST NOT guess through case folding, URL decoding, platform
-separator replacement, or filesystem canonicalization. A reference to a
-metadata record, unknown path, directory, or bytes not covered by checksums
-MUST make the package invalid.
+The package inspector MUST pass `manifest.json` bytes as unknown author input to the existing Manifest validation and normalization API or its Rust counterpart, and MUST NOT duplicate or relax the Manifest Schema, semantics, defaults, compatibility algorithm, or diagnostics.
 
 #### Scenario: Every Manifest resource exists
 
@@ -243,19 +220,19 @@ MUST make the package invalid.
 - **THEN** this capability does not install, enable, authorize, or execute the
   package
 
+#### Scenario: Validate only checksum-confirmed manifest bytes
+- **WHEN** package inspection is ready to apply Manifest Contract validation
+- **THEN** Only a Manifest whose checksums have been verified may enter Manifest validation.
+
+#### Scenario: Resolve every declared resource exactly
+- **WHEN** the validated manifest names a Runtime entry or display, Page, or Action asset
+- **THEN** The Manifest `runtime.entry` and every display, Page, and Action asset path MUST resolve as an exact package path to a checksummed regular payload file.
+- **THEN** Path matching MUST NOT guess through case folding, URL decoding, platform separator replacement, or filesystem canonicalization.
+- **THEN** A reference to a metadata record, unknown path, directory, or bytes not covered by checksums MUST make the package invalid.
+
 ### Requirement: Reference packing and package inspection must be reproducible and consistent across languages
 
-The repository reference packer MUST produce byte-for-byte identical `.lxp`
-output from the same canonical file map, package protocol and tool revision,
-and fixed dependencies and parameters. It MUST use a fixed high-compression
-Zstandard profile whose initial compression level is 19. A change to a
-parameter, codec dependency, or output byte MUST be reviewed explicitly as
-fixture digest drift and MUST NOT silently update a baseline.
-
-The system MUST provide shared valid, invalid, incompatible, and reproducible
-package fixtures consumed by TypeScript and Rust. For each case, both
-implementations MUST agree on status, normalized Manifest, file and checksum
-facts, safe diagnostics, and reference package digest.
+The repository reference packer MUST produce byte-for-byte identical `.lxp` output from the same canonical file map, package protocol and tool revision, and fixed dependencies and parameters.
 
 #### Scenario: Pack the same input repeatedly
 
@@ -282,17 +259,19 @@ facts, safe diagnostics, and reference package digest.
 - **THEN** the file still has its own package digest over its complete `.lxp`
   bytes and does not impersonate the reference output digest
 
+#### Scenario: Review reproducible encoder parameters
+- **WHEN** the reference packer uses or changes a compression parameter, codec dependency, or output byte
+- **THEN** It MUST use a fixed high-compression Zstandard profile whose initial compression level is 19.
+- **THEN** A change to a parameter, codec dependency, or output byte MUST be reviewed explicitly as fixture digest drift and MUST NOT silently update a baseline.
+
+#### Scenario: Compare shared package fixtures across languages
+- **WHEN** TypeScript and Rust inspect the same valid, invalid, incompatible, or reproducible fixture
+- **THEN** The system MUST provide shared valid, invalid, incompatible, and reproducible package fixtures consumed by TypeScript and Rust.
+- **THEN** For each case, both implementations MUST agree on status, normalized Manifest, file and checksum facts, safe diagnostics, and reference package digest.
+
 ### Requirement: Package diagnostics must be stable, safe, and deterministic
 
-A failure result MUST contain only stable `{ code, path, message }`
-diagnostics. `code` MUST belong to the finite set defined by the package
-protocol, `path` MUST use a package logical path or reserved frame/archive
-location, and `message` MUST be stable, safe English text. Diagnostics MUST be
-sorted by `path` and `code` and MUST NOT contain a Host absolute path,
-temporary directory, raw exception, stack, environment text, Manifest or file
-contents, or another sensitive value. For an invalid package, the inspector
-MUST NOT return a partial Manifest, file map, trusted package fact, or Host
-state.
+A failure result MUST contain only stable `{ code, path, message }` diagnostics.
 
 #### Scenario: Several independent problems coexist
 
@@ -311,21 +290,15 @@ state.
 - **THEN** private text does not enter fixtures, serialized results, or
   application-log assertions
 
+#### Scenario: Return bounded safe diagnostics for invalid packages
+- **WHEN** package inspection produces any failure result or diagnostic
+- **THEN** `code` MUST belong to the finite set defined by the package protocol, `path` MUST use a package logical path or reserved frame/archive location, and `message` MUST be stable, safe English text.
+- **THEN** Diagnostics MUST be sorted by `path` and `code` and MUST NOT contain a Host absolute path, temporary directory, raw exception, stack, environment text, Manifest or file contents, or another sensitive value.
+- **THEN** For an invalid package, the inspector MUST NOT return a partial Manifest, file map, trusted package fact, or Host state.
+
 ### Requirement: The package format must not declare Host source, signature, permission, or lifecycle facts
 
-An `.lxp` Manifest, checksums, and payload MUST NOT declare Host-owned source,
-installed path, package digest, enabled state, legacy permission or grant fields, signature
-status, verified or official provenance, lifecycle, or Runtime session.
-Development sources and unsigned local sources MUST use the same canonical
-package payload, and the Host MUST inject source facts outside the package.
-First-version package validation MUST NOT skip any structure, checksum,
-Manifest, resource, or limit check because of publisher text, the filename, or
-an expected official source.
-
-A future signing capability MUST cover the entire canonical `.lxp` package
-digest or use a separate outer or sidecar envelope for the signature and
-provenance. It MUST NOT write signature facts into the author Manifest or
-change this capability's local validation or Host authority result.
+An `.lxp` Manifest, checksums, and payload MUST NOT declare Host-owned source, installed path, package digest, enabled state, legacy permission or grant fields, signature status, verified or official provenance, lifecycle, or Runtime session.
 
 #### Scenario: A Publisher claims an official source
 
@@ -353,8 +326,19 @@ change this capability's local validation or Host authority result.
 - **THEN** later installation, execution, Host API, and signing tasks must
   consume and constrain these package facts explicitly
 
+#### Scenario: Keep author package metadata separate from Host facts
+- **WHEN** an official, development, or unsigned local package is validated
+- **THEN** Development sources and unsigned local sources MUST use the same canonical package payload, and the Host MUST inject source facts outside the package.
+- **THEN** First-version package validation MUST NOT skip any structure, checksum, Manifest, resource, or limit check because of publisher text, the filename, or an expected official source.
+
+#### Scenario: Add signing without modifying author-manifest authority
+- **WHEN** a future signing capability attaches signature or provenance information
+- **THEN** A future signing capability MUST cover the entire canonical `.lxp` package digest or use a separate outer or sidecar envelope for the signature and provenance.
+- **THEN** It MUST NOT write signature facts into the author Manifest or change this capability's local validation or Host authority result.
+
 ### Requirement: Package inspection MUST enforce the current WebView Manifest protocol
-The canonical `.lxp` TAR/Zstandard/checksum profile MUST remain unchanged, but inspection and packing MUST consume Manifest Contract `0.4.0`, including deterministic Page presentation defaults and validation. A package containing an iframe, Manifest `0.3.x` or older, or invalid/native presentation fields MUST be classified as incompatible or invalid before installation or execution, while an otherwise identical WebView package MUST retain reproducible bytes and cross-language classification. Package facts MUST NOT contain current monitor data, effective runtime clamp, user-adjusted size, native handles, or persisted presentation state.
+
+The canonical `.lxp` TAR/Zstandard/checksum profile MUST remain unchanged, but inspection and packing MUST consume Manifest Contract `0.4.0`, including deterministic Page presentation defaults and validation.
 
 #### Scenario: Canonical WebView package is inspected
 - **WHEN** a package contains a valid `0.4.0` WebView Manifest, optional bounded Page presentations, and all referenced files
@@ -370,3 +354,8 @@ The canonical `.lxp` TAR/Zstandard/checksum profile MUST remain unchanged, but i
 - **WHEN** a structurally canonical archive contains an iframe, Manifest `0.3.x` or older, or presentation fields for position, monitor, constraints, native label, maximize or fullscreen
 - **THEN** inspection returns a stable incompatible/invalid result before payload commit
 - **THEN** the archive is not rewritten or executed through a fallback
+
+#### Scenario: Classify WebView manifests without persisting runtime presentation facts
+- **WHEN** packing or inspection processes current, legacy, or native-authority Manifest fields
+- **THEN** A package containing an iframe, Manifest `0.3.x` or older, or invalid/native presentation fields MUST be classified as incompatible or invalid before installation or execution, while an otherwise identical WebView package MUST retain reproducible bytes and cross-language classification.
+- **THEN** Package facts MUST NOT contain current monitor data, effective runtime clamp, user-adjusted size, native handles, or persisted presentation state.

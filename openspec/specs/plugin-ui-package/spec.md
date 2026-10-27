@@ -7,7 +7,7 @@ Define the stable public contract for the optional `@lensx/plugin-ui` package, i
 
 ### Requirement: The system MUST provide an optional constrained public Plugin UI package
 
-The system MUST provide the public `@lensx/plugin-ui@0.1.0` workspace package, which MUST be independently buildable, testable, and packable. The package MUST expose only one JavaScript root entry and one `@lensx/plugin-ui/styles.css` style entry; package resolution MUST reject undeclared deep imports. The public JavaScript entry MUST provide only `PluginUiProvider`, `PluginPage`, `PluginFeedback`, and their public types, and MUST NOT re-export the complete Semi Design API, Host React Context, Host-private components, `src/app/**`, Tauri adapters, or Host-private styles.
+The system MUST provide the public `@lensx/plugin-ui@0.1.0` workspace package, which MUST be independently buildable, testable, and packable.
 
 #### Scenario: A React plugin consumes the public entries from real tarballs
 
@@ -26,9 +26,14 @@ The system MUST provide the public `@lensx/plugin-ui@0.1.0` workspace package, w
 - **THEN** the consumer continues to typecheck and run without installing React, React DOM, Semi Design, or the Plugin UI package
 - **THEN** the Plugin SDK's published dependencies and public declarations do not contain the Plugin UI package, React, or Semi Design
 
+#### Scenario: Resolve only the supported UI package entry points
+- **WHEN** a plugin consumer imports the optional Plugin UI package or styles
+- **THEN** The package MUST expose only one JavaScript root entry and one `@lensx/plugin-ui/styles.css` style entry; package resolution MUST reject undeclared deep imports.
+- **THEN** The public JavaScript entry MUST provide only `PluginUiProvider`, `PluginPage`, `PluginFeedback`, and their public types, and MUST NOT re-export the complete Semi Design API, Host React Context, Host-private components, `src/app/**`, Tauri adapters, or Host-private styles.
+
 ### Requirement: PluginUiProvider MUST adapt the validated Runtime context within the plugin document
 
-`PluginUiProvider` MUST accept a read-only `PluginRuntimeContext` and use its `locale` and `theme` to drive the plugin's own React subtree and document. The provider MUST map `en-US` and `zh-CN` to the corresponding official Semi Design locale packs, MUST synchronize the document language, CSS `color-scheme`, and Semi Design-supported light/dark body theme attribute, and MUST restore the document values that existed before mount when it unmounts. The provider MUST NOT read Host AppProviders, Host preferences, Tauri, or transport, and MUST NOT claim to provide a Runtime context update protocol.
+`PluginUiProvider` MUST accept a read-only `PluginRuntimeContext` and use its `locale` and `theme` to drive the plugin's own React subtree and document.
 
 #### Scenario: The provider initializes with an English light context
 
@@ -52,9 +57,14 @@ The system MUST provide the public `@lensx/plugin-ui@0.1.0` workspace package, w
 - **THEN** the document language, color scheme, and body theme attribute that existed before mount are restored
 - **THEN** no package listener or global state remains
 
+#### Scenario: Apply locale and theme inside the plugin document
+- **WHEN** PluginUiProvider mounts, updates from validated Context, or unmounts
+- **THEN** The provider MUST map `en-US` and `zh-CN` to the corresponding official Semi Design locale packs, MUST synchronize the document language, CSS `color-scheme`, and Semi Design-supported light/dark body theme attribute, and MUST restore the document values that existed before mount when it unmounts.
+- **THEN** The provider MUST NOT read Host AppProviders, Host preferences, Tauri, or transport, and MUST NOT claim to provide a Runtime context update protocol.
+
 ### Requirement: The package MUST expose a small versioned semantic theme contract
 
-The system MUST provide lensX plugin semantic styles through the public style entry and MUST define the following CSS custom properties as part of the `0.1.0` public contract: `--lensx-plugin-color-background`, `--lensx-plugin-color-surface`, `--lensx-plugin-color-text`, `--lensx-plugin-color-text-secondary`, `--lensx-plugin-color-border`, `--lensx-plugin-color-accent`, `--lensx-plugin-color-danger`, `--lensx-plugin-color-focus`, `--lensx-plugin-radius-page`, and `--lensx-plugin-space-page`. Color tokens MUST be based on the package-supported Semi Design tokens and theme mechanism. Published styles MUST NOT import Host `src/styles/**`, depend on Host UnoCSS scanning, or expose Launcher-specific selectors.
+The system MUST provide lensX plugin semantic styles through the public style entry and MUST define the following CSS custom properties as part of the `0.1.0` public contract: `--lensx-plugin-color-background`, `--lensx-plugin-color-surface`, `--lensx-plugin-color-text`, `--lensx-plugin-color-text-secondary`, `--lensx-plugin-color-border`, `--lensx-plugin-color-accent`, `--lensx-plugin-color-danger`, `--lensx-plugin-color-focus`, `--lensx-plugin-radius-page`, and `--lensx-plugin-space-page`.
 
 #### Scenario: A consumer imports the public styles
 
@@ -73,6 +83,11 @@ The system MUST provide lensX plugin semantic styles through the public style en
 - **WHEN** plugin CSS uses the declared `--lensx-plugin-*` tokens to build a custom region
 - **THEN** the custom region can share stable light and dark theme semantics with package components
 - **THEN** Semi tokens that are not in the public list are not described as long-term lensX compatibility commitments
+
+#### Scenario: Use the versioned semantic style entry
+- **WHEN** a plugin imports the public UI stylesheet to style its page
+- **THEN** Color tokens MUST be based on the package-supported Semi Design tokens and theme mechanism.
+- **THEN** Published styles MUST NOT import Host `src/styles/**`, depend on Host UnoCSS scanning, or expose Launcher-specific selectors.
 
 ### Requirement: PluginPage MUST provide an accessible lensX page frame without Host behavior
 
@@ -97,7 +112,7 @@ The system MUST provide lensX plugin semantic styles through the public style en
 
 ### Requirement: PluginFeedback MUST provide localized and accessible page states
 
-`PluginFeedback` MUST provide the three discriminated states `loading`, `empty`, and `error`; MUST provide package-owned default title, description, and retry copy for `en-US` and `zh-CN`; and MUST allow a plugin to override that copy with its own localized React content. Loading MUST expose busy and polite status semantics, empty MUST use non-error status semantics, and error MUST use error semantics that assistive technology can perceive promptly. An optional recovery action MUST be keyboard operable and MUST NOT automatically call a Host API.
+`PluginFeedback` MUST provide the three discriminated states `loading`, `empty`, and `error`; MUST provide package-owned default title, description, and retry copy for `en-US` and `zh-CN`; and MUST allow a plugin to override that copy with its own localized React content.
 
 #### Scenario: Loading state
 
@@ -123,9 +138,14 @@ The system MUST provide lensX plugin semantic styles through the public style en
 - **THEN** the title, description, and retry copy update together to semantically equivalent Chinese
 - **THEN** content overridden by the plugin remains under the plugin's control
 
+#### Scenario: Expose accessible loading empty error and recovery states
+- **WHEN** a plugin renders PluginFeedback with default or overridden localized content
+- **THEN** Loading MUST expose busy and polite status semantics, empty MUST use non-error status semantics, and error MUST use error semantics that assistive technology can perceive promptly.
+- **THEN** An optional recovery action MUST be keyboard operable and MUST NOT automatically call a Host API.
+
 ### Requirement: Plugin Runtime dependencies MUST remain plugin-owned and Host-independent
 
-`@lensx/plugin-ui` MUST declare React, React DOM, and the Plugin SDK as compatible peer dependencies and MUST declare every Semi Design package it actually imports as a direct Runtime dependency. The published UI library MUST NOT inline a second copy of React. The final React plugin browser artifact MUST be produced by the plugin project and contain its own React, React DOM, Semi Design, Plugin UI JavaScript, and styles, and MUST NOT depend on Host externals, import maps, window globals, or shared Host React or Semi Design instances.
+`@lensx/plugin-ui` MUST declare React, React DOM, and the Plugin SDK as compatible peer dependencies and MUST declare every Semi Design package it actually imports as a direct Runtime dependency.
 
 #### Scenario: A React consumer installs and builds its own Runtime
 
@@ -144,6 +164,11 @@ The system MUST provide lensX plugin semantic styles through the public style en
 - **THEN** metadata explicitly preserves style side effects and assigns every Runtime import to a declared dependency or peer dependency
 - **THEN** the tarball does not contain tests, fixtures, build scripts, Host source code, or workspace version ranges
 
+#### Scenario: Bundle plugin-owned React and UI dependencies
+- **WHEN** a React plugin consumes the published UI library and builds its browser artifact
+- **THEN** The published UI library MUST NOT inline a second copy of React.
+- **THEN** The final React plugin browser artifact MUST be produced by the plugin project and contain its own React, React DOM, Semi Design, Plugin UI JavaScript, and styles, and MUST NOT depend on Host externals, import maps, window globals, or shared Host React or Semi Design instances.
+
 ### Requirement: Plugin UI MUST remain document-local inside the Child WebView
 `@lensx/plugin-ui` MUST continue to consume only validated public Runtime Context and plugin-owned React/Semi dependencies inside the plugin document. It MUST NOT access Host DOM, native slot/bounds, Child WebView handles, bridge frames, Tauri APIs or Host navigation. Its theme, locale, accessibility and feedback behavior MUST work when rendered as the top-level Child WebView document.
 
@@ -157,7 +182,7 @@ The system MUST provide lensX plugin semantic styles through the public style en
 
 ### Requirement: The package MUST participate in complete deterministic package, component, release, and documentation validation
 
-The UI package MUST declare meaningful non-overlapping `build`, `typecheck`, `test`, `check`, and deterministic `test:pack` scripts, and root workspace aggregate commands MUST cover them once in dependency order. Validation MUST cover public types/exports, a real tarball in an isolated command-line consumer, dependency direction, a single React instance, normal/empty/error/recovery states, keyboard/focus behavior, both supported languages, light/dark semantic themes, and bilingual documentation. It MUST NOT launch a browser, capture computed styles or screenshots, compare pixels, or retain a visual fixture.
+The UI package MUST declare meaningful non-overlapping `build`, `typecheck`, `test`, `check`, and deterministic `test:pack` scripts, and root workspace aggregate commands MUST cover them once in dependency order.
 
 #### Scenario: Root workspace validation covers the package
 
@@ -182,3 +207,8 @@ The UI package MUST declare meaningful non-overlapping `build`, `typecheck`, `te
 - **WHEN** a developer reads English or Simplified Chinese plugin architecture and workspace documentation
 - **THEN** both languages describe React/non-React consumption, public components/tokens, style import, plugin-owned dependencies, and deterministic validation with equivalent semantics
 - **THEN** neither language describes the UI package as a native Runtime, Host API, installer, Testkit, or plugin execution capability
+
+#### Scenario: Validate UI package consumers and semantic component states
+- **WHEN** the workspace runs UI package lifecycle and deterministic release checks
+- **THEN** Validation MUST cover public types/exports, a real tarball in an isolated command-line consumer, dependency direction, a single React instance, normal/empty/error/recovery states, keyboard/focus behavior, both supported languages, light/dark semantic themes, and bilingual documentation.
+- **THEN** It MUST NOT launch a browser, capture computed styles or screenshots, compare pixels, or retain a visual fixture.

@@ -182,6 +182,27 @@ describe('translation scheduling and request identity', () => {
     expect(translate).not.toHaveBeenCalled();
   });
 
+  it('keeps empty composition drafts in the same session until they are committed', async () => {
+    const translate = rs.fn<Translate>().mockResolvedValue({ translation: 'ok' });
+    const { controller, settings } = await setup(translate);
+    await settings.load();
+    const token = controller.compositionStart();
+    controller.input('', { composing: true });
+    controller.input('n', { composing: true });
+    controller.input('', { composing: true });
+    expect(controller.getSnapshot()).toMatchObject({ text: '', composing: true });
+    controller.input('你', { composing: true });
+    await tick(1000);
+    expect(translate).not.toHaveBeenCalled();
+    expect(controller.getSnapshot()).toMatchObject({ text: '你', composing: true });
+    controller.compositionEnd('你', token);
+    await tick(399);
+    expect(translate).not.toHaveBeenCalled();
+    await tick(1);
+    expect(translate).toHaveBeenCalledTimes(1);
+    expect(translate.mock.calls[0]?.[0].text).toBe('你');
+  });
+
   it.each([
     'success',
     'failure',
@@ -424,6 +445,7 @@ describe('translation scheduling and request identity', () => {
       status: 'disposed',
       settingsOpen: false,
       composing: false,
+      swappingLanguages: false,
     });
     const next = createTranslationController({ settings, translate });
     expect(next.getSnapshot()).toMatchObject({ text: '', translation: '', sourceLanguage: 'auto', status: 'empty' });

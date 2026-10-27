@@ -14,10 +14,6 @@ The system MUST use an operating-system CSPRNG to generate at least 128 bits of
 process-local, unguessable scope for every current `(entry_id,
 resource_generation)` and MUST give its Runtime document a browser origin that
 differs from the Host, every other plugin scope, and every old generation.
-Repeated resolution of the same generation MUST reuse the same scope and
-origin. The scope MUST NOT be persisted, returned separately, written to an
-event or log, or added to a public contract. The origin authority and URL path
-MUST contain the same scope and MUST be cross-validated exactly.
 
 #### Scenario: Resolve the same current generation twice
 
@@ -45,18 +41,16 @@ MUST contain the same scope and MUST be cross-validated exactly.
 - **THEN** the old URL cannot return the new payload or become the current
   authority for the new Runtime
 
+#### Scenario: Reuse or expose a generation scope
+
+- **WHEN** a generation scope is allocated, resolved, validated, reused, or used at a boundary
+- **THEN** Repeated resolution of the same generation MUST reuse the same scope and origin.
+- **THEN** The scope MUST NOT be persisted, returned separately, written to an event or log, or added to a public contract.
+- **THEN** The origin authority and URL path MUST contain the same scope and MUST be cross-validated exactly.
+
 ### Requirement: Isolated origin URLs MUST use one strict Host-owned grammar
 
-A Runtime resource URL MUST use a fixed-version Host-owned envelope. The native
-custom-protocol form MUST place an exact 32-character lowercase hexadecimal
-scope in its own authority and repeat the same scope in the path. A supported
-translated form MUST preserve that origin key as a distinct authority and MUST
-NOT collapse it to the shared `lensx-plugin.localhost` host. The parser MUST
-reject a shared host, an origin and path scope mismatch, unknown or extra
-labels, Unicode or punycode, uppercase scope characters, userinfo, a port,
-query, fragment, backslash, percent- or double-encoding ambiguity, and an
-unknown scheme. The Manifest, plugin code, and frontend caller MUST NOT select
-or construct the origin.
+A Runtime resource URL MUST use a fixed-version Host-owned envelope.
 
 #### Scenario: Parse a canonical isolated URL
 
@@ -78,9 +72,17 @@ or construct the origin.
 - **THEN** the system does not repair, decode, rewrite, or fall back from the
   input to an allowed target
 
+#### Scenario: Parse a candidate isolated Runtime URL
+
+- **WHEN** the Host constructs or receives a candidate Runtime resource URL
+- **THEN** The native custom-protocol form MUST place an exact 32-character lowercase hexadecimal scope in its own authority and repeat the same scope in the path.
+- **THEN** A supported translated form MUST preserve that origin key as a distinct authority and MUST NOT collapse it to the shared `lensx-plugin.localhost` host.
+- **THEN** The parser MUST reject a shared host, an origin and path scope mismatch, unknown or extra labels, Unicode or punycode, uppercase scope characters, userinfo, a port, query, fragment, backslash, percent- or double-encoding ambiguity, and an unknown scheme.
+- **THEN** The Manifest, plugin code, and frontend caller MUST NOT select or construct the origin.
+
 ### Requirement: Isolated origin MUST enable the representative module graph without CORS relaxation
 
-The isolated-origin resource and bundle contract MUST support canonical package HTML, CSS, images, classic scripts, the ES Module entry, and its module dependencies under the production Child WebView policy. Resource responses MUST retain `Cache-Control: no-store` and `X-Content-Type-Options: nosniff` and MUST NOT add wildcard `Access-Control-Allow-Origin`, authorize `Origin: null`, or treat the request Origin as authorization. A classic-only or inline-only bundle, or a test that removes the module case, MUST NOT satisfy completion. Maintained validation SHALL use deterministic resource-response, package, module-graph, URL grammar, MIME, header, and negative-boundary tests and SHALL NOT require target-WebView execution.
+The isolated-origin resource and bundle contract MUST support canonical package HTML, CSS, images, classic scripts, the ES Module entry, and its module dependencies under the production Child WebView policy.
 
 #### Scenario: Validate a same-origin module dependency graph
 
@@ -100,15 +102,18 @@ The isolated-origin resource and bundle contract MUST support canonical package 
 - **THEN** validation governance rejects that path
 - **THEN** the product contract remains while the environment evidence is not retained as an optional Gate
 
+#### Scenario: Serve and validate the package module graph
+
+- **WHEN** the Resource service returns isolated-origin assets or deterministic validation inspects that graph
+- **THEN** Resource responses MUST retain `Cache-Control: no-store` and `X-Content-Type-Options: nosniff` and MUST NOT add wildcard `Access-Control-Allow-Origin`, authorize `Origin: null`, or treat the request Origin as authorization.
+- **THEN** A classic-only or inline-only bundle, or a test that removes the module case, MUST NOT satisfy completion.
+- **THEN** Maintained validation SHALL use deterministic resource-response, package, module-graph, URL grammar, MIME, header, and negative-boundary tests and SHALL NOT require target-WebView execution.
+
 ### Requirement: Same-origin browser state MUST remain partitioned from Host and other generations
 
 The current plugin document MAY use ordinary browser storage for its own
 isolated origin, but MUST NOT read or modify the DOM or storage of the Host,
-another plugin, another scope, or an old generation. Even when the downstream
-iframe uses `allow-same-origin`, the plugin MUST NOT access the `window.parent`
-DOM, `frameElement`, or Host React state. Browser origin and the Host bootstrap
-boundary MUST enforce isolation; it MUST NOT depend on an author adding a key
-prefix, avoiding an API, or asserting an identity.
+another plugin, another scope, or an old generation.
 
 #### Scenario: Two plugins write the same storage key
 
@@ -135,16 +140,16 @@ prefix, avoiding an API, or asserting an identity.
   state changes
 - **THEN** origin isolation does not rely on DOM cleanup or author cooperation
 
+#### Scenario: Attempt access beyond the current browser origin
+
+- **WHEN** a plugin document initializes or attempts access to browser DOM or storage
+- **THEN** Even when the downstream iframe uses `allow-same-origin`, the plugin MUST NOT access the `window.parent` DOM, `frameElement`, or Host React state.
+- **THEN** Browser origin and the Host bootstrap boundary MUST enforce isolation; it MUST NOT depend on an author adding a key prefix, avoiding an API, or asserting an identity.
+
 ### Requirement: Trusted Tauri and Host-private boundaries MUST remain absent from the plugin origin
 
 An isolated origin MUST NOT change the main-frame-only Tauri initialization
-guarantee. The Host main frame MUST retain its existing Tauri bootstrap and
-trusted invoke path. Every plugin descendant MUST lack `isTauri`,
-`__TAURI_INTERNALS__`, metadata, the invoke key, and IPC bootstrap before the
-earliest author script, and a representative invoke MUST NOT reach the Rust
-handler. Origin and scope data, the URL parser, Resource adapter, navigation
-lease, and harness internals MUST remain Host-private and MUST NOT enter the
-Manifest, public packages, plugin messages, or bounded diagnostics.
+guarantee.
 
 #### Scenario: Normal and malicious descendants inspect Tauri
 
@@ -162,6 +167,13 @@ Manifest, public packages, plugin messages, or bounded diagnostics.
 - **THEN** those consumers cannot import the origin issuer or parser, scope map,
   Resource adapter, navigation target, or WebView harness internals
 - **THEN** this capability adds no public Runtime, Session, or Host API export
+
+#### Scenario: Bootstrap plugin descendants without Host authority
+
+- **WHEN** the trusted main frame or a plugin descendant initializes, remains active, or has its public boundary inspected
+- **THEN** The Host main frame MUST retain its existing Tauri bootstrap and trusted invoke path.
+- **THEN** Every plugin descendant MUST lack `isTauri`, `__TAURI_INTERNALS__`, metadata, the invoke key, and IPC bootstrap before the earliest author script, and a representative invoke MUST NOT reach the Rust handler.
+- **THEN** Origin and scope data, the URL parser, Resource adapter, navigation lease, and harness internals MUST remain Host-private and MUST NOT enter the Manifest, public packages, plugin messages, or bounded diagnostics.
 
 ### Requirement: Every isolated origin MUST be bound to one actual current Child WebView
 The Host MUST derive a distinct origin and data-store identity for every current resource generation before Child WebView creation. Resource and navigation access MUST additionally match the actual current WebView label/handle and Runtime attempt; the origin alone MUST NOT authorize a Host WebView, remote document, old WebView or another plugin. The public plugin surface MUST NOT reveal origin tokens or data-store identifiers.

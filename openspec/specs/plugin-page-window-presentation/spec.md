@@ -8,7 +8,14 @@ Define bounded author presentation preferences and Host-owned native Window beha
 
 ### Requirement: Plugin Pages MUST declare only bounded presentation preferences
 
-Manifest `0.4.0` MUST allow each plugin Page to declare an optional strict `presentation` containing required `initial_size.width`, `initial_size.height`, and `resizable`. Width and height MUST be integer logical pixels within the Contract hard bounds of `320..=4096` and `180..=4096`, respectively. An absent presentation MUST normalize to `650×600` and `resizable: false`. The declaration MUST NOT contain position, monitor, minimum or maximum constraints, maximize, fullscreen, z-order, native label, handle, Tauri option, or another Window/WebView configuration.
+Manifest `0.4.0` MUST allow each plugin Page to declare an optional strict `presentation` containing required `initial_size.width`, `initial_size.height`, and `resizable`.
+
+#### Scenario: Page presentation input is normalized or rejected
+
+- **WHEN** a Manifest supplies or omits Page presentation
+- **THEN** Width and height MUST be integer logical pixels within the Contract hard bounds of `320..=4096` and `180..=4096`, respectively.
+- **THEN** An absent presentation MUST normalize to `650×600` and `resizable: false`.
+- **THEN** The declaration MUST NOT contain position, monitor, minimum or maximum constraints, maximize, fullscreen, z-order, native label, handle, Tauri option, or another Window/WebView configuration.
 
 #### Scenario: Page declares a fixed custom initial size
 - **WHEN** a current Manifest Page declares `initial_size: 720×540` and `resizable: false`
@@ -27,7 +34,13 @@ Manifest `0.4.0` MUST allow each plugin Page to declare an optional strict `pres
 
 ### Requirement: Host MUST own effective plugin Page presentation
 
-The Host MUST carry only validated Page presentation through Registration detail, Page projection, Page resolution, trusted App Shell state, and a Rust-validated native surface boundary. On Page open, the Host MUST fit the author-selected initial logical size within the current monitor work area while preserving the Contract hard minimum and MUST apply the target size, constraints, and resizable state to the complete native `main` Window. The plugin Runtime MUST NOT submit, override, or receive native bounds, Window handles, work-area facts, setter results, or transition errors.
+The Host MUST carry only validated Page presentation through Registration detail, Page projection, Page resolution, trusted App Shell state, and a Rust-validated native surface boundary.
+
+#### Scenario: The Host applies a Page presentation to its native surface
+
+- **WHEN** a plugin Page opens through the trusted presentation path or plugin code attempts to submit, override, or receive native presentation facts
+- **THEN** On Page open, the Host MUST fit the author-selected initial logical size within the current monitor work area while preserving the Contract hard minimum and MUST apply the target size, constraints, and resizable state to the complete native `main` Window.
+- **THEN** The plugin Runtime MUST NOT submit, override, or receive native bounds, Window handles, work-area facts, setter results, or transition errors.
 
 #### Scenario: Valid custom Page opens on a sufficiently large monitor
 - **WHEN** a plugin Page declares `800×600` and `resizable: true` and the current work area can contain it
@@ -65,7 +78,14 @@ Only a current plugin Page normalized with `resizable: true` MUST permit the use
 
 ### Requirement: Presentation transitions MUST not leak state across surfaces
 
-Semantic hide/restore of an equivalent current Page attempt MUST preserve its current native size and resizable state. Actual Page close, navigation away, disable, replacement, upgrade, uninstall, development reload, explicit retry, fatal Session/Runtime failure, Host reload, App teardown, or process restart MUST terminate that transient state. Transition to Home, Search, or a Host Page MUST immediately apply that Host surface's fixed size and `resizable: false` without waiting for asynchronous Child WebView teardown. Transition between plugin Pages MUST apply the target Page declaration and MUST NOT inherit the previous Page's user size or resizable state.
+Semantic hide/restore of an equivalent current Page attempt MUST preserve its current native size and resizable state.
+
+#### Scenario: The active surface changes or its attempt terminates
+
+- **WHEN** a plugin Page closes, is invalidated, or transitions to another surface
+- **THEN** Actual Page close, navigation away, disable, replacement, upgrade, uninstall, development reload, explicit retry, fatal Session/Runtime failure, Host reload, App teardown, or process restart MUST terminate that transient state.
+- **THEN** Transition to Home, Search, or a Host Page MUST immediately apply that Host surface's fixed size and `resizable: false` without waiting for asynchronous Child WebView teardown.
+- **THEN** Transition between plugin Pages MUST apply the target Page declaration and MUST NOT inherit the previous Page's user size or resizable state.
 
 #### Scenario: Hidden resized Page is restored
 - **WHEN** an opted-in Page is user-resized and then hidden/restored through `Cmd+W`, focus loss, and the global shortcut while its attempt remains current
@@ -89,7 +109,12 @@ Semantic hide/restore of an equivalent current Page attempt MUST preserve its cu
 
 ### Requirement: Delivery MUST deterministically validate plugin Page presentation
 
-Automated Contract, Rust, React, boundary, package, and Development Mode tests MUST cover default and explicit presentations, hard-bound rejection, modeled work-area fitting, fixed and resizable Pages, resize bursts, monitor/scale state changes, same-attempt hide/restore, close/reopen transitions, multi-plugin switching, failure rollback, and immediate Home restoration. Maintained validation MUST NOT launch a real Child WebView or native Window, capture visual output, or write target-environment evidence.
+Automated Contract, Rust, React, boundary, package, and Development Mode tests MUST cover default and explicit presentations, hard-bound rejection, modeled work-area fitting, fixed and resizable Pages, resize bursts, monitor/scale state changes, same-attempt hide/restore, close/reopen transitions, multi-plugin switching, failure rollback, and immediate Home restoration.
+
+#### Scenario: Presentation verification respects deterministic boundaries
+
+- **WHEN** maintained Page-presentation validation runs
+- **THEN** Maintained validation MUST NOT launch a real Child WebView or native Window, capture visual output, or write target-environment evidence.
 
 #### Scenario: Presentation state matrix passes
 
