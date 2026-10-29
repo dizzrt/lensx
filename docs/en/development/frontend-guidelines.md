@@ -489,3 +489,91 @@ for native focus, propagation, and lifecycle ownership.
   Simplified Chinese, light and dark. Assert split-surface semantics, selection,
   borders and overflow classes, long names and diagnostics, modal behavior,
   disabled state, and focus recovery.
+
+## Shortcut Settings
+
+The Shortcuts section uses the existing Settings navigation, fixed `650×600`
+window, and independently scrolling right pane. Inject a typed Host-private
+`ShortcutService`; components must not call native commands or share persistence
+with theme, locale, or collections. Show confirmed bindings separately from
+runtime availability. Keep unavailable Action IDs editable and clearable; never
+invent a former title. Restore defaults requires confirmation and replaces only the System Launcher
+trigger, preserving every Feature/Action binding. Editing or restoring the
+Launcher follows ordinary conflict checking; an occupied default chord must
+report its conflict instead of deleting or rewriting the occupying Action.
+
+Render peer-level `System shortcuts` and `Feature shortcuts` headings in the
+content pane; the sidebar entry remains `Shortcuts`. Omit the introductory
+paragraph and recording, unsaved-edit, or double-tap timing explanations. Editing
+rows retain the right-aligned save/cancel controls, and actual save/error,
+authorization, and migration feedback stays accessible when relevant. Empty
+feedback has no reserved visible spacing.
+
+Render one Launcher row with title, type select, and current shortcut. There is
+no separate Launcher double-tap row. Each Action row has type select, current
+shortcut, Action select, and delete control in that order. An Add button below
+the list creates a local draft; an incomplete row never enters persistence.
+The `Restore default shortcuts` button is right-aligned at the end of the System
+shortcuts group, before its bottom divider. The `Add feature shortcut` button is
+right-aligned at the end of Feature shortcuts, before that group's bottom
+divider. Group dividers follow their actions; Feature rows have no inter-row
+divider and use spacing only. Restore uses the latest confirmed snapshot at confirmation time, changing
+only `launcher`; concurrent Feature updates are preserved. Save/conflict errors
+remain visible inside the confirmation dialog. Legacy migration resolution also
+preserves the existing Action map.
+Chord key cells start recording when clicked. Double-tap key cells directly show
+a Cmd/Ctrl/Option/Shift dropdown in both viewing and editing states; selecting a
+modifier never starts recording or acquires/renews a lease. Keep save/cancel compact beneath the edited row without helper prose. A changed type or Action remains a
+candidate until explicit save. Reassign Action IDs atomically and reject an ID
+already used by another row. The Feature target picker excludes the built-in
+`lensx.core.hide_launcher` and `lensx.core.open_settings` IDs in every locale,
+including fallback options for existing rows. Filtering uses identity, not display
+text, and does not remove them from Launcher search or the Registry. Existing
+saved bindings are not silently deleted; their collapsed selection can remain
+identifiable for explicit reassignment or deletion without offering those IDs in
+the dropdown. Deleting a draft only removes it locally; deleting
+a saved row uses the complete transaction and retains the row on failure.
+Escape removes an unsaved row or restores a saved row, then focuses its key cell
+or the Add button. Long labels stay within the fixed, scrollable right pane.
+
+Configuration v2 contains one Launcher trigger, either chord or modifier double
+tap. A successful type switch stops the previous trigger; there is no hidden
+recovery chord. A sole unavailable Launcher keeps the window visible for repair
+or quit. If the snapshot exposes unresolved `launcher_migration`, leave its type
+unselected, retain both legacy choices, and require a type choice plus explicit
+save before Action mutations. Only that save or confirmed restore-defaults sends
+`resolveLauncherMigration: true`. Do not treat its placeholder chord as active.
+
+Use the shared shortcut policy for immediate feedback and Rust for final
+validation. Record physical `KeyboardEvent.code`, check current `key` semantics
+as well as physical reserved aliases, and display Host-provided current-layout
+labels instead of assuming a QWERTY letter. Only chord capture uses a native lease;
+subscribe before starting, renew only while visible and recording, release on
+cancel, blur, hide, section exit or unmount, and ignore late lease events. A
+registered native chord may arrive through candidate events. Bare Escape exits
+the shortcut editor from any focused control, including before recording starts,
+while acquiring a lease, and after a failed save. It discards the candidate,
+releases recording, and restores the editing entry's focus without changing
+confirmed bindings. A submitted save retains its existing pending guard.
+Modified Escape remains a candidate while recording; IME input is ignored and
+Cmd+W/Q preserve native close/quit. Remove the Escape listener on editor exit or
+unmount so ordinary Settings navigation retains its keyboard behavior.
+
+The candidate is not an active binding. Keep it after validation, registration or
+storage failure; a revision conflict reloads the confirmed snapshot before a new
+explicit save. Live feedback, controls, reserved/conflicting targets and runtime
+states use locale messages and Semi theme tokens, including both languages and
+themes. Never display raw diagnostics or other applications' input. Explain
+monitoring permission only for double taps and request it only on user action.
+Double taps require two same-physical-modifier complete presses (200 ms each),
+300 ms between presses, then 300 ms quiet confirmation. Consecutive system
+multi-presses in this window cancel; passive listening does not reserve the
+gesture from other applications or prevent system accessibility behavior.
+
+Chord recording starts with an empty local candidate and previews held modifiers
+and primary keys on keydown/keyup, including partial prefixes. Display state is
+not a persistable trigger. Releasing all keys leaves the last complete valid
+candidate visible. Reject unsupported, reserved, and multiple-primary-key input
+instead of saving a previous binding as a new capture. Registered native chord
+feedback updates the display immediately; ignore IME and clear transient pressed
+state on blur, mode switch, cancellation, lease release, and unmount.

@@ -225,7 +225,7 @@ JavaScript/TypedArray 代码。签名路径不需要 Node builtin、Buffer shim�
 
 ## 构建与交付证据
 
-Manifest 使用 `0.4.0`，支持 Host API 从 `0.3.0` 到不含 `0.4.0` 的版本范围。
+Manifest 使用 `0.4.0`，支持 Host API 从 `0.4.0` 到不含 `0.5.0` 的版本范围。
 需要同时升级 Host 和公共 SDK；已安装插件快照不可变，需要重新构建并显式重载或替换
 插件包才能使用新传输。不提供 `http.request` 的旧 Host 会保持 unavailable，插件不会
 静默退回 WebView fetch。
@@ -280,3 +280,6 @@ Gate 或 workflow。参见[验证](validation.md)和[持续集成](continuous-in
 OPTIONS 探测不等于签名 POST 或真实 WebView 网络验收。已报告的 CORS 失败促成原生传输
 修订，但不证明用户凭据无效。构建和打包不发布或安装插件；
 安装与开发重载仍是显式的既有 Host 操作。
+
+Translation 使用 SDK `0.5.0`，省略可选快捷键回调。重复快捷键激活只打开或聚焦已有 Page，
+不发起翻译、不读取剪贴板、不重置输入，也不取消已有工作。

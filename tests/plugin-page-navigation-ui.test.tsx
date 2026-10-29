@@ -1,3 +1,4 @@
+import type { PluginActionActivation } from '@lensx/plugin-contract';
 import { afterEach, beforeEach, describe, expect, rs, test } from '@rstest/core';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { type ComponentProps, StrictMode } from 'react';
@@ -338,6 +339,40 @@ describe('Plugin Page navigation UI', () => {
           page_attempt_id: 'page_attempt_2',
         }),
       ),
+    );
+  });
+
+  test('delivers repeated Action invocations without recreating the current Runtime or surface identity', async () => {
+    const setPresentationState = rs.fn(async (_target: LauncherSurfaceTarget) => undefined);
+    const view = renderPluginComposition({ surfaceController: { setPresentationState } });
+    await waitFor(() => expect(view.actionService.registry.get(`${pluginId}.open_project`)).toBeDefined());
+    await act(async () => {
+      await view.actionService.dispatcher.dispatch(`${pluginId}.open_project`);
+    });
+    await waitFor(() => expect(view.pluginChildWebviewPresentationController.create).toHaveBeenCalledTimes(1));
+    const slot = document.querySelector('[data-plugin-runtime-slot="true"]');
+    const surfaceCount = setPresentationState.mock.calls.length;
+    const channel = view.navigationService.bindActivations({ owner_id: pluginId, page_id: 'open_project' });
+    const delivered = rs.fn((_activation: PluginActionActivation) => true);
+    expect(channel?.subscribe(delivered)).toEqual([{ actionId: 'open_project', invocationId: 1, source: 'normal' }]);
+    await act(async () => {
+      await view.actionService.dispatcher.dispatchShortcut(`${pluginId}.open_project`);
+    });
+    await act(async () => {
+      await view.actionService.dispatcher.dispatch(`${pluginId}.open_project`);
+    });
+    expect(delivered.mock.calls.map(([activation]) => activation)).toEqual([
+      { actionId: 'open_project', invocationId: 2, source: 'shortcut' },
+      { actionId: 'open_project', invocationId: 3, source: 'normal' },
+    ]);
+    expect(document.querySelector('[data-plugin-runtime-slot="true"]')).toBe(slot);
+    expect(view.pluginRuntimeResolver.resolve).toHaveBeenCalledTimes(1);
+    expect(view.pluginChildWebviewPresentationController.create).toHaveBeenCalledTimes(1);
+    expect(view.pluginChildWebviewPresentationController.destroy).not.toHaveBeenCalled();
+    expect(setPresentationState).toHaveBeenCalledTimes(surfaceCount);
+    expect(view.pluginChildWebviewPresentationController.setVisible).toHaveBeenLastCalledWith(
+      { attemptId: 'attempt_0123456789abcdef' },
+      true,
     );
   });
 

@@ -1,7 +1,7 @@
 import type { HostApiEvent, HostApiResult } from '@lensx/plugin-contract';
 import { describe, expect, rs, test } from '@rstest/core';
-
 import { LauncherActionDispatcher, LauncherActionRegistry } from '../src/app/launcher/actions';
+import { PageActivationAttempt } from '../src/app/navigation/activations';
 import {
   createMutablePluginHostApiContextSource,
   createPluginChildWebviewHostDispatcherController,
@@ -26,6 +26,7 @@ const dispatchEvent = (sequence: number, request: unknown) => ({
   contract_version: '0.1.0',
   session_id: sessionId,
   dispatch_id: sequence.toString(16).padStart(32, '0'),
+  attempt_id: 'attempt_0123456789abcdef',
   identity,
   request,
 });
@@ -116,7 +117,7 @@ describe('Child WebView Host dispatcher adapter', () => {
     expect(fixture.settlements[0]?.output).toEqual({
       method: 'runtime.get_context',
       result: {
-        hostApiVersion: '0.3.0',
+        hostApiVersion: '0.4.0',
         locale: 'en-US',
         theme: 'light',
         capabilities: [
@@ -147,6 +148,7 @@ describe('Child WebView Host dispatcher adapter', () => {
     });
 
     fixture.context.update({ locale: 'zh-CN', theme: 'dark' });
+    await flush();
     expect(fixture.events).toHaveLength(1);
     expect(fixture.events[0]).toEqual({
       sessionId,
@@ -181,6 +183,7 @@ describe('Child WebView Host dispatcher adapter', () => {
     expect(fixture.controller.disconnect({ contract_version: '0.1.0', session_id: sessionId })).toBe(true);
     expect(fixture.storageDispose).toHaveBeenCalledTimes(1);
     fixture.context.update({ locale: 'zh-CN', theme: 'dark' });
+    await flush();
     expect(fixture.events).toEqual([]);
     expect(
       fixture.controller.cancel({
@@ -214,7 +217,79 @@ describe('Child WebView Host dispatcher adapter', () => {
     expect(fixture.storageDispose).toHaveBeenCalledTimes(1);
     expect(fixture.settlements).toEqual([]);
     fixture.context.update({ locale: 'zh-CN', theme: 'dark' });
+    await flush();
     expect(fixture.events).toEqual([]);
     expect(fixture.controller.dispatch(dispatchEvent(3, { method: 'ui.close', params: {} }))).toBe(false);
   });
+});
+
+test('serializes native activation delivery and terminates failed emissions without replay', async () => {
+  const failures = rs.fn();
+  const attempt = new PageActivationAttempt(failures);
+  const registry = new LauncherActionRegistry();
+  const factory = createPluginHostApiDispatcherFactory({
+    actions: { registry, dispatcher: new LauncherActionDispatcher(registry) },
+    context: createMutablePluginHostApiContextSource({ locale: 'en-US', theme: 'light' }),
+    navigation: { isActivePage: () => true, closePageIfMatches: () => true },
+    bindActivations: () => attempt.bind(),
+  });
+  const events: HostApiEvent[] = [];
+  const completions: Array<(delivered: boolean) => void> = [];
+  const controller = createPluginChildWebviewHostDispatcherController(factory, {
+    settle: async () => true,
+    fail: async () => true,
+    emitEvent: (_sessionId, event) => {
+      events.push(event);
+      return new Promise<boolean>((resolve) => {
+        completions.push(resolve);
+      });
+    },
+  });
+  expect(controller.dispatch(dispatchEvent(1, { method: 'actions.subscribe_activations', params: {} }))).toBe(true);
+  await flush();
+  attempt.append('first', { invocationId: 1, source: 'shortcut' });
+  attempt.append('second', { invocationId: 2, source: 'normal' });
+  await flush();
+  expect(events).toHaveLength(1);
+  completions[0]?.(true);
+  await flush();
+  expect(events).toHaveLength(2);
+  expect(events[1]).toEqual({
+    event: 'actions.activated',
+    payload: { actionId: 'second', invocationId: 2, source: 'normal' },
+  });
+  completions[1]?.(false);
+  await flush();
+  expect(failures).toHaveBeenCalledWith('unavailable');
+  expect(attempt.terminal).toBe(true);
+  expect(() => attempt.append('late', { invocationId: 3, source: 'shortcut' })).toThrow();
+  controller.dispose();
+});
+
+test('SDK disconnect after Context readiness fails the current activation attempt but does not fail an already closed Page', async () => {
+  for (const pageAlreadyClosed of [false, true]) {
+    const failures = rs.fn();
+    const attempt = new PageActivationAttempt(failures);
+    attempt.append('open', { invocationId: 1, source: 'shortcut' });
+    const registry = new LauncherActionRegistry();
+    const factory = createPluginHostApiDispatcherFactory({
+      actions: { registry, dispatcher: new LauncherActionDispatcher(registry) },
+      context: createMutablePluginHostApiContextSource({ locale: 'en-US', theme: 'light' }),
+      navigation: { isActivePage: () => true, closePageIfMatches: () => true },
+      bindActivations: () => attempt.bind(),
+    });
+    const controller = createPluginChildWebviewHostDispatcherController(factory, {
+      settle: async () => true,
+      fail: async () => true,
+      emitEvent: () => true,
+    });
+    controller.dispatch(dispatchEvent(1, { method: 'runtime.get_context', params: {} }));
+    await flush();
+    if (pageAlreadyClosed) attempt.dispose();
+    expect(controller.disconnect({ contract_version: '0.1.0', session_id: sessionId })).toBe(true);
+    expect(attempt.terminal).toBe(true);
+    expect(failures).toHaveBeenCalledTimes(pageAlreadyClosed ? 0 : 1);
+    expect(controller.disconnect({ contract_version: '0.1.0', session_id: sessionId })).toBe(false);
+    controller.dispose();
+  }
 });

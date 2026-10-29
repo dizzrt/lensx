@@ -3,13 +3,14 @@ import type {
   HostApiEventName,
   HostApiRequest,
   HostApiResult,
+  PluginActionActivation,
   PluginRuntimeContext,
   PluginRuntimeLocale,
   PluginRuntimeTheme,
 } from '@lensx/plugin-contract';
 
 export type PluginSdkState = 'idle' | 'initializing' | 'ready' | 'disconnected' | 'disposed';
-export type { PluginRuntimeContext, PluginRuntimeLocale, PluginRuntimeTheme };
+export type { PluginActionActivation, PluginRuntimeContext, PluginRuntimeLocale, PluginRuntimeTheme };
 
 export interface PluginSdkCancellationSignal {
   readonly aborted: boolean;
@@ -45,6 +46,7 @@ export interface PluginSdkOperationOptions {
 }
 
 export interface CreatePluginSdkOptions {
+  readonly onShortcutActivated?: (activation: PluginActionActivation) => void | Promise<void>;
   readonly transport: PluginSdkTransport;
   readonly timeoutMs?: number;
 }
@@ -59,6 +61,7 @@ export type PluginSdkEvent<EventName extends HostApiEventName> = Extract<HostApi
 export interface PluginSdkClient {
   readonly state: PluginSdkState;
   readonly context: PluginRuntimeContext | undefined;
+  readonly activation: PluginActionActivation | null | undefined;
   initialize(options?: PluginSdkOperationOptions): Promise<PluginRuntimeContext>;
   request<Request extends HostApiRequest>(
     request: Request,

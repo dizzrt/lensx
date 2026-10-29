@@ -155,3 +155,11 @@ resource resolution、Runtime resolver、公共 WebView transport、closed Child
 公共 CLI 与 `create` 命令已可从 workspace build 和真实 package tarball 使用，但本仓库尚未将其发布到 npm。
 Development Mode、watch/reload、插件安装、权限授予、签名/provenance 与远程发布仍是独立能力。生成模板与
 CLI validation 不会替代 Host 独立的 native package 和 source 检查。
+
+## 激活协议迁移
+
+两类 canonical template 和 CLI 快照均使用 Contract `0.4.0`、SDK `0.5.0` 与
+Host API `>=0.4.0 <0.5.0`，Manifest 保持 `0.4.0`。
+Runtime factory 在初始化前接受可选快捷键回调，并随 SDK dispose 清理。
+默认入口省略回调，重复激活保留业务状态。已有插件必须升级依赖和范围后重新打包；
+回调可选不代表旧 SDK 兼容。参见[公共回调契约](../plugin-development/public-packages.md#可选快捷键回调)。

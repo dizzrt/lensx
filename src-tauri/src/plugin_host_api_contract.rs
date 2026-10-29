@@ -9,8 +9,10 @@ const VALID_FIXTURES: &str =
 const INVALID_FIXTURES: &str =
     include_str!("../../packages/plugin-contract/tests/fixtures/host-api/invalid/cases.json");
 
-const METHODS: [&str; 9] = [
+const METHODS: [&str; 11] = [
+    "actions.get_activation",
     "actions.open",
+    "actions.subscribe_activations",
     "http.request",
     "runtime.get_context",
     "storage.delete",
@@ -57,6 +59,10 @@ fn escape_pointer(segment: &str) -> String {
 
 fn method_definition(method: &str, result: bool) -> Option<&'static str> {
     Some(match (method, result) {
+        ("actions.get_activation", false) => "ActionsGetActivationRequest",
+        ("actions.get_activation", true) => "ActionsGetActivationResult",
+        ("actions.subscribe_activations", false) => "ActionsSubscribeActivationsRequest",
+        ("actions.subscribe_activations", true) => "ActionsSubscribeActivationsResult",
         ("actions.open", false) => "ActionsOpenRequest",
         ("actions.open", true) => "ActionsOpenResult",
         ("http.request", false) => "HttpRequestRequest",
@@ -180,7 +186,11 @@ fn validate_fixture(fixture: &FixtureCase) -> Vec<Diagnostic> {
     let definition = match fixture.kind {
         FixtureKind::Context => "PluginRuntimeContextInput",
         FixtureKind::Error => "HostApiErrorInput",
-        FixtureKind::Event => "HostApiEventInput",
+        FixtureKind::Event => match fixture.value.get("event").and_then(Value::as_str) {
+            Some("runtime.context_changed") => "RuntimeContextChangedEvent",
+            Some("actions.activated") => "ActionsActivatedEvent",
+            _ => "HostApiEventInput",
+        },
         FixtureKind::Request | FixtureKind::Result => {
             let method = fixture.value.get("method").and_then(Value::as_str);
             let Some(definition) = method.and_then(|method| {
@@ -212,6 +222,27 @@ fn validate_fixture(fixture: &FixtureCase) -> Vec<Diagnostic> {
             sorted_diagnostic(&fixture.value, "/result/keys")
                 .into_iter()
                 .collect()
+        }
+        FixtureKind::Result
+            if fixture.value.get("method").and_then(Value::as_str)
+                == Some("actions.subscribe_activations") =>
+        {
+            let values = fixture
+                .value
+                .pointer("/result/activations")
+                .and_then(Value::as_array)
+                .unwrap();
+            for index in 1..values.len() {
+                if values[index - 1]["invocationId"].as_u64()
+                    >= values[index]["invocationId"].as_u64()
+                {
+                    return vec![Diagnostic {
+                        code: "unsorted_value".to_owned(),
+                        path: format!("/result/activations/{index}/invocationId"),
+                    }];
+                }
+            }
+            Vec::new()
         }
         _ => Vec::new(),
     }

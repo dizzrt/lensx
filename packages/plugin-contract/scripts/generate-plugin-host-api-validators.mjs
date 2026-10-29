@@ -15,6 +15,12 @@ const outputPath = argumentValue('--output', resolve(packageRoot, 'src/generated
 const checkOnly = process.argv.includes('--check');
 
 const definitions = [
+  'ActionsGetActivationRequest',
+  'ActionsGetActivationResult',
+  'ActionsSubscribeActivationsRequest',
+  'ActionsSubscribeActivationsResult',
+  'ActionsActivatedEvent',
+  'RuntimeContextChangedEvent',
   'ActionsOpenRequest',
   'ActionsOpenResult',
   'HttpRequestRequest',

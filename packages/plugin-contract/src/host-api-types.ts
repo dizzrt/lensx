@@ -6,6 +6,7 @@ import type {
   HostApiMethodInput,
   HostApiRequestInput,
   HostApiResultInput,
+  PluginActionActivationInput,
   PluginRuntimeContextInput,
 } from './generated/plugin-host-api-input.js';
 
@@ -25,6 +26,7 @@ type DeepReadonly<Value> = Value extends (...arguments_: never[]) => unknown
       ? { readonly [Key in keyof Value]: DeepReadonly<Value[Key]> }
       : Value;
 
+export type PluginActionActivation = DeepReadonly<PluginActionActivationInput>;
 export type PluginRuntimeContext = DeepReadonly<PluginRuntimeContextInput>;
 export type HostApiRequest = DeepReadonly<HostApiRequestInput>;
 export type HostApiResult = DeepReadonly<HostApiResultInput>;

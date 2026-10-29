@@ -56,3 +56,30 @@ describe('Translation SDK bootstrap', () => {
     for (const fake of [first, failed, fresh]) expect(fake.observation.disposeCalls).toBe(1);
   });
 });
+
+test('repeated shortcut activation keeps the existing runtime without extra business requests', async () => {
+  const fake = new FakePluginSdkTransport({
+    connect: () => createPluginRuntimeContextFixture({ capabilities: ['actions.subscribe_activations'] }),
+    request: () => ({
+      method: 'actions.subscribe_activations',
+      result: { activations: [{ actionId: 'open', invocationId: 1, source: 'shortcut' }] },
+    }),
+  });
+  const states: RuntimeState[] = [];
+  const runtime = createTranslationRuntime(
+    () => fake,
+    (state) => states.push(state),
+  );
+  await flush();
+  expect(states.at(-1)?.kind).toBe('ready');
+  const ready = states.at(-1);
+  const count = states.length;
+  for (let id = 2; id <= 70; id += 1) {
+    fake.emit('actions.activated', { actionId: 'open', invocationId: id, source: 'shortcut' });
+  }
+  expect(states).toHaveLength(count);
+  expect(states.at(-1)).toBe(ready);
+  expect(fake.observation.connectAttempts).toBe(1);
+  expect(fake.observation.requests.map(({ method }) => method)).toEqual(['actions.subscribe_activations']);
+  await runtime.dispose();
+});

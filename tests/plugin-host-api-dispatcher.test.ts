@@ -80,7 +80,7 @@ test('advertises native HTTP only when composed and rejects accidental JS execut
   for (const available of [false, true]) {
     const { binding, actionExecutor, closePageIfMatches } = createFixture(available);
     const context = await requestInput(binding, { method: 'runtime.get_context', params: {} });
-    expect(context).toMatchObject({ method: 'runtime.get_context', result: { hostApiVersion: '0.3.0' } });
+    expect(context).toMatchObject({ method: 'runtime.get_context', result: { hostApiVersion: '0.4.0' } });
     if (
       context === null ||
       typeof context !== 'object' ||
@@ -109,7 +109,7 @@ describe('Host-private Plugin Host API dispatcher', () => {
     expect(output).toEqual({
       method: 'runtime.get_context',
       result: {
-        hostApiVersion: '0.3.0',
+        hostApiVersion: '0.4.0',
         locale: 'en-US',
         theme: 'light',
         capabilities: ['actions.open', 'runtime.get_context', 'ui.close'],
@@ -141,7 +141,7 @@ describe('Host-private Plugin Host API dispatcher', () => {
     expect(events[0]).toEqual({
       event: 'runtime.context_changed',
       payload: {
-        hostApiVersion: '0.3.0',
+        hostApiVersion: '0.4.0',
         locale: 'zh-CN',
         theme: 'dark',
         capabilities: ['actions.open', 'runtime.get_context', 'ui.close'],
@@ -331,7 +331,7 @@ describe('Host-private Plugin Host API dispatcher', () => {
       {
         event: 'runtime.context_changed',
         payload: {
-          hostApiVersion: '0.3.0',
+          hostApiVersion: '0.4.0',
           locale: 'en-US',
           theme: 'light',
           capabilities: ['actions.open', 'runtime.get_context', 'ui.close'],
@@ -344,4 +344,52 @@ describe('Host-private Plugin Host API dispatcher', () => {
     expect(events).toHaveLength(1);
     expect(invoke).toHaveBeenCalledTimes(1);
   });
+});
+
+test('queued plugin navigation cannot reopen a retired source attempt, while its own successful navigation retains its result', async () => {
+  const registry = new LauncherActionRegistry();
+  let release: (() => void) | undefined;
+  let current = true;
+  let executions = 0;
+  registry.register({
+    descriptor: {
+      action_id: `${identity.plugin_id}.open_project`,
+      owner_id: identity.plugin_id,
+      title: { 'en-US': 'Workspace' },
+      default_keywords: {},
+      enabled: true,
+    },
+    executor: async () => {
+      executions++;
+      if (executions === 1)
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      else current = false;
+    },
+  });
+  const dispatcher = new LauncherActionDispatcher(registry);
+  const factory = createPluginHostApiDispatcherFactory({
+    actions: { registry, dispatcher },
+    context: createMutablePluginHostApiContextSource({ locale: 'en-US', theme: 'light' }),
+    navigation: { isActivePage: () => current, closePageIfMatches: () => true },
+    isActivationAttemptCurrent: () => current,
+  });
+  const binding = factory.create({ identity, runtimeAttemptId: 'attempt_0000000000000001', isCurrent: () => true });
+  const blocked = dispatcher.dispatch(`${identity.plugin_id}.open_project`);
+  const queued = requestInput(binding, { method: 'actions.open', params: { actionId: 'open_project' } });
+  await Promise.resolve();
+  await Promise.resolve();
+  current = false;
+  release?.();
+  await blocked;
+  await expect(queued).resolves.toMatchObject({ code: 'unavailable' });
+  expect(executions).toBe(1);
+  current = true;
+  await expect(
+    requestInput(binding, { method: 'actions.open', params: { actionId: 'open_project' } }),
+  ).resolves.toEqual({ method: 'actions.open', result: { opened: true } });
+  expect(executions).toBe(2);
+  expect(current).toBe(false);
+  binding.dispose();
 });

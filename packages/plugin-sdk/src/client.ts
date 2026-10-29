@@ -1,6 +1,7 @@
 import {
   type HostApiEventName,
   type HostApiRequest,
+  type PluginActionActivation,
   validateHostApiEvent,
   validateHostApiRequest,
   validateHostApiResult,
@@ -50,9 +51,18 @@ class PluginSdkClientImplementation implements PluginSdkClient {
   #disposePromise: Promise<void> | undefined;
   #initializePromise: Promise<PluginRuntimeContext> | undefined;
   #state: PluginSdkState = 'idle';
+  readonly #onShortcutActivated: CreatePluginSdkOptions['onShortcutActivated'];
+  readonly #activationBuffer = new Map<number, PluginActionActivation>();
+  #activation: PluginActionActivation | null | undefined;
+  #activationAttempted = false;
+  #activationInitializing = false;
+  #activationFlushing = false;
+  #activationWatermark = 0;
+  #transportDisposePromise: Promise<void> | undefined;
 
   constructor(options: CreatePluginSdkOptions) {
     this.#transport = options.transport;
+    this.#onShortcutActivated = options.onShortcutActivated;
     this.#defaultTimeoutMs = validateTimeout(options.timeoutMs ?? DEFAULT_PLUGIN_SDK_TIMEOUT_MS);
   }
 
@@ -62,6 +72,10 @@ class PluginSdkClientImplementation implements PluginSdkClient {
 
   get context(): PluginRuntimeContext | undefined {
     return this.#context;
+  }
+
+  get activation(): PluginActionActivation | null | undefined {
+    return this.#activation;
   }
 
   initialize(options: PluginSdkOperationOptions = {}): Promise<PluginRuntimeContext> {
@@ -89,31 +103,55 @@ class PluginSdkClientImplementation implements PluginSdkClient {
     this.#transition('initializing');
 
     const initializePromise = runSdkOperation({
-      operation: (signal) => this.#transport.connect({ signal }),
-      pendingOperations: this.#pendingOperations,
-      signal: options.signal,
-      timeoutMs,
-    })
-      .then((rawContext) => {
-        if (this.#state === 'disposed') {
-          throw new PluginSdkError('disposed');
-        }
-        if (this.#state === 'disconnected') {
-          throw new PluginSdkError('disconnected');
-        }
+      operation: async (signal) => {
+        const rawContext = await this.#transport.connect({ signal });
+        this.#assertInitializing(signal.aborted);
         const context = validateRuntimeContext(rawContext);
         if (!isSupportedHostApiVersion(context.hostApiVersion)) {
           throw new PluginSdkError('incompatible_host_api');
         }
+        if (context.capabilities.includes('actions.subscribe_activations')) {
+          this.#activationInitializing = true;
+          this.#installActivationListener();
+          this.#assertInitializing(signal.aborted);
+          this.#activationAttempted = true;
+          const rawBatch = await this.#transport.request({
+            method: 'actions.subscribe_activations',
+            params: Object.freeze({}),
+            signal,
+          });
+          this.#assertInitializing(signal.aborted);
+          const batch = validateHostApiResult(rawBatch);
+          if (batch.status === 'invalid' || batch.value.method !== 'actions.subscribe_activations') {
+            throw new PluginSdkError('transport_failure');
+          }
+          for (const activation of batch.value.result.activations) this.#bufferActivation(activation);
+        }
+        return context;
+      },
+      pendingOperations: this.#pendingOperations,
+      signal: options.signal,
+      timeoutMs,
+    })
+      .then((context) => {
+        this.#assertInitializing(false);
         this.#context = context;
+        this.#activation = null;
         this.#transition('ready');
+        this.#activationInitializing = false;
+        this.#flushActivations();
         return context;
       })
       .catch((error: unknown) => {
         if (this.#state !== 'disposed' && this.#state !== 'disconnected') {
-          this.#removeDisconnectListener();
-          this.#context = undefined;
-          this.#transition('idle');
+          if (this.#activationAttempted) {
+            this.#terminateInvalidTransport();
+          } else {
+            this.#removeDisconnectListener();
+            this.#removeEventListeners();
+            this.#context = undefined;
+            this.#transition('idle');
+          }
         }
         throw toPluginSdkError(error);
       })
@@ -211,17 +249,14 @@ class PluginSdkClientImplementation implements PluginSdkClient {
       return this.#disposePromise;
     }
     this.#context = undefined;
+    this.#clearActivation();
     this.#transition('disposed');
     abortPendingOperations(this.#pendingOperations, new PluginSdkError('disposed'));
     this.#removeDisconnectListener();
     this.#removeEventListeners();
     this.#stateListeners.clear();
 
-    this.#disposePromise = Promise.resolve()
-      .then(() => this.#transport.dispose())
-      .catch(() => {
-        throw new PluginSdkError('transport_failure');
-      });
+    this.#disposePromise = this.#disposeTransport();
     return this.#disposePromise;
   }
 
@@ -247,6 +282,7 @@ class PluginSdkClientImplementation implements PluginSdkClient {
       return;
     }
     this.#context = undefined;
+    this.#clearActivation();
     this.#transition('disconnected');
     abortPendingOperations(this.#pendingOperations, new PluginSdkError('disconnected'));
     this.#removeDisconnectListener();
@@ -260,7 +296,94 @@ class PluginSdkClientImplementation implements PluginSdkClient {
 
   #terminateInvalidTransport(): void {
     this.#handleDisconnect();
-    Promise.resolve(this.#transport.dispose()).catch(() => undefined);
+    void this.#disposeTransport().catch(() => undefined);
+  }
+
+  #disposeTransport(): Promise<void> {
+    this.#transportDisposePromise ??= Promise.resolve()
+      .then(() => this.#transport.dispose())
+      .catch(() => {
+        throw new PluginSdkError('transport_failure');
+      });
+    return this.#transportDisposePromise;
+  }
+
+  #assertInitializing(aborted: boolean): void {
+    if (this.#state === 'disposed') throw new PluginSdkError('disposed');
+    if (this.#state === 'disconnected') throw new PluginSdkError('disconnected');
+    if (aborted || this.#state !== 'initializing') throw new PluginSdkError('cancelled');
+  }
+
+  #installActivationListener(): void {
+    let active = true;
+    const release = this.#transport.subscribe('actions.activated', (payload) => {
+      if (!active || (this.#state !== 'initializing' && this.#state !== 'ready')) return;
+      const event = validateHostApiEvent({ event: 'actions.activated', payload });
+      if (event.status === 'invalid' || event.value.event !== 'actions.activated') {
+        this.#terminateInvalidTransport();
+        return;
+      }
+      try {
+        this.#bufferActivation(event.value.payload);
+        if (!this.#activationInitializing) this.#flushActivations();
+      } catch {
+        this.#terminateInvalidTransport();
+      }
+    });
+    const unsubscribe = idempotent(() => {
+      active = false;
+      this.#eventUnsubscribes.delete(unsubscribe);
+      try {
+        release();
+      } catch {
+        /* Private cleanup errors are isolated. */
+      }
+    });
+    this.#eventUnsubscribes.add(unsubscribe);
+    if (this.#state === 'disconnected' || this.#state === 'disposed') unsubscribe();
+  }
+
+  #bufferActivation(activation: PluginActionActivation): void {
+    if (activation.invocationId <= this.#activationWatermark) return;
+    const existing = this.#activationBuffer.get(activation.invocationId);
+    if (existing !== undefined) {
+      if (existing.actionId !== activation.actionId || existing.source !== activation.source) {
+        throw new PluginSdkError('transport_failure');
+      }
+      return;
+    }
+    if (this.#activationBuffer.size >= 64) throw new PluginSdkError('transport_failure');
+    this.#activationBuffer.set(activation.invocationId, activation);
+  }
+
+  #flushActivations(): void {
+    if (this.#activationFlushing || this.#state !== 'ready') return;
+    this.#activationFlushing = true;
+    try {
+      while (this.#state === 'ready' && this.#activationBuffer.size > 0) {
+        const id = Math.min(...this.#activationBuffer.keys());
+        const activation = this.#activationBuffer.get(id);
+        this.#activationBuffer.delete(id);
+        if (activation === undefined || id <= this.#activationWatermark) continue;
+        this.#activationWatermark = id;
+        this.#activation = activation;
+        if (activation.source === 'shortcut' && this.#onShortcutActivated !== undefined) {
+          try {
+            void Promise.resolve(this.#onShortcutActivated(activation)).catch(() => undefined);
+          } catch {
+            // Business failure never changes navigation or SDK lifecycle and is not retried.
+          }
+        }
+      }
+    } finally {
+      this.#activationFlushing = false;
+    }
+  }
+
+  #clearActivation(): void {
+    this.#activation = undefined;
+    this.#activationBuffer.clear();
+    this.#activationInitializing = false;
   }
 
   #transition(state: PluginSdkState): void {

@@ -5,9 +5,9 @@ import { PluginSdkError, toPluginSdkError } from '../src/error.js';
 import { compareSemVer, isSupportedHostApiVersion, parseSemVer } from '../src/semver.js';
 
 describe('SemVer and Host API compatibility', () => {
-  test('versions SDK 0.4.0 independently while supporting Host API 0.2.x and 0.3.x', () => {
-    expect(PLUGIN_SDK_VERSION).toBe('0.4.0');
-    expect(PLUGIN_SDK_SUPPORTED_HOST_API_RANGE).toBe('>=0.2.0 <0.4.0');
+  test('versions SDK 0.5.0 independently while supporting Host API 0.4.x', () => {
+    expect(PLUGIN_SDK_VERSION).toBe('0.5.0');
+    expect(PLUGIN_SDK_SUPPORTED_HOST_API_RANGE).toBe('>=0.4.0 <0.5.0');
   });
 
   test('parses boundaries and follows prerelease precedence', () => {
@@ -28,14 +28,12 @@ describe('SemVer and Host API compatibility', () => {
   });
 
   test('enforces the half-open supported Host API range', () => {
-    expect(isSupportedHostApiVersion('0.1.99')).toBe(false);
-    expect(isSupportedHostApiVersion('0.2.0-alpha.1')).toBe(false);
-    expect(isSupportedHostApiVersion('0.2.0')).toBe(true);
-    expect(isSupportedHostApiVersion('0.2.99')).toBe(true);
-    expect(isSupportedHostApiVersion('0.3.0-alpha.1')).toBe(true);
-    expect(isSupportedHostApiVersion('0.3.0')).toBe(true);
-    expect(isSupportedHostApiVersion('0.3.99')).toBe(true);
-    expect(isSupportedHostApiVersion('0.4.0')).toBe(false);
+    expect(isSupportedHostApiVersion('0.2.99')).toBe(false);
+    expect(isSupportedHostApiVersion('0.3.99')).toBe(false);
+    expect(isSupportedHostApiVersion('0.4.0-alpha.1')).toBe(false);
+    expect(isSupportedHostApiVersion('0.4.0')).toBe(true);
+    expect(isSupportedHostApiVersion('0.4.99')).toBe(true);
+    expect(isSupportedHostApiVersion('0.5.0')).toBe(false);
   });
 });
 

@@ -16,8 +16,8 @@ const manifestSchema = json('packages/plugin-contract/schema/manifest.schema.jso
 const hostApiSchema = json('packages/plugin-contract/schema/host-api.schema.json');
 if (manifestSchema.$id !== 'https://lensx.app/schemas/plugin/manifest-0.4.0.schema.json')
   failures.push('Manifest Schema id is not 0.4.0.');
-if (hostApiSchema.$id !== 'https://lensx.dev/schemas/plugin-host-api-0.3.0.schema.json')
-  failures.push('Host API Schema id is not 0.3.0.');
+if (hostApiSchema.$id !== 'https://lensx.dev/schemas/plugin-host-api-0.4.0.schema.json')
+  failures.push('Host API Schema id is not 0.4.0.');
 
 for (const path of [
   'packages/plugin-contract/schema/manifest.schema.json',
@@ -79,10 +79,10 @@ for (const path of publicRuntimeBoundaryFiles) {
 }
 
 requireText('packages/plugin-contract/src/constants.ts', "PLUGIN_MANIFEST_VERSION = '0.4.0'");
-requireText('packages/plugin-contract/src/constants.ts', "PLUGIN_HOST_API_VERSION = '0.3.0'");
-requireText('src-tauri/src/plugin_manifest.rs', 'PLUGIN_HOST_API_VERSION: &str = "0.3.0"');
-requireText('packages/plugin-sdk/src/constants.ts', "PLUGIN_SDK_VERSION = '0.4.0'");
-requireText('packages/plugin-sdk/src/constants.ts', "'>=0.2.0 <0.4.0'");
+requireText('packages/plugin-contract/src/constants.ts', "PLUGIN_HOST_API_VERSION = '0.4.0'");
+requireText('src-tauri/src/plugin_manifest.rs', 'PLUGIN_HOST_API_VERSION: &str = "0.4.0"');
+requireText('packages/plugin-sdk/src/constants.ts', "PLUGIN_SDK_VERSION = '0.5.0'");
+requireText('packages/plugin-sdk/src/constants.ts', "'>=0.4.0 <0.5.0'");
 requireText('packages/plugin-sdk/src/semver.ts', "parseSemVer('0.4.0')");
 
 for (const path of [
@@ -90,13 +90,13 @@ for (const path of [
   'packages/plugin-cli/package.json',
   'packages/plugin-ui/package.json',
 ]) {
-  if (json(path).version !== '0.2.0') failures.push(`${path}: package version is not 0.2.0.`);
+  if (json(path).version !== '0.2.1') failures.push(`${path}: package version is not 0.2.1.`);
 }
-if (json('packages/plugin-contract/package.json').version !== '0.3.0') {
-  failures.push('packages/plugin-contract/package.json: package version is not 0.3.0.');
+if (json('packages/plugin-contract/package.json').version !== '0.4.0') {
+  failures.push('packages/plugin-contract/package.json: package version is not 0.4.0.');
 }
-if (json('packages/plugin-sdk/package.json').version !== '0.4.0') {
-  failures.push('packages/plugin-sdk/package.json: package version is not 0.4.0.');
+if (json('packages/plugin-sdk/package.json').version !== '0.5.0') {
+  failures.push('packages/plugin-sdk/package.json: package version is not 0.5.0.');
 }
 
 for (const path of ['examples/plugin-contract-consumer/manifest.json']) {
@@ -107,8 +107,8 @@ for (const path of ['examples/plugin-contract-consumer/manifest.json']) {
     | undefined;
   if (manifest.manifest_version !== '0.4.0') failures.push(`${path}: Manifest version is not 0.4.0.`);
   if (runtime?.kind !== 'webview') failures.push(`${path}: Runtime kind is not webview.`);
-  if (compatibility?.host_api?.min_version !== '0.2.0' || compatibility.host_api.max_version_exclusive !== '0.4.0')
-    failures.push(`${path}: Host API range is not [0.2.0, 0.4.0).`);
+  if (compatibility?.host_api?.min_version !== '0.4.0' || compatibility.host_api.max_version_exclusive !== '0.5.0')
+    failures.push(`${path}: Host API range is not [0.4.0, 0.5.0).`);
 }
 
 for (const path of [
@@ -126,8 +126,8 @@ for (const path of [
   const runtime = manifest.runtime as { kind?: unknown } | undefined;
   if (manifest.manifest_version !== '0.4.0') failures.push(`${path}: Manifest version is not 0.4.0.`);
   if (runtime?.kind !== 'webview') failures.push(`${path}: Runtime kind is not webview.`);
-  if (compatibility?.host_api?.min_version !== '0.2.0' || compatibility.host_api.max_version_exclusive !== '0.4.0')
-    failures.push(`${path}: Host API range is not [0.2.0, 0.4.0).`);
+  if (compatibility?.host_api?.min_version !== '0.4.0' || compatibility.host_api.max_version_exclusive !== '0.5.0')
+    failures.push(`${path}: Host API range is not [0.4.0, 0.5.0).`);
   const serialized = JSON.stringify(manifest);
   for (const marker of ['requested_permissions', 'required_permissions', 'granted_permission_ids'])
     if (serialized.includes(marker)) failures.push(`${path}: contains removed field ${marker}.`);
@@ -137,4 +137,4 @@ if (failures.length > 0) {
   for (const failure of failures) console.error(failure);
   process.exit(1);
 }
-console.log('Manifest Contract 0.4.0 and Host API 0.3.0 drift checks passed.');
+console.log('Manifest Contract 0.4.0 and Host API 0.4.0 drift checks passed.');

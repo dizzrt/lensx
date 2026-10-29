@@ -59,3 +59,30 @@ describe('ConfigLens SDK lifecycle', () => {
     await runtime.dispose();
   });
 });
+
+test('repeated shortcut activation keeps the existing runtime without extra business requests', async () => {
+  const fake = new FakePluginSdkTransport({
+    connect: () => createPluginRuntimeContextFixture({ capabilities: ['actions.subscribe_activations'] }),
+    request: () => ({
+      method: 'actions.subscribe_activations',
+      result: { activations: [{ actionId: 'open', invocationId: 1, source: 'shortcut' }] },
+    }),
+  });
+  const states: ConfigLensRuntimeState[] = [];
+  const runtime = createConfigLensRuntime(
+    () => fake,
+    (state) => states.push(state),
+  );
+  await waitFor(states, 'ready');
+  expect(states.at(-1)?.kind).toBe('ready');
+  const ready = states.at(-1);
+  const count = states.length;
+  for (let id = 2; id <= 70; id += 1) {
+    fake.emit('actions.activated', { actionId: 'open', invocationId: id, source: 'shortcut' });
+  }
+  expect(states).toHaveLength(count);
+  expect(states.at(-1)).toBe(ready);
+  expect(fake.observation.connectAttempts).toBe(1);
+  expect(fake.observation.requests.map(({ method }) => method)).toEqual(['actions.subscribe_activations']);
+  await runtime.dispose();
+});

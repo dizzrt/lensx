@@ -60,3 +60,20 @@ client.subscribe('runtime.context_changed', (event) => event.payload.theme);
 void client.request('private.method', {});
 // @ts-expect-error Declared method and params must remain paired.
 void client.request({ method: 'actions.open', params: { key: 'private' } });
+
+const activationClient = createPluginSdk({
+  transport,
+  onShortcutActivated: (activation) => {
+    const source: 'normal' | 'shortcut' = activation.source;
+    const id: number = activation.invocationId;
+    // @ts-expect-error Activation is immutable to the plugin.
+    activation.source = 'normal';
+    return Promise.resolve(void { source, id });
+  },
+});
+// @ts-expect-error The SDK owns the current snapshot.
+activationClient.activation = null;
+void activationClient
+  .request({ method: 'actions.get_activation', params: {} })
+  .then(({ activation }) => activation?.actionId);
+activationClient.subscribe('actions.activated', ({ payload }) => payload.invocationId);

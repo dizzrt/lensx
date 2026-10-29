@@ -23,6 +23,10 @@ import {
   productionLauncherActionService,
   searchLauncherActions,
 } from './app/launcher/actions';
+import {
+  type NativeActionInvocationPort,
+  startNativeActionInvocations,
+} from './app/launcher/actions/native-invocations';
 import { desktopLauncherActivationSource, type LauncherActivationSource } from './app/launcher/activation';
 import {
   desktopLauncherActionCollectionsClient,
@@ -72,14 +76,17 @@ import {
 import { desktopPluginScopedStorageProviderFactory } from './app/plugins/storage';
 import type { PluginSurfaceProjectionService } from './app/plugins/surfaces';
 import { type AppPreferencesClient, desktopAppPreferencesClient } from './app/preferences';
+import { desktopShortcutService, type ShortcutService, unavailableShortcutService } from './app/shortcuts';
 import { useAppTheme } from './app/theme';
 
 export interface AppProps {
   activationSource?: LauncherActivationSource;
   actionService?: LauncherActionService;
+  nativeActionInvocationPort?: NativeActionInvocationPort;
   collectionsClient?: LauncherActionCollectionsClient;
   navigationService?: AppNavigationService;
   preferencesClient?: AppPreferencesClient;
+  shortcutsService?: ShortcutService;
   pluginChildWebviewPresentationController?: PluginChildWebviewPresentationController;
   pluginRuntimeLifecycleService?: PluginRuntimeLifecycleService;
   pluginRuntimeResolver?: PluginPageRuntimeResolver;
@@ -111,9 +118,11 @@ interface DispatchFeedback {
 const App = ({
   activationSource = desktopLauncherActivationSource,
   actionService = productionLauncherActionService,
+  nativeActionInvocationPort,
   collectionsClient = desktopLauncherActionCollectionsClient,
   navigationService = productionAppNavigationService,
   preferencesClient = desktopAppPreferencesClient,
+  shortcutsService,
   pluginChildWebviewPresentationController = desktopPluginChildWebviewPresentationController,
   pluginRuntimeLifecycleService,
   pluginRuntimeResolver,
@@ -127,6 +136,8 @@ const App = ({
   windowDragController = inertLauncherWindowDragController,
 }: AppProps) => {
   const { t } = useTranslation();
+  const effectiveShortcutsService =
+    shortcutsService ?? (enablePluginChildWebviewHostDispatcher ? desktopShortcutService : unavailableShortcutService);
   const { locale } = useAppLocale();
   const { themeMode } = useAppTheme();
   const [activePage, setActivePage] = useState<ActivePage>();
@@ -152,6 +163,7 @@ const App = ({
   const shouldRestoreInputFocusRef = useRef(false);
   const lastPresentationTargetKeyRef = useRef<string | undefined>(undefined);
   const pageAttemptSequenceRef = useRef(0);
+  const activePageRef = useRef<ActivePage | undefined>(undefined);
   const collectionsMutationRevisionRef = useRef(0);
   const collectionsMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -216,6 +228,12 @@ const App = ({
         actions: actionService,
         context: pluginHostApiContextSource,
         navigation: navigationService,
+        bindActivations: (target, runtimeAttemptId) =>
+          runtimeAttemptId === undefined
+            ? navigationService.bindActivations(target)
+            : navigationService.bindNativeActivations(target, runtimeAttemptId),
+        isActivationAttemptCurrent: (target, runtimeAttemptId) =>
+          navigationService.isNativeActivationAttemptCurrent(target, runtimeAttemptId),
         storage: desktopPluginScopedStorageProviderFactory,
         nativeHttpAvailable: enablePluginChildWebviewHostDispatcher,
       }),
@@ -373,7 +391,14 @@ const App = ({
         if (!page) {
           shouldRestoreInputFocusRef.current = true;
         }
-        setActivePageAttemptId(page ? (`page_attempt_${++pageAttemptSequenceRef.current}` as const) : undefined);
+        if (
+          !page ||
+          page.owner_id !== activePageRef.current?.owner_id ||
+          page.page_id !== activePageRef.current?.page_id
+        ) {
+          setActivePageAttemptId(page ? (`page_attempt_${++pageAttemptSequenceRef.current}` as const) : undefined);
+        }
+        activePageRef.current = page;
         setActivePage(page);
         resetQuery();
         setDispatchFeedback(undefined);
@@ -432,6 +457,48 @@ const App = ({
     [collectionsClient, enqueueCollectionMutation],
   );
 
+  useEffect(
+    () => actionService.dispatcher.subscribeSuccessfulInvocations?.(recordSuccessfulUse),
+    [actionService, recordSuccessfulUse],
+  );
+
+  useEffect(() => {
+    void effectiveShortcutsService
+      .updateTargets(registrySnapshot.filter((action) => action.enabled).map((action) => action.action_id))
+      .catch(() => undefined);
+  }, [effectiveShortcutsService, registrySnapshot]);
+
+  useEffect(() => {
+    const reportFailure = () =>
+      setDispatchFeedback({ kind: 'error', messageKey: 'launcher.search.failure.actionExecutionFailed' });
+    const unsubscribe = navigationService.subscribeActivationFailures(() => {
+      reportFailure();
+      void effectivePluginRuntimeLifecycleService.failCurrent?.('runtime_unavailable');
+    });
+    if (!enablePluginChildWebviewHostDispatcher && !nativeActionInvocationPort) return unsubscribe;
+    let disposed = false;
+    let detach: (() => void) | undefined;
+    const controller = new AbortController();
+    void startNativeActionInvocations(actionService, reportFailure, nativeActionInvocationPort, controller.signal)
+      .then((next) => {
+        if (disposed) next();
+        else detach = next;
+      })
+      .catch(reportFailure);
+    return () => {
+      disposed = true;
+      controller.abort();
+      unsubscribe();
+      detach?.();
+    };
+  }, [
+    actionService,
+    enablePluginChildWebviewHostDispatcher,
+    navigationService,
+    effectivePluginRuntimeLifecycleService,
+    nativeActionInvocationPort,
+  ]);
+
   const executeAction = useCallback(
     async (actionId: string) => {
       if (pendingActionIdRef.current) {
@@ -451,7 +518,7 @@ const App = ({
             kind: 'success',
             messageKey: 'launcher.search.success',
           });
-          recordSuccessfulUse(actionId);
+          if (!actionService.dispatcher.subscribeSuccessfulInvocations) recordSuccessfulUse(actionId);
         } else {
           setDispatchFeedback({
             kind: 'error',
@@ -466,7 +533,7 @@ const App = ({
       } finally {
         pendingActionIdRef.current = undefined;
         setPendingActionId(undefined);
-        focusLauncherInput();
+        if (!activePageRef.current) focusLauncherInput();
       }
     },
     [actionService, focusLauncherInput, recordSuccessfulUse, resetQuery],
@@ -616,6 +683,8 @@ const App = ({
       ? t('launcher.preferences.startupFailure')
       : '';
 
+  const nonSearchFeedbackMessage = presentationState === 'search' ? '' : visibleSearchError || homeFeedbackMessage;
+
   return (
     <main className="h-screen flex items-center justify-center">
       <section className="launcher-surface h-full max-h-full w-full flex flex-col" data-page-layout={pageLayout}>
@@ -700,10 +769,19 @@ const App = ({
                 ) : pageResolution?.provider.kind === 'host' &&
                   activePage.owner_id === 'lensx.core' &&
                   activePage.page_id === 'settings' ? (
-                  <SettingsPage managementService={pluginManagementService} preferencesClient={preferencesClient} />
+                  <SettingsPage
+                    managementService={pluginManagementService}
+                    preferencesClient={preferencesClient}
+                    shortcutsService={effectiveShortcutsService}
+                    actions={registrySnapshot}
+                  />
                 ) : pageResolution?.provider.kind === 'plugin' && pageContext && effectivePluginRuntimeResolver ? (
                   <PluginRuntimeSlot
                     activePage={activePage}
+                    onRetry={() => navigationService.restartActivationAttempt(activePage)}
+                    onNativeAttempt={(attemptId) =>
+                      navigationService.attachNativeActivationAttempt(activePage, attemptId)
+                    }
                     lifecycleService={effectivePluginRuntimeLifecycleService}
                     pageResolution={pageResolution}
                     pageTitle={pageContext.page_title}
@@ -717,15 +795,13 @@ const App = ({
           <Typography.Text
             aria-atomic="true"
             aria-live="polite"
-            className={presentationState === 'home' && homeFeedbackMessage ? 'launcher-feedback' : 'sr-only'}
-            data-feedback={presentationState === 'home' && homeFeedbackMessage ? 'error' : undefined}
+            className={nonSearchFeedbackMessage ? 'launcher-feedback' : 'sr-only'}
+            data-feedback={nonSearchFeedbackMessage ? 'error' : undefined}
             id={LAUNCHER_STATUS_ID}
             role="status"
-            type={presentationState === 'home' && homeFeedbackMessage ? 'danger' : 'tertiary'}
+            type={nonSearchFeedbackMessage ? 'danger' : 'tertiary'}
           >
-            {presentationState === 'home'
-              ? homeFeedbackMessage || searchStatusMessage
-              : searchStatusMessage || homeFeedbackMessage}
+            {nonSearchFeedbackMessage || searchStatusMessage || homeFeedbackMessage}
           </Typography.Text>
         </div>
       </section>

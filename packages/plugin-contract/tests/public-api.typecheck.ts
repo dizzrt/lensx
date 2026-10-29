@@ -26,3 +26,11 @@ void pluginContract.validateHostApiPermission;
 type LegacyPermission = import('../src/index.js').HostApiPermission;
 declare const legacyPermission: LegacyPermission;
 void legacyPermission;
+
+declare const activation: pluginContract.PluginActionActivation;
+const activationSource: 'normal' | 'shortcut' = activation.source;
+void activationSource;
+// @ts-expect-error Activation output does not permit caller provenance mutation.
+activation.invocationId = 2;
+// @ts-expect-error Plugin-local activation never contains native keys.
+void activation.key;

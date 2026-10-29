@@ -29,6 +29,7 @@ export type {
   LauncherActionDispatchResult,
   LauncherActionExecutor,
   LauncherActionHostIcon,
+  LauncherActionInvocation,
   LauncherActionKeywordMap,
   LauncherActionLocale,
   LauncherActionRegistrationInput,

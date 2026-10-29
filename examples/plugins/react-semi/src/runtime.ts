@@ -1,4 +1,9 @@
-import type { PluginRuntimeContext, PluginSdkClient, PluginSdkTransport } from '@lensx/plugin-sdk';
+import type {
+  CreatePluginSdkOptions,
+  PluginRuntimeContext,
+  PluginSdkClient,
+  PluginSdkTransport,
+} from '@lensx/plugin-sdk';
 import { createPluginSdk } from '@lensx/plugin-sdk';
 
 export type ReactPluginRuntimeState =
@@ -14,6 +19,7 @@ export interface ReactPluginRuntimeController {
 export const createReactPluginRuntime = (
   createTransport: () => PluginSdkTransport,
   publish: (state: ReactPluginRuntimeState) => void,
+  onShortcutActivated?: CreatePluginSdkOptions['onShortcutActivated'],
 ): ReactPluginRuntimeController => {
   let attempt = 0;
   let client: PluginSdkClient | undefined;
@@ -38,7 +44,7 @@ export const createReactPluginRuntime = (
     await releaseCurrent();
     if (disposed || currentAttempt !== attempt) return;
     publish({ kind: 'loading' });
-    const currentClient = createPluginSdk({ transport: createTransport() });
+    const currentClient = createPluginSdk({ transport: createTransport(), onShortcutActivated });
     client = currentClient;
     unsubscribeState = currentClient.subscribeState((state) => {
       if (state === 'disconnected' && !disposed && currentAttempt === attempt) {

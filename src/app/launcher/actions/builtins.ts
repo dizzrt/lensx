@@ -62,7 +62,7 @@ export const createOpenSettingsRegistration = (
     icon: { kind: 'host', token: 'settings' },
     enabled: true,
   },
-  executor: () => {
-    navigationService.openPage(HOST_SETTINGS_PAGE, OPEN_SETTINGS_ACTION_ID);
+  executor: (invocation) => {
+    navigationService.openPage(HOST_SETTINGS_PAGE, OPEN_SETTINGS_ACTION_ID, invocation);
   },
 });

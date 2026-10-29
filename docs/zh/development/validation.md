@@ -352,3 +352,23 @@ pnpm run src-tauri:build
 4. 运行保留的 pack、inspect、tarball 与 CLI consumer Gate。
 5. 严格验证 active OpenSpec Change 与全部 stable specs。
 6. 运行 active-source stale scan 与 `git diff --check`。
+
+## 可配置快捷键验证
+
+运行 `pnpm run gate -- launcher-shortcuts`。此稳定 Gate 组合快捷键策略/typed adapter、真实
+Semi 设置测试、Rust 事务/注册、录制与手势测试，并复用 `launcher-input-focus`、
+`plugin-action-projection`、`plugin-child-webview-session`、`plugin-child-webview-continuity`、
+`plugin-sdk-transport` 和 `plugin-host-api-contract` Gates。共享策略 fixtures 覆盖规范化别名、
+保留键与去重（含不可用目标）。虚拟时间与 fake 原生/存储 adapter 覆盖完整双击、多击取消、部分
+失败、不确定提交、补偿、恢复降级和 lease 到期。Session/SDK 测试覆盖 32 项初始准入、64 项初始化
+合并、重试/终止边界和可选回调异常隔离。
+
+这些确定性检查验证配置与生效状态的区别、独立偏好持久化、原生适配器接线和有界语义交付；不证明
+macOS 授权对话框、OS 键盘交付、真实系统安全输入切换，或与所有外部快捷键工具的冲突情况。
+双击是被动且非独占的。仅通过 Generate 的 `plugin-host-api-types --write` 更新当前 Schema
+派生文件，保留历史 WebView corpus。定向 Gate 不替代完整 workspace 与 Rust 验证。
+
+快捷键矩阵同时覆盖 v2 单入口类型切换、v1 单组合键无损读取、旧双入口待选择迁移与明确保存、唯一
+双击权限失效后的窗口显示，以及不存在隐藏组合键回退。真实 Semi 行式测试覆盖新增草稿、Action
+原子改绑、已保存/草稿删除、行内编辑、Escape、焦点与迟到响应，并覆盖两种语言和主题。上述仍为
+确定性测试，不代表原生输入验收。

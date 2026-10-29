@@ -137,6 +137,7 @@ class ChildWebviewBridgeFixture {
         contract_version: WEBVIEW_HOST_ADAPTER_VERSION,
         session_id: this.sessionId,
         dispatch_id: dispatchId,
+        attempt_id: `attempt_${this.sessionId.slice(0, 16)}`,
         identity: this.identity,
         request: record.request,
       });
@@ -372,7 +373,7 @@ describe('plugin project templates through production Child WebView components',
         clients.push(client);
         const initialized = await client.initialize();
         attempt.markReady();
-        expect(initialized).toMatchObject({ hostApiVersion: '0.3.0', locale: 'zh-CN', theme: 'dark' });
+        expect(initialized).toMatchObject({ hostApiVersion: '0.4.0', locale: 'zh-CN', theme: 'dark' });
         return { attempt, bridge, client };
       };
 

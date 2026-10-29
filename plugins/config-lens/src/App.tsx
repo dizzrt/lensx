@@ -8,7 +8,7 @@ import { type ConfigLensRuntimeState, createConfigLensRuntime } from './runtime.
 
 const fallbackContext = Object.freeze({
   capabilities: Object.freeze([]),
-  hostApiVersion: '0.2.0',
+  hostApiVersion: '0.4.0',
   locale: 'en-US' as const,
   theme: 'light' as const,
 });

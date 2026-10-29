@@ -7,7 +7,7 @@ import type { TranslationProvider } from './provider/index.js';
 import { createTranslationRuntime, type RuntimeState } from './runtime.js';
 import { TranslationPage } from './TranslationPage.js';
 
-const fallbackContext = { capabilities: [], hostApiVersion: '0.2.0', locale: 'en-US', theme: 'light' } as const;
+const fallbackContext = { capabilities: [], hostApiVersion: '0.4.0', locale: 'en-US', theme: 'light' } as const;
 export const App = ({
   createTransport = createPluginWebviewTransport,
   translate,

@@ -56,6 +56,8 @@ export const reducePluginRuntimeSlotState = (
 };
 
 export interface PluginRuntimeSlotProps {
+  readonly onRetry?: () => void;
+  readonly onNativeAttempt?: (attemptId: string) => void;
   readonly activePage: ActivePage;
   readonly pageResolution: PageResolution;
   readonly pageTitle: string;
@@ -81,6 +83,8 @@ const validDescriptor = (descriptor: PluginPageRuntimeDescriptor, ownerId: strin
 
 export const PluginRuntimeSlot = ({
   activePage,
+  onRetry,
+  onNativeAttempt,
   pageResolution,
   pageTitle,
   resolver,
@@ -92,6 +96,9 @@ export const PluginRuntimeSlot = ({
   const [state, dispatch] = useReducer(reducePluginRuntimeSlotState, { status: 'resolving' });
   const slotRef = useRef<HTMLDivElement>(null);
   const activeBindingRef = useRef<ActiveRuntimeBinding | undefined>(undefined);
+  const lastFocusedPageRef = useRef<ActivePage | undefined>(undefined);
+  const onNativeAttemptRef = useRef(onNativeAttempt);
+  onNativeAttemptRef.current = onNativeAttempt;
   const effectiveLifecycleService = useMemo(
     () => lifecycleService ?? createPluginRuntimeLifecycleService(),
     [lifecycleService],
@@ -235,6 +242,7 @@ export const PluginRuntimeSlot = ({
           return;
         }
         binding.presentation = presentation;
+        onNativeAttemptRef.current?.(presentation.attemptId);
         element.dataset.nativePresentation = 'created';
         const updateQueue = createLatestPluginChildWebviewSlotUpdateQueue(
           (update) =>
@@ -286,7 +294,21 @@ export const PluginRuntimeSlot = ({
     };
   }, [presentationController, state]);
 
-  const retry = useCallback(() => setAttempt((current) => current + 1), []);
+  useEffect(() => {
+    if (lastFocusedPageRef.current === activePage) return;
+    lastFocusedPageRef.current = activePage;
+    const binding = activeBindingRef.current;
+    if (binding?.presentation && binding.attempt.isCurrent()) {
+      void presentationController.setVisible(binding.presentation, true).catch(() => {
+        if (binding.attempt.isCurrent()) void binding.attempt.fail('runtime_unavailable');
+      });
+    }
+  }, [activePage, presentationController]);
+
+  const retry = useCallback(() => {
+    onRetry?.();
+    setAttempt((current) => current + 1);
+  }, [onRetry]);
   if (state.status === 'failed') {
     const failureDescriptionKey =
       state.failureCode === 'runtime_load_timeout'

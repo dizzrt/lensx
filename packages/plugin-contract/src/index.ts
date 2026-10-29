@@ -25,6 +25,7 @@ export type {
   HostApiValidationResult,
   InvalidHostApiValidationResult,
   JsonValue,
+  PluginActionActivation,
   PluginRuntimeContext,
   PluginRuntimeContextInput,
   PluginRuntimeLocale,

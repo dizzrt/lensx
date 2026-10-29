@@ -77,7 +77,8 @@ const providers: Record<string, HostApiProvider> = {};
 for (const method of stringLiterals(dispatcher, 'BASE_IMPLEMENTED_METHODS')) providers[method] = 'base';
 for (const method of stringLiterals(storage, 'PLUGIN_SCOPED_STORAGE_METHODS')) providers[method] = 'storage';
 for (const method of stringLiterals(dispatcher, 'NATIVE_HTTP_METHODS')) providers[method] = 'http';
-for (const marker of ['baseImplementedMethodSet', 'storageMethodSet', 'nativeHttpMethodSet']) {
+for (const method of stringLiterals(dispatcher, 'ACTIVATION_METHODS')) providers[method] = 'activation';
+for (const marker of ['ACTIVATION_METHODS', 'baseImplementedMethodSet', 'storageMethodSet', 'nativeHttpMethodSet']) {
   if (!dispatcher.includes(marker)) throw new Error(`Production Dispatcher evidence is missing ${marker}.`);
 }
 

@@ -63,6 +63,7 @@ describe('Plugin Action mapper', () => {
     expect(openPage).toHaveBeenCalledWith(
       { owner_id: 'dev.lensx.config-lens', page_id: 'main' },
       'dev.lensx.config-lens.open',
+      { invocationId: 1, source: 'normal' },
     );
   });
 
@@ -209,7 +210,10 @@ describe('Plugin Action mapper', () => {
     const actionId = 'com.acme.workspace.open_project';
 
     await expect(dispatcher.dispatch(actionId)).resolves.toEqual({ ok: true, action_id: actionId });
-    expect(openPage).toHaveBeenCalledWith({ owner_id: 'com.acme.workspace', page_id: 'open_project' }, actionId);
+    expect(openPage).toHaveBeenCalledWith({ owner_id: 'com.acme.workspace', page_id: 'open_project' }, actionId, {
+      invocationId: 1,
+      source: 'normal',
+    });
     expect(Object.isFrozen(openPage.mock.calls[0]?.[0])).toBe(true);
 
     const failingRegistry = new LauncherActionRegistry();

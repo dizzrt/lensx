@@ -22,7 +22,7 @@ const baseManifest = JSON.parse(
   readFileSync(join(rootDir, 'packages/plugin-contract/tests/fixtures/base.json'), 'utf8'),
 ) as Record<string, unknown>;
 // Keep the on-disk historical corpus unchanged while testing newly rebuilt packages.
-(baseManifest.compatibility as Record<string, Record<string, string>>).host_api.max_version_exclusive = '0.4.0';
+(baseManifest.compatibility as Record<string, Record<string, string>>).host_api.max_version_exclusive = '0.5.0';
 
 const manifestBytes = (manifest: unknown = baseManifest): Uint8Array =>
   Buffer.from(`${JSON.stringify(manifest)}\n`, 'utf8');

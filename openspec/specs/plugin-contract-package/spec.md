@@ -7,6 +7,7 @@ Schema, generated author-input types, deterministic validation and
 normalization APIs, independent version dimensions, and publish-artifact drift
 gates without exposing Host-private implementation.
 ## Requirements
+
 ### Requirement: Public Plugin Contract package must expose a bounded author contract
 
 The system MUST provide the independently buildable public workspace package
@@ -49,7 +50,7 @@ declared in package `exports` MUST NOT be public API.
 - **THEN** the runtime rejects it and the type declaration does not accept raw `PluginManifestInput`
 
 #### Scenario: Valid input is outside a compatibility range
-- **WHEN** valid input's half-open range excludes current LensX `0.1.0` or Host API `0.3.0`
+- **WHEN** valid input declares a half-open range that excludes the current lensX `0.1.0` or Host API `0.4.0`
 - **THEN** the normalizer returns `incompatible` rather than `invalid`, retaining normalized author data and per-dimension compatibility information
 
 ### Requirement: Schema and shared fixtures must prevent cross-consumer contract drift
@@ -97,8 +98,8 @@ The package version, `PLUGIN_MANIFEST_VERSION`, `PLUGIN_HOST_API_VERSION`, and p
 #### Scenario: Inspect current independent version dimensions
 
 - **WHEN** a consumer checks current Contract, Manifest, Host API, application, package-format, or bridge versions
-- **THEN** The current Contract package MUST be `0.3.0`, the Manifest protocol MUST remain `0.4.0`, the Host API MUST be `0.3.0`, and the private root application MUST remain `0.1.0`.
-- **THEN** Adding generic HTTP MUST NOT change the `.lxp` package format or private WebView bridge carrier `0.2.0`.
+- **THEN** The current Contract package MUST be `0.4.0`, the Manifest protocol MUST remain `0.4.0`, Host API MUST be `0.4.0`, and the private root application MUST remain `0.1.0`.
+- **THEN** Adding Action activation MUST NOT change the `.lxp` package format or private WebView bridge carrier `0.2.0`.
 
 #### Scenario: Inspect compatibility exports on the current Contract
 
@@ -155,7 +156,7 @@ implementation.
 
 ### Requirement: Public Contract package MUST expose the bounded Host API semantic contract
 
-The `@lensx/plugin-contract` root entry MUST expose Host API `0.3.0` method, event, and error literal unions; Schema-generated params, result, and payload input types; normalized readonly output types; pure unknown-input validators; and an immutable method catalog, including generic `http.request`.
+The `@lensx/plugin-contract` root entry MUST expose the Host API `0.4.0` method, event, and error unions, Schema-generated input types, normalized readonly types, pure unknown-input validators, and an immutable catalog, including the existing HTTP and new Action activation contracts.
 
 #### Scenario: External consumer imports the Host API contract
 - **WHEN** a no-DOM consumer installs the real Contract tarball and imports only the root and declared Host API Schema subpath
@@ -172,6 +173,11 @@ The `@lensx/plugin-contract` root entry MUST expose Host API `0.3.0` method, eve
 - **WHEN** an external consumer imports Contract Host API declarations or the raw Schema
 - **THEN** The declared Host API Schema subpath MUST expose the raw Draft 2020-12 Schema.
 - **THEN** Exports MUST reuse `PLUGIN_HOST_API_VERSION` and MUST NOT expose permission unions or catalogs, removed clipboard methods, private RPC envelopes, request IDs, Runtime Session identity, `Window`, `MessagePort`, Host executors, React, Tauri, or Rust implementation values.
+
+#### Scenario: Consumer imports independent activation types
+- **WHEN** an external no-DOM consumer imports activation request, result, event, or SDK callback parameter types
+- **THEN** types and validation come from the same public Contract, and Activation contains only the local actionId, semantic invocationId, and normal/shortcut source
+- **THEN** native input, shortcut configuration, RPC request IDs, Session identity, Tauri, and Host internal objects are not exposed
 
 ### Requirement: Host API Schema, generated types, catalog and shared fixtures MUST remain one fact chain
 

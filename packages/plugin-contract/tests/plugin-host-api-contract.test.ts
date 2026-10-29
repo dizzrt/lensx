@@ -33,7 +33,7 @@ const validate = (fixture: FixtureCase): HostApiValidationResult<unknown> => {
   return validateHostApiResult(fixture.value);
 };
 
-describe('Host API 0.3.0 shared fixtures', () => {
+describe('Host API 0.4.0 shared fixtures', () => {
   for (const fixture of fixtures('valid')) {
     test(`valid: ${fixture.name}`, () => {
       const original = structuredClone(fixture.value);
@@ -64,9 +64,9 @@ describe('Host API 0.3.0 shared fixtures', () => {
 });
 
 test('catalog is closed, sorted, immutable and independently versioned', () => {
-  expect(PLUGIN_HOST_API_VERSION).toBe('0.3.0');
+  expect(PLUGIN_HOST_API_VERSION).toBe('0.4.0');
   expect(PLUGIN_MANIFEST_VERSION).toBe('0.4.0');
-  expect(HOST_API_METHOD_CATALOG).toHaveLength(9);
+  expect(HOST_API_METHOD_CATALOG).toHaveLength(11);
   expect(HOST_API_METHOD_CATALOG.map(({ method }) => method)).toContain('http.request');
   expect(HOST_API_METHOD_CATALOG.map(({ method }) => method)).toEqual(
     [...HOST_API_METHOD_CATALOG.map(({ method }) => method)].sort(),

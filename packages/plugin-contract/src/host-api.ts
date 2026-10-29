@@ -15,7 +15,9 @@ import type {
 } from './host-api-types.js';
 
 const methodFacts = [
+  ['actions.get_activation', 'ActionsGetActivationRequest', 'ActionsGetActivationResult'],
   ['actions.open', 'ActionsOpenRequest', 'ActionsOpenResult'],
+  ['actions.subscribe_activations', 'ActionsSubscribeActivationsRequest', 'ActionsSubscribeActivationsResult'],
   ['http.request', 'HttpRequestRequest', 'HttpRequestResult'],
   ['runtime.get_context', 'RuntimeGetContextRequest', 'RuntimeGetContextResult'],
   ['storage.delete', 'StorageDeleteRequest', 'StorageDeleteResult'],
@@ -36,7 +38,7 @@ const deepFreeze = <Value>(value: Value): Value => {
   return value;
 };
 
-/** Closed Host API 0.3.0 semantic catalog; entries do not imply Runtime availability. */
+/** Closed Host API 0.4.0 semantic catalog; entries do not imply Runtime availability. */
 export const HOST_API_METHOD_CATALOG: readonly HostApiMethodCatalogEntry[] = deepFreeze(
   methodFacts.map(([method, params, result]) => ({
     deprecated: false,
@@ -57,6 +59,8 @@ const resultValidators = new Map<HostApiMethod, ValidateFunction>(
 );
 const contextValidator = schemaValidator('PluginRuntimeContextInput');
 const eventValidator = schemaValidator('HostApiEventInput');
+const activationEventValidator = schemaValidator('ActionsActivatedEvent');
+const contextEventValidator = schemaValidator('RuntimeContextChangedEvent');
 const errorValidator = schemaValidator('HostApiErrorInput');
 
 const escapePointer = (value: string): string => value.replaceAll('~', '~0').replaceAll('/', '~1');
@@ -195,14 +199,37 @@ export const validateHostApiRequest = (input: unknown): HostApiValidationResult<
 export const validateHostApiResult = (input: unknown): HostApiValidationResult<HostApiResult> => {
   const result = validatePaired<HostApiResult>(input, resultValidators);
   if (result.status === 'invalid') return result;
+  if (result.value.method === 'actions.subscribe_activations') {
+    const activations = result.value.result.activations;
+    for (let index = 1; index < activations.length; index += 1) {
+      const previous = activations[index - 1];
+      const current = activations[index];
+      if (previous !== undefined && current !== undefined && previous.invocationId >= current.invocationId) {
+        return invalid([
+          {
+            code: 'unsorted_value',
+            path: `/result/activations/${index}/invocationId`,
+            message: 'The activation batch must be sorted and unique.',
+          },
+        ]);
+      }
+    }
+  }
   const values = result.value.method === 'storage.list' ? result.value.result.keys : undefined;
   const diagnostic = values === undefined ? undefined : sortedArrayDiagnostic(values, '/result/keys');
   return diagnostic === undefined ? result : invalid([diagnostic]);
 };
 
 export const validateHostApiEvent = (input: unknown): HostApiValidationResult<HostApiEvent> => {
-  const result = validateWith<HostApiEvent>(input, eventValidator);
-  if (result.status === 'invalid') return result;
+  const event = input !== null && typeof input === 'object' ? (input as { event?: unknown }).event : undefined;
+  const validator =
+    event === 'actions.activated'
+      ? activationEventValidator
+      : event === 'runtime.context_changed'
+        ? contextEventValidator
+        : eventValidator;
+  const result = validateWith<HostApiEvent>(input, validator);
+  if (result.status === 'invalid' || result.value.event === 'actions.activated') return result;
   const context = validatePluginRuntimeContext(result.value.payload);
   return context.status === 'invalid'
     ? invalid(context.diagnostics.map((item) => ({ ...item, path: `/payload${item.path}` })))

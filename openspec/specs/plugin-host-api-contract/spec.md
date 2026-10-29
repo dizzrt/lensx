@@ -3,12 +3,13 @@
 ## Purpose
 
 Define the stable, bounded, and independently validatable public semantic
-contract for Host API `0.3.0` without claiming delivery of transport, dispatch,
+contract for Host API `0.4.0` without claiming delivery of transport, dispatch,
 permissions, or Host-side effects.
 ## Requirements
+
 ### Requirement: Host API v1 MUST expose one closed, versioned semantic catalog
 
-The public Host API MUST expose an independently versioned `0.3.0` closed semantic catalog containing requests, results, events, and bounded errors for `actions.open`, `http.request`, `runtime.get_context`, five plugin-scoped `storage.*` methods, and `ui.close`.
+The public Host API MUST provide an independently versioned `0.4.0` closed semantic catalog, including the existing nine methods plus `actions.get_activation` and `actions.subscribe_activations`, with paired requests, results, events, and bounded errors. Existing method parameter, result, and error semantics MUST be preserved.
 
 #### Scenario: Public HTTP remains generic plugin transport
 
@@ -22,9 +23,9 @@ The public Host API MUST expose an independently versioned `0.3.0` closed semant
 - **THEN** Unknown or removed methods MUST fail closed through the Contract and Dispatcher.
 
 #### Scenario: Consumer reads the Host API 0.3.0 catalog
-- **WHEN** an external consumer reads generated types and the runtime catalog
-- **THEN** it sees nine current Session-bound methods and an independent protocol version, with HTTP exposing only controlled transport semantics
-- **THEN** no clipboard method, permission catalog, grant helper, private transport type, or translation-specific native method exists
+- **WHEN** an external consumer still uses the generated types and closed nine-method catalog of old Host API `0.3.0`
+- **THEN** that old catalog declares only its existing Session-bound methods, HTTP remains controlled transport semantics, and current Action activation is absent
+- **THEN** the consumer must upgrade Contract/SDK to use the new activation contract; the old catalog still excludes clipboard methods, permission catalogs, grant helpers, private transport types, and translation-specific native methods
 
 #### Scenario: Consumer reads the Host API 0.2.0 catalog
 - **WHEN** an existing consumer still uses the old Host API `0.2.0` eight-method closed catalog
@@ -46,6 +47,11 @@ The public Host API MUST expose an independently versioned `0.3.0` closed semant
 - **THEN** it uses the same method catalog, payload Schema, and HTTP control boundary as external plugins
 - **THEN** official provenance provides no hidden method, translation-specific native shortcut, or Host-authority bypass
 
+#### Scenario: Current consumer reads the Host API 0.4.0 catalog
+- **WHEN** a consumer reads the current Schema, generated types, and method catalog
+- **THEN** it sees eleven Session-bound methods and independent version `0.4.0`, with events including `runtime.context_changed` and `actions.activated`
+- **THEN** the activation contract excludes shortcut configuration, actual keys, global input subscriptions, native input permissions, and plugin executors
+
 ### Requirement: Runtime Context MUST be the single capability-discovery snapshot
 
 `PluginRuntimeContext` MUST contain the Host API version, locale, theme, and a complete, sorted, unique capability set of methods actually available to the current Session.
@@ -66,7 +72,7 @@ The public Host API MUST expose an independently versioned `0.3.0` closed semant
 
 #### Scenario: New Session receives Context
 - **WHEN** the current plugin completes Session and SDK initialization
-- **THEN** Context returns Host API `0.3.0` and currently available methods, including `http.request` when available
+- **THEN** Context returns Host API `0.4.0` and the methods actually available now; available HTTP and Action activation methods are declared through capabilities
 - **THEN** an empty capability set remains valid and does not mean ordinary browser Worker/network capabilities were denied
 
 #### Scenario: Provider or context changes
@@ -83,6 +89,11 @@ The public Host API MUST expose an independently versioned `0.3.0` closed semant
 - **WHEN** parameters, events, or author-controlled payloads attempt to submit identity, source, Host API version, locale, theme, or capability overrides
 - **THEN** the exact Schema rejects extra fields or a Context from the wrong source
 - **THEN** plugin input cannot change Host-derived Runtime facts
+
+#### Scenario: Activation information remains independent of Runtime Context
+- **WHEN** a new invocation enters the current plugin Page or the client queries Runtime Context
+- **THEN** Context still contains exactly four fields: `hostApiVersion`, `locale`, `theme`, and `capabilities`
+- **THEN** Action invocation source is not transmitted as a fifth field or an extra `runtime.context_changed` field; activation queries and events use an independent contract
 
 ### Requirement: Session-scoped UI and Action methods MUST NOT become general Host executors
 
@@ -232,7 +243,7 @@ The system MUST provide Draft 2020-12 JSON Schemas and corresponding generated T
 
 ### Requirement: Host API errors MUST be stable, bounded and separate from SDK lifecycle errors
 
-Host API `0.3.0` MUST preserve the closed error-code set `invalid_request`, `invalid_params`, `method_not_found`, `not_found`, `conflict`, `limit_exceeded`, `unavailable`, `cancelled`, `timeout`, and `internal_error`.
+Host API `0.4.0` MUST preserve the closed error-code set `invalid_request`, `invalid_params`, `method_not_found`, `not_found`, `conflict`, `limit_exceeded`, `unavailable`, `cancelled`, `timeout`, and `internal_error`.
 
 #### Scenario: A failed operation is classified for public transport
 
@@ -270,7 +281,7 @@ The Host API protocol, SDK package, and lensX application MUST be versioned inde
 - **WHEN** the SDK checks a Runtime Context or the Host introduces a compatible method
 - **THEN** The SDK MUST check its supported range with SemVer before accepting Runtime Context; plugins MUST invoke only methods declared in current Context `capabilities`.
 - **THEN** Compatible new methods MUST increase the Host API minor version and be exposed through capability discovery.
-- **THEN** This controlled HTTP extension MUST use Host API `0.3.0` while preserving existing methods' payload and error semantics; Manifest and SDK support ranges MUST still be validated separately.
+- **THEN** This Action activation extension MUST use Host API `0.4.0` while preserving existing method payload and error semantics, including HTTP introduced in `0.3.0`; Manifest and SDK support ranges MUST still be validated independently.
 - **THEN** Existing plugin packages outside those ranges MUST be explicitly incompatible and require authors to upgrade the SDK, update declarations, and repack.
 - **THEN** The Host MUST NOT silently negotiate an old catalog, hide new methods to impersonate an old protocol, or rewrite installed packages.
 
@@ -294,6 +305,12 @@ The Host API protocol, SDK package, and lensX application MUST be versioned inde
 - **WHEN** a method is marked deprecated in a compatible minor version
 - **THEN** the catalog and maintained documentation provide a stable replacement direction while preserving params, result, and error semantics
 - **THEN** removal occurs only in a declared incompatible major version
+
+#### Scenario: Upgrade to the current activation protocol
+- **WHEN** the current Host and public packages provide Action activation
+- **THEN** the Contract package and Host API are `0.4.0`, while the Manifest protocol and WebView carrier remain `0.4.0` and `0.2.0`, respectively
+- **THEN** SDK `0.5.0` declares only the support range `>=0.4.0 <0.5.0`; plugin authors upgrade dependencies, adjust Manifest compatibility ranges, and repack
+- **THEN** out-of-range old plugins are explicitly classified as incompatible and cannot project executable Actions; the Host does not add old-protocol negotiation, catalog filtering, or installed-package rewriting
 
 ### Requirement: Contract delivery MUST prove cross-consumer drift without claiming execution
 
@@ -341,3 +358,51 @@ The public Host API version and method/result/event semantics MUST remain unchan
 - **WHEN** a plugin constructs an unknown native-view method or extra trusted fields
 - **THEN** Contract validation rejects it before transport or Dispatcher side effects
 
+### Requirement: Action activation snapshots MUST expose only current Host-owned provenance
+
+`actions.get_activation` MUST accept exact empty parameters and return `{ activation: null | Activation }`. Activation MUST be a readonly `{ actionId, invocationId, source }`: actionId is local to the current plugin, invocationId is a monotonically increasing positive safe integer within the current Page attempt, and source is only `normal | shortcut`. The Host MUST derive these facts from trusted invocations and MUST NOT accept plugin-supplied source or target identity.
+
+#### Scenario: Read a dedicated shortcut invocation
+- **WHEN** the current Session Page is activated through its dedicated Action shortcut and calls `actions.get_activation` with `{}`
+- **THEN** the response contains the local Action ID, semantic invocation identifier, and `shortcut` source of the latest admitted invocation for that Page
+- **THEN** the response excludes actual keys, binding IDs, native handles, RPC request IDs, Session nonces, and invocations belonging to other plugins or Pages
+
+#### Scenario: Normal entry and internal navigation
+- **WHEN** the user selects an Action through search, a click, recents, or pinned entries, or the current plugin starts the next invocation through `actions.open`
+- **THEN** the resulting activation source is `normal`; a previous ordinary launcher shortcut or a previous shortcut invocation does not change that result
+- **THEN** consecutive executions of the same Action still receive distinct, increasing invocationId values
+
+#### Scenario: No invocation and forged source
+- **WHEN** a valid current Session has no associated activation, or parameters add actionId, source, plugin identity, or any other field
+- **THEN** the former returns `{ activation: null }` and the latter is rejected by exact parameter validation
+- **THEN** querying does not create an invocation, change its source, or open another Page
+
+### Requirement: Activation subscriptions MUST preserve a bounded initial batch and current-session events
+
+`actions.subscribe_activations` MUST accept `{}`, atomically open one current-Session channel, and return `{ activations: Activation[] }`. The initial response MUST contain at most 32 pending activations sorted by invocationId. Same-Session retries MUST return the cached initial batch without reopening the channel. Each subsequently admitted invocation MUST emit the same Activation shape through `actions.activated`. Session destruction MUST clear the batch and channel.
+
+#### Scenario: Multiple invocations are admitted during initialization
+- **WHEN** a shortcut cold-starts a Page and additional independent invocations enter that same Page before the activation channel is established
+- **THEN** at most 32 admitted invocations retain their individual IDs and sources and appear in order in the initial batch
+- **THEN** a 33rd invocation that cannot yet be admitted receives explicit busy feedback; the admitted batch is neither overwritten by the latest source nor silently discarded
+
+#### Scenario: Initial response and event arrival interleave
+- **WHEN** a new invocation event after the first subscription's atomic boundary reaches the client before the initial response
+- **THEN** the response's initial batch and subsequent events cover distinct new invocations, allowing the client to merge, deduplicate, and restore Host invocation order by invocationId
+- **THEN** the `actions.activated` payload is Activation itself, without additional identity, permission, actual-key, or transport fields
+
+#### Scenario: Retry after the initial response is lost
+- **WHEN** the same valid Session requests `actions.subscribe_activations` again
+- **THEN** it receives the same cached initial batch as the first request; the batch is not cleared merely because a response was previously sent, and no second channel is created
+- **THEN** replay of the initial batch retains the original invocationId values, so already-delivered business callbacks are not executed again
+- **THEN** the cache remains bounded to 32 entries; subsequent events do not accumulate in it, and this method does not replay arbitrary historical events
+
+#### Scenario: Plugin has no business callback
+- **WHEN** the current SDK has established its internal activation channel but the plugin has not configured a shortcut business callback
+- **THEN** new invocations still navigate or focus normally, while the SDK consumes events and updates the current activation snapshot
+- **THEN** the cached initial batch does not consume subsequent invocation admission capacity; omission of a business callback causes neither failure on the 33rd invocation nor unbounded caching
+
+#### Scenario: Old Session or Page becomes invalid
+- **WHEN** a Page closes or switches, a plugin is disabled, uninstalled, or replaced, a Runtime is rebuilt, or a Session becomes invalid
+- **THEN** the old Session's cache, subscription, and undelivered invocations terminate; late queries, events, or retries cannot deliver to the old client or a replacement Session
+- **THEN** independent shortcut invocations for the same still-valid Page preserve its Runtime and input; reading activation does not remount it

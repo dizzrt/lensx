@@ -5,6 +5,7 @@ export type { PluginSdkErrorCode } from './error.js';
 export { PluginSdkError } from './error.js';
 export type {
   CreatePluginSdkOptions,
+  PluginActionActivation,
   PluginRuntimeContext,
   PluginRuntimeLocale,
   PluginRuntimeTheme,

@@ -50,7 +50,12 @@ export type LauncherActionValidationResult =
       readonly diagnostics: readonly LauncherActionDiagnostic[];
     };
 
-export type LauncherActionExecutor = () => Promise<void> | void;
+export interface LauncherActionInvocation {
+  readonly invocationId: number;
+  readonly source: 'normal' | 'shortcut';
+}
+
+export type LauncherActionExecutor = (invocation: LauncherActionInvocation) => Promise<void> | void;
 
 export interface LauncherActionRegistrationInput {
   readonly descriptor: unknown;

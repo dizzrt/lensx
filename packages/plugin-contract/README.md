@@ -1,5 +1,7 @@
 # @lensx/plugin-contract
 
+[简体中文](./README-zh.md) · [Plugin development](../../docs/en/plugin-development/index.md)
+
 Public lensX plugin Manifest and Host API semantic Schemas, generated input
 types, version constants, immutable catalogs, diagnostics, and deterministic
 pure validators.
@@ -21,7 +23,7 @@ if (result.status === 'valid' && result.value.capabilities.includes('storage.get
 Declared Schema entries are `/schema`, `/manifest.schema.json`,
 `/host-api-schema`, and `/host-api.schema.json`. Other deep imports are private.
 
-Contract `0.3.0` owns Manifest `0.4.0` and Host API `0.3.0`, including the
-bounded `http.request` semantic contract. It performs no network I/O. A
+Contract `0.4.0` owns Manifest `0.4.0` and Host API `0.4.0`, including the
+bounded `http.request` and independent Action activation contracts. It performs no network I/O. A
 current capability snapshot and compatible SDK/Manifest are still required
 before a plugin may call a real Host provider.

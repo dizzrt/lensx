@@ -2,8 +2,8 @@
 
 ## Package 矩阵
 
-`@lensx/plugin-contract` 当前版本为 `0.3.0`，`@lensx/plugin-sdk` 为 `0.4.0`；
-Plugin UI、Testkit 和 CLI 仍为 `0.2.0`。下列入口是完整的受支持
+`@lensx/plugin-contract` 当前版本为 `0.4.0`，`@lensx/plugin-sdk` 为 `0.5.0`；
+Plugin UI、Testkit 和 CLI 为 `0.2.1`。下列入口是完整的受支持
 exports；即使某个文件存在于 tarball，只要没有声明为 export，就仍是私有路径。
 
 | Package | 公共入口 | 角色 |
@@ -82,3 +82,32 @@ normalize 前先使用 `validatePluginManifest`。每个 Runtime attempt 创建�
 - Package 当前尚未发布到 npm。lensX build 产出的真实 tarball 是受支持的外部消费验证输入。
 
 继续阅读[工具与安装](tooling-and-installation.md)或 [Host API 参考](host-api.md)。
+
+## 可选快捷键回调
+
+```ts verify=framework-neutral id=shortcut-activation
+import { createPluginSdk } from '@lensx/plugin-sdk';
+import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview';
+
+const sdk = createPluginSdk({
+  transport: createPluginWebviewTransport(),
+  onShortcutActivated: async (activation) => {
+    // Already ready; use declared capabilities before making a request.
+    if (sdk.context?.capabilities.includes('storage.get')) {
+      await sdk.request({ method: 'storage.get', params: { key: activation.actionId } });
+    }
+  },
+});
+await sdk.initialize();
+const currentActivation = sdk.activation;
+// On teardown:
+await sdk.dispose();
+```
+
+回调在工厂创建时登记且可省略。普通插件使用
+`createPluginSdk({ transport: createPluginWebviewTransport() })` 即可；SDK 仍消费激活事件并维护只读快照。
+ready 前和终止后快照为 `undefined`；ready 但没有激活时为 `null`。
+只有 `shortcut` 才按新 ID 调用一次回调；normal 调用更新快照。
+SDK 按 Host 顺序发起回调，不等待之前的业务 Promise。插件负责并发、取消与副作用。
+同步异常和 Promise rejection 被隔离且不会重试。dispose 停止尚未发起的回调，不能撤销已开始的外部工作。
+尝试激活订阅后的初始化失败为 terminal；显式重试必须创建新 Runtime attempt 和 SDK。

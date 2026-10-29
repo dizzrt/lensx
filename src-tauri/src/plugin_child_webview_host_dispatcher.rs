@@ -43,6 +43,7 @@ pub(crate) struct PluginChildWebviewHostDispatchEvent {
     pub(crate) contract_version: &'static str,
     pub(crate) session_id: String,
     pub(crate) dispatch_id: String,
+    pub(crate) attempt_id: String,
     pub(crate) identity: PluginChildWebviewHostAuthorityIdentity,
     pub(crate) request: Value,
 }
@@ -305,6 +306,7 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRpcDispatcher
             contract_version: PLUGIN_CHILD_WEBVIEW_HOST_ADAPTER_VERSION,
             session_id: session_id.clone(),
             dispatch_id: dispatch_id.clone(),
+            attempt_id: facts.attempt.opaque_id(),
             identity: PluginChildWebviewHostAuthorityIdentity {
                 entry_id: facts.registration_entry_id.clone(),
                 plugin_id: facts.plugin_id.clone(),
@@ -706,13 +708,9 @@ mod tests {
         assert_eq!(event.identity.plugin_id, "plugin-a");
         assert_eq!(event.identity.version, "1.2.3");
         assert_eq!(event.identity.page_id, "page-a");
+        assert_eq!(event.attempt_id, attempt.opaque_id());
         let serialized = serde_json::to_string(&event).expect("event serializes");
-        for private in [
-            "source_label",
-            "resource_generation",
-            "attempt_",
-            "entry_url",
-        ] {
+        for private in ["source_label", "resource_generation", "entry_url"] {
             assert!(!serialized.contains(private));
         }
         assert!(dispatcher.settle(

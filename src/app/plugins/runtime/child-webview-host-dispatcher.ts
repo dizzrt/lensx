@@ -27,6 +27,7 @@ interface PluginChildWebviewHostDispatchEvent {
   readonly contract_version: typeof PLUGIN_CHILD_WEBVIEW_HOST_ADAPTER_VERSION;
   readonly session_id: string;
   readonly dispatch_id: string;
+  readonly attempt_id: string;
   readonly identity: PluginHostApiAuthorityIdentity;
   readonly request: HostApiRequest;
 }
@@ -45,7 +46,7 @@ interface PluginChildWebviewHostDisconnectEvent {
 export interface PluginChildWebviewHostNativePort {
   readonly settle: (dispatchId: string, output: HostApiResult | HostApiError) => Promise<boolean>;
   readonly fail: (dispatchId: string) => Promise<boolean>;
-  readonly emitEvent: (sessionId: string, event: HostApiEvent) => boolean;
+  readonly emitEvent: (sessionId: string, event: HostApiEvent) => boolean | Promise<boolean>;
 }
 
 export interface PluginChildWebviewHostDispatcherController {
@@ -56,10 +57,13 @@ export interface PluginChildWebviewHostDispatcherController {
 }
 
 interface ActiveSession {
+  readonly attemptId: string;
   readonly identity: PluginHostApiAuthorityIdentity;
   readonly binding: PluginHostApiDispatcherBinding;
   readonly detachEmitter: () => void;
   active: boolean;
+  emissions: number;
+  emissionQueue: Promise<void>;
 }
 
 interface PendingDispatch {
@@ -101,10 +105,12 @@ const parseIdentity = (value: unknown): PluginHostApiAuthorityIdentity | undefin
 const parseDispatch = (value: unknown): PluginChildWebviewHostDispatchEvent | undefined => {
   if (
     !plainRecord(value) ||
-    !exact(value, ['contract_version', 'session_id', 'dispatch_id', 'identity', 'request']) ||
+    !exact(value, ['contract_version', 'session_id', 'dispatch_id', 'attempt_id', 'identity', 'request']) ||
     value.contract_version !== PLUGIN_CHILD_WEBVIEW_HOST_ADAPTER_VERSION ||
     !opaqueId(value.session_id) ||
-    !opaqueId(value.dispatch_id)
+    !opaqueId(value.dispatch_id) ||
+    typeof value.attempt_id !== 'string' ||
+    !/^attempt_[0-9a-f]{16}$/u.test(value.attempt_id)
   ) {
     return undefined;
   }
@@ -115,6 +121,7 @@ const parseDispatch = (value: unknown): PluginChildWebviewHostDispatchEvent | un
     contract_version: PLUGIN_CHILD_WEBVIEW_HOST_ADAPTER_VERSION,
     session_id: value.session_id,
     dispatch_id: value.dispatch_id,
+    attempt_id: value.attempt_id,
     identity,
     request: request.value,
   });
@@ -184,16 +191,48 @@ export const createPluginChildWebviewHostDispatcherController = (
     sessions.delete(sessionId);
   };
 
-  const createSession = (sessionId: string, identity: PluginHostApiAuthorityIdentity): ActiveSession => {
+  const createSession = (
+    sessionId: string,
+    identity: PluginHostApiAuthorityIdentity,
+    attemptId: string,
+  ): ActiveSession => {
     let session: ActiveSession | undefined;
     const binding = factory.create({
       identity,
+      runtimeAttemptId: attemptId,
       isCurrent: () => !disposed && session?.active === true && sessions.get(sessionId) === session,
     });
-    const detachEmitter = binding.attachEmitter(
-      (event) => !disposed && session?.active === true && native.emitEvent(sessionId, event),
-    );
-    session = { identity, binding, detachEmitter, active: true };
+    const detachEmitter = binding.attachEmitter((event) => {
+      if (disposed || session?.active !== true || session.emissions >= 32) return false;
+      const current = session;
+      current.emissions++;
+      current.emissionQueue = current.emissionQueue
+        .then(async () => {
+          if (disposed || !current.active) return;
+          if (!(await native.emitEvent(sessionId, event))) {
+            current.binding.fail?.();
+            disposeSession(sessionId);
+          }
+        })
+        .catch(() => {
+          if (!current.active) return;
+          current.binding.fail?.();
+          disposeSession(sessionId);
+        })
+        .finally(() => {
+          current.emissions--;
+        });
+      return true;
+    });
+    session = {
+      identity,
+      attemptId,
+      binding,
+      detachEmitter,
+      active: true,
+      emissions: 0,
+      emissionQueue: Promise.resolve(),
+    };
     sessions.set(sessionId, session);
     return session;
   };
@@ -204,12 +243,15 @@ export const createPluginChildWebviewHostDispatcherController = (
       const event = parseDispatch(payload);
       if (event === undefined || pending.has(event.dispatch_id)) return false;
       const existing = sessions.get(event.session_id);
-      if (existing !== undefined && !sameIdentity(existing.identity, event.identity)) {
+      if (
+        existing !== undefined &&
+        (!sameIdentity(existing.identity, event.identity) || existing.attemptId !== event.attempt_id)
+      ) {
         disposeSession(event.session_id);
         failSafely(event.dispatch_id);
         return false;
       }
-      const session = existing ?? createSession(event.session_id, event.identity);
+      const session = existing ?? createSession(event.session_id, event.identity, event.attempt_id);
       const operation: PendingDispatch = {
         sessionId: event.session_id,
         controller: new AbortController(),
@@ -244,6 +286,9 @@ export const createPluginChildWebviewHostDispatcherController = (
       if (disposed) return false;
       const event = parseDisconnect(payload);
       if (event === undefined || !sessions.has(event.session_id)) return false;
+      // A native terminal event after Context readiness must also retire the
+      // current activation attempt, so SDK initialization failure exposes Retry.
+      sessions.get(event.session_id)?.binding.fail?.();
       disposeSession(event.session_id);
       return true;
     },
@@ -273,14 +318,13 @@ const desktopNativePort = (): PluginChildWebviewHostNativePort =>
         },
       }),
     emitEvent(sessionId: string, event: HostApiEvent) {
-      void invoke<boolean>(EMIT_PLUGIN_CHILD_WEBVIEW_HOST_EVENT_COMMAND, {
+      return invoke<boolean>(EMIT_PLUGIN_CHILD_WEBVIEW_HOST_EVENT_COMMAND, {
         request: {
           contract_version: PLUGIN_CHILD_WEBVIEW_HOST_ADAPTER_VERSION,
           session_id: sessionId,
           event,
         },
       });
-      return true;
     },
   });
 

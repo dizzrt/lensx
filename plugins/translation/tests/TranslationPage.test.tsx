@@ -26,6 +26,7 @@ const setup = async ({
   theme = 'light',
   value = saved,
   readError = false,
+  activations = false,
   translate = rs.fn(
     async (_input: TranslationInput): Promise<TranslationResult> => ({ translation: '<b>译文</b>\nnext' }),
   ),
@@ -34,6 +35,7 @@ const setup = async ({
   theme?: 'light' | 'dark';
   value?: unknown;
   readError?: boolean;
+  activations?: boolean;
   translate?: ReturnType<typeof rs.fn<(input: TranslationInput, signal: AbortSignal) => Promise<TranslationResult>>>;
 } = {}) => {
   rs.useFakeTimers();
@@ -41,11 +43,18 @@ const setup = async ({
   const context = createPluginRuntimeContextFixture({
     locale,
     theme,
-    capabilities: ['http.request', 'storage.get', 'storage.set'],
+    capabilities: activations
+      ? ['actions.subscribe_activations', 'http.request', 'storage.get', 'storage.set']
+      : ['http.request', 'storage.get', 'storage.set'],
   });
   const fake = new FakePluginSdkTransport({
     connect: () => context,
     request: (request) => {
+      if (request.method === 'actions.subscribe_activations')
+        return {
+          method: request.method,
+          result: { activations: [{ actionId: 'open', invocationId: 1, source: 'shortcut' }] },
+        };
       if (request.method === 'storage.get') {
         if (readError) throw new Error('private storage failure');
         return { method: 'storage.get', result: stored === null ? { found: false } : { found: true, value: stored } };
@@ -912,7 +921,7 @@ describe('Translation real Semi workspace', () => {
     const fake = new FakePluginSdkTransport({
       connect: () =>
         createPluginRuntimeContextFixture({
-          hostApiVersion: '0.3.0',
+          hostApiVersion: '0.4.0',
           capabilities: ['http.request', 'storage.get', 'storage.set'],
         }),
       request: (request) => {
@@ -1032,4 +1041,33 @@ describe('Translation real Semi workspace', () => {
     expect(translate).toHaveBeenCalledTimes(1);
     expect(first.observation.disposeCalls).toBe(1);
   });
+});
+
+test('shortcut activation preserves text, result and pending translation without another business call', async () => {
+  const pending = createDeferred<TranslationResult>();
+  const translate = rs.fn(async (input: TranslationInput, _signal: AbortSignal) =>
+    input.text === 'next input' ? pending.promise : { translation: 'existing result' },
+  );
+  const { fake } = await setup({ activations: true, translate });
+  edit('first input');
+  await tick();
+  expect(translate).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('textbox', { name: 'Translated text' })).toHaveValue('existing result');
+  act(() => fake.emit('actions.activated', { actionId: 'open', invocationId: 2, source: 'shortcut' }));
+  await tick();
+  expect(screen.getByRole('textbox', { name: 'Source text' })).toHaveValue('first input');
+  expect(screen.getByRole('textbox', { name: 'Translated text' })).toHaveValue('existing result');
+  expect(translate).toHaveBeenCalledTimes(1);
+  edit('next input');
+  await tick();
+  expect(translate).toHaveBeenCalledTimes(2);
+  const signal = translate.mock.calls[1]?.[1];
+  act(() => fake.emit('actions.activated', { actionId: 'open', invocationId: 3, source: 'shortcut' }));
+  await tick();
+  expect(screen.getByRole('textbox', { name: 'Source text' })).toHaveValue('next input');
+  expect(translate).toHaveBeenCalledTimes(2);
+  expect(signal?.aborted).toBe(false);
+  pending.resolve({ translation: 'next result' });
+  await flush();
+  expect(screen.getByRole('textbox', { name: 'Translated text' })).toHaveValue('next result');
 });

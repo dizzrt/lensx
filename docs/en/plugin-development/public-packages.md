@@ -2,8 +2,8 @@
 
 ## Package matrix
 
-`@lensx/plugin-contract` is version `0.3.0` and `@lensx/plugin-sdk` is version
-`0.4.0`; Plugin UI, Testkit, and CLI remain at `0.2.0`. The listed entries are the complete supported package exports; any
+`@lensx/plugin-contract` is version `0.4.0` and `@lensx/plugin-sdk` is version
+`0.5.0`; Plugin UI, Testkit, and CLI are version `0.2.1`. The listed entries are the complete supported package exports; any
 other path is private even if a file happens to exist in a tarball.
 
 | Package | Public entries | Role |
@@ -14,11 +14,11 @@ other path is private even if a file happens to exist in a tarball.
 | `@lensx/plugin-testkit` | root | Contract fixtures, context fixtures, fake semantic transport, cancellation, and deferred helpers. |
 | `@lensx/plugin-cli` | root plus `lensx-plugin` bin | Portable authoring commands; not a Runtime API. |
 
-<!-- lensx-public-package {"name":"@lensx/plugin-contract","version":"0.3.0","exports":[".","./schema","./manifest.schema.json","./host-api-schema","./host-api.schema.json"]} -->
-<!-- lensx-public-package {"name":"@lensx/plugin-sdk","version":"0.4.0","exports":[".","./webview"]} -->
-<!-- lensx-public-package {"name":"@lensx/plugin-ui","version":"0.2.0","exports":[".","./styles.css"]} -->
-<!-- lensx-public-package {"name":"@lensx/plugin-testkit","version":"0.2.0","exports":["."]} -->
-<!-- lensx-public-package {"name":"@lensx/plugin-cli","version":"0.2.0","exports":["."]} -->
+<!-- lensx-public-package {"name":"@lensx/plugin-contract","version":"0.4.0","exports":[".","./schema","./manifest.schema.json","./host-api-schema","./host-api.schema.json"]} -->
+<!-- lensx-public-package {"name":"@lensx/plugin-sdk","version":"0.5.0","exports":[".","./webview"]} -->
+<!-- lensx-public-package {"name":"@lensx/plugin-ui","version":"0.2.1","exports":[".","./styles.css"]} -->
+<!-- lensx-public-package {"name":"@lensx/plugin-testkit","version":"0.2.1","exports":["."]} -->
+<!-- lensx-public-package {"name":"@lensx/plugin-cli","version":"0.2.1","exports":["."]} -->
 
 The real tarball gate checks package metadata, declarations, Runtime files,
 Schema files, the CLI bin, and export resolution. Deep imports are unsupported.
@@ -111,3 +111,36 @@ plugin.
 
 Continue with [tooling and installation](tooling-and-installation.md) or the
 [Host API reference](host-api.md).
+
+## Optional shortcut callback
+
+```ts verify=framework-neutral id=shortcut-activation
+import { createPluginSdk } from '@lensx/plugin-sdk';
+import { createPluginWebviewTransport } from '@lensx/plugin-sdk/webview';
+
+const sdk = createPluginSdk({
+  transport: createPluginWebviewTransport(),
+  onShortcutActivated: async (activation) => {
+    // Already ready; use declared capabilities before making a request.
+    if (sdk.context?.capabilities.includes('storage.get')) {
+      await sdk.request({ method: 'storage.get', params: { key: activation.actionId } });
+    }
+  },
+});
+await sdk.initialize();
+const currentActivation = sdk.activation;
+// On teardown:
+await sdk.dispose();
+```
+
+The callback is registered at creation and is optional. For an ordinary plugin,
+`createPluginSdk({ transport: createPluginWebviewTransport() })` is sufficient:
+the SDK still consumes activation events and keeps the readonly snapshot current.
+Before ready and after termination the snapshot is `undefined`; ready without an
+activation is `null`. Only `shortcut` invokes the callback, once per new ID; normal
+calls update the snapshot. Calls are started in Host order without waiting for
+previous business Promises. The plugin owns concurrency, cancellation and side
+effects. Synchronous exceptions and Promise rejections are isolated and never
+retried. Disposal stops pending callback starts but cannot undo external work
+already started. Initialization failure after attempting activation subscription
+is terminal; create a fresh Runtime attempt and SDK for explicit retry.

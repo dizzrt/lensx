@@ -12,7 +12,7 @@ describe('ConfigLens Manifest', () => {
     const validation = validatePluginManifest(manifest);
     expect(validation.status).toBe('valid');
     if (validation.status !== 'valid') throw new Error(JSON.stringify(validation.diagnostics));
-    const normalized = normalizePluginManifest(validation, { lensx: '0.1.0', host_api: '0.2.0' });
+    const normalized = normalizePluginManifest(validation, { lensx: '0.1.0', host_api: '0.4.0' });
     expect(normalized.status).toBe('compatible');
     expect(normalized.manifest.plugin_id).toBe('dev.lensx.config-lens');
     expect(normalized.manifest.manifest_version).toBe('0.4.0');

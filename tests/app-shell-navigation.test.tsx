@@ -147,7 +147,10 @@ describe('App Shell page navigation', () => {
       within(screen.getByRole('region', { name: pinnedLabel })).getByRole('button', { name: 'ConfigLens' }),
     );
     await waitFor(() => expect(recordUse).toHaveBeenCalledWith(ids[1]));
-    expect(openPage).toHaveBeenCalledWith({ owner_id: 'dev.lensx.config-lens', page_id: 'main' }, ids[1]);
+    expect(openPage).toHaveBeenCalledWith({ owner_id: 'dev.lensx.config-lens', page_id: 'main' }, ids[1], {
+      invocationId: 2,
+      source: 'normal',
+    });
     fireEvent.change(input, { target: { value: 'JSON' } });
     expect(screen.getByRole('option', { name: 'ConfigLens' })).toBeInTheDocument();
     fireEvent.change(input, { target: { value: 'settings' } });

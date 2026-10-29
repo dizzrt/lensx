@@ -8,7 +8,7 @@ use url::Url;
 
 const MANIFEST_SCHEMA: &str =
     include_str!("../../packages/plugin-contract/schema/manifest.schema.json");
-pub const PLUGIN_HOST_API_VERSION: &str = "0.3.0";
+pub const PLUGIN_HOST_API_VERSION: &str = "0.4.0";
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -65,8 +65,8 @@ export const compareSemVer = (left: ParsedSemVer, right: ParsedSemVer): number =
   return 0;
 };
 
-const minimumHostApiVersion = parseSemVer('0.2.0');
-const maximumHostApiVersion = parseSemVer('0.4.0');
+const minimumHostApiVersion = parseSemVer('0.4.0');
+const maximumHostApiVersion = parseSemVer('0.5.0');
 
 if (minimumHostApiVersion === undefined || maximumHostApiVersion === undefined) {
   throw new Error('The SDK Host API compatibility boundary is invalid.');

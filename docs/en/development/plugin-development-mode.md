@@ -2,8 +2,8 @@
 
 ## Scope
 
-Plugin Development Mode is a Host-private workflow for testing self-contained
-plugin `dist/` directories. It is available only in a feature-enabled
+Plugin Development Mode is a Host-private workflow for using self-contained
+plugin `dist/` directories during development. It is available only in a feature-enabled
 development build. The dedicated `pnpm run dev:plugin-development-mode`
 command is an explicit per-process opt-in: it starts the native mode enabled
 and discovers already-built repository plugins before the frontend loads.
@@ -29,10 +29,9 @@ snapshot-based and still require **Reload from directory** after rebuilding.
 
 ## Canonical Smoke Plugin
 
-The repository includes `examples/plugins/development-mode-smoke`, a real
-public-SDK plugin with two deterministic build phases. Both phases use the same
-plugin ID and output directory so that they exercise the actual development
-reload transaction:
+The repository includes `examples/plugins/development-mode-smoke`, a public-SDK
+plugin with two deterministic build phases. Both phases use the same plugin ID
+and output directory for the development reload workflow:
 
 - `initial` builds version `0.1.0`, generation A;
 - `reload` builds version `0.2.0`, generation B with the same open-Web Runtime boundary.
@@ -137,59 +136,60 @@ old cache cleanup must be retried or completed on process exit.
 The UI never receives the selected path, snapshot root or identity, file bytes,
 operation tokens, raw native errors, or private Manager facts.
 
-## Real Register To Disable Smoke
+## Register, Reload, And Stop Development Plugins
 
-Use a fresh lensX process and keep its terminal open throughout this sequence.
+The following walkthrough describes product operation with the example plugin.
+Repository acceptance is covered by the deterministic Gates in
+[Validation](#validation).
 
-1. Build and validate generation A with the commands above. Place it beneath a
-   direct custom-root member as `<root>/smoke/dist`, then run
+1. Build generation A with the commands above. Place it beneath a direct
+   custom-root member as `<root>/smoke/dist`, then run
    `pnpm run dev:plugin-development-mode -- --plugins-root <root>`.
-2. Press `Ctrl+Shift+Space`, run **Settings**, and open **Plugins**. The
-   **Plugin Development Mode** Switch must already be on, and the discovered
-   entry must show version `0.1.0` and the text labels **Development**,
-   **Unpacked**, and **Unsigned**. Its publisher remains unverified author text,
-   and no permission or grant facts are present.
-3. Open the Launcher again and run **Open development-mode smoke A**. The real
-   plugin WebView must report generation A and Host API `0.3.0` capabilities.
-4. Without closing lensX, build and validate generation B in another terminal:
+2. Use the configured Launcher shortcut (default `Ctrl+Shift+Space`), run
+   **Settings**, and open **Plugins**. The dedicated command enables
+   **Plugin Development Mode**. The discovered entry displays version `0.1.0`
+   and the labels **Development**, **Unpacked**, and **Unsigned**. Publisher
+   text is an author declaration and adds no permission or grant authority.
+3. Open the Launcher and run **Open development-mode smoke A**. The example
+   Page displays generation A and Host API `0.4.0` capabilities, including Action
+   activation methods when their current Session provider is available.
+   Development Mode grants no native input-monitoring or shortcut-configuration
+   authority.
+4. To change the example to generation B, build it in another terminal:
 
    ```bash
    pnpm run gate -- plugin-development-smoke-reload
    pnpm run gate -- plugin-development-smoke-validation
    ```
 
-   The already-open page must remain generation A before manual reload, proving
-   that the Host serves its immutable snapshot rather than changed author files.
-5. Return to **Settings → Plugins**, select the development entry, and choose
-   **Reload from directory**. The current entry must become version `0.2.0` and
-   generation B. No permission/grant state may appear, and the refreshed page
-   must use the same open isolated Runtime profile. The Launcher action must change to **Open development-mode smoke
-   B**. Reload is a real replacement: it creates a fresh Page attempt and
-   reapplies that generation's Manifest initial presentation. A rejected reload
-   leaves the current attempt and any transient user-resized size unchanged.
-6. Choose **Remove development entry** and confirm. The entry and its Launcher
-   action must disappear, and any open plugin Page must terminate. The result
-   must state that plugin data and Launcher collections were retained.
-7. Register the same generation-B `dist/` once more, open it, then disable
-   **Plugin Development Mode**. Confirm the shutdown. The Host must quiesce the
-   live Page and remove every development entry before the UI reports the mode
-   disabled.
-8. Stop and restart `pnpm run dev:plugin-development-mode` with the same root.
-   The mode must start enabled and rediscover fresh registrations without
-   recovering the prior process's snapshot, Runtime, or registration state.
-   An ordinary build still starts without Development Mode. Finally run
-   `pnpm run gate -- plugin-development-mode-boundaries` to verify that the normal
-   production artifacts still exclude the feature.
+   The open Page continues using its generation-A snapshot until you reload it.
+   Editing or rebuilding author files does not automatically replace that snapshot.
+5. In **Settings → Plugins**, select the development entry and choose
+   **Reload from directory**. Successful reload updates the entry to version
+   `0.2.0`, generation B, and the **Open development-mode smoke B** Action.
+   It creates a fresh Page attempt and applies that generation's Manifest
+   presentation, using the same open isolated Runtime boundary. If staging is
+   rejected, the current Page attempt and transient user-resized size remain.
+6. To remove this plugin from the current process, choose
+   **Remove development entry** and confirm. The entry and its Action are removed
+   and its open Page closes; plugin data and Launcher collections are retained.
+   To stop all development plugins, turn off **Plugin Development Mode** and
+   confirm. The Host closes their Pages and removes the process-local entries.
 
-For a real unsafe-directory rejection without changing the fixture source,
-build generation A, add a symbolic link inside its `dist/`, and attempt a
-register or reload. The Host must reject it without replacing the current
-generation. Rebuilding generation A removes the test link because Rsbuild
-cleans `dist/` before emitting output.
+Restarting the dedicated command with the same root discovers fresh entries;
+it does not restore the previous process's snapshots or Runtime state. Ordinary
+builds continue to start without Development Mode.
+
+Directories containing symbolic links or other unsafe members are rejected
+without replacing the current generation. The directory corpus and transaction
+checks in `pnpm run gate -- plugin-development-mode` cover these rejection
+paths deterministically.
 
 ## Validation
 
-Run the focused gate after changing this workflow:
+Repository acceptance uses deterministic checks. Run the focused Gate after
+changing this workflow, and use the [validation guide](validation.md) for the
+complete required validation set:
 
 ```bash
 pnpm run gate -- plugin-development-mode
@@ -201,3 +201,9 @@ messages and docs, deterministic presentation reset/retention assertions, and
 production artifacts. Development entries use the same work-area-aware native
 coordinator as installed plugins; no author-selected or user-resized size is
 persisted across replacement, process restart, or rediscovery.
+
+These Gates do not launch a real WebView, GUI application, or native interaction
+harness. The product walkthrough above is not a repository acceptance step;
+there is no manual or optional compatibility Gate for it. Gate results establish
+the deterministic boundaries they exercise, not operating-system input delivery
+or a real WebView run.

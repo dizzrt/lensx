@@ -144,6 +144,7 @@ export interface StartPluginRuntimeAttemptInput {
 
 export interface PluginRuntimeLifecycleService {
   readonly start: (input: StartPluginRuntimeAttemptInput) => Promise<PluginRuntimeAttempt | undefined>;
+  readonly failCurrent?: (code: PluginRuntimeFailureCode) => Promise<void>;
   readonly terminateCurrent: (reason: PluginRuntimeTerminalReason) => Promise<void>;
   readonly dispose: () => Promise<void>;
 }
@@ -288,6 +289,9 @@ export const createPluginRuntimeLifecycleService = (
       });
       current = attempt;
       return attempt;
+    },
+    failCurrent: async (code: PluginRuntimeFailureCode) => {
+      await current?.fail(code);
     },
     terminateCurrent,
     async dispose() {

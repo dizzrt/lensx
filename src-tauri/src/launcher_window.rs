@@ -11,7 +11,6 @@ use tauri::menu::{
 };
 use tauri::plugin::TauriPlugin;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State, Webview, Window, WindowEvent};
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 #[cfg(target_os = "macos")]
 use {
     block2::RcBlock,
@@ -539,7 +538,11 @@ impl LauncherWindowActions {
         app: &AppHandle<R>,
         action: LauncherWindowAction,
     ) -> Result<(), LauncherWindowActionError> {
-        let suppress_hide = self.native_dialog_active();
+        if matches!(action, LauncherWindowAction::Hide) {
+            crate::launcher_shortcuts::revoke_recording(app);
+        }
+        let suppress_hide =
+            self.native_dialog_active() || crate::launcher_shortcuts::recovery_degraded(app);
         let service = app.try_state::<Arc<PluginChildWebviewService<R>>>();
         let child = service
             .as_ref()
@@ -639,10 +642,7 @@ pub fn hide_launcher(
     dispatch_hide_command(|action| actions.dispatch(&app, action))
 }
 
-fn default_shortcut() -> Shortcut {
-    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Space)
-}
-
+#[cfg(test)]
 fn route_shortcut_event(
     is_default_shortcut: bool,
     state: ShortcutEventState,
@@ -706,6 +706,7 @@ where
 
 #[cfg(target_os = "macos")]
 fn request_macos_application_quit<R: Runtime>(app: &AppHandle<R>) {
+    crate::launcher_shortcuts::revoke_recording(app);
     if MACOS_QUIT_IN_FLIGHT.swap(true, Ordering::AcqRel) {
         return;
     }
@@ -761,6 +762,11 @@ fn install_macos_local_command_monitor<R: Runtime>(
     let monitor_block = RcBlock::new(move |event: NonNull<NSEvent>| -> *mut NSEvent {
         let event = unsafe { event.as_ref() };
         let modifiers = event.modifierFlags() & NSEventModifierFlags::DeviceIndependentFlagsMask;
+        if modifiers.is_empty() && event.keyCode() == 53 {
+            // Recording cancellation remains native-owned without global Input
+            // Monitoring permission; the foreground Escape still passes on.
+            crate::launcher_shortcuts::revoke_recording(&monitor_app);
+        }
         let consumed = dispatch_macos_local_key(
             NSRunningApplication::currentApplication().isActive(),
             modifiers == NSEventModifierFlags::Command,
@@ -832,6 +838,7 @@ where
     Ok(true)
 }
 
+#[cfg(test)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ShortcutEventState {
     Pressed,
@@ -839,22 +846,7 @@ enum ShortcutEventState {
 }
 
 pub fn global_shortcut_plugin<R: Runtime>() -> TauriPlugin<R> {
-    tauri_plugin_global_shortcut::Builder::new()
-        .with_handler(|app, shortcut, event| {
-            let event_state = match event.state() {
-                ShortcutState::Pressed => ShortcutEventState::Pressed,
-                ShortcutState::Released => ShortcutEventState::Released,
-            };
-
-            if let Some(action) = route_shortcut_event(shortcut == &default_shortcut(), event_state)
-            {
-                let actions = app.state::<LauncherWindowActions>();
-                if let Err(error) = actions.dispatch(app, action) {
-                    eprintln!("{error}");
-                }
-            }
-        })
-        .build()
+    tauri_plugin_global_shortcut::Builder::new().build()
 }
 
 trait ShortcutRegistrar {
@@ -883,10 +875,7 @@ struct TauriShortcutRegistrar<'app, R: Runtime> {
 
 impl<R: Runtime> ShortcutRegistrar for TauriShortcutRegistrar<'_, R> {
     fn register_default(&self) -> Result<(), String> {
-        self.app
-            .global_shortcut()
-            .register(default_shortcut())
-            .map_err(|error| error.to_string())
+        crate::launcher_shortcuts::setup(self.app).map_err(|error| error.code.to_owned())
     }
 }
 
@@ -1024,8 +1013,10 @@ fn install_window_lifecycle_listener<R: Runtime>(
         WindowEvent::Focused(focused)
             if route_window_event(false, Some(*focused)) == LauncherWindowEventRoute::Hide =>
         {
+            crate::launcher_shortcuts::revoke_recording(&app);
             dispatch_hide(&app, "focus loss");
         }
+        WindowEvent::Destroyed => crate::launcher_shortcuts::stop(&app),
         _ => {}
     });
 

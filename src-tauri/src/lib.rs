@@ -1,5 +1,6 @@
 pub mod app_preferences;
 pub mod launcher_action_collections;
+pub mod launcher_shortcuts;
 pub mod launcher_surface;
 pub mod launcher_window;
 pub(crate) mod macos_launcher;
@@ -46,6 +47,13 @@ pub(crate) mod trusted_app_target;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
+        .on_page_load(|webview, payload| {
+            if webview.label() == launcher_window::MAIN_WINDOW_LABEL
+                && matches!(payload.event(), tauri::webview::PageLoadEvent::Started)
+            {
+                launcher_shortcuts::invalidate_host(webview.app_handle());
+            }
+        })
         .register_asynchronous_uri_scheme_protocol(
             "lensx-plugin",
             plugin_resource_service::handle_plugin_resource_protocol,
@@ -56,6 +64,15 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         app_preferences::read_app_preferences,
         app_preferences::write_app_preferences,
+        launcher_shortcuts::read_launcher_shortcuts,
+        launcher_shortcuts::write_launcher_shortcuts,
+        launcher_shortcuts::update_launcher_shortcut_targets,
+        launcher_shortcuts::set_launcher_shortcut_host_ready,
+        launcher_shortcuts::ack_launcher_shortcut_invocation,
+        launcher_shortcuts::begin_launcher_shortcut_recording,
+        launcher_shortcuts::renew_launcher_shortcut_recording,
+        launcher_shortcuts::end_launcher_shortcut_recording,
+        launcher_shortcuts::request_launcher_shortcut_monitor_permission,
         launcher_action_collections::read_launcher_action_collections,
         launcher_action_collections::record_launcher_action_use,
         launcher_action_collections::set_launcher_action_pinned,
@@ -88,6 +105,15 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         app_preferences::read_app_preferences,
         app_preferences::write_app_preferences,
+        launcher_shortcuts::read_launcher_shortcuts,
+        launcher_shortcuts::write_launcher_shortcuts,
+        launcher_shortcuts::update_launcher_shortcut_targets,
+        launcher_shortcuts::set_launcher_shortcut_host_ready,
+        launcher_shortcuts::ack_launcher_shortcut_invocation,
+        launcher_shortcuts::begin_launcher_shortcut_recording,
+        launcher_shortcuts::renew_launcher_shortcut_recording,
+        launcher_shortcuts::end_launcher_shortcut_recording,
+        launcher_shortcuts::request_launcher_shortcut_monitor_permission,
         launcher_action_collections::read_launcher_action_collections,
         launcher_action_collections::record_launcher_action_use,
         launcher_action_collections::set_launcher_action_pinned,
@@ -192,6 +218,7 @@ pub fn run() {
         .expect("error while building tauri application");
     app.run(|app, event| {
         if matches!(event, tauri::RunEvent::Exit) {
+            launcher_shortcuts::stop(app);
             launcher_window::release_macos_local_command_monitor();
             let Some(service) = app.try_state::<
                 Arc<plugin_child_webview_service::PluginChildWebviewService<tauri::Wry>>,

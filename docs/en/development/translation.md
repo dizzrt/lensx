@@ -323,8 +323,8 @@ this plugin's `2020-06-01` / `cn-north-1` contract.
 
 ## Building And Delivery Evidence
 
-The Manifest uses `0.4.0` and supports Host API versions from `0.3.0` up to but
-excluding `0.4.0`. Upgrade the Host and public SDK together; existing installed
+The Manifest uses `0.4.0` and supports Host API versions from `0.4.0` up to but
+excluding `0.5.0`. Upgrade the Host and public SDK together; existing installed
 plugin snapshots are immutable, so rebuild and explicitly reload or replace
 the package to use the new transport. An old Host without `http.request` stays
 unavailable; the plugin never silently falls back to WebView fetch. The plugin owns its React, Semi, and signing dependencies;
@@ -392,3 +392,7 @@ network acceptance. The reported CORS failure motivated the native transport
 change; it did not prove that the user credentials were invalid. Builds and
 packages do not publish or install the plugin;
 installation and development reload remain explicit existing Host operations.
+
+Translation uses SDK `0.5.0` and omits the optional shortcut callback. Repeated
+shortcut activation only opens or focuses the existing Page; it does not start
+a translation, read the clipboard, reset input, or cancel existing work.

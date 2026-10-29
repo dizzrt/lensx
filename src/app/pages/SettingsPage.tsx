@@ -2,24 +2,35 @@ import { Banner, Nav, Select, Typography } from '@douyinfe/semi-ui';
 import { cloneElement, type KeyboardEvent, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppLocale } from '../i18n';
+import type { LauncherActionDescriptor } from '../launcher/actions';
 import type { PluginManagementService } from '../plugins/management';
 import type { AppPreferences, AppPreferencesClient, AppPreferencesErrorCode } from '../preferences';
+import { type ShortcutService, unavailableShortcutService } from '../shortcuts';
 import { useAppTheme } from '../theme';
 import { PluginManagementSettings } from './PluginManagementSettings';
+import { ShortcutSettings } from './ShortcutSettings';
 
 interface SettingsPageProps {
   managementService: PluginManagementService;
   preferencesClient: AppPreferencesClient;
+  shortcutsService?: ShortcutService;
+  actions?: readonly LauncherActionDescriptor[];
 }
 
 type PreferenceKey = keyof AppPreferences;
-type SettingsSection = 'plugins' | 'preferences';
+type SettingsSection = 'plugins' | 'preferences' | 'shortcuts';
+const EMPTY_ACTIONS: readonly LauncherActionDescriptor[] = Object.freeze([]);
 
 const isThemeMode = (value: unknown): value is AppPreferences['theme_mode'] => value === 'light' || value === 'dark';
 
 const isLocale = (value: unknown): value is AppPreferences['locale'] => value === 'en-US' || value === 'zh-CN';
 
-export const SettingsPage = ({ managementService, preferencesClient }: SettingsPageProps) => {
+export const SettingsPage = ({
+  managementService,
+  preferencesClient,
+  shortcutsService = unavailableShortcutService,
+  actions = EMPTY_ACTIONS,
+}: SettingsPageProps) => {
   const { t } = useTranslation();
   const { locale, setLocale } = useAppLocale();
   const { setThemeMode, themeMode } = useAppTheme();
@@ -35,6 +46,7 @@ export const SettingsPage = ({ managementService, preferencesClient }: SettingsP
     () => [
       { itemKey: 'preferences', text: t('settings.sections.preferences') },
       { itemKey: 'plugins', text: t('settings.sections.plugins') },
+      { itemKey: 'shortcuts', text: t('settings.sections.shortcuts') },
     ],
     [t],
   );
@@ -110,7 +122,7 @@ export const SettingsPage = ({ managementService, preferencesClient }: SettingsP
   );
 
   const handleSectionSelect = useCallback(({ itemKey }: { itemKey: string | number }) => {
-    if (itemKey === 'preferences' || itemKey === 'plugins') {
+    if (itemKey === 'preferences' || itemKey === 'plugins' || itemKey === 'shortcuts') {
       setSelectedSection(itemKey);
     }
   }, []);
@@ -198,9 +210,13 @@ export const SettingsPage = ({ managementService, preferencesClient }: SettingsP
               {pendingPreference ? t('settings.save.inProgress') : ''}
             </Typography.Text>
           </section>
-        ) : (
+        ) : selectedSection === 'plugins' ? (
           <div className="settings-section-host min-h-0 flex flex-1 flex-col" id="settings-plugins-panel">
             <PluginManagementSettings service={managementService} />
+          </div>
+        ) : (
+          <div id="settings-shortcuts-panel">
+            <ShortcutSettings service={shortcutsService} actions={actions} />
           </div>
         )}
       </div>

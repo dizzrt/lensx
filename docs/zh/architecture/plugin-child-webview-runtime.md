@@ -85,6 +85,45 @@ conversion 与串行 latest-wins presentation revision 会进入既有、由 Rus
 路径。edge-to-edge 布局不会新增 payload field、Tauri command、native setter、Runtime reload
 或 Session replacement 路径。
 
+## Action 调用与快捷键激活
+
+Host Action dispatcher 为每个已接纳调用创建冻结的 invocation，包含独立 ID 和
+`normal` 或 `shortcut` 来源。UI 选择与插件 `actions.open` 始终创建 normal 调用。
+只有当前有效的原生 Action 绑定在原生 Show 并原子认领其绑定 revision 后，才能创建
+shortcut 调用。普通 Launcher 快捷键仍执行 Toggle；Action 保留自己的行为，包括最终 Hide。
+
+原生交付先安装 listener，再声明 Host ready，并按 invocation 顺序合并握手批次与同时到达
+的事件。重复原生 ID 共享一次认领。等待准入最多 32 个 invocation，期限为 10 秒；超载、
+陈旧绑定、目标不可用和过期均产生安全失败反馈。dispatcher 在排队快捷键开始执行时再次核对绑定 revision 和 active 状态，
+检查当前 Action Registry，每次成功 invocation 只通知一次最近使用记录，不受插件回调业务结果影响。
+
+`ActivePage` 仍严格只有 `owner_id`、`page_id` 和 `opened_by_action_id`。
+独立的 Page attempt activation 通道将调用交给当前 Session。重复进入同一可用 Page
+会更新 opening Action 并聚焦当前 Child，不改变 React key、Runtime identity、surface
+attempt、输入、选区或业务状态。Runtime 替换、关闭、可用性失效或显式重试会撤销旧通道；
+重试从空通道开始，不重放旧调用。
+
+私有 native-to-Host dispatch envelope 携带原生 presentation attempt ID。只有该 attempt
+与当前 Page presentation 匹配后，Host 才绑定 activation provider；提前到达的请求可等待
+presentation 创建，晚到的旧请求不能认领新 Page 通道。该 ID 不进入公开 Activation、
+Runtime Context、URL 参数或插件请求权限。
+
+Host API `0.4.0` 通过独立的 `actions.get_activation`、`actions.subscribe_activations`
+方法和 `actions.activated` 事件提供激活事实。Activation 只有插件局部 `actionId`、在
+Page attempt 内递增的正安全整数 `invocationId` 和 `source`。Session 原子开启单一流，
+缓存最多 32 次调用的初始批次；重复订阅返回相同批次，缓存不占用后续事件流容量。
+最新快照会在事件发出前更新。初始通道在 10 秒内无法开启时，其 Runtime attempt 失败；
+显式重试从新状态开始。Context 保留既有四字段，仅在实际 provider 可用时声明激活方法。
+
+SDK `0.5.0` 即使没有业务回调也消费该通道。可选工厂参数 `onShortcutActivated` 只对
+shortcut 调用执行，并且执行时 SDK 已 ready。它不会自动翻译、格式化、清空输入、重置
+结果，也不等待上一个回调 Promise；业务并发由插件拥有。尝试开启 activation 流之后的
+初始化失败会终止该 SDK transport 和 Session，不在同一个 attempt 上重放。disposal
+阻止未来回调并处理晚到的 Promise 拒绝，不宣称撤销回调已经发起的外部工作。
+
+这些保证由 `launcher-shortcuts` 与既有 Child WebView Gate 中的确定性 Action、导航、
+Session、SDK 和生产组合检查覆盖，不证明真实键盘投递、系统权限交互或真实 WebView 运行。
+
 ## 原生编辑快捷键
 
 启用 Tauri `unstable` feature 后，初始 Host `main` WebView 和插件 WebView 都使用

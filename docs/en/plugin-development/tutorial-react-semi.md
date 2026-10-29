@@ -125,3 +125,15 @@ Use [Public packages](public-packages.md) for dependency ownership,
 [Host API](host-api.md) for methods, and
 [Runtime and security](runtime-permissions-security.md) for
 authority and teardown.
+
+## Optional shortcut activation
+
+The template uses Contract `0.4.0`, SDK `0.5.0`, and Host API range
+`>=0.4.0 <0.5.0`; Manifest remains `0.4.0`. Its runtime controller accepts an
+optional `onShortcutActivated` factory callback (a framework-neutral option or
+third React runtime argument). Omitting it preserves normal page behavior and
+still consumes activations. Register it before initialization, follow the
+[public callback example](public-packages.md#optional-shortcut-callback), and read
+`sdk.activation` when needed. The callback runs only after ready; business
+concurrency belongs to the plugin. Retry creates a fresh attempt and SDK, and
+teardown disposes the old one. Never use an invocation ID as a page/React key.

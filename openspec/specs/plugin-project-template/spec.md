@@ -79,7 +79,7 @@ build resources referenced by the Manifest.
 #### Scenario: Validate minimal template resources and authority
 
 - **WHEN** the minimal template Manifest and built Runtime payload are inspected
-- **THEN** The examples MUST use Manifest `0.3.0` without legacy permission fields, MUST NOT call an unpublished native Host API, and MUST NOT claim trusted origin through publisher text or an official repository location.
+- **THEN** Examples MUST use the current Manifest `0.4.0` without legacy permission fields, MUST NOT call unpublished native Host APIs, and MUST NOT claim trusted authority through Publisher text or an official repository location.
 - **THEN** The build output MUST be a self-contained package payload that does not depend on remote scripts, inline scripts, `eval`, an external network, a Host bundle, or repository source code.
 
 ### Requirement: Template Runtime MUST demonstrate the real SDK lifecycle and Runtime context adaptation
@@ -298,7 +298,7 @@ at the same relative path.
 
 ### Requirement: Maintained templates MUST author and execute only the WebView Runtime
 
-Framework-neutral and React/Semi templates MUST emit Manifest `0.4.0` with `runtime.kind: "webview"`, import `@lensx/plugin-sdk/webview`, initialize one SDK client through `createPluginWebviewTransport`, and dispose it with the Page lifecycle.
+Framework-neutral and React/Semi templates MUST use Contract `0.4.0` and SDK `0.5.0`, producing Manifest `0.4.0`, `runtime.kind: "webview"`, and the Host API compatibility range `>=0.4.0 <0.5.0`. Each Page MUST initialize one SDK client through the public WebView transport and dispose it with the Page lifecycle.
 
 #### Scenario: Either template is generated and packed
 - **WHEN** an external consumer builds, tests, validates and packs a fresh template
@@ -385,3 +385,22 @@ and MUST NOT add legacy-title compatibility keywords.
   mechanically reusing the plugin name for every Action
 - **THEN** the guidance explains that operation entries retain necessary verbs
   and that the `title` field remains in use
+
+### Requirement: Maintained templates MUST demonstrate optional shortcut activation without native authority
+
+Both templates and their CLI snapshots MUST preserve the same public contract and demonstrate the optional `onShortcutActivated` SDK creation option in documentation and testable examples. Omitting the callback MUST still allow normal opening; examples MUST use only the semantic source from independent Activation and MUST NOT add Runtime Context fields or native input permissions.
+
+#### Scenario: Author provides the optional callback
+- **WHEN** an author provides onShortcutActivated in createPluginSdk options and initializes the client
+- **THEN** the first and subsequent dedicated shortcut activations invoke the callback, while normal entry does not
+- **THEN** the callback can read this plugin's Action ID without receiving actual keys; SDK disposal stops subsequent delivery when the Page is destroyed
+
+#### Scenario: Author omits the callback or activation capability is absent
+- **WHEN** the template omits the callback or valid Context does not advertise the activation subscription method
+- **THEN** the template still reaches ready through its existing lifecycle, and an empty capability snapshot remains valid
+- **THEN** when the capability is absent, activation is null and no callback occurs; the template does not attempt private bridging or native input access
+
+#### Scenario: Template snapshots and old package evidence
+- **WHEN** the CLI generates a new project or a pure CLI consumer checks it
+- **THEN** generated output matches the canonical template's versions, compatibility ranges, and optional callback examples
+- **THEN** historical incompatible package fixtures are preserved; rewriting old packages does not establish new-protocol compatibility

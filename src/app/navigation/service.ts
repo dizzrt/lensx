@@ -1,3 +1,5 @@
+import type { LauncherActionInvocation } from '../launcher/actions/types';
+import { PageActivationAttempt, type PluginPageActivationSession } from './activations';
 import type { PageRegistry } from './catalog';
 import { type ActivePage, AppNavigationError, type HostPageTarget, type PageResolution } from './types';
 
@@ -8,6 +10,10 @@ export class AppNavigationService {
   readonly #unsubscribeRegistry: () => void;
   #activePage?: ActivePage;
   #handler?: AppNavigationHandler;
+  #activationAttempt?: PageActivationAttempt;
+  #nativeAttemptId?: string;
+  readonly #nativeAttemptWaiters = new Set<(attemptId?: string) => void>();
+  readonly #activationFailures = new Set<(code: 'expired' | 'unavailable') => void>();
 
   constructor(registry: PageRegistry) {
     this.#registry = registry;
@@ -28,12 +34,13 @@ export class AppNavigationService {
       if (isRegistered && this.#handler === handler) {
         this.#handler = undefined;
         this.#activePage = undefined;
+        this.#clearActivationAttempt();
       }
       isRegistered = false;
     };
   }
 
-  openPage(target: HostPageTarget, openedByActionId: string): ActivePage {
+  openPage(target: HostPageTarget, openedByActionId: string, invocation?: LauncherActionInvocation): ActivePage {
     const resolution = this.#registry.lookup(target);
     if (!resolution?.page.available) {
       throw new AppNavigationError('page_unavailable', 'The requested page is unavailable.');
@@ -42,6 +49,22 @@ export class AppNavigationService {
       throw new AppNavigationError('page_unavailable', 'The requested page is unavailable.');
     }
 
+    const samePage = this.isActivePage(target);
+    const nextAttempt = samePage
+      ? this.#activationAttempt
+      : resolution.provider.kind === 'plugin'
+        ? this.#newActivationAttempt()
+        : undefined;
+    if (invocation && nextAttempt) {
+      const prefix = `${target.owner_id}.`;
+      if (!openedByActionId.startsWith(prefix))
+        throw new AppNavigationError('page_unavailable', 'The requested page is unavailable.');
+      nextAttempt.append(openedByActionId.slice(prefix.length), invocation);
+    }
+    if (!samePage) {
+      this.#clearActivationAttempt();
+      this.#activationAttempt = nextAttempt;
+    }
     const activePage = Object.freeze({
       owner_id: target.owner_id,
       page_id: target.page_id,
@@ -57,6 +80,7 @@ export class AppNavigationService {
       return;
     }
     this.#activePage = undefined;
+    this.#clearActivationAttempt();
     this.#handler?.(undefined);
   }
 
@@ -74,12 +98,80 @@ export class AppNavigationService {
     return this.#registry.lookup(target);
   }
 
+  bindActivations(target: HostPageTarget): PluginPageActivationSession | undefined {
+    if (!this.isActivePage(target) || !this.#activationAttempt || this.#activationAttempt.terminal) return undefined;
+    try {
+      return this.#activationAttempt.bind();
+    } catch {
+      return undefined;
+    }
+  }
+
+  restartActivationAttempt(target: HostPageTarget) {
+    if (!this.isActivePage(target)) return;
+    this.#clearActivationAttempt();
+    this.#activationAttempt = this.#newActivationAttempt();
+  }
+
+  attachNativeActivationAttempt(target: HostPageTarget, attemptId: string) {
+    if (!this.isActivePage(target) || !this.#activationAttempt || this.#activationAttempt.terminal) return;
+    this.#nativeAttemptId = attemptId;
+    for (const waiter of [...this.#nativeAttemptWaiters]) waiter(attemptId);
+  }
+
+  isNativeActivationAttemptCurrent(target: HostPageTarget, attemptId: string) {
+    return (
+      this.isActivePage(target) && this.#nativeAttemptId === attemptId && this.#activationAttempt?.terminal === false
+    );
+  }
+
+  bindNativeActivations(target: HostPageTarget, attemptId: string): Promise<PluginPageActivationSession | undefined> {
+    if (!this.isActivePage(target) || !this.#activationAttempt || this.#activationAttempt.terminal)
+      return Promise.resolve(undefined);
+    if (this.#nativeAttemptId !== undefined)
+      return Promise.resolve(this.#nativeAttemptId === attemptId ? this.bindActivations(target) : undefined);
+    return new Promise((resolve) => {
+      const attempt = this.#activationAttempt;
+      const finish = (currentId?: string) => {
+        clearTimeout(timer);
+        this.#nativeAttemptWaiters.delete(finish);
+        resolve(
+          attempt === this.#activationAttempt && currentId === attemptId ? this.bindActivations(target) : undefined,
+        );
+      };
+      const timer = setTimeout(() => finish(), 10_000);
+      this.#nativeAttemptWaiters.add(finish);
+    });
+  }
+
+  #clearActivationAttempt() {
+    this.#activationAttempt?.dispose();
+    this.#activationAttempt = undefined;
+    this.#nativeAttemptId = undefined;
+    for (const waiter of [...this.#nativeAttemptWaiters]) waiter();
+  }
+
+  subscribeActivationFailures(listener: (code: 'expired' | 'unavailable') => void) {
+    this.#activationFailures.add(listener);
+    return () => {
+      this.#activationFailures.delete(listener);
+    };
+  }
+
+  #newActivationAttempt() {
+    return new PageActivationAttempt((code) => {
+      for (const listener of this.#activationFailures) listener(code);
+    });
+  }
+
   subscribeToPages(listener: () => void) {
     return this.#registry.subscribe(listener);
   }
 
   destroy() {
     this.#unsubscribeRegistry();
+    this.#clearActivationAttempt();
+    this.#activationFailures.clear();
     this.#activePage = undefined;
     this.#handler = undefined;
   }

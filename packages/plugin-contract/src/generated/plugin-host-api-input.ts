@@ -6,7 +6,7 @@
  */
 
 /**
- * Public semantic Host API 0.3.0 contract. This schema intentionally excludes private RPC transport and Host identity facts.
+ * Public semantic Host API 0.4.0 contract. This schema intentionally excludes private RPC transport and Host identity facts.
  */
 export type PluginHostApiInput =
   | HostApiRequestInput
@@ -24,7 +24,9 @@ export type HostApiRequestInput =
   | StorageGetQuotaRequest
   | StorageListRequest
   | StorageSetRequest
-  | UiCloseRequest;
+  | UiCloseRequest
+  | ActionsGetActivationRequest
+  | ActionsSubscribeActivationsRequest;
 export type LocalActionId = string;
 /**
  * @maxItems 32
@@ -50,10 +52,14 @@ export type HostApiResultInput =
   | StorageGetQuotaResult
   | StorageListResult
   | StorageSetResult
-  | UiCloseResult;
+  | UiCloseResult
+  | ActionsGetActivationResult
+  | ActionsSubscribeActivationsResult;
 export type Semver = string;
 export type HostApiMethodInput =
+  | 'actions.get_activation'
   | 'actions.open'
+  | 'actions.subscribe_activations'
   | 'http.request'
   | 'runtime.get_context'
   | 'storage.delete'
@@ -62,6 +68,7 @@ export type HostApiMethodInput =
   | 'storage.list'
   | 'storage.set'
   | 'ui.close';
+export type HostApiEventInput = ActionsActivatedEvent | RuntimeContextChangedEvent;
 export type HostApiErrorCodeInput =
   | 'cancelled'
   | 'conflict'
@@ -73,7 +80,7 @@ export type HostApiErrorCodeInput =
   | 'not_found'
   | 'timeout'
   | 'unavailable';
-export type HostApiEventNameInput = 'runtime.context_changed';
+export type HostApiEventNameInput = 'actions.activated' | 'runtime.context_changed';
 
 export interface ActionsOpenRequest {
   method: 'actions.open';
@@ -133,6 +140,14 @@ export interface StorageSetRequest {
 }
 export interface UiCloseRequest {
   method: 'ui.close';
+  params: EmptyParams;
+}
+export interface ActionsGetActivationRequest {
+  method: 'actions.get_activation';
+  params: EmptyParams;
+}
+export interface ActionsSubscribeActivationsRequest {
+  method: 'actions.subscribe_activations';
   params: EmptyParams;
 }
 export interface ActionsOpenResult {
@@ -205,7 +220,31 @@ export interface UiCloseResult {
     accepted: true;
   };
 }
-export interface HostApiEventInput {
+export interface ActionsGetActivationResult {
+  method: 'actions.get_activation';
+  result: {
+    activation: null | PluginActionActivationInput;
+  };
+}
+export interface PluginActionActivationInput {
+  actionId: LocalActionId;
+  invocationId: number;
+  source: 'normal' | 'shortcut';
+}
+export interface ActionsSubscribeActivationsResult {
+  method: 'actions.subscribe_activations';
+  result: {
+    /**
+     * @maxItems 32
+     */
+    activations: PluginActionActivationInput[];
+  };
+}
+export interface ActionsActivatedEvent {
+  event: 'actions.activated';
+  payload: PluginActionActivationInput;
+}
+export interface RuntimeContextChangedEvent {
   event: 'runtime.context_changed';
   payload: PluginRuntimeContextInput;
 }

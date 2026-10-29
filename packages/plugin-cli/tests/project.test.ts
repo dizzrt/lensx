@@ -12,7 +12,7 @@ const baseManifest = JSON.parse(
   await readFile(resolve(import.meta.dirname, '../../plugin-contract/tests/fixtures/base.json'), 'utf8'),
 ) as PluginManifestInput;
 // Current-compatible authoring fixtures are rebuilt for Host API 0.3.0.
-baseManifest.compatibility.host_api.max_version_exclusive = '0.4.0';
+baseManifest.compatibility.host_api.max_version_exclusive = '0.5.0';
 
 const makeRoot = async () => {
   const root = await mkdtemp(resolve(tmpdir(), 'lensx-plugin-cli-project-'));
@@ -26,7 +26,7 @@ const metadata = (build = 'node build.mjs') => ({
   type: 'module',
   packageManager: 'pnpm@11.17.0',
   scripts: { build, typecheck: 'node --check build.mjs', test: 'node --test', check: 'node --check build.mjs' },
-  dependencies: { '@lensx/plugin-sdk': '^0.4.0' },
+  dependencies: { '@lensx/plugin-sdk': '^0.5.0' },
   devDependencies: { '@lensx/plugin-contract': '^0.3.0' },
 });
 

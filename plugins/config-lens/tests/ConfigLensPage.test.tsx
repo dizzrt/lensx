@@ -1,6 +1,6 @@
+import { createPluginRuntimeContextFixture, FakePluginSdkTransport } from '@lensx/plugin-testkit';
 import { describe, expect, rs, test } from '@rstest/core';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-
 import { ConfigLensPage } from '../src/ConfigLensPage.js';
 import type { EditorSurfaceProps } from '../src/editor/MonacoSurface.js';
 import type { LanguageController } from '../src/language/controller.js';
@@ -11,9 +11,10 @@ import type {
   LanguageOperationResult,
   LanguageVersions,
 } from '../src/language/protocol.js';
+import { createConfigLensRuntime } from '../src/runtime.js';
 
 const context = (locale: 'en-US' | 'zh-CN' = 'en-US', theme: 'light' | 'dark' = 'light') =>
-  Object.freeze({ capabilities: Object.freeze([]), hostApiVersion: '0.2.0', locale, theme });
+  Object.freeze({ capabilities: Object.freeze([]), hostApiVersion: '0.4.0', locale, theme });
 // This double tests Page orchestration only. Actual Monaco actions, focus and
 // model/undo behavior are exercised by the native editor tests.
 const TestSurface = ({ diagnostics, input, language, onInput, theme }: EditorSurfaceProps) => (
@@ -458,4 +459,63 @@ describe('ConfigLens footer and feedback', () => {
     expect(format()).toBeEnabled();
     expect(screen.getByLabelText('Editable input')).toHaveAttribute('data-diagnostic-count', '0');
   });
+});
+
+test('callback-free runtime activation preserves input, selection and in-flight formatting', async () => {
+  const h = harness();
+  let finish: ((value: LanguageOperationResult) => void) | undefined;
+  h.run.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const fake = new FakePluginSdkTransport({
+    connect: () => createPluginRuntimeContextFixture({ capabilities: ['actions.subscribe_activations'] }),
+    request: () => ({ method: 'actions.subscribe_activations', result: { activations: [] } }),
+  });
+  const view = renderPage(h);
+  const runtime = createConfigLensRuntime(
+    () => fake,
+    (state) => {
+      if (state.kind === 'ready')
+        view.rerender(
+          <ConfigLensPage context={state.context} createController={h.create} EditorSurface={TestSurface} />,
+        );
+    },
+  );
+  await act(async () => {
+    for (let index = 0; index < 30; index++) await Promise.resolve();
+  });
+  edit('{"retained":true}');
+  h.settle('json');
+  const versions = h.requests.at(-1)?.input;
+  const editor = screen.getByLabelText('Editable input');
+  fireEvent.click(format());
+  expect(h.run).toHaveBeenCalledTimes(1);
+  expect(format()).toBeDisabled();
+  act(() => {
+    for (let id = 1; id <= 40; id += 1)
+      fake.emit('actions.activated', { actionId: 'open', invocationId: id, source: 'shortcut' });
+  });
+  expect(screen.getByLabelText('Editable input')).toBe(editor);
+  expect(editor).toHaveValue('{"retained":true}');
+  expect(screen.getByRole('combobox')).toHaveTextContent(/^Auto$/u);
+  expect(h.run).toHaveBeenCalledTimes(1);
+  expect(format()).toBeDisabled();
+  await act(async () =>
+    finish?.({
+      inputVersion: versions?.inputVersion ?? 0,
+      selectionVersion: versions?.selectionVersion ?? 0,
+      requestId: 2,
+      status: 'valid',
+      diagnostics: [],
+      output: '{\n  "retained": true\n}',
+    }),
+  );
+  expect(editor).toHaveValue('{\n  "retained": true\n}');
+  act(() => fake.emit('actions.activated', { actionId: 'open', invocationId: 41, source: 'shortcut' }));
+  expect(editor).toHaveValue('{\n  "retained": true\n}');
+  expect(h.run).toHaveBeenCalledTimes(1);
+  await runtime.dispose();
 });

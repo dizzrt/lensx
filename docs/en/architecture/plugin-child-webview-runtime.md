@@ -101,6 +101,63 @@ revision feed the existing Rust-validated physical-bounds path. The
 edge-to-edge layout adds no payload field, Tauri command, native setter,
 Runtime reload, or Session replacement path.
 
+## Action Invocations And Shortcut Activation
+
+The Host Action dispatcher gives every admitted call a frozen invocation with
+an independent ID and `normal` or `shortcut` source. UI selection and plugin
+`actions.open` always start a normal invocation. Only a current native Action
+binding can start a shortcut invocation, after native Show and an atomic claim
+of its binding revision. The ordinary Launcher shortcut still uses Toggle;
+an Action retains its own behavior, including an eventual Hide.
+
+Native delivery installs its listener before declaring the Host ready, then
+merges the handshake batch with concurrent events in invocation order. Repeated
+native IDs share one claim. Waiting admission is bounded at 32 invocations and
+10 seconds; overload, stale bindings, unavailable targets, and expiry produce
+safe failure feedback. The dispatcher rechecks the current binding revision and active status when a
+queued shortcut begins execution, checks the current Action Registry, and emits successful-use observation once per invocation, regardless
+of plugin callback outcomes.
+
+`ActivePage` remains exactly `owner_id`, `page_id`, and `opened_by_action_id`.
+A separate Page-attempt activation channel carries calls to the current Session.
+Repeated calls to the same available Page update its opening Action and focus
+the current Child without changing its React key, Runtime identity, surface
+attempt, input, selection, or business state. Runtime replacement, close,
+invalidated availability, or explicit retry revoke the old channel. Retry
+starts an empty channel and does not replay old calls.
+
+The private native-to-Host dispatch envelope carries the native presentation
+attempt ID. The Host binds the activation provider only after that attempt
+matches the current Page presentation; an early request can await presentation
+creation, while a late old request cannot claim the new Page channel. This ID
+never enters public Activation, Runtime Context, URL parameters, or plugin
+request authority.
+
+Host API `0.4.0` exposes separate `actions.get_activation` and
+`actions.subscribe_activations` methods and the `actions.activated` event.
+Activation contains only plugin-local `actionId`, a positive safe integer
+`invocationId` increasing within the Page attempt, and `source`. The Session
+atomically opens one stream and caches its initial batch of at most 32 calls;
+repeated subscription returns that same batch. The cache does not consume later
+stream capacity. The latest snapshot updates before an event is emitted.
+An initial channel that cannot open within 10 seconds fails its Runtime attempt;
+explicit retry starts fresh. Context remains its existing four fields and
+advertises the activation methods only when the provider is actually available.
+
+SDK `0.5.0` consumes this channel even without a business callback. The optional
+factory `onShortcutActivated` runs only for shortcut calls, after the SDK is
+ready. It does not automatically translate, format, clear input, reset results,
+or wait for previous callback Promises. Plugin code owns business concurrency.
+After an activation stream has been attempted, initialization failure terminates
+that SDK transport and Session instead of replaying against the same attempt.
+Disposal prevents future callbacks and consumes late Promise rejections; it
+does not claim to undo external work that a callback already started.
+
+These guarantees are covered by deterministic Action, navigation, Session,
+SDK, and production-composition checks in `launcher-shortcuts` and the existing
+Child WebView Gates. They do not establish real keyboard delivery, system
+permission interaction, or a real WebView run.
+
 ## Native Editing Shortcuts
 
 With the enabled Tauri `unstable` feature, both the initial Host `main` WebView

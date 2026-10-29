@@ -310,9 +310,13 @@
             "plugins": {
               "type": "string",
               "minLength": 1
+            },
+            "shortcuts": {
+              "type": "string",
+              "minLength": 1
             }
           },
-          "required": ["preferences", "plugins"]
+          "required": ["preferences", "plugins", "shortcuts"]
         },
         "theme": {
           "type": "object",
@@ -1091,9 +1095,458 @@
             }
           },
           "required": ["inProgress", "failure"]
+        },
+        "shortcuts": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "recovery": {
+              "type": "string",
+              "minLength": 1
+            },
+            "unavailableTarget": {
+              "type": "string",
+              "minLength": 1
+            },
+            "unbound": {
+              "type": "string",
+              "minLength": 1
+            },
+            "doubleTapDisplay": {
+              "type": "string",
+              "minLength": 1
+            },
+            "edit": {
+              "type": "string",
+              "minLength": 1
+            },
+            "clear": {
+              "type": "string",
+              "minLength": 1
+            },
+            "editTarget": {
+              "type": "string",
+              "minLength": 1
+            },
+            "clearTarget": {
+              "type": "string",
+              "minLength": 1
+            },
+            "loading": {
+              "type": "string",
+              "minLength": 1
+            },
+            "recoveryDegraded": {
+              "type": "string",
+              "minLength": 1
+            },
+            "diagnostics": {
+              "type": "string",
+              "minLength": 1
+            },
+            "saving": {
+              "type": "string",
+              "minLength": 1
+            },
+            "retry": {
+              "type": "string",
+              "minLength": 1
+            },
+            "launcherBindings": {
+              "type": "string",
+              "minLength": 1
+            },
+            "actions": {
+              "type": "string",
+              "minLength": 1
+            },
+            "actionBindings": {
+              "type": "string",
+              "minLength": 1
+            },
+            "empty": {
+              "type": "string",
+              "minLength": 1
+            },
+            "noActions": {
+              "type": "string",
+              "minLength": 1
+            },
+            "chooseAction": {
+              "type": "string",
+              "minLength": 1
+            },
+            "configure": {
+              "type": "string",
+              "minLength": 1
+            },
+            "permissionDescription": {
+              "type": "string",
+              "minLength": 1
+            },
+            "permission": {
+              "type": "string",
+              "minLength": 1
+            },
+            "reset": {
+              "type": "string",
+              "minLength": 1
+            },
+            "resetConfirm": {
+              "type": "string",
+              "minLength": 1
+            },
+            "resetDescription": {
+              "type": "string",
+              "minLength": 1
+            },
+            "editor": {
+              "type": "string",
+              "minLength": 1
+            },
+            "mode": {
+              "type": "string",
+              "minLength": 1
+            },
+            "chordMode": {
+              "type": "string",
+              "minLength": 1
+            },
+            "doubleTapMode": {
+              "type": "string",
+              "minLength": 1
+            },
+            "modifier": {
+              "type": "string",
+              "minLength": 1
+            },
+            "candidate": {
+              "type": "string",
+              "minLength": 1
+            },
+            "record": {
+              "type": "string",
+              "minLength": 1
+            },
+            "save": {
+              "type": "string",
+              "minLength": 1
+            },
+            "cancel": {
+              "type": "string",
+              "minLength": 1
+            },
+            "modifiers": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "cmd": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "ctrl": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "option": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "shift": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["cmd", "ctrl", "option", "shift"]
+            },
+            "keys": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "Space": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "Tab": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "Escape": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "Enter": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "Backspace": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "Delete": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "Insert": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "Home": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "End": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "PageUp": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "PageDown": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "ArrowLeft": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "ArrowRight": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "ArrowUp": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "ArrowDown": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "Backquote": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "Space",
+                "Tab",
+                "Escape",
+                "Enter",
+                "Backspace",
+                "Delete",
+                "Insert",
+                "Home",
+                "End",
+                "PageUp",
+                "PageDown",
+                "ArrowLeft",
+                "ArrowRight",
+                "ArrowUp",
+                "ArrowDown",
+                "Backquote"
+              ]
+            },
+            "status": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "active": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "permission_required": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "target_unavailable": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "registration_failed": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "monitor_unavailable": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "degraded": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "active",
+                "permission_required",
+                "target_unavailable",
+                "registration_failed",
+                "monitor_unavailable",
+                "degraded"
+              ]
+            },
+            "feedback": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "saved": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "invalid_configuration": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reserved_shortcut": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "duplicate_shortcut": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "revision_conflict": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "registration_failed": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "storage_failed": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "degraded": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "recording_unavailable": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "unavailable": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "invalid_response": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "duplicate_action": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "launcher_choice_required": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "saved",
+                "invalid_configuration",
+                "reserved_shortcut",
+                "duplicate_shortcut",
+                "revision_conflict",
+                "registration_failed",
+                "storage_failed",
+                "degraded",
+                "recording_unavailable",
+                "unavailable",
+                "invalid_response",
+                "duplicate_action",
+                "launcher_choice_required"
+              ]
+            },
+            "add": {
+              "type": "string",
+              "minLength": 1
+            },
+            "newShortcut": {
+              "type": "string",
+              "minLength": 1
+            },
+            "typeForTarget": {
+              "type": "string",
+              "minLength": 1
+            },
+            "actionForRow": {
+              "type": "string",
+              "minLength": 1
+            },
+            "deleteTarget": {
+              "type": "string",
+              "minLength": 1
+            },
+            "chooseType": {
+              "type": "string",
+              "minLength": 1
+            },
+            "launcherMigration": {
+              "type": "string",
+              "minLength": 1
+            },
+            "modifierForTarget": {
+              "type": "string",
+              "minLength": 1
+            },
+            "system": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "recovery",
+            "unavailableTarget",
+            "unbound",
+            "doubleTapDisplay",
+            "edit",
+            "clear",
+            "editTarget",
+            "clearTarget",
+            "loading",
+            "recoveryDegraded",
+            "diagnostics",
+            "saving",
+            "retry",
+            "launcherBindings",
+            "actions",
+            "actionBindings",
+            "empty",
+            "noActions",
+            "chooseAction",
+            "configure",
+            "permissionDescription",
+            "permission",
+            "reset",
+            "resetConfirm",
+            "resetDescription",
+            "editor",
+            "mode",
+            "chordMode",
+            "doubleTapMode",
+            "modifier",
+            "candidate",
+            "record",
+            "save",
+            "cancel",
+            "modifiers",
+            "keys",
+            "status",
+            "feedback",
+            "add",
+            "newShortcut",
+            "typeForTarget",
+            "actionForRow",
+            "deleteTarget",
+            "chooseType",
+            "launcherMigration",
+            "modifierForTarget",
+            "system"
+          ]
         }
       },
-      "required": ["title", "sections", "theme", "locale", "plugins", "save"]
+      "required": ["title", "sections", "theme", "locale", "plugins", "save", "shortcuts"]
     },
     "error": {
       "type": "object",

@@ -190,3 +190,13 @@ Development Mode, watch/reload, plugin installation, permission grants,
 signing/provenance, and remote publishing remain separate capabilities.
 Generated templates and CLI validation do not replace the Host's independent
 native package and source checks.
+
+## Activation protocol migration
+
+Both canonical templates and CLI snapshots use Contract `0.4.0`, SDK `0.5.0`,
+and Host API `>=0.4.0 <0.5.0` while retaining Manifest `0.4.0`. Runtime factories
+accept the optional shortcut callback before initialization and dispose it with
+the SDK. Their default entry points omit it, preserving business state on
+repeated activation. Existing plugins must upgrade dependencies and ranges and
+repack; optional callbacks do not make an old SDK compatible. See the
+[public callback contract](../plugin-development/public-packages.md#optional-shortcut-callback).

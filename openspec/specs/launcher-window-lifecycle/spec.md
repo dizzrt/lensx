@@ -224,22 +224,20 @@ failed operation stage.
 
 ### Requirement: The default global shortcut must toggle the launcher
 
-The system MUST register `Ctrl+Shift+Space` as the default global shortcut. A
-press event for that shortcut MUST route to the unified `toggle` action.
-Release events and unknown shortcuts MUST NOT trigger window actions. The
-application MUST maintain at most one instance of the default binding while it
-is running.
+The system MUST default to `Ctrl+Shift+Space` without configuration, allow one confirmed selected chord or modifier double tap, and use unified `toggle` for ordinary activation. Action entries MUST `show` before execution. Releases, repeat presses, and unknown bindings MUST NOT execute another window action; double taps MUST execute once only after full `launcher-shortcuts` confirmation.
 
 #### Scenario: Press the default shortcut from the hidden state
 
 - **WHEN** the main window is invisible and the user presses
   `Ctrl+Shift+Space`
+- **AND** the selected Launcher trigger is the default chord
 - **THEN** the system executes `toggle`
 - **THEN** the main window appears and requests focus
 
 #### Scenario: Press the default shortcut from the visible state
 
 - **WHEN** the main window is visible and the user presses `Ctrl+Shift+Space`
+- **AND** the selected Launcher trigger is the default chord
 - **THEN** the system executes `toggle`
 - **THEN** the main window hides and the application continues running
 
@@ -250,8 +248,7 @@ is running.
 
 #### Scenario: Default shortcut registration fails
 
-- **WHEN** the global-shortcut plugin is unavailable or
-  `Ctrl+Shift+Space` cannot be registered
+- **WHEN** the selected Launcher chord cannot register or its selected double tap cannot be observed reliably
 - **THEN** the system reports a diagnosable error containing the binding and
   failure reason
 - **THEN** the system keeps the main window visible and permits ordinary window
@@ -259,13 +256,29 @@ is running.
 - **THEN** the system does not enable close-to-hide or focus-loss hiding that
   could make the window permanently unreachable through configured paths
 
+#### Scenario: Use a customized ordinary Launcher entry
+- **WHEN** a user saves a replacement selected Launcher trigger or that trigger is invoked with its confirmed chord/double-tap semantics
+- **THEN** the current entry uses unified Toggle to show a hidden window or hide a visible one, executing at most once per independent valid trigger
+- **THEN** only the selected trigger remains configured; saving a type switch disables the previous trigger without retaining a hidden fallback
+- **THEN** ordinary Launcher activation neither executes the current Action nor marks a subsequently selected Action as shortcut-sourced
+
+#### Scenario: Use a dedicated Action shortcut
+- **WHEN** a current valid dedicated Action chord is pressed or its double tap is confirmed
+- **THEN** the system activates the complete window with Show before submitting the target to the unified Action invocation boundary
+- **THEN** an already visible window does not Toggle or hide, and failed Show does not report the Action as executed
+
+#### Scenario: Fail to change the recovery entry during execution
+- **WHEN** shortcut persistence, native unregistration, or compensation fails
+- **THEN** window recoverability depends only on the selected trigger being active, not old disk values or an unauthorized double tap
+- **THEN** when recovery cannot be confirmed, the system retains visible repair and exit paths and stops actions that could hide the window without recovery
+
 ### Requirement: A recoverable launcher must hide on close and focus loss
 
-After the default global shortcut is registered successfully, the system MUST prevent a main-window close request from terminating the application and MUST route the request to `hide`.
+While the selected Launcher trigger is confirmed active, the system MUST prevent the main-window close request from terminating the application and execute `hide` through the unified boundary. If recovery cannot be confirmed or shortcut compensation becomes degraded, the system MUST retain visible repair and exit paths and disable close-to-hide, focus-loss hide, and local Cmd+W hide until the recovery entry is confirmed effective again.
 
 #### Scenario: Close a ready launcher window
 
-- **WHEN** the default global shortcut has been registered successfully
+- **WHEN** the selected Launcher trigger is confirmed active
 - **AND** the user requests that the main window close
 - **THEN** the system prevents the default close behavior
 - **THEN** the system hides the main window through the unified action boundary
@@ -273,7 +286,7 @@ After the default global shortcut is registered successfully, the system MUST pr
 
 #### Scenario: Press Cmd+W in a ready macOS launcher
 
-- **WHEN** the default global shortcut has been registered successfully
+- **WHEN** the selected Launcher trigger is confirmed active
 - **AND** the macOS main window is visible and lensX is the foreground
   application
 - **AND** the user presses `Cmd+W`
@@ -298,7 +311,7 @@ After the default global shortcut is registered successfully, the system MUST pr
 #### Scenario: Restore the launcher after Cmd+W
 
 - **WHEN** the macOS main window has been hidden by `Cmd+W`
-- **AND** the user presses the default global shortcut
+- **AND** the user triggers the currently valid ordinary Launcher entry
 - **THEN** the system shows and focuses the main window through the unified
   action boundary
 - **THEN** the existing typed activation event restores focus according to the
@@ -308,7 +321,7 @@ After the default global shortcut is registered successfully, the system MUST pr
 
 - **WHEN** `Cmd+W` semantically hid a Launcher with an equivalent current
   plugin attempt
-- **AND** the user restores Launcher with the default global shortcut
+- **AND** the user restores the Launcher through the currently valid ordinary entry
 - **THEN** the complete native Window is shown before the same Child WebView is
   shown and focused
 - **THEN** the plugin document, Session, model, and Worker are reused without a
@@ -316,8 +329,7 @@ After the default global shortcut is registered successfully, the system MUST pr
 
 #### Scenario: Default recovery shortcut is unavailable on macOS
 
-- **WHEN** the global-shortcut plugin is unavailable or registration of the
-  default global shortcut fails
+- **WHEN** the selected Launcher entry is unavailable because registration or monitoring fails
 - **AND** the user presses `Cmd+W`
 - **THEN** the new application-local `Cmd+W` entry point does not hide the main
   window
@@ -348,15 +360,14 @@ After the default global shortcut is registered successfully, the system MUST pr
 
 #### Scenario: The launcher main window loses focus
 
-- **WHEN** the default global shortcut has been registered successfully
+- **WHEN** the selected Launcher trigger is confirmed active
 - **AND** the visible main window loses focus
 - **THEN** the system hides the complete native main Window and current Child
   WebView through the unified action boundary
-- **THEN** the user can restore the window and same equivalent attempt with the
-  default global shortcut
+- **THEN** the user can restore the complete window and the same equivalent Runtime attempt through the currently valid ordinary Launcher entry
 
 #### Scenario: Route ready close and blur events to recoverable hide
-- **WHEN** the recovery shortcut is registered and the main Window receives a close or focus-loss event
+- **WHEN** the selected Launcher entry is active and the main Window receives a close or focus-loss event
 - **THEN** On macOS, the system MUST provide exactly one application-local `Cmd+W` window-close shortcut entry point.
 - **THEN** When the undecorated main window cannot produce a close event through the native close command, that entry point MUST still route to `hide` through the unified action boundary.
 - **THEN** The system MUST NOT register `Cmd+W` as a system-wide global shortcut.
@@ -365,7 +376,7 @@ After the default global shortcut is registered successfully, the system MUST pr
 
 #### Scenario: Handle unavailable local close routing
 - **WHEN** the Host installs or executes the application-local macOS close shortcut
-- **THEN** The application-local macOS `Cmd+W` entry point MUST be enabled only after the default global shortcut is registered successfully.
+- **THEN** the application-local macOS `Cmd+W` hide entry MUST be enabled only while the current selected Launcher trigger is confirmed active.
 - **THEN** If menu-event installation or routing fails, or if the hide operation fails, the system MUST make failure information available for developer diagnosis, MUST NOT expose native error details to the user, and MUST NOT terminate the application process because of the failure.
 
 #### Scenario: Coordinate Child and native parent hide or restore
@@ -375,32 +386,33 @@ After the default global shortcut is registered successfully, the system MUST pr
 - **THEN** A failed hide MUST NOT leave the Host window visible with only the plugin content blank.
 - **THEN** Restore MUST show and focus the native parent before restoring and focusing the same current Child WebView.
 
+#### Scenario: Retain double-tap configuration while input monitoring is unavailable
+- **WHEN** the selected Launcher is a double tap but input monitoring is unauthorized, invalid, or temporarily unavailable
+- **THEN** that configuration alone does not establish safe recoverable hiding
+- **THEN** the Host shows an already-hidden window and retains visible repair and exit paths; close/blur/local Cmd+W cannot hide it until the selected entry is active again
+- **THEN** no former or default chord is silently registered as a fallback, and monitoring recovery starts with cleared gesture candidates
+
 ### Requirement: Launcher activation must restore input focus
 
-The system MUST focus the launcher input when the main window first renders.
-After Rust completes a subsequent `show` action, it MUST send a typed activation
-event to the main window, and React MUST subscribe to that event and focus the
-same input again. The event payload MUST use stable, serializable fields to
-represent the activation reason and MUST NOT expose native window objects or
-internal Rust types. React MUST release the event listener when the subscriber
-unmounts.
+The system MUST focus launcher input on initial Home/Search and send a stable serializable activation event only to the trusted Host after Show. Focus MUST follow the current target: launcher input for Home/Search, existing valid input for restored Pages, and the target Page for dedicated Actions. Events MUST NOT expose native objects or replace Action provenance. Subscribers MUST remove listeners on unmount.
 
 #### Scenario: Open the application for the first time
 
-- **WHEN** the minimal launcher interface completes its initial render
+- **WHEN** the Launcher first finishes rendering its Home/Search interface
 - **THEN** the launcher input receives focus
 - **THEN** the user can enter text immediately
 
 #### Scenario: Restore the launcher with the shortcut
 
-- **WHEN** the hidden main window is shown by the default global shortcut
+- **WHEN** the hidden main window is shown through the currently valid ordinary Launcher entry
+- **AND** the current presentation is Home/Search
 - **THEN** Rust sends an activation event after showing and requesting focus
   for the window
 - **THEN** React receives the event and focuses the launcher input
 
 #### Scenario: Show the launcher repeatedly
 
-- **WHEN** the main window is hidden and shown multiple times
+- **WHEN** the main window is repeatedly hidden and shown in Home/Search
 - **THEN** the launcher input regains focus after every successful show
 - **THEN** repeated shows do not accumulate duplicate event listeners
 
@@ -409,6 +421,16 @@ unmounts.
 - **WHEN** the React interface that subscribes to launcher activation unmounts
 - **THEN** the system releases that interface's activation-event listener
 - **THEN** later events do not invoke focus logic for the unmounted interface
+
+#### Scenario: Restore input in an existing Page
+- **WHEN** ordinary Launcher activation restores the current Host Page or equivalent Plugin Page
+- **THEN** the Host preserves that Page and its currently valid input without moving focus to the hidden launcher input
+- **THEN** Page restoration creates no new Action invocation and neither clears input nor recreates an equivalent Runtime
+
+#### Scenario: Activate the same Action Page again
+- **WHEN** a dedicated Action shortcut targets the current Page again and its target identity and Runtime remain valid
+- **THEN** the system focuses that Page and delivers a new Action invocation while preserving the Page, input, and business state
+- **THEN** window activation events and Action invocations each follow their own deduplication and lifecycle rules, and focus restoration does not execute a second invocation
 
 ### Requirement: Launcher lifecycle MUST coordinate Host and Child WebView surfaces atomically
 
@@ -469,7 +491,7 @@ On macOS, the system MUST configure lensX as a programmatically activatable acce
 #### Scenario: Hide an accessory Launcher
 
 - **WHEN** the ready macOS Launcher hides through the unified action boundary
-- **THEN** the lensX process and default global shortcut continue running
+- **THEN** the lensX process and currently confirmed effective selected Launcher trigger continue running
 - **THEN** hiding does not create a Dock tile, status item, or other persistent
   clickable entry point
 
@@ -491,7 +513,7 @@ On macOS, the system MUST configure lensX as a programmatically activatable acce
 
 #### Scenario: Keep accessory policy within trusted native ownership
 - **WHEN** the macOS application starts or remains running with its Launcher Window hidden
-- **THEN** While lensX is running, it MUST NOT show a Dock tile or ordinary application menu bar, MUST NOT use the prohibited activation policy that prevents Window creation or activation, and MUST keep the process and default global shortcut available after the Launcher Window is hidden.
+- **THEN** the lensX runtime MUST NOT show a Dock icon or ordinary application menu bar, and MUST NOT use a policy that prohibits creating or activating windows; after hiding the Launcher, the process and currently confirmed effective selected Launcher trigger MUST remain available.
 - **THEN** This policy MUST belong only to the trusted Rust Host.
 - **THEN** React, plugin Runtimes, plugin Host APIs, and public Host APIs MUST NOT receive authority to change the application activation policy or Dock visibility.
 
@@ -508,7 +530,7 @@ The complete native macOS `main` Window MUST participate in all Spaces and MUST 
 
 - **WHEN** the macOS Launcher is hidden
 - **AND** another application is full-screen in the user's current Space
-- **AND** the user presses the default global shortcut
+- **AND** the user triggers the currently valid ordinary Launcher entry
 - **THEN** the pressed event enters the show path through the unified `toggle`
   action
 - **THEN** the complete lensX Window is visible above the full-screen content
@@ -520,7 +542,7 @@ The complete native macOS `main` Window MUST participate in all Spaces and MUST 
 
 - **WHEN** the macOS Launcher is hidden and the user is in an ordinary,
   non-full-screen Space
-- **AND** the user presses the default global shortcut
+- **AND** the user triggers the currently valid ordinary Launcher entry
 - **THEN** the system shows and focuses the Launcher through the same action
   boundary
 - **THEN** cross-Space policy does not change the existing size, position,
@@ -540,8 +562,7 @@ The complete native macOS `main` Window MUST participate in all Spaces and MUST 
 
 - **WHEN** the hidden Launcher contains the same equivalent current plugin
   attempt
-- **AND** the user restores the Launcher from another application's full-screen
-  Space with the default global shortcut
+- **AND** the user restores the Launcher from another application's fullscreen Space through the currently valid ordinary entry
 - **THEN** the system shows and focuses the complete native parent before
   restoring the same Child WebView presentation
 - **THEN** Host chrome and plugin content are visible together in the same
@@ -565,9 +586,14 @@ The complete native macOS `main` Window MUST participate in all Spaces and MUST 
 
 #### Scenario: Restore through the native action boundary in the active Space
 - **WHEN** the hidden launcher is activated while another application occupies the current full-screen Space
-- **THEN** When the Launcher is hidden and the user presses the default global shortcut while another application occupies the current full-screen Space, the system MUST use the unified `toggle`/`show` action boundary to activate the accessory application, restore and show the complete native Window, request keyboard focus, and then send the Host activation event.
+- **THEN** when another application occupies the current fullscreen Space and the user restores the hidden Launcher through its currently valid ordinary entry, the system MUST use the unified `toggle`/`show` boundary to activate the accessory application, restore and show the complete native window, request keyboard focus, and then send the Host window-activation event.
 - **THEN** The Launcher MUST appear above the full-screen content in the user's current full-screen Space.
 - **THEN** The system MUST NOT switch the user back to the Launcher's previous ordinary Space or exit, minimize, or otherwise change the foreground application's full-screen state.
+
+#### Scenario: Execute a dedicated Action entry from a fullscreen Space
+- **WHEN** a user triggers a valid dedicated Action shortcut in another application's fullscreen Space
+- **THEN** the system uses unified Show to display the complete Launcher in the current Space and execute the target Action
+- **THEN** it does not exit, minimize, or switch the other application's fullscreen state; repeated activation of the same Page preserves the existing Runtime and input
 
 ### Requirement: Accessory Launcher MUST retain application-local close and quit shortcuts
 
@@ -580,7 +606,7 @@ When the macOS accessory policy removes the ordinary application menu bar, the s
 - **AND** the user presses `Cmd+W`
 - **THEN** exactly one application-local entry point hides the complete Launcher
   through the unified Hide action
-- **THEN** the process and default recovery shortcut continue running
+- **THEN** the process and currently confirmed effective selected Launcher trigger continue running
 
 #### Scenario: Press Cmd+Q without a visible application menu bar
 
@@ -600,7 +626,7 @@ When the macOS accessory policy removes the ordinary application menu bar, the s
 
 #### Scenario: Recovery shortcut registration fails
 
-- **WHEN** the default lensX global recovery shortcut cannot be registered
+- **WHEN** the selected Launcher entry is unavailable or effective recovery can no longer be confirmed
 - **THEN** the system does not enable application-local `Cmd+W` or focus-loss
   hiding that would hide the Launcher
 - **THEN** the visible Window retains an exit path and the system does not leave
@@ -705,8 +731,7 @@ Launcher size, constraint, and resizable configuration MUST preserve the current
 
 #### Scenario: The main window genuinely loses focus
 
-- **WHEN** the main Window genuinely loses focus and the default recovery
-  shortcut is ready
+- **WHEN** the main window truly loses focus and the current selected Launcher trigger is confirmed active
 - **THEN** the system continues to hide the complete main Window and current
   Child WebView through the existing unified boundary
 - **THEN** configuration focus preservation neither disables focus-loss hiding
@@ -795,7 +820,7 @@ On macOS, the foreground lensX Accessory Launcher MUST use a native editing disp
 
 - **WHEN** the user presses `Cmd+W/Q` while lensX is foreground, or uses editing, close, and quit shortcuts in another foreground application
 - **THEN** the former retain single Hide/Quit execution and the corresponding cleanup, while lensX does not consume the latter
-- **THEN** the default global activation shortcut, recovery entry point, and other non-editing Window behavior retain their existing contracts
+- **THEN** the currently valid ordinary Launcher entry, selected Launcher trigger, and other non-editing window behavior preserve their respective contracts; ordinary editing combinations cancel modifier double-tap candidates without consuming the original event
 
 #### Scenario: Standard command coverage does not become a per-key or per-plugin patch
 
@@ -841,7 +866,12 @@ On macOS, the foreground lensX Accessory Launcher MUST use a native editing disp
 
 #### Scenario: Preserve accessory activation and local lifecycle shortcuts
 - **WHEN** editing dispatch runs while lensX or another application owns foreground focus
-- **THEN** The system MUST preserve Accessory policy, the absence of a Dock tile and ordinary visible application menu bar, the default global activation shortcut, and the existing Window lifecycle.
+- **THEN** the system MUST preserve Accessory policy, the absence of a Dock icon and ordinary application menu bar, current valid ordinary activation and recovery entries, and existing window lifecycle behavior.
 - **THEN** `Cmd+W/Q` MUST continue to execute recoverable Hide and complete Quit respectively once, only within foreground lensX.
 - **THEN** When another application is foreground, lensX MUST NOT intercept that application's editing, close, or quit commands.
 - **THEN** Repairing the standard editing chain MUST NOT change unrelated non-editing behavior.
+
+#### Scenario: Use standard editing commands during double-tap confirmation
+- **WHEN** a standard editing combination occurs during a modifier double-tap candidate or its 300ms confirmation period
+- **THEN** the system cancels the candidate and the original event continues to the system or current valid input in the foreground application
+- **THEN** it does not activate lensX, execute an extra edit, retain a delayed gesture, or synthesize or replay keyboard events

@@ -1,4 +1,9 @@
-import type { PluginRuntimeContext, PluginSdkClient, PluginSdkTransport } from '@lensx/plugin-sdk';
+import type {
+  CreatePluginSdkOptions,
+  PluginRuntimeContext,
+  PluginSdkClient,
+  PluginSdkTransport,
+} from '@lensx/plugin-sdk';
 import { createPluginSdk } from '@lensx/plugin-sdk';
 
 export type FrameworkNeutralRuntimeState =
@@ -13,12 +18,14 @@ export interface FrameworkNeutralRuntimeController {
 
 export interface FrameworkNeutralRuntimeOptions {
   readonly createTransport: () => PluginSdkTransport;
+  readonly onShortcutActivated?: CreatePluginSdkOptions['onShortcutActivated'];
   readonly render: (state: FrameworkNeutralRuntimeState) => void;
 }
 
 export const createFrameworkNeutralRuntime = ({
   createTransport,
   render,
+  onShortcutActivated,
 }: FrameworkNeutralRuntimeOptions): FrameworkNeutralRuntimeController => {
   let attempt = 0;
   let client: PluginSdkClient | undefined;
@@ -44,7 +51,7 @@ export const createFrameworkNeutralRuntime = ({
     if (disposed || currentAttempt !== attempt) return;
 
     render({ kind: 'loading' });
-    const currentClient = createPluginSdk({ transport: createTransport() });
+    const currentClient = createPluginSdk({ transport: createTransport(), onShortcutActivated });
     client = currentClient;
     unsubscribeState = currentClient.subscribeState((state) => {
       if (state === 'disconnected' && !disposed && currentAttempt === attempt) {

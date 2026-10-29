@@ -57,7 +57,7 @@ Plugin
 
 ## 已交付的公共契约与静态 Manifest
 
-lensX 已交付可发布的 `@lensx/plugin-contract@0.3.0` workspace package。根 export 提供
+lensX 已交付可发布的 `@lensx/plugin-contract@0.4.0` workspace package。根 export 提供
 Manifest/Host API 版本、生成输入类型、规范化值、稳定诊断、catalog 与纯 validator。Manifest
 Schema 入口是 `@lensx/plugin-contract/schema` 与
 `@lensx/plugin-contract/manifest.schema.json`；Host API Schema 入口是
@@ -141,7 +141,7 @@ Host 私有进程内 Runtime Session 与公共语义契约已经交付。
 
 ## 已交付的公共 Host API 语义契约
 
-`@lensx/plugin-contract` 现在持有 Host API protocol `0.3.0`：闭集 Draft 2020-12 Schema、
+`@lensx/plugin-contract` 现在持有 Host API protocol `0.4.0`：闭集 Draft 2020-12 Schema、
 生成的 TypeScript 输入、深度冻结的规范值、不可变 catalog，以及接受 `unknown` 的纯 validator。
 TypeScript 与测试专用 Rust consumer 读取同一批 package-owned valid/invalid fixtures，并对
 validity 及按 JSON Pointer 排序的诊断 `code`/`path` 达成一致。
@@ -152,6 +152,7 @@ catalog 精确包含以下方法：
 | --- | --- |
 | Runtime | `runtime.get_context` |
 | 当前 Page 与 Action | `ui.close`、`actions.open` |
+| 当前 Action activation | `actions.get_activation`、`actions.subscribe_activations` |
 | 插件私有 storage | `storage.get`、`storage.set`、`storage.delete`、`storage.list`、`storage.get_quota` |
 | 受控 HTTPS 传输 | `http.request` |
 
@@ -161,6 +162,9 @@ Context，而不是 patch。capability 表示当前 Host 支持与实现可用�
 Manifest 数据、path、permission/grant fact 与 executor 都会作为作者可控 Context/method 字段被拒绝。
 普通浏览器 Worker、network、远程资源、Blob/Data、WASM 和 origin storage 不是 Host API method，
 不进入 Context。独立的原生 `http.request` 只在其受控 provider 可用时声明，不改变浏览器网络策略。
+两个 Action activation 方法仅在 Session-owned provider 可用时声明。`actions.activated` 携带独立的
+`PluginActionActivation`，只包含插件局部 `actionId`、在 attempt 内递增的 `invocationId` 和
+`normal | shortcut` source；activation 不向 Runtime Context 添加字段，也不暴露原生键位。
 
 Host API error 使用稳定闭集 code 与有界安全英文 message，并与 SDK 的 `disconnected`、`disposed`、
 `transport_failure` 等 lifecycle error 保持可判别。package、Manifest protocol、Host API protocol、SDK
@@ -648,23 +652,24 @@ hide/restore 保留该 attempt；真实 close、replacement、reload、disable�
 
 ## 已交付的公共 Plugin SDK 与 WebView Transport
 
-lensX 已交付框架无关的 `@lensx/plugin-sdk@0.4.0` workspace package。package 具有公共 root 与
+lensX 已交付框架无关的 `@lensx/plugin-sdk@0.5.0` workspace package。package 具有公共 root 与
 `@lensx/plugin-sdk/webview` 入口，Runtime 只依赖 `@lensx/plugin-contract`。未声明的 deep import 不受支持；其公共声明
 不要求 React、Semi Design、Tauri、DOM 全局、Node filesystem 类型或 Host 私有模块。
 
-根入口公开 `createPluginSdk`、`PluginSdkError`、SDK lifecycle、Runtime context、取消和
+根入口公开 `createPluginSdk`、`PluginSdkError`、SDK lifecycle、Runtime context、Action activation、取消和
 transport 类型，以及下列独立版本事实：
 
 | Export | 含义 |
 | --- | --- |
-| `PLUGIN_SDK_VERSION` | SDK package 与公共 API 版本，当前为 `0.4.0`。 |
-| `PLUGIN_SDK_SUPPORTED_HOST_API_RANGE` | 支持的 Host API 半开区间，当前为 `>=0.2.0 <0.4.0`。 |
+| `PLUGIN_SDK_VERSION` | SDK package 与公共 API 版本，当前为 `0.5.0`。 |
+| `PLUGIN_SDK_SUPPORTED_HOST_API_RANGE` | 支持的 Host API 半开区间，当前为 `>=0.4.0 <0.5.0`。 |
 | `PLUGIN_HOST_API_VERSION` | SDK 不会重新导出；当前 Host API 版本仍由 `@lensx/plugin-contract` 持有。 |
 
 `createPluginSdk({ transport })` 返回相互隔离的 client，而不是全局 singleton。client 依次使用
 `idle`、`initializing`、`ready`、`disconnected` 和 `disposed` 状态。并发初始化共享同一次连接
-尝试；被取消、超时或失败的尝试回到 `idle`，允许显式重试。断开对当前 client 是终止状态，不会
-自动重连。销毁是幂等的，会取消 SDK 管理的 pending operation、移除 listener，并且最多销毁一次
+尝试；尝试开启 activation stream 之前，被取消、超时或失败的初始化回到 `idle`，允许显式重试。
+一旦尝试开流，初始化失败就终止当前 client 和 transport；显式重试需要新的 Runtime attempt 与
+SDK client。断开是终止状态，不会自动重连。销毁是幂等的，会取消 SDK 管理的 pending operation、移除 listener，并且最多销毁一次
 transport。
 
 进入 `ready` 前，SDK 通过 Contract validator 校验、复制并冻结共享 `PluginRuntimeContext`。该 context 包含兼容的
@@ -692,9 +697,17 @@ JSON-RPC envelope。公共 `PluginSdkClient` 特意不提供任意字符串 Host
 
 `PluginSdkClient.request()` 只接受 Contract `HostApiRequest` 判别联合；进入 transport 前完成校验与
 冻结，并从 method 推导配对 result payload 类型。client 会拒绝 `ready` 前调用，也会拒绝当前
-capability snapshot 未包含的 method。`subscribe()` 只接受 `runtime.context_changed`；完整校验并冻结的
-replacement 会先成为 `client.context`，再通知 subscriber。Contract-valid Host API error 与 SDK 的
-cancellation、timeout、disconnect、dispose、invalid argument、transport failure 保持可判别。
+capability snapshot 未包含的 method。`subscribe()` 接受当前 Contract 事件
+`runtime.context_changed` 和 `actions.activated`；完整校验并冻结的 Context replacement 会先成为
+`client.context`，再通知 Context subscriber。Contract-valid Host API error 与 SDK 的 cancellation、
+timeout、disconnect、dispose、invalid argument、transport failure 保持可判别。
+
+Context 声明 `actions.subscribe_activations` 时，初始化先安装内部事件接收，再请求订阅，以 invocation
+ID 合并初始批次和先到事件，最多暂存 64 个不同调用，然后进入 ready 并更新只读 `client.activation`。
+没有业务回调也会消费该通道。可选工厂参数 `onShortcutActivated` 只在 ready 后对 shortcut 调用执行；
+normal 调用仅更新 activation。回调异常被隔离，业务并发仍由插件拥有。取消公共事件订阅不会停止内部通道。
+参见 [Action activation 参考](../plugin-development/host-api.md#action-激活) 与
+[Child WebView 生命周期](plugin-child-webview-runtime.md#action-调用与快捷键激活)。
 
 `createPluginWebviewTransport()` 不接受 trust 配置。它只发现 Host 安装的 current bridge，并校验封闭的
 `0.2.0` carrier contract。bridge 使用精确 ready/request/response/event/cancel/disconnect frame 与
@@ -705,7 +718,8 @@ nonce policy、native label 或 deep-import path。
 Host 最多消费 ready lease 一次。私有 adapter 向窄 handler 注入不可变 Session identity 与 Host-owned
 cancellation signal，校验所有 result/error/event，支持并发乱序 settle，并让 Session/Page replacement
 与 dispose 收敛到幂等 cleanup。Production 会为每个 current ready Session 创建一个 Host 私有 Dispatcher
-binding。该 binding 实现 `runtime.get_context`、`ui.close`、`actions.open` 与五个 `storage.*` method；
+binding。该 binding 在相应 provider 可用时实现 `runtime.get_context`、`ui.close`、`actions.open`、
+两个 Action activation 方法与五个 `storage.*` method；受控 HTTP 保留在原生路由。
 已删除的 clipboard 与未知 method fail closed。私有 post-response outcome 让 adapter
 先校验并发送成功的 `ui.close` result，再执行匹配目标的关闭 effect。该 outcome 永不跨 wire，也不改变
 公共 SDK transport。
@@ -766,17 +780,24 @@ Production App 使用当前 locale/theme 状态、App Navigation Service、Launc
 与 Runtime currentness 组合出 Session-scoped Dispatcher。认证 lease 是 plugin/Page identity 的唯一来源；
 request 不能选择 owner、Page、provider、executor、route、Tauri command 或其他 Host object。
 
-`runtime.get_context` 返回 Host API `0.3.0`、当前 `en-US | zh-CN` locale、当前 `light | dark` theme，
+`runtime.get_context` 返回 Host API `0.4.0`、当前 `en-US | zh-CN` locale、当前 `light | dark` theme，
 以及排序并冻结的 `actions.open`、`runtime.get_context`、`ui.close`，加上存储可用时的五个
-`storage.*` method 和原生 HTTP provider 可用时的 `http.request`。只有当前 locale、
+`storage.*` method、原生 HTTP provider 可用时的 `http.request`，以及当前 Session activation provider
+可用时的 `actions.get_activation` / `actions.subscribe_activations`。只有当前 locale、
 theme 或 capability snapshot 实际变化时才发送完整 `runtime.context_changed` replacement。identity、
-Registration revision、Runtime attempt、source、Manifest 数据、path 与 Host lifecycle state
-继续保持私有。
+Registration revision、Runtime attempt、原生快捷键绑定、Manifest 数据、path 与 Host lifecycle state
+继续保持私有。语义调用来源只通过独立 Activation 契约公开。
 
 `ui.close` 只接受 `{}` 并从 Session 推导目标。Host 先发送并终结 `{ accepted: true }`，再恰好执行一次
 match-and-close effect，因此 stale Session 无法关闭 replacement Page。`actions.open` 只接受 plugin-local
-Action ID，由 Host 推导 `<plugin_id>.<local_action_id>`，并通过统一 Launcher Dispatcher 重新查询。
-core、跨插件、缺失、禁用、不兼容或已移除的 Action 都会失败关闭，不暴露 Registry 或 executor。
+Action ID，由 Host 推导 `<plugin_id>.<local_action_id>`，以新的 normal 来源通过统一 Launcher Dispatcher
+重新查询，并在排队准入后再次检查当前性。core、跨插件、缺失、禁用、不兼容或已移除的 Action 都会
+失败关闭，不暴露 Registry 或 executor。
+
+Activation 查询只接受 `{}`，使用当前 Session 与 Page attempt。provider 开启单一流，缓存最多 32 个
+初始调用供幂等订阅重试，并独立发送后续调用。原生 presentation attempt 匹配阻止陈旧 Session 的
+交付认领替代 Page 通道。同页调用保留现有 Runtime 与输入；关闭、替换、初始化失败或重试会撤销旧通道。
+插件只收到语义 activation，不获得输入监听或快捷键配置权限。
 
 storage 调用只使用认证 Session lease 中冻结的 identity。Dispatcher 把该 identity 注入 Host 私有 desktop
 provider，绝不接受插件选择的 namespace、path、plugin key、command 或 executor。确认 namespace 损坏或
@@ -791,8 +812,9 @@ HTTP 在 source-bound native RPC 边界接纳，并通过受控 Rust provider �
 和 Translation 传输。
 
 运行 `pnpm run gate -- plugin-host-api-dispatcher` 可执行 Dispatcher、Navigation、Action、Runtime、
-MessageChannel、公共 tarball、export、dependency 与 workspace boundary 聚焦门禁。该能力不增加公共 export、
-wire frame 或 SDK dependency。持续 Runtime resource isolation、项目模板、CLI 与开发模式仍是独立能力。
+MessageChannel、公共 tarball、export、dependency 与 workspace boundary 聚焦门禁。Dispatcher 仍为
+Host-private；公共 activation 类型、事件与回调属于 Contract 和 SDK。`pnpm run gate -- launcher-shortcuts`
+验证快捷键与 activation 的组合边界。持续 Runtime resource isolation、项目模板、CLI 与开发模式仍是独立能力。
 
 ## 已删除的 Host Permission 与 Native Clipboard Authority
 
@@ -804,8 +826,9 @@ composition 中。旧 record 与 wire field fail closed。
 
 可信安装与 replacement confirmation 改为说明开放隔离 Web Runtime 的信任决定。lensX 隔离 Host 与
 其他插件 authority，但不审查或逐项授权普通 Worker、network、远程资源、Blob/Data、WASM 或浏览器
-origin storage 行为。未公开的设备/native capability 仍不可用。Host API `0.3.0` 只增加显式受控
-HTTP 边界，不恢复 grant、clipboard、任意命令、本地网络 authority 或浏览器行为代理。
+origin storage 行为。未公开的设备/native capability 仍不可用。Host API `0.3.0` 引入了显式受控
+HTTP 边界，没有恢复 grant、clipboard、任意命令、本地网络 authority 或浏览器行为代理。
+Host API `0.4.0` 增加的是语义 Action activation，不是插件输入监听或快捷键配置权限。
 `pnpm run gate -- open-isolated-plugin-runtime` 提供负向 authority 扫描与组合 Runtime 验证。
 
 ## 已交付的插件 Scoped Storage
@@ -1025,8 +1048,9 @@ production 只开放 Host 私有 Dispatcher method。
 
 ## Host API
 
-已交付的公共语义契约定义了上文九个 method ID、exact params/result、
-`runtime.context_changed`、`PluginRuntimeContext`、error 与 capability/version 规则。
+已交付的公共语义契约定义了上文十一个 method ID、exact params/result、
+`runtime.context_changed`、`actions.activated`、`PluginRuntimeContext`、`PluginActionActivation`、
+error 与 capability/version 规则。
 Contract 校验本身不会发送或执行请求。公共 SDK client 现在提供一个 Contract-closed typed request
 operation，而不是 raw string method 或具体副作用 provider。
 
@@ -1038,7 +1062,7 @@ flowchart TD
   S --> R[Source-bound native RPC 与当前 Session]
   R -->|http.request| H[受控 Rust HTTP provider]
   R -->|其他方法| D[Session-scoped Dispatcher]
-  D --> B[Context / Page close / plugin Action / scoped storage]
+  D --> B[Context / Page close / plugin Action / activation / scoped storage]
 ```
 
 Bridge 必须校验真实消息来源和受限制的 origin。公共 Host API 仅通过明确的受控 HTTP 方法增加

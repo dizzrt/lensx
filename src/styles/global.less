@@ -208,6 +208,16 @@ body {
   font-weight: 600;
 }
 
+.launcher-feedback {
+  flex-shrink: 0;
+}
+
+.launcher-body[data-page-layout] > .launcher-feedback {
+  padding: 8px 16px;
+  border-top: 1px solid var(--semi-color-border);
+  background: var(--semi-color-bg-1);
+}
+
 .launcher-content {
   overflow: hidden;
 }
@@ -476,6 +486,94 @@ body {
 }
 
 .settings-save-status {
+  min-height: 20px;
+}
+
+.shortcut-bindings {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shortcut-binding {
+  padding: 10px 0;
+}
+
+.shortcut-settings-group {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--semi-color-border);
+}
+
+.shortcut-action-columns,
+.shortcut-launcher-columns {
+  display: grid;
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.shortcut-action-columns {
+  grid-template-columns: minmax(96px, 1fr) minmax(100px, 1fr) minmax(110px, 1.2fr) 28px;
+}
+
+.shortcut-launcher-columns {
+  grid-template-columns: minmax(90px, 0.8fr) minmax(110px, 1fr) minmax(120px, 1.2fr);
+  align-items: center;
+}
+
+.shortcut-target {
+  overflow-wrap: anywhere;
+}
+
+.shortcut-type-select,
+.shortcut-action-select,
+.shortcut-key-cell,
+.shortcut-key-button,
+.shortcut-recorder {
+  width: 100%;
+  min-width: 0;
+}
+
+.shortcut-key-button,
+.shortcut-recorder {
+  font-variant-numeric: tabular-nums;
+}
+
+.shortcut-key-button .semi-button-content {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shortcut-recorder input {
+  cursor: pointer;
+}
+
+.shortcut-key-status {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.shortcut-delete-button {
+  width: 28px;
+  min-width: 28px;
+  padding-inline: 0;
+  font-size: 20px;
+}
+
+.shortcut-inline-edit {
+  margin-top: 8px;
+}
+
+.shortcut-modifier-select {
+  flex: none;
+  width: 100px;
+}
+
+.shortcut-feedback {
   min-height: 20px;
 }
 

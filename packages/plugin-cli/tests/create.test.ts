@@ -89,7 +89,7 @@ describe('create plugin project', () => {
     expect(validation.status).toBe('valid');
     if (validation.status !== 'valid') throw new TypeError('Generated Manifest should validate.');
     expect(
-      normalizePluginManifest(validation, { lensx: '0.1.0', host_api: '0.2.0' }).manifest.contributes.pages[0],
+      normalizePluginManifest(validation, { lensx: '0.1.0', host_api: '0.4.0' }).manifest.contributes.pages[0],
     ).toMatchObject({ presentation: { initial_size: { width: 650, height: 600 }, resizable: false } });
     expect(manifest.contributes.pages[0]).not.toHaveProperty('presentation');
     expect(await readdir(target)).toEqual(expect.arrayContaining(['manifest.json', 'package.json', 'src', 'tests']));

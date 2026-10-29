@@ -1,0 +1,332 @@
+{
+  "valid": [
+    {
+      "input": {
+        "version": 1,
+        "revision": 7,
+        "launcher": {
+          "chord": {
+            "kind": "chord",
+            "modifiers": ["ctrl", "shift"],
+            "key": "KeyK"
+          },
+          "double_tap": null
+        },
+        "actions": {
+          "com.test.open": {
+            "kind": "chord",
+            "modifiers": ["ctrl", "shift"],
+            "key": "KeyL"
+          }
+        }
+      },
+      "configuration": {
+        "version": 2,
+        "revision": 7,
+        "launcher": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyK"
+        },
+        "actions": {
+          "com.test.open": {
+            "kind": "chord",
+            "modifiers": ["ctrl", "shift"],
+            "key": "KeyL"
+          }
+        }
+      },
+      "legacy": true
+    },
+    {
+      "input": {
+        "version": 1,
+        "revision": 7,
+        "launcher": {
+          "chord": {
+            "kind": "chord",
+            "modifiers": ["ctrl", "shift"],
+            "key": "KeyK"
+          },
+          "double_tap": {
+            "kind": "modifier_double_tap",
+            "modifier": "cmd"
+          }
+        },
+        "actions": {
+          "com.test.open": {
+            "kind": "chord",
+            "modifiers": ["ctrl", "shift"],
+            "key": "KeyL"
+          }
+        }
+      },
+      "configuration": {
+        "version": 2,
+        "revision": 7,
+        "launcher": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyK"
+        },
+        "actions": {
+          "com.test.open": {
+            "kind": "chord",
+            "modifiers": ["ctrl", "shift"],
+            "key": "KeyL"
+          }
+        }
+      },
+      "legacy": true,
+      "launcher_migration": {
+        "chord": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyK"
+        },
+        "double_tap": {
+          "kind": "modifier_double_tap",
+          "modifier": "cmd"
+        }
+      }
+    },
+    {
+      "input": {
+        "version": 2,
+        "revision": 7,
+        "launcher": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyK"
+        },
+        "actions": {
+          "com.test.open": {
+            "kind": "chord",
+            "modifiers": ["ctrl", "shift"],
+            "key": "KeyL"
+          }
+        }
+      },
+      "configuration": {
+        "version": 2,
+        "revision": 7,
+        "launcher": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyK"
+        },
+        "actions": {
+          "com.test.open": {
+            "kind": "chord",
+            "modifiers": ["ctrl", "shift"],
+            "key": "KeyL"
+          }
+        }
+      },
+      "legacy": false
+    },
+    {
+      "input": {
+        "version": 2,
+        "revision": 7,
+        "launcher": {
+          "kind": "modifier_double_tap",
+          "modifier": "cmd"
+        },
+        "actions": {
+          "com.test.open": {
+            "kind": "chord",
+            "modifiers": ["ctrl", "shift"],
+            "key": "KeyL"
+          }
+        }
+      },
+      "configuration": {
+        "version": 2,
+        "revision": 7,
+        "launcher": {
+          "kind": "modifier_double_tap",
+          "modifier": "cmd"
+        },
+        "actions": {
+          "com.test.open": {
+            "kind": "chord",
+            "modifiers": ["ctrl", "shift"],
+            "key": "KeyL"
+          }
+        }
+      },
+      "legacy": false
+    }
+  ],
+  "invalid": [
+    {
+      "version": 1,
+      "revision": 7,
+      "launcher": {
+        "chord": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyK"
+        },
+        "double_tap": null
+      },
+      "actions": {
+        "com.test.open": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyL"
+        }
+      },
+      "extra": true
+    },
+    {
+      "version": 3,
+      "revision": 7,
+      "launcher": {
+        "kind": "chord",
+        "modifiers": ["ctrl", "shift"],
+        "key": "KeyK"
+      },
+      "actions": {
+        "com.test.open": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyL"
+        }
+      }
+    },
+    {
+      "version": 1,
+      "revision": 7,
+      "launcher": {
+        "double_tap": {
+          "kind": "modifier_double_tap",
+          "modifier": "cmd"
+        }
+      },
+      "actions": {
+        "com.test.open": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyL"
+        }
+      }
+    },
+    {
+      "version": 1,
+      "revision": 7,
+      "launcher": {
+        "chord": {
+          "kind": "modifier_double_tap",
+          "modifier": "cmd"
+        },
+        "double_tap": null
+      },
+      "actions": {
+        "com.test.open": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyL"
+        }
+      }
+    },
+    {
+      "version": 1,
+      "revision": 7,
+      "launcher": {
+        "chord": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyK"
+        },
+        "double_tap": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyK"
+        }
+      },
+      "actions": {
+        "com.test.open": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyL"
+        }
+      }
+    },
+    {
+      "version": 1,
+      "revision": 7,
+      "launcher": {
+        "chord": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyK"
+        },
+        "double_tap": {
+          "kind": "modifier_double_tap",
+          "modifier": "cmd"
+        }
+      },
+      "actions": {
+        "com.test.open": {
+          "kind": "modifier_double_tap",
+          "modifier": "cmd"
+        }
+      }
+    },
+    {
+      "version": 1,
+      "revision": 7,
+      "launcher": {
+        "chord": {
+          "kind": "chord",
+          "modifiers": ["cmd"],
+          "key": "KeyQ"
+        },
+        "double_tap": null
+      },
+      "actions": {
+        "com.test.open": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyL"
+        }
+      }
+    },
+    {
+      "version": 2,
+      "revision": 7,
+      "launcher": null,
+      "actions": {
+        "com.test.open": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyL"
+        }
+      }
+    },
+    {
+      "version": 2,
+      "revision": 7,
+      "launcher": {
+        "chord": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyK"
+        },
+        "double_tap": {
+          "kind": "modifier_double_tap",
+          "modifier": "cmd"
+        }
+      },
+      "actions": {
+        "com.test.open": {
+          "kind": "chord",
+          "modifiers": ["ctrl", "shift"],
+          "key": "KeyL"
+        }
+      }
+    }
+  ]
+}

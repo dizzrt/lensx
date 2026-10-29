@@ -9,7 +9,7 @@ describe('Translation public Manifest', () => {
     const result = validatePluginManifest(manifest);
     expect(result.status).toBe('valid');
     if (result.status !== 'valid') throw new Error('Invalid Manifest');
-    const normalized = normalizePluginManifest(result, { lensx: '0.1.0', host_api: '0.3.0' });
+    const normalized = normalizePluginManifest(result, { lensx: '0.1.0', host_api: '0.4.0' });
     expect(normalized.status).toBe('compatible');
     expect(normalized.manifest.plugin_id).toBe('dev.lensx.translation');
     expect(normalized.manifest.display.name).toEqual({ 'en-US': 'Translation', 'zh-CN': '翻译' });
@@ -24,7 +24,7 @@ describe('Translation public Manifest', () => {
       target: { kind: 'page', page_id: 'main' },
       title: manifest.display.name,
     });
-    expect(normalizePluginManifest(result, { lensx: '0.1.0', host_api: '0.4.0' }).status).toBe('incompatible');
+    expect(normalizePluginManifest(result, { lensx: '0.1.0', host_api: '0.5.0' }).status).toBe('incompatible');
   });
   test.each(['id', 'locale', 'protocol', 'page'])('rejects invalid %s fixtures', (kind) => {
     const invalid = structuredClone(manifest);

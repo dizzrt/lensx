@@ -22,7 +22,7 @@ afterEach(() => {
 });
 const setup = async () => {
   const transport = new FakePluginSdkTransport();
-  transport.connectImplementation = async () => ({ ...validRuntimeContext(['http.request']), hostApiVersion: '0.3.0' });
+  transport.connectImplementation = async () => ({ ...validRuntimeContext(['http.request']), hostApiVersion: '0.4.0' });
   const client = createPluginSdk({ transport });
   await client.initialize();
   return { client, transport };
@@ -47,7 +47,7 @@ describe('typed HTTP through the existing SDK', () => {
   test('works on an older supported Host without pretending HTTP is available', async () => {
     const transport = new FakePluginSdkTransport();
     const client = createPluginSdk({ transport });
-    await expect(client.initialize()).resolves.toMatchObject({ hostApiVersion: '0.2.0' });
+    await expect(client.initialize()).resolves.toMatchObject({ hostApiVersion: '0.4.0' });
     await expect(client.request(request)).rejects.toMatchObject({ code: 'invalid_argument' });
     expect(transport.requestSignals).toHaveLength(0);
     await client.dispose();
@@ -87,7 +87,7 @@ describe('typed HTTP through the existing SDK', () => {
   test('drops HTTP availability on full Context replacement', async () => {
     const { client, transport } = await setup();
     client.subscribe('runtime.context_changed', () => undefined);
-    transport.emit('runtime.context_changed', { ...validRuntimeContext([]), hostApiVersion: '0.3.0' });
+    transport.emit('runtime.context_changed', { ...validRuntimeContext([]), hostApiVersion: '0.4.0' });
     await expect(client.request(request)).rejects.toMatchObject({ code: 'invalid_argument' });
     expect(transport.requestSignals).toHaveLength(0);
     await client.dispose();

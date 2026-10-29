@@ -38,14 +38,14 @@ lensX 是一款轻量级桌面效率启动器，其设计重点包括：
 - macOS-only frame-aware WKWebView navigation policy，提供完全分离的 Host/descendant document
   allowlist、idle 的进程内 target lease、main-only Tauri initialization，以及独立的
   new-window/download deny；
-- 唯一 current 隔离 Plugin Page iframe，以及通过 single-use nonce 与专用 MessagePort 认证真实
-  window 和精确 origin 的 Host 私有进程内 Runtime Session；
+- 唯一 current 原生 Plugin Child WebView，以及通过绑定真实原生来源的 bridge ingress 认证的
+  Host 私有进程内 Runtime Session；
 - 统一的 Host-owned Page Registry 与框架无关导航 service，用于受保护 Host Page 和声明式
   Plugin Page descriptor；
 - 通过窄化 Rust/Tauri 边界持久化、并按当前 registry snapshot 解析的版本化最近使用与已固定
   Action 集合；
-- 单窗口 Host 设置界面，包含持久化主题与语言偏好，以及刻意保持为空的插件部分；
-- 公开的 `@lensx/plugin-contract@0.1.0` workspace package，提供受限的 Schema、类型、
+- 单窗口 Host 设置界面，包含持久化主题与语言偏好，本地插件管理和可配置快捷键；
+- 公开的 `@lensx/plugin-contract@0.4.0` workspace package，提供受限的 Schema、类型、
   校验和规范化 exports，并通过真实 package tarball 验证；
 - Rstest、Testing Library、TypeScript 检查、Biome 和 Cargo 验证命令；
 - 用于能力和架构变更的 OpenSpec 配置。
@@ -155,19 +155,20 @@ Rust 通过单一动作边界拥有全部 launcher 原生窗口操作：
 动作边界通过 Tauri adapter 解析 `main` 窗口，并在失败时同时报告请求的动作和失败的原生操作阶段。
 原生快捷键和窗口事件 handler 通过该边界路由动作，不会各自直接调用窗口 API。
 
-官方 Tauri global-shortcut 插件注册唯一的默认 `Ctrl+Shift+Space` 绑定。只有按下事件会路由到
-`toggle`；释放事件和未知快捷键不执行动作。生命周期 setup 先安装动作状态，再注册快捷键，最后才
-为主窗口安装 listener。注册成功后，关闭请求会被阻止并路由到 `hide`，失焦也会路由到 `hide`。
-如果快捷键注册失败，应用会报告包含绑定的错误，并保持关闭转隐藏和失焦隐藏为禁用状态，使可见窗口
-保留普通关闭行为，而不会进入无法恢复的隐藏状态。
+官方 Tauri global-shortcut 插件注册已确认的配置。单一唤出 trigger 默认为 `Ctrl+Shift+Space`，
+也可改为修饰键双击。独立 Rust 快捷键服务拥有该入口和 Action 绑定；切换唤出类型会停用旧入口。
+一次物理按压最多产生一次调用。
+普通唤出使用 Toggle；Action 绑定使用 Show 并进入当前共享 Action Dispatcher。
+注册代次隔离陈旧事件。关闭、失焦和本地关闭命令仅在所选唤出 trigger 已确认 active 时允许隐藏。
+恢复失败会保持窗口可见，并保留设置与退出入口。
 
 在 macOS 上，无装饰 launcher 不能依赖默认的“关闭窗口”菜单命令：其原生 `performClose:` selector
-要求窗口具备 closable style，因此不会为这个无边框承载面产生 `CloseRequested`。只有在恢复快捷键
-和原生窗口 listener 都就绪后，Host 才会用应用所有的菜单替换默认应用菜单；该菜单保留标准的应用、
+要求窗口具备 closable style，因此不会为这个无边框承载面产生 `CloseRequested`。只有在快捷键服务
+和原生窗口 listener 初始化完成后，Host 才会用应用所有的菜单替换默认应用菜单；该菜单保留标准的应用、
 编辑、显示、窗口、帮助以及 `Cmd+Q` 退出语义，同时移除所有 predefined Close Window accelerator。
 恰好一个自定义“关闭窗口”项目持有应用内 `Cmd+W` accelerator，其稳定菜单 ID 会进入与原生关闭请求
-和失焦相同的 Rust `Hide` action 边界。它不是全局快捷键，也不会影响其他应用中的 `Cmd+W`。如果恢复
-快捷键或窗口 listener 不可用，Host 不会安装该自定义菜单；如果菜单安装本身失败，Host 会记录
+和失焦相同的 Rust `Hide` action 边界。它不是全局快捷键，也不会影响其他应用中的 `Cmd+W`。如果快捷键服务或窗口 listener
+初始化失败，Host 不会安装该自定义菜单；之后恢复入口的可用性由 Hide 边界检查，Quit 保持独立。如果菜单安装本身失败，Host 会记录
 `hide` action 与 `install_menu` 操作阶段且不会终止进程，已经注册的恢复快捷键和原生生命周期 listener
 仍然可用。
 
@@ -176,8 +177,8 @@ application-local `Cmd+Q` 自定义命令请求现有应用退出路径；后者
 终止 current Child WebView 与 Host 资源。两个路由都会确认 lensX 位于前台，并且都不会进入
 global-shortcut plugin。由于目标 Accessory runtime 不能可靠分发隐藏菜单 key equivalent，Host setup
 会为前台 `Cmd+W/Q` 安装一个幂等的 AppKit local event monitor；它只先消费这两个匹配事件，避免菜单路由
-重复处理，并在应用退出时释放。如果默认恢复快捷键未就绪，菜单图以及 close/focus-loss hide 路径都会保持
-禁用，避免 Accessory 进程进入无法恢复的隐藏状态。
+重复处理，并在应用退出时释放。所选唤出 trigger 未 active 时，close/focus-loss hide 和本地 Hide 路径保持
+禁用，Quit 仍然可用，避免 Accessory 进程进入无法恢复的隐藏状态。
 
 标准编辑使用共享原生 responder 路径。启用 Tauri `unstable` 后，Host `main` WebView
 和插件 WebView 都作为 `WindowChild` 创建。Wry 检查当前原生焦点并委托原事件，其同步
@@ -200,7 +201,7 @@ operation，并在 success event 或独立 Child restore 之前停止相应转�
 载荷格式错误或监听失败时输出诊断，而不破坏首次输入聚焦。每次激活还会使用当前查询和最新 registry
 snapshot 刷新搜索，但不会填充、清除或执行 action。
 
-该生命周期本身不实现查询匹配、结果列表、设置、快捷键自定义、持久化或插件运行时行为。独立的受约束
+该生命周期本身不实现查询匹配、结果列表、设置、快捷键配置存储或插件业务行为。独立的受约束
 surface mode command 只控制同一 `main` 窗口的固定呈现高度。
 
 ## Launcher Action 核心
@@ -313,10 +314,10 @@ Page 标题。Host Page 使用受保护 Host icon token；在 scoped resource re
 同时由 Rust 创建 current native Child WebView sibling。Host 私有 resolver 会交叉检查 Page、
 Registration revision、Resource identity、isolated `entry_url`、route、generation、native source
 与 attempt。closed bridge 和 Session 只会为该 current Child WebView 进入 ready。close、retry、
-invalidation、replacement 与 App teardown 都会撤销它。Manifest `0.4.0` 与 Host API `0.3.0`
+invalidation、replacement 与 App teardown 都会撤销它。Manifest `0.4.0` 与 Host API `0.4.0`
 既不暴露 native Window method，也不暴露 Child WebView identity。
 
-设置在现有 `main` Tauri 窗口中渲染。左侧受控纵向导航只包含“偏好”和“插件”，默认选择“偏好”；
+设置在现有 `main` Tauri 窗口中渲染。左侧受控纵向导航包含“偏好”、“插件”和“快捷键”，默认选择“偏好”；
 右侧内容区只渲染当前部分。解析后的 `lensx.core/settings` 身份会启用 edge-to-edge App Shell modifier：
 主题 token 横边界分隔共享 Header 与 body，纵边界分隔导航与内容，右侧内容在固定 `650×600` Host Page
 presentation 内独立滚动。“偏好”控制受支持的 `light`/`dark` 主题与 `en-US`/`zh-CN` locale；“插件”
@@ -420,3 +421,49 @@ Session state 不持久化，也不改变 Registration 的 `inactive` read model
 - 键盘访问和可见焦点属于一等需求。
 - 跨边界错误必须可诊断，并且能够安全展示或记录。
 - 规划中的行为必须先经过 OpenSpec，才能成为稳定的能力契约。
+
+## 可配置快捷键
+
+Rust 独立拥有 v2 `shortcuts.json`，不与 `AppPreferences` 或集合混写。`launcher` 是单个组合键/
+双击 trigger，不再同时配置两个入口。读取返回已确认配置、
+revision、逐绑定运行状态与有界诊断。写入比较预期 revision，使用一份共享规范化/保留策略校验，
+暂存文件、预注册新增组合、释放旧注册、提交存储，再发布映射。失败执行补偿并核对实际存储和注册；
+恢复能力不确定时进入 degraded 并禁止不可恢复的隐藏。存储结果不确定时，自动目标/布局对账
+不得解除降级；必须由明确保存事务重新确认存储。无效启动文件保留且不执行；仅无效或缺失情形
+尝试默认恢复键。有效自定义恢复键失败时，绝不将已分配给 Action 的默认组合重新用作唤出。
+
+不可用 Action 保留配置和内部占用，但释放原生注册；重新出现时重新核验当前目标并尝试 OS 注册。
+未授权双击可保存但不生效。如果它是唯一唤出入口，Host 会显示已隐藏的窗口并暂停不可恢复的隐藏，
+直到所选入口重新 active；不暗中注册旧组合键或默认键。手势 reset 保留健康的监听，避免普通隐藏
+本身中断恢复入口。组合键身份保存原生物理键代码。Host 提供当前布局标签（含 Command 专用布局语义）；录制同时检查
+当前语义键与物理保留别名。布局变化刷新标签和注册资格，不重写配置。
+共享策略拒绝保留编辑/系统组合与内部重复；注册错误不能枚举其它应用的
+全部快捷键。被动双击不具有 OS 独占预约。
+
+macOS listen-only adapter 只向纯单调时间状态机提供事件事实，不保存字符或修改输入。双击必须
+来自同一物理修饰键，每次按住最多 200 毫秒，两击间隔最多 300 毫秒，再静默确认 300 毫秒。
+第三击、其它键/修饰键、鼠标按键与滚轮会取消，移动鼠标不会。权限丢失、安全输入、睡眠/唤醒、
+配置与录制转换清除旧候选。只在用户明确操作时请求监听权限。恢复观测先采样当前仍按住的物理键/鼠标键；源事件时间戳与
+静默确认共用单调时钟，并在确认前处理排队输入。不支持的修饰键只中断候选，不成为手势。
+
+录制由最长 30 秒的原生 lease 持有，可见且正在录制的设置页面负责续期。保留原生注册但暂停目标
+执行；即便 WebView 收不到已注册组合，原生事件仍能提供候选。失焦、隐藏、Host 失效、到期、取消
+和退出撤销 lease，并在当前按键松开后才接受新输入。裸 Escape 取消，带修饰键的 Escape 仍是候选；
+前台 Cmd+W/Q 保留原生语义。
+
+Host 每次调用携带不可变的 normal/shortcut 来源。只有认领当前原生绑定才产生 shortcut；UI 与
+插件 `actions.open` 都使用 normal。等待准入最多 32 项、10 秒截止，失败明确反馈。已接纳调用的结果保留在准入容量内直到 Host
+可接收；反馈不可用不会静默释放容量并接受无限调用。ActivePage
+仍只有 owner、Page 与 opening Action 身份。同页调用复用 Runtime 与输入，activation 独立进入
+当前 attempt。每次成功 dispatch 只更新一次 Recent，不受可选插件回调业务结果影响。
+
+### 快捷键配置迁移与行式编辑
+
+Host 将有效 v1 单组合键文件读取为等价 v2 视图，不重写磁盘；下次明确保存成功后提交 v2。有效 v1
+双入口保留原始文件，并通过 `launcher_migration` 暴露两个旧候选；v2 中的组合键占位不生效。
+在用户选择一种类型并明确保存解决迁移前，窗口保持可见，其它配置写入被拒绝。不确定提交先重读，
+再判断能否清除迁移事实或确认持久化。
+
+设置只显示一条唤出行（标题、类型、键位）和多条 Action 行（类型、键位、Action、删除），列表下方
+提供新增。草稿和行内编辑在完整且明确保存前只存在于本地。Action 改绑在同一候选中删除旧 ID 并
+加入新 ID，不覆盖已有绑定。原生 revision/事务校验仍是权威；成功删除后在列表内恢复焦点。

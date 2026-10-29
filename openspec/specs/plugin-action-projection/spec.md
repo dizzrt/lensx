@@ -155,12 +155,12 @@ The system MUST subscribe to the existing Registration Adapter's complete snapsh
 
 ### Requirement: Plugin Action execution must remain Host-owned and use the unified Dispatcher
 
-The system MUST synthesize a Host-owned executor for every Page-only Manifest target that is eligible for publication.
+The system MUST create Host-owned executors for eligible Page-only Manifest Actions and pass the current Host invocation context to the current available Page; plugins gain neither executors nor shortcut configuration authority.
 
 #### Scenario: A projected Action is dispatched to its Page
 
 - **WHEN** a projected Action is resolved or dispatched, or a plugin attempts to access its executor
-- **THEN** The executor MUST pass only a frozen `{ owner_id: plugin_id, page_id: local_page_id }` target and the global opening `action_id` to a narrow Host Page opener.
+- **THEN** the executor MUST pass a frozen `{ owner_id: plugin_id, page_id: local_page_id }`, the global opening `action_id`, and the immutable invocation to the restricted Host Page opener; these Host-private execution facts MUST NOT enter the public descriptor.
 - **THEN** A projected Action MUST execute through the existing Registry lookup and Dispatcher, and successful, not-found, unavailable, and execution-failure outcomes MUST preserve the existing typed dispatch semantics.
 - **THEN** A plugin MUST NOT submit, read, or directly invoke an executor.
 
@@ -211,6 +211,16 @@ The system MUST synthesize a Host-owned executor for every Page-only Manifest ta
 - **THEN** production unregisters the provider's complete Action batch before
   unregistering its Page batch
 - **THEN** other plugins and `lensx.core` Actions remain available
+
+#### Scenario: Activate the same plugin Page through a dedicated shortcut
+- **WHEN** a currently available plugin Action executes again through a dedicated shortcut
+- **THEN** the Page opener receives a new invocationId and shortcut source while retaining stable owner/page identity
+- **THEN** the Runtime, input, and Page state remain reused while their identity facts are equivalent; a provenance change does not register the Action again or remount the Page
+
+#### Scenario: Withdraw a projection while a binding remains configured
+- **WHEN** disabling, uninstalling, incompatibility, or unavailable target Pages withdraw an Action
+- **THEN** its saved binding cannot bypass the current projection and Dispatcher to execute an old closure
+- **THEN** other plugins and Host Actions remain unaffected, and the shortcut configuration contract preserves the user binding as unavailable
 
 ### Requirement: Projected Actions must reuse search and collections without provider-specific behavior
 

@@ -151,3 +151,61 @@ describe('App navigation service', () => {
     expect(() => service.registerHandler(() => undefined)).not.toThrow();
   });
 });
+
+describe('Page invocation identity and revocation', () => {
+  test('binds a Session only to its native presentation attempt, including dispatch-before-create and late old dispatches', async () => {
+    const registry = new HostPageCatalog([]);
+    registry.replaceProviderBatch('com.acme.notes', pluginBatch());
+    const service = new AppNavigationService(registry);
+    service.registerHandler(rs.fn());
+    const target = { owner_id: 'com.acme.notes', page_id: 'home' };
+    service.openPage(target, 'com.acme.notes.open', { invocationId: 1, source: 'shortcut' });
+    const early = service.bindNativeActivations(target, 'attempt_0000000000000001');
+    service.attachNativeActivationAttempt(target, 'attempt_0000000000000001');
+    const original = await early;
+    expect(original?.subscribe(() => true)).toEqual([{ actionId: 'open', invocationId: 1, source: 'shortcut' }]);
+    service.restartActivationAttempt(target);
+    const late = service.bindNativeActivations(target, 'attempt_0000000000000001');
+    const next = service.bindNativeActivations(target, 'attempt_0000000000000002');
+    service.attachNativeActivationAttempt(target, 'attempt_0000000000000002');
+    expect(await late).toBeUndefined();
+    expect(service.isNativeActivationAttemptCurrent(target, 'attempt_0000000000000001')).toBe(false);
+    expect((await next)?.subscribe(() => true)).toEqual([]);
+    expect(original?.available()).toBe(false);
+    service.destroy();
+  });
+
+  test('reuses one attempt across same-page actions and never replays after switching or retrying', () => {
+    const registry = new HostPageCatalog([{ ...settingsTarget, enabled: true }]);
+    registry.replaceProviderBatch('com.acme.notes', pluginBatch());
+    const service = new AppNavigationService(registry);
+    const handler = rs.fn();
+    service.registerHandler(handler);
+    const target = { owner_id: 'com.acme.notes', page_id: 'home' };
+    const opened = service.openPage(target, 'com.acme.notes.open', { invocationId: 1, source: 'normal' });
+    expect(Object.keys(opened).sort()).toEqual(['opened_by_action_id', 'owner_id', 'page_id']);
+    service.openPage(target, 'com.acme.notes.alternate', { invocationId: 2, source: 'shortcut' });
+    const session = service.bindActivations(target);
+    const emit = rs.fn(() => true);
+    expect(session?.subscribe(emit)).toEqual([
+      { actionId: 'open', invocationId: 1, source: 'normal' },
+      { actionId: 'alternate', invocationId: 2, source: 'shortcut' },
+    ]);
+    service.openPage(target, 'com.acme.notes.open', { invocationId: 3, source: 'normal' });
+    expect(emit).toHaveBeenCalledWith({ actionId: 'open', invocationId: 3, source: 'normal' });
+    expect(session?.current()).toEqual({ actionId: 'open', invocationId: 3, source: 'normal' });
+    service.openPage(settingsTarget, 'lensx.core.open_settings', { invocationId: 4, source: 'normal' });
+    expect(session?.available()).toBe(false);
+    expect(service.bindActivations(target)).toBeUndefined();
+    service.openPage(target, 'com.acme.notes.open', { invocationId: 5, source: 'shortcut' });
+    const replacement = service.bindActivations(target);
+    expect(replacement?.subscribe(emit)).toEqual([{ actionId: 'open', invocationId: 1, source: 'shortcut' }]);
+    replacement?.dispose();
+    expect(service.bindActivations(target)).toBeUndefined();
+    service.restartActivationAttempt(target);
+    const retried = service.bindActivations(target);
+    expect(retried?.subscribe(emit)).toEqual([]);
+    service.destroy();
+    expect(retried?.available()).toBe(false);
+  });
+});

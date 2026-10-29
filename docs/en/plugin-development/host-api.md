@@ -2,7 +2,7 @@
 
 ## Authority model
 
-Host API `0.3.0` is a closed, Session-bound method catalog. The public
+Host API `0.4.0` is a closed, Session-bound method catalog. The public
 contract defines valid requests, results, events, and stable errors; the
 current Host composes providers; and the latest complete
 `PluginRuntimeContext.capabilities` list says which methods are callable in the
@@ -16,7 +16,7 @@ controlled Host HTTPS transport; it does not change browser CORS or CSP.
 
 ## Method reference
 
-<!-- lensx-host-api-method {"method":"http.request","provider":"http","version":"0.3.0","capability":"session"} -->
+<!-- lensx-host-api-method {"method":"http.request","provider":"http","version":"0.4.0","capability":"session"} -->
 ### `http.request`
 
 Params: `{ url, method, headers?, body?, timeoutMs? }`. A header is
@@ -77,49 +77,49 @@ not create another request. URL queries, headers, bodies, credentials,
 signatures, and raw network exceptions must not enter logs or diagnostics.
 Signing and service-specific response interpretation belong in the plugin.
 
-<!-- lensx-host-api-method {"method":"actions.open","provider":"base","version":"0.3.0","capability":"session"} -->
+<!-- lensx-host-api-method {"method":"actions.open","provider":"base","version":"0.4.0","capability":"session"} -->
 ### `actions.open`
 
 Params: `{ actionId: string }`. Result: `{ opened: true }`. The action must
 belong to the current plugin and still resolve to an available target.
 
-<!-- lensx-host-api-method {"method":"runtime.get_context","provider":"base","version":"0.3.0","capability":"session"} -->
+<!-- lensx-host-api-method {"method":"runtime.get_context","provider":"base","version":"0.4.0","capability":"session"} -->
 ### `runtime.get_context`
 
 Params: `{}`. Result: the complete context containing `hostApiVersion`,
 `locale`, `theme`, and sorted unique `capabilities`. Context events are full
 replacements, not patches.
 
-<!-- lensx-host-api-method {"method":"storage.delete","provider":"storage","version":"0.3.0","capability":"session"} -->
+<!-- lensx-host-api-method {"method":"storage.delete","provider":"storage","version":"0.4.0","capability":"session"} -->
 ### `storage.delete`
 
 Params: `{ key: string }`. Result: `{ deleted: boolean }` in the current
 plugin-scoped Host storage namespace.
 
-<!-- lensx-host-api-method {"method":"storage.get","provider":"storage","version":"0.3.0","capability":"session"} -->
+<!-- lensx-host-api-method {"method":"storage.get","provider":"storage","version":"0.4.0","capability":"session"} -->
 ### `storage.get`
 
 Params: `{ key: string }`. Result: `{ found: false }` or
 `{ found: true, value: JsonValue }`.
 
-<!-- lensx-host-api-method {"method":"storage.get_quota","provider":"storage","version":"0.3.0","capability":"session"} -->
+<!-- lensx-host-api-method {"method":"storage.get_quota","provider":"storage","version":"0.4.0","capability":"session"} -->
 ### `storage.get_quota`
 
 Params: `{}`. Result: `{ usedBytes: number, limitBytes: number }`. A later write
 can still fail with `limit_exceeded`.
 
-<!-- lensx-host-api-method {"method":"storage.list","provider":"storage","version":"0.3.0","capability":"session"} -->
+<!-- lensx-host-api-method {"method":"storage.list","provider":"storage","version":"0.4.0","capability":"session"} -->
 ### `storage.list`
 
 Params: optional `{ cursor, limit }`. Result: sorted `keys` and an optional
 opaque `nextCursor`.
 
-<!-- lensx-host-api-method {"method":"storage.set","provider":"storage","version":"0.3.0","capability":"session"} -->
+<!-- lensx-host-api-method {"method":"storage.set","provider":"storage","version":"0.4.0","capability":"session"} -->
 ### `storage.set`
 
 Params: `{ key: string, value: JsonValue }`. Result: `{ stored: true }`.
 
-<!-- lensx-host-api-method {"method":"ui.close","provider":"base","version":"0.3.0","capability":"session"} -->
+<!-- lensx-host-api-method {"method":"ui.close","provider":"base","version":"0.4.0","capability":"session"} -->
 ### `ui.close`
 
 Params: `{}`. Result: `{ accepted: true }`. Only the matching current page may
@@ -127,7 +127,7 @@ close; a replaced session cannot close a newer attempt.
 
 ## Stable errors
 
-<!-- lensx-host-api-errors {"version":"0.3.0","codes":["cancelled","conflict","internal_error","invalid_params","invalid_request","limit_exceeded","method_not_found","not_found","timeout","unavailable"]} -->
+<!-- lensx-host-api-errors {"version":"0.4.0","codes":["cancelled","conflict","internal_error","invalid_params","invalid_request","limit_exceeded","method_not_found","not_found","timeout","unavailable"]} -->
 
 | Code | Developer action |
 | --- | --- |
@@ -156,3 +156,40 @@ a fresh SDK and subscriptions; it never revives an old session.
 See [Runtime and security](runtime-permissions-security.md) for the full
 lifecycle and [Compatibility and errors](compatibility-and-errors.md) for
 version recovery.
+
+## Action activation
+
+`PluginActionActivation` is a copied, frozen `{ actionId, invocationId, source }`
+value. `actionId` is local to this plugin; `invocationId` is a positive safe integer
+increasing within the current Page attempt; `source` is `normal` or `shortcut`.
+Only a dedicated native Action binding produces `shortcut`. Search, clicks,
+recents, pinned entries, and `actions.open` produce `normal`, regardless of the
+previous activation. No actual key, binding, Session identity, or native handle
+is exposed. Runtime Context still has exactly `hostApiVersion`, `locale`, `theme`,
+and `capabilities`.
+
+### actions.get_activation
+
+<!-- lensx-host-api-method {"method":"actions.get_activation","provider":"activation","version":"0.4.0","capability":"session"} -->
+
+Exact `{}` params return `{ activation: null | PluginActionActivation }` for the
+current Page Session. The query creates no invocation and accepts no target or
+source override.
+
+### actions.subscribe_activations
+
+<!-- lensx-host-api-method {"method":"actions.subscribe_activations","provider":"activation","version":"0.4.0","capability":"session"} -->
+
+Exact `{}` params atomically open one Session channel and return
+`{ activations: PluginActionActivation[] }`, sorted by invocation ID, with at most
+32 initial calls. Repeated subscription returns the same cached initial batch,
+without opening another stream. New calls produce `actions.activated` with the
+Activation itself as payload. The cached batch does not consume later admission
+capacity. Closing or replacing the Session clears the channel and batch.
+
+SDK `0.5.0` installs its internal listener before subscribing, merges up to 64
+distinct calls received during initialization, sorts and deduplicates by ID, then
+enters ready and delivers callbacks. Later processing retains a high-water mark
+and the current snapshot, not an unbounded history. Missing subscription capability
+allows ready with `sdk.activation === null`; query capability is checked separately.
+The public catalog now contains eleven methods and two events.

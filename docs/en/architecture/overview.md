@@ -45,16 +45,15 @@ The repository currently provides:
 - a macOS-only frame-aware WKWebView navigation policy with disjoint Host and
   descendant document allowlists, an idle process-local target lease, main-only
   Tauri initialization, and independent new-window/download denial;
-- one current isolated Plugin Page iframe plus a Host-private process-local
-  Runtime Session that authenticates the actual window and exact origin with a
-  single-use nonce and dedicated MessagePort;
+- one current native plugin Child WebView plus a Host-private process-local
+  Runtime Session authenticated through source-bound native bridge ingress;
 - a unified Host-owned Page Registry and framework-neutral navigation service
   for protected Host Pages and declarative Plugin Page descriptors;
 - versioned recent-use and pinned Action collections persisted through a narrow
   Rust/Tauri boundary and resolved against the current registry snapshot;
 - a single-window Host settings surface with persisted theme and locale
-  preferences plus a deliberately empty plugin section;
-- the public `@lensx/plugin-contract@0.1.0` workspace package with bounded
+  preferences, local plugin management, and configurable shortcuts;
+- the public `@lensx/plugin-contract@0.4.0` workspace package with bounded
   Schema, type, validation, and normalization exports verified from a real
   package tarball;
 - Rstest, Testing Library, TypeScript checks, Biome, and Cargo validation
@@ -220,28 +219,29 @@ reports failures with both the requested action and the failing native
 operation stage. Native shortcut and window-event handlers route actions
 through this boundary rather than calling window APIs independently.
 
-The official Tauri global-shortcut plugin registers one default
-`Ctrl+Shift+Space` binding. Only its pressed event routes to `toggle`; release
-events and unknown shortcuts do nothing. Lifecycle setup first installs the
-action state, then registers the shortcut, and only then attaches the main
-window listeners. After registration succeeds, a close request is prevented
-and routed to `hide`, and focus loss is also routed to `hide`. If shortcut
-registration fails, the application reports the binding failure and leaves
-hide-on-close and hide-on-blur disabled, so the visible window keeps ordinary
-close behavior instead of becoming unrecoverable.
+The official Tauri global-shortcut plugin registers the confirmed configuration.
+The single Launcher trigger defaults to `Ctrl+Shift+Space` and may instead be a
+modifier double tap. The separate Rust shortcut service owns it and Action
+bindings; changing the Launcher type stops its previous entry.
+One physical press produces at most one invocation. Ordinary activation uses
+Toggle; an Action binding uses Show and the current shared Action dispatcher.
+Registration generations isolate stale events. Close, blur, and local close
+commands may hide only while the selected Launcher trigger is confirmed active.
+A recovery failure keeps the window visible with settings and quit available.
 
 On macOS, the undecorated launcher cannot rely on the default Close Window
 menu command: its native `performClose:` selector expects a closable window
 style and therefore does not produce `CloseRequested` for this borderless
-surface. Once the recovery shortcut and native window listeners are ready, the
+surface. Once the shortcut service and native window listeners initialize, the
 Host replaces the default application menu with an application-owned menu that
 preserves the standard application, edit, view, window, help, and `Cmd+Q` quit
 semantics while removing every predefined Close Window accelerator. Exactly
 one custom Close Window item owns the application-local `Cmd+W` accelerator
 and routes its stable menu ID through the same Rust `Hide` action boundary used
 by native close requests and focus loss. It is not a global shortcut and does
-not affect `Cmd+W` in other applications. If the recovery shortcut or window
-listener is unavailable, the custom menu is not installed. If menu installation
+not affect `Cmd+W` in other applications. If shortcut-service or window-listener initialization fails, the custom menu is
+not installed. Later recovery availability is checked at the Hide boundary,
+while Quit remains independent. If menu installation
 itself fails, the Host records the `hide` action and `install_menu` operation
 stage without terminating the process; the already registered recovery
 shortcut and native lifecycle listeners remain available.
@@ -256,9 +256,9 @@ from the global-shortcut plugin. Because the target Accessory runtime does not
 reliably dispatch the hidden menu key equivalents, Host setup installs one
 idempotent AppKit local event monitor for foreground `Cmd+W/Q`; it
 consumes only those matching events before the menu route can duplicate them and is
-released during application exit. If the default recovery shortcut is not ready,
-the menu graph and all hide-on-close/focus-loss paths remain disabled so an
-Accessory process cannot become unreachable.
+released during application exit. When the selected Launcher trigger is not active,
+all hide-on-close/focus-loss and local Hide paths are disabled while Quit remains
+available, so an Accessory process cannot become unreachable.
 
 Standard editing uses the shared native responder path. With Tauri `unstable`,
 the Host `main` WebView and plugin WebViews are both created as `WindowChild`.
@@ -294,7 +294,7 @@ input focus. Each activation also refreshes search from the current query and
 latest registry snapshot without filling, clearing, or executing an action.
 
 This lifecycle does not itself implement query matching, result lists,
-settings, shortcut customization, persistence, or plugin runtime behavior. The
+settings, shortcut configuration storage, or plugin business behavior. The
 separate constrained surface-mode command only controls the fixed presentation
 height of the same `main` window.
 
@@ -460,11 +460,11 @@ Child WebView sibling. The Host-private resolver cross-checks Page,
 Registration revision, Resource identity, isolated `entry_url`, route,
 generation, native source, and attempt. The closed bridge and Session become
 ready only for that current Child WebView. Close, retry, invalidation,
-replacement, and App teardown revoke it. Manifest `0.4.0` and Host API `0.3.0`
+replacement, and App teardown revoke it. Manifest `0.4.0` and Host API `0.4.0`
 expose neither native Window methods nor Child WebView identity.
 
 Settings is rendered in the existing `main` Tauri window. A controlled vertical
-navigation on the left contains only Preferences and Plugins, defaults to
+navigation on the left contains Preferences, Plugins, and Shortcuts, defaults to
 Preferences, and the right content pane renders only the selected section. The
 resolved `lensx.core/settings` identity enables an edge-to-edge App Shell
 modifier: a token-based horizontal boundary separates the shared header from
@@ -590,3 +590,78 @@ registered capabilities.
 - Errors crossing boundaries must be diagnosable and safe to display or log.
 - Planned behavior must pass through OpenSpec before becoming a stable
   capability contract.
+
+## Configurable Shortcuts
+
+Rust owns v2 `shortcuts.json` independently of `AppPreferences` and
+collections. Its `launcher` is one chord/double-tap trigger, not a pair of
+simultaneously configured entries. Reads return confirmed configuration, revision, per-binding runtime
+status, and bounded diagnostics. Writes compare the expected revision, validate
+one shared canonical/reserved policy, stage the file, pre-register new chords,
+release removed registrations, commit storage, then publish the mapping.
+Failure compensates and reconciles actual storage and registrations; uncertain
+recovery becomes degraded and disables unrecoverable hiding. An uncertain storage
+result stays degraded across automatic target/layout reconciliation until an
+explicit save transaction confirms storage again. Invalid startup
+files are preserved and never executed; only that invalid/missing case attempts
+the default recovery chord. A valid custom recovery failure never repurposes a
+default chord assigned to an Action.
+
+Unavailable Actions retain their configuration and internal trigger ownership
+while releasing native registrations. Reappearance revalidates current targets
+and OS registration. A saved double tap without authorization remains inactive. If this is the
+sole Launcher entry, the Host shows even an already-hidden window and disables
+unrecoverable hiding until the selected entry is active; it never silently
+registers a former/default chord. Healthy monitoring is preserved across gesture
+resets so ordinary hiding does not itself interrupt the recovery entry.
+Stored chord identities use native physical key codes. The Host supplies current
+layout labels, including Command-specific layout semantics; recording checks both
+the current semantic key and physical reserved aliases. Layout changes refresh
+labels and registration eligibility without rewriting configuration.
+The shared policy rejects reserved editing/system combinations and duplicates;
+registration errors cannot identify all other applications' shortcuts. Passive
+double taps have no exclusive OS reservation.
+
+The macOS listen-only adapter exposes event facts to a pure monotonic state
+machine, without storing characters or modifying input. A double tap uses the
+same physical modifier, at most 200 ms per press, at most 300 ms between presses,
+and 300 ms quiet confirmation. Third presses, other keys/modifiers, mouse buttons
+and scrolling cancel; pointer movement does not. Permission loss, Secure Input,
+sleep/wake, configuration and recording transitions discard old candidates.
+Monitoring permission is requested only by an explicit user action. Resuming
+observation samples currently held physical keys/buttons; source event timestamps
+and quiet confirmation share a monotonic clock, and queued input drains before
+confirmation. Unsupported modifiers interrupt without becoming gestures.
+
+Recording holds a native lease for at most 30 seconds, renewed by visible active
+settings. Existing registrations remain but target execution is suspended;
+native events can supply candidates even when the WebView does not receive a
+registered chord. Blur, hide, Host loss, expiry, cancellation and exit revoke the
+lease and wait for releases before accepting new input. Bare Escape cancels;
+modified Escape remains a candidate; foreground Cmd+W/Q retain native semantics.
+
+Host invocations carry immutable per-call normal/shortcut provenance. Only a
+claimed current native binding creates shortcut provenance; UI and plugin
+`actions.open` use normal. Admission is bounded to 32 waiting calls with a
+10-second deadline and explicit failures. Outcomes of accepted invocations are
+retained within the admission bound until the Host can receive them; unavailable
+feedback never silently frees capacity for unlimited accepted calls. ActivePage keeps only owner, Page and
+opening Action identity. Same-page invocations reuse the Runtime and input;
+activation travels independently to the current attempt. A successful dispatch
+updates Recent once, independent of optional plugin callback business success.
+
+### Shortcut Configuration Migration And Rows
+
+The Host reads a valid v1 chord-only file into an equivalent v2 view without
+rewriting it; the next successful explicit save commits v2. A valid v1 file with
+both Launcher entries retains its original bytes and exposes both choices in
+`launcher_migration`. Its v2 chord placeholder is inactive. The window stays
+visible while the user chooses one type and saves with explicit migration
+resolution. Other writes are rejected until that choice is resolved. An
+uncertain commit is reread before clearing migration or claiming persistence.
+
+Settings uses one Launcher row (title, type, key) and Action rows (type, key,
+Action, delete), with Add beneath the list. Drafts and inline edits remain local
+until complete explicit save. Action reassignment removes and adds IDs in one
+candidate without overwriting existing bindings. Native revision/transaction
+checks remain authoritative; successful deletion restores focus within the list.

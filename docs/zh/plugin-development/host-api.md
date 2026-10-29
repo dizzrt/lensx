@@ -2,7 +2,7 @@
 
 ## Authority 模型
 
-Host API `0.3.0` 是封闭的 Session-bound method catalog。公共 Contract 定义合法的
+Host API `0.4.0` 是封闭的 Session-bound method catalog。公共 Contract 定义合法的
 request、result、event 与稳定错误；当前 Host 组合 provider；最新的完整
 `PluginRuntimeContext.capabilities` 列表说明当前 Session 可调用哪些 method。
 
@@ -123,3 +123,29 @@ capabilities。disconnect、reload 或 replacement 后，把旧 callback 与 pen
 
 完整生命周期见[Runtime 与安全](runtime-permissions-security.md)，版本恢复见
 [兼容性与错误](compatibility-and-errors.md)。
+
+## Action 激活
+
+`PluginActionActivation` 是复制并冻结的 `{ actionId, invocationId, source }`。
+`actionId` 为当前插件局部 ID；`invocationId` 是当前 Page attempt 内递增的正安全整数；
+`source` 为 `normal` 或 `shortcut`。只有原生 Action 专属绑定产生 `shortcut`；搜索、点击、
+最近、固定项和 `actions.open` 均产生 `normal`，不继承上次来源。
+不暴露实际按键、绑定、Session 身份或原生句柄。Runtime Context 仍严格只有
+`hostApiVersion`、`locale`、`theme`、`capabilities` 四字段。
+
+### actions.get_activation
+
+精确 `{}` 参数返回当前 Page Session 的 `{ activation: null | PluginActionActivation }`。
+查询不创建调用，也不接受目标或来源覆盖。
+
+### actions.subscribe_activations
+
+精确 `{}` 参数原子开启唯一 Session 通道，返回按 invocation ID 排序、最多 32 项的
+`{ activations: PluginActionActivation[] }` 初始批次。重复订阅返回同一缓存批次，不建立新流。
+新调用通过 `actions.activated` 发送，payload 就是 Activation。初始批次缓存不占用后续准入容量。
+Session 关闭或替换会清除通道和批次。
+
+SDK `0.5.0` 在请求订阅前安装内部 listener，合并初始化期间最多 64 个不同调用，按 ID 排序去重，
+然后进入 ready 并投递回调。后续仅保留已消费高水位和当前快照，不累积无限历史。
+缺少订阅能力时仍可 ready，`sdk.activation === null`；查询能力独立检查。
+当前公共目录包含十一个方法和两个事件。

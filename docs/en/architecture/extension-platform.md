@@ -68,7 +68,7 @@ boundaries must have stable machine-readable codes and locations.
 
 ## Shipped Public Contract And Static Manifest
 
-lensX ships the publishable `@lensx/plugin-contract@0.3.0` workspace package.
+lensX ships the publishable `@lensx/plugin-contract@0.4.0` workspace package.
 Its root export provides Manifest and Host API versions, generated input types,
 normalized values, stable diagnostics, catalogs, and pure validators. Manifest
 Schema entries are `@lensx/plugin-contract/schema` and
@@ -174,7 +174,7 @@ Session and public semantic contract described below are now shipped.
 
 ## Shipped Public Host API Semantic Contract
 
-`@lensx/plugin-contract` now owns Host API protocol `0.3.0` as a closed Draft
+`@lensx/plugin-contract` now owns Host API protocol `0.4.0` as a closed Draft
 2020-12 Schema, generated TypeScript inputs, deeply frozen normalized values,
 immutable catalogs, and pure `unknown` validators. TypeScript and test-only Rust
 consumers read the same package-owned valid and invalid fixtures and agree on
@@ -186,6 +186,7 @@ The catalog contains exactly these methods:
 | --- | --- |
 | Runtime | `runtime.get_context` |
 | Current Page and Action | `ui.close`, `actions.open` |
+| Current Action activation | `actions.get_activation`, `actions.subscribe_activations` |
 | Plugin-private storage | `storage.get`, `storage.set`, `storage.delete`, `storage.list`, `storage.get_quota` |
 | Controlled HTTPS transport | `http.request` |
 
@@ -199,7 +200,11 @@ rejected as author-controlled Context or method fields. Ordinary Worker,
 network, remote-resource, Blob/Data, WASM, and browser-storage capabilities are
 not Host API methods and do not appear in Context. The distinct native
 `http.request` method is advertised only when its controlled provider is
-available; it does not change browser network policies.
+available; it does not change browser network policies. The two Action activation
+methods are advertised only when their Session-owned provider is available.
+`actions.activated` carries a separate `PluginActionActivation` containing only
+plugin-local `actionId`, per-attempt `invocationId`, and `normal | shortcut`
+source; activation does not add fields to Runtime Context or expose native keys.
 
 Host API errors have stable closed codes and a bounded safe English message.
 They remain distinguishable from SDK lifecycle errors such as `disconnected`,
@@ -879,28 +884,30 @@ Manifest initial size. No size is persisted.
 
 ## Shipped Public Plugin SDK And WebView Transport
 
-lensX ships the framework-neutral `@lensx/plugin-sdk@0.4.0` workspace package.
+lensX ships the framework-neutral `@lensx/plugin-sdk@0.5.0` workspace package.
 The package has public root and `@lensx/plugin-sdk/webview` entries and depends only on
 `@lensx/plugin-contract` at Runtime. Undeclared deep imports are unsupported,
 and its public declarations do not require React, Semi Design, Tauri, DOM
 globals, Node filesystem types, or Host-private modules.
 
 The root entry exposes `createPluginSdk`, `PluginSdkError`, SDK lifecycle,
-Runtime context, cancellation, and transport types, plus these independent
+Runtime context, Action activation, cancellation, and transport types, plus these independent
 version facts:
 
 | Export | Meaning |
 | --- | --- |
-| `PLUGIN_SDK_VERSION` | The SDK package and public API version, currently `0.4.0`. |
-| `PLUGIN_SDK_SUPPORTED_HOST_API_RANGE` | The half-open supported Host API range, currently `>=0.2.0 <0.4.0`. |
+| `PLUGIN_SDK_VERSION` | The SDK package and public API version, currently `0.5.0`. |
+| `PLUGIN_SDK_SUPPORTED_HOST_API_RANGE` | The half-open supported Host API range, currently `>=0.4.0 <0.5.0`. |
 | `PLUGIN_HOST_API_VERSION` | Not re-exported by the SDK; the current Host API version remains owned by `@lensx/plugin-contract`. |
 
 `createPluginSdk({ transport })` returns an isolated client rather than a
 global singleton. A client moves through `idle`, `initializing`, `ready`,
 `disconnected`, and `disposed`. Concurrent initialization calls share one
-connection attempt. A cancelled, timed-out, or failed attempt returns to
-`idle` for explicit retry; disconnect is terminal for that client and does not
-automatically reconnect. Disposal is idempotent, cancels pending SDK-managed
+connection attempt. A cancelled, timed-out, or failed initialization before
+activation-stream opening returns to `idle` for explicit retry. Once stream
+opening has been attempted, initialization failure terminates that client and
+transport; explicit retry requires a new Runtime attempt and SDK client.
+Disconnect is terminal and does not automatically reconnect. Disposal is idempotent, cancels pending SDK-managed
 operations, removes listeners, and disposes the transport at most once.
 
 Before entering `ready`, the SDK uses the Contract validator to copy and freeze
@@ -941,10 +948,22 @@ separate Testkit package.
 discriminated union, validates and freezes it before transport, derives the
 paired result payload type from its method, and rejects calls before `ready` or
 when the current capability snapshot omits the method. `subscribe()` accepts
-only `runtime.context_changed`; the complete validated and frozen replacement
-becomes `client.context` before subscribers run. Contract-valid Host API errors
-remain distinct from SDK cancellation, timeout, disconnect, disposal, invalid
-argument, and transport failures.
+the current Contract events `runtime.context_changed` and `actions.activated`;
+a complete validated and frozen Context replacement becomes `client.context`
+before Context subscribers run. Contract-valid Host API errors remain distinct
+from SDK cancellation, timeout, disconnect, disposal, invalid argument, and
+transport failures.
+
+When Context advertises `actions.subscribe_activations`, initialization installs
+internal event reception before subscribing, merges the initial batch with early
+events by invocation ID with at most 64 distinct buffered calls, then enters
+ready and updates the readonly `client.activation`. The channel is consumed even
+without a business callback. Optional factory `onShortcutActivated` runs only for
+shortcut calls after ready; normal calls only update activation. Callback errors
+are isolated and business concurrency remains plugin-owned. Public event
+unsubscription does not disable the internal channel. See the
+[Action activation reference](../plugin-development/host-api.md#action-activation)
+and [Child WebView lifecycle](plugin-child-webview-runtime.md#action-invocations-and-shortcut-activation).
 
 `createPluginWebviewTransport()` has no trust configuration. It discovers only
 the Host-installed current bridge and validates the closed `0.2.0` carrier
@@ -960,8 +979,10 @@ narrow handler, validates every result/error/event, supports concurrent
 out-of-order settlement, and converges Session/Page replacement and disposal
 on idempotent cleanup. Production creates one Host-private Dispatcher binding
 for every current ready Session. That binding implements
-`runtime.get_context`, `ui.close`, `actions.open`, and the five `storage.*`
-methods. Removed clipboard and unknown methods fail closed. A private
+`runtime.get_context`, `ui.close`, `actions.open`, the two Action activation
+methods, and the five `storage.*` methods when their providers are available.
+Controlled HTTP remains on the native route. Removed clipboard and unknown
+methods fail closed. A private
 post-response outcome lets the adapter validate and
 post a successful `ui.close` result before running the target-matched close
 effect. It never crosses the wire or changes the public SDK transport.
@@ -1042,23 +1063,35 @@ Dispatcher, and Runtime currentness. The authenticated lease is the only source
 of plugin and Page identity. Requests cannot choose an owner, Page, provider,
 executor, route, Tauri command, or other Host object.
 
-`runtime.get_context` returns Host API `0.3.0`, the current `en-US | zh-CN`
+`runtime.get_context` returns Host API `0.4.0`, the current `en-US | zh-CN`
 locale, current `light | dark` theme, and the sorted frozen capability snapshot
 `actions.open`, `runtime.get_context`, and `ui.close`, plus the five
-`storage.*` methods while storage is available and `http.request` while its
-native provider is available. Complete
+`storage.*` methods while storage is available, `http.request` while its native
+provider is available, and `actions.get_activation` / `actions.subscribe_activations`
+while the current Session activation provider is available. Complete
 `runtime.context_changed` replacements are emitted only when the current
 locale, theme, or capability snapshot actually changes. Identity, Registration
-revision, Runtime attempt, source, Manifest data, paths, and
-Host lifecycle state remain private.
+revision, Runtime attempt, native shortcut bindings, Manifest data, paths, and
+Host lifecycle state remain private. Semantic invocation provenance is exposed
+only through the separate Activation contract.
 
 `ui.close` accepts only `{}` and derives the target from the Session. The Host
 posts and terminals `{ accepted: true }` before invoking an exactly-once
 match-and-close effect, so a stale Session cannot close a replacement Page.
 `actions.open` accepts only a plugin-local Action ID, derives
 `<plugin_id>.<local_action_id>`, and performs a fresh lookup through the unified
-Launcher Dispatcher. Core, cross-plugin, missing, disabled, incompatible, or
+Launcher Dispatcher with new normal provenance and currentness checked again
+after queued admission. Core, cross-plugin, missing, disabled, incompatible, or
 removed Actions fail closed without exposing the Registry or executor.
+
+Activation queries accept only `{}` and use the current Session and Page attempt.
+The provider opens one stream, caches at most 32 initial calls for idempotent
+subscription retries, and emits later calls separately. Native presentation
+attempt matching prevents stale Session delivery from claiming a replacement
+Page channel. Same-page invocations preserve the existing Runtime and input;
+close, replacement, failed initialization, or retry revoke the old channel.
+Plugins receive semantic activation without input-monitoring or shortcut
+configuration authority.
 
 Storage calls use only the identity frozen in the authenticated Session lease.
 The Dispatcher injects that identity into a Host-private desktop provider and
@@ -1079,8 +1112,10 @@ admission/cancellation, public SDK, and Translation transport coverage.
 
 Run `pnpm run gate -- plugin-host-api-dispatcher` for the focused Dispatcher,
 Navigation, Action, Runtime, MessageChannel, public-tarball, export, dependency,
-and workspace-boundary gate. This capability adds no public export, wire frame,
-or SDK dependency. Sustained Runtime resource isolation, project template,
+and workspace-boundary gate. The Dispatcher stays Host-private; public activation
+types, events, and callbacks belong to Contract and SDK. Use
+`pnpm run gate -- launcher-shortcuts` for the composed shortcut and activation
+boundary. Sustained Runtime resource isolation, project template,
 CLI, and development mode remain separate capabilities.
 
 ## Removed Host Permission And Native Clipboard Authority
@@ -1097,8 +1132,10 @@ open isolated Web Runtime trust decision. lensX isolates Host and other-plugin
 authority but does not inspect or individually authorize ordinary Worker,
 network, remote-resource, Blob/Data, WASM, or browser-origin storage behavior.
 Unpublished device/native capabilities remain unavailable. Host API `0.3.0`
-adds only the explicit controlled HTTP boundary; it does not restore grants,
-clipboard, arbitrary commands, local-network authority, or browser mediation. Run `pnpm run gate -- open-isolated-plugin-runtime`
+introduced the explicit controlled HTTP boundary without restoring grants,
+clipboard, arbitrary commands, local-network authority, or browser mediation.
+Host API `0.4.0` adds semantic Action activation, not plugin input-monitoring or
+shortcut-configuration authority. Run `pnpm run gate -- open-isolated-plugin-runtime`
 for the negative authority scan and composed Runtime validation.
 
 ## Shipped Plugin-Scoped Storage
@@ -1383,9 +1420,10 @@ External runtime resources must resolve inside the installed plugin boundary.
 
 ## Host API
 
-The shipped public semantic contract defines the nine method IDs, exact
-params/results, `runtime.context_changed`, `PluginRuntimeContext`,
-errors, and capability/version rules described above. Contract validation alone
+The shipped public semantic contract defines the eleven method IDs, exact
+params/results, `runtime.context_changed`, `actions.activated`,
+`PluginRuntimeContext`, `PluginActionActivation`, errors, and capability/version
+rules described above. Contract validation alone
 does not send or execute a request. The public SDK client now exposes one
 Contract-closed typed request operation, not a raw string method or a concrete
 side-effect provider.
@@ -1398,7 +1436,7 @@ flowchart TD
   S --> R[Source-bound native RPC and current Session]
   R -->|http.request| H[Controlled Rust HTTP provider]
   R -->|other methods| D[Session-scoped Dispatcher]
-  D --> B[Context / Page close / plugin Action / scoped storage]
+  D --> B[Context / Page close / plugin Action / activation / scoped storage]
 ```
 
 The bridge validates the actual message source and restricted origin. The

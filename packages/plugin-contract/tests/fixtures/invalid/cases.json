@@ -603,5 +603,28 @@
         "path": "/compatibility/lensx"
       }
     ]
+  },
+  {
+    "name": "current Host keeps empty 0.4 compatibility range invalid",
+    "current_versions": {
+      "lensx": "0.1.0",
+      "host_api": "0.4.0"
+    },
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/compatibility/host_api",
+        "value": {
+          "min_version": "0.4.0",
+          "max_version_exclusive": "0.4.0"
+        }
+      }
+    ],
+    "expected_diagnostics": [
+      {
+        "code": "invalid_range",
+        "path": "/compatibility/host_api"
+      }
+    ]
   }
 ]

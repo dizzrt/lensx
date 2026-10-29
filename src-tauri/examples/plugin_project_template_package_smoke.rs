@@ -2,7 +2,7 @@ use lensx_lib::{
     plugin_installation_contract::LocalPluginInstallationResult,
     plugin_installer::PluginInstaller,
     plugin_manager::PluginManager,
-    plugin_manifest::PluginHostVersions,
+    plugin_manifest::{PluginHostVersions, PLUGIN_HOST_API_VERSION},
     plugin_package_format::{inspect_plugin_package, PackageInspectionResult},
 };
 use serde_json::json;
@@ -24,7 +24,7 @@ fn main() {
 
     let versions = PluginHostVersions {
         lensx: "0.1.0".to_owned(),
-        host_api: "0.2.0".to_owned(),
+        host_api: PLUGIN_HOST_API_VERSION.to_owned(),
     };
     let mut evidence = Vec::new();
     for (index, path) in package_paths.iter().enumerate() {

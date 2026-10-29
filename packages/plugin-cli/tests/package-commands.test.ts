@@ -19,7 +19,7 @@ const baseManifest = JSON.parse(
   await readFile(resolve(import.meta.dirname, '../../plugin-contract/tests/fixtures/base.json'), 'utf8'),
 ) as PluginManifestInput;
 // The shared historical fixture targets Host API 0.2.x; current CLI cases model a rebuilt package.
-baseManifest.compatibility.host_api.max_version_exclusive = '0.4.0';
+baseManifest.compatibility.host_api.max_version_exclusive = '0.5.0';
 
 const makeRoot = async () => {
   const root = await mkdtemp(resolve(tmpdir(), 'lensx-plugin-cli-pack-'));
@@ -57,7 +57,7 @@ const writeProject = async (input: { withDist?: boolean; build?: string } = {}) 
         test: 'node --test',
         check: 'node --check build.mjs',
       },
-      dependencies: { '@lensx/plugin-sdk': '^0.4.0' },
+      dependencies: { '@lensx/plugin-sdk': '^0.5.0' },
       devDependencies: { '@lensx/plugin-contract': '^0.3.0' },
     })}\n`,
   );
@@ -142,7 +142,7 @@ describe('transactional plugin packing', () => {
 
   test('does not expose an incompatible payload as a successful artifact', async () => {
     const incompatible = structuredClone(baseManifest);
-    incompatible.compatibility.host_api = { min_version: '0.4.0', max_version_exclusive: '0.5.0' };
+    incompatible.compatibility.host_api = { min_version: '0.5.0', max_version_exclusive: '0.6.0' };
     const project = await writeProject();
     await writeDist(project, incompatible);
     await expect(packPluginProject({ cwd: project, noBuild: true, json: true })).rejects.toMatchObject({

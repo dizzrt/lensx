@@ -2,8 +2,16 @@
   {
     "name": "unknown-method",
     "kind": "request",
-    "value": { "method": "system.open_external", "params": {} },
-    "expected": [{ "code": "method_not_found", "path": "/method" }]
+    "value": {
+      "method": "system.open_external",
+      "params": {}
+    },
+    "expected": [
+      {
+        "code": "method_not_found",
+        "path": "/method"
+      }
+    ]
   },
   {
     "name": "context-unknown-capability",
@@ -14,7 +22,12 @@
       "theme": "light",
       "capabilities": ["system.open_external"]
     },
-    "expected": [{ "code": "invalid_value", "path": "/capabilities/0" }]
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/capabilities/0"
+      }
+    ]
   },
   {
     "name": "context-duplicate-capability",
@@ -25,7 +38,12 @@
       "theme": "light",
       "capabilities": ["storage.get", "storage.get"]
     },
-    "expected": [{ "code": "duplicate_value", "path": "/capabilities" }]
+    "expected": [
+      {
+        "code": "duplicate_value",
+        "path": "/capabilities"
+      }
+    ]
   },
   {
     "name": "context-unsorted-capability",
@@ -36,7 +54,12 @@
       "theme": "light",
       "capabilities": ["storage.get", "actions.open"]
     },
-    "expected": [{ "code": "unsorted_value", "path": "/capabilities/1" }]
+    "expected": [
+      {
+        "code": "unsorted_value",
+        "path": "/capabilities/1"
+      }
+    ]
   },
   {
     "name": "context-trusted-field",
@@ -48,95 +71,229 @@
       "capabilities": [],
       "pluginId": "com.attacker.plugin"
     },
-    "expected": [{ "code": "additional_property", "path": "/pluginId" }]
+    "expected": [
+      {
+        "code": "additional_property",
+        "path": "/pluginId"
+      }
+    ]
   },
   {
     "name": "event-is-patch",
     "kind": "event",
-    "value": { "event": "runtime.context_changed", "payload": { "theme": "dark" } },
+    "value": {
+      "event": "runtime.context_changed",
+      "payload": {
+        "theme": "dark"
+      }
+    },
     "expected": [
-      { "code": "required", "path": "/payload/capabilities" },
-      { "code": "required", "path": "/payload/hostApiVersion" },
-      { "code": "required", "path": "/payload/locale" }
+      {
+        "code": "required",
+        "path": "/payload/capabilities"
+      },
+      {
+        "code": "required",
+        "path": "/payload/hostApiVersion"
+      },
+      {
+        "code": "required",
+        "path": "/payload/locale"
+      }
     ]
   },
   {
     "name": "ui-close-target",
     "kind": "request",
-    "value": { "method": "ui.close", "params": { "windowId": "main" } },
-    "expected": [{ "code": "additional_property", "path": "/params/windowId" }]
+    "value": {
+      "method": "ui.close",
+      "params": {
+        "windowId": "main"
+      }
+    },
+    "expected": [
+      {
+        "code": "additional_property",
+        "path": "/params/windowId"
+      }
+    ]
   },
   {
     "name": "actions-global-id",
     "kind": "request",
-    "value": { "method": "actions.open", "params": { "actionId": "lensx.core.settings" } },
-    "expected": [{ "code": "invalid_value", "path": "/params/actionId" }]
+    "value": {
+      "method": "actions.open",
+      "params": {
+        "actionId": "lensx.core.settings"
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/params/actionId"
+      }
+    ]
   },
   {
     "name": "actions-executor-injection",
     "kind": "request",
-    "value": { "method": "actions.open", "params": { "actionId": "settings", "executor": "host" } },
-    "expected": [{ "code": "additional_property", "path": "/params/executor" }]
+    "value": {
+      "method": "actions.open",
+      "params": {
+        "actionId": "settings",
+        "executor": "host"
+      }
+    },
+    "expected": [
+      {
+        "code": "additional_property",
+        "path": "/params/executor"
+      }
+    ]
   },
   {
     "name": "storage-namespace-injection",
     "kind": "request",
-    "value": { "method": "storage.get", "params": { "key": "theme", "namespace": "other" } },
-    "expected": [{ "code": "additional_property", "path": "/params/namespace" }]
+    "value": {
+      "method": "storage.get",
+      "params": {
+        "key": "theme",
+        "namespace": "other"
+      }
+    },
+    "expected": [
+      {
+        "code": "additional_property",
+        "path": "/params/namespace"
+      }
+    ]
   },
   {
     "name": "storage-path-injection",
     "kind": "request",
-    "value": { "method": "storage.delete", "params": { "key": "theme", "path": "/private/data" } },
-    "expected": [{ "code": "additional_property", "path": "/params/path" }]
+    "value": {
+      "method": "storage.delete",
+      "params": {
+        "key": "theme",
+        "path": "/private/data"
+      }
+    },
+    "expected": [
+      {
+        "code": "additional_property",
+        "path": "/params/path"
+      }
+    ]
   },
   {
     "name": "storage-list-unsorted",
     "kind": "result",
-    "value": { "method": "storage.list", "result": { "keys": ["beta", "alpha"] } },
-    "expected": [{ "code": "unsorted_value", "path": "/result/keys/1" }]
+    "value": {
+      "method": "storage.list",
+      "result": {
+        "keys": ["beta", "alpha"]
+      }
+    },
+    "expected": [
+      {
+        "code": "unsorted_value",
+        "path": "/result/keys/1"
+      }
+    ]
   },
   {
     "name": "storage-quota-unsafe",
     "kind": "result",
     "value": {
       "method": "storage.get_quota",
-      "result": { "usedBytes": 9007199254740992, "limitBytes": 9007199254740992 }
+      "result": {
+        "usedBytes": 9007199254740992,
+        "limitBytes": 9007199254740992
+      }
     },
     "expected": [
-      { "code": "invalid_value", "path": "/result/limitBytes" },
-      { "code": "invalid_value", "path": "/result/usedBytes" }
+      {
+        "code": "invalid_value",
+        "path": "/result/limitBytes"
+      },
+      {
+        "code": "invalid_value",
+        "path": "/result/usedBytes"
+      }
     ]
   },
   {
     "name": "removed clipboard read method",
     "kind": "request",
-    "value": { "method": "clipboard.read", "params": {} },
-    "expected": [{ "code": "method_not_found", "path": "/method" }]
+    "value": {
+      "method": "clipboard.read",
+      "params": {}
+    },
+    "expected": [
+      {
+        "code": "method_not_found",
+        "path": "/method"
+      }
+    ]
   },
   {
     "name": "removed clipboard write method",
     "kind": "request",
-    "value": { "method": "clipboard.write", "params": { "text": "legacy" } },
-    "expected": [{ "code": "method_not_found", "path": "/method" }]
+    "value": {
+      "method": "clipboard.write",
+      "params": {
+        "text": "legacy"
+      }
+    },
+    "expected": [
+      {
+        "code": "method_not_found",
+        "path": "/method"
+      }
+    ]
   },
   {
     "name": "removed permission denial error",
     "kind": "error",
-    "value": { "code": "permission_denied", "message": "Denied." },
-    "expected": [{ "code": "invalid_value", "path": "/code" }]
+    "value": {
+      "code": "permission_denied",
+      "message": "Denied."
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/code"
+      }
+    ]
   },
   {
     "name": "unknown-error",
     "kind": "error",
-    "value": { "code": "raw_exception", "message": "unsafe" },
-    "expected": [{ "code": "invalid_value", "path": "/code" }]
+    "value": {
+      "code": "raw_exception",
+      "message": "unsafe"
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/code"
+      }
+    ]
   },
   {
     "name": "error-extra-path",
     "kind": "error",
-    "value": { "code": "internal_error", "message": "failed", "path": "/private/plugin" },
-    "expected": [{ "code": "additional_property", "path": "/path" }]
+    "value": {
+      "code": "internal_error",
+      "message": "failed",
+      "path": "/private/plugin"
+    },
+    "expected": [
+      {
+        "code": "additional_property",
+        "path": "/path"
+      }
+    ]
   },
   {
     "name": "http-unknown-field",
@@ -156,7 +313,7 @@
             "value": "20261022T000000Z"
           }
         ],
-        "body": " original 文本\n",
+        "body": " original \u6587\u672c\n",
         "timeoutMs": 15000,
         "pluginId": "forged"
       }
@@ -202,7 +359,7 @@
             "value": "20261022T000000Z"
           }
         ],
-        "body": " original 文本\n",
+        "body": " original \u6587\u672c\n",
         "timeoutMs": 15000
       }
     },
@@ -267,7 +424,7 @@
             "value": "20261022T000000Z"
           }
         ],
-        "body": " original 文本\n",
+        "body": " original \u6587\u672c\n",
         "timeoutMs": 0
       }
     },
@@ -296,7 +453,7 @@
             "value": "20261022T000000Z"
           }
         ],
-        "body": " original 文本\n",
+        "body": " original \u6587\u672c\n",
         "timeoutMs": 15001
       }
     },
@@ -321,7 +478,7 @@
             "value": "x"
           }
         ],
-        "body": " original 文本\n",
+        "body": " original \u6587\u672c\n",
         "timeoutMs": 15000
       }
     },
@@ -346,7 +503,7 @@
             "value": "a\nb"
           }
         ],
-        "body": " original 文本\n",
+        "body": " original \u6587\u672c\n",
         "timeoutMs": 15000
       }
     },
@@ -368,10 +525,10 @@
         "headers": [
           {
             "name": "X-Test",
-            "value": "中文"
+            "value": "\u4e2d\u6587"
           }
         ],
-        "body": " original 文本\n",
+        "body": " original \u6587\u672c\n",
         "timeoutMs": 15000
       }
     },
@@ -396,7 +553,7 @@
             "value": "\t"
           }
         ],
-        "body": " original 文本\n",
+        "body": " original \u6587\u672c\n",
         "timeoutMs": 15000
       }
     },
@@ -458,6 +615,374 @@
       {
         "code": "invalid_type",
         "path": "/result/body"
+      }
+    ]
+  },
+  {
+    "name": "activation-invalid-invocationId-0",
+    "kind": "event",
+    "value": {
+      "event": "actions.activated",
+      "payload": {
+        "actionId": "open",
+        "invocationId": 0,
+        "source": "shortcut"
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/payload/invocationId"
+      }
+    ]
+  },
+  {
+    "name": "activation-invalid-invocationId--1",
+    "kind": "event",
+    "value": {
+      "event": "actions.activated",
+      "payload": {
+        "actionId": "open",
+        "invocationId": -1,
+        "source": "shortcut"
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/payload/invocationId"
+      }
+    ]
+  },
+  {
+    "name": "activation-invalid-invocationId-1.5",
+    "kind": "event",
+    "value": {
+      "event": "actions.activated",
+      "payload": {
+        "actionId": "open",
+        "invocationId": 1.5,
+        "source": "shortcut"
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_type",
+        "path": "/payload/invocationId"
+      }
+    ]
+  },
+  {
+    "name": "activation-invalid-invocationId-9007199254740992",
+    "kind": "event",
+    "value": {
+      "event": "actions.activated",
+      "payload": {
+        "actionId": "open",
+        "invocationId": 9007199254740992,
+        "source": "shortcut"
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/payload/invocationId"
+      }
+    ]
+  },
+  {
+    "name": "activation-invalid-actionId-dev.plugin:open",
+    "kind": "event",
+    "value": {
+      "event": "actions.activated",
+      "payload": {
+        "actionId": "dev.plugin:open",
+        "invocationId": 1,
+        "source": "shortcut"
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/payload/actionId"
+      }
+    ]
+  },
+  {
+    "name": "activation-invalid-source-keyboard",
+    "kind": "event",
+    "value": {
+      "event": "actions.activated",
+      "payload": {
+        "actionId": "open",
+        "invocationId": 1,
+        "source": "keyboard"
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/payload/source"
+      }
+    ]
+  },
+  {
+    "name": "activation-invalid-nativeKey-KeyK",
+    "kind": "event",
+    "value": {
+      "event": "actions.activated",
+      "payload": {
+        "actionId": "open",
+        "invocationId": 1,
+        "source": "shortcut",
+        "nativeKey": "KeyK"
+      }
+    },
+    "expected": [
+      {
+        "code": "additional_property",
+        "path": "/payload/nativeKey"
+      }
+    ]
+  },
+  {
+    "name": "actions.get_activation-rejects-source",
+    "kind": "request",
+    "value": {
+      "method": "actions.get_activation",
+      "params": {
+        "source": "shortcut"
+      }
+    },
+    "expected": [
+      {
+        "code": "additional_property",
+        "path": "/params/source"
+      }
+    ]
+  },
+  {
+    "name": "actions.subscribe_activations-rejects-source",
+    "kind": "request",
+    "value": {
+      "method": "actions.subscribe_activations",
+      "params": {
+        "source": "shortcut"
+      }
+    },
+    "expected": [
+      {
+        "code": "additional_property",
+        "path": "/params/source"
+      }
+    ]
+  },
+  {
+    "name": "activation-initial-batch-overflow",
+    "kind": "result",
+    "value": {
+      "method": "actions.subscribe_activations",
+      "result": {
+        "activations": [
+          {
+            "actionId": "open",
+            "invocationId": 1,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 2,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 3,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 4,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 5,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 6,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 7,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 8,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 9,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 10,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 11,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 12,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 13,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 14,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 15,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 16,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 17,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 18,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 19,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 20,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 21,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 22,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 23,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 24,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 25,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 26,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 27,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 28,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 29,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 30,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 31,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 32,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 33,
+            "source": "shortcut"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "code": "invalid_value",
+        "path": "/result/activations"
+      }
+    ]
+  },
+  {
+    "name": "activation-initial-batch-unsorted",
+    "kind": "result",
+    "value": {
+      "method": "actions.subscribe_activations",
+      "result": {
+        "activations": [
+          {
+            "actionId": "open",
+            "invocationId": 2,
+            "source": "shortcut"
+          },
+          {
+            "actionId": "open",
+            "invocationId": 1,
+            "source": "shortcut"
+          }
+        ]
+      }
+    },
+    "expected": [
+      {
+        "code": "unsorted_value",
+        "path": "/result/activations/1/invocationId"
       }
     ]
   }

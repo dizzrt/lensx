@@ -98,3 +98,13 @@ CLI acceptance 不会授予 Host authority；普通 Web 行为仍限制在隔离
 
 添加受保护 feature 前阅读 [Host API](host-api.md)，gate 失败时阅读
 [兼容与错误](compatibility-and-errors.md)。
+
+## 可选快捷键激活
+
+模板使用 Contract `0.4.0`、SDK `0.5.0` 和 Host API 范围 `>=0.4.0 <0.5.0`，
+Manifest 仍为 `0.4.0`。Runtime controller 接受可选工厂回调 `onShortcutActivated`
+（framework-neutral 的 option，或 React runtime 的第三个参数）。
+省略回调保留正常页面行为，仍消费激活。在初始化前登记，参照
+[公共回调示例](public-packages.md#可选快捷键回调)，按需读取 `sdk.activation`。
+回调仅在 ready 后执行，业务并发由插件负责。重试创建新 attempt 和 SDK；teardown dispose 旧实例。
+不要将 invocation ID 作为页面或 React key。

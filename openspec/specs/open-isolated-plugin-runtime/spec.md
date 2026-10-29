@@ -36,7 +36,7 @@ The plugin Runtime MUST support ordinary Web content and connections within the 
 
 #### Scenario: The SDK invokes controlled Host HTTP
 
-- **WHEN** a current trusted Session uses Host API 0.3.0 http.request
+- **WHEN** a current trusted Session invokes the published `http.request` method through the current Host API
 - **THEN** The `http.request` method added in Host API `0.3.0` MUST be a separate, explicit, controlled public method invoked through the SDK and the current trusted Session.
 - **THEN** It does not change browser fetch CORS/CSP behavior or provide arbitrary native APIs.
 - **THEN** It MUST provide only restricted public Internet HTTPS transport on port 443, subject to the destination, DNS, header/body, deadline, concurrency, cancellation, and cleanup limits in the separate HTTP specification.

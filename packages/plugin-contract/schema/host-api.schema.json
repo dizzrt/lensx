@@ -1,21 +1,35 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://lensx.dev/schemas/plugin-host-api-0.3.0.schema.json",
+  "$id": "https://lensx.dev/schemas/plugin-host-api-0.4.0.schema.json",
   "title": "PluginHostApiInput",
-  "description": "Public semantic Host API 0.3.0 contract. This schema intentionally excludes private RPC transport and Host identity facts.",
+  "description": "Public semantic Host API 0.4.0 contract. This schema intentionally excludes private RPC transport and Host identity facts.",
   "oneOf": [
-    { "$ref": "#/$defs/HostApiRequestInput" },
-    { "$ref": "#/$defs/HostApiResultInput" },
-    { "$ref": "#/$defs/HostApiEventInput" },
-    { "$ref": "#/$defs/HostApiErrorInput" },
-    { "$ref": "#/$defs/PluginRuntimeContextInput" },
-    { "$ref": "#/$defs/HostApiEventNameInput" }
+    {
+      "$ref": "#/$defs/HostApiRequestInput"
+    },
+    {
+      "$ref": "#/$defs/HostApiResultInput"
+    },
+    {
+      "$ref": "#/$defs/HostApiEventInput"
+    },
+    {
+      "$ref": "#/$defs/HostApiErrorInput"
+    },
+    {
+      "$ref": "#/$defs/PluginRuntimeContextInput"
+    },
+    {
+      "$ref": "#/$defs/HostApiEventNameInput"
+    }
   ],
   "$defs": {
     "HostApiMethodInput": {
       "type": "string",
       "enum": [
+        "actions.get_activation",
         "actions.open",
+        "actions.subscribe_activations",
         "http.request",
         "runtime.get_context",
         "storage.delete",
@@ -28,7 +42,7 @@
     },
     "HostApiEventNameInput": {
       "type": "string",
-      "enum": ["runtime.context_changed"]
+      "enum": ["actions.activated", "runtime.context_changed"]
     },
     "HostApiErrorCodeInput": {
       "type": "string",
@@ -55,13 +69,23 @@
       "additionalProperties": false,
       "required": ["hostApiVersion", "locale", "theme", "capabilities"],
       "properties": {
-        "hostApiVersion": { "$ref": "#/$defs/Semver" },
-        "locale": { "type": "string", "enum": ["en-US", "zh-CN"] },
-        "theme": { "type": "string", "enum": ["light", "dark"] },
+        "hostApiVersion": {
+          "$ref": "#/$defs/Semver"
+        },
+        "locale": {
+          "type": "string",
+          "enum": ["en-US", "zh-CN"]
+        },
+        "theme": {
+          "type": "string",
+          "enum": ["light", "dark"]
+        },
         "capabilities": {
           "type": "array",
           "uniqueItems": true,
-          "items": { "$ref": "#/$defs/HostApiMethodInput" }
+          "items": {
+            "$ref": "#/$defs/HostApiMethodInput"
+          }
         }
       }
     },
@@ -88,14 +112,29 @@
     },
     "JsonValue": {
       "anyOf": [
-        { "type": "null" },
-        { "type": "boolean" },
-        { "type": "string" },
-        { "type": "number" },
-        { "type": "array", "items": { "$ref": "#/$defs/JsonValue" } },
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        },
         {
           "type": "object",
-          "additionalProperties": { "$ref": "#/$defs/JsonValue" }
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          }
         }
       ]
     },
@@ -104,36 +143,80 @@
       "additionalProperties": false,
       "required": ["name", "value"],
       "properties": {
-        "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$" },
-        "value": { "type": "string", "maxLength": 8192, "pattern": "^[\\u0020-\\u007E]*$" }
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$"
+        },
+        "value": {
+          "type": "string",
+          "maxLength": 8192,
+          "pattern": "^[\\u0020-\\u007E]*$"
+        }
       }
     },
     "HttpHeaders": {
       "type": "array",
       "maxItems": 32,
-      "items": { "$ref": "#/$defs/HttpHeader" }
+      "items": {
+        "$ref": "#/$defs/HttpHeader"
+      }
     },
     "HttpRequestParams": {
       "type": "object",
       "additionalProperties": false,
       "required": ["url", "method"],
       "properties": {
-        "url": { "type": "string", "minLength": 1, "maxLength": 4096 },
-        "method": { "type": "string", "enum": ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] },
-        "headers": { "$ref": "#/$defs/HttpHeaders" },
-        "body": { "type": "string", "maxLength": 1048576 },
-        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 15000 }
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "method": {
+          "type": "string",
+          "enum": ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+        },
+        "headers": {
+          "$ref": "#/$defs/HttpHeaders"
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 1048576
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 15000
+        }
       },
-      "if": { "properties": { "method": { "enum": ["GET", "HEAD"] } } },
-      "then": { "not": { "required": ["body"], "properties": { "body": {} } } }
+      "if": {
+        "properties": {
+          "method": {
+            "enum": ["GET", "HEAD"]
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": ["body"],
+          "properties": {
+            "body": {}
+          }
+        }
+      }
     },
     "HttpRequestRequest": {
       "type": "object",
       "additionalProperties": false,
       "required": ["method", "params"],
       "properties": {
-        "method": { "const": "http.request" },
-        "params": { "$ref": "#/$defs/HttpRequestParams" }
+        "method": {
+          "const": "http.request"
+        },
+        "params": {
+          "$ref": "#/$defs/HttpRequestParams"
+        }
       }
     },
     "HttpRequestResult": {
@@ -141,15 +224,26 @@
       "additionalProperties": false,
       "required": ["method", "result"],
       "properties": {
-        "method": { "const": "http.request" },
+        "method": {
+          "const": "http.request"
+        },
         "result": {
           "type": "object",
           "additionalProperties": false,
           "required": ["status", "headers", "body"],
           "properties": {
-            "status": { "type": "integer", "minimum": 100, "maximum": 599 },
-            "headers": { "$ref": "#/$defs/HttpHeaders" },
-            "body": { "type": "string", "maxLength": 1048576 }
+            "status": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 599
+            },
+            "headers": {
+              "$ref": "#/$defs/HttpHeaders"
+            },
+            "body": {
+              "type": "string",
+              "maxLength": 1048576
+            }
           }
         }
       }
@@ -159,8 +253,12 @@
       "additionalProperties": false,
       "required": ["method", "params"],
       "properties": {
-        "method": { "const": "runtime.get_context" },
-        "params": { "$ref": "#/$defs/EmptyParams" }
+        "method": {
+          "const": "runtime.get_context"
+        },
+        "params": {
+          "$ref": "#/$defs/EmptyParams"
+        }
       }
     },
     "UiCloseRequest": {
@@ -168,8 +266,12 @@
       "additionalProperties": false,
       "required": ["method", "params"],
       "properties": {
-        "method": { "const": "ui.close" },
-        "params": { "$ref": "#/$defs/EmptyParams" }
+        "method": {
+          "const": "ui.close"
+        },
+        "params": {
+          "$ref": "#/$defs/EmptyParams"
+        }
       }
     },
     "ActionsOpenRequest": {
@@ -177,12 +279,18 @@
       "additionalProperties": false,
       "required": ["method", "params"],
       "properties": {
-        "method": { "const": "actions.open" },
+        "method": {
+          "const": "actions.open"
+        },
         "params": {
           "type": "object",
           "additionalProperties": false,
           "required": ["actionId"],
-          "properties": { "actionId": { "$ref": "#/$defs/LocalActionId" } }
+          "properties": {
+            "actionId": {
+              "$ref": "#/$defs/LocalActionId"
+            }
+          }
         }
       }
     },
@@ -191,12 +299,18 @@
       "additionalProperties": false,
       "required": ["method", "params"],
       "properties": {
-        "method": { "const": "storage.get" },
+        "method": {
+          "const": "storage.get"
+        },
         "params": {
           "type": "object",
           "additionalProperties": false,
           "required": ["key"],
-          "properties": { "key": { "$ref": "#/$defs/StorageKey" } }
+          "properties": {
+            "key": {
+              "$ref": "#/$defs/StorageKey"
+            }
+          }
         }
       }
     },
@@ -205,14 +319,20 @@
       "additionalProperties": false,
       "required": ["method", "params"],
       "properties": {
-        "method": { "const": "storage.set" },
+        "method": {
+          "const": "storage.set"
+        },
         "params": {
           "type": "object",
           "additionalProperties": false,
           "required": ["key", "value"],
           "properties": {
-            "key": { "$ref": "#/$defs/StorageKey" },
-            "value": { "$ref": "#/$defs/JsonValue" }
+            "key": {
+              "$ref": "#/$defs/StorageKey"
+            },
+            "value": {
+              "$ref": "#/$defs/JsonValue"
+            }
           }
         }
       }
@@ -222,12 +342,18 @@
       "additionalProperties": false,
       "required": ["method", "params"],
       "properties": {
-        "method": { "const": "storage.delete" },
+        "method": {
+          "const": "storage.delete"
+        },
         "params": {
           "type": "object",
           "additionalProperties": false,
           "required": ["key"],
-          "properties": { "key": { "$ref": "#/$defs/StorageKey" } }
+          "properties": {
+            "key": {
+              "$ref": "#/$defs/StorageKey"
+            }
+          }
         }
       }
     },
@@ -236,13 +362,21 @@
       "additionalProperties": false,
       "required": ["method", "params"],
       "properties": {
-        "method": { "const": "storage.list" },
+        "method": {
+          "const": "storage.list"
+        },
         "params": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "cursor": { "$ref": "#/$defs/OpaqueCursor" },
-            "limit": { "type": "integer", "minimum": 1, "maximum": 1000 }
+            "cursor": {
+              "$ref": "#/$defs/OpaqueCursor"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
           }
         }
       }
@@ -252,21 +386,49 @@
       "additionalProperties": false,
       "required": ["method", "params"],
       "properties": {
-        "method": { "const": "storage.get_quota" },
-        "params": { "$ref": "#/$defs/EmptyParams" }
+        "method": {
+          "const": "storage.get_quota"
+        },
+        "params": {
+          "$ref": "#/$defs/EmptyParams"
+        }
       }
     },
     "HostApiRequestInput": {
       "oneOf": [
-        { "$ref": "#/$defs/ActionsOpenRequest" },
-        { "$ref": "#/$defs/HttpRequestRequest" },
-        { "$ref": "#/$defs/RuntimeGetContextRequest" },
-        { "$ref": "#/$defs/StorageDeleteRequest" },
-        { "$ref": "#/$defs/StorageGetRequest" },
-        { "$ref": "#/$defs/StorageGetQuotaRequest" },
-        { "$ref": "#/$defs/StorageListRequest" },
-        { "$ref": "#/$defs/StorageSetRequest" },
-        { "$ref": "#/$defs/UiCloseRequest" }
+        {
+          "$ref": "#/$defs/ActionsOpenRequest"
+        },
+        {
+          "$ref": "#/$defs/HttpRequestRequest"
+        },
+        {
+          "$ref": "#/$defs/RuntimeGetContextRequest"
+        },
+        {
+          "$ref": "#/$defs/StorageDeleteRequest"
+        },
+        {
+          "$ref": "#/$defs/StorageGetRequest"
+        },
+        {
+          "$ref": "#/$defs/StorageGetQuotaRequest"
+        },
+        {
+          "$ref": "#/$defs/StorageListRequest"
+        },
+        {
+          "$ref": "#/$defs/StorageSetRequest"
+        },
+        {
+          "$ref": "#/$defs/UiCloseRequest"
+        },
+        {
+          "$ref": "#/$defs/ActionsGetActivationRequest"
+        },
+        {
+          "$ref": "#/$defs/ActionsSubscribeActivationsRequest"
+        }
       ]
     },
     "RuntimeGetContextResult": {
@@ -274,8 +436,12 @@
       "additionalProperties": false,
       "required": ["method", "result"],
       "properties": {
-        "method": { "const": "runtime.get_context" },
-        "result": { "$ref": "#/$defs/PluginRuntimeContextInput" }
+        "method": {
+          "const": "runtime.get_context"
+        },
+        "result": {
+          "$ref": "#/$defs/PluginRuntimeContextInput"
+        }
       }
     },
     "UiCloseResult": {
@@ -283,12 +449,18 @@
       "additionalProperties": false,
       "required": ["method", "result"],
       "properties": {
-        "method": { "const": "ui.close" },
+        "method": {
+          "const": "ui.close"
+        },
         "result": {
           "type": "object",
           "additionalProperties": false,
           "required": ["accepted"],
-          "properties": { "accepted": { "const": true } }
+          "properties": {
+            "accepted": {
+              "const": true
+            }
+          }
         }
       }
     },
@@ -297,12 +469,18 @@
       "additionalProperties": false,
       "required": ["method", "result"],
       "properties": {
-        "method": { "const": "actions.open" },
+        "method": {
+          "const": "actions.open"
+        },
         "result": {
           "type": "object",
           "additionalProperties": false,
           "required": ["opened"],
-          "properties": { "opened": { "const": true } }
+          "properties": {
+            "opened": {
+              "const": true
+            }
+          }
         }
       }
     },
@@ -311,22 +489,32 @@
       "additionalProperties": false,
       "required": ["method", "result"],
       "properties": {
-        "method": { "const": "storage.get" },
+        "method": {
+          "const": "storage.get"
+        },
         "result": {
           "oneOf": [
             {
               "type": "object",
               "additionalProperties": false,
               "required": ["found"],
-              "properties": { "found": { "const": false } }
+              "properties": {
+                "found": {
+                  "const": false
+                }
+              }
             },
             {
               "type": "object",
               "additionalProperties": false,
               "required": ["found", "value"],
               "properties": {
-                "found": { "const": true },
-                "value": { "$ref": "#/$defs/JsonValue" }
+                "found": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/JsonValue"
+                }
               }
             }
           ]
@@ -338,12 +526,18 @@
       "additionalProperties": false,
       "required": ["method", "result"],
       "properties": {
-        "method": { "const": "storage.set" },
+        "method": {
+          "const": "storage.set"
+        },
         "result": {
           "type": "object",
           "additionalProperties": false,
           "required": ["stored"],
-          "properties": { "stored": { "const": true } }
+          "properties": {
+            "stored": {
+              "const": true
+            }
+          }
         }
       }
     },
@@ -352,12 +546,18 @@
       "additionalProperties": false,
       "required": ["method", "result"],
       "properties": {
-        "method": { "const": "storage.delete" },
+        "method": {
+          "const": "storage.delete"
+        },
         "result": {
           "type": "object",
           "additionalProperties": false,
           "required": ["deleted"],
-          "properties": { "deleted": { "type": "boolean" } }
+          "properties": {
+            "deleted": {
+              "type": "boolean"
+            }
+          }
         }
       }
     },
@@ -366,7 +566,9 @@
       "additionalProperties": false,
       "required": ["method", "result"],
       "properties": {
-        "method": { "const": "storage.list" },
+        "method": {
+          "const": "storage.list"
+        },
         "result": {
           "type": "object",
           "additionalProperties": false,
@@ -376,9 +578,13 @@
               "type": "array",
               "maxItems": 1000,
               "uniqueItems": true,
-              "items": { "$ref": "#/$defs/StorageKey" }
+              "items": {
+                "$ref": "#/$defs/StorageKey"
+              }
             },
-            "nextCursor": { "$ref": "#/$defs/OpaqueCursor" }
+            "nextCursor": {
+              "$ref": "#/$defs/OpaqueCursor"
+            }
           }
         }
       }
@@ -388,47 +594,209 @@
       "additionalProperties": false,
       "required": ["method", "result"],
       "properties": {
-        "method": { "const": "storage.get_quota" },
+        "method": {
+          "const": "storage.get_quota"
+        },
         "result": {
           "type": "object",
           "additionalProperties": false,
           "required": ["usedBytes", "limitBytes"],
           "properties": {
-            "usedBytes": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-            "limitBytes": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+            "usedBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "limitBytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
           }
         }
       }
     },
     "HostApiResultInput": {
       "oneOf": [
-        { "$ref": "#/$defs/ActionsOpenResult" },
-        { "$ref": "#/$defs/HttpRequestResult" },
-        { "$ref": "#/$defs/RuntimeGetContextResult" },
-        { "$ref": "#/$defs/StorageDeleteResult" },
-        { "$ref": "#/$defs/StorageGetResult" },
-        { "$ref": "#/$defs/StorageGetQuotaResult" },
-        { "$ref": "#/$defs/StorageListResult" },
-        { "$ref": "#/$defs/StorageSetResult" },
-        { "$ref": "#/$defs/UiCloseResult" }
+        {
+          "$ref": "#/$defs/ActionsOpenResult"
+        },
+        {
+          "$ref": "#/$defs/HttpRequestResult"
+        },
+        {
+          "$ref": "#/$defs/RuntimeGetContextResult"
+        },
+        {
+          "$ref": "#/$defs/StorageDeleteResult"
+        },
+        {
+          "$ref": "#/$defs/StorageGetResult"
+        },
+        {
+          "$ref": "#/$defs/StorageGetQuotaResult"
+        },
+        {
+          "$ref": "#/$defs/StorageListResult"
+        },
+        {
+          "$ref": "#/$defs/StorageSetResult"
+        },
+        {
+          "$ref": "#/$defs/UiCloseResult"
+        },
+        {
+          "$ref": "#/$defs/ActionsGetActivationResult"
+        },
+        {
+          "$ref": "#/$defs/ActionsSubscribeActivationsResult"
+        }
       ]
     },
     "HostApiEventInput": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["event", "payload"],
-      "properties": {
-        "event": { "const": "runtime.context_changed" },
-        "payload": { "$ref": "#/$defs/PluginRuntimeContextInput" }
-      }
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ActionsActivatedEvent"
+        },
+        {
+          "$ref": "#/$defs/RuntimeContextChangedEvent"
+        }
+      ]
     },
     "HostApiErrorInput": {
       "type": "object",
       "additionalProperties": false,
       "required": ["code", "message"],
       "properties": {
-        "code": { "$ref": "#/$defs/HostApiErrorCodeInput" },
-        "message": { "type": "string", "minLength": 1, "maxLength": 512 }
+        "code": {
+          "$ref": "#/$defs/HostApiErrorCodeInput"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    },
+    "PluginActionActivationInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actionId", "invocationId", "source"],
+      "properties": {
+        "actionId": {
+          "$ref": "#/$defs/LocalActionId"
+        },
+        "invocationId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "source": {
+          "enum": ["normal", "shortcut"]
+        }
+      }
+    },
+    "ActionsGetActivationRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "params"],
+      "properties": {
+        "method": {
+          "const": "actions.get_activation"
+        },
+        "params": {
+          "$ref": "#/$defs/EmptyParams"
+        }
+      }
+    },
+    "ActionsGetActivationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "result"],
+      "properties": {
+        "method": {
+          "const": "actions.get_activation"
+        },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["activation"],
+          "properties": {
+            "activation": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/PluginActionActivationInput"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "ActionsSubscribeActivationsRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "params"],
+      "properties": {
+        "method": {
+          "const": "actions.subscribe_activations"
+        },
+        "params": {
+          "$ref": "#/$defs/EmptyParams"
+        }
+      }
+    },
+    "ActionsSubscribeActivationsResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "result"],
+      "properties": {
+        "method": {
+          "const": "actions.subscribe_activations"
+        },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["activations"],
+          "properties": {
+            "activations": {
+              "type": "array",
+              "maxItems": 32,
+              "items": {
+                "$ref": "#/$defs/PluginActionActivationInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "RuntimeContextChangedEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "payload"],
+      "properties": {
+        "event": {
+          "const": "runtime.context_changed"
+        },
+        "payload": {
+          "$ref": "#/$defs/PluginRuntimeContextInput"
+        }
+      }
+    },
+    "ActionsActivatedEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "payload"],
+      "properties": {
+        "event": {
+          "const": "actions.activated"
+        },
+        "payload": {
+          "$ref": "#/$defs/PluginActionActivationInput"
+        }
       }
     }
   }

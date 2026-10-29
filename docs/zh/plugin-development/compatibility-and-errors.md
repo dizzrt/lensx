@@ -6,22 +6,24 @@
 
 | 维度 | 当前基线 | 含义 |
 | --- | --- | --- |
-| Contract package | `0.3.0` | 公共 Manifest 与 Host API semantic contract。 |
-| UI/Testkit/CLI package | `0.2.0` | UI、测试 helper 与作者工具。 |
-| SDK package | `0.4.0` | root semantic client 与 `/webview` production transport。 |
+| Contract package | `0.4.0` | 公共 Manifest 与 Host API semantic contract。 |
+| UI/Testkit/CLI package | `0.2.1` | UI、测试 helper 与作者工具。 |
+| SDK package | `0.5.0` | root semantic client 与 `/webview` production transport。 |
 | Manifest protocol | `0.4.0` | 作者输入与 normalized WebView Manifest wire contract。 |
-| Host API protocol | `0.3.0` | Semantic method、result、event、error 与 context。 |
+| Host API protocol | `0.4.0` | Semantic method、result、event、error 与 context。 |
 | Private bridge carrier | `0.2.0` | closed Host/native-to-plugin transport frame；不是 Host API。 |
 | lensX application | `0.1.0` | Manifest 检查的 Host compatibility range。 |
 | `.lxp` package format | `0.1.0` | Canonical archive 与 checksums profile。 |
 
-Package patch 不会自动改变 protocol。Manifest 分别为 lensX 与 Host API 声明半开 compatibility
-range。SDK 支持 Host API `>=0.2.0 <0.4.0`，并在 ready 前拒绝 incompatible context。
-旧 Host 可以初始化新 SDK，但不提供 `http.request`；始终检查当前 capability。当前 Host
-报告 `0.3.0`。Manifest 范围不包含 `0.3.0` 的旧包将被判为 incompatible，旧 SDK `0.3.0`
-也不能接受新方法目录。需要升级公共依赖、更新 Manifest、重新构建与打包；不会隐式协商协议
-或改写插件包。维护的 templates 与 ConfigLens 使用 `0.4.0` exclusive upper bound；
-Translation 最低要求 Host API `0.3.0`。
+Package patch 不会自动改变协议。SDK `0.5.0` 支持 Host API `>=0.4.0 <0.5.0`，
+在 ready 前拒绝旧版本或不兼容的 Context。当前模板、ConfigLens 与 Translation 均声明该范围。
+已有 SDK `0.3.0` 和 `0.4.0` 包不理解当前激活目录；必须升级公共依赖、修改 Manifest 范围、
+重新构建与打包。Host 不协商旧目录或改写安装包。迁移后仍可省略可选回调。
+UI、Testkit 与 CLI 的 patch 版本承载更新后的依赖元数据和模板；Manifest、carrier、应用和包格式版本不变。
+
+只有 Context 声明 `actions.subscribe_activations` 时，SDK 才在初始化期间开启激活订阅。
+开流前失败可以回到 idle，允许显式重试；尝试订阅后初始化失败则终止 SDK、transport 和 Session attempt。
+重试必须建立新的 Runtime attempt 和 SDK，不重放旧激活。
 
 ## 校验结论
 

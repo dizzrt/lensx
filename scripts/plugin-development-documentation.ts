@@ -2,7 +2,7 @@ import { posix } from 'node:path';
 
 export type DocumentationLocale = 'en' | 'zh';
 export type CapabilityStatus = 'shipped' | 'conditional' | 'not-delivered';
-export type HostApiProvider = 'base' | 'storage' | 'http';
+export type HostApiProvider = 'base' | 'storage' | 'http' | 'activation';
 
 export interface DocumentationDiagnostic {
   readonly code: string;

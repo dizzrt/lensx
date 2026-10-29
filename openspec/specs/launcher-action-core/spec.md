@@ -226,7 +226,7 @@ One trusted Host registry MUST provide atomic Action registration and owner repl
 
 ### Requirement: The dispatcher must execute actions uniformly and return typed results
 
-The unified dispatcher MUST resolve current enabled Actions, invoke at most one Host executor, and return typed results with stable safe failure codes without leaking internal exceptions.
+The unified Dispatcher MUST execute each Action using its current registration and enabled state, pass the immutable invocation context to the Host executor, execute at most once, and preserve safe typed success and failure results.
 
 #### Scenario: Execute an available action
 
@@ -265,6 +265,12 @@ The unified dispatcher MUST resolve current enabled Actions, invoke at most one 
   `action_not_found`, `action_unavailable`, and `action_execution_failed`. When
   an executor throws or rejects, the dispatcher MUST contain the internal error
   and MUST NOT expose a stack, Tauri window, or Rust internal type to the caller.
+
+#### Scenario: Independent invocations of the same Action
+- **WHEN** a user executes the same Action again through a normal entry or dedicated shortcut
+- **THEN** every admitted invocation has an independent invocationId and explicit normal or shortcut source
+- **THEN** repeated delivery of the same invocation identifier does not execute again, and independent calls are not discarded merely because they share an Action ID
+- **THEN** recent use is recorded once per successful invocation, and plugin business callback results do not reinterpret successful Action navigation
 
 ### Requirement: Descriptors and executors must preserve the Host trust boundary
 
@@ -335,7 +341,7 @@ the native window hide operation directly.
 
 ### Requirement: The default registry must contain the Host settings Action
 
-The default service MUST register localized lensX Settings metadata as an enabled Host Action. Its private executor MUST use framework-independent page navigation while React dispatches only the Action ID.
+The default service MUST register localized lensX Settings as an enabled Host Action. Its private executor MUST use framework-neutral navigation and accept Host invocation context; ordinary React result components continue to select only an Action ID and do not supply trusted provenance.
 
 #### Scenario: Create the default Action service
 
@@ -387,11 +393,8 @@ The default service MUST register localized lensX Settings metadata as an enable
 
 #### Scenario: Navigate from the Settings executor without exposing a page target
 - **WHEN** the Settings Action is presented for execution or dispatched to its private Host executor
-- **THEN** The trusted Host executor MUST preserve the existing
-  `LauncherActionExecutor = () => Promise<void> | void` contract and MUST request
-  the `lensx.core/settings` Host page through a framework-independent application
-  navigation service. React result components MUST continue to dispatch only the
-  Action ID.
+- **THEN** the private Host executor MUST use `LauncherActionExecutor = (invocation: LauncherActionInvocation) => Promise<void> | void`, request `lensx.core/settings` through framework-neutral navigation, and pass this Host-created invocation context
+- **THEN** ordinary React result components continue to submit only an Action ID; only the trusted native entry establishes shortcut provenance, which never enters the public descriptor
 
 ### Requirement: Action titles MUST express user-facing entry names
 
@@ -452,3 +455,23 @@ titles and keywords, without guaranteeing matches for old full titles.
 - **THEN** the old full title does not return that Action
 - **THEN** the system does not restore the match through a legacy title alias,
   an automatically added prefix, or description
+
+### Requirement: Action invocation provenance MUST be per-call and Host-owned
+
+Every admitted Action invocation MUST contain a Host-created immutable invocationId and `normal | shortcut` source. UI, plugins, and Manifests MUST NOT claim shortcut provenance. Window activation reasons MUST remain separate from Action invocation sources; unified admission MUST cover UI, native shortcuts, and plugin actions.open.
+
+#### Scenario: Ordinary selection and plugin navigation
+- **WHEN** a user clicks, presses search Enter, selects Recent/Pinned, or a plugin calls actions.open
+- **THEN** the source is normal and does not inherit the preceding shortcut or window activation source
+- **THEN** the public plugin request still carries only the permitted local Action ID and rejects additional source fields
+
+#### Scenario: Enter through a trusted dedicated shortcut
+- **WHEN** a current native binding submits its target to the Host invocation entry
+- **THEN** the source is shortcut, and execution still rechecks the Registry, Page, and binding generation
+- **THEN** provenance exposes no physical binding, native object, other application input, or binding configuration
+
+#### Scenario: Queue concurrent invocations during initialization
+- **WHEN** a new independent invocation arrives before the Host is ready or while the same Page Runtime is being created
+- **THEN** admitted invocations enter an ordered bounded queue containing at most 32 waiting calls, and the same Page creates only one Runtime
+- **THEN** a full queue or a 10-second wait timeout produces admission-layer failure feedback, and invalidated calls do not migrate to another Page attempt
+- **THEN** one physical long press or duplicate delivery creates no additional invocation, while an independent press after release creates a new invocation

@@ -7,6 +7,7 @@ Page Registry, coordinate Page and Action publication, navigate through the
 existing single-window application surface, and fail closed without loading or
 executing plugin Runtime code.
 ## Requirements
+
 ### Requirement: Plugin Pages must project into stable Host-owned descriptors
 
 Plugin Pages MUST project from current validated Registration into stable Host-private descriptors with the structured owner/Page identity, safe presentation metadata, and no leaked routes or Runtime internals.
@@ -163,7 +164,7 @@ One serial coordinator MUST derive Page and Action batches from the same Registr
 
 ### Requirement: Plugin Page navigation must remain framework-neutral and Host-controlled
 
-Plugin Page opening MUST use the framework-neutral Host navigation service and current Registry availability, returning safe rejection without exposing renderers, setters, routes, or privileged APIs to plugins.
+Plugin Page opening MUST use framework-neutral Host navigation and current Registry availability, and associate the trusted current Action invocation. Failures MUST reject safely; plugins gain no renderer, setter, route, or native authority.
 
 #### Scenario: Open an available Plugin Page
 
@@ -189,13 +190,21 @@ Plugin Page opening MUST use the framework-neutral Host navigation service and c
 #### Scenario: Resolve a navigation request through the current Page Registry
 - **WHEN** an Action requests opening a Plugin Page by structured target identity
 - **THEN** The system MUST use the unified framework-neutral application navigation
-  service to accept `{ owner_id, page_id }` and an opening Action ID. Before
-  notifying the one App Shell handler, the service MUST look up a currently
-  available descriptor in the Page Registry. Unknown, unavailable, or removed
-  Pages MUST be rejected with stable, safe `page_unavailable` semantics. Plugins,
-  Manifests, Action descriptors, and projection payloads MUST NOT receive a React
-  setter, navigation handler, route executor, Registry mutation API, Tauri API,
-  or Page renderer.
+  service to accept `{ owner_id, page_id }` and an opening Action ID.
+- **THEN** navigation MUST also accept independent Host invocation context and associate it with the current Page attempt; ActivePage retains only owner/page/opened_by_action_id identity fields and never uses invocation IDs as Page identity.
+- **THEN** before notifying the sole App Shell handler, navigation MUST query the current available Page descriptor; unknown, unavailable, or removed Pages MUST reject with safe `page_unavailable` semantics.
+- **THEN** plugins, Manifests, Action descriptors, and projection payloads MUST NOT obtain React setters, navigation handlers, route executors, Registry mutation APIs, Tauri APIs, or Page renderers.
+
+#### Scenario: Deliver a new invocation to the same Page
+- **WHEN** the current Action or another Action opens the same owner/page with a new invocation while Runtime facts remain equivalent
+- **THEN** the Host preserves the existing Page, Child WebView, input, selection, and business state while updating the opening Action display and independent activation
+- **THEN** shortcut provenance delivers the activation to the current plugin when it has supplied a callback, while normal provenance only updates activation facts
+- **THEN** invocationId changes do not rebuild the Page or input, and the launcher input does not steal focus
+
+#### Scenario: Terminate old invocations on Page navigation or invalidation
+- **WHEN** a Page closes, is replaced, is navigated away from, or becomes unavailable while an invocation awaits initialization or delivery
+- **THEN** the invocation belongs only to its original Page attempt, and undelivered work terminates and is cleaned up
+- **THEN** late results cannot reopen the old Page, contaminate the new Page provenance, or execute in a replacement Session
 
 ### Requirement: Plugin Page presentation must resolve current localized metadata safely
 

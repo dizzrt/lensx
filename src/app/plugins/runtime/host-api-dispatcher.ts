@@ -15,7 +15,9 @@ import {
 } from '@lensx/plugin-contract';
 
 import type { LauncherActionService } from '../../launcher/actions';
+import { LauncherActionAdmissionError } from '../../launcher/actions/dispatcher';
 import type { HostPageTarget } from '../../navigation';
+import type { PluginPageActivationSession } from '../../navigation/activations';
 import {
   PLUGIN_SCOPED_STORAGE_METHODS,
   PluginScopedStorageBoundaryError,
@@ -32,6 +34,7 @@ const BASE_IMPLEMENTED_METHODS = Object.freeze([
   'runtime.get_context',
   'ui.close',
 ] as const satisfies readonly HostApiMethod[]);
+const ACTIVATION_METHODS = new Set<HostApiMethod>(['actions.get_activation', 'actions.subscribe_activations']);
 const baseImplementedMethodSet = new Set<HostApiMethod>(BASE_IMPLEMENTED_METHODS);
 const NATIVE_HTTP_METHODS = Object.freeze(['http.request'] as const satisfies readonly HostApiMethod[]);
 const nativeHttpMethodSet = new Set<HostApiMethod>(NATIVE_HTTP_METHODS);
@@ -45,6 +48,7 @@ const errors = Object.freeze({
   invalidParams: Object.freeze({ code: 'invalid_params', message: 'The Host API parameters are invalid.' }),
   methodNotFound: Object.freeze({ code: 'method_not_found', message: 'The Host API method was not found.' }),
   limitExceeded: Object.freeze({ code: 'limit_exceeded', message: 'The Host API limit was exceeded.' }),
+  timeout: Object.freeze({ code: 'timeout', message: 'The Host API request timed out.' }),
   notFound: Object.freeze({ code: 'not_found', message: 'The requested Host resource was not found.' }),
   unavailable: Object.freeze({ code: 'unavailable', message: 'The Host API is unavailable.' }),
 }) satisfies Readonly<Record<string, HostApiError>>;
@@ -73,11 +77,17 @@ export interface PluginHostApiDispatcherDependencies {
   readonly context: PluginHostApiContextSource;
   readonly navigation: PluginHostApiNavigation;
   readonly storage?: PluginScopedStorageProviderFactory;
+  readonly bindActivations?: (
+    target: HostPageTarget,
+    runtimeAttemptId?: string,
+  ) => PluginPageActivationSession | undefined | Promise<PluginPageActivationSession | undefined>;
+  readonly isActivationAttemptCurrent?: (target: HostPageTarget, runtimeAttemptId: string) => boolean;
   /** True only in the production composition whose native dispatcher owns HTTP execution. */
   readonly nativeHttpAvailable?: boolean;
 }
 
 export interface CreatePluginHostApiDispatcherBindingInput {
+  readonly runtimeAttemptId?: string;
   readonly identity: PluginHostApiAuthorityIdentity;
   readonly isCurrent: () => boolean;
 }
@@ -94,6 +104,7 @@ export interface PluginHostApiDispatcherBinding {
   readonly execute: (request: HostApiRequest, signal: AbortSignal) => ReturnType<PluginRuntimeTransportHandler>;
   readonly attachEmitter: (emit: (event: HostApiEvent) => boolean) => () => void;
   readonly dispose: () => void;
+  readonly fail?: () => void;
 }
 
 export interface PluginHostApiDispatcherFactory {
@@ -145,12 +156,17 @@ const invalidRequestError = (request: unknown): HostApiError => {
 const validateResult = (result: HostApiResult): HostApiResult | HostApiError =>
   validateHostApiResult(result).status === 'valid' ? result : errors.internal;
 
-const availableMethods = (storageAvailable: boolean, nativeHttpAvailable: boolean): readonly HostApiMethod[] =>
+const availableMethods = (
+  storageAvailable: boolean,
+  nativeHttpAvailable: boolean,
+  activationAvailable: boolean,
+): readonly HostApiMethod[] =>
   Object.freeze(
     HOST_API_METHOD_CATALOG.flatMap(({ method }) =>
       baseImplementedMethodSet.has(method) ||
       (storageAvailable && storageMethodSet.has(method)) ||
-      (nativeHttpAvailable && nativeHttpMethodSet.has(method))
+      (nativeHttpAvailable && nativeHttpMethodSet.has(method)) ||
+      (activationAvailable && ACTIVATION_METHODS.has(method))
         ? [method]
         : [],
     ),
@@ -160,13 +176,14 @@ const createContextSnapshot = (
   source: PluginHostApiContextSource,
   storageAvailable: boolean,
   nativeHttpAvailable: boolean,
+  activationAvailable: boolean,
 ): PluginRuntimeContext => {
   const state = source.snapshot();
   const validation = validatePluginRuntimeContext({
     hostApiVersion: PLUGIN_HOST_API_VERSION,
     locale: state.locale,
     theme: state.theme,
-    capabilities: availableMethods(storageAvailable, nativeHttpAvailable),
+    capabilities: availableMethods(storageAvailable, nativeHttpAvailable, activationAvailable),
   });
   if (validation.status === 'invalid') throw new TypeError('Invalid Host-owned Runtime Context snapshot.');
   return validation.value;
@@ -182,18 +199,32 @@ export const createPluginHostApiDispatcherFactory = (
   dependencies: PluginHostApiDispatcherDependencies,
 ): PluginHostApiDispatcherFactory =>
   Object.freeze({
-    create({ identity, isCurrent }: CreatePluginHostApiDispatcherBindingInput) {
+    create({ identity, isCurrent: isSessionCurrent, runtimeAttemptId }: CreatePluginHostApiDispatcherBindingInput) {
       let disposed = false;
       let emitter: ((event: HostApiEvent) => boolean) | undefined;
       let emitterAttached = false;
       let latestContext: PluginRuntimeContext | undefined;
+      const target = Object.freeze({ owner_id: identity.plugin_id, page_id: identity.page_id });
+      const isCurrent = () =>
+        isSessionCurrent() &&
+        (runtimeAttemptId === undefined ||
+          dependencies.isActivationAttemptCurrent === undefined ||
+          dependencies.isActivationAttemptCurrent(target, runtimeAttemptId));
       const storage = dependencies.storage?.create({ identity, isCurrent });
+      let activation: PluginPageActivationSession | undefined;
+      const activationReady = Promise.resolve(dependencies.bindActivations?.(target, runtimeAttemptId))
+        .then((provider) => {
+          if (disposed) provider?.dispose();
+          else activation = provider;
+        })
+        .catch(() => undefined);
 
       const readContext = (): PluginRuntimeContext => {
         const context = createContextSnapshot(
           dependencies.context,
           storage?.available() ?? false,
           dependencies.nativeHttpAvailable === true,
+          activation?.available() ?? false,
         );
         latestContext = context;
         return context;
@@ -213,6 +244,7 @@ export const createPluginHostApiDispatcherFactory = (
             dependencies.context,
             storage?.available() ?? false,
             dependencies.nativeHttpAvailable === true,
+            activation?.available() ?? false,
           );
           latestContext = next;
           if (previous && sameContext(previous, next)) return;
@@ -225,6 +257,7 @@ export const createPluginHostApiDispatcherFactory = (
       const unsubscribeStorage = storage?.subscribeAvailability(publishContext) ?? (() => undefined);
 
       const execute: PluginHostApiDispatcherBinding['execute'] = async (requestInput, signal) => {
+        await activationReady;
         const unavailable = isAvailable(disposed, isCurrent, signal);
         if (unavailable) return unavailable;
 
@@ -237,6 +270,18 @@ export const createPluginHostApiDispatcherFactory = (
             // Native source-bound RPC owns this method. Never fall back to browser fetch or invoke.
             case 'http.request':
               return errors.unavailable;
+            case 'actions.get_activation': {
+              if (!activation?.available()) return errors.unavailable;
+              return validateResult({ method: request.method, result: { activation: activation.current() } });
+            }
+            case 'actions.subscribe_activations': {
+              if (!activation?.available() || !emitter) return errors.unavailable;
+              const activations = activation.subscribe((payload) => {
+                if (disposed || !isCurrent()) return false;
+                return emitter?.(Object.freeze({ event: 'actions.activated', payload })) ?? false;
+              });
+              return validateResult({ method: request.method, result: { activations } });
+            }
             case 'runtime.get_context': {
               const current = isAvailable(disposed, isCurrent, signal);
               if (current) return current;
@@ -264,8 +309,13 @@ export const createPluginHostApiDispatcherFactory = (
                 .find(({ action_id: candidate }) => candidate === actionId);
               if (!descriptor || descriptor.owner_id !== identity.plugin_id || !descriptor.enabled)
                 return errors.notFound;
-              const result = await dependencies.actions.dispatcher.dispatch(actionId);
-              const completed = isAvailable(disposed, isCurrent, signal);
+              const result = await dependencies.actions.dispatcher.dispatch(
+                actionId,
+                () => !isAvailable(disposed, isCurrent, signal),
+              );
+              // Successful Page navigation may itself replace the calling Page. The
+              // Session/cancellation check still owns delivery of its accepted result.
+              const completed = isAvailable(disposed, isSessionCurrent, signal);
               if (completed) return completed;
               if (result.ok) return validateResult({ method: request.method, result: { opened: true } });
               return result.error.code === 'action_execution_failed' ? errors.internal : errors.notFound;
@@ -299,7 +349,14 @@ export const createPluginHostApiDispatcherFactory = (
               }
             }
           }
-        } catch {
+        } catch (error) {
+          if (error instanceof LauncherActionAdmissionError) {
+            return error.code === 'busy'
+              ? errors.limitExceeded
+              : error.code === 'expired'
+                ? errors.timeout
+                : errors.unavailable;
+          }
           return errors.internal;
         }
       };
@@ -308,6 +365,7 @@ export const createPluginHostApiDispatcherFactory = (
       const binding: PluginHostApiDispatcherBinding = Object.freeze({
         handler,
         execute,
+        fail: () => activation?.fail(),
         attachEmitter(nextEmitter: (event: HostApiEvent) => boolean) {
           if (disposed || emitterAttached) throw new TypeError('Plugin Host API emitter is unavailable.');
           emitterAttached = true;
@@ -326,6 +384,7 @@ export const createPluginHostApiDispatcherFactory = (
           unsubscribeContext();
           unsubscribeStorage();
           storage?.dispose();
+          activation?.dispose();
         },
       });
       return binding;

@@ -51,7 +51,10 @@
       {
         "op": "set",
         "path": "/contributes/pages/0/presentation/initial_size",
-        "value": { "width": 320, "height": 180 }
+        "value": {
+          "width": 320,
+          "height": 180
+        }
       }
     ],
     "expected_status": "compatible"
@@ -62,7 +65,28 @@
       {
         "op": "set",
         "path": "/contributes/pages/0/presentation/initial_size",
-        "value": { "width": 4096, "height": 4096 }
+        "value": {
+          "width": 4096,
+          "height": 4096
+        }
+      }
+    ],
+    "expected_status": "compatible"
+  },
+  {
+    "name": "current Host API 0.4 accepts its lower bound without changing Manifest 0.4",
+    "current_versions": {
+      "lensx": "0.1.0",
+      "host_api": "0.4.0"
+    },
+    "mutations": [
+      {
+        "op": "set",
+        "path": "/compatibility/host_api",
+        "value": {
+          "min_version": "0.4.0",
+          "max_version_exclusive": "0.5.0"
+        }
       }
     ],
     "expected_status": "compatible"

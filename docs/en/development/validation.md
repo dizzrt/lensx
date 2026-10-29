@@ -396,3 +396,32 @@ English documents under `docs/en` are canonical. Keep the matching `docs/zh` fil
 4. Run retained pack, inspect, tarball, and CLI consumer Gates.
 5. Validate active OpenSpec changes and all stable specs strictly.
 6. Run active-source stale scans and `git diff --check`.
+
+## Configurable Shortcut Validation
+
+Run `pnpm run gate -- launcher-shortcuts`. The stable Gate composes shortcut
+policy/typed adapter and real Semi settings tests, Rust transaction/registration,
+recording and gesture tests, and the existing `launcher-input-focus`,
+`plugin-action-projection`, `plugin-child-webview-session`,
+`plugin-child-webview-continuity`, `plugin-sdk-transport`, and
+`plugin-host-api-contract` Gates. Shared policy fixtures cover canonical aliases,
+reserved keys and duplicates, including unavailable targets. Virtual time and
+fake native/storage adapters cover complete double taps, multi-press cancellation,
+partial failures, uncertain commits, compensation, recovery degradation and lease
+expiry. Session/SDK tests cover 32-item initial admission, 64-item initialization
+merge, retry/terminal boundaries and optional callback isolation.
+
+These deterministic checks establish configured versus active state, independent
+preferences persistence, native adapter wiring and bounded semantic delivery.
+They do not prove macOS authorization dialogs, OS keyboard delivery, Secure Input
+transitions on a real system, or conflicts with every external shortcut tool.
+Double taps are passive and not exclusive. Use `plugin-host-api-types --write`
+only through Generate for current Schema-derived files; preserve historical
+WebView corpora. Focused Gates do not replace full workspace and Rust validation.
+
+The shortcut matrix also covers v2 single-entry type switching, lossless v1
+chord-only reads, unresolved dual-entry migration and explicit resolution,
+permission-loss reveal for a sole double tap, and no hidden chord fallback.
+Real Semi row tests cover Add drafts, atomic Action reassignment, saved/draft
+deletion, inline editing, Escape, focus and stale responses in both locales and
+themes. These remain deterministic tests without native input acceptance.

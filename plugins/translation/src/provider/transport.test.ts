@@ -15,7 +15,7 @@ const setup = async (available = true) => {
   const fake = new FakePluginSdkTransport({
     connect: () =>
       createPluginRuntimeContextFixture({
-        hostApiVersion: available ? '0.3.0' : '0.2.0',
+        hostApiVersion: '0.4.0',
         capabilities: available ? ['http.request'] : [],
       }),
     request: () => ({ method: 'http.request', result: { status: 200, headers: [], body: '{}' } }),

@@ -1,5 +1,5 @@
 import type { NormalizedPluginManifest } from '@lensx/plugin-contract';
-import type { LauncherActionRegistrationInput } from '../../launcher/actions/types';
+import type { LauncherActionInvocation, LauncherActionRegistrationInput } from '../../launcher/actions/types';
 
 export interface PluginActionPageTarget {
   readonly owner_id: string;
@@ -7,7 +7,11 @@ export interface PluginActionPageTarget {
 }
 
 export interface PluginActionPageOpener {
-  openPage: (target: PluginActionPageTarget, openedByActionId: string) => Promise<void> | void;
+  openPage: (
+    target: PluginActionPageTarget,
+    openedByActionId: string,
+    invocation: LauncherActionInvocation,
+  ) => Promise<void> | void;
 }
 
 export type PluginActionPageAvailability = (target: PluginActionPageTarget) => boolean;
@@ -51,7 +55,7 @@ export const mapPluginActionsToLauncherRegistrations = (
             default_keywords: cloneKeywords(action.default_keywords),
             enabled: true,
           }),
-          executor: () => pageOpener.openPage(target, actionId),
+          executor: (invocation: LauncherActionInvocation) => pageOpener.openPage(target, actionId, invocation),
         }),
       ];
     }),

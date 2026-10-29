@@ -1,5 +1,7 @@
 # @lensx/plugin-contract
 
+[English](./README.md) · [插件开发](../../docs/zh/plugin-development/index.md)
+
 公共 lensX 插件 Manifest 与 Host API 语义 Schema、生成输入类型、版本常量、不可变目录、
 诊断及确定性纯 validator。
 
@@ -19,6 +21,6 @@ if (result.status === 'valid' && result.value.capabilities.includes('storage.get
 声明的 Schema entry 为 `/schema`、`/manifest.schema.json`、`/host-api-schema` 和
 `/host-api.schema.json`，其他 deep import 均为私有。
 
-Contract `0.3.0` 拥有 Manifest `0.4.0` 与 Host API `0.3.0`，包含有界的
-`http.request` 语义契约，自身不执行网络 I/O。插件调用真实 Host provider 前，仍需当前
+Contract `0.4.0` 拥有 Manifest `0.4.0` 与 Host API `0.4.0`，包含有界的
+`http.request` 与独立 Action activation 语义契约，自身不执行网络 I/O。插件调用真实 Host provider 前，仍需当前
 capability 快照及兼容的 SDK/Manifest。

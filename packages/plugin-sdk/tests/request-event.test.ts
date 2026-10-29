@@ -105,7 +105,7 @@ describe('Plugin SDK Contract-closed request and event API', () => {
     client.subscribe('runtime.context_changed', (event) => contexts.push([client.context, event]));
     transport.emit('runtime.context_changed', {
       capabilities: [],
-      hostApiVersion: '0.2.0',
+      hostApiVersion: '0.4.0',
       locale: 'zh-CN',
       theme: 'dark',
     });

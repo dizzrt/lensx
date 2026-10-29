@@ -214,6 +214,7 @@ describe('Plugin Action projection service', () => {
     expect(openPage).toHaveBeenCalledWith(
       { owner_id: 'com.acme.builtin', page_id: 'open_project' },
       'com.acme.builtin.open_project',
+      { invocationId: 1, source: 'normal' },
     );
     await projection.destroy();
   });

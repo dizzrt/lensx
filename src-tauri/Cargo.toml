@@ -42,8 +42,8 @@ tokio = { version = "=1.53.1", features = ["macros", "net", "rt", "sync", "time"
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = { version = "=0.6.2" }
 objc2 = { version = "=0.6.4" }
-objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["block2", "libc", "NSApplication", "NSCursor", "NSEvent", "NSGraphicsContext", "NSMenu", "NSResponder", "NSRunningApplication", "NSView", "NSWindow"] }
-objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSData", "NSDictionary", "NSError", "NSJSONSerialization", "NSObject", "NSString", "NSThread"] }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["block2", "libc", "NSApplication", "NSCursor", "NSEvent", "NSGraphicsContext", "NSMenu", "NSResponder", "NSRunningApplication", "NSView", "NSWindow", "NSWorkspace"] }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSData", "NSDictionary", "NSError", "NSJSONSerialization", "NSNotification", "NSObject", "NSOperation", "NSString", "NSThread"] }
 objc2-web-kit = { version = "=0.3.2", default-features = false, features = ["block2", "WKContentWorld", "WKFrameInfo", "WKWebView"] }
 
 [dev-dependencies]

@@ -360,6 +360,26 @@ gatesById.set('isolated-plugin-runtime-origin', {
   steps: [],
 });
 
+gatesById.set('launcher-shortcuts', {
+  id: 'launcher-shortcuts',
+  description: 'Configurable shortcuts, native recovery and recording, trusted activation and settings',
+  legacyNames: [],
+  dependsOn: [
+    'launcher-input-focus',
+    'plugin-action-projection',
+    'plugin-child-webview-session',
+    'plugin-child-webview-continuity',
+    'plugin-sdk-transport',
+    'plugin-host-api-contract',
+  ],
+  steps: [
+    internStep(
+      'pnpm exec rstest run tests/launcher-shortcuts.test.ts tests/launcher-shortcuts-ui.test.tsx tests/launcher-shortcut-invocations.test.ts tests/launcher-shortcut-feedback.test.tsx tests/plugin-shortcut-continuity.test.ts tests/host-settings-ui.test.tsx',
+    ),
+    internStep('cargo test --manifest-path src-tauri/Cargo.toml launcher_shortcuts'),
+  ],
+});
+
 gatesById.set('plugin-host-http', {
   id: 'plugin-host-http',
   description: 'Public typed HTTP contract, native public-address transport, cancellation and plugin integration',

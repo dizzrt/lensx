@@ -32,7 +32,9 @@ pub(crate) fn host_api_method(value: &Value) -> Option<&str> {
 pub(crate) fn is_known_host_api_method(method: &str) -> bool {
     matches!(
         method,
-        "actions.open"
+        "actions.get_activation"
+            | "actions.open"
+            | "actions.subscribe_activations"
             | "http.request"
             | "runtime.get_context"
             | "storage.delete"
@@ -53,6 +55,15 @@ pub(crate) fn validate_host_api_result(value: &Value, expected_method: &str) -> 
     static VALIDATOR: OnceLock<Validator> = OnceLock::new();
     host_api_method(value) == Some(expected_method)
         && is_valid("HostApiResultInput", &VALIDATOR, value)
+        && (expected_method != "actions.subscribe_activations"
+            || value
+                .pointer("/result/activations")
+                .and_then(Value::as_array)
+                .is_some_and(|items| {
+                    items.windows(2).all(|pair| {
+                        pair[0]["invocationId"].as_u64() < pair[1]["invocationId"].as_u64()
+                    })
+                }))
 }
 
 pub(crate) fn validate_host_api_error(value: &Value) -> bool {

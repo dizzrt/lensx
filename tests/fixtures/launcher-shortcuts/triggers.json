@@ -1,0 +1,37 @@
+{
+  "valid": [
+    {
+      "input": { "kind": "chord", "modifiers": ["SHIFT", "Command", "cmd"], "key": "k" },
+      "canonical": { "kind": "chord", "modifiers": ["cmd", "shift"], "key": "KeyK" }
+    },
+    {
+      "input": { "kind": "chord", "modifiers": ["option", "control"], "key": "F20" },
+      "canonical": { "kind": "chord", "modifiers": ["ctrl", "option"], "key": "F20" }
+    },
+    {
+      "input": { "kind": "modifier_double_tap", "modifier": "MetaRight" },
+      "canonical": { "kind": "modifier_double_tap", "modifier": "cmd" }
+    },
+    {
+      "input": { "kind": "modifier_double_tap", "modifier": "ControlLeft" },
+      "canonical": { "kind": "modifier_double_tap", "modifier": "ctrl" }
+    },
+    {
+      "input": { "kind": "chord", "modifiers": ["ctrl", "shift"], "key": "spacebar" },
+      "canonical": { "kind": "chord", "modifiers": ["ctrl", "shift"], "key": "Space" }
+    }
+  ],
+  "invalid": [
+    { "kind": "chord", "modifiers": [], "key": "a" },
+    { "kind": "chord", "modifiers": ["shift"], "key": "a" },
+    { "kind": "chord", "modifiers": ["fn"], "key": "KeyK" },
+    { "kind": "chord", "modifiers": ["cmd"], "key": "CapsLock" },
+    { "kind": "chord", "modifiers": ["ctrl"], "key": "F21" },
+    { "kind": "chord", "modifiers": ["cmd"], "key": "q" },
+    { "kind": "chord", "modifiers": ["cmd"], "key": "KeyK", "extra": true },
+    { "kind": "chord", "modifiers": ["ctrl"], "keys": ["KeyK", "KeyP"] },
+    { "kind": "modifier_double_tap", "modifier": "fn" },
+    { "kind": "modifier_double_tap", "modifier": "cmd", "clicks": 3 },
+    { "kind": "character_double_tap", "key": "K" }
+  ]
+}

@@ -6,25 +6,30 @@ Track these dimensions independently:
 
 | Dimension | Current baseline | Meaning |
 | --- | --- | --- |
-| Contract package | `0.3.0` | Public Manifest and Host API semantic contracts. |
-| UI/Testkit/CLI packages | `0.2.0` | UI, test helpers, and authoring tools. |
-| SDK package | `0.4.0` | Root semantic client plus the `/webview` production transport. |
+| Contract package | `0.4.0` | Public Manifest and Host API semantic contracts. |
+| UI/Testkit/CLI packages | `0.2.1` | UI, test helpers, and authoring tools. |
+| SDK package | `0.5.0` | Root semantic client plus the `/webview` production transport. |
 | Manifest protocol | `0.4.0` | Author input and normalized WebView Manifest wire contract. |
-| Host API protocol | `0.3.0` | Semantic methods, results, events, errors, and context. |
+| Host API protocol | `0.4.0` | Semantic methods, results, events, errors, and context. |
 | Private bridge carrier | `0.2.0` | Closed Host/native-to-plugin transport frames; not a Host API. |
 | lensX application | `0.1.0` | Host compatibility range checked by the Manifest. |
 | `.lxp` package format | `0.1.0` | Canonical archive and checksums profile. |
 
-A package patch does not automatically change a protocol. The Manifest declares
-half-open compatibility ranges for lensX and Host API. The SDK supports Host
-API `>=0.2.0 <0.4.0` and rejects an incompatible context before ready. An older
-Host can initialize the new SDK without offering `http.request`; always check
-current capabilities. The current Host reports `0.3.0`. Old bundles whose
-Manifest excludes `0.3.0` are incompatible, and old SDK `0.3.0` cannot accept
-the new method catalog. Upgrade the public dependencies, update the Manifest,
-rebuild, and repackage; no implicit protocol negotiation or package rewriting
-is performed. Maintained templates and ConfigLens use an exclusive upper bound
-of `0.4.0`; Translation requires at least Host API `0.3.0`.
+A package patch does not automatically change a protocol. SDK `0.5.0` supports
+Host API `>=0.4.0 <0.5.0` and rejects older or incompatible Context before
+ready. Current templates, ConfigLens, and Translation declare this same range.
+Existing SDK `0.3.0` and `0.4.0` bundles do not understand the current activation
+catalog. Upgrade public dependencies, update the Manifest range, rebuild, and
+repack; the Host does not negotiate an old catalog or rewrite installed packages.
+The optional callback may remain omitted after migration. UI, Testkit, and CLI
+patch versions carry updated dependency metadata and templates; Manifest, carrier,
+application, and package-format versions remain unchanged.
+
+Activation subscription begins during SDK initialization only when Context
+advertises `actions.subscribe_activations`. A failure before opening this stream
+can return to idle for explicit retry. Once subscription has been attempted,
+initialization failure terminates the SDK/transport/Session attempt. Retry must
+create a fresh Runtime attempt and SDK; old activations are not replayed.
 
 ## Validation outcomes
 
