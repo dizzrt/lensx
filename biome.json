@@ -23,6 +23,7 @@
     "includes": [
       "**",
       "!!packages/plugin-contract/src/generated/plugin-host-api-validators.ts",
+      "!!packages/plugin-contract/src/generated/plugin-manifest-validators.ts",
       "!!fixtures/plugin-package-format/expectations.json",
       "!!fixtures/plugin-webview-runtime/expectations.json",
       "!!vendor/frame-aware-navigation"

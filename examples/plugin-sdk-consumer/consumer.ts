@@ -8,6 +8,8 @@ import {
 } from '@lensx/plugin-sdk';
 
 class ExternalTransport implements PluginSdkTransport {
+  disposeCalls = 0;
+
   async connect(_operation: PluginSdkTransportOperation): Promise<unknown> {
     return {
       capabilities: ['actions.get_activation', 'actions.subscribe_activations'],
@@ -36,12 +38,15 @@ class ExternalTransport implements PluginSdkTransport {
     return () => undefined;
   }
 
-  dispose(): void {}
+  dispose(): void {
+    this.disposeCalls += 1;
+  }
 }
 
 let activations = 0;
+const transport = new ExternalTransport();
 const client = createPluginSdk({
-  transport: new ExternalTransport(),
+  transport,
   onShortcutActivated: (activation) => {
     const id: number = activation.invocationId;
     if (id !== 1 || client.state !== 'ready') throw new Error('Invalid activation delivery.');
@@ -50,5 +55,11 @@ const client = createPluginSdk({
 });
 const context = await client.initialize();
 if (activations !== 1 || client.activation?.source !== 'shortcut') throw new Error('Activation contract failed.');
+const result = await client.request({ method: 'actions.get_activation', params: {} });
+if (result.activation !== null) throw new Error('Packed SDK request validation failed.');
 export const exampleResult = `${PLUGIN_SDK_VERSION}:${PLUGIN_HOST_API_VERSION}:${client.state}:${context.locale}`;
 await client.dispose();
+await client.dispose();
+if (client.state !== 'disposed' || transport.disposeCalls !== 1) {
+  throw new Error('Packed SDK disposal did not release its transport exactly once.');
+}

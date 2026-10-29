@@ -32,6 +32,16 @@ if (validation.status !== 'valid') {
   throw new TypeError(`Example Manifest is not current: ${JSON.stringify(validation.diagnostics)}`);
 }
 
+const invalidManifest = validatePluginManifest({ ...manifestInput, version: 123 });
+if (
+  invalidManifest.status !== 'invalid' ||
+  !invalidManifest.diagnostics.some(
+    (diagnostic) => diagnostic.path === '/version' && diagnostic.code === 'invalid_type',
+  )
+) {
+  throw new TypeError('Packed Contract package did not reject a Manifest with an invalid version type.');
+}
+
 const result = normalizePluginManifest(validation, {
   lensx: '0.1.0',
   host_api: PLUGIN_HOST_API_VERSION,

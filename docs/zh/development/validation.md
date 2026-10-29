@@ -333,6 +333,16 @@ pnpm run src-tauri:check
 pnpm run src-tauri:build
 ```
 
+修改原生启动接线时，还需在禁用 debug assertion 的构建中运行生产初始化回归：
+
+```bash
+cargo test --release --manifest-path src-tauri/Cargo.toml --lib release_setup
+```
+
+这些测试使用 MockRuntime 和真实 setup 函数验证 Resource、Ready/RPC 与 managed state 绑定，
+不会创建原生 Window 或 WebView。仅运行 debug 测试无法发现藏在 `debug_assert!` 表达式中的
+初始化操作被省略的问题。
+
 ## 文档验证
 
 `docs/en` 下英文文档是 canonical；保持相同路径的 `docs/zh` 语义一致，并保证 Gate 与 Generate identifier 可解析。
@@ -372,3 +382,7 @@ macOS 授权对话框、OS 键盘交付、真实系统安全输入切换，或�
 双击权限失效后的窗口显示，以及不存在隐藏组合键回退。真实 Semi 行式测试覆盖新增草稿、Action
 原子改绑、已保存/草稿删除、行内编辑、Escape、焦点与迟到响应，并覆盖两种语言和主题。上述仍为
 确定性测试，不代表原生输入验收。
+
+观察线程等待测试注入时钟、run loop 返回值与 sleeper，覆盖无输入源和提前返回、已完成等待不重复
+休眠、连续空闲轮询，以及静默确认前的输入取消。它们验证 10 毫秒等待预算，不使用墙钟性能断言或
+OS input tap。

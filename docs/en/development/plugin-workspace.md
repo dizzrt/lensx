@@ -109,11 +109,21 @@ pnpm run gate -- plugin-host-api-contract
 pnpm run gate -- plugin-contract
 ```
 
-The complete check rebuilds both generated type sets, runs package and Host
+Manifest and Host API validation use committed AJV standalone functions. The
+explicit Generate targets update both input types and validators; ordinary
+builds only compile those committed inputs. Loading the public package root
+does not compile Schemas or generate executable strings, so Host startup and
+SDK consumers work with `script-src 'self'`. AJV remains a declared dependency
+for the standalone validators' pure runtime helpers.
+
+The complete check verifies generated types and validators, runs package and Host
 boundary tests, checks Manifest and Host API TypeScript/Rust shared fixtures,
 packs real Contract/SDK/Testkit tarballs, verifies file lists and exports, and
 installs them into isolated no-DOM consumers for typecheck and Runtime smoke
-testing. It proves semantic validity without claiming dispatch or side effects.
+testing. Contract and SDK consumer smoke tests disable string code generation
+while importing public roots and exercising validation and SDK lifecycle. This
+proves the tested module graph works without dynamic evaluation; it does not
+establish real WebView rendering, dispatch, or side effects.
 
 ## Plugin Developer CLI And Package Core
 

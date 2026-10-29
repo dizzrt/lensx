@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
@@ -44,6 +44,7 @@ describe('public package boundary', () => {
       'src/host-api-types.ts',
       'src/host-api.ts',
       'src/generated/plugin-host-api-validators.ts',
+      'src/generated/plugin-manifest-validators.ts',
       'src/index.ts',
       'src/schema.ts',
       'src/types.ts',
@@ -64,16 +65,15 @@ describe('public package boundary', () => {
       expect(source).not.toContain(forbidden);
     }
     const externalImports = [...source.matchAll(/from\s+['"]([^.'"][^'"]*)['"]/gu)].map((match) => match[1]);
-    expect(externalImports).toEqual([
+    expect([...new Set(externalImports)].sort()).toEqual([
       'ajv',
-      'ajv/dist/runtime/ucs2length.js',
       'ajv/dist/runtime/equal.js',
-      'ajv/dist/2020.js',
+      'ajv/dist/runtime/ucs2length.js',
     ]);
-    const standaloneValidators = runtimeSources[4] ?? '';
-    expect(standaloneValidators).not.toContain('require(');
-    expect(standaloneValidators).not.toContain('new Function');
-    expect(standaloneValidators).not.toContain('Ajv2020');
+    expect(source).not.toContain('require(');
+    expect(source).not.toMatch(/\b(?:eval|Function)\s*\(/u);
+    expect(source).not.toContain('Ajv2020');
+    expect(source).not.toContain('ajv/dist/2020.js');
   });
 
   test('generated type drift check fails for missing and stale output', () => {
@@ -93,6 +93,50 @@ describe('public package boundary', () => {
       expect(spawnSync(process.execPath, [...generatorArguments, '--check'], { cwd: packageRoot }).status).toBe(0);
       writeFileSync(outputPath, '// stale\n', 'utf8');
       expect(spawnSync(process.execPath, [...generatorArguments, '--check'], { cwd: packageRoot }).status).not.toBe(0);
+    } finally {
+      rmSync(temporaryRoot, { force: true, recursive: true });
+    }
+  });
+
+  test('standalone Manifest drift check is read-only and follows the package-owned Schema', () => {
+    const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'lensx-manifest-validator-'));
+    const outputPath = resolve(temporaryRoot, 'plugin-manifest-validators.ts');
+    const schemaPath = resolve(temporaryRoot, 'manifest.schema.json');
+    const schema = readJson<{ $defs: { pluginId: { maxLength: number } } }>(
+      resolve(packageRoot, 'schema/manifest.schema.json'),
+    );
+    const generatorArguments = [
+      'scripts/generate-plugin-manifest-validators.mjs',
+      '--schema',
+      schemaPath,
+      '--output',
+      outputPath,
+    ];
+    const run = (check: boolean) =>
+      spawnSync(process.execPath, [...generatorArguments, ...(check ? ['--check'] : [])], { cwd: packageRoot });
+
+    try {
+      writeFileSync(schemaPath, JSON.stringify(schema), 'utf8');
+      expect(run(true).status).not.toBe(0);
+      expect(existsSync(outputPath)).toBe(false);
+      expect(run(false).status).toBe(0);
+      const generated = readFileSync(outputPath, 'utf8');
+      expect(generated).toBe(readFileSync(resolve(packageRoot, 'src/generated/plugin-manifest-validators.ts'), 'utf8'));
+      expect(run(true).status).toBe(0);
+      expect(run(false).status).toBe(0);
+      expect(readFileSync(outputPath, 'utf8')).toBe(generated);
+
+      schema.$defs.pluginId.maxLength -= 1;
+      writeFileSync(schemaPath, JSON.stringify(schema), 'utf8');
+      expect(run(true).status).not.toBe(0);
+      expect(readFileSync(outputPath, 'utf8')).toBe(generated);
+      expect(run(false).status).toBe(0);
+      expect(readFileSync(outputPath, 'utf8')).not.toBe(generated);
+      expect(run(true).status).toBe(0);
+
+      writeFileSync(outputPath, '// stale\n', 'utf8');
+      expect(run(true).status).not.toBe(0);
+      expect(readFileSync(outputPath, 'utf8')).toBe('// stale\n');
     } finally {
       rmSync(temporaryRoot, { force: true, recursive: true });
     }
@@ -120,7 +164,7 @@ describe('public package boundary', () => {
       'dist/src/schema.js',
       'package.json',
     ];
-    expect(validatePackedPackage({ metadata, files, runtimeImports: ['ajv/dist/2020.js'] })).toEqual([]);
+    expect(validatePackedPackage({ metadata, files, runtimeImports: ['ajv/dist/runtime/ucs2length.js'] })).toEqual([]);
 
     expect(
       validatePackedPackage({

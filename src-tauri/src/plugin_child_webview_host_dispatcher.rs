@@ -522,9 +522,12 @@ pub(crate) fn setup_plugin_child_webview_host_dispatcher<R: Runtime>(
         Arc::clone(&service),
         emitter,
     ));
-    debug_assert!(service.attach_ready_dispatcher(dispatcher.clone()));
-    debug_assert!(service.attach_rpc_dispatcher(dispatcher.clone()));
-    debug_assert!(app.manage(Arc::clone(&dispatcher)));
+    let ready_attached = service.attach_ready_dispatcher(dispatcher.clone());
+    debug_assert!(ready_attached);
+    let rpc_attached = service.attach_rpc_dispatcher(dispatcher.clone());
+    debug_assert!(rpc_attached);
+    let managed = app.manage(Arc::clone(&dispatcher));
+    debug_assert!(managed);
     dispatcher
 }
 
@@ -537,6 +540,31 @@ mod tests {
         PluginChildWebviewSessionErrorCode,
     };
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn release_setup_registers_and_connects_host_dispatcher() {
+        let app = tauri::test::mock_app();
+        let service = Arc::new(PluginChildWebviewService::default());
+        let dispatcher =
+            setup_plugin_child_webview_host_dispatcher(app.handle(), Arc::clone(&service));
+
+        let managed = app
+            .try_state::<Arc<
+                PluginChildWebviewHostDispatcher<
+                    PluginChildWebviewHandle<tauri::test::MockRuntime>,
+                >,
+            >>()
+            .expect("production setup must manage the dispatcher without debug assertions");
+        assert!(Arc::ptr_eq(&dispatcher, managed.inner()));
+        assert!(
+            !service.attach_ready_dispatcher(dispatcher.clone()),
+            "production setup must attach the Ready dispatcher without debug assertions"
+        );
+        assert!(
+            !service.attach_rpc_dispatcher(dispatcher),
+            "production setup must attach the RPC dispatcher without debug assertions"
+        );
+    }
 
     #[derive(Clone, Default)]
     struct FakeHandle {

@@ -90,10 +90,16 @@ pnpm run gate -- plugin-host-api-contract
 pnpm run gate -- plugin-contract
 ```
 
-完整检查会重建两组生成类型，运行 package 与 Host 边界测试，检查 Manifest/Host API 的
+Manifest 与 Host API 校验使用已提交的 AJV standalone function。显式 Generate target 更新
+输入类型与 validator；普通 build 只编译这些已提交的输入。加载公共 package 根入口不会编译
+Schema 或生成可执行字符串，因此 Host 启动和 SDK consumer 可以在 `script-src 'self'` 下工作。
+AJV 仍作为依赖声明，用于 standalone validator 的纯 runtime helper。
+
+完整检查会验证生成类型与 validator，运行 package 与 Host 边界测试，检查 Manifest/Host API 的
 TypeScript/Rust 共享 fixtures，打出真实 Contract/SDK/Testkit tarball 并验证文件清单和 exports，
-最后将其安装到隔离 no-DOM consumer 中执行 typecheck 与 Runtime smoke。它证明语义有效，
-但不声称已经 dispatch 或执行副作用。
+最后将其安装到隔离 no-DOM consumer 中执行 typecheck 与 Runtime smoke。Contract 和 SDK
+consumer smoke 在禁用字符串代码生成的条件下导入公共根入口，并执行校验和 SDK 生命周期。
+这证明被测试的模块图不依赖动态求值，不代表真实 WebView 渲染、dispatch 或副作用已通过验证。
 
 ## Plugin Developer CLI 与 Package Core
 

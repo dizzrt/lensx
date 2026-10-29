@@ -153,7 +153,8 @@ no earlier Schema, deprecated symbol alias, compatibility adapter, or
 migration branch.
 
 Run `pnpm run generate -- plugin-manifest-types --write` and
-`pnpm run generate -- plugin-host-api-types --write` to regenerate committed input types,
+`pnpm run generate -- plugin-host-api-types --write` to regenerate committed input types
+and standalone validators,
 and `pnpm run gate -- plugin-contract` for the complete drift gate. The gate
 checks generated types, package tests, Host boundaries, shared Rust fixtures,
 and a real tarball installed into an isolated external consumer. The tarball
@@ -916,10 +917,12 @@ the shared `PluginRuntimeContext` containing a compatible `hostApiVersion`,
 snapshot of declared Host API method IDs. An empty capability list is valid and
 does not imply any method. Plugin identity, Page identity, installation
 source, and Host lifecycle facts are not supported context inputs.
-The Host API validators consumed by the SDK are generated as committed AJV
-standalone functions at build time. They do not compile Schemas or use dynamic
-evaluation inside the plugin document, so the SDK remains compatible with the
-Runtime `script-src 'self'` policy without adding `unsafe-eval`.
+The public Contract root uses committed AJV standalone functions for both
+Manifest and Host API validation, produced by explicit Generate targets.
+Neither module initialization nor validation compiles Schemas or uses dynamic
+evaluation. This keeps Host bootstrap and SDK consumers compatible with the
+existing `script-src 'self'` policy. Real tarball consumer checks disable string
+code generation across the complete imported public module graph.
 
 SDK-managed operations use a 10,000 millisecond default timeout with positive
 finite integer overrides. Cancellation accepts a minimal structural signal

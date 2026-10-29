@@ -73,6 +73,23 @@ pnpm run preview
 pnpm exec tauri build
 ```
 
+最终交付的 lensX 桌面安装包、插件 `.lxp` 文件及配套交付文件统一放在仓库根目录的
+`.release/` 中，该目录由 Git 忽略。Tauri 先将安装包写入其原生构建目录，构建成功后
+再收集最终产物。从仓库根目录执行以下命令，可收集当前 macOS Apple Silicon 构建
+及两个官方插件：
+
+```bash
+mkdir -p .release
+ditto src-tauri/target/release/bundle/macos/lensx.app .release/lensx.app
+cp src-tauri/target/release/bundle/dmg/lensx_0.1.0_aarch64.dmg .release/
+node packages/plugin-cli/bin/lensx-plugin.mjs pack --project plugins/config-lens --no-build --output .release/dev.lensx.config-lens-0.1.0.lxp
+node packages/plugin-cli/bin/lensx-plugin.mjs pack --project plugins/translation --no-build --output .release/dev.lensx.translation-0.1.0.lxp
+```
+
+版本或架构不同时，文件名使用实际值。`--no-build` 使用 Tauri 的 workspace 构建 hook
+刚生成的插件构建。编译中间产物保留在常规构建目录。公共插件 CLI 仍支持其普通默认
+输出；本仓库交付时通过显式 `--output` 指向 `.release/`。
+
 ## 仓库目录
 
 - `src/` — React 和 TypeScript 前端源码。

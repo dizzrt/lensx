@@ -78,6 +78,26 @@ Build a desktop bundle:
 pnpm exec tauri build
 ```
 
+Place final lensX desktop bundles, plugin `.lxp` files, and accompanying
+delivery files in the repository-root `.release/` directory, which Git ignores.
+Tauri writes bundles to its native build directory; collect the final artifacts
+there after a successful build. From the repository root, the current macOS
+Apple Silicon build and two official plugins can be collected with:
+
+```bash
+mkdir -p .release
+ditto src-tauri/target/release/bundle/macos/lensx.app .release/lensx.app
+cp src-tauri/target/release/bundle/dmg/lensx_0.1.0_aarch64.dmg .release/
+node packages/plugin-cli/bin/lensx-plugin.mjs pack --project plugins/config-lens --no-build --output .release/dev.lensx.config-lens-0.1.0.lxp
+node packages/plugin-cli/bin/lensx-plugin.mjs pack --project plugins/translation --no-build --output .release/dev.lensx.translation-0.1.0.lxp
+```
+
+Use the actual version and architecture in artifact filenames when they differ.
+`--no-build` uses the fresh plugin builds produced by Tauri's workspace build
+hook. Keep compiler intermediates in their normal build directories. The public
+plugin CLI still supports its ordinary default output; use explicit `--output`
+for this repository's `.release/` deliveries.
+
 ## Repository Map
 
 - `src/` — React and TypeScript frontend source.

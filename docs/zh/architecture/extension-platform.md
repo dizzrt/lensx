@@ -125,7 +125,8 @@ change 更新各自版本维度。当前契约不提供更早 Schema、deprecate
 或迁移分支。
 
 运行 `pnpm run generate -- plugin-manifest-types --write` 与
-`pnpm run generate -- plugin-host-api-types --write` 可重新生成已提交的输入类型，运行
+`pnpm run generate -- plugin-host-api-types --write` 可重新生成已提交的输入类型与 standalone
+validator，运行
 `pnpm run gate -- plugin-contract` 可执行完整 drift gate。门禁覆盖生成类型、package tests、Host
 边界、Rust 共享 fixtures，以及把真实 tarball 安装到隔离外部消费者中的验证。tarball 只包含
 运行时 JavaScript、声明、两个公共 JSON Schema 和 package metadata，不包含 tests、fixtures、生成
@@ -676,9 +677,10 @@ transport。
 `hostApiVersion`、`en-US | zh-CN` locale、`light | dark` theme，以及已声明 Host API method ID 的
 排序去重只读 snapshot。空 capability 列表有效，并不代表存在任何 method。plugin identity、Page
 identity、安装来源和 Host lifecycle 事实都不是受支持的 context 输入。
-SDK 消费的 Host API validator 会在构建时生成并提交为 AJV standalone function。它们不会在插件
-document 内编译 Schema 或执行动态求值，因此 SDK 无需增加 `unsafe-eval`，仍与 Runtime 的
-`script-src 'self'` policy 兼容。
+公共 Contract 根入口对 Manifest 和 Host API 校验都使用已提交的 AJV standalone function，
+由显式 Generate target 生成。模块初始化与校验过程都不会编译 Schema 或执行动态求值，
+使 Host bootstrap 和 SDK consumer 与现有 `script-src 'self'` policy 兼容。真实 tarball
+consumer 检查会对完整导入的公共模块图禁用字符串代码生成。
 
 SDK 管理的 operation 默认超时为 10000 毫秒，并允许正有限整数覆盖。取消输入使用与原生
 `AbortSignal` 结构兼容的最小 signal，但公共声明不引用 DOM 类型。超时、取消、断开或销毁会把

@@ -110,6 +110,7 @@ try {
   const runtimeOutput = run(
     'node',
     [
+      '--disallow-code-generation-from-strings',
       '--input-type=module',
       '--eval',
       "const consumer = await import('./dist/consumer.js'); process.stdout.write(consumer.exampleResult)",
@@ -136,7 +137,9 @@ try {
     }
   }
 
-  console.log(`Packed ${files.length} public files and verified an isolated external consumer.`);
+  console.log(
+    `Packed ${files.length} public files and verified an isolated external consumer with dynamic code generation disabled.`,
+  );
 } finally {
   await rm(temporaryRoot, { force: true, recursive: true });
 }

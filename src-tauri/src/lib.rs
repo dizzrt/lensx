@@ -44,6 +44,17 @@ pub(crate) mod plugin_runtime_security_policy;
 pub mod plugin_scoped_storage;
 pub(crate) mod trusted_app_target;
 
+fn attach_plugin_resource_authority<R: tauri::Runtime>(
+    service: &plugin_child_webview_service::PluginChildWebviewService<R>,
+    authority: Arc<dyn plugin_child_webview_service::PluginChildWebviewResourceAuthority>,
+) {
+    let attached = service.attach_resource_authority(authority);
+    debug_assert!(
+        attached,
+        "Child WebView resource authority should only be attached once"
+    );
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -194,8 +205,9 @@ pub fn run() {
                 Arc::clone(&plugin_installer),
                 &trusted_app_target,
             );
-            debug_assert!(
-                plugin_child_webview_service.attach_resource_authority(plugin_resource_service)
+            attach_plugin_resource_authority(
+                plugin_child_webview_service.as_ref(),
+                plugin_resource_service,
             );
             plugin_scoped_storage::setup_plugin_scoped_storage(
                 app.handle(),
@@ -230,4 +242,41 @@ pub fn run() {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use plugin_child_webview_service::{
+        PluginChildWebviewResourceAuthority, PluginChildWebviewService,
+    };
+
+    struct TestResourceAuthority;
+
+    impl PluginChildWebviewResourceAuthority for TestResourceAuthority {
+        fn activate(
+            &self,
+            _attempt_id: &str,
+            _webview_label: &str,
+            _entry_id: &str,
+            _resource_generation: u64,
+        ) -> bool {
+            true
+        }
+
+        fn revoke(&self, _attempt_id: &str) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn release_setup_binds_plugin_resource_authority() {
+        let service = PluginChildWebviewService::<tauri::test::MockRuntime>::default();
+        attach_plugin_resource_authority(&service, Arc::new(TestResourceAuthority));
+
+        assert!(
+            !service.attach_resource_authority(Arc::new(TestResourceAuthority)),
+            "production setup must bind resource authority even without debug assertions"
+        );
+    }
 }

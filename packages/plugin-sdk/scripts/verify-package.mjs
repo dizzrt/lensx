@@ -134,6 +134,7 @@ try {
   const runtimeOutput = run(
     'node',
     [
+      '--disallow-code-generation-from-strings',
       '--input-type=module',
       '--eval',
       "const consumer = await import('./dist/consumer.js'); process.stdout.write(consumer.exampleResult)",
@@ -169,7 +170,9 @@ try {
       throw new Error(`Undeclared SDK transport deep import was not rejected: ${specifier}.`);
     }
   }
-  console.log(`Packed ${files.length} SDK files and verified the isolated no-DOM consumer.`);
+  console.log(
+    `Packed ${files.length} SDK files and verified the isolated no-DOM consumer with dynamic code generation disabled.`,
+  );
 } finally {
   await rm(temporaryRoot, { force: true, recursive: true });
 }

@@ -1,6 +1,6 @@
-import Ajv2020, { type ErrorObject } from 'ajv/dist/2020.js';
-import manifestSchema from '../schema/manifest.schema.json' with { type: 'json' };
+import type { ErrorObject, ValidateFunction } from 'ajv';
 import type { PluginManifestInput } from './generated/plugin-manifest-input.js';
+import { validateManifest as generatedManifestValidator } from './generated/plugin-manifest-validators.js';
 import type {
   ManifestLocale,
   NormalizedAsset,
@@ -28,11 +28,7 @@ const MANIFEST_LOCALES: readonly ManifestLocale[] = ['en-US', 'zh-CN'];
 const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
-const ajv = new Ajv2020({
-  allErrors: true,
-  strict: true,
-});
-const validateSchema = ajv.compile<PluginManifestInput>(manifestSchema);
+const validateSchema = generatedManifestValidator as unknown as ValidateFunction<PluginManifestInput>;
 const validatedManifestBrand = Symbol('lensx.validatedPluginManifest');
 
 const legacyProtocolDiagnostics = (input: unknown): PluginManifestDiagnostic[] => {

@@ -2,6 +2,23 @@
 //! synthesizes input, or changes another application's Secure Input state.
 use super::*;
 
+#[cfg(any(target_os = "macos", test))]
+fn wait_for_monitor_poll(
+    mut clock: impl FnMut() -> std::time::Duration,
+    run_loop: impl FnOnce(std::time::Duration) -> i32,
+    sleep: impl FnOnce(std::time::Duration),
+) {
+    const INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
+    let started = clock();
+    // An empty or stopped CFRunLoop returns before its requested timeout. Keep
+    // polling bounded in those states without delaying an already elapsed wait.
+    run_loop(INTERVAL);
+    let remaining = INTERVAL.saturating_sub(clock().saturating_sub(started));
+    if !remaining.is_zero() {
+        sleep(remaining);
+    }
+}
+
 #[cfg(target_os = "macos")]
 mod platform {
     use super::*;
@@ -647,6 +664,9 @@ mod platform {
                     }
                 }
                 if !drained {
+                    if state.lock().map(|service| service.stopped).unwrap_or(true) {
+                        break;
+                    }
                     continue;
                 }
                 let visible = foreground(&app);
@@ -792,9 +812,15 @@ mod platform {
                 deliver(&app, effect);
                 publish_failures(&app);
                 // Drain queued input before the next timer tick. Equal-time inputs win.
-                unsafe {
-                    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.01, false);
-                }
+                // Neither the run-loop wait nor its idle fallback holds service state.
+                let wait_started = Instant::now();
+                wait_for_monitor_poll(
+                    || wait_started.elapsed(),
+                    |interval| unsafe {
+                        CFRunLoopRunInMode(kCFRunLoopDefaultMode, interval.as_secs_f64(), false)
+                    },
+                    std::thread::sleep,
+                );
             }
             if !tap.is_null() {
                 unsafe {
@@ -846,4 +872,118 @@ pub fn start<R: Runtime>(app: AppHandle<R>, state: State<R>) {
         publish_failures(&app);
         std::thread::sleep(std::time::Duration::from_millis(25));
     });
+}
+
+#[cfg(test)]
+mod monitor_poll_tests {
+    use super::{gesture, wait_for_monitor_poll};
+    use std::{cell::Cell, time::Duration};
+
+    const FINISHED: i32 = 1;
+    const STOPPED: i32 = 2;
+    const TIMED_OUT: i32 = 3;
+    const HANDLED_SOURCE: i32 = 4;
+
+    #[test]
+    fn empty_or_early_run_loop_returns_still_wait_for_the_poll_interval() {
+        for result in [FINISHED, STOPPED, TIMED_OUT, HANDLED_SOURCE] {
+            for elapsed in [0, 3] {
+                let clock = Cell::new(Duration::from_millis(100));
+                let slept = Cell::new(None);
+                wait_for_monitor_poll(
+                    || clock.get(),
+                    |interval| {
+                        assert_eq!(interval, Duration::from_millis(10));
+                        clock.set(clock.get() + Duration::from_millis(elapsed));
+                        result
+                    },
+                    |remaining| {
+                        slept.set(Some(remaining));
+                        clock.set(clock.get() + remaining);
+                    },
+                );
+                assert_eq!(slept.get(), Some(Duration::from_millis(10 - elapsed)));
+                assert_eq!(clock.get(), Duration::from_millis(110));
+            }
+        }
+    }
+
+    #[test]
+    fn elapsed_run_loop_waits_are_not_delayed_again() {
+        for elapsed in [10, 15] {
+            let clock = Cell::new(Duration::ZERO);
+            wait_for_monitor_poll(
+                || clock.get(),
+                |_| {
+                    clock.set(Duration::from_millis(elapsed));
+                    TIMED_OUT
+                },
+                |_| panic!("an elapsed poll interval must not sleep again"),
+            );
+            assert_eq!(clock.get(), Duration::from_millis(elapsed));
+        }
+    }
+
+    #[test]
+    fn repeated_source_free_polls_have_a_bounded_cadence() {
+        let clock = Cell::new(Duration::ZERO);
+        let polls = Cell::new(0);
+        let sleeps = Cell::new(0);
+        for _ in 0..100 {
+            wait_for_monitor_poll(
+                || clock.get(),
+                |_| {
+                    polls.set(polls.get() + 1);
+                    FINISHED
+                },
+                |remaining| {
+                    sleeps.set(sleeps.get() + 1);
+                    clock.set(clock.get() + remaining);
+                },
+            );
+        }
+        assert_eq!(polls.get(), 100);
+        assert_eq!(sleeps.get(), 100);
+        assert_eq!(clock.get(), Duration::from_secs(1));
+    }
+
+    #[test]
+    fn input_processed_during_the_wait_still_precedes_quiet_confirmation() {
+        let mut gesture = gesture::Gesture::default();
+        for at in [0, 200] {
+            assert_eq!(
+                gesture.input(
+                    gesture::Input::ModifierDown {
+                        physical: 55,
+                        modifier: "cmd",
+                        repeat: false,
+                    },
+                    at,
+                ),
+                None,
+            );
+            assert_eq!(
+                gesture.input(gesture::Input::ModifierUp { physical: 55 }, at + 100),
+                None,
+            );
+        }
+        let clock = Cell::new(Duration::from_millis(595));
+        let callbacks = Cell::new(0);
+        wait_for_monitor_poll(
+            || clock.get(),
+            |_| {
+                clock.set(Duration::from_millis(600));
+                callbacks.set(callbacks.get() + 1);
+                assert_eq!(gesture.input(gesture::Input::KeyDown(0), 600), None);
+                HANDLED_SOURCE
+            },
+            |remaining| {
+                assert_eq!(callbacks.get(), 1);
+                assert_eq!(remaining, Duration::from_millis(5));
+                clock.set(clock.get() + remaining);
+            },
+        );
+        assert_eq!(callbacks.get(), 1);
+        assert_eq!(gesture.tick(clock.get().as_millis() as u64), None);
+    }
 }

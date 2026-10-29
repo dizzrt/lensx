@@ -404,6 +404,10 @@ presentation prop 与公共 plugin package 都不会获得 installation path、d
 Session state 不持久化，也不改变 Registration 的 `inactive` read model；公共 SDK transport、Host API
 与完整 CSP 仍是独立工作。
 
+启动时始终在 debug 和 Release 构建中绑定 Resource authority、Ready/RPC dispatcher，以及
+dispatcher 的 Tauri state。debug assertion 可以检查初始化返回的标志，但不能包含初始化调用本身，
+因为优化构建会省略这些断言。
+
 ## 依赖方向
 
 - UI 组件可以依赖应用服务，但不能直接依赖 Rust 内部实现。
@@ -445,6 +449,10 @@ macOS listen-only adapter 只向纯单调时间状态机提供事件事实，不
 第三击、其它键/修饰键、鼠标按键与滚轮会取消，移动鼠标不会。权限丢失、安全输入、睡眠/唤醒、
 配置与录制转换清除旧候选。只在用户明确操作时请求监听权限。恢复观测先采样当前仍按住的物理键/鼠标键；源事件时间戳与
 静默确认共用单调时钟，并在确认前处理排队输入。不支持的修饰键只中断候选，不成为手势。
+
+即使原生 run loop 没有输入源或提前返回，观察线程也会在快捷键状态锁外完成 10 毫秒等待，
+避免空闲或未授权的监听持续查询主窗口。排队输入仍先于纯时间手势确认处理；普通组合键注册
+仍独立于被动监听授权。
 
 录制由最长 30 秒的原生 lease 持有，可见且正在录制的设置页面负责续期。保留原生注册但暂停目标
 执行；即便 WebView 收不到已注册组合，原生事件仍能提供候选。失焦、隐藏、Host 失效、到期、取消

@@ -569,6 +569,11 @@ treating unrelated Registration revision changes as identity changes. Session
 state is not persisted and does not change Registration's `inactive` read
 model; public SDK transport, Host API, and complete CSP remain separate work.
 
+Startup always binds the Resource authority, Ready/RPC dispatchers, and the
+dispatcher Tauri state in both debug and Release builds. Debug assertions may
+check the returned initialization flags, but must not contain the initialization
+calls themselves: optimized builds omit those assertions.
+
 ## Dependency Direction
 
 - UI components may depend on application services, not directly on Rust
@@ -632,6 +637,12 @@ Monitoring permission is requested only by an explicit user action. Resuming
 observation samples currently held physical keys/buttons; source event timestamps
 and quiet confirmation share a monotonic clock, and queued input drains before
 confirmation. Unsupported modifiers interrupt without becoming gestures.
+
+The observer completes a 10 ms wait outside the shortcut state lock even when
+the native run loop has no input source or returns early. This prevents idle or
+unauthorized monitoring from continuously querying the main Window. Queued
+input still drains before time-only gesture confirmation; ordinary chord
+registration remains independent of passive-monitor authorization.
 
 Recording holds a native lease for at most 30 seconds, renewed by visible active
 settings. Existing registrations remain but target execution is suspended;

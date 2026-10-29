@@ -377,6 +377,18 @@ pnpm run src-tauri:check
 pnpm run src-tauri:build
 ```
 
+When changing native startup wiring, also run the production-initialization
+regressions with debug assertions disabled:
+
+```bash
+cargo test --release --manifest-path src-tauri/Cargo.toml --lib release_setup
+```
+
+These tests use MockRuntime and the actual setup functions to verify Resource,
+Ready/RPC, and managed-state bindings. They do not create a native Window or
+WebView. A debug-only test run cannot detect initialization hidden inside a
+`debug_assert!` expression.
+
 ## Documentation Validation
 
 English documents under `docs/en` are canonical. Keep the matching `docs/zh` file semantically aligned and keep Gate and Generate identifiers resolvable.
@@ -425,3 +437,8 @@ permission-loss reveal for a sole double tap, and no hidden chord fallback.
 Real Semi row tests cover Add drafts, atomic Action reassignment, saved/draft
 deletion, inline editing, Escape, focus and stale responses in both locales and
 themes. These remain deterministic tests without native input acceptance.
+
+Observer wait tests inject a clock, run-loop result, and sleeper. They cover
+source-free and early returns, completed waits without double sleeping, repeated
+idle polling, and input cancellation before quiet confirmation. They verify the
+10 ms wait budget without wall-clock performance assertions or an OS input tap.
