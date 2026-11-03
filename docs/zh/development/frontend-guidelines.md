@@ -65,11 +65,21 @@ Rust 确认持久化后才更新根 Provider。写入失败必须保留最后确
 简单的 App Shell 布局和间距使用 UnoCSS 工具类。
 
 共享 `.launcher-surface` 负责 Home、Search、Host Page 和插件 Page 的 `18px` 外层圆角、
-`overflow: hidden` 内容裁剪及 `var(--semi-color-bg-0)` 主题背景。外层不叠加 CSS 投影，
-macOS 桌面窗口保留现有原生投影。该策略在 `en-US`、`zh-CN` 及两种主题下保持一致，不改变
-窗口几何、页面布局、拖动、键盘导航、焦点恢复、插件 Page 的原生缩放权限，以及内层控件与浮层
-自身的投影。浏览器预览呈现没有 macOS 原生投影的圆角表面。确定性测试、源码审查和构建用于
-验证实现及既有契约，不能证明 macOS 最终像素效果。
+`overflow: hidden` DOM 裁剪及 `var(--semi-color-bg-0)` 主题背景。文档根背景保持透明，
+不添加 CSS 外投影。Host CSS 无法裁剪 native sibling Child WebView：macOS 上由 Rust
+在呈现前，为共同 `NSWindow.contentView` layer 应用并确认相同的 18 逻辑点外轮廓。
+原生半径不乘 DPR，既有 `NSWindow` 投影仍保持启用。详见
+[原生归属与失败边界](../architecture/plugin-child-webview-runtime.md#原生圆角内容)。
+
+插件 Page 仍使用 edge-to-edge 矩形 slot：body inline/bottom inset 为零，gap 为零，
+无内卡片圆角。不得注入插件圆角样式，或添加遮角、边框、焦点目标及插件专用布局分支。
+该策略同样适用于空白和不透明内容、loading/error 状态、`en-US`、`zh-CN` 和两种主题。
+窗口几何、页面布局、拖动、键盘导航、焦点恢复、插件 Page 原生 resize 权限及内层控件/
+overlay 投影保留既有契约。
+
+Rstest 检查 DOM 样式和 CSS/Rust 半径一致性，不证明原生裁剪。Rust 策略测试、生产接线
+检查和 macOS 构建各自覆盖其边界；它们都不证明 macOS 最终像素、原生投影外观、抗锯齿
+或原生边缘交互。
 
 ## 主题
 

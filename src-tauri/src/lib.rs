@@ -1,5 +1,6 @@
 pub mod app_preferences;
 pub mod launcher_action_collections;
+pub(crate) mod launcher_rounded_corners;
 pub mod launcher_shortcuts;
 pub mod launcher_surface;
 pub mod launcher_window;
@@ -224,6 +225,8 @@ pub fn run() {
             }
             launcher_window::setup_launcher_window(app.handle());
             launcher_surface::setup_launcher_surface(app.handle());
+            #[cfg(target_os = "macos")]
+            launcher_window::reveal_launcher_startup(app.handle())?;
             Ok(())
         })
         .build(tauri::generate_context!())

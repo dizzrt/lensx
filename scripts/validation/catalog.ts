@@ -279,6 +279,15 @@ prependWorkspaceBuildPreparation({
   targetPaths: ['packages/plugin-contract'],
 });
 
+for (const gateId of ['plugin-child-webview-runtime', 'plugin-child-webview-window-lifecycle']) {
+  const gate = gatesById.get(gateId);
+  if (gate === undefined) throw new Error(`[validation/catalog] missing ${gateId} Gate.`);
+  gate.steps.push(
+    internStep('pnpm exec rstest run tests/launcher-rounded-corners.test.ts'),
+    internStep('cargo test --manifest-path src-tauri/Cargo.toml launcher_rounded_corners'),
+  );
+}
+
 const governanceGate: MutableGate = {
   id: 'validation-governance',
   legacyNames: ['check:plugin-runtime-gate-graph'],

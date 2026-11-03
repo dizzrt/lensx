@@ -255,6 +255,27 @@ pnpm run gate -- plugin-child-webview-runtime
 
 这是确定性的 contract 与 lifecycle 验证，不能描述为原生隔离或真实 WebView 行为证明。
 
+## 原生圆角内容验证
+
+使用既有 `plugin-child-webview-runtime` 和 `launcher-input-focus` Gate。其依赖计划包含
+`plugin-runtime-slot`、`plugin-child-webview-window-lifecycle` 和
+`frame-aware-navigation-dependency-drift`；应检查计划，不要单独重复执行共享依赖步骤。
+`validation-governance` 检查维护中的入口边界。这些聚焦 Gate 仍需辅以上述完整前端/
+workspace 和 Rust lifecycle。原生变更还需通过相同 Rust 入口追加
+`--features plugin-development-mode` 执行 test、check 和 build。
+
+| 证据 | 能证明的内容 | 不能证明的内容 |
+| --- | --- | --- |
+| 生产圆角内容策略与 fake adapter | 18 逻辑点、幂等、对象不可用、设置/读回失败及确认先于呈现 | 真实 AppKit 对象或合成输出 |
+| Launcher/Child/surface 控制器 | 隐藏启动与显式显示、快捷键失败兜底、current-attempt 恢复、resize/scale 不变量、失败隐藏及晚到事件隔离 | 原生窗口运行或真实边缘拖动 |
+| Rstest DOM 与漂移断言 | CSS/Rust 半径一致、透明根背景、无 CSS 外投影、edge-to-edge slot 及语言/主题/错误状态 | 仅凭 CSS 声明证明 native sibling 裁剪 |
+| 生产接线及默认/开发 Cargo check/build | 主线程当前 `NSWindow.contentView` 选择与测试过的策略通过锁定依赖接入可编译的 adapter | 像素、抗锯齿、原生投影外观或 hit-test |
+
+裁剪归完整 Window 所有，不归插件 DOM 或生命周期所有。应一起审查启动、Child 显示/
+恢复、父窗口恢复和 surface 配置；队列投递成功不能当作原生确认成功。失败诊断保持在
+Host 内部，并保留既有 readiness、焦点、physical-bounds revision 和 teardown 回归。
+不新增截图、真实 WebView、GUI、浏览器、native harness 或性能入口。
+
 ## Plugin Child WebView Session 验证
 
 ```bash

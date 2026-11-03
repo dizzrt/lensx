@@ -92,6 +92,7 @@ impl LauncherWindowAction {
 pub enum LauncherWindowOperation {
     ResolveWindow,
     ReadVisibility,
+    EnsureRoundedCorners,
     Restore,
     Show,
     Hide,
@@ -106,6 +107,7 @@ impl Display for LauncherWindowOperation {
         let operation = match self {
             Self::ResolveWindow => "resolve_window",
             Self::ReadVisibility => "read_visibility",
+            Self::EnsureRoundedCorners => "ensure_rounded_corners",
             Self::Restore => "restore",
             Self::Show => "show",
             Self::Hide => "hide",
@@ -182,6 +184,7 @@ struct LauncherActivationPayload {
 
 trait LauncherWindowAdapter {
     fn is_visible(&mut self) -> Result<bool, String>;
+    fn ensure_rounded_corners(&mut self) -> Result<(), String>;
     fn restore(&mut self) -> Result<(), String>;
     fn show(&mut self) -> Result<(), String>;
     fn hide(&mut self) -> Result<(), String>;
@@ -205,6 +208,7 @@ trait LauncherWindowResolver {
 struct LauncherChildPresentationSnapshot {
     attempt: PluginChildWebviewAttempt,
     state: PluginChildWebviewState,
+    ready: bool,
 }
 
 trait LauncherChildPresentation {
@@ -230,6 +234,9 @@ impl<R: Runtime> LauncherChildPresentation for PluginChildWebviewService<R> {
             LauncherChildPresentationSnapshot {
                 attempt: snapshot.attempt,
                 state: snapshot.state,
+                ready: matches!(snapshot.session_state,
+                    crate::plugin_child_webview_service::PluginChildWebviewSessionState::BridgeReady
+                    | crate::plugin_child_webview_service::PluginChildWebviewSessionState::SdkReady),
             }
         })
     }
@@ -370,6 +377,14 @@ fn show_native<A: LauncherWindowAdapter>(
     window: &mut A,
     action: LauncherWindowAction,
 ) -> Result<(), LauncherWindowActionError> {
+    if let Err(details) = window.ensure_rounded_corners() {
+        let _ = window.hide();
+        return Err(LauncherWindowActionError::new(
+            action,
+            LauncherWindowOperation::EnsureRoundedCorners,
+            details,
+        ));
+    }
     run_operation(window.restore(), action, LauncherWindowOperation::Restore)?;
     run_operation(window.show(), action, LauncherWindowOperation::Show)?;
     run_operation(window.focus(), action, LauncherWindowOperation::Focus)
@@ -391,7 +406,12 @@ fn show_with_host<R: LauncherWindowResolver>(
         action,
         LauncherWindowOperation::ActivateApplication,
     )?;
-    show_native(window, action)?;
+    if let Err(error) = show_native(window, action) {
+        if error.operation == LauncherWindowOperation::EnsureRoundedCorners {
+            hide_current_plugin_presentation(child);
+        }
+        return Err(error);
+    }
     let activation = run_operation(
         host.emit_activation(reason),
         action,
@@ -434,6 +454,11 @@ struct TauriLauncherWindowAdapter<R: Runtime> {
 }
 
 impl<R: Runtime> LauncherWindowAdapter for TauriLauncherWindowAdapter<R> {
+    fn ensure_rounded_corners(&mut self) -> Result<(), String> {
+        crate::launcher_rounded_corners::ensure_launcher_rounded_corners(&self.window)
+            .map_err(|_| "launcher content is unavailable".to_owned())
+    }
+
     fn is_visible(&mut self) -> Result<bool, String> {
         self.window.is_visible().map_err(|error| error.to_string())
     }
@@ -515,6 +540,36 @@ impl Drop for LauncherNativeDialogGuard {
 #[derive(Default)]
 pub struct LauncherWindowActions {
     native_dialog_depth: Arc<AtomicUsize>,
+    #[cfg(any(target_os = "macos", test))]
+    startup_revealed: AtomicBool,
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn reveal_startup_once(
+    revealed: &AtomicBool,
+    reveal: impl FnOnce() -> Result<(), LauncherWindowActionError>,
+) -> Result<(), LauncherWindowActionError> {
+    if revealed.swap(true, Ordering::AcqRel) {
+        return Ok(());
+    }
+    if let Err(error) = reveal() {
+        revealed.store(false, Ordering::Release);
+        return Err(error);
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn reveal_launcher_startup<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<(), LauncherWindowActionError> {
+    let actions = app.state::<LauncherWindowActions>();
+    reveal_startup_once(&actions.startup_revealed, || {
+        actions.dispatch(
+            app,
+            LauncherWindowAction::Show(LauncherActivationReason::Startup),
+        )
+    })
 }
 
 impl LauncherWindowActions {
@@ -561,11 +616,15 @@ fn hide_current_plugin_presentation(
 ) -> Option<PluginChildWebviewAttempt> {
     let child = child?;
     let snapshot = child.snapshot()?;
-    if snapshot.state != PluginChildWebviewState::Visible {
+    if snapshot.state == PluginChildWebviewState::Creating && !snapshot.ready {
         return None;
     };
+    // Revoke a pending reveal even while the ready Child is still hidden.
+    // Rollback may only restore content that was visible before this Hide.
     match child.hide_current(snapshot.attempt) {
-        PluginChildWebviewPresentationResult::Applied => Some(snapshot.attempt),
+        PluginChildWebviewPresentationResult::Applied => {
+            (snapshot.state == PluginChildWebviewState::Visible).then_some(snapshot.attempt)
+        }
         PluginChildWebviewPresentationResult::StaleAttempt => None,
         _ => {
             let _ = child.compare_current_teardown(snapshot.attempt);
@@ -1178,7 +1237,9 @@ fn install_macos_close_window_menu<R: Runtime>(
 }
 
 pub fn setup_launcher_window<R: Runtime>(app: &AppHandle<R>) {
-    app.manage(LauncherWindowActions::default());
+    if !app.manage(LauncherWindowActions::default()) {
+        return;
+    }
 
     let plugin_installer = TauriShortcutPluginInstaller { app };
     let registrar = TauriShortcutRegistrar { app };
@@ -1239,6 +1300,10 @@ mod tests {
     }
 
     impl LauncherWindowAdapter for FakeWindow {
+        fn ensure_rounded_corners(&mut self) -> Result<(), String> {
+            self.record(LauncherWindowOperation::EnsureRoundedCorners)
+        }
+
         fn is_visible(&mut self) -> Result<bool, String> {
             self.record(LauncherWindowOperation::ReadVisibility)?;
             Ok(self.visible)
@@ -1332,6 +1397,10 @@ mod tests {
     }
 
     impl LauncherWindowAdapter for OrderedWindow {
+        fn ensure_rounded_corners(&mut self) -> Result<(), String> {
+            self.record("window_clip", LauncherWindowOperation::EnsureRoundedCorners)
+        }
+
         fn is_visible(&mut self) -> Result<bool, String> {
             self.record("window_visibility", LauncherWindowOperation::ReadVisibility)?;
             Ok(self.visible)
@@ -1416,6 +1485,7 @@ mod tests {
     struct FakeChildPresentation {
         calls: Rc<RefCell<Vec<&'static str>>>,
         state: PluginChildWebviewState,
+        ready: bool,
         hide_result: PluginChildWebviewPresentationResult,
         show_result: PluginChildWebviewPresentationResult,
         focus_result: PluginChildWebviewPresentationResult,
@@ -1434,6 +1504,7 @@ mod tests {
             Some(LauncherChildPresentationSnapshot {
                 attempt: Self::attempt(),
                 state: self.state,
+                ready: self.ready,
             })
         }
 
@@ -1496,6 +1567,7 @@ mod tests {
         FakeChildPresentation {
             calls: Rc::clone(calls),
             state,
+            ready: true,
             hide_result: PluginChildWebviewPresentationResult::Applied,
             show_result: PluginChildWebviewPresentationResult::Applied,
             focus_result: PluginChildWebviewPresentationResult::Applied,
@@ -1530,6 +1602,42 @@ mod tests {
             .expect("guarded hide should be suppressed");
 
         assert_eq!(*calls.borrow(), vec!["resolve_window"]);
+    }
+
+    #[test]
+    fn parent_hide_revokes_pending_ready_reveal_without_restoring_previously_hidden_content() {
+        for state in [
+            PluginChildWebviewState::Hidden,
+            PluginChildWebviewState::Creating,
+        ] {
+            let (calls, resolver) = ordered_fixture(true, Some(LauncherWindowOperation::Hide));
+            let child = child_fixture(&calls, state);
+            execute_with_resolver_policy(
+                &resolver,
+                Some(&child),
+                LauncherWindowAction::Hide,
+                false,
+            )
+            .unwrap_err();
+            assert_eq!(
+                *calls.borrow(),
+                vec![
+                    "resolve_window",
+                    "child_snapshot",
+                    "child_hide",
+                    "window_hide"
+                ]
+            );
+        }
+        let (calls, resolver) = ordered_fixture(true, None);
+        let mut child = child_fixture(&calls, PluginChildWebviewState::Creating);
+        child.ready = false;
+        execute_with_resolver_policy(&resolver, Some(&child), LauncherWindowAction::Hide, false)
+            .unwrap();
+        assert_eq!(
+            *calls.borrow(),
+            vec!["resolve_window", "child_snapshot", "window_hide"]
+        );
     }
 
     #[test]
@@ -1595,6 +1703,7 @@ mod tests {
                 "resolve_window",
                 "resolve_host",
                 "activate_application",
+                "window_clip",
                 "window_restore",
                 "window_show",
                 "window_focus",
@@ -1670,11 +1779,43 @@ mod tests {
         assert_eq!(
             window.calls,
             vec![
+                LauncherWindowOperation::EnsureRoundedCorners,
                 LauncherWindowOperation::Restore,
                 LauncherWindowOperation::Show,
                 LauncherWindowOperation::Focus,
             ]
         );
+    }
+
+    #[test]
+    fn unconfirmed_clip_hides_parent_and_child_without_reveal_or_activation_event() {
+        let (calls, resolver) =
+            ordered_fixture(true, Some(LauncherWindowOperation::EnsureRoundedCorners));
+        let child = child_fixture(&calls, PluginChildWebviewState::Visible);
+        let error = execute_with_resolver_policy(
+            &resolver,
+            Some(&child),
+            LauncherWindowAction::Show(LauncherActivationReason::GlobalShortcut),
+            false,
+        )
+        .unwrap_err();
+        assert_eq!(
+            error.operation,
+            LauncherWindowOperation::EnsureRoundedCorners
+        );
+        let calls = calls.borrow();
+        assert!(calls.contains(&"window_hide"));
+        assert!(calls.contains(&"child_hide"));
+        for forbidden in [
+            "window_restore",
+            "window_show",
+            "window_focus",
+            "host_emit",
+            "child_show",
+            "child_focus",
+        ] {
+            assert!(!calls.contains(&forbidden), "unexpected {forbidden}");
+        }
     }
 
     #[test]
@@ -1754,6 +1895,7 @@ mod tests {
             hidden.calls,
             vec![
                 LauncherWindowOperation::ReadVisibility,
+                LauncherWindowOperation::EnsureRoundedCorners,
                 LauncherWindowOperation::Restore,
                 LauncherWindowOperation::Show,
                 LauncherWindowOperation::Focus,
@@ -1809,6 +1951,7 @@ mod tests {
                 unexpectedly_hidden.calls,
                 vec![
                     LauncherWindowOperation::ReadVisibility,
+                    LauncherWindowOperation::EnsureRoundedCorners,
                     LauncherWindowOperation::Restore,
                     LauncherWindowOperation::Show,
                     LauncherWindowOperation::Focus,
@@ -1835,6 +1978,7 @@ mod tests {
         let action = LauncherWindowAction::Toggle(LauncherActivationReason::GlobalShortcut);
         let operations = [
             LauncherWindowOperation::ReadVisibility,
+            LauncherWindowOperation::EnsureRoundedCorners,
             LauncherWindowOperation::Restore,
             LauncherWindowOperation::Show,
             LauncherWindowOperation::Focus,
@@ -2419,6 +2563,48 @@ mod tests {
     }
 
     #[test]
+    fn startup_reveals_once_after_success_or_shortcut_setup_failure() {
+        for (plugin_failure, registration_failure) in [(false, false), (true, false), (false, true)]
+        {
+            let actions = LauncherWindowActions::default();
+            let installer = FakePluginInstaller {
+                attempts: Cell::new(0),
+                fail: plugin_failure,
+                order: None,
+            };
+            let registrar = FakeRegistrar {
+                attempts: Cell::new(0),
+                fail: registration_failure,
+                order: None,
+            };
+            let lifecycle =
+                initialize_launcher_lifecycle(&installer, &registrar, || Ok(()), || Ok(()));
+            assert_eq!(lifecycle.is_err(), plugin_failure || registration_failure);
+            let mut window = FakeWindow::default();
+            reveal_startup_once(&actions.startup_revealed, || {
+                execute_with_adapter(
+                    &mut window,
+                    LauncherWindowAction::Show(LauncherActivationReason::Startup),
+                )
+            })
+            .unwrap();
+            reveal_startup_once(&actions.startup_revealed, || {
+                panic!("startup must not reveal twice")
+            })
+            .unwrap();
+            assert_eq!(
+                window.calls,
+                vec![
+                    LauncherWindowOperation::EnsureRoundedCorners,
+                    LauncherWindowOperation::Restore,
+                    LauncherWindowOperation::Show,
+                    LauncherWindowOperation::Focus,
+                ]
+            );
+        }
+    }
+
+    #[test]
     fn menu_installation_failure_is_diagnosed_without_disabling_ready_lifecycle() {
         let plugin_installer = FakePluginInstaller {
             attempts: Cell::new(0),
@@ -2460,5 +2646,50 @@ mod tests {
         assert!(error
             .to_string()
             .contains("native menu installation failed"));
+    }
+}
+
+#[cfg(test)]
+mod rounded_startup_tests {
+    use super::*;
+
+    #[test]
+    fn failed_startup_is_not_recorded_as_revealed_and_can_retry() {
+        let actions = LauncherWindowActions::default();
+        let failure = || {
+            Err(LauncherWindowActionError::new(
+                LauncherWindowAction::Show(LauncherActivationReason::Startup),
+                LauncherWindowOperation::EnsureRoundedCorners,
+                "launcher content is unavailable",
+            ))
+        };
+        assert!(reveal_startup_once(&actions.startup_revealed, failure).is_err());
+        assert!(!actions.startup_revealed.load(Ordering::Acquire));
+        reveal_startup_once(&actions.startup_revealed, || Ok(())).unwrap();
+        assert!(actions.startup_revealed.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn release_setup_keeps_creation_clipping_services_and_startup_in_order() {
+        let setup = include_str!("frame_aware_navigation_setup.rs");
+        assert!(setup.find(".visible(false)").unwrap() < setup.find(".build()?").unwrap());
+        assert!(
+            setup.find(".build()?").unwrap()
+                < setup
+                    .find("ensure_launcher_rounded_corners(&window)")
+                    .unwrap()
+        );
+        let lib = include_str!("lib.rs");
+        let create = lib
+            .find("frame_aware_navigation_setup::setup_frame_aware_navigation_policy(")
+            .unwrap();
+        let services = lib
+            .find("plugin_child_webview_service::setup_plugin_child_webview_service(")
+            .unwrap();
+        let lifecycle = lib.find("launcher_window::setup_launcher_window(").unwrap();
+        let reveal = lib
+            .find("launcher_window::reveal_launcher_startup(")
+            .unwrap();
+        assert!(create < services && services < lifecycle && lifecycle < reveal);
     }
 }

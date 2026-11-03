@@ -61,8 +61,10 @@ const renderSlot = (options: {
   readonly create?: ReturnType<typeof rs.fn>;
   readonly destroy?: ReturnType<typeof rs.fn>;
   readonly locale?: 'en-US' | 'zh-CN';
+  readonly theme?: 'light' | 'dark';
   readonly isCurrent?: ReturnType<typeof rs.fn>;
   readonly waitReadiness?: ReturnType<typeof rs.fn>;
+  readonly setVisible?: ReturnType<typeof rs.fn>;
   readonly resolve?: ReturnType<typeof rs.fn>;
   readonly subscribeInvalidation?: (listener: () => void) => () => void;
   readonly strict?: boolean;
@@ -72,7 +74,7 @@ const renderSlot = (options: {
   const updateSlot = options.updateSlot ?? rs.fn(async () => undefined);
   const readReadiness = rs.fn(async () => ({ status: 'ready' as const }));
   const waitReadiness = options.waitReadiness ?? rs.fn(async () => ({ status: 'ready' as const }));
-  const setVisible = rs.fn(async () => undefined);
+  const setVisible = options.setVisible ?? rs.fn(async () => undefined);
   const destroy = options.destroy ?? rs.fn(async () => true);
   const presentationController: PluginChildWebviewPresentationController = {
     create,
@@ -88,7 +90,7 @@ const renderSlot = (options: {
     ...(options.subscribeInvalidation ? { subscribeInvalidation: options.subscribeInvalidation } : {}),
   };
   const content = (
-    <AppProviders initialLocale={options.locale}>
+    <AppProviders initialLocale={options.locale} initialThemeMode={options.theme}>
       <PluginRuntimeSlot
         activePage={activePage}
         lifecycleService={createPluginRuntimeLifecycleService()}
@@ -171,16 +173,18 @@ describe('PluginRuntimeSlot', () => {
     try {
       const view = renderSlot({});
       await waitFor(() => expect(view.setVisible).toHaveBeenCalledTimes(1));
-      Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 2 });
-      fireEvent(window, new Event('resize'));
-      await waitFor(() =>
-        expect(view.updateSlot).toHaveBeenCalledWith(
-          { attemptId: 'attempt_0123456789abcdef' },
-          2,
-          { x: 40, y: 80, width: 600, height: 400 },
-          2n,
-        ),
-      );
+      for (const [index, scale] of [1, 2, 1.25].entries()) {
+        Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: scale });
+        fireEvent(window, new Event('resize'));
+        await waitFor(() =>
+          expect(view.updateSlot).toHaveBeenCalledWith(
+            { attemptId: 'attempt_0123456789abcdef' },
+            scale,
+            { x: 20 * scale, y: 40 * scale, width: 300 * scale, height: 200 * scale },
+            BigInt(index + 2),
+          ),
+        );
+      }
       expect(view.create).toHaveBeenCalledTimes(1);
       const callsBeforeUnmount = view.updateSlot.mock.calls.length;
       view.unmount();
@@ -311,5 +315,39 @@ describe('PluginRuntimeSlot', () => {
       fireEvent.click(screen.getByRole('button'));
     });
     await waitFor(() => expect(view.resolver.resolve).toHaveBeenCalledTimes(2));
+  });
+
+  test.each([
+    ['en-US', 'light', 'This plugin page could not be loaded', 'Retry'],
+    ['en-US', 'dark', 'This plugin page could not be loaded', 'Retry'],
+    ['zh-CN', 'light', '无法加载此插件页面', '重试'],
+    ['zh-CN', 'dark', '无法加载此插件页面', '重试'],
+  ] as const)('keeps a rejected native reveal failed and supports bounded retry in %s/%s', async (locale, theme, failureText, retryText) => {
+    let rejectReveal = true;
+    const visibility: boolean[] = [];
+    const view = renderSlot({
+      locale,
+      theme,
+      setVisible: rs.fn(async (_presentation, visible: boolean) => {
+        visibility.push(visible);
+        if (visible && rejectReveal) throw new Error('private NSWindow/contentView clipping failure');
+      }),
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent(failureText);
+    expect(document.querySelector('[data-runtime-state="ready"]')).toBeNull();
+    expect(screen.queryByText(/NSWindow|contentView|clipping failure/u)).not.toBeInTheDocument();
+    expect(visibility).toEqual([true, false]);
+    expect(view.destroy).toHaveBeenCalledTimes(1);
+    const retry = screen.getByRole('button', { name: retryText });
+    expect(retry).toHaveFocus();
+    if (theme === 'dark') expect(document.body).toHaveAttribute('theme-mode', 'dark');
+    else expect(document.body).not.toHaveAttribute('theme-mode');
+    rejectReveal = false;
+    fireEvent.click(retry);
+    await waitFor(() => expect(document.querySelector('[data-runtime-state="ready"]')).not.toBeNull());
+    expect(view.create).toHaveBeenCalledTimes(2);
+    expect(view.resolver.resolve).toHaveBeenCalledTimes(2);
+    expect(visibility).toEqual([true, false, true]);
+    expect(document.querySelector('[data-plugin-runtime-slot="true"]')).not.toHaveAttribute('tabindex');
   });
 });

@@ -37,7 +37,12 @@ const destroy = child.indexOf('handle.destroy()', teardown);
 if (revoke < 0 || teardown < 0 || teardownRevoke < 0 || destroy < 0 || teardownRevoke > destroy) {
   failures.push('resource authority is not revoked before native destroy.');
 }
-if (!library.includes('.attach_resource_authority(plugin_resource_service)')) {
+if (
+  !library.includes('service.attach_resource_authority(authority)') ||
+  !/attach_plugin_resource_authority\(\s*plugin_child_webview_service\.as_ref\(\),\s*plugin_resource_service,\s*\)/u.test(
+    library,
+  )
+) {
   failures.push('application composition does not bind Resource Service to Child WebView lifecycle.');
 }
 

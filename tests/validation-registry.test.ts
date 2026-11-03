@@ -68,6 +68,32 @@ describe('validation Gate registry and runner', () => {
     ).toBe(true);
   });
 
+  test('shares native outline policy and production wiring checks across Runtime and launcher focus Gates', () => {
+    for (const gateId of [
+      'plugin-child-webview-runtime',
+      'plugin-child-webview-window-lifecycle',
+      'launcher-input-focus',
+    ]) {
+      const plan = planGates(validationRegistry, [gateId]);
+      expect(plan.steps.filter((item) => item.argv.includes('tests/launcher-rounded-corners.test.ts'))).toHaveLength(1);
+      expect(
+        plan.steps.filter((item) => item.executable === 'cargo' && item.argv.at(-1) === 'launcher_rounded_corners'),
+      ).toHaveLength(1);
+    }
+    const combined = planGates(validationRegistry, ['plugin-child-webview-runtime', 'launcher-input-focus']);
+    expect(combined.steps.filter((item) => item.argv.includes('tests/launcher-rounded-corners.test.ts'))).toHaveLength(
+      1,
+    );
+    expect(
+      combined.steps.filter((item) => item.executable === 'cargo' && item.argv.at(-1) === 'launcher_rounded_corners'),
+    ).toHaveLength(1);
+    expect(combined.gateIds).toContain('plugin-runtime-slot');
+    expect(combined.gateIds).toContain('frame-aware-navigation-dependency-drift');
+    expect(
+      combined.steps.every((item) => item.safety.readOnly && !isProhibitedEnvironmentCommand(item.description)),
+    ).toBe(true);
+  });
+
   test('plans launcher input focus with structured commands and shared native dependencies', () => {
     const gate = findGate('launcher-input-focus');
     expect(gate?.description).toBe(

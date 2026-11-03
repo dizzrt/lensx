@@ -750,7 +750,7 @@ Actually truncated Action titles MUST remain readable through one non-focusable 
 
 ### Requirement: Launcher outer surfaces must use consistent rounded corners and shadows
 
-Launcher outer surfaces MUST preserve rounded clipping and theme backgrounds without frontend CSS shadows, retain the native macOS shadow, and leave layout, interactions, resize permissions, and inner-control shadows unchanged.
+Launcher outer surfaces MUST preserve consistent rounded clipping, theme backgrounds, and the native macOS shadow without frontend CSS outer shadows. On macOS, clipping MUST cover the complete native composition of Host and plugin content with the existing 18-logical-pixel four-corner outline. Layout, interactions, resize permissions, and inner-control shadows MUST retain their existing semantics.
 
 #### Scenario: Display Home and Search surfaces
 
@@ -804,3 +804,23 @@ Launcher outer surfaces MUST preserve rounded clipping and theme backgrounds wit
   layout, dragging, keyboard navigation, focus restoration, or native resize
   permissions for plugin Pages. They MUST NOT alter shadows belonging to inner
   controls or overlays.
+
+#### Scenario: Clip opaque plugin content at the native outer corners
+
+- **WHEN** plugin content in the macOS Launcher fills the inline and bottom slot edges with an opaque background
+- **THEN** the final Host and plugin content MUST share the complete window's four-corner outline, and both bottom corners MUST retain the same logical radius as Home
+- **THEN** the area outside the outline MUST remain transparent and MUST NOT be filled by plugin backgrounds, theme-colored corner covers, or a new outer border
+- **THEN** this behavior MUST NOT depend on a transparent plugin background, plugin rounding CSS, or a particular SDK adaptation
+
+#### Scenario: Preserve the outline while native size or scale changes
+
+- **WHEN** the macOS Launcher presents content after a fixed-surface size transition, permitted user resize, monitor work-area fitting, or backing-scale change
+- **THEN** clipping MUST match the current complete content bounds and retain a radius of 18 logical pixels, without growing or shrinking with the physical-pixel scale
+- **THEN** existing window sizes, resize constraints, native edge dragging, and content-slot geometry MUST retain their existing semantics
+
+#### Scenario: Retain the outline throughout presentation lifecycle
+
+- **WHEN** the macOS Launcher first presents content, transitions among Home, Search, Host Pages, and plugin loading/ready/failed/retry states, or restores after hiding
+- **THEN** every presented content state MUST already be clipped to the shared outer outline, without exposing a rectangular plugin before adding rounding
+- **THEN** clipping MUST NOT add a focus target, reload a document, recreate a Session, or change the current text-editing target
+- **THEN** closing an old Page, asynchronous destruction, and delayed completions from an old attempt MUST NOT remove the current window's clipping

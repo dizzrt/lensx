@@ -351,6 +351,8 @@ pub(crate) fn valid_host_route(value: &str) -> bool {
 
 pub(crate) trait PluginChildWebviewNativeHandle: Send + Sync + 'static {
     fn source_label(&self) -> String;
+    fn ensure_rounded_corners(&self) -> Result<(), ()>;
+    fn hide_unconfirmed_content(&self) -> Result<(), ()>;
     fn update_bounds(&self, x: i32, y: i32, width: u32, height: u32) -> Result<(), ()>;
     fn show(&self) -> Result<(), ()>;
     fn hide(&self) -> Result<(), ()>;
@@ -372,6 +374,19 @@ impl<R: Runtime> PluginChildWebviewHandle<R> {
 }
 
 impl<R: Runtime> PluginChildWebviewNativeHandle for PluginChildWebviewHandle<R> {
+    fn ensure_rounded_corners(&self) -> Result<(), ()> {
+        let parent = self.webview.window();
+        crate::launcher_rounded_corners::ensure_launcher_rounded_corners(&parent).map_err(|_| ())
+    }
+
+    fn hide_unconfirmed_content(&self) -> Result<(), ()> {
+        // Called only after the registry rechecks this current attempt. An
+        // unconfirmed common container cannot safely present Host or Child.
+        let child = self.webview.hide().map_err(|_| ());
+        let parent = self.webview.window().hide().map_err(|_| ());
+        child.and(parent)
+    }
+
     fn source_label(&self) -> String {
         self.webview.label().to_owned()
     }

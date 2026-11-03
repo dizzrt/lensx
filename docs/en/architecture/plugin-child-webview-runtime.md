@@ -13,10 +13,11 @@ When the trusted current Page resolution has `provider.kind: "plugin"`, React
 selects one shared edge-to-edge Launcher body layout for external,
 Development Mode, and official plugins. The Host keeps Page chrome outside the
 plugin rectangle, removes body inline and bottom inset plus inter-region gap,
-and adds no inner radius on the Runtime container. The outer Launcher surface
-continues to own native-window clipping and radius. Home, Search, and
-Host-owned Pages retain their existing layouts; plugin identity, Publisher,
-repository location, provenance, and Runtime content do not select this state.
+and adds no inner radius on the Runtime container. Host CSS clips its own DOM;
+on macOS, Rust clips the common native content container as described below.
+Home, Search, and Host-owned Pages retain their existing layouts; plugin identity,
+Publisher, repository location, provenance, and Runtime content do not select
+this state.
 
 ```mermaid
 flowchart LR
@@ -37,6 +38,77 @@ Host document and is the sole target of `launcher://activated`. The current
 plugin Child WebView has a separate generated identity and never receives that
 Host event. Post-creation Launcher operations must not convert the native
 Window back into a single `WebviewWindow`.
+
+## Native Rounded Content
+
+On macOS, Rust resolves the complete `Window("main")` and its current
+`NSWindow.contentView`, the common ancestor of the Host and plugin native
+siblings. On the main thread it enables layer backing and configures the
+existing layer with a radius of 18 logical points and `masksToBounds = true`,
+then reads the state back. This clips all four corners without replacing the
+content view or layer, adding a wrapper, or changing the first responder or
+view ordering. The layer adds no background fill, corner covers, or shadow.
+The existing `NSWindow` shadow remains separate from content clipping.
+
+The radius corresponds to `.launcher-surface`'s 18 CSS px and is never
+multiplied by the backing scale. The layer's implicit bounds mask follows the
+current content bounds during resize and monitor changes. Surface configuration
+reconfirms the policy after fixed/resizable transitions and work-area fitting;
+there is no separate physical mask path, resize polling, or plugin geometry
+channel. Surface commands and coalesced monitor/scale refreshes run off the main
+thread while retaining the existing serialized transaction and rollback order.
+The native event callback only schedules work, so it cannot hold up main-thread
+confirmation by waiting for that transaction. A notification during refresh is
+retained for the next pass. The Child still receives the existing rectangular
+physical bounds and latest-wins slot revision. Its viewport and resize permission
+do not change.
+
+The macOS main window is created hidden. After the Host view exists, clipping
+is established before the plugin service can present content. Startup then
+explicitly reveals the window using the existing activation and focus path,
+including when shortcut registration fails. A missing native window, content
+view, layer, or failed confirmation keeps startup hidden and returns a bounded
+setup error. Hiding creation and performing this first reveal are one lifecycle
+change; a rollback must revert both together with native clipping, or it can
+leave a permanently hidden window.
+
+Before a current Child's first reveal, same-attempt restore, or parent-window
+restore, Rust reconfirms the same Window-owned policy. Successful queue
+submission is not confirmation: a scheduled operation must report its actual
+main-thread result before presentation proceeds. Main-thread callers execute
+directly instead of waiting on their own queue. The Child registry releases its
+lock while confirmation runs, then rechecks the attempt, native handle,
+readiness, and latest private visibility intent before reveal or failure hiding.
+A newer hide or reveal supersedes an older pending operation without changing
+the slot's wire revision. The clipping operation does not load a document,
+create a Session, Worker, or model, or acquire focus. Existing load, bridge, SDK
+readiness, and compare-current checks still govern Child presentation.
+
+If runtime confirmation fails, presentation cannot report a successful reveal
+or expose an unconfirmed Child. A still-confirmable safe clip is retained;
+otherwise the affected content stays hidden and the existing window/Runtime
+failure path handles the error. Existing localized navigation, retry, and close
+controls remain available only while the Host can be safely shown. Native
+pointers, object labels, and platform diagnostics do not become plugin data or
+product copy. No new user setting or public protocol field is introduced.
+
+Clipping belongs to the Window, so Child teardown does not remove it. The same
+rules apply to official, external, and Development Mode plugins; provenance,
+background opacity, locale, and theme do not select another native path.
+
+| Presentation or transition | Common clipping and retained behavior |
+| --- | --- |
+| Home, Search, Host Page, or Settings overlay | Host content stays inside the same outer outline; existing padding, overlay ordering, keyboard behavior, and focus targets remain owned by the Host. |
+| Plugin loading, ready, blank, opaque, failed, or retry | The edge-to-edge rectangle has no inner top corners or added inset; existing readiness and failure UI remain authoritative. |
+| Hide and same-attempt restore | Confirmation precedes reveal while the same document, Session, Worker, model, and user-resized size are retained. |
+| Close/reopen or replacement from A to B | Close destroys the old attempt; late A updates, ready events, and teardown cannot remove the Window clip or operate on B. |
+| Resize burst, work-area fitting, or scale change | The common content bounds drive clipping, the radius stays 18 logical points, and existing physical-bounds revisions converge independently. |
+
+Deterministic policy, lifecycle, wiring, and compilation checks have distinct
+roles in the [validation guide](../development/validation.md#native-rounded-content-validation).
+They do not establish final macOS compositing pixels, antialiasing, native
+shadow appearance, or edge hit-testing. Other platforms retain their existing
+window behavior.
 
 ## Session And Lifecycle
 

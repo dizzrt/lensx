@@ -31,7 +31,7 @@ When the current Page belongs to an executable external plugin, the Host MUST cr
 
 ### Requirement: Host MUST provide an edge-to-edge content slot below plugin Page chrome
 
-When a current Page is provided by a plugin, the trusted Host MUST keep Page chrome outside the plugin content rectangle and MUST assign the Child WebView slot all remaining Launcher body space directly below that chrome.
+When a current Page is provided by a plugin, the trusted Host MUST keep Page chrome outside the plugin content rectangle and MUST assign the Child WebView slot all remaining Launcher body space directly below that chrome. On macOS, edge-to-edge plugin content MUST also be clipped to the complete Launcher's rounded outer outline; plugins MUST NOT be responsible for adapting to the window outline.
 
 #### Scenario: Ordinary plugin Page enters its content slot
 
@@ -61,7 +61,7 @@ When a current Page is provided by a plugin, the trusted Host MUST keep Page chr
 
 - **WHEN** the trusted Host lays out a current plugin Page
 - **THEN** The plugin Page body MUST add no Host-owned inline padding, bottom padding, inter-region gap, or inner card radius around the Runtime slot.
-- **THEN** The outer Launcher surface MAY continue to clip the complete native Window shape.
+- **THEN** The macOS Host MUST clip the complete native content, including the plugin Child WebView, to the shared outer outline defined by `frontend-foundation`; this MUST NOT turn the plugin slot's top edge into a card with inner rounded corners.
 - **THEN** This layout MUST be selected from the trusted Page provider kind and MUST apply identically to official, external, and Development Mode plugins; plugin identity, Publisher, repository location, release metadata, or Runtime content MUST NOT select a special layout path.
 
 #### Scenario: Measure and publish slot changes
@@ -74,6 +74,32 @@ When a current Page is provided by a plugin, the trusted Host MUST keep Page chr
 
 - **WHEN** the Host presents Home, Search, or a Host-owned Page
 - **THEN** Home, Search and Host Pages MUST retain their own Host layouts.
+
+#### Scenario: Present any plugin without a rounding adaptation
+
+- **WHEN** an official, external, or Development Mode plugin presents opaque or transparent content in the current macOS slot without providing window-rounding styles
+- **THEN** the Host MUST apply the same outer-outline clipping to every plugin, without requiring an SDK upgrade, Manifest change, package rebuild, or additional message registration
+- **THEN** the plugin MUST observe only its existing rectangular Web viewport and MUST NOT gain window-rounding configuration, native objects, or new geometry-setting authority
+
+#### Scenario: Reveal or restore a clipped Child
+
+- **WHEN** the macOS Host first reveals a ready Child or restores the semantically equivalent current Child
+- **THEN** the revealed Child MUST already be clipped to the current window's outer outline, and existing load, bridge, and SDK readiness conditions MUST continue to hold
+- **THEN** same-attempt restoration MUST preserve the existing document, Session, Worker, model, user size, and focus-restoration semantics; clipping MUST NOT trigger another creation or load
+
+#### Scenario: Clipping cannot be established for presentation
+
+- **WHEN** the macOS Host cannot confirm that content to be presented is clipped to the current window's outer outline
+- **THEN** the Host MUST NOT reveal an unclipped Child or report the reveal as successful
+- **THEN** existing valid clipping and safe presentation MUST be retained when possible; otherwise the affected content MUST be hidden and handled through the existing initialization-error or Runtime-failure path
+- **THEN** plugin data and product error copy MUST NOT expose native pointers, object labels, platform exceptions, or internal diagnostics; existing navigation, retry, and close behavior MUST remain operable while the Host can still be safely presented
+- **THEN** failure to establish initial clipping MUST keep the window unpresented and follow the existing initialization-error path
+
+#### Scenario: Old attempts cannot undo the current outline
+
+- **WHEN** plugin A is closed, invalidated, or replaced by B and A's slot updates, ready events, hide, or destroy operations complete later
+- **THEN** A's late operations MUST NOT clear the common window outline, change B's clipping, or make A visible again
+- **THEN** the current Child slot MUST retain the existing revision and compare-current rules, and the outer outline MUST follow the current complete window bounds
 
 ### Requirement: Child WebView navigation MUST be top-level, current and Host-derived
 

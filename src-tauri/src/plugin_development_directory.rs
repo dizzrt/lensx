@@ -423,7 +423,7 @@ mod tests {
             )
             .unwrap();
             manifest["compatibility"]["host_api"]["max_version_exclusive"] =
-                serde_json::json!("0.4.0");
+                serde_json::json!("0.5.0");
             fs::write(
                 self.0.join("manifest.json"),
                 serde_json::to_vec(&manifest).unwrap(),

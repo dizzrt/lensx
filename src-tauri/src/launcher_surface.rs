@@ -1,7 +1,7 @@
 use crate::{launcher_window::MAIN_WINDOW_LABEL, plugin_manager::PluginManager};
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU8, Ordering},
     Arc, Mutex,
 };
 use tauri::{AppHandle, LogicalSize, Manager, Runtime, State, Window, WindowEvent};
@@ -162,6 +162,7 @@ struct PresentationSnapshot {
 }
 
 trait LauncherSurfaceWindow {
+    fn ensure_rounded_corners(&self) -> Result<(), String>;
     fn current_logical_size(&self) -> Result<LogicalDimensions, String>;
     fn current_work_area(&self) -> Result<LogicalDimensions, String>;
     fn current_resizable(&self) -> Result<bool, String>;
@@ -172,6 +173,13 @@ trait LauncherSurfaceWindow {
 }
 
 impl<R: Runtime> LauncherSurfaceWindow for Window<R> {
+    fn ensure_rounded_corners(&self) -> Result<(), String> {
+        crate::launcher_rounded_corners::ensure_launcher_rounded_corners(self).map_err(|_| {
+            let _ = self.hide();
+            "launcher content is unavailable".to_owned()
+        })
+    }
+
     fn current_resizable(&self) -> Result<bool, String> {
         self.is_resizable().map_err(|error| error.to_string())
     }
@@ -255,6 +263,43 @@ pub struct LauncherSurfaceCoordinator {
     // Read/write only while holding last_successful. Keep uncertain queued
     // enables across a failed rollback, independently of the success cache.
     resizable_uncertain: AtomicBool,
+    environment_refresh: EnvironmentRefreshQueue,
+}
+
+#[derive(Default)]
+struct EnvironmentRefreshQueue {
+    // One worker owns RUNNING; callbacks only mark DIRTY and never take the
+    // surface transaction mutex on AppKit's main thread.
+    state: AtomicU8,
+}
+
+impl EnvironmentRefreshQueue {
+    const RUNNING: u8 = 1;
+    const DIRTY: u8 = 2;
+
+    fn request(&self) -> bool {
+        self.state
+            .fetch_or(Self::RUNNING | Self::DIRTY, Ordering::AcqRel)
+            & Self::RUNNING
+            == 0
+    }
+
+    fn run(&self, mut refresh: impl FnMut()) {
+        loop {
+            self.state.fetch_and(!Self::DIRTY, Ordering::AcqRel);
+            refresh();
+            // A notification during refresh keeps this worker alive. A later
+            // notification observes idle and starts another worker, so the
+            // final monitor/scale state cannot be lost at worker handoff.
+            if self
+                .state
+                .compare_exchange(Self::RUNNING, 0, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                return;
+            }
+        }
+    }
 }
 
 fn valid_owner_id(value: &str) -> bool {
@@ -404,7 +449,9 @@ fn apply_snapshot<W: LauncherSurfaceWindow>(
             .set_resizable(snapshot.resizable)
             .map_err(|_| "set_target_resizable")?;
     }
-    Ok(())
+    window
+        .ensure_rounded_corners()
+        .map_err(|_| "ensure_rounded_corners")
 }
 
 fn transition<W: LauncherSurfaceWindow, B: LauncherSurfaceBindingResolver + ?Sized>(
@@ -424,7 +471,9 @@ fn transition<W: LauncherSurfaceWindow, B: LauncherSurfaceBindingResolver + ?Siz
         .as_ref()
         .is_some_and(|snapshot| snapshot.key == target.key())
     {
-        return Ok(());
+        return window
+            .ensure_rounded_corners()
+            .map_err(|_| LauncherSurfaceError::new(target, "ensure_rounded_corners"));
     }
     let work_area = window
         .current_work_area()
@@ -492,7 +541,9 @@ fn refresh_environment<W: LauncherSurfaceWindow>(
         .lock()
         .map_err(|_| "coordinator_lock")?;
     let Some(previous) = last_successful.clone() else {
-        return Ok(());
+        return window
+            .ensure_rounded_corners()
+            .map_err(|_| "ensure_rounded_corners");
     };
     let work_area = window.current_work_area().map_err(|_| "work_area")?;
     let hard_minimum = LogicalDimensions::new(HARD_MIN_WIDTH, HARD_MIN_HEIGHT);
@@ -546,7 +597,9 @@ fn refresh_environment<W: LauncherSurfaceWindow>(
     Ok(())
 }
 
-#[tauri::command]
+// The transaction can wait for confirmed main-thread clipping. Never enter it
+// synchronously from the IPC callback while an environment worker owns it.
+#[tauri::command(async)]
 pub fn set_launcher_surface_mode(
     app: AppHandle,
     target: LauncherSurfaceTarget,
@@ -578,11 +631,19 @@ pub fn setup_launcher_surface<R: Runtime>(app: &AppHandle<R>) {
             WindowEvent::Moved(_) | WindowEvent::ScaleFactorChanged { .. }
         ) {
             let coordinator: State<'_, LauncherSurfaceCoordinator> = app.state();
-            let Some(window) = app.get_window(MAIN_WINDOW_LABEL) else {
-                return;
-            };
-            if let Err(operation) = refresh_environment(&coordinator, &window) {
-                eprintln!("launcher surface environment refresh failed at {operation}");
+            if coordinator.environment_refresh.request() {
+                let app = app.clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    let coordinator: State<'_, LauncherSurfaceCoordinator> = app.state();
+                    coordinator.environment_refresh.run(|| {
+                        let Some(window) = app.get_window(MAIN_WINDOW_LABEL) else {
+                            return;
+                        };
+                        if let Err(operation) = refresh_environment(&coordinator, &window) {
+                            eprintln!("launcher surface environment refresh failed at {operation}");
+                        }
+                    });
+                });
             }
         }
     });
@@ -595,6 +656,59 @@ mod tests {
         cell::{Cell, RefCell},
         collections::{HashMap, VecDeque},
     };
+
+    #[test]
+    fn environment_bursts_coalesce_and_a_request_at_worker_handoff_is_retained() {
+        let queue = EnvironmentRefreshQueue::default();
+        assert!(queue.request());
+        for _ in 0..100 {
+            assert!(!queue.request());
+        }
+        let mut refreshes = 0;
+        queue.run(|| {
+            refreshes += 1;
+            if refreshes == 1 {
+                for _ in 0..100 {
+                    assert!(!queue.request());
+                }
+            }
+        });
+        assert_eq!(refreshes, 2);
+        assert!(
+            queue.request(),
+            "a request after handoff must start a worker"
+        );
+        queue.run(|| refreshes += 1);
+        assert_eq!(refreshes, 3);
+    }
+
+    #[test]
+    fn environment_notifications_never_wait_for_the_surface_transaction() {
+        let coordinator = Arc::new(LauncherSurfaceCoordinator::default());
+        let transaction = coordinator.last_successful.lock().unwrap();
+        assert!(coordinator.environment_refresh.request());
+        let worker_coordinator = Arc::clone(&coordinator);
+        let (started, entered) = std::sync::mpsc::sync_channel(1);
+        let worker = std::thread::spawn(move || {
+            let mut calls = 0;
+            worker_coordinator.environment_refresh.run(|| {
+                calls += 1;
+                if calls == 1 {
+                    started.send(()).unwrap();
+                }
+                let _transaction = worker_coordinator.last_successful.lock().unwrap();
+            });
+            calls
+        });
+        entered
+            .recv_timeout(std::time::Duration::from_secs(1))
+            .unwrap();
+        // Model the main-thread callback while a transaction is outstanding.
+        // It only marks another refresh; it cannot block the native confirmation.
+        assert!(!coordinator.environment_refresh.request());
+        drop(transaction);
+        assert_eq!(worker.join().unwrap(), 2);
+    }
 
     struct FakeBindings(bool);
 
@@ -718,6 +832,10 @@ mod tests {
     }
 
     impl LauncherSurfaceWindow for FakeWindow {
+        fn ensure_rounded_corners(&self) -> Result<(), String> {
+            self.record("ensure_rounded_corners")
+        }
+
         fn current_resizable(&self) -> Result<bool, String> {
             self.record("current_resizable")?;
             Ok(self.resizable.get())
@@ -793,7 +911,8 @@ mod tests {
                 "set_max_size",
                 "set_size",
                 "set_min_size",
-                "set_max_size"
+                "set_max_size",
+                "ensure_rounded_corners"
             ]
         );
     }
@@ -810,9 +929,13 @@ mod tests {
         )
         .unwrap();
         assert_eq!(*window.size.borrow(), LogicalDimensions::new(700.0, 500.0));
+        assert!(window.operations.borrow().ends_with(&[
+            "set_resizable_true".to_owned(),
+            "ensure_rounded_corners".to_owned(),
+        ]));
         assert_eq!(
             window.operations.borrow().last().map(String::as_str),
-            Some("set_resizable_true")
+            Some("ensure_rounded_corners")
         );
     }
 
@@ -825,7 +948,11 @@ mod tests {
         *window.size.borrow_mut() = LogicalDimensions::new(960.0, 720.0);
         let operation_count = window.operations.borrow().len();
         transition(&coordinator, &window, &FakeBindings(true), &a).unwrap();
-        assert_eq!(window.operations.borrow().len(), operation_count);
+        assert_eq!(window.operations.borrow().len(), operation_count + 1);
+        assert_eq!(
+            window.operations.borrow().last().unwrap(),
+            "ensure_rounded_corners"
+        );
         assert_eq!(*window.size.borrow(), LogicalDimensions::new(960.0, 720.0));
 
         let b = plugin_target("com.acme.b", "main", 2, 720, 540, false);
@@ -834,6 +961,31 @@ mod tests {
         let reopened = plugin_target("com.acme.a", "main", 3, 800, 600, true);
         transition(&coordinator, &window, &FakeBindings(true), &reopened).unwrap();
         assert_eq!(*window.size.borrow(), LogicalDimensions::new(800.0, 600.0));
+    }
+
+    #[test]
+    fn clipping_is_reconfirmed_on_cached_surface_and_environment_recovery() {
+        let coordinator = LauncherSurfaceCoordinator::default();
+        let window = FakeWindow::new(LogicalDimensions::new(1920.0, 1040.0));
+        let target = plugin_target("com.acme.a", "main", 1, 800, 600, true);
+        transition(&coordinator, &window, &FakeBindings(true), &target).unwrap();
+        window.reset_operations();
+        window
+            .failures
+            .borrow_mut()
+            .push_back("ensure_rounded_corners".to_owned());
+        assert!(transition(&coordinator, &window, &FakeBindings(true), &target).is_err());
+        assert_eq!(*window.operations.borrow(), vec!["ensure_rounded_corners"]);
+        transition(&coordinator, &window, &FakeBindings(true), &target).unwrap();
+        assert_eq!(*window.size.borrow(), LogicalDimensions::new(800.0, 600.0));
+        *window.work_area.borrow_mut() = LogicalDimensions::new(700.0, 500.0);
+        refresh_environment(&coordinator, &window).unwrap();
+        assert_eq!(*window.size.borrow(), LogicalDimensions::new(700.0, 500.0));
+        assert_eq!(
+            window.operations.borrow().last().unwrap(),
+            "ensure_rounded_corners"
+        );
+        assert_eq!(window.responder.get(), Some("host_input"));
     }
 
     #[test]
@@ -857,7 +1009,10 @@ mod tests {
         .unwrap();
         assert_eq!(*window.size.borrow(), LogicalDimensions::new(650.0, 320.0));
         assert!(!window.resizable.get());
-        assert_eq!(window.operations.borrow().last().unwrap(), "set_max_size");
+        assert!(window.operations.borrow().ends_with(&[
+            "set_max_size".to_owned(),
+            "ensure_rounded_corners".to_owned(),
+        ]));
     }
 
     #[test]
@@ -876,10 +1031,10 @@ mod tests {
 
         refresh_environment(&coordinator, &window).unwrap();
         assert_eq!(*window.size.borrow(), LogicalDimensions::new(700.0, 500.0));
-        assert_eq!(
-            window.operations.borrow().last().map(String::as_str),
-            Some("set_resizable_true")
-        );
+        assert!(window.operations.borrow().ends_with(&[
+            "set_resizable_true".to_owned(),
+            "ensure_rounded_corners".to_owned(),
+        ]));
     }
 
     #[test]
@@ -1177,10 +1332,10 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(error.operation, "set_target_resizable");
-        assert_eq!(
-            window.operations.borrow().last().unwrap(),
-            "set_resizable_false"
-        );
+        assert!(window.operations.borrow().ends_with(&[
+            "set_resizable_false".to_owned(),
+            "ensure_rounded_corners".to_owned(),
+        ]));
         window.drain();
         window.assert_snapshot(&previous);
     }

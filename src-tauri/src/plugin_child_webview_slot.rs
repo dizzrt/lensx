@@ -223,6 +223,13 @@ mod tests {
     }
 
     impl PluginChildWebviewNativeHandle for FakeHandle {
+        fn ensure_rounded_corners(&self) -> Result<(), ()> {
+            Ok(())
+        }
+        fn hide_unconfirmed_content(&self) -> Result<(), ()> {
+            self.hide()
+        }
+
         fn source_label(&self) -> String {
             "fake-child".to_owned()
         }

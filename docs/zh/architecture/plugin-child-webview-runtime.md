@@ -10,8 +10,8 @@ authority 与 destroy。插件不能提交 native bounds，也不能获取 Tauri
 当可信的 current Page resolution 具有 `provider.kind: "plugin"` 时，React 会为
 external、Development Mode 与 official 插件选择同一套 edge-to-edge Launcher body
 布局。Host 将 Page chrome 保留在插件矩形之外，移除 body 的 inline/bottom inset 与
-区域间 gap，并且不在 Runtime container 上叠加 inner radius。最外层 Launcher surface
-继续拥有 native-window 裁切与圆角。Home、Search 和 Host-owned Page 保留既有布局；
+区域间 gap，并且不在 Runtime container 上叠加 inner radius。Host CSS 只裁剪自己的 DOM；
+macOS 上由 Rust 裁剪下文所述的共同原生内容容器。Home、Search 和 Host-owned Page 保留既有布局；
 plugin identity、Publisher、repository location、provenance 与 Runtime content 都不能
 选择该状态。
 
@@ -31,6 +31,56 @@ size、visibility、show/hide、focus、window event 与 native-dialog parent；
 `Webview("main")` 只表示 Host document，并且是 `launcher://activated` 的唯一目标。current plugin
 Child WebView 使用独立的 generated identity，绝不会收到该 Host event。post-creation Launcher
 操作不得把 native Window 重新转换成 single `WebviewWindow`。
+
+## 原生圆角内容
+
+macOS 上，Rust 解析完整 `Window("main")` 及其当前 `NSWindow.contentView`，后者是
+Host 与插件 native sibling 的共同祖先。在主线程启用 layer backing 后，Rust 为既有
+layer 设置 18 逻辑点半径和 `masksToBounds = true`，再读回确认状态。该操作裁剪四角，
+不替换 content view 或 layer，不添加 wrapper，也不改变 first responder 或 view 顺序。
+layer 不添加背景填充、遮角或投影。既有 `NSWindow` 原生投影与内容裁剪保持独立。
+
+该半径对应 `.launcher-surface` 的 18 CSS px，不乘 backing scale。layer 的隐式 bounds
+mask 随 resize 和 monitor 变化跟随当前内容边界。surface 配置在固定/可调整状态转换及
+工作区适配后重新确认策略；不添加独立的物理 mask path、resize polling 或插件几何通道。
+surface command 与合并后的 monitor/scale refresh 在主线程之外运行，同时保留既有串行
+事务与回滚顺序。原生事件回调只调度工作，不会因等待事务而阻塞主线程确认；refresh 期间
+到达的通知保留到下一轮处理。Child 仍接收原有矩形 physical bounds 和 latest-wins slot
+revision，其 viewport 与 resize 权限保持不变。
+
+macOS 主窗口先隐藏创建。Host view 建立后、插件 service 能呈现内容前，Rust 建立裁剪。
+随后启动流程显式沿既有激活与焦点路径显示窗口，包括快捷键注册失败的情况。原生窗口、
+content view、layer 缺失或确认失败时，启动窗口保持隐藏并返回有界 setup 错误。隐藏创建
+与首次显示属于同一生命周期变更；回滚时必须与原生裁剪一起撤回，否则可能留下永久隐藏
+的窗口。
+
+当前 Child 首次显示、同 attempt 恢复及父窗口恢复前，Rust 重新确认同一 Window 级策略。
+队列投递成功不等于确认成功：调度操作必须返回真实主线程执行结果，呈现才能继续。
+主线程调用直接执行，不等待自身队列。Child registry 在确认期间释放锁，并在显示或失败
+隐藏前重新检查 attempt、native handle、readiness 和最新的私有 visibility intent。
+后续 hide 或 reveal 会取代旧的待完成操作，不改变 slot 的 wire revision。裁剪操作不会
+加载 document、创建 Session、Worker 或 model，也不会获取焦点。既有 load、bridge、
+SDK readiness 和 compare-current 检查仍控制 Child 呈现。
+
+运行期确认失败时，呈现不能报告显示成功，也不能暴露未确认的 Child。仍可确认的安全
+裁剪会保留；否则受影响内容保持隐藏，并沿既有窗口/Runtime 失败路径处理。只有 Host
+仍可安全显示时，既有本地化导航、重试和关闭控件才保持可用。原生指针、对象标签和平台
+诊断不进入插件数据或产品文案，不新增用户配置或公开协议字段。
+
+裁剪归 Window 所有，Child teardown 不会移除它。官方、外部和 Development Mode 插件
+遵循相同规则；来源、背景透明度、语言和主题都不会选择另一条原生路径。
+
+| 呈现或转换 | 共同裁剪与保留行为 |
+| --- | --- |
+| Home、Search、Host Page 或 Settings overlay | Host 内容保持在同一外轮廓内；既有 padding、overlay 顺序、键盘行为和焦点目标仍由 Host 拥有。 |
+| 插件 loading、ready、空白、不透明、failed 或 retry | edge-to-edge 矩形不添加内部上圆角或 inset；既有 readiness 与失败 UI 保持权威。 |
+| Hide 与同 attempt 恢复 | 确认先于显示，同时保留原 document、Session、Worker、model 和用户调整后的尺寸。 |
+| Close/reopen 或 A 替换为 B | Close 销毁旧 attempt；A 晚到的更新、ready 事件和 teardown 不能移除 Window 裁剪或操作 B。 |
+| Resize burst、工作区适配或 scale 变化 | 共同内容 bounds 驱动裁剪，半径保持 18 逻辑点，既有 physical-bounds revision 独立收敛。 |
+
+确定性策略、生命周期、接线和编译检查的职责见
+[验证指南](../development/validation.md#原生圆角内容验证)。这些检查不证明 macOS 最终
+合成像素、抗锯齿、原生投影外观或边缘 hit-test。其他平台保留既有窗口行为。
 
 ## Session 与 Lifecycle
 

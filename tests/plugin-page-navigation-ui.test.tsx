@@ -156,6 +156,8 @@ const renderPluginComposition = (
   options: {
     readonly activationSource?: TestLauncherActivationSource;
     readonly destroy?: ReturnType<typeof rs.fn>;
+    readonly initialLocale?: 'en-US' | 'zh-CN';
+    readonly initialThemeMode?: 'light' | 'dark';
     readonly strictMode?: boolean;
     readonly renderPage?: ComponentProps<typeof App>['renderPage'];
     readonly surfaceController?: LauncherSurfaceController;
@@ -185,7 +187,7 @@ const renderPluginComposition = (
   const activationSource = options.activationSource ?? new TestLauncherActivationSource();
   void projection.initialize();
   const view = (
-    <AppProviders>
+    <AppProviders initialLocale={options.initialLocale} initialThemeMode={options.initialThemeMode}>
       <TestProviderControls />
       <App
         actionService={actionService}
@@ -228,20 +230,39 @@ describe('Plugin Page navigation UI', () => {
     await waitFor(() => expect(pluginChildWebviewPresentationController.create).toHaveBeenCalledTimes(1));
   });
 
-  test('selects one edge-to-edge Page body layout from plugin provider kind only', async () => {
-    const view = renderPluginComposition({ renderPage: (page) => <div>Current page {page.page_id}</div> });
+  test.each([
+    ['en-US', 'light', 'blank'],
+    ['en-US', 'dark', 'opaque'],
+    ['zh-CN', 'light', 'opaque'],
+    ['zh-CN', 'dark', 'blank'],
+  ] as const)('selects one edge-to-edge Page body layout from plugin provider kind only in %s/%s with %s content', async (initialLocale, initialThemeMode, content) => {
+    // A Host render fixture verifies shell composition, not native Child pixels.
+    const view = renderPluginComposition({
+      initialLocale,
+      initialThemeMode,
+      renderPage: (page) => (
+        <div data-fixture-page={page.page_id} style={{ background: content === 'opaque' ? '#fff' : 'transparent' }}>
+          {content === 'opaque' ? `Current page ${page.page_id}` : null}
+        </div>
+      ),
+    });
     const launcherBody = () => document.querySelector('.launcher-body');
+    const surface = document.querySelector('.launcher-surface');
+    const queryLabel = initialLocale === 'zh-CN' ? '启动器查询' : 'Launcher query';
+    const closeLabel = initialLocale === 'zh-CN' ? '关闭设置并返回主页' : 'Close settings and return home';
 
     expect(launcherBody()).not.toHaveAttribute('data-page-layout');
-    fireEvent.change(screen.getByRole('combobox', { name: 'Launcher query' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: queryLabel }), {
       target: { value: 'no matching action' },
     });
     expect(launcherBody()).not.toHaveAttribute('data-page-layout');
 
     await waitFor(() => expect(view.pageRegistry.lookup({ owner_id: pluginId, page_id: 'home' })).toBeDefined());
     act(() => view.navigationService.openPage({ owner_id: pluginId, page_id: 'home' }, `${pluginId}.open_project`));
-    expect(await screen.findByText('Current page home')).toBeInTheDocument();
+    await waitFor(() => expect(document.querySelector('[data-fixture-page="home"]')).toBeInTheDocument());
     expect(launcherBody()).toHaveAttribute('data-page-layout', 'plugin-edge-to-edge');
+    expect(document.querySelector('.launcher-surface')).toBe(surface);
+    expect(surface).not.toHaveAttribute('tabindex');
 
     const configLensId = 'dev.lensx.config-lens';
     const configLensBatch: PageProviderBatch = {
@@ -263,16 +284,20 @@ describe('Plugin Page navigation UI', () => {
     };
     expect(view.pageRegistry.replaceProviderBatch(configLensId, configLensBatch).ok).toBe(true);
     act(() => view.navigationService.openPage({ owner_id: configLensId, page_id: 'main' }, `${configLensId}.open`));
-    expect(await screen.findByText('Current page main')).toBeInTheDocument();
+    await waitFor(() => expect(document.querySelector('[data-fixture-page="main"]')).toBeInTheDocument());
     expect(launcherBody()).toHaveAttribute('data-page-layout', 'plugin-edge-to-edge');
+    expect(document.querySelector('.launcher-surface')).toBe(surface);
 
     act(() => view.navigationService.openPage({ owner_id: 'lensx.core', page_id: 'settings' }, 'lensx.core.settings'));
-    expect(await screen.findByText('Current page settings')).toBeInTheDocument();
+    await waitFor(() => expect(document.querySelector('[data-fixture-page="settings"]')).toBeInTheDocument());
     expect(launcherBody()).toHaveAttribute('data-page-layout', 'settings-split');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close settings and return home' }));
-    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Launcher query' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: closeLabel }));
+    await waitFor(() => expect(screen.getByRole('combobox', { name: queryLabel })).toHaveFocus());
     expect(launcherBody()).not.toHaveAttribute('data-page-layout');
+    expect(document.querySelector('.launcher-surface')).toBe(surface);
+    if (initialThemeMode === 'dark') expect(document.body).toHaveAttribute('theme-mode', 'dark');
+    else expect(document.body).not.toHaveAttribute('theme-mode');
   });
 
   test('keeps one current Runtime across shortcut activation refresh and replaces it only after a real close', async () => {

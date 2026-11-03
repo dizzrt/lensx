@@ -1174,7 +1174,7 @@ mod tests {
                 "../../packages/plugin-contract/tests/fixtures/base.json"
             ))
             .unwrap();
-            manifest["compatibility"]["host_api"]["max_version_exclusive"] = json!("0.4.0");
+            manifest["compatibility"]["host_api"]["max_version_exclusive"] = json!("0.5.0");
             fs::write(
                 source.join("manifest.json"),
                 serde_json::to_vec(&manifest).unwrap(),
@@ -1195,7 +1195,7 @@ mod tests {
             ))
             .unwrap();
             manifest["plugin_id"] = json!(plugin_id);
-            manifest["compatibility"]["host_api"]["max_version_exclusive"] = json!("0.4.0");
+            manifest["compatibility"]["host_api"]["max_version_exclusive"] = json!("0.5.0");
             fs::write(
                 source.join("manifest.json"),
                 serde_json::to_vec(&manifest).unwrap(),

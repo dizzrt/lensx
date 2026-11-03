@@ -303,8 +303,9 @@ struct CurrentEntry<H> {
     source_label: String,
     state: PluginChildWebviewState,
     bounds: Option<PluginChildWebviewBounds>,
-    handle: Option<H>,
+    handle: Option<Arc<H>>,
     presentation_revision: u64,
+    visibility_intent_revision: u64,
     freshness: String,
     bridge_ready: bool,
     session: PluginChildWebviewSessionMachine,
@@ -552,6 +553,7 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
             bounds: None,
             handle: None,
             presentation_revision: 0,
+            visibility_intent_revision: 0,
             freshness,
             bridge_ready: false,
             session: PluginChildWebviewSessionMachine::new(),
@@ -587,6 +589,7 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
             bounds: None,
             handle: None,
             presentation_revision: 0,
+            visibility_intent_revision: 0,
             freshness,
             bridge_ready: false,
             session: PluginChildWebviewSessionMachine::new(),
@@ -681,7 +684,7 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
                 let _ = handle.destroy();
                 return false;
             }
-            current.handle = Some(handle);
+            current.handle = Some(Arc::new(handle));
             true
         } else {
             let _ = handle.destroy();
@@ -752,6 +755,35 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
         &self,
         attempt: PluginChildWebviewAttempt,
     ) -> PluginChildWebviewPresentationResult {
+        let (handle, visibility_intent_revision) = {
+            let mut state = self.lock_state();
+            let Some(current) = state
+                .current
+                .as_mut()
+                .filter(|current| current.attempt == attempt)
+            else {
+                return PluginChildWebviewPresentationResult::StaleAttempt;
+            };
+            if !matches!(
+                current.session.state,
+                PluginChildWebviewSessionState::BridgeReady
+                    | PluginChildWebviewSessionState::SdkReady
+            ) {
+                return PluginChildWebviewPresentationResult::NotReady;
+            }
+            let Some(handle) = &current.handle else {
+                return PluginChildWebviewPresentationResult::NativeUnavailable;
+            };
+            let Some(revision) = current.visibility_intent_revision.checked_add(1) else {
+                return PluginChildWebviewPresentationResult::NativeFailed;
+            };
+            current.visibility_intent_revision = revision;
+            (Arc::clone(handle), revision)
+        };
+        // Confirmation can wait for AppKit. Never retain the registry lock across
+        // that wait: native callbacks may need it to finish or replace an attempt.
+        // This operation only maintains Window-owned clipping, never presentation.
+        let confirmation = handle.ensure_rounded_corners();
         let mut state = self.lock_state();
         let Some(current) = state
             .current
@@ -760,15 +792,29 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
         else {
             return PluginChildWebviewPresentationResult::StaleAttempt;
         };
+        // A newer same-attempt hide or reveal supersedes this pending intent.
+        // This counter is private and independent of the slot's wire revision.
+        if current.visibility_intent_revision != visibility_intent_revision {
+            return PluginChildWebviewPresentationResult::StaleAttempt;
+        }
         if !matches!(
             current.session.state,
             PluginChildWebviewSessionState::BridgeReady | PluginChildWebviewSessionState::SdkReady
         ) {
             return PluginChildWebviewPresentationResult::NotReady;
         }
-        let Some(handle) = &current.handle else {
+        let Some(current_handle) = &current.handle else {
             return PluginChildWebviewPresentationResult::NativeUnavailable;
         };
+        if !Arc::ptr_eq(current_handle, &handle) {
+            return PluginChildWebviewPresentationResult::StaleAttempt;
+        }
+        if confirmation.is_err() {
+            if handle.hide_unconfirmed_content().is_ok() {
+                current.state = PluginChildWebviewState::Hidden;
+            }
+            return PluginChildWebviewPresentationResult::NativeFailed;
+        }
         if handle.show().is_err() {
             return PluginChildWebviewPresentationResult::NativeFailed;
         }
@@ -791,6 +837,10 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRegistry<H> {
         let Some(handle) = &current.handle else {
             return PluginChildWebviewPresentationResult::NativeUnavailable;
         };
+        let Some(revision) = current.visibility_intent_revision.checked_add(1) else {
+            return PluginChildWebviewPresentationResult::NativeFailed;
+        };
+        current.visibility_intent_revision = revision;
         if handle.hide().is_err() {
             return PluginChildWebviewPresentationResult::NativeFailed;
         }
@@ -1544,9 +1594,19 @@ pub(crate) fn setup_plugin_child_webview_service<R: Runtime>(
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::mpsc;
+
+    struct PendingConfirmation {
+        started: mpsc::Sender<()>,
+        release: Mutex<mpsc::Receiver<()>>,
+    }
 
     #[derive(Clone, Default)]
     struct FakeHandle {
+        clip_checks: Arc<AtomicUsize>,
+        fail_clip: Arc<AtomicBool>,
+        pending_confirmation: Option<Arc<PendingConfirmation>>,
+        unconfirmed_hides: Arc<AtomicUsize>,
         destroys: Arc<AtomicUsize>,
         bounds_updates: Arc<AtomicUsize>,
         shows: Arc<AtomicUsize>,
@@ -1561,6 +1621,32 @@ mod tests {
     }
 
     impl PluginChildWebviewNativeHandle for FakeHandle {
+        fn ensure_rounded_corners(&self) -> Result<(), ()> {
+            self.clip_checks.fetch_add(1, Ordering::SeqCst);
+            if let Some(pending) = &self.pending_confirmation {
+                pending
+                    .started
+                    .send(())
+                    .expect("confirmation started receiver");
+                pending
+                    .release
+                    .lock()
+                    .expect("confirmation release lock")
+                    .recv()
+                    .expect("confirmation release sender");
+            }
+            if self.fail_clip.load(Ordering::SeqCst) {
+                Err(())
+            } else {
+                Ok(())
+            }
+        }
+
+        fn hide_unconfirmed_content(&self) -> Result<(), ()> {
+            self.unconfirmed_hides.fetch_add(1, Ordering::SeqCst);
+            self.hide()
+        }
+
         fn source_label(&self) -> String {
             self.source_label.unwrap_or("fake-child").to_owned()
         }
@@ -1875,6 +1961,8 @@ mod tests {
         let hides = Arc::clone(&handle.hides);
         let focuses = Arc::clone(&handle.focuses);
         let fail_presentation = Arc::clone(&handle.fail_presentation);
+        let fail_clip = Arc::clone(&handle.fail_clip);
+        let clip_checks = Arc::clone(&handle.clip_checks);
         assert!(service.attach_current(attempt, handle));
         let creation = service.creation_facts(attempt).expect("creation facts");
         assert!(service.attach_ready_dispatcher(Arc::new(FakeReadyDispatcher::default())));
@@ -1889,6 +1977,7 @@ mod tests {
             PluginChildWebviewPresentationResult::NotReady
         );
         assert_eq!(shows.load(Ordering::SeqCst), 0);
+        assert_eq!(clip_checks.load(Ordering::SeqCst), 0);
         assert!(service.mark_native_loaded(attempt, "fake-child"));
         assert_eq!(
             service.accept_ready_ingress(attempt, "fake-child", &ready_body(&creation.freshness)),
@@ -1913,6 +2002,41 @@ mod tests {
         assert_eq!(shows.load(Ordering::SeqCst), 1);
         assert_eq!(hides.load(Ordering::SeqCst), 1);
         assert_eq!(focuses.load(Ordering::SeqCst), 1);
+
+        fail_clip.store(true, Ordering::SeqCst);
+        assert_eq!(
+            service.show_current(attempt),
+            PluginChildWebviewPresentationResult::NativeFailed
+        );
+        assert_eq!(
+            shows.load(Ordering::SeqCst),
+            1,
+            "unconfirmed clipping cannot reveal"
+        );
+        assert_eq!(
+            service.snapshot().unwrap().state,
+            PluginChildWebviewState::Hidden
+        );
+        fail_clip.store(false, Ordering::SeqCst);
+        assert_eq!(
+            service.show_current(attempt),
+            PluginChildWebviewPresentationResult::Applied
+        );
+        assert_eq!(service.snapshot().unwrap().attempt, attempt);
+        assert_eq!(
+            service.creation_facts(attempt).unwrap().freshness,
+            creation.freshness
+        );
+        assert_eq!(clip_checks.load(Ordering::SeqCst), 3);
+        assert_eq!(
+            focuses.load(Ordering::SeqCst),
+            1,
+            "clipping does not transfer focus"
+        );
+        assert_eq!(
+            service.hide_current(attempt),
+            PluginChildWebviewPresentationResult::Applied
+        );
 
         fail_presentation.store(true, Ordering::SeqCst);
         assert_eq!(
@@ -1948,6 +2072,7 @@ mod tests {
         let hides = Arc::clone(&replacement.hides);
         let focuses = Arc::clone(&replacement.focuses);
         let destroys = Arc::clone(&replacement.destroys);
+        let clip_checks = Arc::clone(&replacement.clip_checks);
         assert!(service.attach_current(new_attempt, replacement));
 
         assert_eq!(
@@ -1978,9 +2103,253 @@ mod tests {
         assert_eq!(hides.load(Ordering::SeqCst), 0);
         assert_eq!(focuses.load(Ordering::SeqCst), 0);
         assert_eq!(destroys.load(Ordering::SeqCst), 0);
+        assert_eq!(clip_checks.load(Ordering::SeqCst), 0);
         assert_eq!(
             service.snapshot().expect("replacement remains").attempt,
             new_attempt
+        );
+    }
+
+    #[test]
+    fn pending_outline_confirmation_releases_registry_and_cannot_present_or_hide_a_replacement() {
+        for fail_confirmation in [false, true] {
+            let service = Arc::new(PluginChildWebviewRegistry::<FakeHandle>::default());
+            assert!(service.attach_ready_dispatcher(Arc::new(FakeReadyDispatcher::default())));
+            let old_attempt = service
+                .reserve_current(identity("plugin-a", 1), "fake-child")
+                .unwrap();
+            let (started, started_rx) = mpsc::channel();
+            let (release, release_rx) = mpsc::channel();
+            let old = FakeHandle {
+                pending_confirmation: Some(Arc::new(PendingConfirmation {
+                    started,
+                    release: Mutex::new(release_rx),
+                })),
+                ..FakeHandle::default()
+            };
+            old.fail_clip.store(fail_confirmation, Ordering::SeqCst);
+            assert!(service.attach_current(old_attempt, old.clone()));
+            let creation = service.creation_facts(old_attempt).unwrap();
+            assert!(service.mark_native_loaded(old_attempt, "fake-child"));
+            assert_eq!(
+                service.accept_ready_ingress(
+                    old_attempt,
+                    "fake-child",
+                    &ready_body(&creation.freshness)
+                ),
+                PluginChildWebviewReadyResult::Accepted
+            );
+            let showing = {
+                let service = Arc::clone(&service);
+                std::thread::spawn(move || service.show_current(old_attempt))
+            };
+            started_rx
+                .recv_timeout(Duration::from_secs(2))
+                .expect("confirmation is pending");
+            let replacement = FakeHandle {
+                source_label: Some("replacement-child"),
+                ..FakeHandle::default()
+            };
+            let (replaced, replaced_rx) = mpsc::channel();
+            let replacing = {
+                let service = Arc::clone(&service);
+                let replacement = replacement.clone();
+                std::thread::spawn(move || {
+                    assert_eq!(service.snapshot().unwrap().attempt, old_attempt);
+                    assert!(service.compare_current_teardown(old_attempt).unwrap());
+                    let current = service
+                        .reserve_current(identity("plugin-b", 2), "replacement-child")
+                        .unwrap();
+                    assert!(service.attach_current(current, replacement));
+                    let creation = service.creation_facts(current).unwrap();
+                    assert!(service.mark_native_loaded(current, "replacement-child"));
+                    assert_eq!(
+                        service.accept_ready_ingress(
+                            current,
+                            "replacement-child",
+                            &ready_body(&creation.freshness)
+                        ),
+                        PluginChildWebviewReadyResult::Accepted
+                    );
+                    assert_eq!(
+                        service.show_current(current),
+                        PluginChildWebviewPresentationResult::Applied
+                    );
+                    replaced.send(current).unwrap();
+                })
+            };
+            let replacement_before_confirmation = replaced_rx.recv_timeout(Duration::from_secs(2));
+            // Always release the held confirmation before asserting, including a
+            // lock-regression failure, so the test cannot strand either worker.
+            release.send(()).unwrap();
+            let old_result = showing.join().unwrap();
+            replacing.join().unwrap();
+            let current = replacement_before_confirmation
+                .expect("registry remains usable while AppKit confirmation waits");
+            assert_eq!(
+                old_result,
+                PluginChildWebviewPresentationResult::StaleAttempt
+            );
+            assert_eq!(service.snapshot().unwrap().attempt, current);
+            assert_eq!(
+                service.snapshot().unwrap().state,
+                PluginChildWebviewState::Visible
+            );
+            assert_eq!(old.clip_checks.load(Ordering::SeqCst), 1);
+            assert_eq!(old.shows.load(Ordering::SeqCst), 0);
+            assert_eq!(old.hides.load(Ordering::SeqCst), 0);
+            assert_eq!(old.unconfirmed_hides.load(Ordering::SeqCst), 0);
+            assert_eq!(old.destroys.load(Ordering::SeqCst), 1);
+            assert_eq!(replacement.clip_checks.load(Ordering::SeqCst), 1);
+            assert_eq!(replacement.shows.load(Ordering::SeqCst), 1);
+            assert_eq!(replacement.hides.load(Ordering::SeqCst), 0);
+            assert_eq!(replacement.unconfirmed_hides.load(Ordering::SeqCst), 0);
+        }
+    }
+
+    #[test]
+    fn pending_outline_confirmation_cannot_override_a_newer_same_attempt_visibility_intent() {
+        for (newer_show, fail_confirmation) in [(false, false), (false, true), (true, false)] {
+            let service = Arc::new(PluginChildWebviewRegistry::<FakeHandle>::default());
+            assert!(service.attach_ready_dispatcher(Arc::new(FakeReadyDispatcher::default())));
+            let attempt = service
+                .reserve_current(identity("plugin-a", 1), "fake-child")
+                .unwrap();
+            let (started, started_rx) = mpsc::channel();
+            let (release, release_rx) = mpsc::channel();
+            let handle = FakeHandle {
+                pending_confirmation: Some(Arc::new(PendingConfirmation {
+                    started,
+                    release: Mutex::new(release_rx),
+                })),
+                ..FakeHandle::default()
+            };
+            handle.fail_clip.store(fail_confirmation, Ordering::SeqCst);
+            assert!(service.attach_current(attempt, handle.clone()));
+            let creation = service.creation_facts(attempt).unwrap();
+            assert!(service.mark_native_loaded(attempt, "fake-child"));
+            assert_eq!(
+                service.accept_ready_ingress(
+                    attempt,
+                    "fake-child",
+                    &ready_body(&creation.freshness)
+                ),
+                PluginChildWebviewReadyResult::Accepted
+            );
+            let first = {
+                let service = Arc::clone(&service);
+                std::thread::spawn(move || service.show_current(attempt))
+            };
+            started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+            let (hidden, hidden_rx) = mpsc::channel();
+            let newer = {
+                let service = Arc::clone(&service);
+                std::thread::spawn(move || {
+                    if newer_show {
+                        service.show_current(attempt)
+                    } else {
+                        let result = service.hide_current(attempt);
+                        hidden.send(()).unwrap();
+                        result
+                    }
+                })
+            };
+            let newer_admitted = if newer_show {
+                started_rx.recv_timeout(Duration::from_secs(2))
+            } else {
+                hidden_rx.recv_timeout(Duration::from_secs(2))
+            };
+            release.send(()).unwrap();
+            if newer_show {
+                release.send(()).unwrap();
+            }
+            let first_result = first.join().unwrap();
+            let newer_result = newer.join().unwrap();
+            newer_admitted.expect("newer intent is admitted without waiting for old confirmation");
+            assert_eq!(
+                first_result,
+                PluginChildWebviewPresentationResult::StaleAttempt
+            );
+            assert_eq!(newer_result, PluginChildWebviewPresentationResult::Applied);
+            assert_eq!(handle.shows.load(Ordering::SeqCst), usize::from(newer_show));
+            assert_eq!(
+                handle.hides.load(Ordering::SeqCst),
+                usize::from(!newer_show)
+            );
+            assert_eq!(handle.unconfirmed_hides.load(Ordering::SeqCst), 0);
+            assert_eq!(handle.focuses.load(Ordering::SeqCst), 0);
+            assert_eq!(
+                service.snapshot().unwrap().state,
+                if newer_show {
+                    PluginChildWebviewState::Visible
+                } else {
+                    PluginChildWebviewState::Hidden
+                }
+            );
+            assert_eq!(
+                service.snapshot().unwrap().presentation_revision,
+                0,
+                "visibility intent does not change the slot wire revision"
+            );
+            assert_eq!(
+                service.creation_facts(attempt).unwrap().freshness,
+                creation.freshness
+            );
+        }
+    }
+
+    #[test]
+    fn pending_outline_confirmation_rechecks_session_readiness_after_completion() {
+        let service = Arc::new(PluginChildWebviewRegistry::<FakeHandle>::default());
+        assert!(service.attach_ready_dispatcher(Arc::new(FakeReadyDispatcher::default())));
+        let attempt = service
+            .reserve_current(identity("plugin-a", 1), "fake-child")
+            .unwrap();
+        let (started, started_rx) = mpsc::channel();
+        let (release, release_rx) = mpsc::channel();
+        let handle = FakeHandle {
+            pending_confirmation: Some(Arc::new(PendingConfirmation {
+                started,
+                release: Mutex::new(release_rx),
+            })),
+            ..FakeHandle::default()
+        };
+        assert!(service.attach_current(attempt, handle.clone()));
+        let creation = service.creation_facts(attempt).unwrap();
+        assert!(service.mark_native_loaded(attempt, "fake-child"));
+        assert_eq!(
+            service.accept_ready_ingress(attempt, "fake-child", &ready_body(&creation.freshness)),
+            PluginChildWebviewReadyResult::Accepted
+        );
+        let showing = {
+            let service = Arc::clone(&service);
+            std::thread::spawn(move || service.show_current(attempt))
+        };
+        started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        let (disconnected, disconnected_rx) = mpsc::channel();
+        let disconnecting = {
+            let service = Arc::clone(&service);
+            std::thread::spawn(move || {
+                let result = service.disconnect_current(
+                    attempt,
+                    PluginChildWebviewSessionErrorCode::RuntimeSessionDisconnected,
+                );
+                disconnected.send(result).unwrap();
+            })
+        };
+        let disconnected_before_confirmation = disconnected_rx.recv_timeout(Duration::from_secs(2));
+        release.send(()).unwrap();
+        let result = showing.join().unwrap();
+        disconnecting.join().unwrap();
+        assert!(
+            disconnected_before_confirmation.expect("disconnect is not blocked by confirmation")
+        );
+        assert_eq!(result, PluginChildWebviewPresentationResult::NotReady);
+        assert_eq!(handle.shows.load(Ordering::SeqCst), 0);
+        assert_eq!(handle.unconfirmed_hides.load(Ordering::SeqCst), 0);
+        assert_eq!(
+            service.snapshot().unwrap().session_state,
+            PluginChildWebviewSessionState::Disconnected
         );
     }
 

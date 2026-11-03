@@ -30,6 +30,7 @@ pub(crate) fn setup_frame_aware_navigation_policy(
     }
     let callback_policy = Arc::clone(&policy);
     WebviewWindowBuilder::from_config(app, &window_config)?
+        .visible(false)
         .on_navigation_with_frame(move |url, frame| {
             match decide_tauri_navigation(&callback_policy, url, frame) {
                 NavigationDecision::Allow(_) => true,
@@ -56,6 +57,11 @@ pub(crate) fn setup_frame_aware_navigation_policy(
             false
         })
         .build()?;
+    let window = app
+        .get_window(crate::launcher_window::MAIN_WINDOW_LABEL)
+        .ok_or_else(|| io::Error::other("launcher content is unavailable"))?;
+    crate::launcher_rounded_corners::ensure_launcher_rounded_corners(&window)
+        .map_err(|_| io::Error::other("launcher content is unavailable"))?;
     Ok(policy)
 }
 

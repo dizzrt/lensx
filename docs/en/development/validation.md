@@ -293,6 +293,31 @@ pnpm run gate -- plugin-child-webview-runtime
 
 This is deterministic contract and lifecycle validation. It must not be described as proof of native isolation or real WebView behavior.
 
+## Native Rounded Content Validation
+
+Use the existing `plugin-child-webview-runtime` and `launcher-input-focus`
+Gates. Their dependency plans include `plugin-runtime-slot`,
+`plugin-child-webview-window-lifecycle`, and
+`frame-aware-navigation-dependency-drift`; inspect the plan instead of rerunning
+shared dependency steps separately. `validation-governance` checks the maintained
+entry boundaries. These focused Gates supplement the complete frontend/workspace
+and Rust lifecycle above. Native changes also require test, check, and build
+through the same Rust entries with `--features plugin-development-mode`.
+
+| Evidence | What it establishes | What it does not establish |
+| --- | --- | --- |
+| Production rounded-content policy with fake adapters | 18 logical points, idempotence, unavailable objects, setter/readback failure, and confirmation before presentation | Real AppKit objects or compositor output |
+| Launcher/Child/surface controllers | Hidden startup and explicit reveal, shortcut-failure fallback, current-attempt restore, resize/scale invariants, failure hiding, and stale-event isolation | A native window run or real edge dragging |
+| Rstest DOM and drift assertions | CSS/Rust radius agreement, transparent roots, no outer CSS shadow, edge-to-edge slot, and locale/theme/error states | Native sibling clipping from CSS declarations |
+| Production wiring and default/development Cargo check/build | Main-thread current `NSWindow.contentView` selection and the tested policy are wired into the compiled adapters using locked dependencies | Pixels, antialiasing, native shadow appearance, or hit-testing |
+
+Clipping belongs to the complete Window, not a plugin's DOM or lifecycle. Review
+startup, Child reveal/restore, parent restore, and surface configuration together;
+queue submission must not be accepted as successful native confirmation. Keep
+failure diagnostics inside Host boundaries and preserve existing readiness,
+focus, physical-bounds revision, and teardown regressions. No screenshot,
+real-WebView, GUI, browser, native harness, or performance entry is added.
+
 ## Plugin Child WebView Session Validation
 
 ```bash

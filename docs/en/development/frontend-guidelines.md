@@ -79,15 +79,26 @@ token bridges, and cross-component base rules in `global.less`; keep simple App
 Shell layout and spacing in UnoCSS utilities.
 
 The shared `.launcher-surface` owns the `18px` outer radius, `overflow: hidden`
-content clipping, and `var(--semi-color-bg-0)` theme background across Home,
-Search, Host Pages, and plugin Pages. It adds no CSS shadow; the macOS desktop
-window retains its existing native shadow. Keep this policy consistent in
-`en-US`, `zh-CN`, and both themes, without changing window geometry, page
+DOM clipping, and `var(--semi-color-bg-0)` theme background across Home, Search,
+Host Pages, and plugin Pages. Keep the document root transparent and add no CSS
+outer shadow. Host CSS cannot clip a native sibling Child WebView: on macOS,
+Rust applies and confirms the same 18 logical-point outline on the common
+`NSWindow.contentView` layer before presentation. The native radius is not
+scaled by DPR, and the existing `NSWindow` shadow remains enabled. See the
+[native ownership and failure boundary](../architecture/plugin-child-webview-runtime.md#native-rounded-content).
+
+Plugin Pages still use an edge-to-edge rectangular slot with zero body inline
+and bottom inset, zero gap, and no inner card radius. Do not inject plugin
+rounding styles or add corner covers, borders, focus targets, or plugin-specific
+layout branches. The policy applies equally to blank and opaque content,
+loading/error states, `en-US`, `zh-CN`, and both themes. Window geometry, page
 layout, dragging, keyboard navigation, focus restoration, plugin Page native
-resize permissions, or inner component and overlay shadows. Browser previews
-show the rounded surface without the macOS native shadow. Deterministic tests,
-source review, and builds verify the implementation and existing contracts;
-they do not establish the final macOS pixel appearance.
+resize permissions, and inner component/overlay shadows retain their contracts.
+
+Rstest checks DOM styles and CSS/Rust radius consistency; it does not prove
+native clipping. Rust policy tests, production wiring checks, and macOS builds
+cover their own boundaries. None establishes final macOS pixels, native shadow
+appearance, antialiasing, or native edge interactions.
 
 ## Theme
 

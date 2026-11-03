@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { assertLauncherRoundedCornersContract } from './launcher-rounded-corners-contract.ts';
 
 const root = join(import.meta.dirname, '..');
 const read = (path: string) => readFileSync(join(root, path), 'utf8');
@@ -23,6 +24,7 @@ for (const hostChrome of ['<PageContextBar', 'pageTitle={pageContext.page_title}
 }
 
 const styles = read('src/styles/global.less');
+assertLauncherRoundedCornersContract(styles, read('src-tauri/src/launcher_rounded_corners.rs'));
 const block = (selector: string): string => {
   const start = styles.indexOf(selector);
   if (start < 0) fail(`Host styles omit ${selector}`);
