@@ -8,6 +8,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -39,6 +40,7 @@ import { LauncherHome } from './app/launcher/LauncherHome';
 import {
   inertLauncherSurfaceController,
   type LauncherSurfaceController,
+  type LauncherSurfaceLease,
   type LauncherSurfaceTarget,
   launcherSurfaceTargetKey,
 } from './app/launcher/surface';
@@ -69,6 +71,7 @@ import {
   type PluginChildWebviewPresentationController,
   type PluginHostApiDispatcherFactory,
   type PluginPageRuntimeResolver,
+  PluginRuntimeInstanceRegistry,
   type PluginRuntimeLifecycleService,
   PluginRuntimeSlot,
   startPluginChildWebviewHostDispatcherDesktopAdapter,
@@ -78,6 +81,11 @@ import type { PluginSurfaceProjectionService } from './app/plugins/surfaces';
 import { type AppPreferencesClient, desktopAppPreferencesClient } from './app/preferences';
 import { desktopShortcutService, type ShortcutService, unavailableShortcutService } from './app/shortcuts';
 import { useAppTheme } from './app/theme';
+import { reportHostWindowFailure } from './app/windows/diagnostics';
+import { HostWindowCoordinator } from './app/windows/host-window-coordinator';
+import { desktopHostWindowPort, type HostWindowPort } from './app/windows/host-window-protocol';
+import { PluginWindowRecoveryControls } from './app/windows/PluginWindowControls';
+import { usePluginWindowControls } from './app/windows/usePluginWindowControls';
 
 export interface AppProps {
   activationSource?: LauncherActivationSource;
@@ -92,6 +100,7 @@ export interface AppProps {
   pluginRuntimeResolver?: PluginPageRuntimeResolver;
   pluginHostApiDispatcherFactory?: PluginHostApiDispatcherFactory;
   enablePluginChildWebviewHostDispatcher?: boolean;
+  hostWindowPort?: HostWindowPort;
   pluginManagementService?: PluginManagementService;
   renderPage?: (activePage: ActivePage) => ReactNode;
   surfaceProjectionService?: PluginSurfaceProjectionService;
@@ -128,6 +137,7 @@ const App = ({
   pluginRuntimeResolver,
   pluginHostApiDispatcherFactory,
   enablePluginChildWebviewHostDispatcher = false,
+  hostWindowPort = desktopHostWindowPort,
   pluginManagementService = inertPluginManagementService,
   renderPage,
   startupPreferencesErrorCode,
@@ -219,6 +229,111 @@ const App = ({
     () => pluginRuntimeLifecycleService ?? createPluginRuntimeLifecycleService(),
     [pluginRuntimeLifecycleService],
   );
+  const instanceRegistry = useMemo(
+    () =>
+      new PluginRuntimeInstanceRegistry(
+        effectivePluginRuntimeLifecycleService,
+        enablePluginChildWebviewHostDispatcher
+          ? (attemptId, reason, owner) =>
+              ['navigation', 'retry', 'failure'].includes(reason)
+                ? hostWindowPort.replaceInstance(attemptId, owner)
+                : hostWindowPort.closeInstance(attemptId)
+          : undefined,
+      ),
+    [effectivePluginRuntimeLifecycleService, enablePluginChildWebviewHostDispatcher, hostWindowPort],
+  );
+  const windowCoordinatorRef = useRef<HostWindowCoordinator | undefined>(undefined);
+  const preferenceSnapshotRef = useRef({ locale, themeMode });
+  preferenceSnapshotRef.current = { locale, themeMode };
+  const [surfaceLease, setSurfaceLease] = useState<LauncherSurfaceLease>();
+  const [detachmentPending, setDetachmentPending] = useState(false);
+  const reconcilePluginWindows = useCallback(async () => {
+    await windowCoordinatorRef.current?.reconcile();
+  }, []);
+  const pluginWindowControls = usePluginWindowControls({
+    enabled: enablePluginChildWebviewHostDispatcher,
+    port: hostWindowPort,
+    instances: instanceRegistry,
+    transferPending: detachmentPending,
+    reconcile: reconcilePluginWindows,
+  });
+  const mainInteractionFrozen = detachmentPending || pluginWindowControls.interactionFrozen;
+  const mainNavigationSequenceRef = useRef(0);
+  const nativePageAttemptsRef = useRef(new Map<string, `page_attempt_${number}`>());
+  const renderWaitersRef = useRef(new Set<() => void>());
+  const [, requestRender] = useState(0);
+  const awaitMainRender = useCallback(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const finish = () => {
+          clearTimeout(timer);
+          renderWaitersRef.current.delete(finish);
+          resolve();
+        };
+        const timer = setTimeout(() => {
+          renderWaitersRef.current.delete(finish);
+          reject(new Error('Host presentation did not acknowledge.'));
+        }, 10_000);
+        renderWaitersRef.current.add(finish);
+        requestRender((value) => value + 1);
+      }),
+    [],
+  );
+  useLayoutEffect(() => {
+    for (const complete of [...renderWaitersRef.current]) complete();
+  });
+  useEffect(
+    () => () => {
+      for (const complete of [...renderWaitersRef.current]) complete();
+    },
+    [],
+  );
+  useEffect(() => {
+    if (!enablePluginChildWebviewHostDispatcher || !effectivePluginRuntimeResolver) return;
+    const coordinator = new HostWindowCoordinator({
+      port: hostWindowPort,
+      navigation: navigationService,
+      instances: instanceRegistry,
+      actions: actionService.registry,
+      resolver: effectivePluginRuntimeResolver,
+      mainPresentation: pluginChildWebviewPresentationController,
+      awaitMainRender,
+      suspendMainPresentation: () => {
+        surfaceController.suspend?.();
+        setDetachmentPending(true);
+        setSurfaceLease(undefined);
+      },
+      resumeMainPresentation: () => setDetachmentPending(false),
+      onOperationSettled: pluginWindowControls.observeOperation,
+    });
+    windowCoordinatorRef.current = coordinator;
+    void coordinator.start().catch(() => undefined);
+    coordinator.updatePreferences(preferenceSnapshotRef.current.locale, preferenceSnapshotRef.current.themeMode);
+    return () => {
+      coordinator.dispose();
+      if (windowCoordinatorRef.current === coordinator) windowCoordinatorRef.current = undefined;
+    };
+  }, [
+    enablePluginChildWebviewHostDispatcher,
+    effectivePluginRuntimeResolver,
+    hostWindowPort,
+    navigationService,
+    instanceRegistry,
+    actionService,
+    pluginChildWebviewPresentationController,
+    awaitMainRender,
+    surfaceController,
+    pluginWindowControls.observeOperation,
+  ]);
+  useEffect(() => {
+    windowCoordinatorRef.current?.updatePreferences(locale, themeMode);
+  }, [locale, themeMode]);
+  useEffect(() => {
+    if (enablePluginChildWebviewHostDispatcher)
+      void hostWindowPort
+        .interaction(activePage?.owner_id === 'lensx.core' && activePage.page_id === 'settings')
+        .catch(() => undefined);
+  }, [enablePluginChildWebviewHostDispatcher, hostWindowPort, activePage?.owner_id, activePage?.page_id]);
   const [pluginHostApiContextSource] = useState(() =>
     createMutablePluginHostApiContextSource({ locale, theme: themeMode }),
   );
@@ -236,6 +351,10 @@ const App = ({
           navigationService.isNativeActivationAttemptCurrent(target, runtimeAttemptId),
         storage: desktopPluginScopedStorageProviderFactory,
         nativeHttpAvailable: enablePluginChildWebviewHostDispatcher,
+        awaitInstanceStable: enablePluginChildWebviewHostDispatcher
+          ? (attemptId, signal) =>
+              windowCoordinatorRef.current?.awaitInstanceStable(attemptId, signal) ?? Promise.resolve(false)
+          : undefined,
       }),
     [actionService, navigationService, pluginHostApiContextSource, enablePluginChildWebviewHostDispatcher],
   );
@@ -264,16 +383,18 @@ const App = ({
 
   useEffect(() => {
     const terminateForReload = () => {
-      void effectivePluginRuntimeLifecycleService.terminateCurrent('host_reload');
+      navigationService.clearAll();
+      void effectivePluginRuntimeLifecycleService.terminateAll('host_reload');
     };
     window.addEventListener('beforeunload', terminateForReload);
     window.addEventListener('pagehide', terminateForReload);
     return () => {
       window.removeEventListener('beforeunload', terminateForReload);
       window.removeEventListener('pagehide', terminateForReload);
-      void effectivePluginRuntimeLifecycleService.terminateCurrent('app_teardown');
+      navigationService.clearAll();
+      void effectivePluginRuntimeLifecycleService.terminateAll('app_teardown');
     };
-  }, [effectivePluginRuntimeLifecycleService]);
+  }, [effectivePluginRuntimeLifecycleService, navigationService]);
   const results = useMemo(
     () =>
       searchLauncherActions({
@@ -373,38 +494,92 @@ const App = ({
   }, [focusLauncherInput]);
 
   useEffect(() => {
-    const targetKey = launcherSurfaceTargetKey(presentationTarget);
-    if (lastPresentationTargetKeyRef.current === targetKey) {
-      return;
-    }
+    if (surfaceController.prepareNavigation && !surfaceLease) return;
+    const targetKey =
+      launcherSurfaceTargetKey(presentationTarget) +
+      (surfaceLease ? `\0${surfaceLease.hostEpoch}\0${surfaceLease.intentEpoch}` : '');
+    if (lastPresentationTargetKeyRef.current === targetKey) return;
     lastPresentationTargetKeyRef.current = targetKey;
-    void surfaceController.setPresentationState(presentationTarget).catch((error: unknown) => {
-      if (import.meta.env.DEV) {
-        console.error('Failed to resize the launcher presentation surface.', error);
-      }
+    const update = surfaceLease
+      ? surfaceController.setPresentationState(
+          presentationTarget,
+          surfaceLease,
+          instanceRegistry.forSurface('main')?.presentation ?? null,
+        )
+      : surfaceController.setPresentationState(presentationTarget);
+    let current = true;
+    void update.catch((error: unknown) => {
+      if (!current) return;
+      lastPresentationTargetKeyRef.current = undefined;
+      reportHostWindowFailure('main_surface', error);
     });
-  }, [presentationTarget, surfaceController]);
+    return () => {
+      current = false;
+    };
+  }, [presentationTarget, surfaceController, surfaceLease, instanceRegistry]);
 
-  useEffect(
-    () =>
-      navigationService.registerHandler((page) => {
-        if (!page) {
-          shouldRestoreInputFocusRef.current = true;
-        }
-        if (
-          !page ||
-          page.owner_id !== activePageRef.current?.owner_id ||
-          page.page_id !== activePageRef.current?.page_id
-        ) {
-          setActivePageAttemptId(page ? (`page_attempt_${++pageAttemptSequenceRef.current}` as const) : undefined);
-        }
-        activePageRef.current = page;
-        setActivePage(page);
-        resetQuery();
-        setDispatchFeedback(undefined);
-      }),
-    [navigationService, resetQuery],
-  );
+  useEffect(() => {
+    let registered = true;
+    const applyPage = (
+      page: ActivePage | undefined,
+      change?: import('./app/navigation/service').AppNavigationChange,
+      lease?: LauncherSurfaceLease,
+    ) => {
+      if (!registered) return;
+      const migration = change?.reason === 'transfer' || change?.reason === 'restore' || change?.reason === 'metadata';
+      shouldRestoreInputFocusRef.current = !page && !migration;
+      if (
+        !page ||
+        page.owner_id !== activePageRef.current?.owner_id ||
+        page.page_id !== activePageRef.current?.page_id
+      ) {
+        const retainedId = change?.nativeAttemptId
+          ? nativePageAttemptsRef.current.get(change.nativeAttemptId)
+          : undefined;
+        setActivePageAttemptId(
+          page ? (retainedId ?? (`page_attempt_${++pageAttemptSequenceRef.current}` as const)) : undefined,
+        );
+      }
+      setSurfaceLease(lease);
+      activePageRef.current = page;
+      setActivePage(page);
+      resetQuery();
+      setDispatchFeedback(undefined);
+    };
+    const handle: import('./app/navigation/service').AppNavigationHandler = (page, change) => {
+      const sequence = ++mainNavigationSequenceRef.current;
+      if (change?.reason === 'transfer' || change?.reason === 'restore') {
+        surfaceController.suspend?.();
+        applyPage(page, change);
+        return;
+      }
+      if (!surfaceController.prepareNavigation) {
+        applyPage(page, change);
+        return;
+      }
+      const previous = instanceRegistry.forSurface('main');
+      const replacement =
+        previous &&
+        (!page || page.owner_id !== previous.descriptor.plugin_id || page.page_id !== previous.descriptor.page_id);
+      void Promise.resolve(replacement ? previous.attempt.terminate('navigation') : undefined)
+        .then(() => surfaceController.prepareNavigation?.())
+        .then((lease) => {
+          if (registered && mainNavigationSequenceRef.current === sequence) applyPage(page, change, lease);
+        })
+        .catch((error: unknown) => {
+          if (registered && mainNavigationSequenceRef.current === sequence)
+            reportHostWindowFailure('main_navigation', error);
+        });
+    };
+    const unsubscribe = navigationService.registerHandler(handle);
+    if (!navigationService.getActivePage() && surfaceController.prepareNavigation)
+      handle(undefined, { surfaceId: 'main', reason: 'metadata' });
+    return () => {
+      registered = false;
+      ++mainNavigationSequenceRef.current;
+      unsubscribe();
+    };
+  }, [navigationService, resetQuery, surfaceController, instanceRegistry]);
 
   useEffect(() => {
     const unsubscribe = navigationService.subscribeToPages(() => setPageRevision((revision) => revision + 1));
@@ -430,6 +605,7 @@ const App = ({
   }, [results]);
 
   const handleLauncherActivation = useCallback(() => {
+    void windowCoordinatorRef.current?.reconcile();
     focusLauncherInput();
     if (surfaceProjectionService) {
       void surfaceProjectionService.handleLauncherActivation().finally(() => {
@@ -471,15 +647,32 @@ const App = ({
   useEffect(() => {
     const reportFailure = () =>
       setDispatchFeedback({ kind: 'error', messageKey: 'launcher.search.failure.actionExecutionFailed' });
-    const unsubscribe = navigationService.subscribeActivationFailures(() => {
-      reportFailure();
-      void effectivePluginRuntimeLifecycleService.failCurrent?.('runtime_unavailable');
+    const unsubscribe = navigationService.subscribeActivationFailures((_code, instance) => {
+      if (instance?.attemptId) {
+        void instanceRegistry.forAttempt(instance.attemptId)?.attempt.fail('runtime_unavailable');
+        if (instance.surfaceId !== 'main') return;
+      } else void effectivePluginRuntimeLifecycleService.failCurrent?.('runtime_unavailable');
+      reportHostWindowFailure('activation');
     });
     if (!enablePluginChildWebviewHostDispatcher && !nativeActionInvocationPort) return unsubscribe;
     let disposed = false;
     let detach: (() => void) | undefined;
     const controller = new AbortController();
-    void startNativeActionInvocations(actionService, reportFailure, nativeActionInvocationPort, controller.signal)
+    const coordinatedActions: LauncherActionService = {
+      registry: actionService.registry,
+      dispatcher: {
+        dispatch: (id, current, context) => actionService.dispatcher.dispatch(id, current, context),
+        dispatchShortcut: actionService.dispatcher.dispatchShortcut
+          ? async (id, current) => {
+              if (windowCoordinatorRef.current) await windowCoordinatorRef.current.reconcile();
+              const dispatch = actionService.dispatcher.dispatchShortcut;
+              if (!dispatch) throw new Error('Action shortcut is unavailable.');
+              return dispatch.call(actionService.dispatcher, id, current);
+            }
+          : undefined,
+      },
+    };
+    void startNativeActionInvocations(coordinatedActions, reportFailure, nativeActionInvocationPort, controller.signal)
       .then((next) => {
         if (disposed) next();
         else detach = next;
@@ -496,12 +689,13 @@ const App = ({
     enablePluginChildWebviewHostDispatcher,
     navigationService,
     effectivePluginRuntimeLifecycleService,
+    instanceRegistry,
     nativeActionInvocationPort,
   ]);
 
   const executeAction = useCallback(
     async (actionId: string) => {
-      if (pendingActionIdRef.current) {
+      if (pendingActionIdRef.current || mainInteractionFrozen) {
         return;
       }
 
@@ -511,6 +705,7 @@ const App = ({
       setCollectionsFeedbackKey(undefined);
 
       try {
+        if (windowCoordinatorRef.current) await windowCoordinatorRef.current.reconcile();
         const result = await actionService.dispatcher.dispatch(actionId);
         if (result.ok) {
           resetQuery();
@@ -536,7 +731,7 @@ const App = ({
         if (!activePageRef.current) focusLauncherInput();
       }
     },
-    [actionService, focusLauncherInput, recordSuccessfulUse, resetQuery],
+    [actionService, focusLauncherInput, recordSuccessfulUse, resetQuery, mainInteractionFrozen],
   );
 
   const clearSearch = useCallback(() => {
@@ -547,8 +742,11 @@ const App = ({
 
   const closeActivePage = useCallback(() => {
     shouldRestoreInputFocusRef.current = true;
+    const instance = instanceRegistry.forSurface('main');
+    const closing = instance?.presentation ? instanceRegistry.close(instance.presentation.attemptId) : undefined;
     navigationService.closePage();
-  }, [navigationService]);
+    void closing;
+  }, [navigationService, instanceRegistry]);
 
   const handleQueryChange = useCallback((value: string, event: ChangeEvent<HTMLInputElement>) => {
     if (!inputMountedRef.current || event.target !== inputRef.current) return;
@@ -676,7 +874,14 @@ const App = ({
           ? t('launcher.search.resultCount', { count: results.length })
           : t('launcher.search.noResults')
         : '';
-  const visibleSearchError = dispatchFeedback?.kind === 'error' ? t(dispatchFeedback.messageKey) : undefined;
+  const visibleSearchError =
+    dispatchFeedback?.kind === 'error' &&
+    !(
+      pageResolution?.provider.kind === 'plugin' &&
+      dispatchFeedback.messageKey === 'launcher.search.failure.actionExecutionFailed'
+    )
+      ? t(dispatchFeedback.messageKey)
+      : undefined;
   const homeFeedbackMessage = collectionsFeedbackKey
     ? t(collectionsFeedbackKey)
     : startupPreferencesErrorCode
@@ -719,6 +924,7 @@ const App = ({
                 autoComplete="off"
                 className="launcher-input min-w-0 flex-1"
                 composition
+                disabled={mainInteractionFrozen}
                 forwardRef={inputRef}
                 onChange={handleQueryChange}
                 onBlur={() => setIsInputFocused(false)}
@@ -739,7 +945,12 @@ const App = ({
             </div>
           </div>
         </div>
-        <div className="launcher-body min-h-0 flex flex-1 flex-col gap-3 px-4 pb-4" data-page-layout={pageLayout}>
+        <PluginWindowRecoveryControls controls={pluginWindowControls} />
+        <div
+          className="launcher-body min-h-0 flex flex-1 flex-col gap-3 px-4 pb-4"
+          data-page-layout={pageLayout}
+          inert={mainInteractionFrozen && pageResolution?.provider.kind !== 'plugin'}
+        >
           <div className="launcher-content min-h-0 flex flex-1 flex-col" data-presentation-state={presentationState}>
             {presentationState === 'home' ? (
               <LauncherHome
@@ -779,10 +990,14 @@ const App = ({
                   <PluginRuntimeSlot
                     activePage={activePage}
                     onRetry={() => navigationService.restartActivationAttempt(activePage)}
-                    onNativeAttempt={(attemptId) =>
-                      navigationService.attachNativeActivationAttempt(activePage, attemptId)
-                    }
+                    onNativeAttempt={(attemptId) => {
+                      navigationService.attachNativeActivationAttempt(activePage, attemptId);
+                      if (activePageAttemptId) nativePageAttemptsRef.current.set(attemptId, activePageAttemptId);
+                      for (const id of nativePageAttemptsRef.current.keys())
+                        if (!instanceRegistry.forAttempt(id)) nativePageAttemptsRef.current.delete(id);
+                    }}
                     lifecycleService={effectivePluginRuntimeLifecycleService}
+                    instanceRegistry={instanceRegistry}
                     pageResolution={pageResolution}
                     pageTitle={pageContext.page_title}
                     presentationController={pluginChildWebviewPresentationController}

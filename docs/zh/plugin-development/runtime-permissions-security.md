@@ -2,18 +2,31 @@
 
 ## Runtime 生命周期
 
-每个 eligible plugin Page 都在 Launcher 唯一 current native Child WebView 中运行，并使用
-generation-scoped origin 与 data store。Host 创建 WebView 和私有 bridge Session，分别等待
-native load、bridge ready 与 `runtime.get_context`，并拥有 deadline、retry、breaker、
-navigation、presentation 与最终 teardown。close、navigation、disable、uninstall、replacement、
-development reload、disconnect、Host reload 和 app unmount 会销毁旧 WebView，并让其 Worker、
-连接、timer、listener、bridge、Session 与 resource authority 失效。
+每个 eligible plugin Page 实例都在 Host 管理的 native Child WebView 中运行。每个所属窗口
+至多承载一个实例，同一插件可以有多个独立实例。有效 generation scope 可以共用 origin
+字符串，但每个 attempt 都有独立的非持久化 data store、来源租约和 Session；持久化插件
+配置应使用 Host `storage.*`。Host 分别等待 native load、
+bridge ready 和 `runtime.get_context`，并拥有 deadline、retry、breaker、navigation、
+presentation 与最终 teardown。
+
+close、窗口内 Page 替换、retry 与 disconnect 只终止受影响实例。已提交 disable、uninstall、
+replacement 或 development reload 撤销全部受影响插件 generation 的实例；拒绝 staging
+保留这些实例。Host reload 与应用退出终止全部实例。终止清理使对应实例的 Worker、连接、
+timer、listener、bridge、Session 和来源权限失效，不撤销健康兄弟实例的租约。
 
 暂时隐藏和恢复 Launcher 窗口不等于关闭 Page 或 teardown Runtime。每次恢复时的
 activation 都会刷新并重新验证当前 Registration 与 Resource 事实。如果当前插件的
 entry、Page、version、origin、resource generation 和 Runtime attempt 没有改变，Host
 会保留同一 Child WebView、Session 与 Page 内存。全局 Registration revision
 只是 invalidation 提示；其他插件的无关变化不会替换当前 Runtime。
+
+Host 分离也保留同一 document、Session、SDK、Worker、请求序列与临时状态，只改变 Host
+管理的呈现归属。main 返回 Home 不会关闭已移交实例；从 Launcher 再次打开同一 Page，只
+创建或复用 main 自己的实例。独立窗口失焦保持显示，关闭仅终止自身；应用退出后，下次
+启动不会恢复窗口布局或临时状态。
+
+插件共享的 `storage.*` 配置与浏览器存储、内存工作状态保持独立。并发实例通过正常读写
+观察共享配置；不自动同步输入/结果，也不新增多窗口 Manifest 声明或权限。
 
 ## Context replacement
 
@@ -47,6 +60,11 @@ Fetch，不以 CORS 响应头为条件，不关闭浏览器安全、不共享 Co
 `method_not_found`、`unavailable`、取消、超时、限制、disconnect 和不兼容 Context 做降级，
 不要盲目重试。replacement 或 reload 后创建新的 Worker、连接、SDK 状态和订阅。绝不把上一
 generation 的 URL、port、cursor 或浏览器状态复用为 Host authority。
+
+分离恢复重试的是原实例补偿，不是 Runtime Retry。原生补偿无法确认时，Host 以明确恢复态
+保留该实例，并提供可信的恢复、关闭和退出控件，不重载或重放工作。恢复解决前，依赖归属
+的 `actions.open` 有界返回 `unavailable`；真实来源与 Session 校验持续生效，`ui.close` 仍可
+请求明确终止。
 
 ## 安全边界
 

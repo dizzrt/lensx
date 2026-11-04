@@ -18,7 +18,10 @@ import sharedTriggers from './fixtures/launcher-shortcuts/triggers.json';
 const chord = { kind: 'chord' as const, modifiers: ['cmd' as const, 'shift' as const], key: 'KeyK' };
 const snapshot = () => ({
   configuration: defaultShortcutConfiguration(),
-  bindings: [{ target: 'launcher', status: 'active' }],
+  bindings: [
+    { target: 'launcher', status: 'active' },
+    { target: 'detach', status: 'active' },
+  ],
   recovery_degraded: false,
   diagnostics: [],
 });
@@ -54,18 +57,22 @@ describe('shortcut policy and typed desktop boundary', () => {
     for (const entry of sharedConfigurations.valid) {
       expect(normalizeShortcutConfiguration(entry.configuration)).toEqual(entry.configuration);
       const launcherMigration = 'launcher_migration' in entry ? entry.launcher_migration : undefined;
+      const detachMigration = 'detach_migration' in entry ? entry.detach_migration : undefined;
       const parsed = parseShortcutSnapshot({
         configuration: entry.configuration,
         bindings: [
           { target: 'launcher', status: launcherMigration ? 'degraded' : 'active' },
           ...Object.keys(entry.configuration.actions).map((target) => ({ target, status: 'active' })),
+          ...(entry.configuration.detach ? [{ target: 'detach', status: 'active' }] : []),
         ],
         recovery_degraded: Boolean(launcherMigration),
         diagnostics: [],
         ...(launcherMigration ? { launcher_migration: launcherMigration } : {}),
+        ...(detachMigration ? { detach_migration: detachMigration } : {}),
       });
       expect(parsed.configuration).toEqual(entry.configuration);
-      if (entry.legacy) expect(() => normalizeShortcutConfiguration(entry.input)).toThrow(ShortcutError);
+      if (entry.source_version !== 3 || detachMigration)
+        expect(() => normalizeShortcutConfiguration(entry.input)).toThrow(ShortcutError);
       else expect(normalizeShortcutConfiguration(entry.input)).toEqual(entry.configuration);
     }
     for (const invalid of sharedConfigurations.invalid)
@@ -111,10 +118,11 @@ describe('shortcut policy and typed desktop boundary', () => {
       modifier: 'ctrl',
     });
     expect(configuration).toEqual({
-      version: 2,
+      version: 3,
       revision: 0,
       launcher: { kind: 'modifier_double_tap', modifier: 'ctrl' },
       actions: {},
+      detach: defaultShortcutConfiguration().detach,
     });
     expect(replaceShortcut(configuration, 'launcher', chord).launcher).toEqual(chord);
     expect(() => normalizeShortcutConfiguration({ ...configuration, version: 1 })).toThrow(ShortcutError);
@@ -215,7 +223,10 @@ describe('shortcut policy and typed desktop boundary', () => {
     };
     const pending = {
       ...initial,
-      bindings: [{ target: 'launcher', status: 'degraded' }],
+      bindings: [
+        { target: 'launcher', status: 'degraded' },
+        { target: 'detach', status: 'active' },
+      ],
       recovery_degraded: true,
       launcher_migration: migration,
     };
@@ -270,5 +281,121 @@ describe('shortcut policy and typed desktop boundary', () => {
     expect(invoke).toHaveBeenCalledWith('end_launcher_shortcut_recording', { leaseId: 'lease_1' });
     unsubscribe();
     expect(listeners.size).toBe(0);
+  });
+
+  test('detach is a nullable chord with one canonical conflict space for every target', () => {
+    const initial = defaultShortcutConfiguration(7);
+    expect(initial).toMatchObject({
+      version: 3,
+      revision: 7,
+      detach: { kind: 'chord', modifiers: ['cmd'], key: 'KeyD' },
+    });
+    for (const target of ['launcher', 'dev.removed.open']) {
+      expect(() => replaceShortcut(initial, target, { kind: 'chord', modifiers: ['cmd'], key: 'KeyD' })).toThrow(
+        ShortcutError,
+      );
+      const global = replaceShortcut({ ...initial, detach: null }, target, {
+        kind: 'chord',
+        modifiers: ['cmd'],
+        key: 'KeyD',
+      });
+      expect(() =>
+        replaceShortcut(global, 'detach', normalizeShortcut({ kind: 'chord', modifiers: ['Command'], key: 'd' })),
+      ).toThrow(ShortcutError);
+      try {
+        replaceShortcut(global, 'detach', initial.detach);
+      } catch (error) {
+        expect(error).toMatchObject({ code: 'duplicate_shortcut', conflicting_target: target });
+      }
+    }
+    expect(replaceShortcut(initial, 'detach', null)).toEqual({ ...initial, detach: null });
+    expect(replaceShortcut(initial, 'detach', initial.detach)).toEqual(initial);
+    expect(() => replaceShortcut(initial, 'detach', { kind: 'modifier_double_tap', modifier: 'cmd' })).toThrow(
+      ShortcutError,
+    );
+    expect(() => replaceActionShortcut(initial, undefined, 'detach', chord)).toThrow(ShortcutError);
+    expect(() => normalizeShortcutConfiguration({ ...initial, detach: { ...initial.detach, extra: true } })).toThrow(
+      ShortcutError,
+    );
+    expect(() => normalizeShortcutConfiguration({ ...initial, detach: undefined })).toThrow(ShortcutError);
+  });
+
+  test('retains historical detach conflict independently of launcher recovery and validates local status', () => {
+    const migration = {
+      version: 1,
+      reason: 'default_conflict',
+      trigger: defaultShortcutConfiguration().detach,
+      conflicting_target: 'dev.removed.open',
+    };
+    const pending = {
+      ...snapshot(),
+      configuration: { ...defaultShortcutConfiguration(8), detach: null },
+      bindings: [{ target: 'launcher', status: 'active' }],
+      detach_migration: migration,
+    };
+    const parsed = parseShortcutSnapshot(pending);
+    expect(parsed.detach_migration).toEqual(migration);
+    expect(parsed.recovery_degraded).toBe(false);
+    expect(Object.isFrozen(parsed.detach_migration)).toBe(true);
+    for (const invalid of [
+      { ...migration, version: 2 },
+      { ...migration, reason: 'unavailable' },
+      { ...migration, conflicting_target: 'detach' },
+      { ...migration, trigger: chord },
+      { ...migration, extra: true },
+    ]) {
+      expect(() => parseShortcutSnapshot({ ...pending, detach_migration: invalid })).toThrow(ShortcutError);
+    }
+    expect(() => parseShortcutSnapshot({ ...snapshot(), detach_migration: migration })).toThrow(ShortcutError);
+    const local = parseShortcutSnapshot({
+      ...snapshot(),
+      bindings: [
+        { target: 'launcher', status: 'active' },
+        { target: 'detach', status: 'local_unavailable' },
+      ],
+    });
+    expect(local.recovery_degraded).toBe(false);
+    for (const status of ['permission_required', 'monitor_unavailable', 'registration_failed', 'degraded']) {
+      expect(() =>
+        parseShortcutSnapshot({
+          ...snapshot(),
+          bindings: [
+            { target: 'launcher', status: 'active' },
+            { target: 'detach', status },
+          ],
+        }),
+      ).toThrow(ShortcutError);
+    }
+    expect(() =>
+      parseShortcutSnapshot({
+        ...snapshot(),
+        bindings: [
+          { target: 'launcher', status: 'local_unavailable' },
+          { target: 'detach', status: 'active' },
+        ],
+      }),
+    ).toThrow(ShortcutError);
+  });
+
+  test('explicit same-null resolution is sent separately while unrelated saves cannot author migration facts', async () => {
+    const configuration = { ...defaultShortcutConfiguration(12), detach: null };
+    const confirmed = { ...snapshot(), configuration, bindings: [{ target: 'launcher', status: 'active' }] };
+    const invoke = rs.fn(async () => confirmed);
+    const service = createDesktopShortcutService(invoke, async () => () => undefined);
+    await service.write(12, configuration);
+    expect(invoke).toHaveBeenLastCalledWith('write_launcher_shortcuts', { expectedRevision: 12, configuration });
+    await service.write(12, configuration, { resolveDetachMigration: true });
+    expect(invoke).toHaveBeenLastCalledWith('write_launcher_shortcuts', {
+      expectedRevision: 12,
+      configuration,
+      resolveDetachMigration: true,
+    });
+    await service.write(12, configuration, { resolveLauncherMigration: true });
+    expect(invoke).toHaveBeenLastCalledWith('write_launcher_shortcuts', {
+      expectedRevision: 12,
+      configuration,
+      resolveLauncherMigration: true,
+    });
+    expect(() => normalizeShortcutConfiguration({ ...configuration, detach_migration: null })).toThrow(ShortcutError);
   });
 });

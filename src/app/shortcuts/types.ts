@@ -14,9 +14,10 @@ export interface ShortcutDoubleTap {
 export type ShortcutTrigger = ShortcutChord | ShortcutDoubleTap;
 
 export interface ShortcutConfiguration {
-  readonly version: 2;
+  readonly version: 3;
   readonly revision: number;
   readonly launcher: ShortcutTrigger;
+  readonly detach: ShortcutChord | null;
   readonly actions: Readonly<Record<string, ShortcutTrigger>>;
 }
 
@@ -26,6 +27,7 @@ export type ShortcutStatus =
   | 'target_unavailable'
   | 'registration_failed'
   | 'monitor_unavailable'
+  | 'local_unavailable'
   | 'degraded';
 
 export interface ShortcutSnapshot {
@@ -37,6 +39,12 @@ export interface ShortcutSnapshot {
   readonly launcher_migration?: {
     readonly chord: ShortcutChord;
     readonly double_tap: ShortcutDoubleTap;
+  };
+  readonly detach_migration?: {
+    readonly version: 1;
+    readonly reason: 'default_conflict';
+    readonly trigger: ShortcutChord;
+    readonly conflicting_target: string;
   };
 }
 
@@ -57,6 +65,7 @@ export type ShortcutErrorCode =
   | 'duplicate_shortcut'
   | 'duplicate_action'
   | 'launcher_choice_required'
+  | 'detach_choice_required'
   | 'revision_conflict'
   | 'registration_failed'
   | 'storage_failed'
@@ -95,11 +104,13 @@ export interface ShortcutService {
 
 export interface ShortcutWriteOptions {
   readonly resolveLauncherMigration?: boolean;
+  readonly resolveDetachMigration?: boolean;
 }
 
 export const defaultShortcutConfiguration = (revision = 0): ShortcutConfiguration => ({
-  version: 2,
+  version: 3,
   revision,
   launcher: { kind: 'chord', modifiers: ['ctrl', 'shift'], key: 'Space' },
+  detach: { kind: 'chord', modifiers: ['cmd'], key: 'KeyD' },
   actions: {},
 });

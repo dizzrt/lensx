@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "detached-shell",
+  "description": "Narrow trusted detached Host chrome; every app command also requires a registered native source and shell epoch.",
+  "webviews": ["plugin-window-*"],
+  "permissions": ["detached-shell"]
+}

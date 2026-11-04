@@ -65,7 +65,7 @@ export const MonacoSurface = ({
   const initialLocaleRef = useRef(locale);
   const stateRef = useRef<
     | {
-        readonly monaco: typeof import('monaco-editor');
+        readonly monaco: typeof import('monaco-editor/editor/editor.api.js');
         readonly model: import('monaco-editor').editor.ITextModel;
         readonly editor: import('monaco-editor').editor.IStandaloneCodeEditor;
         readonly dispose: () => void;

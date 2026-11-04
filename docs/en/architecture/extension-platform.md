@@ -569,7 +569,10 @@ the Installer ownership proof for the exact
 `packages/<plugin-key>/<sha256>` active pointer, matching record identity and
 digest, a canonical real payload tree, and a regular non-link Runtime entry.
 Each `(entry_id, resource_generation)` receives at most one 128-bit OS-CSPRNG
-scope. Repeated resolution is idempotent. Disable/re-enable, replacement,
+live scope while an instance lease or bounded creation reservation holds it.
+Repeated resolution reuses that scope. The final lease/reservation release
+permanently retires it; reopening the same generation receives a new scope.
+Disable/re-enable, replacement,
 logical uninstall, incompatible or quarantine state, and restart permanently
 invalidate prior scopes; unrelated global revision changes do not.
 
@@ -634,7 +637,9 @@ adapter and downstream Runtime Session consume its validated `entry_url`.
 
 Each current `(entry_id, resource_generation)` reuses its existing 128-bit
 process-local Resource scope as both the browser-origin key and the path
-authorization key. Repeated resolution within one generation is idempotent.
+authorization key while its leases or creation reservations remain live.
+Closing one instance revokes only its source lease; the last holder retires the
+scope permanently. Reopening can reuse verified bytes but never the old URL.
 Disable/re-enable, replacement, uninstall, and restart revoke the old scope and
 therefore move a future document to a different origin and storage partition;
 an unrelated plugin change does not rotate the current scope. The mapping is
@@ -712,22 +717,26 @@ native policy contract.
 
 ## Shipped macOS Isolated Plugin Child WebView Runtime
 
-An available external Plugin Page owns one Host-managed Child WebView inside
-the existing single-window Page surface. React renders trusted chrome and a
+An available external Plugin Page owns one Host-managed Child WebView in its
+owning surface. The registry supports independent attempts and enforces at most
+one plugin instance per surface. React renders trusted chrome and a
 non-interactive `PluginRuntimeSlot`; Host-private presentation code reports its
 physical bounds, visibility, and revision to Rust. The native service validates
 the current Page, Registration, resource generation, route, attempt, window,
 and slot revision before it creates or updates the Child WebView. Plugins cannot
 choose native bounds, labels, configuration, navigation policy, or data stores.
 
-Each attempt has an isolated origin and generation-bound resource authority.
+Attempts in one live generation scope share its origin string but have
+independent native sources, non-persistent data stores, Sessions and request spaces. Each
+resource read validates its own source lease, before and after cache/file work;
+a sibling lease never authorizes a closed source.
 The main Host WebView and plugin Child WebView use separate navigation policies:
 the plugin document may load its exact package entry and current-origin
 resources, but top-level escape, popup, download, and native authority remain
 closed. Close, retry, replacement, navigation away, invalidation, App teardown,
 and fatal bridge failure converge on compare-current terminal destruction.
 Semantic-equivalent Launcher hide/restore retains the same attempt; at most one
-external Plugin Page Child WebView exists.
+external Plugin Page Child WebView exists per surface.
 
 The UI exposes localized resolving, loading, ready, and bounded failure states
 with an accessible retry. Native load completion, private bridge readiness, and
@@ -766,29 +775,36 @@ request-header, and plugin-authored meta values cannot change either profile.
 
 CSP, isolated origin and data store, native navigation, the closed native
 bridge, and Runtime Session are complementary boundaries. CSP controls resource
-and document destinations; the per-generation origin separates DOM and storage;
-the native lease controls top-level navigation; and the Session authenticates
-one current Child WebView and source-bound bridge. These boundaries do not
+and document destinations; the generation origin separates plugins, while each
+attempt has its own data store and document. The native lease controls top-level
+navigation, and each Session authenticates one instance and source-bound bridge. These boundaries do not
 mediate ordinary Web behavior through Host API.
 
-A Host-private controller owns one Runtime attempt and one external-plugin
-Child WebView globally. Bounded resolution, load, and handshake deadlines fail
+An application-level Host-private controller owns an attempt map and a unique
+instance binding for each surface. Bounded resolution, load, and handshake deadlines fail
 closed without constructing another Child. Close, navigation, quiescence,
 disable, uninstall, replacement, relevant fact changes, retry, timeout, Session
-failure, Host reload, and App teardown converge on one idempotent compare-current
-terminal operation that makes work stale, cancels timers/subscriptions, disposes
+failure converge on an idempotent per-instance terminal operation that makes work stale, cancels timers/subscriptions, disposes
 Session/bridge state, destroys the Child, releases its navigation authority, and
 discards references. Late promise, load, acknowledgement, timer, and bridge
-events cannot affect a newer attempt. There is no preload, hidden pool,
-background Runtime, cross-Page reuse, automatic retry, or persisted Runtime state.
+events cannot affect a newer or sibling attempt. Committed plugin eligibility
+or generation changes revoke every affected attempt; rejected staging leaves
+the previous generation alive. Host reload and application teardown drain all
+instances. There is no preload, unowned hidden pool, background Runtime,
+cross-Page reuse, automatic retry, or persisted Runtime state.
 
 The process-local breaker is keyed by trusted entry identity and resource
 generation. A third qualifying load, handshake, or unexpected-disconnect
 failure in 60,000 ms opens a 30,000 ms cooldown before resolve, lease, Child WebView,
 or Session creation. Cooldown expiry still requires an explicit user retry.
 Close, navigation, invalidation, and graceful exit do not count; a generation
-change or 30,000 ms continuously healthy `ready` state clears the record, and
-process exit forgets it.
+change clears obsolete history. Otherwise reset requires both a continuously
+ready instance and 30,000 ms without a qualifying failure; a healthy sibling
+cannot erase newer failures. Cooldown blocks new attempts without terminating
+healthy siblings, and an owner transfer does not reset it. Process exit forgets
+the record. The private instance admission command reads the real Manager
+generation before resource resolution, without changing Resource Contract
+`0.1.0`; a rotating origin scope is not the breaker identity.
 
 Visible failures use only `runtime_load_timeout`,
 `runtime_handshake_timeout`, `runtime_session_disconnected`,

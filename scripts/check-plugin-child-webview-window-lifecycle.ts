@@ -16,13 +16,38 @@ for (const required of [
   'restore_current_plugin_presentation(child)',
   'child.hide_current(snapshot.attempt)',
   'child.show_current(snapshot.attempt)',
-  'child.focus_current(snapshot.attempt)',
+  'focus_restored_child(child, snapshot.attempt)',
+  'focus_restored_child(child, attempt)',
+  'self.service.focus_owned(attempt, &self.owner)',
+  'self.service.compare_owned_teardown(attempt, &self.owner)',
 ]) {
   if (!launcher.includes(required)) fail(`Launcher lifecycle omits ${required}`);
 }
 if (!launcher.includes('child.compare_current_teardown(snapshot.attempt)')) {
   fail('failed native hide does not fail closed through compare-current teardown');
 }
+const restoreFocus = launcher.slice(
+  launcher.indexOf('fn focus_restored_child('),
+  launcher.indexOf('fn restore_current_plugin_presentation('),
+);
+if (
+  !restoreFocus.includes('match child.focus_current(attempt)') ||
+  !/StaleAttempt\s*\| PluginChildWebviewPresentationResult::NotVisible\s*\| PluginChildWebviewPresentationResult::FocusUnavailable => \{\}/u.test(
+    restoreFocus,
+  ) ||
+  !restoreFocus.includes('child.compare_current_teardown(attempt)')
+)
+  fail('restored Child focus does not distinguish transient or stale focus from terminal failure');
+const service = read('src-tauri/src/plugin_child_webview_service.rs');
+if (
+  !/WindowEvent::Focused\(true\) => \{[\s\S]*?service\.retry_pending_main_focus\(\)/u.test(launcher) ||
+  !service.includes('self.lock_state().pending_main_focus.take()') ||
+  !service.includes('self.focus_owned_with_permit(attempt, &owner, Some(guard))') ||
+  !service.includes('.focus_guard(current.visibility_intent_revision)') ||
+  !service.includes('if awaiting_key && !is_retry') ||
+  !service.includes('delayed_main_key_focus_preserves_the_instance_and_only_retries_the_original_visibility_intent')
+)
+  fail('key-window retry is not bound to the original owner and visibility intent');
 if (launcher.includes('get_webview_window(MAIN_WINDOW_LABEL)') || launcher.includes('WebviewWindow<R>')) {
   fail('post-creation Launcher paths regressed to the single-WebviewWindow lookup');
 }
@@ -56,6 +81,7 @@ for (const required of [
   'dialog_guard_suppresses_child_and_parent_hide_after_native_resolution',
   'native_hide_failure_restores_and_refocuses_the_same_child',
   'rollback_failure_tears_down_current_child_but_stale_rollback_is_inert',
+  'an_unavailable_or_superseded_focus_does_not_terminate_a_visibly_restored_child',
   'restore_resolves_host_then_shows_parent_before_the_same_child',
   'target_resolution_failures_never_mutate_child_presentation',
 ]) {
@@ -67,7 +93,9 @@ for (const required of [
   'window.devicePixelRatio',
   'physicalBoundsFromDomRect(element.getBoundingClientRect(), scaleFactor)',
   "window.addEventListener('resize', syncBounds)",
-  'presentationRevision: revision',
+  'binding.slotRevision++',
+  'presentationRevision: binding.slotRevision',
+  'owner: native.owner',
 ]) {
   if (!slot.includes(required)) fail(`React slot lifecycle omits ${required}`);
 }
@@ -76,7 +104,9 @@ const app = read('src/App.tsx');
 for (const required of [
   "window.addEventListener('beforeunload', terminateForReload)",
   "window.addEventListener('pagehide', terminateForReload)",
-  "terminateCurrent('app_teardown')",
+  "terminateAll('host_reload')",
+  "terminateAll('app_teardown')",
+  'navigationService.clearAll()',
 ]) {
   if (!app.includes(required)) fail(`App terminal lifecycle omits ${required}`);
 }

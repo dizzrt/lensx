@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, rs, test } from '@rstest/core';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { StrictMode } from 'react';
-
 import { AppProviders } from '../src/app/AppProviders';
 import type { ActivePage, PageResolution } from '../src/app/navigation';
 import {
@@ -9,8 +8,10 @@ import {
   type PluginChildWebviewPresentationController,
   type PluginPageRuntimeDescriptor,
   type PluginPageRuntimeResolver,
+  type PluginRuntimeLifecycleService,
   PluginRuntimeSlot,
 } from '../src/app/plugins/runtime';
+import { MAIN_PLUGIN_CHILD_WEBVIEW_OWNER } from '../src/app/plugins/runtime/pluginChildWebviewOwner';
 import {
   createLatestPluginChildWebviewSlotUpdateQueue,
   type PluginChildWebviewSlotUpdate,
@@ -41,7 +42,7 @@ const descriptor: PluginPageRuntimeDescriptor = Object.freeze({
   version: '1.2.3',
   page_id: activePage.page_id,
   expected_origin: 'lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost',
-  resource_generation: '0123456789abcdef0123456789abcdef',
+  resource_generation: '1',
   runtime_attempt_key: 'attempt-1',
   registration_revision: '7',
 });
@@ -58,6 +59,8 @@ afterEach(() => {
 });
 
 const renderSlot = (options: {
+  readonly lifecycleService?: PluginRuntimeLifecycleService;
+  readonly admit?: PluginPageRuntimeResolver['admit'];
   readonly create?: ReturnType<typeof rs.fn>;
   readonly destroy?: ReturnType<typeof rs.fn>;
   readonly locale?: 'en-US' | 'zh-CN';
@@ -70,7 +73,14 @@ const renderSlot = (options: {
   readonly strict?: boolean;
   readonly updateSlot?: ReturnType<typeof rs.fn>;
 }) => {
-  const create = options.create ?? rs.fn(async () => ({ attemptId: 'attempt_0123456789abcdef' as const }));
+  const create =
+    options.create ??
+    rs.fn(async () => ({
+      attemptId: 'attempt_0123456789abcdef' as const,
+      entryUrl: descriptor.entry_url,
+      resourceGeneration: descriptor.resource_generation,
+      owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+    }));
   const updateSlot = options.updateSlot ?? rs.fn(async () => undefined);
   const readReadiness = rs.fn(async () => ({ status: 'ready' as const }));
   const waitReadiness = options.waitReadiness ?? rs.fn(async () => ({ status: 'ready' as const }));
@@ -85,15 +95,17 @@ const renderSlot = (options: {
     destroy,
   };
   const resolver: PluginPageRuntimeResolver = {
+    ...(options.admit ? { admit: options.admit } : {}),
     resolve: options.resolve ?? rs.fn(async () => descriptor),
     ...(options.isCurrent ? { isCurrent: options.isCurrent } : {}),
     ...(options.subscribeInvalidation ? { subscribeInvalidation: options.subscribeInvalidation } : {}),
   };
+  const lifecycleService = options.lifecycleService ?? createPluginRuntimeLifecycleService();
   const content = (
     <AppProviders initialLocale={options.locale} initialThemeMode={options.theme}>
       <PluginRuntimeSlot
         activePage={activePage}
-        lifecycleService={createPluginRuntimeLifecycleService()}
+        lifecycleService={lifecycleService}
         pageResolution={pageResolution}
         pageTitle={options.locale === 'zh-CN' ? '工作区主页' : 'Workspace Home'}
         presentationController={presentationController}
@@ -102,7 +114,7 @@ const renderSlot = (options: {
     </AppProviders>
   );
   const view = render(options.strict ? <StrictMode>{content}</StrictMode> : content);
-  return { ...view, create, destroy, resolver, setVisible, updateSlot, waitReadiness };
+  return { ...view, create, destroy, resolver, setVisible, updateSlot, waitReadiness, lifecycleService };
 };
 
 describe('PluginRuntimeSlot', () => {
@@ -113,7 +125,15 @@ describe('PluginRuntimeSlot', () => {
     expect(document.querySelector('iframe')).toBeNull();
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
     expect(document.querySelector('[data-runtime-state="ready"]')).not.toBeNull();
-    expect(view.setVisible).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }, true);
+    expect(view.setVisible).toHaveBeenCalledWith(
+      {
+        attemptId: 'attempt_0123456789abcdef',
+        entryUrl: descriptor.entry_url,
+        resourceGeneration: descriptor.resource_generation,
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+      },
+      true,
+    );
     expect(view.create).toHaveBeenCalledWith({
       identity: {
         entryId: descriptor.entry_id,
@@ -127,8 +147,207 @@ describe('PluginRuntimeSlot', () => {
       presentationRevision: 1n,
     });
     view.unmount();
-    await waitFor(() => expect(view.setVisible).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }, false));
-    await waitFor(() => expect(view.destroy).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }));
+    await waitFor(() =>
+      expect(view.setVisible).toHaveBeenCalledWith(
+        {
+          attemptId: 'attempt_0123456789abcdef',
+          entryUrl: descriptor.entry_url,
+          resourceGeneration: descriptor.resource_generation,
+          owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+        },
+        false,
+      ),
+    );
+    await waitFor(() =>
+      expect(view.destroy).toHaveBeenCalledWith({
+        attemptId: 'attempt_0123456789abcdef',
+        entryUrl: descriptor.entry_url,
+        resourceGeneration: descriptor.resource_generation,
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+      }),
+    );
+  });
+
+  test('unmount after ownership transfer releases only main presentation and retains Runtime invalidation', async () => {
+    let invalidate: (() => void) | undefined;
+    let current = true;
+    const unsubscribe = rs.fn();
+    const view = renderSlot({
+      isCurrent: rs.fn(async () => current),
+      subscribeInvalidation: (listener) => {
+        invalidate = listener;
+        return unsubscribe;
+      },
+    });
+    await waitFor(() => expect(document.querySelector('[data-runtime-state="ready"]')).not.toBeNull());
+    const instance = view.lifecycleService.getCurrent();
+    if (!instance) throw new Error('runtime should exist');
+    const nativeOwner = { windowLabel: 'plugin-window-0000000000000001', ownershipRevision: 2n };
+    const releaseRuntime = rs.fn(async () => {
+      await view.destroy({ attemptId: 'attempt_0123456789abcdef', owner: nativeOwner });
+    });
+    await act(async () => {
+      await view.lifecycleService.transfer(instance.key, instance.currentOwner(), 'detached-1', releaseRuntime);
+    });
+    const oldUpdates = view.updateSlot.mock.calls.length;
+    view.unmount();
+    fireEvent(window, new Event('resize'));
+    expect(view.updateSlot).toHaveBeenCalledTimes(oldUpdates);
+    expect(view.destroy).not.toHaveBeenCalled();
+    expect(unsubscribe).not.toHaveBeenCalled();
+    expect(instance.isCurrent()).toBe(true);
+    const next = await view.lifecycleService.start({ targetKey: 'same-plugin-page', onFailure: rs.fn() });
+    expect(next?.isCurrent()).toBe(true);
+    expect(instance.isCurrent()).toBe(true);
+    await act(async () => {
+      current = false;
+      invalidate?.();
+    });
+    await waitFor(() => expect(releaseRuntime).toHaveBeenCalledTimes(1));
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(instance.isCurrent()).toBe(false);
+    expect(next?.isCurrent()).toBe(true);
+    expect(view.create).toHaveBeenCalledTimes(1);
+    expect(view.destroy).toHaveBeenCalledExactlyOnceWith({ attemptId: 'attempt_0123456789abcdef', owner: nativeOwner });
+    await view.lifecycleService.dispose();
+  });
+
+  test('reads admission but never resolves resources or creates a native instance during aggregate cooldown', async () => {
+    const lifecycleService = createPluginRuntimeLifecycleService();
+    const trustedIdentity = { entryId: descriptor.entry_id, generation: descriptor.resource_generation };
+    for (let index = 0; index < 3; index++) {
+      const instance = await lifecycleService.start({
+        targetKey: `other-page-${index}`,
+        trustedIdentity,
+        onFailure: rs.fn(),
+      });
+      if (!instance) throw new Error('instance should start');
+      await instance.fail('runtime_load_timeout');
+    }
+    const admit = rs.fn(async () => ({
+      entryId: descriptor.entry_id,
+      generation: descriptor.resource_generation,
+      revision: descriptor.registration_revision,
+    }));
+    const view = renderSlot({ admit, lifecycleService });
+    expect(await screen.findByRole('alert')).toHaveAttribute('data-runtime-failure-code', 'runtime_crash_loop');
+    expect(admit).toHaveBeenCalledTimes(1);
+    expect(view.resolver.resolve).not.toHaveBeenCalled();
+    expect(view.create).not.toHaveBeenCalled();
+    view.unmount();
+    await lifecycleService.dispose();
+  });
+
+  test('bounds admission and ignores late completion after timeout or presentation cancellation', async () => {
+    rs.useFakeTimers();
+    try {
+      let complete!: (value: { entryId: string; generation: string; revision: string }) => void;
+      let signal: AbortSignal | undefined;
+      const admit = rs.fn((_request, incomingSignal?: AbortSignal) => {
+        signal = incomingSignal;
+        return new Promise<{ entryId: string; generation: string; revision: string }>((resolve) => {
+          complete = resolve;
+        });
+      });
+      const view = renderSlot({ admit });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      await act(async () => {
+        await rs.advanceTimersByTimeAsync(10_000);
+      });
+      expect(screen.getByRole('alert')).toHaveAttribute('data-runtime-failure-code', 'runtime_unavailable');
+      expect(signal?.aborted).toBe(true);
+      await act(async () => {
+        complete({
+          entryId: descriptor.entry_id,
+          generation: descriptor.resource_generation,
+          revision: descriptor.registration_revision,
+        });
+      });
+      expect(view.resolver.resolve).not.toHaveBeenCalled();
+      expect(view.create).not.toHaveBeenCalled();
+      view.unmount();
+      const cancelled = renderSlot({ admit });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      cancelled.unmount();
+      expect(signal?.aborted).toBe(true);
+      await act(async () => {
+        complete({
+          entryId: descriptor.entry_id,
+          generation: descriptor.resource_generation,
+          revision: descriptor.registration_revision,
+        });
+      });
+      expect(cancelled.resolver.resolve).not.toHaveBeenCalled();
+      expect(cancelled.create).not.toHaveBeenCalled();
+    } finally {
+      rs.useRealTimers();
+    }
+  });
+
+  test('keeps a rejected admission bounded even when the provider rejects without an error value', async () => {
+    const view = renderSlot({ admit: async () => Promise.reject(undefined) });
+    expect(await screen.findByRole('alert')).toHaveAttribute('data-runtime-failure-code', 'runtime_unavailable');
+    expect(view.resolver.resolve).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  test('reconciles the authoritative native scope once before readiness and revalidates that same retained descriptor', async () => {
+    const entryUrl = descriptor.entry_url.replaceAll(
+      '0123456789abcdef0123456789abcdef',
+      'fedcba9876543210fedcba9876543210',
+    );
+    let invalidate: (() => void) | undefined;
+    const isCurrent = rs.fn(async () => true);
+    const view = renderSlot({
+      create: rs.fn(async () => ({
+        attemptId: 'attempt_0123456789abcdef',
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+        entryUrl,
+        resourceGeneration: descriptor.resource_generation,
+      })),
+      isCurrent,
+      subscribeInvalidation: (listener) => {
+        invalidate = listener;
+        return () => undefined;
+      },
+    });
+    await waitFor(() => expect(document.querySelector('[data-runtime-state="ready"]')).not.toBeNull());
+    await act(async () => {
+      invalidate?.();
+    });
+    expect(isCurrent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        entry_url: entryUrl,
+        expected_origin: 'lensx-plugin://fedcba9876543210fedcba9876543210.runtime.localhost',
+        resource_generation: descriptor.resource_generation,
+      }),
+    );
+    expect(view.create).toHaveBeenCalledTimes(1);
+    expect(view.resolver.resolve).toHaveBeenCalledTimes(1);
+    view.unmount();
+  });
+
+  test.each([
+    { entryUrl: descriptor.entry_url, resourceGeneration: '2' },
+    { entryUrl: 'file:///private/plugin.html', resourceGeneration: descriptor.resource_generation },
+  ])('destroys a created instance before reporting mismatched native metadata %s', async (metadata) => {
+    const view = renderSlot({
+      create: rs.fn(async () => ({
+        attemptId: 'attempt_0123456789abcdef',
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+        ...metadata,
+      })),
+    });
+    expect(await screen.findByRole('alert')).toHaveAttribute('data-runtime-failure-code', 'runtime_unavailable');
+    expect(view.destroy).toHaveBeenCalledTimes(1);
+    expect(view.setVisible.mock.calls.some(([, visible]) => visible === true)).toBe(false);
+    expect(view.lifecycleService.getCurrent()).toBeUndefined();
+    view.unmount();
   });
 
   test('keeps the native view hidden behind loading until current Session ready', async () => {
@@ -144,7 +363,17 @@ describe('PluginRuntimeSlot', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Loading the plugin page…');
     expect(view.setVisible).not.toHaveBeenCalled();
     await act(async () => publishReady?.({ status: 'ready' }));
-    await waitFor(() => expect(view.setVisible).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }, true));
+    await waitFor(() =>
+      expect(view.setVisible).toHaveBeenCalledWith(
+        {
+          attemptId: 'attempt_0123456789abcdef',
+          entryUrl: descriptor.entry_url,
+          resourceGeneration: descriptor.resource_generation,
+          owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+        },
+        true,
+      ),
+    );
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(document.querySelector('[data-runtime-state="ready"]')).not.toBeNull();
   });
@@ -164,7 +393,15 @@ describe('PluginRuntimeSlot', () => {
       for (const complete of completions) complete({ status: 'ready' });
       await Promise.resolve();
     });
-    expect(view.setVisible.mock.calls).not.toContainEqual([{ attemptId: 'attempt_0123456789abcdef' }, true]);
+    expect(view.setVisible.mock.calls).not.toContainEqual([
+      {
+        attemptId: 'attempt_0123456789abcdef',
+        entryUrl: descriptor.entry_url,
+        resourceGeneration: descriptor.resource_generation,
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+      },
+      true,
+    ]);
     await waitFor(() => expect(view.destroy.mock.calls.length).toBe(view.create.mock.calls.length));
   });
 
@@ -178,7 +415,12 @@ describe('PluginRuntimeSlot', () => {
         fireEvent(window, new Event('resize'));
         await waitFor(() =>
           expect(view.updateSlot).toHaveBeenCalledWith(
-            { attemptId: 'attempt_0123456789abcdef' },
+            {
+              attemptId: 'attempt_0123456789abcdef',
+              entryUrl: descriptor.entry_url,
+              resourceGeneration: descriptor.resource_generation,
+              owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+            },
             scale,
             { x: 20 * scale, y: 40 * scale, width: 300 * scale, height: 200 * scale },
             BigInt(index + 2),
@@ -210,6 +452,7 @@ describe('PluginRuntimeSlot', () => {
     const queue = createLatestPluginChildWebviewSlotUpdateQueue(send, onFailure);
     const update = (presentationRevision: bigint): PluginChildWebviewSlotUpdate => ({
       attemptId: 'attempt_0123456789abcdef',
+      owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
       scaleFactor: 2,
       physicalBounds: { x: 20, y: 40, width: 600, height: 400 },
       presentationRevision,
@@ -233,6 +476,7 @@ describe('PluginRuntimeSlot', () => {
     const queue = createLatestPluginChildWebviewSlotUpdateQueue(send, onFailure);
     const update: PluginChildWebviewSlotUpdate = {
       attemptId: 'attempt_0123456789abcdef',
+      owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
       scaleFactor: 1,
       physicalBounds: { x: 10, y: 20, width: 300, height: 200 },
       presentationRevision: 2n,
@@ -261,7 +505,15 @@ describe('PluginRuntimeSlot', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     await act(async () => finishDestroy?.(true));
     expect(await screen.findByRole('alert')).toHaveTextContent('This plugin page could not be loaded');
-    expect(view.setVisible).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }, false);
+    expect(view.setVisible).toHaveBeenCalledWith(
+      {
+        attemptId: 'attempt_0123456789abcdef',
+        entryUrl: descriptor.entry_url,
+        resourceGeneration: descriptor.resource_generation,
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+      },
+      false,
+    );
   });
 
   test('converges disable, replacement, upgrade, and development invalidation on terminal teardown', async () => {
@@ -275,18 +527,48 @@ describe('PluginRuntimeSlot', () => {
         };
       },
     });
-    await waitFor(() => expect(view.setVisible).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }, true));
+    await waitFor(() =>
+      expect(view.setVisible).toHaveBeenCalledWith(
+        {
+          attemptId: 'attempt_0123456789abcdef',
+          entryUrl: descriptor.entry_url,
+          resourceGeneration: descriptor.resource_generation,
+          owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+        },
+        true,
+      ),
+    );
     act(() => invalidate?.());
-    await waitFor(() => expect(view.destroy).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }));
+    await waitFor(() =>
+      expect(view.destroy).toHaveBeenCalledWith({
+        attemptId: 'attempt_0123456789abcdef',
+        entryUrl: descriptor.entry_url,
+        resourceGeneration: descriptor.resource_generation,
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+      }),
+    );
     expect(await screen.findByRole('alert')).toHaveTextContent('This plugin page could not be loaded');
-    expect(view.setVisible).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }, false);
+    expect(view.setVisible).toHaveBeenCalledWith(
+      {
+        attemptId: 'attempt_0123456789abcdef',
+        entryUrl: descriptor.entry_url,
+        resourceGeneration: descriptor.resource_generation,
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+      },
+      false,
+    );
   });
 
   test('explicit retry terminates the failed attempt and creates one fresh presentation', async () => {
     let sequence = 0;
     const create = rs.fn(async () => {
       sequence += 1;
-      return { attemptId: `attempt_${sequence.toString(16).padStart(16, '0')}` as `attempt_${string}` };
+      return {
+        attemptId: `attempt_${sequence.toString(16).padStart(16, '0')}` as `attempt_${string}`,
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+        entryUrl: descriptor.entry_url,
+        resourceGeneration: descriptor.resource_generation,
+      };
     });
     const waitReadiness = rs.fn(async () =>
       sequence === 1
@@ -298,8 +580,21 @@ describe('PluginRuntimeSlot', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(view.create).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(document.querySelector('[data-runtime-state="ready"]')).not.toBeNull());
-    expect(view.destroy).toHaveBeenCalledWith({ attemptId: 'attempt_0000000000000001' });
-    expect(view.setVisible).toHaveBeenCalledWith({ attemptId: 'attempt_0000000000000002' }, true);
+    expect(view.destroy).toHaveBeenCalledWith({
+      attemptId: 'attempt_0000000000000001',
+      owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+      entryUrl: descriptor.entry_url,
+      resourceGeneration: descriptor.resource_generation,
+    });
+    expect(view.setVisible).toHaveBeenCalledWith(
+      {
+        attemptId: 'attempt_0000000000000002',
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+        entryUrl: descriptor.entry_url,
+        resourceGeneration: descriptor.resource_generation,
+      },
+      true,
+    );
   });
 
   test('keeps terminal retry and localized Host-owned error presentation', async () => {

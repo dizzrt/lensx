@@ -10,14 +10,22 @@ use tauri::Manager;
 pub(crate) mod frame_aware_navigation_policy;
 #[cfg(target_os = "macos")]
 pub(crate) mod frame_aware_navigation_setup;
+pub(crate) mod launcher_native_execution;
 #[doc(hidden)]
 pub mod plugin_child_webview_adapter;
+pub(crate) mod plugin_child_webview_execution;
 pub(crate) mod plugin_child_webview_host_dispatcher;
+pub(crate) mod plugin_child_webview_owner;
 pub(crate) mod plugin_child_webview_presentation;
 pub(crate) mod plugin_child_webview_rpc;
 pub(crate) mod plugin_child_webview_service;
 pub(crate) mod plugin_child_webview_slot;
 pub mod plugin_data_management;
+pub(crate) mod plugin_detached_window_host;
+#[cfg(test)]
+mod plugin_detached_window_matrix_tests;
+pub(crate) mod plugin_detached_window_migration;
+pub(crate) mod plugin_detached_window_native;
 #[cfg(feature = "plugin-development-mode")]
 pub(crate) mod plugin_development;
 #[cfg(feature = "plugin-development-mode")]
@@ -63,7 +71,34 @@ pub fn run() {
             if webview.label() == launcher_window::MAIN_WINDOW_LABEL
                 && matches!(payload.event(), tauri::webview::PageLoadEvent::Started)
             {
+                launcher_native_execution::fence(webview.app_handle()).reset_host();
+                if let Some(host) = webview
+                    .app_handle()
+                    .try_state::<Arc<plugin_detached_window_host::PluginDetachedWindowHost>>()
+                {
+                    host.note_host_load("main");
+                }
                 launcher_shortcuts::invalidate_host(webview.app_handle());
+                if let Some(service) = webview.app_handle().try_state::<
+                    Arc<plugin_child_webview_service::PluginChildWebviewService<tauri::Wry>>,
+                >() {
+                    let attempts = service.prepare_host_reload();
+                    let service = Arc::clone(service.inner());
+                    // Host reload is application-wide termination. Native cleanup may
+                    // need the main thread, so never wait inside the load callback.
+                    tauri::async_runtime::spawn_blocking(move || {
+                        for attempt in attempts {
+                            let _ = service.compare_current_teardown(attempt);
+                        }
+                    });
+                }
+            } else if matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
+                if let Some(host) = webview
+                    .app_handle()
+                    .try_state::<Arc<plugin_detached_window_host::PluginDetachedWindowHost>>()
+                {
+                    host.note_host_load(webview.label());
+                }
             }
         })
         .register_asynchronous_uri_scheme_protocol(
@@ -106,12 +141,37 @@ pub fn run() {
         plugin_child_webview_host_dispatcher::settle_plugin_child_webview_host_dispatch,
         plugin_child_webview_host_dispatcher::fail_plugin_child_webview_host_dispatch,
         plugin_child_webview_host_dispatcher::emit_plugin_child_webview_host_event,
+        plugin_child_webview_presentation::read_plugin_child_webview_admission,
         plugin_child_webview_presentation::create_plugin_child_webview_presentation,
         plugin_child_webview_presentation::read_plugin_child_webview_presentation,
         plugin_child_webview_presentation::wait_plugin_child_webview_presentation,
         plugin_child_webview_presentation::set_plugin_child_webview_presentation_visibility,
         plugin_child_webview_presentation::destroy_plugin_child_webview_presentation,
-        plugin_child_webview_slot::update_plugin_child_webview_slot
+        plugin_child_webview_slot::update_plugin_child_webview_slot,
+        launcher_surface::read_main_surface_epoch,
+        launcher_surface::begin_main_surface_intent,
+        plugin_detached_window_host::read_host_window_bootstrap,
+        plugin_detached_window_host::subscribe_host_window,
+        plugin_detached_window_host::subscribe_host_window_operations,
+        plugin_detached_window_host::release_host_window_subscription,
+        plugin_detached_window_host::read_host_window_snapshot,
+        plugin_detached_window_host::read_host_window_geometry,
+        plugin_detached_window_host::ready_host_window,
+        plugin_detached_window_host::update_host_window_slot,
+        plugin_detached_window_host::read_host_window_operations,
+        plugin_detached_window_host::ack_host_window_operation,
+        plugin_detached_window_host::publish_host_window_preferences,
+        plugin_detached_window_host::publish_main_host_interaction,
+        plugin_detached_window_host::publish_main_host_page,
+        plugin_detached_window_host::publish_host_window_page,
+        plugin_detached_window_host::wait_host_instance_owner,
+        plugin_detached_window_host::close_host_instance,
+        plugin_detached_window_host::replace_host_instance,
+        plugin_detached_window_host::coordinate_plugin_child_webview,
+        plugin_detached_window_native::retry_detached_window_recovery,
+        plugin_detached_window_native::close_detached_window_recovery,
+        plugin_detached_window_native::read_detached_window_state,
+        plugin_detached_window_native::quit_plugin_windows,
     ]);
     #[cfg(feature = "plugin-development-mode")]
     let builder = builder.invoke_handler(tauri::generate_handler![
@@ -152,12 +212,37 @@ pub fn run() {
         plugin_child_webview_host_dispatcher::settle_plugin_child_webview_host_dispatch,
         plugin_child_webview_host_dispatcher::fail_plugin_child_webview_host_dispatch,
         plugin_child_webview_host_dispatcher::emit_plugin_child_webview_host_event,
+        plugin_child_webview_presentation::read_plugin_child_webview_admission,
         plugin_child_webview_presentation::create_plugin_child_webview_presentation,
         plugin_child_webview_presentation::read_plugin_child_webview_presentation,
         plugin_child_webview_presentation::wait_plugin_child_webview_presentation,
         plugin_child_webview_presentation::set_plugin_child_webview_presentation_visibility,
         plugin_child_webview_presentation::destroy_plugin_child_webview_presentation,
-        plugin_child_webview_slot::update_plugin_child_webview_slot
+        plugin_child_webview_slot::update_plugin_child_webview_slot,
+        launcher_surface::read_main_surface_epoch,
+        launcher_surface::begin_main_surface_intent,
+        plugin_detached_window_host::read_host_window_bootstrap,
+        plugin_detached_window_host::subscribe_host_window,
+        plugin_detached_window_host::subscribe_host_window_operations,
+        plugin_detached_window_host::release_host_window_subscription,
+        plugin_detached_window_host::read_host_window_snapshot,
+        plugin_detached_window_host::read_host_window_geometry,
+        plugin_detached_window_host::ready_host_window,
+        plugin_detached_window_host::update_host_window_slot,
+        plugin_detached_window_host::read_host_window_operations,
+        plugin_detached_window_host::ack_host_window_operation,
+        plugin_detached_window_host::publish_host_window_preferences,
+        plugin_detached_window_host::publish_main_host_interaction,
+        plugin_detached_window_host::publish_main_host_page,
+        plugin_detached_window_host::publish_host_window_page,
+        plugin_detached_window_host::wait_host_instance_owner,
+        plugin_detached_window_host::close_host_instance,
+        plugin_detached_window_host::replace_host_instance,
+        plugin_detached_window_host::coordinate_plugin_child_webview,
+        plugin_detached_window_native::retry_detached_window_recovery,
+        plugin_detached_window_native::close_detached_window_recovery,
+        plugin_detached_window_native::read_detached_window_state,
+        plugin_detached_window_native::quit_plugin_windows,
     ]);
     let app = builder
         .setup(|app| {
@@ -185,6 +270,11 @@ pub fn run() {
             let plugin_manager = plugin_manager::setup_plugin_manager(app.handle());
             let plugin_child_webview_service =
                 plugin_child_webview_service::setup_plugin_child_webview_service(app.handle());
+            let plugin_detached_window_host =
+                plugin_detached_window_host::setup_plugin_detached_window_host(
+                    app.handle(),
+                    &trusted_app_target,
+                );
             plugin_child_webview_host_dispatcher::setup_plugin_child_webview_host_dispatcher(
                 app.handle(),
                 Arc::clone(&plugin_child_webview_service),
@@ -225,8 +315,14 @@ pub fn run() {
             }
             launcher_window::setup_launcher_window(app.handle());
             launcher_surface::setup_launcher_surface(app.handle());
+            plugin_detached_window_native::setup_plugin_detached_window_native(
+                app.handle(),
+                Arc::clone(&plugin_child_webview_service),
+                plugin_detached_window_host,
+                Arc::clone(&plugin_manager),
+            );
             #[cfg(target_os = "macos")]
-            launcher_window::reveal_launcher_startup(app.handle())?;
+            launcher_window::schedule_launcher_startup(app.handle())?;
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -240,12 +336,21 @@ pub fn run() {
             >() else {
                 return;
             };
-            if let Some(snapshot) = service.snapshot() {
-                let _ = service.compare_current_teardown(snapshot.attempt);
+            let _ = service.teardown_all();
+            if let Some(host) =
+                app.try_state::<Arc<plugin_detached_window_host::PluginDetachedWindowHost>>()
+            {
+                host.close_subscriptions();
             }
+            plugin_detached_window_native::shutdown_plugin_detached_windows(app);
         }
     });
 }
+
+#[cfg(test)]
+#[rustfmt::skip]
+#[path = "../../vendor/frame-aware-navigation/tauri/src/ipc/channel_recipient.rs"]
+mod channel_recipient_policy;
 
 #[cfg(test)]
 mod tests {

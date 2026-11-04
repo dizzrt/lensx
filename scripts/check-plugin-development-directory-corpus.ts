@@ -45,7 +45,8 @@ for (const fixture of corpus) {
     const bytes =
       fixture.manifest === 'invalid' ? Buffer.from('{', 'utf8') : Buffer.from(JSON.stringify(manifest), 'utf8');
     const files = fixture.paths.map((path) => ({ path, size: 1, sha256: '00', checksumCovered: false }));
-    const result = validatePackageManifest(bytes, files);
+    // Match the Rust corpus's fixed compatibility baseline, not current product defaults.
+    const result = validatePackageManifest(bytes, files, { lensx: '0.1.0', host_api: '0.2.0' });
     if ('normalized' in result) actual = result.normalized.status;
     else if ('incompatible' in result && result.incompatible) actual = 'incompatible';
   }

@@ -15,6 +15,9 @@ for (const marker of [
   'scale_factor: f64',
   'physical_bounds: PluginChildWebviewPhysicalBounds',
   'presentation_revision: String',
+  'ownership_revision: String',
+  'actual_host_source != actual_window_label',
+  'service.apply_owned_slot_update(attempt, &owner, revision, bounds)',
   'value.is_finite()',
   'bounds.x + bounds.width',
   'PluginChildWebviewSlotUpdateResult::StaleAttempt',
@@ -24,8 +27,10 @@ for (const marker of [
 }
 for (const marker of [
   'presentation_revision: u64',
-  'presentation_revision <= current.presentation_revision',
-  '.update_bounds(bounds.x, bounds.y, bounds.width, bounds.height)',
+  'current.presentation_epoch.slot_revision()',
+  'current.matches_owner(owner)',
+  'NativePresentationOperation::Bounds',
+  'handle.present_owned(',
 ]) {
   if (!service.includes(marker)) failures.push(`Child WebView registry is missing ${marker}.`);
 }
@@ -33,7 +38,7 @@ for (const marker of [
   'physicalBoundsFromDomRect',
   'Math.floor(rect.left * scaleFactor)',
   'Math.ceil(rect.right * scaleFactor)',
-  "window_label: 'main'",
+  'serializePluginChildWebviewOwner(owner)',
   "surface_mode: 'page'",
 ]) {
   if (!frontend.includes(marker)) failures.push(`React-to-Rust slot adapter is missing ${marker}.`);

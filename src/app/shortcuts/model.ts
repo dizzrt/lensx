@@ -21,6 +21,7 @@ const statuses = new Set<ShortcutStatus>([
   'target_unavailable',
   'registration_failed',
   'monitor_unavailable',
+  'local_unavailable',
   'degraded',
 ]);
 
@@ -62,13 +63,14 @@ export const isReservedShortcut = (trigger: ShortcutTrigger) => reserved.has(sho
 export const shortcutEntries = (configuration: ShortcutConfiguration): readonly [string, ShortcutTrigger][] => [
   ['launcher', configuration.launcher],
   ...Object.entries(configuration.actions),
+  ...(configuration.detach ? [['detach', configuration.detach] as [string, ShortcutTrigger]] : []),
 ];
 
 export const normalizeShortcutConfiguration = (value: unknown): ShortcutConfiguration => {
   if (
     !record(value) ||
-    !exact(value, ['version', 'revision', 'launcher', 'actions']) ||
-    value.version !== 2 ||
+    !exact(value, ['version', 'revision', 'launcher', 'actions', 'detach']) ||
+    value.version !== 3 ||
     !Number.isSafeInteger(value.revision) ||
     (value.revision as number) < 0 ||
     !record(value.actions) ||
@@ -77,6 +79,8 @@ export const normalizeShortcutConfiguration = (value: unknown): ShortcutConfigur
     throw new ShortcutError('invalid_configuration');
   }
   const launcher = normalizeShortcut(value.launcher);
+  const detach = value.detach === null ? null : normalizeShortcut(value.detach);
+  if (detach && detach.kind !== 'chord') throw new ShortcutError('invalid_configuration');
   const actions: Record<string, ShortcutTrigger> = {};
   for (const [id, trigger] of Object.entries(value.actions)) {
     if (!isValidLauncherActionId(id, id.slice(0, id.lastIndexOf('.'))))
@@ -84,9 +88,10 @@ export const normalizeShortcutConfiguration = (value: unknown): ShortcutConfigur
     actions[id] = normalizeShortcut(trigger);
   }
   const configuration: ShortcutConfiguration = Object.freeze({
-    version: 2,
+    version: 3,
     revision: value.revision as number,
     launcher,
+    detach,
     actions: Object.freeze(actions),
   });
   const used = new Map<string, string>();
@@ -110,6 +115,7 @@ export const parseShortcutSnapshot = (value: unknown): ShortcutSnapshot => {
       'diagnostics',
       ...(Object.hasOwn(value, 'key_labels') ? ['key_labels'] : []),
       ...(Object.hasOwn(value, 'launcher_migration') ? ['launcher_migration'] : []),
+      ...(Object.hasOwn(value, 'detach_migration') ? ['detach_migration'] : []),
     ]) ||
     !Array.isArray(value.bindings) ||
     typeof value.recovery_degraded !== 'boolean' ||
@@ -135,6 +141,35 @@ export const parseShortcutSnapshot = (value: unknown): ShortcutSnapshot => {
     // Both legacy choices must still satisfy the shared reserved/uniqueness policy.
     normalizeShortcutConfiguration({ ...configuration, launcher: doubleTap });
     launcherMigration = Object.freeze({ chord, double_tap: doubleTap });
+  }
+  let detachMigration: ShortcutSnapshot['detach_migration'];
+  if (Object.hasOwn(value, 'detach_migration')) {
+    const migration = value.detach_migration;
+    if (
+      !record(migration) ||
+      !exact(migration, ['version', 'reason', 'trigger', 'conflicting_target']) ||
+      migration.version !== 1 ||
+      migration.reason !== 'default_conflict' ||
+      configuration.detach !== null ||
+      typeof migration.conflicting_target !== 'string' ||
+      (migration.conflicting_target !== 'launcher' &&
+        !isValidLauncherActionId(
+          migration.conflicting_target,
+          migration.conflicting_target.slice(0, migration.conflicting_target.lastIndexOf('.')),
+        ))
+    )
+      throw new ShortcutError('invalid_response');
+    const trigger = normalizeShortcut(migration.trigger);
+    if (trigger.kind !== 'chord' || shortcutIdentity(trigger) !== 'cmd:KeyD')
+      throw new ShortcutError('invalid_response');
+    // This retained migration fact describes the original conflict. An unrelated
+    // save may remove that target without making a detach choice for the user.
+    detachMigration = Object.freeze({
+      version: 1,
+      reason: 'default_conflict',
+      trigger,
+      conflicting_target: migration.conflicting_target,
+    });
   }
   let keyLabels: Readonly<Record<string, string>> | undefined;
   if (Object.hasOwn(value, 'key_labels')) {
@@ -165,6 +200,12 @@ export const parseShortcutSnapshot = (value: unknown): ShortcutSnapshot => {
       !statuses.has(binding.status as ShortcutStatus)
     )
       throw new ShortcutError('invalid_response');
+    if (
+      binding.target === 'detach'
+        ? binding.status !== 'active' && binding.status !== 'local_unavailable'
+        : binding.status === 'local_unavailable'
+    )
+      throw new ShortcutError('invalid_response');
     return Object.freeze({ target: binding.target, status: binding.status as ShortcutStatus });
   });
   if (targets.size) throw new ShortcutError('invalid_response');
@@ -177,6 +218,7 @@ export const parseShortcutSnapshot = (value: unknown): ShortcutSnapshot => {
     diagnostics: Object.freeze([...value.diagnostics]) as readonly string[],
     ...(keyLabels ? { key_labels: keyLabels } : {}),
     ...(launcherMigration ? { launcher_migration: launcherMigration } : {}),
+    ...(detachMigration ? { detach_migration: detachMigration } : {}),
   });
 };
 
@@ -194,12 +236,16 @@ export const replaceShortcut = (
   }
   const actions = { ...configuration.actions };
   let launcher = configuration.launcher;
+  let detach = configuration.detach;
   if (target === 'launcher') {
     if (!trigger) throw new ShortcutError('invalid_configuration');
     launcher = trigger;
+  } else if (target === 'detach') {
+    if (trigger && trigger.kind !== 'chord') throw new ShortcutError('invalid_configuration');
+    detach = trigger;
   } else if (trigger) actions[target] = trigger;
   else delete actions[target];
-  return normalizeShortcutConfiguration({ ...configuration, launcher, actions });
+  return normalizeShortcutConfiguration({ ...configuration, launcher, actions, detach });
 };
 
 /** Reassign an Action row atomically without overwriting another configured Action. */
@@ -209,6 +255,8 @@ export const replaceActionShortcut = (
   actionId: string,
   trigger: ShortcutTrigger,
 ): ShortcutConfiguration => {
+  if (!isValidLauncherActionId(actionId, actionId.slice(0, actionId.lastIndexOf('.'))))
+    throw new ShortcutError('invalid_configuration');
   if (previousActionId !== undefined && !Object.hasOwn(configuration.actions, previousActionId))
     throw new ShortcutError('revision_conflict');
   if (actionId !== previousActionId && Object.hasOwn(configuration.actions, actionId))

@@ -1,9 +1,14 @@
+use crate::plugin_child_webview_execution::NativeExecutionGuard;
 use crate::plugin_host_api_validation::{
     host_api_method, is_known_host_api_method, validate_host_api_error, validate_host_api_event,
     validate_host_api_request, validate_host_api_result,
 };
 use serde_json::{json, Map, Value};
 use std::collections::{HashMap, VecDeque};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 pub(crate) const PLUGIN_CHILD_WEBVIEW_RPC_MAX_FRAME_BYTES: usize = 5_242_880;
 pub(crate) const PLUGIN_CHILD_WEBVIEW_RPC_MAX_FRAME_DEPTH: usize = 36;
@@ -87,6 +92,26 @@ pub(crate) struct PluginChildWebviewRpcOutcome {
 struct PendingRequest {
     method: String,
     deadline_at_ms: u64,
+    delivery: Option<Arc<AtomicBool>>,
+    delivery_guard: Option<NativeExecutionGuard>,
+}
+
+impl PendingRequest {
+    fn revoke_delivery(&self) {
+        if let Some(delivery) = &self.delivery {
+            delivery.store(false, Ordering::Release);
+        }
+        if let Some(guard) = &self.delivery_guard {
+            guard.expire();
+        }
+    }
+}
+
+pub(crate) struct ConfirmedRpcDelivery {
+    pub(crate) frame: Value,
+    pub(crate) active: Arc<AtomicBool>,
+    pub(crate) guard: NativeExecutionGuard,
+    pub(crate) deadline_at_ms: u64,
 }
 
 #[derive(Debug, Default)]
@@ -144,6 +169,13 @@ impl PluginChildWebviewRpcSession {
                 vec![],
             );
         }
+        if self
+            .pending
+            .get(request_id)
+            .is_some_and(|pending| pending.delivery.is_some())
+        {
+            return outcome(PluginChildWebviewRpcIngressResult::Ignored, vec![]);
+        }
         let Some(pending) = self.pending.remove(request_id) else {
             return outcome(PluginChildWebviewRpcIngressResult::Ignored, vec![]);
         };
@@ -181,10 +213,86 @@ impl PluginChildWebviewRpcSession {
         )
     }
 
+    /// Keep a close request cancellable until the native receiver confirms delivery.
+    /// Preparing the frame does not authorize its post-response close effect.
+    pub(crate) fn begin_confirmed_close(
+        &mut self,
+        request_id: &str,
+        output: Value,
+        now_ms: u64,
+    ) -> Option<ConfirmedRpcDelivery> {
+        if !self.connected || self.terminal {
+            return None;
+        }
+        let pending = self.pending.get(request_id)?.clone();
+        if pending.method != "ui.close"
+            || pending.delivery.is_some()
+            || now_ms >= pending.deadline_at_ms
+        {
+            return None;
+        }
+        // Reuse the closed response encoder while this mutable session is held;
+        // no externally observable terminal transition occurs during preparation.
+        let prepared = self.settle(request_id, output);
+        let mut effects = prepared.effects.into_iter();
+        let PluginChildWebviewRpcEffect::Deliver(frame) = effects.next()? else {
+            return None;
+        };
+        if effects.next().is_some() {
+            return None;
+        }
+        let active = Arc::new(AtomicBool::new(true));
+        let live = Arc::clone(&active);
+        let guard = NativeExecutionGuard::new(move || live.load(Ordering::Acquire));
+        self.pending.insert(
+            request_id.to_owned(),
+            PendingRequest {
+                delivery: Some(Arc::clone(&active)),
+                delivery_guard: Some(guard.clone()),
+                ..pending.clone()
+            },
+        );
+        Some(ConfirmedRpcDelivery {
+            frame,
+            active,
+            guard,
+            deadline_at_ms: pending.deadline_at_ms,
+        })
+    }
+
+    pub(crate) fn finish_confirmed_close(
+        &mut self,
+        request_id: &str,
+        receipt: &Arc<AtomicBool>,
+        delivered: bool,
+        now_ms: u64,
+    ) -> bool {
+        let matches = self.pending.get(request_id).is_some_and(|pending| {
+            pending
+                .delivery
+                .as_ref()
+                .is_some_and(|active| Arc::ptr_eq(active, receipt))
+        });
+        if !matches {
+            return false;
+        }
+        let pending = self
+            .pending
+            .remove(request_id)
+            .expect("matched delivery exists");
+        let active = receipt.swap(false, Ordering::AcqRel);
+        pending.revoke_delivery();
+        delivered && active && self.connected && !self.terminal && now_ms < pending.deadline_at_ms
+    }
+
     pub(crate) fn fail_handler(&mut self, request_id: &str) -> PluginChildWebviewRpcOutcome {
         let Some(pending) = self.pending.remove(request_id) else {
             return outcome(PluginChildWebviewRpcIngressResult::Ignored, vec![]);
         };
+        pending.revoke_delivery();
+        if pending.delivery.is_some() {
+            return outcome(PluginChildWebviewRpcIngressResult::Ignored, vec![]);
+        }
         self.diagnose(
             PluginChildWebviewRpcDiagnosticStage::Execution,
             PluginChildWebviewRpcDiagnosticCode::HandlerFailed,
@@ -212,7 +320,11 @@ impl PluginChildWebviewRpcSession {
         expired.sort_by(|left, right| left.0.cmp(&right.0));
         let mut effects = Vec::with_capacity(expired.len() * 2);
         for (request_id, method) in expired {
-            self.pending.remove(&request_id);
+            let pending = self
+                .pending
+                .remove(&request_id)
+                .expect("expired request exists");
+            pending.revoke_delivery();
             self.diagnose(
                 PluginChildWebviewRpcDiagnosticStage::Execution,
                 PluginChildWebviewRpcDiagnosticCode::ExecutionTimeout,
@@ -224,6 +336,9 @@ impl PluginChildWebviewRpcSession {
                     method,
                 },
             ));
+            if pending.delivery.is_some() {
+                continue;
+            }
             effects.push(PluginChildWebviewRpcEffect::Deliver(response_error(
                 &request_id,
                 timeout_error(),
@@ -283,7 +398,7 @@ impl PluginChildWebviewRpcSession {
             && self
                 .pending
                 .get(request_id)
-                .is_some_and(|request| request.method == method)
+                .is_some_and(|request| request.method == method && request.delivery.is_none())
     }
 
     fn receive_request(
@@ -377,6 +492,8 @@ impl PluginChildWebviewRpcSession {
             PendingRequest {
                 method: method_text.to_owned(),
                 deadline_at_ms,
+                delivery: None,
+                delivery_guard: None,
             },
         );
         outcome(
@@ -404,6 +521,7 @@ impl PluginChildWebviewRpcSession {
         let Some(pending) = self.pending.remove(request_id) else {
             return outcome(PluginChildWebviewRpcIngressResult::Ignored, vec![]);
         };
+        pending.revoke_delivery();
         outcome(
             PluginChildWebviewRpcIngressResult::Cancelled,
             vec![PluginChildWebviewRpcEffect::Cancel(
@@ -445,6 +563,7 @@ impl PluginChildWebviewRpcSession {
         let mut effects = pending
             .into_iter()
             .map(|(request_id, pending)| {
+                pending.revoke_delivery();
                 PluginChildWebviewRpcEffect::Cancel(PluginChildWebviewRpcCancellation {
                     request_id,
                     method: pending.method,
@@ -627,6 +746,65 @@ mod tests {
             panic!("expected dispatch effect")
         };
         dispatch
+    }
+
+    #[test]
+    fn close_delivery_stays_cancellable_and_never_emits_a_second_response() {
+        for terminal in ["cancel", "deadline", "disconnect"] {
+            let mut session = PluginChildWebviewRpcSession::default();
+            assert!(session.connect());
+            session.receive(&request(1, "ui.close", json!({})), 0);
+            let id = "request_0000000000000001";
+            let output = json!({"method":"ui.close","result":{"accepted":true}});
+            let delivery = session
+                .begin_confirmed_close(id, output.clone(), 1)
+                .unwrap();
+            assert_eq!(session.pending_count(), 1);
+            assert!(session
+                .begin_confirmed_close(id, output.clone(), 2)
+                .is_none());
+            assert_eq!(
+                session.settle(id, output).result,
+                PluginChildWebviewRpcIngressResult::Ignored
+            );
+            let effects = match terminal {
+                "cancel" => session.receive(&json!({"contract_version":CONTRACT_VERSION,"type":CANCEL_TYPE,"request_id":id}).to_string(), 2).effects,
+                "deadline" => session.expire(10_000),
+                _ => session.terminate(true),
+            };
+            assert!(!delivery.active.load(Ordering::Acquire));
+            assert!(!session.finish_confirmed_close(id, &delivery.active, true, 3));
+            assert_eq!(session.pending_count(), 0);
+            assert!(!effects.iter().any(|effect| matches!(effect, PluginChildWebviewRpcEffect::Deliver(frame) if frame["type"] == RESPONSE_TYPE)));
+        }
+    }
+
+    #[test]
+    fn close_delivery_requires_matching_live_receipt_before_deadline_and_confirms_once() {
+        for (delivered, now, accepted) in
+            [(true, 3, true), (false, 3, false), (true, 10_000, false)]
+        {
+            let mut session = PluginChildWebviewRpcSession::default();
+            session.connect();
+            session.receive(&request(1, "ui.close", json!({})), 0);
+            let id = "request_0000000000000001";
+            let delivery = session
+                .begin_confirmed_close(
+                    id,
+                    json!({"method":"ui.close","result":{"accepted":true}}),
+                    1,
+                )
+                .unwrap();
+            assert!(!session.finish_confirmed_close(id, &Arc::new(AtomicBool::new(true)), true, 2));
+            assert_eq!(session.pending_count(), 1);
+            assert_eq!(
+                session.finish_confirmed_close(id, &delivery.active, delivered, now),
+                accepted
+            );
+            assert!(!session.finish_confirmed_close(id, &delivery.active, true, now));
+            assert!(!delivery.active.load(Ordering::Acquire));
+            assert_eq!(session.pending_count(), 0);
+        }
     }
 
     #[test]

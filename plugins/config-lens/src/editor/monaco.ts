@@ -1,5 +1,5 @@
 import type { PluginRuntimeContext } from '@lensx/plugin-sdk';
-import type * as Monaco from 'monaco-editor';
+import type * as Monaco from 'monaco-editor/editor/editor.api.js';
 
 import { localClipboard } from './localClipboard.js';
 

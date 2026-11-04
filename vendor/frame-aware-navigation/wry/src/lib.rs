@@ -2395,9 +2395,20 @@ impl WebViewExtDarwin for WebView {
   }
 }
 
+#[cfg(target_os = "macos")]
+#[doc(hidden)]
+pub use wkwebview::NativeReparentSnapshot;
+
 /// Additional methods on `WebView` that are specific to macOS.
 #[cfg(target_os = "macos")]
 pub trait WebViewExtMacOS {
+  /// Captures Host-private native state retained until explicit commit or teardown.
+  #[doc(hidden)]
+  fn capture_reparent_snapshot(&self) -> Result<NativeReparentSnapshot>;
+  /// Confirm removal of this exact native view for terminal cleanup.
+  #[doc(hidden)]
+  fn close_confirmed(&self, current: &dyn Fn() -> bool) -> Result<()>;
+
   /// Returns WKWebView handle
   fn webview(&self) -> Retained<WryWebView>;
   /// Returns WKWebView manager [(userContentController)](https://developer.apple.com/documentation/webkit/wkscriptmessagehandler/1396222-usercontentcontroller) handle
@@ -2418,6 +2429,13 @@ pub trait WebViewExtMacOS {
 
 #[cfg(target_os = "macos")]
 impl WebViewExtMacOS for WebView {
+  fn close_confirmed(&self, current: &dyn Fn() -> bool) -> Result<()> {
+    self.webview.close_confirmed(current)
+  }
+  fn capture_reparent_snapshot(&self) -> Result<NativeReparentSnapshot> {
+    self.webview.capture_reparent_snapshot()
+  }
+
   fn webview(&self) -> Retained<WryWebView> {
     self.webview.webview.clone()
   }

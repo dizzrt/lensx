@@ -109,10 +109,14 @@ describe('Launcher native outline production wiring (paired with Cargo policy te
       'plugin_child_webview_service::setup_plugin_child_webview_service(',
       'launcher_window::setup_launcher_window(',
       'launcher_surface::setup_launcher_surface(',
-      'launcher_window::reveal_launcher_startup(',
+      'launcher_window::schedule_launcher_startup(',
     );
-    expect(lib).toContain('#[cfg(target_os = "macos")]\n            launcher_window::reveal_launcher_startup');
+    expect(lib).toContain('#[cfg(target_os = "macos")]\n            launcher_window::schedule_launcher_startup');
     const window = product('src-tauri/src/launcher_window.rs');
+    expect(window).toContain('crate::macos_launcher::queue_next_main_turn(move ||');
+    expect(product('src-tauri/src/macos_launcher.rs')).toContain(
+      'NSOperationQueue::mainQueue().addOperationWithBlock(&block)',
+    );
     expect(window).toContain('reveal_startup_once(&actions.startup_revealed');
     expect(window).toContain('LauncherWindowAction::Show(LauncherActivationReason::Startup)');
   });
@@ -122,47 +126,155 @@ describe('Launcher native outline production wiring (paired with Cargo policy te
     const showWindow = section(window, 'fn show_native<', 'fn show_with_host<');
     ordered(showWindow, 'window.ensure_rounded_corners()', 'window.restore()', 'window.show()', 'window.focus()');
     expect(showWindow).toContain('window.hide()');
-    expect(window).toContain('ensure_launcher_rounded_corners(&self.window)');
+    const nativeAdapter = section(
+      window,
+      'impl<R: Runtime> LauncherWindowAdapter for TauriLauncherWindowAdapter<R>',
+      'fn is_visible(',
+    );
+    ordered(nativeAdapter, 'self.confirmed(', 'ensure_launcher_rounded_corners(window)');
+    const mainExecutor = product('src-tauri/src/launcher_native_execution.rs');
+    ordered(mainExecutor, 'app.run_on_main_thread(', 'callback_guard.is_current()', 'execute(&callback_guard)');
     const service = product('src-tauri/src/plugin_child_webview_service.rs');
-    const showChild = section(service, 'pub(crate) fn show_current(', 'pub(crate) fn hide_current(');
+    const showChild = section(service, 'pub(crate) fn show_owned(', 'pub(crate) fn hide_current(');
     ordered(
       showChild,
-      'current.attempt == attempt',
+      '.get_mut(&attempt)',
+      'current.matches_owner(owner)',
       'PluginChildWebviewSessionState::BridgeReady',
-      'handle.ensure_rounded_corners()',
+      'handle.present_owned(',
       'let mut state = self.lock_state()',
-      'current.attempt == attempt',
+      '.get_mut(&attempt)',
+      'current.matches_owner(owner)',
       'PluginChildWebviewSessionState::BridgeReady',
-      'Arc::ptr_eq(current_handle, &handle)',
-      'handle.show()',
+      '!guard.is_current()',
       'current.state = PluginChildWebviewState::Visible',
     );
-    expect(showChild).toContain('handle.hide_unconfirmed_content()');
+    const execution = product('src-tauri/src/plugin_child_webview_execution.rs');
+    const policy = section(
+      execution,
+      'pub(crate) fn perform_owned_presentation(',
+      'pub(crate) fn confirm_native_execution(',
+    );
+    ordered(
+      policy,
+      '!guard.is_current()',
+      'NativePresentationStep::ConfirmClip',
+      '!guard.is_current()',
+      'NativePresentationStep::HideUnconfirmed',
+      'NativePresentationStep::Apply(operation)',
+    );
+    expect(showChild).toContain('NativePresentationOutcome::FailedHidden');
+    expect(service).toContain('current.presentation_epoch.revoke()');
     const teardown = section(service, 'pub(crate) fn compare_current_teardown(', 'pub(crate) fn snapshot(');
     expect(teardown).not.toMatch(/rounded_corners|setMasksToBounds|setCornerRadius/u);
     const adapter = product('src-tauri/src/plugin_child_webview_adapter.rs');
     const ensure = section(
-      adapter,
-      'impl<R: Runtime> PluginChildWebviewNativeHandle for PluginChildWebviewHandle<R>',
+      adapter.slice(adapter.indexOf('impl<R: Runtime> PluginChildWebviewNativeHandle for PluginChildWebviewHandle<R>')),
+      'fn ensure_rounded_corners(&self)',
       'fn hide_unconfirmed_content(',
     );
     ordered(ensure, 'self.webview.window()', 'ensure_launcher_rounded_corners(&parent)');
     expect(ensure).not.toContain('.hide()');
-    const hideUnsafe = section(adapter, 'fn hide_unconfirmed_content(&self) -> Result<(), ()> {', 'fn source_label(');
+    const hideUnsafe = section(
+      adapter.slice(adapter.indexOf('impl<R: Runtime> PluginChildWebviewNativeHandle for PluginChildWebviewHandle<R>')),
+      'fn hide_unconfirmed_content(&self) -> Result<(), ()> {',
+      'fn source_label(',
+    );
     expect(hideUnsafe).toContain('self.webview.hide()');
     expect(hideUnsafe).toContain('self.webview.window().hide()');
+    const nativeExecution = section(
+      adapter,
+      'fn execute_owned_presentation_on_main_thread',
+      'fn deliver_structured_plugin_child_webview_frame',
+    );
+    expect(nativeExecution).toContain('window.label() != expected_window');
+    expect(nativeExecution).toContain('expected_native_window');
+    expect(nativeExecution).toContain('perform_owned_presentation(&guard');
+    expect(nativeExecution).toContain('view.setHidden(true)');
+    expect(nativeExecution).toContain('native_window.orderOut(None)');
+    expect(nativeExecution).toMatch(/receiver\s*\.try_recv\(\)/u);
   });
 
   test('confirms completion after surface configuration and does not treat main-thread queue submission as success', () => {
     const surface = product('src-tauri/src/launcher_surface.rs');
     const apply = section(surface, 'fn apply_snapshot<', 'fn transition<');
     ordered(apply, '.set_logical_size(', '.set_resizable(snapshot.resizable)', '.ensure_rounded_corners()');
-    expect(surface).toContain('ensure_launcher_rounded_corners(self)');
+    expect(surface).toContain('ensure_launcher_rounded_corners(window)');
     const source = product('src-tauri/src/launcher_rounded_corners.rs');
     expect(source).toContain('if is_main_thread {\n        return execute();');
     expect(source).toContain('.recv_timeout(deadline.saturating_duration_since(std::time::Instant::now()))');
     expect(source).toContain('window.run_on_main_thread(job)');
     expect(source).not.toContain('webview.show()');
     expect(source).not.toContain('window.show()');
+  });
+  test('confirms AppKit content geometry in the same native callback for main and detached windows', () => {
+    const surface = product('src-tauri/src/launcher_surface.rs');
+    const content = section(surface, 'pub(crate) fn set_macos_content_geometry(', 'pub(crate) fn set_macos_resizable');
+    for (const operation of [
+      'write_and_confirm_content_geometry(',
+      'native.setContentSize(size)',
+      'native.setContentMinSize(size)',
+      'native.setContentMaxSize(size)',
+      'native.contentRectForFrameRect(native.frame()).size',
+      'native.contentMinSize()',
+      'native.contentMaxSize()',
+    ])
+      expect(content).toContain(operation);
+    const native = product('src-tauri/src/plugin_detached_window_native.rs');
+    const configure = section(native, 'fn configure_window(', '#[cfg(not(target_os = "macos"))]');
+    expect(configure).toContain('set_macos_content_geometry(');
+    expect(configure).toContain('ContentGeometry::Size');
+    expect(configure).not.toContain('window.set_size(');
+    expect(surface).toContain('self.geometry(ContentGeometry::Size, size)');
+  });
+
+  test('keeps the detached system title bar opaque and outside the full rectangular plugin content', () => {
+    const source = product('src-tauri/src/plugin_detached_window_native.rs');
+    const window = section(source, 'let window = WindowBuilder::new(app, label)', 'let policy = Arc::clone');
+    for (const setting of [
+      '.decorations(true)',
+      '.title_bar_style(tauri::TitleBarStyle::Transparent)',
+      '.hidden_title(true)',
+      '.closable(true)',
+      '.minimizable(true)',
+      '.maximizable(true)',
+      '.fullscreen(false)',
+      '.transparent(false)',
+    ])
+      expect(window).toContain(setting);
+    const titlebar = section(source, 'fn configure_detached_titlebar(', 'fn create_hidden_shell(');
+    for (const confirmation of [
+      'native.isOpaque()',
+      '!native.titlebarAppearsTransparent()',
+      '!style.contains(NSWindowStyleMask::FullSizeContentView)',
+      'NSWindowButton::CloseButton',
+      'NSWindowButton::MiniaturizeButton',
+      'NSWindowButton::ZoomButton',
+      'NSWindowCollectionBehavior::FullScreenPrimary',
+      'native.setCollectionBehavior(behavior)',
+      'native.setMaxFullScreenContentSize(',
+    ])
+      expect(titlebar).toContain(confirmation);
+    const resizePolicy = section(
+      product('src-tauri/src/launcher_surface.rs'),
+      'fn set_macos_resizable',
+      'pub(crate) struct GuardedSurfaceWindow',
+    );
+    expect(resizePolicy).toContain('window.set_resizable(resizable)');
+    expect(resizePolicy).toContain('window.set_maximizable(true)');
+    const presentation = section(source, 'fn update_windowed_surface(', 'struct NativeHostControl(');
+    ordered(
+      presentation,
+      'shell.window.is_fullscreen()',
+      'if fullscreen',
+      '*pending = Some((revision, page))',
+      'return Ok(())',
+      'pending.take().filter',
+      'apply_owned_window_surface(',
+      'refresh_owned_window_surface(',
+    );
+    expect(nativePolicy).toContain('ensure_content_clip(&mut content, 0.0)');
+    const config = JSON.parse(read('src-tauri/tauri.conf.json'));
+    expect(config.app.windows.find((entry: { label: string }) => entry.label === 'main')?.transparent).toBe(true);
   });
 });

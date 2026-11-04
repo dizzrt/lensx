@@ -1,6 +1,7 @@
 export * from './child-webview-host-dispatcher';
 export * from './helpers';
 export * from './host-api-dispatcher';
+export * from './instance-registry';
 export * from './lifecycle-controller';
 export * from './PluginRuntimeSlot';
 export * from './pluginChildWebviewPresentation';

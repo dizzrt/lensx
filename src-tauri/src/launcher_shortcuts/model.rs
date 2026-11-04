@@ -3,6 +3,20 @@ use std::{collections::BTreeMap, sync::OnceLock};
 
 pub const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 pub const LAUNCHER: &str = "launcher";
+pub const DETACH: &str = "detach";
+
+pub fn default_detach() -> Trigger {
+    Trigger::Chord {
+        modifiers: vec!["cmd".into()],
+        key: "KeyD".into(),
+    }
+}
+
+fn required_nullable<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
+    deserializer: D,
+) -> Result<Option<T>, D::Error> {
+    Option::<T>::deserialize(deserializer)
+}
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -49,18 +63,66 @@ pub struct Configuration {
     pub revision: u64,
     pub launcher: Trigger,
     pub actions: BTreeMap<String, Trigger>,
+    #[serde(deserialize_with = "required_nullable")]
+    pub detach: Option<Trigger>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct VersionTwoConfiguration {
+    pub version: u32,
+    pub revision: u64,
+    pub launcher: Trigger,
+    pub actions: BTreeMap<String, Trigger>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DetachMigration {
+    pub version: u32,
+    pub reason: String,
+    pub trigger: Trigger,
+    pub conflicting_target: String,
+}
+
+impl DetachMigration {
+    pub fn valid(&self) -> bool {
+        self.version == 1
+            && self.reason == "default_conflict"
+            && self.trigger == default_detach()
+            && (self.conflicting_target == LAUNCHER || valid_action_id(&self.conflicting_target))
+    }
+}
+
+impl VersionTwoConfiguration {
+    pub fn project(self) -> Result<(Configuration, Option<DetachMigration>), ShortcutError> {
+        if self.version != 2 {
+            return Err(ShortcutError::new("invalid_configuration"));
+        }
+        let mut configuration = Configuration {
+            version: 3,
+            revision: self.revision,
+            launcher: self.launcher,
+            actions: self.actions,
+            detach: None,
+        }
+        .normalized()?;
+        let migration = configuration.project_detach_default();
+        Ok((configuration, migration))
+    }
 }
 
 impl Default for Configuration {
     fn default() -> Self {
         Self {
-            version: 2,
+            version: 3,
             revision: 0,
             launcher: Trigger::Chord {
                 modifiers: vec!["ctrl".into(), "shift".into()],
                 key: "Space".into(),
             },
             actions: BTreeMap::new(),
+            detach: Some(default_detach()),
         }
     }
 }
@@ -81,15 +143,25 @@ pub struct LauncherMigration {
 }
 
 impl VersionOneConfiguration {
-    pub fn project(self) -> Result<(Configuration, Option<LauncherMigration>), ShortcutError> {
+    pub fn project(
+        self,
+    ) -> Result<
+        (
+            Configuration,
+            Option<LauncherMigration>,
+            Option<DetachMigration>,
+        ),
+        ShortcutError,
+    > {
         if self.version != 1 || !matches!(self.launcher.chord, Trigger::Chord { .. }) {
             return Err(ShortcutError::new("invalid_configuration"));
         }
-        let configuration = Configuration {
-            version: 2,
+        let mut configuration = Configuration {
+            version: 3,
             revision: self.revision,
             launcher: self.launcher.chord,
             actions: self.actions,
+            detach: None,
         }
         .normalized()?;
         let migration = if let Some(double_tap) = self.launcher.double_tap {
@@ -111,7 +183,8 @@ impl VersionOneConfiguration {
         } else {
             None
         };
-        Ok((configuration, migration))
+        let detach_migration = configuration.project_detach_default();
+        Ok((configuration, migration, detach_migration))
     }
 }
 
@@ -123,6 +196,7 @@ pub enum BindingStatus {
     TargetUnavailable,
     RegistrationFailed,
     MonitorUnavailable,
+    LocalUnavailable,
     Degraded,
 }
 
@@ -141,6 +215,8 @@ pub struct Snapshot {
     pub key_labels: BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub launcher_migration: Option<LauncherMigration>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detach_migration: Option<DetachMigration>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -233,14 +309,42 @@ pub fn valid_action_id(value: &str) -> bool {
 }
 
 impl Configuration {
+    // Native global registration and invocation MUST only use this iterator.
     pub fn bindings(&self) -> BTreeMap<String, Trigger> {
         let mut bindings = self.actions.clone();
         bindings.insert(LAUNCHER.into(), self.launcher.clone());
         bindings
     }
 
+    pub fn all_bindings(&self) -> BTreeMap<String, Trigger> {
+        let mut bindings = self.bindings();
+        if let Some(trigger) = &self.detach {
+            bindings.insert(DETACH.into(), trigger.clone());
+        }
+        bindings
+    }
+
+    fn project_detach_default(&mut self) -> Option<DetachMigration> {
+        let trigger = default_detach();
+        if let Some((target, _)) = self
+            .bindings()
+            .into_iter()
+            .find(|(_, value)| *value == trigger)
+        {
+            Some(DetachMigration {
+                version: 1,
+                reason: "default_conflict".into(),
+                trigger,
+                conflicting_target: target,
+            })
+        } else {
+            self.detach = Some(trigger);
+            None
+        }
+    }
+
     pub fn normalized(mut self) -> Result<Self, ShortcutError> {
-        if self.version != 2
+        if self.version != 3
             || self.revision > MAX_SAFE_INTEGER
             || self.actions.len() > 1024
             || self.actions.keys().any(|id| !valid_action_id(id))
@@ -251,8 +355,14 @@ impl Configuration {
         for trigger in self.actions.values_mut() {
             *trigger = trigger.normalized()?;
         }
+        if let Some(trigger) = &mut self.detach {
+            *trigger = trigger.normalized()?;
+            if !matches!(trigger, Trigger::Chord { .. }) {
+                return Err(ShortcutError::new("invalid_trigger"));
+            }
+        }
         let mut occupied = BTreeMap::new();
-        for (target, trigger) in self.bindings() {
+        for (target, trigger) in self.all_bindings() {
             if let Some(previous) = occupied.insert(trigger, target) {
                 return Err(ShortcutError {
                     code: "conflicting_trigger",
@@ -385,7 +495,7 @@ mod tests {
         let baseline = serde_json::to_value(Configuration::default()).unwrap();
         let mut cases = Vec::new();
         let mut unknown_version = baseline.clone();
-        unknown_version["version"] = serde_json::json!(3);
+        unknown_version["version"] = serde_json::json!(4);
         cases.push(unknown_version);
         let mut unsafe_revision = baseline.clone();
         unsafe_revision["revision"] = serde_json::json!(MAX_SAFE_INTEGER + 1);

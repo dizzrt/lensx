@@ -38,7 +38,7 @@ lensX 是一款轻量级桌面效率启动器，其设计重点包括：
 - macOS-only frame-aware WKWebView navigation policy，提供完全分离的 Host/descendant document
   allowlist、idle 的进程内 target lease、main-only Tauri initialization，以及独立的
   new-window/download deny；
-- 唯一 current 原生 Plugin Child WebView，以及通过绑定真实原生来源的 bridge ingress 认证的
+- 每个所属窗口至多一个 current 原生 Plugin Child WebView，以及通过绑定真实原生来源的 bridge ingress 认证的独立
   Host 私有进程内 Runtime Session；
 - 统一的 Host-owned Page Registry 与框架无关导航 service，用于受保护 Host Page 和声明式
   Plugin Page descriptor；
@@ -55,18 +55,20 @@ lensX 是一款轻量级桌面效率启动器，其设计重点包括：
 ## 前端应用基座
 
 `src/index.tsx` 是唯一的前端组合入口。它只导入一次 Semi Design 全局样式表和项目
-`global.less` 入口，然后渲染 `AppBootstrap`。bootstrap 会在产品 App Shell 渲染前读取偏好；
-读取失败时使用安全默认值继续启动。
+`global.less` 入口，然后渲染 `HostWindowBootstrap`。Rust 从实际 WebView 派生可信角色；只有
+main 加载 `AppBootstrap`、解析持久化偏好并创建全局应用服务。独立 root 使用已确认 snapshot
+和位于原生标题栏下方的轻量内容 shell。角色探测失败不回退到 main。
 
-`AppProviders` 是唯一的应用级 Provider 组合：
+`AppProviders` 在每个可信 Host document 中组合一次 locale、theme、Semi locale 和 error
+boundary。只有 main 持有持久化与全局服务：
 
-```text
-AppBootstrap
-└── AppLocaleProvider
-    └── AppThemeProvider
-        └── Semi Design LocaleProvider
-            └── AppErrorBoundary
-                └── App
+```mermaid
+flowchart TD
+  B["HostWindowBootstrap"] --> R{"原生确认的角色"}
+  R -->|main| M["AppBootstrap · 持久化偏好"]
+  M --> MP["AppProviders"] --> A["App · 全局服务"]
+  R -->|detached| S["已确认窗口 snapshot"]
+  S --> SP["AppProviders · 仅呈现"] --> H["独立 shell · 内容 slot"]
 ```
 
 应用 locale 仅限 `en-US` 和 `zh-CN`，默认使用 `en-US`，并同时驱动应用 message、对应的
@@ -128,8 +130,9 @@ Manifest `0.4.0` 为每个规范化 plugin Page 提供有界 `presentation`。�
 执行转换。plugin message、DOM 测量、结果数量或 Runtime API 都不能选择原生 Window 呈现。
 
 Surface 配置先读取实际原生 resizable 状态，再按顺序投递 guard、约束、尺寸和最终状态操作。
-fixed→fixed 转换不投递 resizable setter；同一次操作根据成功投递更新计划，不依赖立即重新读取
-原生状态；后续 guard 也会考虑先前已投递但仍在途的 enable。rollback 会重新读取实际状态并重申
+fixed→fixed 转换不投递 resizable setter。同一次操作根据 resizable 成功投递更新计划，
+后续 guard 也考虑先前已投递但仍在途的 enable。在 macOS 上，Host 在主线程同步设置内容
+尺寸和最小/最大约束，读回对应的 AppKit 内容属性后才提交尺寸。rollback 会重新读取实际状态并重申
 完整的旧 target，包括最终 resizable 值，因为消息
 投递可能先于原生执行，也可能在部分生效后失败。rollback 失败会使成功缓存失效，让重复 target
 可以修复配置。不确定的 resizable 状态独立保留，紧急投递也失败时仍会强制下一次修复 guard。
@@ -166,19 +169,18 @@ Rust 通过单一动作边界拥有全部 launcher 原生窗口操作：
 要求窗口具备 closable style，因此不会为这个无边框承载面产生 `CloseRequested`。只有在快捷键服务
 和原生窗口 listener 初始化完成后，Host 才会用应用所有的菜单替换默认应用菜单；该菜单保留标准的应用、
 编辑、显示、窗口、帮助以及 `Cmd+Q` 退出语义，同时移除所有 predefined Close Window accelerator。
-恰好一个自定义“关闭窗口”项目持有应用内 `Cmd+W` accelerator，其稳定菜单 ID 会进入与原生关闭请求
-和失焦相同的 Rust `Hide` action 边界。它不是全局快捷键，也不会影响其他应用中的 `Cmd+W`。如果快捷键服务或窗口 listener
+恰好一个自定义“关闭窗口”项目持有应用内 `Cmd+W` accelerator，其稳定菜单 ID 会进入实际 key Window
+的可信关闭边界：main 使用可恢复 `Hide`，独立窗口关闭自身实例。它不是全局快捷键，也不会影响其他应用中的 `Cmd+W`。如果快捷键服务或窗口 listener
 初始化失败，Host 不会安装该自定义菜单；之后恢复入口的可用性由 Hide 边界检查，Quit 保持独立。如果菜单安装本身失败，Host 会记录
 `hide` action 与 `install_menu` 操作阶段且不会终止进程，已经注册的恢复快捷键和原生生命周期 listener
 仍然可用。
 
-Accessory 模式保留应用菜单 command graph，但不显示菜单栏。恰好一个 application-local `Cmd+W` 自定义命令复用统一 Hide action，恰好一个
-application-local `Cmd+Q` 自定义命令请求现有应用退出路径；后者通过 `RunEvent::Exit` teardown
-终止 current Child WebView 与 Host 资源。两个路由都会确认 lensX 位于前台，并且都不会进入
-global-shortcut plugin。由于目标 Accessory runtime 不能可靠分发隐藏菜单 key equivalent，Host setup
-会为前台 `Cmd+W/Q` 安装一个幂等的 AppKit local event monitor；它只先消费这两个匹配事件，避免菜单路由
-重复处理，并在应用退出时释放。所选唤出 trigger 未 active 时，close/focus-loss hide 和本地 Hide 路径保持
-禁用，Quit 仍然可用，避免 Accessory 进程进入无法恢复的隐藏状态。
+Accessory 模式保留应用菜单 command graph，但不显示菜单栏。唯一 application-local monitor
+为配置的分离键（默认 `Cmd+D`）、`Cmd+W` 与 `Cmd+Q` 捕获真实前台目标。W 对 main 执行可恢复
+Hide，对独立窗口执行精确实例 Close。Q 先拒绝新工作，在事件循环仍运行时清理全部捕获实例
+及保留事务，再退出一次；Exit teardown 保留为最后保护。这些本地命令不进入全局注册。
+monitor 防止菜单/重复事件二次执行，并在退出时释放。Launcher 恢复未确认或迁移恢复未解决时，
+main Hide 被禁用并保留可见修复与 Quit；独立窗口关闭不因此禁用。
 
 标准编辑使用共享原生 responder 路径。启用 Tauri `unstable` 后，Host `main` WebView
 和插件 WebView 都作为 `WindowChild` 创建。Wry 检查当前原生焦点并委托原事件，其同步
@@ -194,6 +196,11 @@ Window identity、collection behavior 或应用激活无法建立或确认时，
 operation，并在 success event 或独立 Child restore 之前停止相应转换。Launcher 保留上次位置与显示器；
 跟随鼠标显示器或在多显示器间自动重新居中不属于该生命周期。
 
+首次 Show 在 AppKit 启动回调返回后由主队列执行。普通 Show 在主窗口可见后请求焦点。
+若 macOS 拒绝首次焦点请求，Host 保持已确认裁剪的窗口可见，并在原窗口与启动操作仍有效时
+重试一次。后续窗口操作会取代这次重试。把插件移入其他窗口时，仍须确认目标窗口已获焦，
+才能发布新的归属。
+
 每次 `show` 成功后，Rust 向主 webview 发送 `launcher://activated`。其可序列化 payload 包含
 `reason` 字段，值为 `startup`、`global_shortcut` 或 `programmatic` 之一，并使用 snake-case
 序列化值。React 通过类型化桌面 adapter 接收该契约。launcher 输入在首次挂载时主动聚焦，并在每次
@@ -201,8 +208,9 @@ operation，并在 success event 或独立 Child restore 之前停止相应转�
 载荷格式错误或监听失败时输出诊断，而不破坏首次输入聚焦。每次激活还会使用当前查询和最新 registry
 snapshot 刷新搜索，但不会填充、清除或执行 action。
 
-该生命周期本身不实现查询匹配、结果列表、设置、快捷键配置存储或插件业务行为。独立的受约束
-surface mode command 只控制同一 `main` 窗口的固定呈现高度。
+`set_launcher_surface_mode` 根据 `main` 窗口当前显示的 Home、Search、Host Page
+或插件 Page 应用逻辑内容尺寸、尺寸约束，并决定是否允许用户调整窗口大小。它接收可信主 WebView 的请求，
+校验当前呈现意图与修订号，并在请求带有插件绑定时核验实例归属。
 
 ## Launcher Action 核心
 
@@ -241,9 +249,9 @@ Action 图标。
 投影按 Registration revision 串行收敛。过期 detail 结果会被丢弃；disabled、incompatible、
 quarantined、degraded、已消失或无法验证的 provider 会 fail closed 注销。单个 provider 的失败只
 影响该 owner，并且只产生有界安全诊断。对当前合格 revision，生产环境先提交完整 Page 批次，再发布
-目标当前 available 的 Action；移除时先注销 Action，再注销 Page。Page 仅在其全部 required
-permission ID 都存在于当前 Host-owned grant snapshot 时 available。这只是机械的子集检查，不是
-permission catalog、grant decision、提示或 Runtime session 授权。
+目标当前 available 的 Action；移除时先注销 Action，再注销 Page。Page 可用性来自当前健康、已启用且兼容的
+Registration 与当前 descriptor。Manifest 0.4.0 拒绝旧 permission/grant 字段；Page 投影不读取
+grant snapshot 或 permission service。
 
 生产 launcher action service 在 React render 之外只创建一次，并允许在 App Shell 边界替换为
 隔离的测试 service。Launcher action 搜索是 registry descriptor snapshot 的纯消费者。它使用
@@ -286,7 +294,8 @@ snapshot 解析已存 ID，保持顺序，隐藏缺失或禁用 Action，但不�
 Pinned Action；每张卡片只提供主 Action，不提供固定、取消固定或菜单入口。已有 ID 不迁移、不重排；
 未来管理入口必须通过独立且已接受的变更定义。
 
-插件管理与显式 permission decision 已通过可信 Settings surface 交付；安全插件 icon 解析仍是独立能力。
+插件管理通过可信 Settings surface 交付；当前 Contract 不含 Manifest permission 或 grant 提示。
+安全插件 icon 解析仍是独立能力。
 scoped resource、生命周期写操作、隔离 Child WebView Runtime 及其私有 Session 已分别交付，但不会改变
 Action collection 语义。
 生产 Plugin Action 现在只会在其投影目标 Page available 时出现。持久化 Plugin Action ID 可以自然
@@ -296,13 +305,15 @@ Action collection 语义。
 
 Host 与 Plugin Page 共用统一的 Host-owned Page Registry，以及扁平的 `owner_id`、`page_id` 与
 `opened_by_action_id` `ActivePage` 身份。Registry 保护 `lensx.core`，按插件 provider 原子替换完整
-Page 批次，并返回隔离且确定性的 snapshot。私有 route、required permission ID、provider
+Page 批次，并返回隔离且确定性的 snapshot。私有 route、provider
 bookkeeping、安装事实和 Runtime entry 不会进入 `ActivePage` 或展示 props。
 
-`AppNavigationService` 在把 `ActivePage` 交给唯一 App Shell handler 前预检当前 descriptor 与
-availability。Registry 更新移除 active Plugin Page 或令其 unavailable 时，会触发 Host-owned close
-transition 返回 `home`；相同 available 身份的 metadata 更新不会关闭 Page。插件不会获得 React
-setter、navigation handler、Registry mutation API、renderer 或 Tauri 对象。
+`AppNavigationService` 在把 `ActivePage` 交给调用 surface 的 handler 前预检当前 descriptor 与
+availability。每个窗口最多拥有一个活动插件实例。打开相同 Page 只复用该 surface 的当前实例；
+分离后从 main 打开该 Page 会创建新的独立实例。分离移交现有 navigation 与 activation channel，
+不 dispose 或 replay。Registry 失效会关闭全部受影响实例；保持相同 available 身份的 metadata
+更新不会关闭它们。插件不会获得 React setter、navigation handler、Registry mutation API、renderer
+或 Tauri 对象。
 
 页面上下文 resolver 从 Page resolution 与 Launcher Registry snapshot 派生当前本地化 Owner、Page
 标题与 opening Action 名称。缺失 `zh-CN` Owner 文本时回退 `en-US`；opening Action 缺失时回退当前
@@ -310,11 +321,11 @@ Page 标题。Host Page 使用受保护 Host icon token；在 scoped resource re
 使用通用 provider icon。显示字符串不会复制进 `ActivePage`，因此 locale 与 metadata 更新会从当前
 事实重新解析。
 
-`lensx.core/settings` 渲染可信 Host Page surface。available Plugin Page 渲染一个 Host-owned slot，
-同时由 Rust 创建 current native Child WebView sibling。Host 私有 resolver 会交叉检查 Page、
+`lensx.core/settings` 渲染可信 Host Page surface。available Plugin Page 在每个窗口渲染一个 Host-owned
+slot，同时由 Rust 创建其 native Child WebView sibling。Host 私有 resolver 会交叉检查 Page、
 Registration revision、Resource identity、isolated `entry_url`、route、generation、native source
-与 attempt。closed bridge 和 Session 只会为该 current Child WebView 进入 ready。close、retry、
-invalidation、replacement 与 App teardown 都会撤销它。Manifest `0.4.0` 与 Host API `0.4.0`
+与 attempt。closed bridge 和 Session 只会为该实例进入 ready。close 与 retry 撤销目标实例；已提交的
+generation 失效与 replacement 撤销受影响的兄弟实例，App teardown 撤销全部实例。Manifest `0.4.0` 与 Host API `0.4.0`
 既不暴露 native Window method，也不暴露 Child WebView identity。
 
 设置在现有 `main` Tauri 窗口中渲染。左侧受控纵向导航包含“偏好”、“插件”和“快捷键”，默认选择“偏好”；
@@ -428,7 +439,7 @@ dispatcher 的 Tauri state。debug assertion 可以检查初始化返回的标�
 
 ## 可配置快捷键
 
-Rust 独立拥有 v2 `shortcuts.json`，不与 `AppPreferences` 或集合混写。`launcher` 是单个组合键/
+Rust 独立拥有 v3 `shortcuts.json`，不与 `AppPreferences` 或集合混写。`launcher` 是单个组合键/
 双击 trigger，不再同时配置两个入口。读取返回已确认配置、
 revision、逐绑定运行状态与有界诊断。写入比较预期 revision，使用一份共享规范化/保留策略校验，
 暂存文件、预注册新增组合、释放旧注册、提交存储，再发布映射。失败执行补偿并核对实际存储和注册；
@@ -436,11 +447,19 @@ revision、逐绑定运行状态与有界诊断。写入比较预期 revision，
 不得解除降级；必须由明确保存事务重新确认存储。无效启动文件保留且不执行；仅无效或缺失情形
 尝试默认恢复键。有效自定义恢复键失败时，绝不将已分配给 Action 的默认组合重新用作唤出。
 
+可空 `detach` chord 是应用内命令，默认 `Cmd+D`，不属于 Action，也不进行全局注册。它与
+Launcher 及全部保留 Action 绑定共享 canonical 冲突校验，包括不可用 Action。本地 monitor
+不可用单独反馈，不使已确认的 Launcher 恢复入口降级。清除分离键后，需在设置中重新指定组合键才可分离。
+
 不可用 Action 保留配置和内部占用，但释放原生注册；重新出现时重新核验当前目标并尝试 OS 注册。
 未授权双击可保存但不生效。如果它是唯一唤出入口，Host 会显示已隐藏的窗口并暂停不可恢复的隐藏，
 直到所选入口重新 active；不暗中注册旧组合键或默认键。手势 reset 保留健康的监听，避免普通隐藏
-本身中断恢复入口。组合键身份保存原生物理键代码。Host 提供当前布局标签（含 Command 专用布局语义）；录制同时检查
+本身中断恢复入口。原生隐藏和分离读取已发布的唤出注册或监控状态，以及录制租约的到期时间。
+实际注册变更、恢复入口失效、休眠或退出会撤销资格，普通的快捷键服务锁竞争保留已确认的状态。
+组合键身份保存原生物理键代码。Host 提供当前布局标签（含 Command 专用布局语义）；录制同时检查
 当前语义键与物理保留别名。布局变化刷新标签和注册资格，不重写配置。
+macOS 主线程读取键盘输入源，将普通和 Command 修饰下的键位转换复制到 Rust 快照。监听线程
+使用该快照发布快捷键状态。按键按下时仍在主线程按当前布局校验，布局切换后松键也能释放原组合键。
 共享策略拒绝保留编辑/系统组合与内部重复；注册错误不能枚举其它应用的
 全部快捷键。被动双击不具有 OS 独占预约。
 
@@ -467,11 +486,16 @@ Host 每次调用携带不可变的 normal/shortcut 来源。只有认领当前�
 
 ### 快捷键配置迁移与行式编辑
 
-Host 将有效 v1 单组合键文件读取为等价 v2 视图，不重写磁盘；下次明确保存成功后提交 v2。有效 v1
-双入口保留原始文件，并通过 `launcher_migration` 暴露两个旧候选；v2 中的组合键占位不生效。
+Host 将有效 v1/v2 文件读取为 v3 投影，不重写原字节或 revision；下次明确保存成功后提交 v3。有效 v1
+双入口保留原始文件，并通过 `launcher_migration` 暴露两个旧候选；投影中的组合键占位不生效。
 在用户选择一种类型并明确保存解决迁移前，窗口保持可见，其它配置写入被拒绝。不确定提交先重读，
 再判断能否清除迁移事实或确认持久化。
 
-设置只显示一条唤出行（标题、类型、键位）和多条 Action 行（类型、键位、Action、删除），列表下方
+既有全局 Launcher 或 Action 占用 canonical `Cmd+D` 时，迁移保留原绑定并把分离键投影为关闭。
+版本化的 Host-owned `detach_migration` 记录跨无关保存与重启保留待决选择，即使原冲突目标后来
+改变也不静默清除。只有已确认的分离改键、清除/保持关闭选择或分离专用默认恢复才解决该记录。
+仅恢复 Launcher 默认值不会改变分离键或其待决选择；恢复分离默认值仍需拒绝当前冲突。
+
+设置显示一条唤出行（标题、类型、键位）、固定的应用内分离 chord 行和多条 Action 行（类型、键位、Action、删除），列表下方
 提供新增。草稿和行内编辑在完整且明确保存前只存在于本地。Action 改绑在同一候选中删除旧 ID 并
 加入新 ID，不覆盖已有绑定。原生 revision/事务校验仍是权威；成功删除后在列表内恢复焦点。

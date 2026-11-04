@@ -14,6 +14,19 @@ browser Worker/network, remote resources, Blob/Data, WASM, and origin storage
 remain Web Runtime capabilities. The separate `http.request` method provides
 controlled Host HTTPS transport; it does not change browser CORS or CSP.
 
+Each live plugin instance has its own Session and request space, including when
+several windows run the same plugin and Page. Host detachment retains that
+instance; it does not initialize the SDK again or replay an Action. Window
+selection comes from the calling Session, never from plugin-supplied window or
+instance fields. Existing compliant packages need no Manifest or SDK change.
+
+`storage.*` remains shared persistent configuration for the plugin identity.
+Concurrent writes use the existing serialized atomic commit and quota rules;
+subsequent reads can observe committed writes from another instance. Browser
+data stores, document memory, input, undo history and Workers remain independent.
+The Host neither synchronizes temporary input nor pushes arbitrary configuration
+values between instances, and it does not restore those instances after exit.
+
 ## Method reference
 
 <!-- lensx-host-api-method {"method":"http.request","provider":"http","version":"0.4.0","capability":"session"} -->
@@ -72,8 +85,8 @@ disconnect, or Runtime termination stops request waiting, releases request
 concurrency, and makes late results inert. An already-started OS DNS lookup
 cannot be interrupted; it retains its separate bounded worker slot until it
 finishes, then discards its result and never starts a connection for that
-cancelled request. Hiding/restoring the same current Runtime does
-not create another request. URL queries, headers, bodies, credentials,
+cancelled request. Hiding/restoring or detaching the same current Runtime does
+not create another request, cancel valid work or reset concurrency limits. URL queries, headers, bodies, credentials,
 signatures, and raw network exceptions must not enter logs or diagnostics.
 Signing and service-specific response interpretation belong in the plugin.
 
@@ -82,6 +95,11 @@ Signing and service-specific response interpretation belong in the plugin.
 
 Params: `{ actionId: string }`. Result: `{ opened: true }`. The action must
 belong to the current plugin and still resolve to an available target.
+The action opens in the calling instance's owning window. The same Page reuses
+that instance and receives a normal activation; another Page replaces only that
+window's instance. Launcher and global Action entry points continue to target
+main. During a transfer, ownership resolution waits for a bounded interval;
+unresolved recovery returns `unavailable` without replaying navigation later.
 
 <!-- lensx-host-api-method {"method":"runtime.get_context","provider":"base","version":"0.4.0","capability":"session"} -->
 ### `runtime.get_context`
@@ -122,8 +140,13 @@ Params: `{ key: string, value: JsonValue }`. Result: `{ stored: true }`.
 <!-- lensx-host-api-method {"method":"ui.close","provider":"base","version":"0.4.0","capability":"session"} -->
 ### `ui.close`
 
-Params: `{}`. Result: `{ accepted: true }`. Only the matching current page may
-close; a replaced session cannot close a newer attempt.
+Params: `{}`. Result: `{ accepted: true }`. The successful response is delivered
+before the Host closes the calling instance. A detached instance closes its
+own window; a main instance returns main to Home. The effect rechecks the same
+attempt and resolves its current owner, even if it moved while the response was
+pending. A cancelled/failed response has no close effect, and a replaced Session
+cannot close a newer or sibling instance. A retained recovery instance can still
+request this explicit termination through its valid Session.
 
 ## Stable errors
 

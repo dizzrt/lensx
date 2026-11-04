@@ -30,6 +30,7 @@ describe('PageContextBar', () => {
     expect(container.querySelectorAll('[tabindex]')).toHaveLength(0);
 
     const closeButton = within(region).getByRole('button', { name: 'Close settings and return home' });
+    expect(closeButton.previousElementSibling).toBe(region.querySelector('.page-context-action-text'));
     expect(closeButton).toHaveAttribute('data-launcher-drag-exclude', 'true');
     fireEvent.click(closeButton);
     expect(onClose).toHaveBeenCalledTimes(1);

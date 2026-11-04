@@ -134,6 +134,22 @@ pub(crate) struct PluginChildWebviewHostDispatcher<H: PluginChildWebviewNativeHa
 }
 
 impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewHostDispatcher<H> {
+    #[cfg(test)]
+    pub(crate) fn for_test(
+        service: Arc<PluginChildWebviewRegistry<H>>,
+        emitter: Arc<dyn PluginChildWebviewHostEmitter>,
+    ) -> Self {
+        Self::new(service, emitter)
+    }
+    #[cfg(test)]
+    pub(crate) fn live_binding_counts(&self) -> (usize, usize, usize) {
+        let state = self.state.lock().unwrap();
+        (
+            state.sessions.len(),
+            state.dispatches.len(),
+            self.http_pending.lock().unwrap().len(),
+        )
+    }
     fn new(
         service: Arc<PluginChildWebviewRegistry<H>>,
         emitter: Arc<dyn PluginChildWebviewHostEmitter>,
@@ -238,6 +254,14 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewHostDispatcher<H> {
         let Some(session) = session else {
             return false;
         };
+        if binding.method == "ui.close" {
+            return self.service.settle_close_confirmed(
+                session.attempt,
+                &session.source_label,
+                &binding.request_id,
+                output,
+            ) == PluginChildWebviewRpcIngressResult::Responded;
+        }
         self.service.settle_rpc_dispatch(
             session.attempt,
             &session.source_label,
@@ -315,36 +339,47 @@ impl<H: PluginChildWebviewNativeHandle> PluginChildWebviewRpcDispatcher
             },
             request: facts.request.clone(),
         };
+        // Serialize publication with cancellation/disconnection. The emitter queues a
+        // Host event synchronously; it does not wait on the main thread or plugin.
+        // A terminal effect either precedes this pending check or follows dispatch.
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if state.dispatches.contains_key(&dispatch_id)
+            || !self.service.is_rpc_dispatch_pending(
+                facts.attempt,
+                &facts.source_label,
+                &facts.request_id,
+                &facts.method,
+            )
         {
-            let mut state = self
-                .state
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            state.sessions.insert(
-                session_id.clone(),
-                HostSessionBinding {
-                    attempt: facts.attempt,
-                    source_label: facts.source_label.clone(),
-                    plugin_id: facts.plugin_id.clone(),
-                },
-            );
-            state.dispatches.insert(
-                dispatch_id.clone(),
-                HostDispatchBinding {
-                    session_id: session_id.clone(),
-                    request_id: facts.request_id.clone(),
-                    method: facts.method.clone(),
-                },
-            );
+            return false;
         }
+        let new_session = !state.sessions.contains_key(&session_id);
+        state
+            .sessions
+            .entry(session_id.clone())
+            .or_insert_with(|| HostSessionBinding {
+                attempt: facts.attempt,
+                source_label: facts.source_label.clone(),
+                plugin_id: facts.plugin_id.clone(),
+            });
+        state.dispatches.insert(
+            dispatch_id.clone(),
+            HostDispatchBinding {
+                session_id: session_id.clone(),
+                request_id: facts.request_id.clone(),
+                method: facts.method.clone(),
+            },
+        );
         if self.emitter.dispatch(&payload) {
             true
         } else {
-            self.state
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .dispatches
-                .remove(&dispatch_id);
+            state.dispatches.remove(&dispatch_id);
+            if new_session {
+                state.sessions.remove(&session_id);
+            }
             false
         }
     }
@@ -475,6 +510,28 @@ pub(crate) struct EmitPluginChildWebviewHostEventRequest {
     event: Value,
 }
 
+fn trusted_central_host_source(webview_label: &str, window_label: &str) -> bool {
+    webview_label == crate::launcher_window::MAIN_WINDOW_LABEL
+        && window_label == crate::launcher_window::MAIN_WINDOW_LABEL
+}
+
+pub(crate) fn reconcile_entry_instances<H: PluginChildWebviewNativeHandle>(
+    service: &PluginChildWebviewRegistry<H>,
+    manager: &crate::plugin_manager::PluginManager,
+    entry_id: &str,
+) {
+    let retained_generation = manager
+        .read_resource_projection(entry_id, None)
+        .ok()
+        .filter(|projection| {
+            projection.registration.facts.enabled
+                && projection.registration.compatibility.lensx
+                && projection.registration.compatibility.host_api
+        })
+        .map(|projection| projection.resource_generation);
+    let _ = service.teardown_entry_instances(entry_id, retained_generation);
+}
+
 fn valid_adapter_request(version: &str, opaque_id: &str) -> bool {
     version == PLUGIN_CHILD_WEBVIEW_HOST_ADAPTER_VERSION
         && opaque_id.len() == 32
@@ -484,32 +541,43 @@ fn valid_adapter_request(version: &str, opaque_id: &str) -> bool {
 }
 
 #[tauri::command]
-pub(crate) fn settle_plugin_child_webview_host_dispatch<R: Runtime>(
-    _app: AppHandle<R>,
+pub(crate) async fn settle_plugin_child_webview_host_dispatch<R: Runtime>(
+    webview: tauri::Webview<R>,
     dispatcher: State<'_, Arc<PluginChildWebviewHostDispatcher<PluginChildWebviewHandle<R>>>>,
     request: SettlePluginChildWebviewHostDispatchRequest,
-) -> bool {
-    valid_adapter_request(&request.contract_version, &request.dispatch_id)
-        && dispatcher.settle(&request.dispatch_id, request.output)
+) -> Result<bool, ()> {
+    if !trusted_central_host_source(webview.label(), webview.window().label())
+        || !valid_adapter_request(&request.contract_version, &request.dispatch_id)
+    {
+        return Ok(false);
+    }
+    let dispatcher = Arc::clone(dispatcher.inner());
+    Ok(tauri::async_runtime::spawn_blocking(move || {
+        dispatcher.settle(&request.dispatch_id, request.output)
+    })
+    .await
+    .unwrap_or(false))
 }
 
 #[tauri::command]
 pub(crate) fn fail_plugin_child_webview_host_dispatch<R: Runtime>(
-    _app: AppHandle<R>,
+    webview: tauri::Webview<R>,
     dispatcher: State<'_, Arc<PluginChildWebviewHostDispatcher<PluginChildWebviewHandle<R>>>>,
     request: FailPluginChildWebviewHostDispatchRequest,
 ) -> bool {
-    valid_adapter_request(&request.contract_version, &request.dispatch_id)
+    trusted_central_host_source(webview.label(), webview.window().label())
+        && valid_adapter_request(&request.contract_version, &request.dispatch_id)
         && dispatcher.fail(&request.dispatch_id)
 }
 
 #[tauri::command]
 pub(crate) fn emit_plugin_child_webview_host_event<R: Runtime>(
-    _app: AppHandle<R>,
+    webview: tauri::Webview<R>,
     dispatcher: State<'_, Arc<PluginChildWebviewHostDispatcher<PluginChildWebviewHandle<R>>>>,
     request: EmitPluginChildWebviewHostEventRequest,
 ) -> bool {
-    valid_adapter_request(&request.contract_version, &request.session_id)
+    trusted_central_host_source(webview.label(), webview.window().label())
+        && valid_adapter_request(&request.contract_version, &request.session_id)
         && dispatcher.emit_event(&request.session_id, request.event)
 }
 
@@ -568,6 +636,8 @@ mod tests {
 
     #[derive(Clone, Default)]
     struct FakeHandle {
+        source_label: Option<String>,
+        destroys: Arc<AtomicUsize>,
         deliveries: Arc<Mutex<Vec<Value>>>,
     }
 
@@ -580,7 +650,9 @@ mod tests {
         }
 
         fn source_label(&self) -> String {
-            "child".to_owned()
+            self.source_label
+                .clone()
+                .unwrap_or_else(|| "child".to_owned())
         }
         fn update_bounds(&self, _x: i32, _y: i32, _width: u32, _height: u32) -> Result<(), ()> {
             Ok(())
@@ -602,6 +674,7 @@ mod tests {
             Ok(())
         }
         fn destroy(&self) -> Result<(), ()> {
+            self.destroys.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
     }
@@ -716,6 +789,7 @@ mod tests {
             attempt,
             FakeHandle {
                 deliveries: Arc::clone(&deliveries),
+                ..FakeHandle::default()
             }
         ));
         assert!(service.mark_native_loaded(attempt, "child"));
@@ -725,6 +799,174 @@ mod tests {
             PluginChildWebviewReadyResult::Accepted
         );
         (service, dispatcher, emitter, attempt, deliveries)
+    }
+
+    fn add_instance(
+        service: &PluginChildWebviewRegistry<FakeHandle>,
+        owner: crate::plugin_child_webview_owner::PluginChildWebviewOwner,
+        plugin: &str,
+        generation: u64,
+    ) -> (PluginChildWebviewAttempt, String, FakeHandle) {
+        let identity = PluginChildWebviewIdentity::new(
+            plugin,
+            "page-a",
+            format!("entry_{plugin}"),
+            "1.2.3",
+            generation,
+            format!("lensx-plugin://{plugin}.runtime.localhost/index.html")
+                .parse()
+                .unwrap(),
+            "/",
+        )
+        .unwrap();
+        let attempt = service
+            .reserve_owned_with_derived_label(identity, owner)
+            .unwrap();
+        let creation = service.creation_facts(attempt).unwrap();
+        let source = creation.source_label.clone();
+        let handle = FakeHandle {
+            source_label: Some(source.clone()),
+            ..FakeHandle::default()
+        };
+        assert!(service.attach_current(attempt, handle.clone()));
+        assert!(service.mark_native_loaded(attempt, &source));
+        assert_eq!(
+            service.accept_ready_ingress(attempt, &source, &ready_body(&creation.freshness)),
+            PluginChildWebviewReadyResult::Accepted
+        );
+        assert!(service.mark_sdk_ready_after_context(
+            attempt,
+            &source,
+            "runtime.get_context",
+            true
+        ));
+        (attempt, source, handle)
+    }
+
+    #[test]
+    fn same_plugin_request_ids_remain_session_bound_across_transfer_and_close() {
+        use crate::plugin_child_webview_owner::PluginChildWebviewOwner;
+        let (service, dispatcher, emitter, first, first_deliveries) = setup();
+        assert!(service.mark_sdk_ready_after_context(first, "child", "runtime.get_context", true));
+        let second_owner = PluginChildWebviewOwner::detached(2).unwrap();
+        let (second, second_source, second_handle) =
+            add_instance(&service, second_owner, "plugin-a", 7);
+        let first_facts = service.creation_facts(first).unwrap();
+        let second_facts = service.creation_facts(second).unwrap();
+        assert_ne!(
+            first_facts.data_store_identifier,
+            second_facts.data_store_identifier
+        );
+        assert_ne!(first_facts.freshness, second_facts.freshness);
+        assert_eq!(
+            service.accept_ready_ingress(
+                second,
+                &second_source,
+                &ready_body(&first_facts.freshness)
+            ),
+            PluginChildWebviewReadyResult::FreshnessMismatch
+        );
+        for (attempt, source) in [(first, "child"), (second, second_source.as_str())] {
+            assert_eq!(
+                service.accept_rpc_ingress(
+                    attempt,
+                    source,
+                    &rpc_request(1, "storage.get", serde_json::json!({"key":"same"}))
+                ),
+                PluginChildWebviewRpcIngressResult::Dispatched
+            );
+        }
+        let events = emitter.dispatches.lock().unwrap().clone();
+        assert_eq!(events.len(), 2);
+        assert_ne!(events[0].session_id, events[1].session_id);
+        assert_ne!(events[0].dispatch_id, events[1].dispatch_id);
+        assert_eq!(
+            service.accept_rpc_ingress(
+                first,
+                &second_source,
+                &rpc_request(2, "storage.get", serde_json::json!({"key":"forged"}))
+            ),
+            PluginChildWebviewRpcIngressResult::SessionUnavailable
+        );
+        let transfer = service
+            .begin_ownership_transfer(
+                first,
+                "main",
+                &PluginChildWebviewOwner::main(),
+                "plugin-window-0000000000000001",
+            )
+            .unwrap();
+        assert!(service.commit_ownership_transfer(&transfer));
+        assert_eq!(
+            service.creation_facts(first).unwrap().data_store_identifier,
+            first_facts.data_store_identifier
+        );
+        assert!(dispatcher.settle(
+            &events[0].dispatch_id,
+            serde_json::json!({"method":"storage.get","result":{"found":true,"value":"first"}})
+        ));
+        assert_eq!(
+            first_deliveries.lock().unwrap()[0]["result"]["result"]["value"],
+            "first"
+        );
+        assert!(second_handle.deliveries.lock().unwrap().is_empty());
+        assert!(service.compare_current_teardown(first).unwrap());
+        assert!(!dispatcher.settle(&events[0].dispatch_id, serde_json::json!({})));
+        assert!(dispatcher.settle(
+            &events[1].dispatch_id,
+            serde_json::json!({"method":"storage.get","result":{"found":true,"value":"second"}})
+        ));
+        assert_eq!(
+            second_handle.deliveries.lock().unwrap()[0]["result"]["result"]["value"],
+            "second"
+        );
+        assert_eq!(emitter.dispatch_calls.load(Ordering::SeqCst), 2);
+        assert_eq!(second_handle.destroys.load(Ordering::SeqCst), 0);
+        assert_eq!(dispatcher.state.lock().unwrap().sessions.len(), 1);
+        service.teardown_all().unwrap();
+        assert_eq!(second_handle.destroys.load(Ordering::SeqCst), 1);
+        assert!(dispatcher.state.lock().unwrap().sessions.is_empty());
+        assert!(dispatcher.state.lock().unwrap().dispatches.is_empty());
+        assert_eq!(emitter.disconnects.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn cancelled_and_terminal_held_host_dispatches_never_republish_authority() {
+        for terminal in [false, true] {
+            let held = Arc::new(HeldDispatch::default());
+            let (service, dispatcher, emitter, attempt, _) =
+                setup_with_http(Arc::new(PluginHttpProvider::new()), Some(held.clone()));
+            service.accept_rpc_ingress(
+                attempt,
+                "child",
+                &rpc_request(1, "storage.get", serde_json::json!({"key":"pending"})),
+            );
+            let facts = held.facts.lock().unwrap()[0].clone();
+            if terminal {
+                service.compare_current_teardown(attempt).unwrap();
+            } else {
+                service.accept_rpc_ingress(attempt, "child", &cancel_body(1));
+            }
+            assert!(!dispatcher.dispatch(&facts));
+            assert_eq!(emitter.dispatch_calls.load(Ordering::SeqCst), 0);
+            assert!(dispatcher.state.lock().unwrap().sessions.is_empty());
+            assert!(dispatcher.state.lock().unwrap().dispatches.is_empty());
+        }
+    }
+
+    #[test]
+    fn central_dispatch_control_rejects_plugin_and_detached_host_sources() {
+        assert!(trusted_central_host_source("main", "main"));
+        for (source, window) in [
+            ("child", "main"),
+            ("main", "plugin-window-0000000000000001"),
+            (
+                "plugin-window-0000000000000001",
+                "plugin-window-0000000000000001",
+            ),
+        ] {
+            assert!(!trusted_central_host_source(source, window));
+        }
     }
 
     #[test]
@@ -956,6 +1198,226 @@ mod tests {
             "actual response without CORS"
         );
         assert!(dispatcher.http_pending.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn http_result_settles_during_an_uncommitted_owner_transfer() {
+        let (http, mut calls) = queued_http();
+        let (service, dispatcher, _, attempt, deliveries) = setup_with_http(http, None);
+        assert!(service.mark_sdk_ready_after_context(
+            attempt,
+            "child",
+            "runtime.get_context",
+            true
+        ));
+        assert_eq!(
+            service.accept_rpc_ingress(
+                attempt,
+                "child",
+                &rpc_request(1, "http.request", http_params())
+            ),
+            PluginChildWebviewRpcIngressResult::Dispatched
+        );
+        let call = calls.recv().await.unwrap();
+        let owner = service.owner_for_attempt(attempt).unwrap();
+        let transfer = service
+            .begin_ownership_transfer(attempt, "main", &owner, "plugin-window-0000000000000001")
+            .unwrap();
+        call.complete
+            .send(http_result("completed while owner is frozen"))
+            .unwrap();
+        wait_until(|| !deliveries.lock().unwrap().is_empty()).await;
+        assert!(service.ownership_transfer_is_current(&transfer));
+        assert_eq!(service.snapshot_attempt(attempt).unwrap().owner, owner);
+        assert_eq!(
+            deliveries.lock().unwrap()[0]["result"]["result"]["body"],
+            "completed while owner is frozen"
+        );
+        assert!(dispatcher.http_pending.lock().unwrap().is_empty());
+        assert!(service.cancel_ownership_transfer(&transfer));
+        assert_eq!(deliveries.lock().unwrap().len(), 1);
+        assert!(calls.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn pending_http_crosses_owner_transfer_once_and_sibling_close_cancels_only_itself() {
+        use crate::plugin_child_webview_owner::PluginChildWebviewOwner;
+        let (http, mut calls) = queued_http();
+        let (service, dispatcher, _, first, first_deliveries) = setup_with_http(http, None);
+        assert!(service.mark_sdk_ready_after_context(first, "child", "runtime.get_context", true));
+        let (second, second_source, second_handle) = add_instance(
+            &service,
+            PluginChildWebviewOwner::detached(2).unwrap(),
+            "plugin-a",
+            7,
+        );
+        for (attempt, source) in [(first, "child"), (second, second_source.as_str())] {
+            assert_eq!(
+                service.accept_rpc_ingress(
+                    attempt,
+                    source,
+                    &rpc_request(1, "http.request", http_params())
+                ),
+                PluginChildWebviewRpcIngressResult::Dispatched
+            );
+        }
+        let one = calls.recv().await.unwrap();
+        let two = calls.recv().await.unwrap();
+        let (first_call, second_call) = if one.attempt == first.opaque_id() {
+            (one, two)
+        } else {
+            (two, one)
+        };
+        let owner = service.owner_for_attempt(first).unwrap();
+        let transfer = service
+            .begin_ownership_transfer(first, "main", &owner, "plugin-window-0000000000000001")
+            .unwrap();
+        assert!(!*first_call.cancelled.borrow());
+        assert!(service.commit_ownership_transfer(&transfer));
+        assert!(service.compare_current_teardown(second).unwrap());
+        assert!(*second_call.cancelled.borrow());
+        assert!(!*first_call.cancelled.borrow());
+        second_call
+            .complete
+            .send(http_result("discarded sibling result"))
+            .unwrap();
+        first_call
+            .complete
+            .send(http_result("original request after transfer"))
+            .unwrap();
+        wait_until(|| {
+            first_deliveries
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|frame| frame["result"]["method"] == "http.request")
+        })
+        .await;
+        wait_until(|| dispatcher.http_pending.lock().unwrap().is_empty()).await;
+        let responses = first_deliveries.lock().unwrap();
+        assert_eq!(
+            responses
+                .iter()
+                .filter(|frame| frame["result"]["method"] == "http.request")
+                .count(),
+            1
+        );
+        assert_eq!(
+            responses[0]["result"]["result"]["body"],
+            "original request after transfer"
+        );
+        assert!(!second_handle
+            .deliveries
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|frame| frame["result"]["method"] == "http.request"));
+        assert!(
+            calls.try_recv().is_err(),
+            "transfer must not submit another HTTP operation"
+        );
+        assert_eq!(
+            service.snapshot_attempt(first).unwrap().owner,
+            transfer.target
+        );
+    }
+
+    #[tokio::test]
+    async fn generation_fanout_cancels_all_old_siblings_and_preserves_new_and_unrelated_work() {
+        use crate::plugin_child_webview_owner::PluginChildWebviewOwner;
+        let (http, mut calls) = queued_http();
+        let (service, dispatcher, emitter, first, _) = setup_with_http(http, None);
+        let (second, second_source, second_handle) = add_instance(
+            &service,
+            PluginChildWebviewOwner::detached(2).unwrap(),
+            "plugin-a",
+            7,
+        );
+        let (newer, newer_source, newer_handle) = add_instance(
+            &service,
+            PluginChildWebviewOwner::detached(3).unwrap(),
+            "plugin-a",
+            8,
+        );
+        let (other, other_source, other_handle) = add_instance(
+            &service,
+            PluginChildWebviewOwner::detached(4).unwrap(),
+            "plugin-b",
+            9,
+        );
+        for (attempt, source) in [
+            (first, "child"),
+            (second, second_source.as_str()),
+            (newer, newer_source.as_str()),
+            (other, other_source.as_str()),
+        ] {
+            assert_eq!(
+                service.accept_rpc_ingress(
+                    attempt,
+                    source,
+                    &rpc_request(1, "http.request", http_params())
+                ),
+                PluginChildWebviewRpcIngressResult::Dispatched
+            );
+        }
+        let mut pending = HashMap::new();
+        for _ in 0..4 {
+            let call = calls.recv().await.unwrap();
+            pending.insert(call.attempt.clone(), call);
+        }
+        service
+            .teardown_entry_instances("entry_plugin-a", Some(8))
+            .unwrap();
+        assert_eq!(service.snapshots().len(), 2);
+        assert_eq!(second_handle.destroys.load(Ordering::SeqCst), 1);
+        assert_eq!(newer_handle.destroys.load(Ordering::SeqCst), 0);
+        assert_eq!(other_handle.destroys.load(Ordering::SeqCst), 0);
+        assert_eq!(dispatcher.http_pending.lock().unwrap().len(), 2);
+        for attempt in [first, second] {
+            let call = pending.remove(&attempt.opaque_id()).unwrap();
+            assert!(*call.cancelled.borrow());
+            call.complete.send(http_result("retired response")).unwrap();
+        }
+        let other_call = pending.remove(&other.opaque_id()).unwrap();
+        assert!(!*other_call.cancelled.borrow());
+        other_call
+            .complete
+            .send(http_result("other remains"))
+            .unwrap();
+        wait_until(|| !other_handle.deliveries.lock().unwrap().is_empty()).await;
+        assert_eq!(
+            other_handle.deliveries.lock().unwrap()[0]["result"]["result"]["body"],
+            "other remains"
+        );
+        let new_call = pending.remove(&newer.opaque_id()).unwrap();
+        assert!(!*new_call.cancelled.borrow());
+        service
+            .teardown_entry_instances("entry_plugin-a", None)
+            .unwrap();
+        assert!(*new_call.cancelled.borrow());
+        new_call
+            .complete
+            .send(http_result("disabled response"))
+            .unwrap();
+        assert_eq!(newer_handle.destroys.load(Ordering::SeqCst), 1);
+        assert_eq!(service.snapshots().len(), 1);
+        service.teardown_all().unwrap();
+        assert_eq!(other_handle.destroys.load(Ordering::SeqCst), 1);
+        assert!(service.snapshots().is_empty());
+        assert!(dispatcher.http_pending.lock().unwrap().is_empty());
+        assert!(emitter.dispatches.lock().unwrap().is_empty());
+        assert!(second_handle
+            .deliveries
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|value| value.get("result").is_none()));
+        assert!(newer_handle
+            .deliveries
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|value| value.get("result").is_none()));
     }
 
     #[tokio::test]

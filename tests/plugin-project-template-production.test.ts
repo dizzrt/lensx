@@ -309,6 +309,11 @@ describe('plugin project templates through production Child WebView components',
 
       const resourceReads: string[] = [];
       const resolver = createPluginPageRuntimeResolver({
+        readAdmission: async (identity) => ({
+          entryId: identity.entryId,
+          revision: identity.expectedRevision,
+          generation: '1',
+        }),
         resourceAdapter: {
           resolveEntry: async (request) => {
             resourceReads.push(request.entry_id);

@@ -5,6 +5,9 @@
 //! The Tauri webview types and functions.
 
 pub(crate) mod plugin;
+mod reparent;
+mod reparent_transaction;
+pub use reparent_transaction::{WebviewReparentOwnership, WebviewReparentTransaction};
 mod webview_window;
 
 pub use webview_window::{WebviewWindow, WebviewWindowBuilder};
@@ -18,9 +21,9 @@ pub use cookie;
 use http::HeaderMap;
 use serde::Serialize;
 use tauri_macros::default_runtime;
-pub use tauri_runtime::webview::{NewWindowFeatures, PageLoadEvent, ScrollBarStyle};
 #[cfg(target_os = "macos")]
 pub use tauri_runtime::webview::NavigationFrame;
+pub use tauri_runtime::webview::{NewWindowFeatures, PageLoadEvent, ScrollBarStyle};
 // Remove this re-export in v3
 pub use tauri_runtime::Cookie;
 #[cfg(desktop)]
@@ -550,9 +553,7 @@ tauri::Builder::default()
 
   /// Defines a macOS closure that receives the native target frame classification before commit.
   #[cfg(target_os = "macos")]
-  pub fn on_navigation_with_frame<
-    F: Fn(&Url, NavigationFrame) -> bool + Send + 'static,
-  >(
+  pub fn on_navigation_with_frame<F: Fn(&Url, NavigationFrame) -> bool + Send + 'static>(
     mut self,
     f: F,
   ) -> Self {
@@ -729,9 +730,7 @@ tauri::Builder::default()
   /// built-in `tauri` or `ipc` URI protocols. Application URI protocols remain available so the
   /// WebView can load its owned resources. The handler must validate every received message.
   #[must_use]
-  pub fn isolated_ipc_handler<
-    F: Fn(String, http::Request<String>) + Send + Sync + 'static,
-  >(
+  pub fn isolated_ipc_handler<F: Fn(String, http::Request<String>) + Send + Sync + 'static>(
     mut self,
     handler: F,
   ) -> Self {
@@ -1364,6 +1363,8 @@ fn main() {
 #[default_runtime(crate::Wry, wry)]
 pub struct Webview<R: Runtime> {
   pub(crate) window: Arc<Mutex<Window<R>>>,
+  reparent_gate: Arc<reparent::ReparentGate>,
+  pending_reparent: Arc<Mutex<Option<Arc<reparent_transaction::TransactionState<R>>>>>,
   /// The webview created by the runtime.
   pub(crate) webview: DetachedWebview<EventLoopMessage, R>,
   /// The manager to associate this webview with.
@@ -1387,6 +1388,8 @@ impl<R: Runtime> Clone for Webview<R> {
   fn clone(&self) -> Self {
     Self {
       window: self.window.clone(),
+      reparent_gate: self.reparent_gate.clone(),
+      pending_reparent: self.pending_reparent.clone(),
       webview: self.webview.clone(),
       manager: self.manager.clone(),
       app_handle: self.app_handle.clone(),
@@ -1423,6 +1426,8 @@ impl<R: Runtime> Webview<R> {
       manager: window.manager.clone(),
       app_handle: window.app_handle.clone(),
       window: Arc::new(Mutex::new(window)),
+      reparent_gate: Arc::default(),
+      pending_reparent: Arc::default(),
       webview,
       resources_table: Default::default(),
       use_https_scheme,
@@ -1623,9 +1628,58 @@ impl<R: Runtime> Webview<R> {
       }
     }
 
-    *self.window.lock().unwrap() = window.clone();
-    self.webview.dispatcher.reparent(window.window.id)?;
-    Ok(())
+    #[cfg(target_os = "macos")]
+    {
+      let transaction = self.begin_reparent()?;
+      if let Err(error) = transaction.move_to(window) {
+        if transaction.restore_original().is_ok() {
+          let _ = transaction.commit();
+        }
+        // If compensation fails, pending_reparent() recovers the same frozen
+        // transaction; dropping this convenience handle does not lose it.
+        return Err(error);
+      }
+      if transaction.commit()? {
+        Ok(())
+      } else {
+        Err(tauri_runtime::Error::FailedToSendMessage.into())
+      }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+      reparent::transfer(
+        &self.reparent_gate,
+        &self.window,
+        window.clone(),
+        || self.webview.dispatcher.reparent(window.window.id),
+        || tauri_runtime::Error::FailedToSendMessage,
+      )
+      .map_err(Into::into)
+    }
+  }
+
+  /// Confirm destruction of this exact native view rather than queue admission.
+  #[doc(hidden)]
+  pub fn close_confirmed(&self) -> crate::Result<bool> {
+    let closed = self.webview.dispatcher.close_confirmed()?;
+    if closed {
+      self
+        .manager
+        .on_webview_close_exact(self.label(), &self.resources_table);
+    }
+    Ok(closed)
+  }
+
+  /// Begin a retained Host-private native parent transfer.
+  #[doc(hidden)]
+  pub fn begin_reparent(&self) -> crate::Result<WebviewReparentTransaction<R>> {
+    WebviewReparentTransaction::begin(self)
+  }
+
+  /// Reclaim an unresolved transaction left by a failed move or compensation.
+  #[doc(hidden)]
+  pub fn pending_reparent(&self) -> Option<WebviewReparentTransaction<R>> {
+    WebviewReparentTransaction::pending(self)
   }
 
   /// Sets whether the webview should automatically grow and shrink its size and position when the parent window resizes.
@@ -1740,6 +1794,22 @@ tauri::Builder::default()
       .webview
       .dispatcher
       .with_webview(|w| f(PlatformWebview(*w.downcast().unwrap())))
+      .map_err(Into::into)
+  }
+
+  /// Host-private data delivery to this exact original native view. The native
+  /// parent may be absent during retained recovery. This is not a presentation
+  /// setter; native pointers are borrowed only for the synchronous callback.
+  #[cfg(feature = "wry")]
+  #[doc(hidden)]
+  pub fn with_webview_data<F: FnOnce(PlatformWebview) + Send + 'static>(
+    &self,
+    f: F,
+  ) -> crate::Result<()> {
+    self
+      .webview
+      .dispatcher
+      .with_webview_data(|view| f(PlatformWebview(*view.downcast().unwrap())))
       .map_err(Into::into)
   }
 

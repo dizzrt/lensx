@@ -45,7 +45,7 @@ The repository currently provides:
 - a macOS-only frame-aware WKWebView navigation policy with disjoint Host and
   descendant document allowlists, an idle process-local target lease, main-only
   Tauri initialization, and independent new-window/download denial;
-- one current native plugin Child WebView plus a Host-private process-local
+- one current native plugin Child WebView per owning window plus independent Host-private process-local
   Runtime Session authenticated through source-bound native bridge ingress;
 - a unified Host-owned Page Registry and framework-neutral navigation service
   for protected Host Pages and declarative Plugin Page descriptors;
@@ -67,19 +67,21 @@ implemented until their source code and tests exist.
 
 `src/index.tsx` is the only frontend composition entry. It imports the Semi
 Design global stylesheet and the project `global.less` entry once, then renders
-`AppBootstrap`. The bootstrap reads preferences before rendering the product
-App Shell and falls back to safe defaults without blocking startup when that
-read fails.
+`HostWindowBootstrap`. Rust derives the trusted role from the actual WebView;
+only main loads `AppBootstrap`, resolves persisted preferences and constructs
+the global application services. A detached root uses its confirmed snapshot
+and a lightweight content shell below the native title bar. Failed role probes never fall back to main.
 
-`AppProviders` is the single application-level provider composition:
+`AppProviders` composes locale, theme, Semi locale and the error boundary once
+per trusted Host document. Only main owns persistence and global services:
 
-```text
-AppBootstrap
-└── AppLocaleProvider
-    └── AppThemeProvider
-        └── Semi Design LocaleProvider
-            └── AppErrorBoundary
-                └── App
+```mermaid
+flowchart TD
+  B["HostWindowBootstrap"] --> R{"Native-confirmed role"}
+  R -->|main| M["AppBootstrap · persisted preferences"]
+  M --> MP["AppProviders"] --> A["App · global services"]
+  R -->|detached| S["Confirmed window snapshot"]
+  S --> SP["AppProviders · presentation only"] --> H["Detached shell · content slot"]
 ```
 
 The application locale is limited to `en-US` and `zh-CN`, defaults to `en-US`,
@@ -178,8 +180,10 @@ can choose native Window presentation.
 Surface configuration reads actual native resizability before submitting the
 ordered guard, constraints, size, and final-state operations. Fixed-to-fixed
 transitions do not submit a resizable setter. Within one operation, successful
-submissions update the plan rather than relying on an immediate native re-read;
-the next guard also accounts for a previously submitted enable still in flight.
+resizable submissions update the plan and the next guard accounts for a
+previously submitted enable still in flight. On macOS the Host applies content
+size and min/max constraints synchronously on the main thread and reads back
+the matching AppKit content properties before committing those dimensions.
 Rollback re-reads the actual state and reasserts the complete previous target,
 including final resizability, because delivery can precede native execution or
 fail after partial application. Failed rollback invalidates the success cache
@@ -237,8 +241,9 @@ Host replaces the default application menu with an application-owned menu that
 preserves the standard application, edit, view, window, help, and `Cmd+Q` quit
 semantics while removing every predefined Close Window accelerator. Exactly
 one custom Close Window item owns the application-local `Cmd+W` accelerator
-and routes its stable menu ID through the same Rust `Hide` action boundary used
-by native close requests and focus loss. It is not a global shortcut and does
+and routes its stable menu ID through the actual key window's trusted close
+boundary: main uses recoverable `Hide`, while a detached window closes its own
+instance. It is not a global shortcut and does
 not affect `Cmd+W` in other applications. If shortcut-service or window-listener initialization fails, the custom menu is
 not installed. Later recovery availability is checked at the Hide boundary,
 while Quit remains independent. If menu installation
@@ -247,18 +252,15 @@ stage without terminating the process; the already registered recovery
 shortcut and native lifecycle listeners remain available.
 
 Accessory mode keeps the application menu command graph without a visible menu
-bar. Exactly one custom
-application-local `Cmd+W` command reuses the unified Hide action, and exactly
-one custom application-local `Cmd+Q` command requests the existing application
-exit path, whose `RunEvent::Exit` teardown terminates the current Child WebView
-and Host resources. Both routes verify that lensX is foreground and are absent
-from the global-shortcut plugin. Because the target Accessory runtime does not
-reliably dispatch the hidden menu key equivalents, Host setup installs one
-idempotent AppKit local event monitor for foreground `Cmd+W/Q`; it
-consumes only those matching events before the menu route can duplicate them and is
-released during application exit. When the selected Launcher trigger is not active,
-all hide-on-close/focus-loss and local Hide paths are disabled while Quit remains
-available, so an Accessory process cannot become unreachable.
+bar. One application-local monitor captures actual foreground targets for
+configured detachment (default `Cmd+D`), `Cmd+W` and `Cmd+Q`. W uses recoverable
+Hide for main and exact-instance Close for a detached window. Q rejects new work
+and cleans all captured instances and retained transactions while the event loop
+still runs, then exits once; Exit teardown remains a final safeguard. These local
+commands are absent from global registration. The monitor prevents duplicate
+menu/repeat delivery and is released on exit. Unconfirmed Launcher recovery or
+an unresolved migration recovery disables main Hide while retaining visible
+repair and Quit; it does not disable closing a detached window.
 
 Standard editing uses the shared native responder path. With Tauri `unstable`,
 the Host `main` WebView and plugin WebViews are both created as `WindowChild`.
@@ -282,6 +284,13 @@ restore. The Launcher retains its last position and display; moving it to the
 pointer's display or automatically recentering across multiple displays is not
 part of this lifecycle.
 
+Startup schedules the first Show on the main queue after the AppKit launch
+callback returns. Ordinary Show requests focus once the main window is visible.
+If macOS declines that first focus request, the Host leaves the safely clipped
+window visible and retries once while the same window and startup action remain
+current. A later window action supersedes the retry. Transferring a plugin to
+another window still requires confirmed target focus before ownership is published.
+
 After a successful `show`, Rust emits `launcher://activated` to the main
 webview. Its serializable payload contains a `reason` field with one of
 `startup`, `global_shortcut`, or `programmatic`, using snake-case serialized
@@ -293,10 +302,11 @@ diagnoses malformed payloads or listener failures without breaking initial
 input focus. Each activation also refreshes search from the current query and
 latest registry snapshot without filling, clearing, or executing an action.
 
-This lifecycle does not itself implement query matching, result lists,
-settings, shortcut configuration storage, or plugin business behavior. The
-separate constrained surface-mode command only controls the fixed presentation
-height of the same `main` window.
+`set_launcher_surface_mode` applies the logical content size, size constraints,
+and resize policy for Home, Search, a Host Page, or a plugin Page in the
+`main` window. It accepts requests from the trusted main WebView, checks the
+current presentation intent and revision, and verifies the instance owner when
+the request includes a plugin binding.
 
 ## Launcher Action Core
 
@@ -353,10 +363,10 @@ unverifiable providers are unregistered fail closed. One provider's failure is
 contained to that owner and produces only bounded diagnostics. For a current
 eligible revision, production commits the complete Page batch before publishing
 Actions whose targets are currently available; removal performs Action
-unregistration before Page unregistration. A Page is available only when all
-of its required permission IDs are present in the current Host-owned grant
-snapshot. This is a mechanical subset check, not a permission catalog, grant
-decision, prompt, or Runtime session authorization.
+unregistration before Page unregistration. Availability follows current healthy,
+enabled and compatible Registration and the current descriptor. Manifest 0.4.0
+rejects legacy permission/grant fields; Page projection does not consult a grant
+snapshot or permission service.
 
 The production launcher action service is created once outside React rendering
 and can be replaced with an isolated service at the App Shell boundary for
@@ -421,8 +431,8 @@ Pinned Actions as read-only data and exposes no pin, unpin, or menu control.
 Existing IDs are neither migrated nor reordered; a future management entry
 point requires a separate accepted change.
 
-Plugin management and explicit permission decisions are delivered through the
-trusted Settings surface. Safe plugin icon resolution remains a separate
+Plugin management is delivered through trusted Settings. Manifest permissions
+and grant prompts are not part of the current Contract. Safe plugin icon resolution remains a separate
 capability. Scoped resources, lifecycle writes, the isolated Child WebView Runtime,
 and its private Session are delivered separately and do not change Action
 collection semantics.
@@ -436,15 +446,18 @@ Host and Plugin Pages share a unified Host-owned Page Registry and the flat
 `owner_id`, `page_id`, and `opened_by_action_id` `ActivePage` identity. The
 Registry protects `lensx.core`, replaces one plugin provider's complete Page
 batch atomically, and returns isolated deterministic snapshots. Private routes,
-required permission IDs, provider bookkeeping, installation facts, and Runtime
+provider bookkeeping, installation facts, and Runtime
 entries never enter `ActivePage` or presentation props.
 
 `AppNavigationService` preflights the current descriptor and availability
-before sending `ActivePage` to the single App Shell handler. Registry changes
-that remove or make the active Plugin Page unavailable cause a Host-owned close
-transition back to `home`; metadata changes that retain the same available
-identity do not close the Page. Plugins receive no React setter, navigation
-handler, Registry mutation API, renderer, or Tauri object.
+before sending `ActivePage` to the handler for the calling surface. Each window
+owns at most one active plugin instance. Opening the same Page reuses only that
+surface's current instance; opening it from main after detachment creates a new
+independent instance. Detachment transfers the existing navigation and activation
+channel without disposing or replaying it. Registry invalidation closes all
+affected instances; metadata changes retaining the same available identity do
+not close them. Plugins receive no React setter, navigation handler, Registry
+mutation API, renderer, or Tauri object.
 
 The page context resolver derives the current localized owner, Page title, and
 opening Action name from the Page resolution and Launcher Registry snapshot.
@@ -455,12 +468,13 @@ resolution ships. Display strings are not copied into `ActivePage`, so locale
 and metadata changes resolve from current facts.
 
 `lensx.core/settings` renders the trusted Host Page surface. An available
-Plugin Page renders one Host-owned slot while Rust creates the current native
+Plugin Page renders one Host-owned slot per window while Rust creates its native
 Child WebView sibling. The Host-private resolver cross-checks Page,
 Registration revision, Resource identity, isolated `entry_url`, route,
 generation, native source, and attempt. The closed bridge and Session become
-ready only for that current Child WebView. Close, retry, invalidation,
-replacement, and App teardown revoke it. Manifest `0.4.0` and Host API `0.4.0`
+ready only for that instance. Close and retry revoke the addressed instance;
+committed generation invalidation and replacement revoke its affected siblings,
+and App teardown revokes all instances. Manifest `0.4.0` and Host API `0.4.0`
 expose neither native Window methods nor Child WebView identity.
 
 Settings is rendered in the existing `main` Tauri window. A controlled vertical
@@ -598,7 +612,7 @@ registered capabilities.
 
 ## Configurable Shortcuts
 
-Rust owns v2 `shortcuts.json` independently of `AppPreferences` and
+Rust owns v3 `shortcuts.json` independently of `AppPreferences` and
 collections. Its `launcher` is one chord/double-tap trigger, not a pair of
 simultaneously configured entries. Reads return confirmed configuration, revision, per-binding runtime
 status, and bounded diagnostics. Writes compare the expected revision, validate
@@ -612,6 +626,12 @@ files are preserved and never executed; only that invalid/missing case attempts
 the default recovery chord. A valid custom recovery failure never repurposes a
 default chord assigned to an Action.
 
+The nullable `detach` chord is application-local, defaults to `Cmd+D`, and is
+not an Action or a global registration. It shares canonical conflict validation
+with Launcher and all retained Action bindings, including unavailable Actions.
+Local-monitor unavailability is reported separately and does not degrade an
+otherwise confirmed Launcher recovery entry. Clearing the binding disables detachment until another chord is assigned in Settings.
+
 Unavailable Actions retain their configuration and internal trigger ownership
 while releasing native registrations. Reappearance revalidates current targets
 and OS registration. A saved double tap without authorization remains inactive. If this is the
@@ -619,10 +639,18 @@ sole Launcher entry, the Host shows even an already-hidden window and disables
 unrecoverable hiding until the selected entry is active; it never silently
 registers a former/default chord. Healthy monitoring is preserved across gesture
 resets so ordinary hiding does not itself interrupt the recovery entry.
+Native hide and detachment consult a published snapshot of confirmed Launcher
+registration or monitor health and recording-lease expiry. A real registration
+transition, loss of recovery, sleep or shutdown revokes eligibility. Ordinary
+contention on the shortcut-service lock leaves the confirmed facts intact.
 Stored chord identities use native physical key codes. The Host supplies current
 layout labels, including Command-specific layout semantics; recording checks both
 the current semantic key and physical reserved aliases. Layout changes refresh
 labels and registration eligibility without rewriting configuration.
+On macOS the main thread reads the keyboard input source and copies its plain
+and Command translations into an owned snapshot. The monitor worker uses that
+snapshot to publish shortcut status. Key-down admission still checks the current
+layout on the main thread, and key-up releases a held chord across a layout change.
 The shared policy rejects reserved editing/system combinations and duplicates;
 registration errors cannot identify all other applications' shortcuts. Passive
 double taps have no exclusive OS reservation.
@@ -663,15 +691,24 @@ updates Recent once, independent of optional plugin callback business success.
 
 ### Shortcut Configuration Migration And Rows
 
-The Host reads a valid v1 chord-only file into an equivalent v2 view without
-rewriting it; the next successful explicit save commits v2. A valid v1 file with
+The Host reads valid v1/v2 files into a v3 projection without rewriting their
+bytes or revision; the next successful explicit save commits v3. A valid v1 file with
 both Launcher entries retains its original bytes and exposes both choices in
-`launcher_migration`. Its v2 chord placeholder is inactive. The window stays
+`launcher_migration`. Its projected chord placeholder is inactive. The window stays
 visible while the user chooses one type and saves with explicit migration
 resolution. Other writes are rejected until that choice is resolved. An
 uncertain commit is reread before clearing migration or claiming persistence.
 
-Settings uses one Launcher row (title, type, key) and Action rows (type, key,
+When an existing global Launcher or Action owns canonical `Cmd+D`, migration
+keeps that binding and projects detach as disabled. A versioned Host-owned
+`detach_migration` record preserves the unresolved choice across unrelated
+saves and restart, even if the conflicting target later changes. Only a
+confirmed explicit detach change, clear/keep-disabled choice or detach-default
+reset resolves it. The Launcher-only reset changes neither detach nor its
+pending choice; restoring detach defaults still rejects a current conflict.
+
+Settings uses one Launcher row (title, type, key), a fixed chord-only local
+detach row, and Action rows (type, key,
 Action, delete), with Add beneath the list. Drafts and inline edits remain local
 until complete explicit save. Action reassignment removes and adds IDs in one
 candidate without overwriting existing bindings. Native revision/transaction

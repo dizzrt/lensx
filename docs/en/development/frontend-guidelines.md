@@ -27,9 +27,20 @@ accessibility contract.
 ## Application Root Composition
 
 Keep `src/index.tsx` limited to one-time global style imports, React root
-creation, and `AppBootstrap`. The bootstrap must resolve persisted preferences
-before composing `AppProviders` and `App`. Do not add parallel application-level
-providers in pages or feature modules.
+creation, and `HostWindowBootstrap`. Native validation selects the trusted Host
+role before either application branch loads; URL/query text and failed probes
+must not select the main application. Main alone loads `AppBootstrap`, resolves
+persisted preferences, and then composes `AppProviders` and `App`.
+
+A detached Host root loads only its shell and presentation providers from a
+confirmed native snapshot. It mirrors confirmed locale/theme updates without
+creating another preference reader/writer, Plugin Manager, global shortcut
+registration or central dispatcher. Do not mount default-theme/default-locale
+loading providers while awaiting the role or main preferences. A failed role
+probe may show an isolated localized error fallback, but must not load main.
+Each trusted Host
+document has one root composition; pages and feature modules must not introduce
+parallel application services or nested global providers.
 
 `AppProviders` owns the established root order:
 
@@ -175,11 +186,15 @@ appearance, antialiasing, or native edge interactions.
   description.
 - Resolve page Owner and opening Action presentation before rendering the shared
   page-context view. Keep the view free of Owner-ID and Registry branches, and
-  pass it only serializable Owner name/icon and Action name display data.
+  pass its business context only as serializable Owner name/icon and Action
+  name display data. Any trailing controls come from trusted Host composition,
+  not plugin descriptors.
 - Present page context as one content-sized segmented capsule in Owner, opening
   Action, and close-button order. Owner and Action segments remain
-  non-interactive; only the adjacent Semi Design borderless close button may
-  receive focus or exclude window dragging. Resolve Owner icons through their
+  non-interactive; only the adjacent Semi Design borderless close button inside
+  that capsule may receive focus or exclude window dragging. The main plugin Page has no trailing detach button or shortcut hint.
+  On a detached window, the native title bar owns the standard window buttons
+  and the plugin fills the content rect. Resolve Owner icons through their
   dedicated Host token namespace with a generic provider fallback, never through
   an opening Action icon such as the settings gear.
 - Keep the full page-context slot transparent and draggable. Use UnoCSS only for
@@ -508,14 +523,17 @@ window, and independently scrolling right pane. Inject a typed Host-private
 `ShortcutService`; components must not call native commands or share persistence
 with theme, locale, or collections. Show confirmed bindings separately from
 runtime availability. Keep unavailable Action IDs editable and clearable; never
-invent a former title. Restore defaults requires confirmation and replaces only the System Launcher
-trigger, preserving every Feature/Action binding. Editing or restoring the
+invent a former title. The System Launcher restore-defaults action requires
+confirmation and changes only its trigger, preserving the detach binding, its
+pending migration choice and every Feature/Action binding. Editing or restoring the
 Launcher follows ordinary conflict checking; an occupied default chord must
 report its conflict instead of deleting or rewriting the occupying Action.
 
-Render peer-level `System shortcuts` and `Feature shortcuts` headings in the
-content pane; the sidebar entry remains `Shortcuts`. Omit the introductory
-paragraph and recording, unsaved-edit, or double-tap timing explanations. Editing
+Render peer-level `System shortcuts`, `In-app shortcuts` and `Feature shortcuts`
+headings in the content pane; the sidebar entry remains `Shortcuts`. The in-app
+group explains that detachment applies only to a ready main plugin Page and
+does not take over other applications or detached windows. The other groups
+omit introductory paragraphs; omit recording, unsaved-edit and double-tap timing explanations. Editing
 rows retain the right-aligned save/cancel controls, and actual save/error,
 authorization, and migration feedback stays accessible when relevant. Empty
 feedback has no reserved visible spacing.
@@ -524,6 +542,10 @@ Render one Launcher row with title, type select, and current shortcut. There is
 no separate Launcher double-tap row. Each Action row has type select, current
 shortcut, Action select, and delete control in that order. An Add button below
 the list creates a local draft; an incomplete row never enters persistence.
+The fixed detach row supports only chord recording and has no type or Action
+selector. Clear, explicit keep-disabled confirmation and its separate `Cmd+D`
+default action use the same confirmed save transaction and conflict policy;
+clearing the chord disables detachment until a chord is configured again.
 The `Restore default shortcuts` button is right-aligned at the end of the System
 shortcuts group, before its bottom divider. The `Add feature shortcut` button is
 right-aligned at the end of Feature shortcuts, before that group's bottom
@@ -547,13 +569,23 @@ a saved row uses the complete transaction and retains the row on failure.
 Escape removes an unsaved row or restores a saved row, then focuses its key cell
 or the Add button. Long labels stay within the fixed, scrollable right pane.
 
-Configuration v2 contains one Launcher trigger, either chord or modifier double
-tap. A successful type switch stops the previous trigger; there is no hidden
+Configuration v3 contains one Launcher trigger, either chord or modifier double
+tap, and an independent nullable detach chord. A successful type switch stops the previous trigger; there is no hidden
 recovery chord. A sole unavailable Launcher keeps the window visible for repair
 or quit. If the snapshot exposes unresolved `launcher_migration`, leave its type
 unselected, retain both legacy choices, and require a type choice plus explicit
 save before Action mutations. Only that save or confirmed restore-defaults sends
 `resolveLauncherMigration: true`. Do not treat its placeholder chord as active.
+
+The Host-owned `detach_migration` snapshot describes an unresolved legacy
+default conflict. Reads of v1/v2 preserve original bytes, revision and global
+bindings; an occupied default projects detach as `null`. Unrelated saves retain
+that record even if the original occupying target changes. Only a confirmed
+detach change, clear/keep-disabled choice or detach-default action sends
+`resolveDetachMigration: true`; an unconfirmed save keeps the pending choice.
+Launcher, retained Actions and non-null detach share one canonical conflict
+space. Local detach unavailability does not imply Input Monitoring denial or
+Launcher recovery degradation.
 
 Use the shared shortcut policy for immediate feedback and Rust for final
 validation. Record physical `KeyboardEvent.code`, check current `key` semantics

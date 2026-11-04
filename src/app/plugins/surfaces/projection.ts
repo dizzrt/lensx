@@ -204,8 +204,9 @@ export const createPluginSurfaceProjectionService = ({
       actions = mapPluginActionsToLauncherRegistrations(
         response.detail.manifest,
         {
-          openPage: (target, actionId, invocation) => {
-            navigationService.openPage(target, actionId, invocation);
+          openPage: (target, actionId, invocation, context) => {
+            if (context) navigationService.openPage(target, actionId, invocation, context);
+            else navigationService.openPage(target, actionId, invocation);
           },
         },
         ({ owner_id: ownerId, page_id: pageId }) => ownerId === entry.plugin_id && availablePageIds.has(pageId),

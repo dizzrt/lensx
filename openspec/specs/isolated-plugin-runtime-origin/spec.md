@@ -2,10 +2,12 @@
 
 ## Purpose
 
-Define the Host-private browser-origin boundary that gives every current plugin
-resource generation a distinct process-local origin, preserves module loading
-without relaxed CORS, partitions browser state from the Host and other
-generations, and proves those guarantees on the supported macOS WKWebView.
+
+Define the Host-private origin and source-lease boundary for current plugin
+resource generations, including shared generation origins, isolated per-instance
+browser state, module loading without relaxed CORS, permanent revocation, and
+deterministic validation of the supported native WebView behavior.
+
 ## Requirements
 
 ### Requirement: Every current resource generation MUST receive a distinct browser origin
@@ -17,8 +19,7 @@ differs from the Host, every other plugin scope, and every old generation.
 
 #### Scenario: Resolve the same current generation twice
 
-- **WHEN** the trusted Host resolves the same entry twice while its registration
-  and resource generation are unchanged
+- **WHEN** Host resolves the same entry twice and Registration, resource generation, and the scope still held by valid leases or bounded creation reservations are unchanged
 - **THEN** both results use the same opaque `entry_url`, scope, and browser
   origin
 - **THEN** an unrelated plugin revision change does not revoke that current
@@ -44,9 +45,15 @@ differs from the Host, every other plugin scope, and every old generation.
 #### Scenario: Reuse or expose a generation scope
 
 - **WHEN** a generation scope is allocated, resolved, validated, reused, or used at a boundary
-- **THEN** Repeated resolution of the same generation MUST reuse the same scope and origin.
+- **THEN** While a valid scope for the same generation remains live, repeated resolution and multiple instances MUST reuse the same scope and origin; window detachment alone or closing some instances MUST NOT change that origin.
 - **THEN** The scope MUST NOT be persisted, returned separately, written to an event or log, or added to a public contract.
 - **THEN** The origin authority and URL path MUST contain the same scope and MUST be cross-validated exactly.
+
+#### Scenario: Reopen after the final instance lease ends
+
+- **WHEN** the generation's final valid source lease and creation reservation are released and the user subsequently opens the plugin again
+- **THEN** the old scope and origin MUST be permanently retired, and subsequent creation MUST use a new unpredictable scope and origin
+- **THEN** equality of plugin, version, or generation values MUST NOT reauthorize a retired URL, browser data container, or old source
 
 ### Requirement: Isolated origin URLs MUST use one strict Host-owned grammar
 
@@ -175,8 +182,8 @@ guarantee.
 - **THEN** Every plugin descendant MUST lack `isTauri`, `__TAURI_INTERNALS__`, metadata, the invoke key, and IPC bootstrap before the earliest author script, and a representative invoke MUST NOT reach the Rust handler.
 - **THEN** Origin and scope data, the URL parser, Resource adapter, navigation lease, and harness internals MUST remain Host-private and MUST NOT enter the Manifest, public packages, plugin messages, or bounded diagnostics.
 
-### Requirement: Every isolated origin MUST be bound to one actual current Child WebView
-The Host MUST derive a distinct origin and data-store identity for every current resource generation before Child WebView creation. Resource and navigation access MUST additionally match the actual current WebView label/handle and Runtime attempt; the origin alone MUST NOT authorize a Host WebView, remote document, old WebView or another plugin. The public plugin surface MUST NOT reveal origin tokens or data-store identifiers.
+### Requirement: Every isolated origin MUST authorize only explicitly bound current Child WebView instances
+Host MUST derive a distinct Runtime attempt, actual native source, and browser data-store identity for every running instance, and bind its valid lease to the corresponding generation's shared origin. Resource and navigation authorization MUST jointly validate the native source, attempt, and lease; the origin alone cannot authorize the Host, remote documents, old instances, or unbound instances. Public plugin interfaces MUST NOT expose origin tokens, data stores, or instance identifiers.
 
 #### Scenario: Current Child WebView loads its module graph
 - **WHEN** the actual current Child WebView requests the exact entry and same-generation package resources
@@ -186,3 +193,21 @@ The Host MUST derive a distinct origin and data-store identity for every current
 #### Scenario: An old WebView reuses a current origin URL
 - **WHEN** a destroyed or replaced WebView requests a syntactically current resource URL
 - **THEN** source binding rejects the request without revealing whether the scope exists
+
+#### Scenario: Instances of the same plugin share a generation but not browser state
+
+- **WHEN** A and B with the same plugin/Page/generation run concurrently and each writes browser storage keys with the same names or establishes in-page state
+- **THEN** the two instances MUST use distinct data-store identities and independent documents, Sessions, Workers, and business memory; an identical origin string cannot merge their running instances
+- **THEN** Host `storage.*` continues to share a persistent namespace by plugin identity; browser storage isolation MUST NOT be interpreted as changing that public storage contract or providing automatic cross-window synchronization
+
+#### Scenario: A closed source reuses an origin that remains valid for a sibling
+
+- **WHEN** A has terminated, B continues running with the shared origin for the same generation, and A or another unbound source requests a valid URL
+- **THEN** source and lease validation MUST reject the request; B's continued existence cannot renew A's authority
+- **THEN** B's legitimate module, resource, and Worker requests MUST continue to succeed under B's own source
+
+#### Scenario: Detachment changes window ownership while preserving browser identity
+
+- **WHEN** Host transfers the current instance to a new detached window without changing its WebView, attempt, or generation
+- **THEN** the original origin, source lease, and data-store identity MUST remain continuous; browser storage, document, and Session MUST NOT be rebuilt because of detachment
+- **THEN** Host MUST update only trusted window ownership; the plugin cannot select the new window or copy that authority to a second source

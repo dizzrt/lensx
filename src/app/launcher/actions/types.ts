@@ -55,7 +55,15 @@ export interface LauncherActionInvocation {
   readonly source: 'normal' | 'shortcut';
 }
 
-export type LauncherActionExecutor = (invocation: LauncherActionInvocation) => Promise<void> | void;
+/** Host-private caller routing; never part of an Action descriptor or public activation. */
+export interface LauncherActionExecutionContext {
+  readonly runtimeAttemptId: string;
+}
+
+export type LauncherActionExecutor = (
+  invocation: LauncherActionInvocation,
+  context?: LauncherActionExecutionContext,
+) => Promise<void> | void;
 
 export interface LauncherActionRegistrationInput {
   readonly descriptor: unknown;

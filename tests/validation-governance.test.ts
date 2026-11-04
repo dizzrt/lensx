@@ -110,6 +110,39 @@ describe('validation Gate governance', () => {
     ]);
   });
 
+  test('composes detached-window acceptance from deterministic capability Gates without a root alias', () => {
+    const plan = planGates(validationRegistry, ['plugin-detached-windows']);
+    expect(plan.gateIds.at(-1)).toBe('plugin-detached-windows');
+    for (const dependency of [
+      'plugin-child-webview-window-lifecycle',
+      'plugin-child-webview-continuity',
+      'plugin-child-webview-session',
+      'plugin-child-webview-runtime',
+      'plugin-child-webview-resource-binding',
+      'isolated-plugin-runtime-origin',
+      'plugin-host-api-dispatcher',
+      'plugin-host-http',
+      'plugin-scoped-storage',
+      'launcher-input-focus',
+      'launcher-shortcuts',
+      'plugin-development-mode',
+      'frame-aware-navigation-dependency-drift',
+    ]) {
+      expect(plan.gateIds).toContain(dependency);
+    }
+    expect(rootScripts).not.toHaveProperty('plugin-detached-windows');
+    expect(rootScripts).not.toHaveProperty('check:plugin-detached-windows');
+    expect(rootScripts).not.toHaveProperty('add-detachable-plugin-windows');
+    expect(plan.steps.some((step) => step.argv.includes('plugin_detached'))).toBe(true);
+    expect(plan.steps.some((step) => step.argv.includes('tests/plugin-detached-official-plugins.test.ts'))).toBe(true);
+    for (const step of plan.steps) {
+      expect(step.safety).toEqual({ readOnly: true, writesCommittedArtifacts: false });
+      expect(isProhibitedEnvironmentCommand(step.description), step.description).toBe(false);
+      expect(step.description).not.toContain('&&');
+      expect(step.description).not.toMatch(/pnpm run (?:gate|generate|evidence)\b/u);
+    }
+  });
+
   test('prepares the CLI transitive workspace dependency before LensX type checking', () => {
     const descriptions = planGates(validationRegistry, ['ci-lensx-typecheck']).steps.map((step) => step.description);
     const contractBuild = 'pnpm --dir packages/plugin-contract run build';

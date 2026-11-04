@@ -1,6 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 
-export const PLUGIN_CHILD_WEBVIEW_SLOT_CONTRACT_VERSION = '0.1.0' as const;
+import { type PluginChildWebviewOwner, serializePluginChildWebviewOwner } from './pluginChildWebviewOwner';
+
+export const PLUGIN_CHILD_WEBVIEW_SLOT_CONTRACT_VERSION = '0.2.0' as const;
 export const UPDATE_PLUGIN_CHILD_WEBVIEW_SLOT_COMMAND = 'update_plugin_child_webview_slot' as const;
 
 export interface PluginChildWebviewPhysicalBounds {
@@ -12,6 +14,7 @@ export interface PluginChildWebviewPhysicalBounds {
 
 export interface PluginChildWebviewSlotUpdate {
   readonly attemptId: `attempt_${string}`;
+  readonly owner: PluginChildWebviewOwner;
   readonly scaleFactor: number;
   readonly physicalBounds: PluginChildWebviewPhysicalBounds;
   readonly presentationRevision: bigint;
@@ -111,14 +114,14 @@ const validResponse = (value: unknown, revision: string): boolean => {
 export const createPluginChildWebviewSlotController = (
   invokeCommand: SlotInvoke = invoke,
 ): PluginChildWebviewSlotController => ({
-  update: async ({ attemptId, scaleFactor, physicalBounds, presentationRevision }) => {
+  update: async ({ attemptId, owner, scaleFactor, physicalBounds, presentationRevision }) => {
     if (presentationRevision <= 0n) throw new TypeError('Plugin Child WebView slot revision is invalid.');
     const revision = presentationRevision.toString();
     const response = await invokeCommand(UPDATE_PLUGIN_CHILD_WEBVIEW_SLOT_COMMAND, {
       request: {
         contract_version: PLUGIN_CHILD_WEBVIEW_SLOT_CONTRACT_VERSION,
         attempt_id: attemptId,
-        window_label: 'main',
+        ...serializePluginChildWebviewOwner(owner),
         surface_mode: 'page',
         scale_factor: scaleFactor,
         physical_bounds: physicalBounds,

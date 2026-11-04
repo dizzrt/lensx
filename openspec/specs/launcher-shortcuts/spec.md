@@ -2,17 +2,20 @@
 
 ## Purpose
 
-Define user-owned lensX shortcut bindings so key combinations and modifier double taps can reliably open the application or execute an Action, with explicit reserved-key protection, internal uniqueness, system authorization, failure recovery, and persistence boundaries.
+
+Define user-owned global Launcher and Action shortcuts and the application-local
+plugin-detachment chord, including canonical conflicts, reserved-key protection,
+recording, migration, confirmed persistence, precise native routing, and recovery.
 
 ## Requirements
 
 ### Requirement: Shortcut bindings MUST have explicit targets and supported trigger kinds
 
-The system MUST support opening lensX and stable Action IDs as targets, with chord or single-modifier double-tap triggers. The Launcher MUST have exactly one selected trigger, defaulting to Ctrl+Shift+Space. Saving a different kind MUST deactivate the previous entry without retaining a hidden fallback chord. Each Action MUST have at most one clearable binding.
+Host MUST support global chords or single-modifier double taps for Launcher and stable Action IDs. Launcher MUST have one trigger (default `Ctrl+Shift+Space`); type changes disable the old entry without fallback. Each Action has at most one clearable binding. Configuration v3 MUST add nullable application-local `detach` (default `Cmd+D`), never a global registration, Action target or public plugin capability.
 
 #### Scenario: First launch and existing-user migration
 - **WHEN** no shortcut configuration exists
-- **THEN** configuration v2 has one Launcher chord `Ctrl+Shift+Space` and empty Action bindings
+- **THEN** configuration v3 MUST contain Launcher chord `Ctrl+Shift+Space`, empty Action bindings, and application-local `detach` chord `Cmd+D`
 - **THEN** theme, locale, plugin configuration, and existing collections remain unchanged
 
 #### Scenario: Configure a supported double tap
@@ -30,9 +33,15 @@ The system MUST support opening lensX and stable Action IDs as targets, with cho
 - **THEN** it contains one supported primary key and at least one of `Cmd`, `Ctrl`, or `Option`, with optional `Shift`
 - **THEN** bare characters, Shift-only character combinations, missing or multiple primary keys, unknown keys, and extra fields are rejected
 
+#### Scenario: Change or clear the detach shortcut
+- **WHEN** the user saves a supported chord for the detach command or clears its binding in settings
+- **THEN** after complete validation and confirmed persistence, the system MUST enable only the new chord, or save `detach` as `null` and disable the shortcut entry
+- **THEN** clearing the detach shortcut MUST disable shortcut detachment and preserve the Launcher recovery entry and existing Action bindings
+- **THEN** the detach target MUST NOT accept modifier double taps, bare characters, macros, multiple primary keys, or extra fields
+
 ### Requirement: Canonical shortcut identity MUST be unique across all configured targets
 
-The system MUST deduplicate the single Launcher trigger and all Action bindings after normalization. Modifier order, case, and supported aliases MUST NOT create different identities. Retained unavailable Action bindings MUST continue to occupy their trigger and Action ID until cleared.
+Launcher, Action and non-null `detach` bindings MUST share canonical uniqueness regardless of execution scope, modifier order, case or aliases. Unavailable Actions MUST reserve their trigger and ID until cleared. Migration conflicts with default detach MUST preserve the old global binding and set `detach` to `null`, never configuring two targets for one chord.
 
 #### Scenario: Equivalent spellings identify one chord
 - **WHEN** two targets submit equivalent `Cmd+Shift+K` and `Shift+Command+k` combinations
@@ -44,8 +53,13 @@ The system MUST deduplicate the single Launcher trigger and all Action bindings 
 - **THEN** the duplicate is rejected; left and right Cmd do not bypass uniqueness
 
 #### Scenario: Edit an existing binding
-- **WHEN** the user saves the same canonical binding for the same target in a current v2 configuration without pending migration
+- **WHEN** the user saves the same canonical binding for the same target in current v3 configuration with no unresolved migration
 - **THEN** the system treats it as unchanged, without a self-conflict or repeated registration
+
+#### Scenario: Conflicts between detach and global bindings in either direction
+- **WHEN** the user saves the detach shortcut as a canonical chord already occupied by the Launcher or a retained Action, or saves a global binding as the current detach chord
+- **THEN** the save MUST be rejected, and readable bilingual feedback MUST identify the occupying target
+- **THEN** existing configuration and effective bindings MUST remain unchanged; the system MUST NOT bypass uniqueness based on scope, current plugin availability, or window visibility
 
 ### Requirement: Reserved operating-system and common editing shortcuts MUST be rejected
 
@@ -114,7 +128,7 @@ The system MUST execute double taps only while passive monitoring is authorized 
 
 ### Requirement: Shortcut persistence MUST report confirmed state and compensating failures
 
-Rust MUST serialize validation, registration, unregistration, and versioned shortcut persistence. Success MUST return confirmed persisted configuration and per-binding runtime status. Chords for available targets MUST complete registration before success; unauthorized double taps and unavailable Action targets MAY persist as explicitly inactive. Failures MUST return safe errors, and failed compensation MUST report degradation. An old file alone MUST NOT prove recovery.
+Rust MUST serialize validation, global registration, local detach updates and versioned persistence. Success MUST return confirmed config/status: available global chords registered; unauthorized double taps or unavailable Actions explicitly inactive. Detach MUST use only local execution, without global registration or Input Monitoring. Failures MUST be safe; failed compensation MUST report degradation. The old file alone cannot prove recovery.
 
 #### Scenario: Successfully change the recovery chord
 - **WHEN** a new chord is valid and registrable, the old chord can be released, and configuration can be written completely
@@ -141,9 +155,15 @@ Rust MUST serialize validation, registration, unregistration, and versioned shor
 - **THEN** configuration is retained, repair and quit remain visible, and unrecoverable hiding is disabled
 - **THEN** the system does not automatically register or retarget the default chord, even when that chord is validly assigned to an Action
 
+#### Scenario: Application-local detach configuration commit fails
+- **WHEN** detach-chord validation, application-local execution-boundary update, or configuration commit fails
+- **THEN** the system MUST compensate uncommitted effects, retain or reconfirm the original configuration, and must not display the candidate chord as effective
+- **THEN** an unavailable detach entry MUST NOT be misreported as another application occupying the chord, missing Input Monitoring authorization, or loss of Launcher recovery
+- **THEN** currently effective global Launcher/Action bindings MUST retain their existing state; unconfirmed local detach state MUST be shown explicitly without silently substituting another shortcut
+
 ### Requirement: Shortcut recording MUST suspend target execution with bounded native ownership
 
-Recording MUST retain native registrations but suspend all user-configurable target execution under the current Host recording session. Cancellation, blur, hide, Host invalidation, exit, or bounded expiry MUST revoke recording independently of frontend cleanup. Reserved close and quit commands MUST retain existing semantics.
+Recording MUST retain global registrations but suspend all configurable targets, including detach, under a bounded Host lease. Cancel, recording-window blur/hide, Host loss, exit or expiry MUST revoke it natively without frontend cleanup. Reserved close/quit MUST still use actual focus to select main Hide, detached Close or application Quit.
 
 #### Scenario: Record an already-bound shortcut
 - **WHEN** the user records an already-bound chord
@@ -154,6 +174,12 @@ Recording MUST retain native registrations but suspend all user-configurable tar
 - **WHEN** the user presses Cmd+W/Q, the window blurs or hides, the recording page/Host is invalidated, or the recording session expires
 - **THEN** the native boundary revokes recording and clears candidates while reserved commands execute their existing foreground semantics
 - **THEN** configured execution resumes after current keys are released, without replaying old candidates or ending events
+
+#### Scenario: Record the current detach chord
+- **WHEN** the user presses the currently configured detach chord in a valid shortcut-recording session
+- **THEN** the gesture MUST produce only candidate feedback, without detaching the current instance or triggering a global target with the same chord
+- **THEN** after recording is cancelled, completed, or invalidated, configured execution MUST wait until current keys are released before resuming, without replaying old keys or ending events
+- **THEN** application-local chord recording MUST NOT require system-wide monitoring authorization
 
 ### Requirement: Action shortcut delivery MUST use current targets and bounded invocation handling
 
@@ -181,26 +207,84 @@ A dedicated shortcut MUST show and activate lensX, then execute the current avai
 
 ### Requirement: Versioned Launcher migration MUST preserve unresolved user choice
 
-Configuration v2 MUST represent one `launcher` trigger. Reads MUST NOT rewrite legacy files. A valid v1 chord-only configuration MAY project losslessly to v2. When valid v1 contains both Launcher entries, the Host MUST retain both choices and the original file, require explicit selection, and keep the window visible. Other configuration writes MUST NOT silently choose or discard a legacy entry.
+V3 MUST retain one `launcher` trigger, original Action bindings and nullable detach. Reading v1/v2 MUST preserve files and global bindings. One v1 chord projects losslessly; two Launcher entries MUST retain both choices and the file, require explicit selection and keep main visible. Default detach MUST pass conflict validation. Migration and later writes MUST NOT silently choose, override or discard old bindings.
 
 #### Scenario: Read and save a chord-only v1 file
 - **WHEN** the existing v1 file contains a chord and no Launcher double tap
-- **THEN** the Host exposes the same chord and Action bindings in v2 without rewriting the file during read
-- **THEN** a later explicit successful save commits v2, even if its semantic bindings are unchanged
+- **THEN** Host MUST preserve the same chord and Action bindings in the v3 projection and populate `detach` according to the detach-default migration rules, without rewriting the file on read
+- **THEN** a later explicit successful save MUST commit v3 even when existing global-binding semantics are unchanged
 
 #### Scenario: Resolve a v1 file with two Launcher entries
 - **WHEN** a valid v1 file contains both a chord and a Launcher double tap
 - **THEN** the snapshot exposes `launcher_migration` with both validated choices and the Launcher as degraded, with no active Launcher trigger or automatic fallback
 - **THEN** the window remains visible and settings require a type selection and explicit save before allowing other configuration writes
-- **THEN** only the selected entry is committed as the v2 Launcher and activated according to its actual availability; the other entry is not kept as a hidden shortcut
+- **THEN** only the selected entry MUST be committed as the v3 Launcher and activated according to actual availability; the other entry MUST NOT remain as a hidden shortcut
 
 #### Scenario: A migration commit fails or has an uncertain result
 - **WHEN** an explicit migration save fails
-- **THEN** the old file and unresolved choices remain unless rereading storage confirms the v2 candidate was committed
-- **THEN** a confirmed v2 commit clears migration facts even when the operation must still report an I/O failure; unconfirmed storage retains degraded recovery
+- **THEN** the original file and unresolved choice MUST be preserved unless rereading storage confirms that the candidate v3 configuration committed
+- **THEN** a confirmed v3 commit MUST clear resolved migration facts even if the operation must still report an I/O failure; unconfirmed storage MUST retain the corresponding unresolved state, and an unresolved Launcher choice continues to imply degraded recovery
 
 #### Scenario: Restore defaults during unresolved migration
 - **WHEN** the user explicitly confirms restoring shortcut defaults
 - **THEN** the same full transaction may resolve migration with the default Launcher chord while preserving all existing Action bindings
 - **THEN** an Action occupying the default chord causes a conflict instead of being removed or reassigned
 - **THEN** failure retains confirmed state and never claims completion
+
+#### Scenario: Migrate v2 when the default detach chord is unoccupied
+- **WHEN** no Launcher or retained Action in valid v2 configuration uses canonical `Cmd+D`
+- **THEN** the v3 projection MUST fully preserve the old revision and Launcher and Action bindings, setting `detach` to application-local `Cmd+D`
+- **THEN** the system MUST NOT rewrite the old file on read; only a later explicit successful save commits v3
+
+#### Scenario: The default detach chord conflicts with an existing global binding
+- **WHEN** the Launcher, a retained Action, or an unresolved valid Launcher choice in valid v1/v2 configuration already occupies canonical `Cmd+D`
+- **THEN** the system MUST preserve the old binding and its previously confirmable effective state, project `detach` as `null`, and show actionable feedback identifying the specific target conflicting with the detach default
+- **THEN** the system MUST NOT delete, reassign, or suspend the original global binding, enable a substitute detach chord, or treat valid old configuration as damaged and fall back
+- **THEN** the user MUST be able to explicitly select an unoccupied detach chord or confirm leaving the detach shortcut disabled; unresolved feedback MUST NOT silently disappear after an unrelated save
+- **THEN** a conflict involving only the detach default MUST NOT degrade a still-valid Launcher recovery entry; existing unresolved v1 dual-entry rules continue to apply
+
+#### Scenario: Restore the detach default
+- **WHEN** the user explicitly restores the detach shortcut to `Cmd+D`
+- **THEN** the system MUST revalidate conflicts through the same complete transaction, preserving all confirmed bindings and identifying the occupying target on conflict
+- **THEN** the existing operation that restores only the Launcher system shortcut MUST NOT reset detach or delete Action bindings
+
+### Requirement: The application-local detach shortcut MUST execute only in a trusted eligible main window
+
+Detach MUST require foreground lensX, actual main key Window and its ready detachable instance. Modal overlays, recording, IME composition, unconfirmed Launcher recovery or `recovery_required` MUST block admission. Native window/current-instance facts MUST select the target, never plugin, DOM or shortcut claims. Host MUST consume eligible gestures before plugin handling; other apps and ineligible windows retain native events.
+
+#### Scenario: Detach while the Child WebView has focus
+- **WHEN** the current main-window plugin is ready and meets every detach condition, no trusted modal, recording, or incomplete input-method composition exists, Host chrome or that instance's Child WebView holds current valid focus, and the user presses the configured detach chord
+- **THEN** Host MUST submit one detach operation for the current instance and consume the original key event once; the plugin must not also handle that gesture
+- **THEN** default `Cmd+D` MUST give the user-selected Host detach semantics priority over Monaco or other plugin functions on the same chord
+- **THEN** the operation MUST NOT depend on React DOM receiving Child keyboard events, and must require neither a plugin SDK update nor additional authorization
+
+#### Scenario: Pass through events in ineligible states
+- **WHEN** a new physical key gesture not yet taken over by Host arrives while another application is foreground, actual focus is in Home, Search, a Host Page, a detached plugin window, an invalidated or unready instance, or no valid `detach` binding exists
+- **THEN** the detach command MUST NOT execute, activate, or focus any window, and MUST preserve normal propagation of the original event
+- **THEN** `Cmd+D` in a detached plugin window MUST remain available for the plugin's own keyboard semantics, without cloning or detaching the instance again
+
+#### Scenario: Repeated events and reentrant detachment
+- **WHEN** a physical key gesture produces auto-repeat or duplicate delivery, or another detach request arrives before the same instance's detach transaction terminates
+- **THEN** the system MUST admit at most one detach transaction, without creating a second window, repeating migration, or replaying an Action
+- **THEN** repeated events from a gesture already taken over by Host MUST NOT leak as a second same-chord plugin operation; an unavailable event with no previously admitted gesture MUST NOT be consumed as successful detachment
+- **THEN** transaction results and errors MUST remain bound to the instance and window at admission; an invalidated target must not cause a replacement instance to be detached instead
+
+#### Scenario: Overlays recording and input-method composition prevent detachment
+- **WHEN** main contains Settings or a confirmation modal, shortcut recording, or incomplete input-method composition, and the user presses the detach chord
+- **THEN** Host MUST NOT migrate the window, interrupt composition, or bypass the overlay; keys continue through the existing modal, recording, or input-method boundary
+- **THEN** a new detach gesture may be admitted only after the conditions clear and the source remains valid; rejected old events are not replayed
+
+#### Scenario: Recovery-required state blocks repeated detachment while retaining terminal controls
+- **WHEN** the current instance retains `recovery_required` context and the user presses the detach chord again or invokes a local close/quit command
+- **THEN** Host MUST admit no repeated detachment, create no new token/window, and replay no Action; repeated events from an already admitted gesture must not become a second same-chord plugin operation
+- **THEN** main-window local `Cmd+W` MUST NOT hide the recovery entry; explicit instance close and foreground `Cmd+Q` MUST remain executable through the original attempt/token terminal boundary, without being blocked by recovery waits or repeated D
+
+### Requirement: Detach shortcut settings MUST clearly distinguish application-local and global scopes
+
+Settings MUST provide a fixed application-local detach-command row supporting chord recording, editing, clearing, and restoring the default, and display confirmed bindings, scope, reasons for unavailability, and conflict targets. All new copy MUST use application i18n with English as the default and Simplified Chinese, preserving light and dark themes, keyboard operation, accessible names, and focus recovery after saving.
+
+#### Scenario: Edit the detach binding
+- **WHEN** the user opens shortcut settings and edits the detach command
+- **THEN** the row MUST clearly state that only the current Launcher plugin Page can be detached, and must not expose a replaceable Action target or modifier double-tap option
+- **THEN** feedback before and after saving MUST distinguish candidate values, confirmed configuration, and actual execution availability; conflicts or failures must not present an uncommitted candidate as active
+- **THEN** keyboard and assistive-technology users MUST be able to clear, change or restore the detach chord in Settings. The main plugin Page displays no detach button or shortcut hint

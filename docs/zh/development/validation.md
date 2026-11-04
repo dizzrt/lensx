@@ -38,6 +38,36 @@ pnpm run generate -- plugin-manifest-types --write
 
 不得为 Change、测试子集或 Gate 转发新增根 alias。
 
+## 插件独立窗口验证
+
+```bash
+pnpm run gate -- plugin-detached-windows
+```
+
+该只读 capability Gate 组合 window-lifecycle、continuity、Session、runtime、resource-binding、
+isolated-origin、Host dispatcher、HTTP、scoped-storage、input-focus、shortcuts、development-mode、
+dependency-drift 与 contract-documentation Gates。typed dispatcher 对共享步骤去重，不新增功能专用
+根脚本或 baseline 写入。
+
+定向 Rstest 覆盖可信 main/detached composition、严格控制面解析与 ACL、快捷键分离、本地化恢复控件及独立窗口的全内容区几何，
+以及官方插件的既有 handler。Cargo 用例执行生产 registry、迁移/恢复协调器、shell broker 与按 owner
+隔离的生命周期。多实例序列依次分离 A₁、A₂，在 main 打开 B，关闭 A₁，交付 A₂ 的原请求，令插件
+generation 失效并退出；断言检查实际 owner、请求、scope、保留的恢复上下文与清理，而非只记录调用。
+恢复分支覆盖明确重试、关闭、generation 失效与 Quit，不重载或重放 activation。
+
+ConfigLens、Translation 测试与纯 CLI 产物检查验证既有业务行为和公共包边界。Development Mode
+检查覆盖已提交重载的 fanout 与 staging 失败保留。无需新增 SDK 方法、Manifest 字段或插件专用分离 hook。
+
+| 证据 | 可以证明 | 不能证明 |
+| --- | --- | --- |
+| 生产 Rust 策略与可控 native adapter | owner、deadline、回滚/恢复、精确实例清理与资源生命周期 | 实际 AppKit 事件顺序、IME composition 或原生 responder 恢复 |
+| 真实前端/SDK/插件 handler 与可控 transport | 状态连续性、响应路由、上下文更新、UI 操作与声明的 DOM 行为 | 实际 WebKit 调度、原生默认行为或真实网络服务交付 |
+| 锁定 Cargo check/build 与已审阅 vendor 策略测试 | adapter 集成、固定 API 与确定性原生策略 | 运行中的桌面窗口交互成功 |
+| pack/inspect 与临时 CLI consumer | 公共 export、自包含产物与不变的插件契约 | 在真实 WebView 中安装或执行 |
+
+Gate 不启动 GUI，也不提供手工兼容路径。定向结果补充上文完整 workspace 和 Rust 验证命令。
+vendor 变更须先审阅 diff 并显式运行 dependency-drift Generate target，再执行只读 Gate。
+
 ## 统一开发启动器验证
 
 ```bash
@@ -399,10 +429,13 @@ macOS 授权对话框、OS 键盘交付、真实系统安全输入切换，或�
 双击是被动且非独占的。仅通过 Generate 的 `plugin-host-api-types --write` 更新当前 Schema
 派生文件，保留历史 WebView corpus。定向 Gate 不替代完整 workspace 与 Rust 验证。
 
-快捷键矩阵同时覆盖 v2 单入口类型切换、v1 单组合键无损读取、旧双入口待选择迁移与明确保存、唯一
+快捷键矩阵同时覆盖 v3 应用内分离 chord、v1/v2 只读投影、v1 单组合键无损读取、旧双入口待选择迁移与明确保存、唯一
 双击权限失效后的窗口显示，以及不存在隐藏组合键回退。真实 Semi 行式测试覆盖新增草稿、Action
-原子改绑、已保存/草稿删除、行内编辑、Escape、焦点与迟到响应，并覆盖两种语言和主题。上述仍为
-确定性测试，不代表原生输入验收。
+原子改绑、已保存/草稿删除、行内编辑、Escape、焦点与迟到响应，并覆盖两种语言和主题。还覆盖保留
+既有全局 `Cmd+D`、跨无关保存保留待决分离冲突、明确关闭/恢复默认选择、本地独立可用性、双向
+canonical 冲突及不将 detach 注册为全局命令。生产局部事件策略测试覆盖真实 key-window/实例捕获、组合输入与
+录制拒绝、已接管重复事件直至释放、过期 W 目标和按序清理全部实例的 Q。上述仍为确定性测试，
+不代表原生输入验收。
 
 观察线程等待测试注入时钟、run loop 返回值与 sleeper，覆盖无输入源和提前返回、已完成等待不重复
 休眠、连续空闲轮询，以及静默确认前的输入取消。它们验证 10 毫秒等待预算，不使用墙钟性能断言或

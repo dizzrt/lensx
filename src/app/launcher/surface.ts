@@ -1,4 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
+import {
+  type PluginChildWebviewOwner,
+  serializePluginChildWebviewOwner,
+} from '../plugins/runtime/pluginChildWebviewOwner';
 
 export const SET_LAUNCHER_SURFACE_MODE_COMMAND = 'set_launcher_surface_mode';
 
@@ -15,8 +19,22 @@ export type LauncherSurfaceTarget =
       readonly resizable: boolean;
     };
 
+export interface LauncherSurfaceLease {
+  readonly hostEpoch: string;
+  readonly intentEpoch: string;
+}
+export interface LauncherSurfaceBinding {
+  readonly attemptId: string;
+  readonly owner: PluginChildWebviewOwner;
+}
 export interface LauncherSurfaceController {
-  setPresentationState: (target: LauncherSurfaceTarget) => Promise<void>;
+  prepareNavigation?: () => Promise<LauncherSurfaceLease>;
+  suspend?: () => void;
+  setPresentationState: (
+    target: LauncherSurfaceTarget,
+    lease?: LauncherSurfaceLease,
+    binding?: LauncherSurfaceBinding | null,
+  ) => Promise<void>;
 }
 
 export type TauriSurfaceInvoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
@@ -93,12 +111,64 @@ export const createTauriLauncherSurfaceController = (
   invokeCommand: TauriSurfaceInvoke = invoke,
 ): LauncherSurfaceController => {
   let resizeChain = Promise.resolve();
-
+  let epochRequest: Promise<string> | undefined;
+  let navigationRevision = 0n;
+  let presentationRevision = 0n;
+  let currentLease: LauncherSurfaceLease | undefined;
+  const version = '0.1.0';
+  const exact = (value: unknown, keys: readonly string[]) => {
+    if (!isRecord(value) || !hasExactKeys(value, keys) || value.contract_version !== version)
+      throw new TypeError('Main presentation state is invalid.');
+    return value;
+  };
+  const revision = (value: unknown): value is string =>
+    typeof value === 'string' && /^[1-9][0-9]{0,19}$/u.test(value) && BigInt(value) <= 18_446_744_073_709_551_615n;
   return {
-    setPresentationState: (candidate) => {
+    async prepareNavigation() {
+      const requestRevision = ++navigationRevision;
+      currentLease = undefined;
+      epochRequest ??= invokeCommand('read_main_surface_epoch', { request: { contract_version: version } }).then(
+        (raw) => {
+          const response = exact(raw, ['contract_version', 'host_epoch']);
+          if (!revision(response.host_epoch)) throw new TypeError('Main presentation epoch is invalid.');
+          return response.host_epoch;
+        },
+      );
+      const hostEpoch = await epochRequest;
+      const response = exact(
+        await invokeCommand('begin_main_surface_intent', {
+          request: {
+            contract_version: version,
+            host_epoch: hostEpoch,
+            navigation_revision: requestRevision.toString(),
+          },
+        }),
+        ['contract_version', 'host_epoch', 'intent_epoch'],
+      );
+      if (response.host_epoch !== hostEpoch || !revision(response.intent_epoch))
+        throw new TypeError('Main presentation intent is invalid.');
+      const lease = Object.freeze({ hostEpoch, intentEpoch: response.intent_epoch });
+      if (requestRevision === navigationRevision) currentLease = lease;
+      return lease;
+    },
+    suspend() {
+      currentLease = undefined;
+      ++navigationRevision;
+    },
+    setPresentationState(candidate, lease, binding = null) {
       const target = validateLauncherSurfaceTarget(candidate);
+      if (!lease) return Promise.reject(new TypeError('Main presentation lease is unavailable.'));
+      const request = {
+        contract_version: version,
+        host_epoch: lease.hostEpoch,
+        intent_epoch: lease.intentEpoch,
+        presentation_revision: (++presentationRevision).toString(),
+        binding: binding ? { attempt_id: binding.attemptId, ...serializePluginChildWebviewOwner(binding.owner) } : null,
+        target,
+      };
       const resizeRequest = resizeChain.then(async () => {
-        await invokeCommand(SET_LAUNCHER_SURFACE_MODE_COMMAND, { target });
+        if (currentLease !== lease) return;
+        await invokeCommand(SET_LAUNCHER_SURFACE_MODE_COMMAND, { request });
       });
       resizeChain = resizeRequest.then(
         () => undefined,

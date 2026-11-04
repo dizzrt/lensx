@@ -177,6 +177,252 @@ describe('Plugin Runtime lifecycle controller', () => {
     expect(recreated.isCoolingDown(recreated.ensureRecord(...identity))).toBe(false);
   });
 
+  test('aggregates sibling failures without letting a healthy or detached instance bypass cooldown', async () => {
+    const scheduler = new VirtualScheduler();
+    const lifecycle = createPluginRuntimeLifecycleService({ scheduler });
+    const trustedIdentity = { entryId: identity[0], generation: identity[1] };
+    const failures = rs.fn();
+    const healthy = await lifecycle.start({
+      targetKey,
+      trustedIdentity,
+      surfaceId: 'detached-healthy',
+      onFailure: failures,
+    });
+    if (!healthy) throw new Error('healthy instance should start');
+    healthy.markReady();
+    for (let index = 0; index < 3; index++) {
+      const failing = await lifecycle.start({ targetKey: `page-${index}`, trustedIdentity, onFailure: failures });
+      if (!failing) throw new Error('failing instance should start');
+      await failing.fail('runtime_load_timeout');
+      await failing.fail('runtime_load_timeout');
+      healthy.markReady();
+      if (index < 2) scheduler.advance(29_000);
+    }
+    expect(failures.mock.calls.map(([code]) => code)).toEqual([
+      'runtime_load_timeout',
+      'runtime_load_timeout',
+      'runtime_crash_loop',
+    ]);
+    expect(healthy.isCurrent()).toBe(true);
+    const transferred = await lifecycle.transfer(healthy.key, healthy.currentOwner(), 'detached-moved', rs.fn());
+    expect(transferred).toBeDefined();
+    expect(
+      await lifecycle.start({ targetKey: 'previously-unopened-page', trustedIdentity, onFailure: failures }),
+    ).toBeUndefined();
+    scheduler.advance(29_999);
+    expect(await lifecycle.start({ targetKey: 'another-page', trustedIdentity, onFailure: failures })).toBeUndefined();
+    scheduler.advance(1);
+    expect(lifecycle.getCurrent()).toBeUndefined();
+    expect(healthy.isCurrent()).toBe(true);
+    const retry = await lifecycle.start({ targetKey: 'another-page', trustedIdentity, onFailure: failures });
+    expect(retry?.isCurrent()).toBe(true);
+    await lifecycle.dispose();
+    expect(scheduler.timerCount).toBe(0);
+  });
+
+  test('healthy reset requires one continuously ready instance and retains bookkeeping for later failures', () => {
+    const scheduler = new VirtualScheduler();
+    const breaker = new PluginRuntimeCircuitBreaker(scheduler);
+    const key = breaker.ensureRecord(...identity);
+    breaker.recordFailure(key, 'runtime_load_timeout');
+    breaker.recordFailure(key, 'runtime_load_timeout');
+    const stopOldest = breaker.beginHealthyWindow(key);
+    scheduler.advance(29_000);
+    const stopSibling = breaker.beginHealthyWindow(key);
+    stopOldest();
+    scheduler.advance(1_000);
+    expect(breaker.recordFailure(key, 'runtime_handshake_timeout')).toBe(true);
+    scheduler.advance(29_999);
+    expect(breaker.isCoolingDown(key)).toBe(true);
+    scheduler.advance(1);
+    expect(breaker.isCoolingDown(key)).toBe(false);
+    expect(breaker.recordFailure(key, 'runtime_load_timeout')).toBe(false);
+    expect(breaker.recordFailure(key, 'runtime_load_timeout')).toBe(false);
+    expect(breaker.recordFailure(key, 'runtime_load_timeout')).toBe(true);
+    stopSibling();
+    expect(scheduler.timerCount).toBe(0);
+    breaker.reset();
+  });
+
+  test('ready gaps and obsolete generation callbacks cannot clear current failures', () => {
+    const scheduler = new VirtualScheduler();
+    const breaker = new PluginRuntimeCircuitBreaker(scheduler);
+    const old = breaker.ensureRecord(...identity);
+    breaker.recordFailure(old, 'runtime_load_timeout');
+    const stopOld = breaker.beginHealthyWindow(old);
+    const next = breaker.ensureRecord(identity[0], 'new-generation');
+    expect(breaker.recordFailure(old, 'runtime_load_timeout')).toBe(false);
+    breaker.recordFailure(next, 'runtime_load_timeout');
+    const stopNext = breaker.beginHealthyWindow(next);
+    stopOld();
+    scheduler.advance(29_000);
+    stopNext();
+    scheduler.advance(1_000);
+    const stopReturned = breaker.beginHealthyWindow(next);
+    scheduler.advance(29_999);
+    expect(breaker.recordFailure(next, 'runtime_load_timeout')).toBe(false);
+    expect(breaker.recordFailure(next, 'runtime_load_timeout')).toBe(true);
+    stopReturned();
+    breaker.reset();
+    expect(scheduler.timerCount).toBe(0);
+  });
+
+  test('trusted generation preflight admits a new generation while rejecting identity reuse', async () => {
+    const scheduler = new VirtualScheduler();
+    const lifecycle = createPluginRuntimeLifecycleService({ scheduler });
+    for (let index = 0; index < 3; index++) {
+      const instance = await lifecycle.start({
+        targetKey,
+        trustedIdentity: { entryId: identity[0], generation: '1' },
+        onFailure: rs.fn(),
+      });
+      if (!instance) throw new Error('instance should start');
+      expect(instance.bindTrustedIdentity(identity[0], '2')).toBe(false);
+      await instance.fail('runtime_load_timeout');
+    }
+    const next = await lifecycle.start({
+      targetKey,
+      trustedIdentity: { entryId: identity[0], generation: '2' },
+      onFailure: rs.fn(),
+    });
+    expect(next?.isCurrent()).toBe(true);
+    await lifecycle.dispose();
+  });
+
+  test('matching invalidation fans out across surfaces while preserving unrelated entries and newer generations', async () => {
+    const lifecycle = createPluginRuntimeLifecycleService();
+    const identities = [
+      { entryId: 'entry-a', generation: '1' },
+      { entryId: 'entry-a', generation: '1' },
+      { entryId: 'entry-a', generation: '2' },
+      { entryId: 'entry-b', generation: '1' },
+    ];
+    const cleanups = identities.map(() => rs.fn());
+    const instances = [];
+    for (const [index, trustedIdentity] of identities.entries()) {
+      const instance = await lifecycle.start({
+        targetKey: `page-${index}`,
+        surfaceId: `surface-${index}`,
+        trustedIdentity,
+        onFailure: rs.fn(),
+      });
+      if (!instance) throw new Error('instance should start');
+      instance.bindRuntime(cleanups[index]);
+      instances.push(instance);
+    }
+    await lifecycle.terminateMatching({ entryId: 'entry-a', generation: '1' }, 'invalidation');
+    expect(instances.map((instance) => instance.isCurrent())).toEqual([false, false, true, true]);
+    await lifecycle.terminateMatching({ entryId: 'entry-a' }, 'invalidation');
+    expect(instances.map((instance) => instance.isCurrent())).toEqual([false, false, false, true]);
+    expect(cleanups.map((cleanup) => cleanup.mock.calls.length)).toEqual([1, 1, 1, 0]);
+    await lifecycle.dispose();
+    expect(cleanups.map((cleanup) => cleanup.mock.calls.length)).toEqual([1, 1, 1, 1]);
+  });
+
+  test('matching invalidation cancels an admitted start waiting on prior cleanup', async () => {
+    const lifecycle = createPluginRuntimeLifecycleService();
+    const trustedIdentity = { entryId: identity[0], generation: '1' };
+    const first = await lifecycle.start({ targetKey, trustedIdentity, onFailure: rs.fn() });
+    if (!first) throw new Error('instance should start');
+    const cleanup = deferred<void>();
+    first.bindRuntime(() => cleanup.promise);
+    const pending = lifecycle.start({ targetKey, trustedIdentity, onFailure: rs.fn() });
+    const invalidation = lifecycle.terminateMatching(trustedIdentity, 'invalidation');
+    cleanup.resolve();
+    await invalidation;
+    expect(await pending).toBeUndefined();
+    expect(lifecycle.getCurrent()).toBeUndefined();
+    await lifecycle.dispose();
+  });
+
+  test('moves presentation ownership without cancelling the instance and closes each surface independently', async () => {
+    const lifecycle = createPluginRuntimeLifecycleService();
+    const first = await lifecycle.start({ targetKey, onFailure: rs.fn() });
+    if (!first) throw new Error('first attempt should start');
+    const cancel = rs.fn();
+    const unsubscribe = rs.fn();
+    const releasePresentation = rs.fn();
+    const oldNativeCleanup = rs.fn();
+    const currentNativeCleanup = rs.fn();
+    first.bindCancellable(cancel);
+    first.bindSubscription(unsubscribe);
+    first.bindPresentation(releasePresentation);
+    first.bindRuntime(oldNativeCleanup);
+    const owner = first.currentOwner();
+    const moved = await lifecycle.transfer(first.key, owner, 'detached-1', currentNativeCleanup);
+    expect(moved).toEqual({ surfaceId: 'detached-1', revision: 2 });
+    expect(first.isOwner(owner)).toBe(false);
+    expect(first.isCurrent()).toBe(true);
+    expect(lifecycle.getCurrent()).toBeUndefined();
+    expect(lifecycle.getCurrent('detached-1')).toBe(first);
+    expect(releasePresentation).toHaveBeenCalledTimes(1);
+    expect(cancel).not.toHaveBeenCalled();
+    expect(unsubscribe).not.toHaveBeenCalled();
+    expect(oldNativeCleanup).not.toHaveBeenCalled();
+    expect(currentNativeCleanup).not.toHaveBeenCalled();
+    expect(await lifecycle.transfer(first.key, owner, 'detached-2', rs.fn())).toBeUndefined();
+
+    const second = await lifecycle.start({ targetKey, onFailure: rs.fn() });
+    if (!second) throw new Error('second attempt should start');
+    expect(second.key).not.toBe(first.key);
+    expect(await lifecycle.transfer(second.key, second.currentOwner(), 'detached-1', rs.fn())).toBeUndefined();
+    await lifecycle.terminateCurrent('manual_close');
+    expect(second.isCurrent()).toBe(false);
+    expect(first.isCurrent()).toBe(true);
+    await first.terminate('manual_close');
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(currentNativeCleanup).toHaveBeenCalledTimes(1);
+    expect(oldNativeCleanup).not.toHaveBeenCalled();
+    await lifecycle.dispose();
+  });
+
+  test('releases a presentation lease without terminating its Runtime and tears down all instances exactly once', async () => {
+    const scheduler = new VirtualScheduler();
+    const lifecycle = createPluginRuntimeLifecycleService({ scheduler });
+    const cleanups = [rs.fn(), rs.fn(), rs.fn()];
+    const instances = [];
+    for (const [index, surfaceId] of ['main', 'detached-1', 'detached-2'].entries()) {
+      const attempt = await lifecycle.start({ targetKey, surfaceId, onFailure: rs.fn() });
+      if (!attempt) throw new Error('attempt should start');
+      attempt.bindRuntime(cleanups[index]);
+      attempt.startLoadDeadline();
+      instances.push(attempt);
+    }
+    const release = rs.fn();
+    instances[0].bindPresentation(release);
+    await instances[0].releasePresentation();
+    await instances[0].releasePresentation();
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(instances.every((instance) => instance.isCurrent())).toBe(true);
+    for (const cleanup of cleanups) expect(cleanup).not.toHaveBeenCalled();
+    await lifecycle.terminateAll('host_reload');
+    await lifecycle.dispose();
+    expect(instances.every((instance) => !instance.isCurrent())).toBe(true);
+    for (const cleanup of cleanups) expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(scheduler.timerCount).toBe(0);
+    expect(lifecycle.getCurrent('detached-1')).toBeUndefined();
+  });
+
+  test('serializes replacement within a surface without blocking a sibling and admits only the newest concurrent start', async () => {
+    const lifecycle = createPluginRuntimeLifecycleService();
+    const first = await lifecycle.start({ targetKey, onFailure: rs.fn() });
+    if (!first) throw new Error('attempt should start');
+    const cleanup = deferred<void>();
+    first.bindRuntime(() => cleanup.promise);
+    const pending = lifecycle.start({ targetKey, onFailure: rs.fn() });
+    const newest = lifecycle.start({ targetKey, onFailure: rs.fn() });
+    const sibling = await lifecycle.start({ targetKey, surfaceId: 'detached-1', onFailure: rs.fn() });
+    expect(sibling?.isCurrent()).toBe(true);
+    cleanup.resolve();
+    expect(await pending).toBeUndefined();
+    const current = await newest;
+    expect(current?.isCurrent()).toBe(true);
+    expect(lifecycle.getCurrent()).toBe(current);
+    expect(sibling?.isCurrent()).toBe(true);
+    await lifecycle.dispose();
+  });
+
   test('dispose clears all process-local work', async () => {
     const scheduler = new VirtualScheduler();
     const lifecycle = createPluginRuntimeLifecycleService({ scheduler });

@@ -5,7 +5,7 @@ use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 struct FakeStore(Rc<RefCell<Disk>>);
 struct Disk {
     stored: Stored,
-    staged: Option<Configuration>,
+    staged: Option<Stored>,
     fail_stage: bool,
     commit: &'static str,
 }
@@ -23,12 +23,19 @@ impl Store for FakeStore {
     fn read(&self) -> Stored {
         self.0.borrow().stored.clone()
     }
-    fn stage(&mut self, configuration: &Configuration) -> Result<(), ()> {
+    fn stage(
+        &mut self,
+        configuration: &Configuration,
+        detach_migration: Option<&DetachMigration>,
+    ) -> Result<(), ()> {
         let mut disk = self.0.borrow_mut();
         if disk.fail_stage {
             return Err(());
         }
-        disk.staged = Some(configuration.clone());
+        disk.staged = Some(Stored::current(
+            configuration.clone(),
+            detach_migration.cloned(),
+        ));
         Ok(())
     }
     fn commit(&mut self) -> Result<(), ()> {
@@ -40,7 +47,7 @@ impl Store for FakeStore {
                 Err(())
             }
             mode => {
-                disk.stored = Stored::Configuration(disk.staged.take().unwrap());
+                disk.stored = disk.staged.take().unwrap();
                 if mode == "after" {
                     Err(())
                 } else {
@@ -62,6 +69,8 @@ struct Native {
     calls: Vec<String>,
     failures: VecDeque<&'static str>,
     blocked: BTreeSet<Trigger>,
+    admission_probe: Option<ShortcutAdmission>,
+    recovery_during_publication: Vec<bool>,
 }
 impl Registry for FakeRegistry {
     fn register(&mut self, trigger: &Trigger, generation: u64) -> Result<(), RegistrationFailure> {
@@ -98,8 +107,12 @@ impl Registry for FakeRegistry {
         Ok(())
     }
     fn publish(&mut self, registrations: &BTreeMap<Trigger, u64>) {
-        self.0
-            .borrow_mut()
+        let mut native = self.0.borrow_mut();
+        if let Some(probe) = &native.admission_probe {
+            let available = probe.recovery_available();
+            native.recovery_during_publication.push(available);
+        }
+        native
             .calls
             .push(format!("publish:{}", registrations.len()));
     }
@@ -451,7 +464,7 @@ fn filesystem_is_independent_of_preferences_and_preserves_corrupt_files_until_ex
     assert_eq!(disk.read(), Stored::Invalid);
     assert_eq!(fs::read(root.join("shortcuts.json")).unwrap(), b"broken");
     let configuration = Configuration::default();
-    disk.stage(&configuration).unwrap();
+    disk.stage(&configuration, None).unwrap();
     disk.commit().unwrap();
     assert_eq!(disk.read(), Stored::Configuration(configuration));
     assert_eq!(
@@ -648,7 +661,7 @@ fn concurrent_preferences_writes_never_replace_shortcut_snapshots() {
     for revision in 0..32 {
         let mut configuration = Configuration::default();
         configuration.revision = revision;
-        disk.stage(&configuration).unwrap();
+        disk.stage(&configuration, None).unwrap();
         disk.commit().unwrap();
         assert_eq!(disk.read(), Stored::Configuration(configuration));
     }
@@ -677,13 +690,15 @@ fn legacy_fixture(
         "launcher":{"chord":chord("KeyK"),"double_tap":if double {serde_json::json!({"kind":"modifier_double_tap","modifier":"cmd"})} else {serde_json::Value::Null}},
         "actions":{"com.test.open":chord("KeyL")}
     });
-    let (configuration, migration) = serde_json::from_value::<VersionOneConfiguration>(raw)
-        .unwrap()
-        .project()
-        .unwrap();
+    let (configuration, migration, detach_migration) =
+        serde_json::from_value::<VersionOneConfiguration>(raw)
+            .unwrap()
+            .project()
+            .unwrap();
     let disk = FakeStore::new(Stored::VersionOne {
         configuration,
         migration,
+        detach_migration,
     });
     let native = FakeRegistry::default();
     (
@@ -720,7 +735,13 @@ fn versioned_configuration_fixtures_are_strict_and_reads_preserve_original_bytes
                 .cloned()
                 .unwrap_or(serde_json::Value::Null)
         );
-        assert_eq!(service.legacy_file, case["legacy"]);
+        assert_eq!(service.legacy_file, case["source_version"] != 3);
+        assert_eq!(
+            serde_json::to_value(snapshot.detach_migration).unwrap(),
+            case.get("detach_migration")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null)
+        );
         assert_eq!(fs::read(&file).unwrap(), bytes);
     }
     for input in fixture["invalid"].as_array().unwrap() {
@@ -741,7 +762,7 @@ fn legacy_single_chord_upgrades_on_explicit_save_even_when_binding_is_unchanged(
     let (mut service, disk, native) = legacy_fixture(false);
     let before = disk.read();
     let snapshot = service.snapshot();
-    assert_eq!(snapshot.configuration.version, 2);
+    assert_eq!(snapshot.configuration.version, 3);
     assert!(snapshot.launcher_migration.is_none());
     assert!(!snapshot.recovery_degraded);
     assert_eq!(disk.read(), before);
@@ -750,6 +771,463 @@ fn legacy_single_chord_upgrades_on_explicit_save_even_when_binding_is_unchanged(
     assert_eq!(saved.configuration.revision, 8);
     assert!(!service.legacy_file);
     assert_eq!(disk.read(), Stored::Configuration(saved.configuration));
+}
+
+fn detach_conflict_fixture(
+    launcher: bool,
+) -> (
+    ShortcutService<FakeStore, FakeRegistry>,
+    FakeStore,
+    FakeRegistry,
+) {
+    let mut original = Configuration::default();
+    if launcher {
+        original.launcher = default_detach();
+    } else {
+        original
+            .actions
+            .insert("com.test.unavailable".into(), default_detach());
+    }
+    let (configuration, migration) = VersionTwoConfiguration {
+        version: 2,
+        revision: 17,
+        launcher: original.launcher,
+        actions: original.actions,
+    }
+    .project()
+    .unwrap();
+    let disk = FakeStore::new(Stored::VersionTwo {
+        configuration,
+        migration,
+    });
+    let native = FakeRegistry::default();
+    (
+        ShortcutService::start(disk.clone(), native.clone()),
+        disk,
+        native,
+    )
+}
+
+#[test]
+fn detach_is_canonical_but_never_registered_or_invoked_as_a_global_target() {
+    let (mut service, _, native) = fixture();
+    service.set_local_available(true);
+    let before = native.0.borrow().keys.clone();
+    assert!(!before.contains_key(&default_detach()));
+    assert_eq!(service.trigger(&default_detach(), 0), Effect::None);
+    let mut candidate = service.configuration.clone();
+    candidate.detach = Some(chord("KeyL"));
+    let saved = service.save(0, candidate).unwrap();
+    assert_eq!(native.0.borrow().keys, before);
+    assert!(saved
+        .bindings
+        .iter()
+        .any(|binding| binding.target == DETACH && binding.status == BindingStatus::Active));
+    assert_eq!(service.trigger(&chord("KeyL"), 1), Effect::None);
+    let mut candidate = service.configuration.clone();
+    candidate.detach = Some(service.configuration.launcher.clone());
+    assert_eq!(
+        service
+            .save(1, candidate)
+            .unwrap_err()
+            .conflicting_target
+            .as_deref(),
+        Some(LAUNCHER)
+    );
+    let mut candidate = service.configuration.clone();
+    candidate.launcher = chord("KeyL");
+    assert_eq!(
+        service
+            .save(1, candidate)
+            .unwrap_err()
+            .conflicting_target
+            .as_deref(),
+        Some(DETACH)
+    );
+    let mut candidate = service.configuration.clone();
+    candidate
+        .actions
+        .insert("com.test.unavailable".into(), chord("KeyL"));
+    assert_eq!(
+        service
+            .save(1, candidate)
+            .unwrap_err()
+            .conflicting_target
+            .as_deref(),
+        Some(DETACH)
+    );
+    assert_eq!(service.configuration, saved.configuration);
+    assert_eq!(native.0.borrow().keys, before);
+}
+
+#[test]
+fn unavailable_detach_does_not_degrade_or_change_global_recovery() {
+    let (mut service, _, native) = fixture();
+    let global = service.configuration.launcher.clone();
+    let initial = native.0.borrow().keys.clone();
+    assert!(!service.snapshot().recovery_degraded);
+    assert!(service.snapshot().bindings.iter().any(
+        |binding| binding.target == DETACH && binding.status == BindingStatus::LocalUnavailable
+    ));
+    service.set_local_available(true);
+    native.0.borrow_mut().blocked.insert(default_detach());
+    service.refresh_layout();
+    assert!(!service.local_available());
+    assert!(!service.snapshot().recovery_degraded);
+    assert_eq!(service.trigger(&global, 0), Effect::Toggle);
+    assert_eq!(native.0.borrow().keys, initial);
+    native.0.borrow_mut().blocked.clear();
+    service.set_local_available(false);
+    let mut candidate = service.configuration.clone();
+    candidate.detach = Some(chord("KeyK"));
+    let saved = service.save(0, candidate).unwrap();
+    assert!(!saved.recovery_degraded);
+    assert_eq!(
+        saved
+            .bindings
+            .iter()
+            .find(|binding| binding.target == DETACH)
+            .unwrap()
+            .status,
+        BindingStatus::LocalUnavailable
+    );
+    assert_eq!(native.0.borrow().keys, initial);
+}
+
+#[test]
+fn startup_monitor_availability_arms_default_detach_despite_service_lock_contention() {
+    let (service, _, native) = fixture();
+    let installation = service.local_availability();
+    let service = std::sync::Mutex::new(service);
+    let held = service.lock().unwrap();
+    assert!(service.try_lock().is_err());
+    assert!(!held.local_available());
+    let globals = native.0.borrow().keys.clone();
+    // Exactly the installer publication path: it never needs the held lock.
+    assert!(installation.set(true));
+    assert_eq!(held.detach(), Some(default_detach()));
+    assert!(held.local_available());
+    assert!(held
+        .snapshot()
+        .bindings
+        .iter()
+        .any(|binding| binding.target == DETACH && binding.status == BindingStatus::Active));
+    assert!(held.recovery_available());
+    assert_eq!(native.0.borrow().keys, globals);
+    assert!(installation.set(false));
+    assert!(!held.local_available());
+    assert!(held.recovery_available());
+    assert_eq!(native.0.borrow().keys, globals);
+    drop(held);
+    assert!(!service.lock().unwrap().local_available());
+}
+
+#[test]
+fn ordinary_shortcut_mutex_contention_does_not_remove_recovery_or_invent_recording() {
+    let (service, _, native) = fixture();
+    let facts = service.admission();
+    let service = std::sync::Mutex::new(service);
+    let mut held = service.lock().unwrap();
+    let probe = facts.clone();
+    assert_eq!(
+        std::thread::spawn(move || (probe.recovery_available(), probe.recording_active(10)))
+            .join()
+            .unwrap(),
+        (true, false)
+    );
+    let lease = held.begin_recording(10);
+    assert!(facts.recording_active(11));
+    held.renew_recording(&lease.lease_id, 20).unwrap();
+    assert!(facts.recording_active(30_019));
+    assert!(!facts.recording_active(30_020));
+    held.end_recording();
+    assert!(!facts.recording_active(21));
+    native.0.borrow_mut().calls.clear();
+    held.refresh_layout();
+    held.update_targets(Default::default()).unwrap();
+    assert!(native.0.borrow().calls.is_empty());
+    assert!(facts.recovery_available());
+}
+
+#[test]
+fn recovery_is_revoked_before_registration_changes_and_reconfirmed_only_after_publication() {
+    let (mut service, _, native) = fixture();
+    let facts = service.admission();
+    native.0.borrow_mut().admission_probe = Some(facts.clone());
+    service.save(0, changed(&service)).unwrap();
+    assert_eq!(
+        native.0.borrow().recovery_during_publication,
+        vec![false, false]
+    );
+    assert!(facts.recovery_available());
+    let selected = service.configuration.launcher.clone();
+    native.0.borrow_mut().blocked.insert(selected);
+    service.refresh_layout();
+    assert!(!facts.recovery_available());
+    assert!(service.snapshot().recovery_degraded);
+    native.0.borrow_mut().blocked.clear();
+    service.refresh_layout();
+    assert!(facts.recovery_available());
+}
+
+#[test]
+fn double_tap_monitor_loss_sleep_and_stop_revoke_only_confirmed_recovery() {
+    let (mut service, _, _) = fixture();
+    let facts = service.admission();
+    service.set_monitor(MonitorStatus::Unavailable);
+    assert!(facts.recovery_available());
+    let mut candidate = service.configuration.clone();
+    candidate.launcher = Trigger::ModifierDoubleTap {
+        modifier: "cmd".into(),
+    };
+    service.save(0, candidate).unwrap();
+    assert!(!facts.recovery_available());
+    service.set_monitor(MonitorStatus::Active);
+    assert!(facts.recovery_available());
+    facts.set_monitor(false);
+    assert!(!facts.recovery_available());
+    service.set_monitor(MonitorStatus::Active);
+    facts.set_sleeping(true);
+    assert!(!facts.recovery_available());
+    facts.set_sleeping(false);
+    assert!(!facts.recovery_available());
+    service.set_monitor(MonitorStatus::Active);
+    assert!(facts.recovery_available());
+    facts.stop();
+    service.set_monitor(MonitorStatus::Active);
+    service.publish();
+    assert!(!facts.recovery_available());
+}
+
+#[test]
+fn legacy_cmd_d_keeps_global_owner_and_unrelated_saves_persist_unresolved_choice() {
+    for launcher in [true, false] {
+        let (mut service, disk, native) = detach_conflict_fixture(launcher);
+        let initial = disk.read();
+        let snapshot = service.snapshot();
+        assert_eq!(snapshot.configuration.revision, 17);
+        assert_eq!(snapshot.configuration.detach, None);
+        assert!(!snapshot.recovery_degraded);
+        assert_eq!(
+            snapshot
+                .detach_migration
+                .as_ref()
+                .unwrap()
+                .conflicting_target,
+            if launcher {
+                LAUNCHER
+            } else {
+                "com.test.unavailable"
+            }
+        );
+        assert_eq!(disk.read(), initial);
+        if launcher {
+            assert_eq!(service.trigger(&default_detach(), 0), Effect::Toggle);
+        } else {
+            assert!(!native.0.borrow().keys.contains_key(&default_detach()));
+        }
+        let mut unrelated = service.configuration.clone();
+        // Removing/changing the former occupant is not an explicit detach choice.
+        if launcher {
+            unrelated.launcher = chord("KeyJ");
+        } else {
+            unrelated.actions.clear();
+        }
+        let saved = service.save(17, unrelated).unwrap();
+        assert_eq!(saved.detach_migration, snapshot.detach_migration);
+        let restarted = ShortcutService::start(disk.clone(), FakeRegistry::default());
+        assert_eq!(
+            restarted.snapshot().detach_migration,
+            snapshot.detach_migration
+        );
+        assert!(!restarted.legacy_file);
+        let mut candidate = service.configuration.clone();
+        candidate.detach = Some(default_detach());
+        assert_eq!(
+            service.save(18, candidate.clone()).unwrap_err().code,
+            "detach_choice_required"
+        );
+        let resolved = service
+            .save_resolving_migrations(18, candidate, false, true)
+            .unwrap();
+        assert!(resolved.detach_migration.is_none());
+        assert_eq!(resolved.configuration.detach, Some(default_detach()));
+        assert!(
+            ShortcutService::start(disk.clone(), FakeRegistry::default())
+                .detach_migration
+                .is_none()
+        );
+    }
+}
+
+#[test]
+fn explicit_detach_null_resolution_and_failed_default_restore_keep_confirmed_state() {
+    let (mut service, disk, native) = detach_conflict_fixture(true);
+    let before = disk.read();
+    let mut candidate = service.configuration.clone();
+    candidate.detach = Some(default_detach());
+    let error = service
+        .save_resolving_migrations(17, candidate, false, true)
+        .unwrap_err();
+    assert_eq!(error.conflicting_target.as_deref(), Some(LAUNCHER));
+    assert_eq!(disk.read(), before);
+    assert!(native.0.borrow().keys.contains_key(&default_detach()));
+    let saved = service
+        .save_resolving_migrations(17, service.configuration.clone(), false, true)
+        .unwrap();
+    assert!(saved.detach_migration.is_none());
+    assert!(saved.configuration.detach.is_none());
+    assert_eq!(saved.configuration.revision, 18);
+    assert!(!saved.recovery_degraded);
+}
+
+#[test]
+fn detach_resolution_storage_failures_preserve_marker_until_commit_is_confirmed() {
+    for failure in ["stage", "before", "after", "unknown"] {
+        let (mut service, disk, _) = detach_conflict_fixture(false);
+        let marker = service.detach_migration.clone();
+        if failure == "stage" {
+            disk.0.borrow_mut().fail_stage = true;
+        } else {
+            disk.0.borrow_mut().commit = failure;
+        }
+        let error = service
+            .save_resolving_migrations(17, service.configuration.clone(), false, true)
+            .unwrap_err();
+        let snapshot = error.snapshot.unwrap();
+        assert_eq!(
+            snapshot.detach_migration,
+            if failure == "after" { None } else { marker }
+        );
+        assert_eq!(
+            snapshot.configuration.revision,
+            if failure == "after" { 18 } else { 17 }
+        );
+        assert_eq!(snapshot.recovery_degraded, failure == "unknown");
+    }
+}
+
+#[test]
+fn local_recording_is_permission_independent_and_owns_only_current_lease_gesture() {
+    let (mut service, _, native) = fixture();
+    assert_eq!(service.monitor, MonitorStatus::PermissionRequired);
+    let lease = service.begin_recording(10);
+    let epoch = service.recording_epoch();
+    let trigger = default_detach();
+    let globals = native.0.borrow().keys.clone();
+    assert_eq!(
+        service.local_recording_press(2, Some(&trigger), true, false, epoch, 11),
+        (
+            true,
+            Effect::Candidate {
+                lease_id: lease.lease_id,
+                trigger: trigger.clone()
+            }
+        )
+    );
+    // Global callbacks cannot emit a second ordinary chord candidate.
+    assert_eq!(service.trigger(&trigger, 11), Effect::None);
+    assert_eq!(
+        service.local_recording_press(2, Some(&trigger), true, true, epoch, 12),
+        (true, Effect::None)
+    );
+    service.end_recording();
+    assert!(service.suppressed_until_release());
+    assert_eq!(
+        service.local_recording_press(2, Some(&trigger), true, true, epoch, 13),
+        (true, Effect::None)
+    );
+    assert_eq!(
+        service.local_recording_press(2, None, false, false, epoch, 14),
+        (true, Effect::None)
+    );
+    assert!(!service.suppressed_until_release());
+    service.begin_recording(15);
+    assert_eq!(
+        service.local_recording_press(2, Some(&trigger), true, false, epoch, 16),
+        (false, Effect::None)
+    );
+    let fresh = service.recording_epoch();
+    service.local_recording_press(2, Some(&trigger), true, false, fresh, 17);
+    assert_eq!(
+        service.local_recording_press(2, Some(&trigger), true, true, fresh, 30_015),
+        (true, Effect::None)
+    );
+    assert!(service.recording().is_none());
+    assert_eq!(native.0.borrow().keys, globals);
+}
+
+#[test]
+fn global_and_local_recording_callbacks_share_one_candidate_in_either_order() {
+    for local_first in [true, false] {
+        let (mut service, _, _) = fixture();
+        service.begin_recording(0);
+        let epoch = service.recording_epoch();
+        let trigger = service.configuration.launcher.clone();
+        let generation = service.registrations[&trigger].generation;
+        let (first, second) = if local_first {
+            let first = service
+                .local_recording_press(49, Some(&trigger), true, false, epoch, 1)
+                .1;
+            (first, service.press(&trigger, generation, true, 1))
+        } else {
+            let first = service.press(&trigger, generation, true, 1);
+            (
+                first,
+                service
+                    .local_recording_press(49, Some(&trigger), true, false, epoch, 1)
+                    .1,
+            )
+        };
+        assert!(matches!(first, Effect::Candidate { .. }));
+        assert_eq!(second, Effect::None);
+        service.end_recording();
+        service.press(&trigger, generation, false, 2);
+        assert!(service.suppressed_until_release());
+        service.local_recording_press(49, None, false, false, epoch, 2);
+        assert!(!service.suppressed_until_release());
+        assert_eq!(service.press(&trigger, generation, true, 3), Effect::Toggle);
+    }
+}
+
+#[test]
+fn real_v2_file_retains_host_migration_record_across_unrelated_v3_save_and_restart() {
+    let root = std::env::temp_dir().join(format!(
+        "lensx-detach-shortcuts-migration-{}",
+        std::process::id()
+    ));
+    fs::create_dir_all(&root).unwrap();
+    let path = root.join("shortcuts.json");
+    let original = serde_json::to_vec(&serde_json::json!({"version":2,"revision":23,"launcher":Configuration::default().launcher,"actions":{"com.test.removed":default_detach()}})).unwrap();
+    fs::write(&path, &original).unwrap();
+    let mut service = ShortcutService::start(FileStore::new(path.clone()), FakeRegistry::default());
+    assert_eq!(fs::read(&path).unwrap(), original);
+    let marker = service.snapshot().detach_migration.unwrap();
+    let mut candidate = service.configuration.clone();
+    candidate.actions.clear();
+    service.save(23, candidate).unwrap();
+    let persisted: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(persisted["version"], 3);
+    assert_eq!(
+        persisted["detach_migration"],
+        serde_json::to_value(&marker).unwrap()
+    );
+    // Host-owned persisted metadata cannot be supplied as editable configuration.
+    assert!(serde_json::from_value::<Configuration>(persisted).is_err());
+    let mut restarted =
+        ShortcutService::start(FileStore::new(path.clone()), FakeRegistry::default());
+    assert_eq!(restarted.snapshot().detach_migration, Some(marker));
+    let saved = restarted
+        .save_resolving_migrations(24, restarted.configuration.clone(), false, true)
+        .unwrap();
+    assert!(saved.detach_migration.is_none());
+    let persisted: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert!(persisted.get("detach_migration").is_none());
+    assert!(serde_json::from_value::<Configuration>(persisted)
+        .unwrap()
+        .detach
+        .is_none());
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -944,7 +1422,7 @@ fn real_legacy_file_is_only_replaced_after_confirmed_selection() {
     assert!(saved.launcher_migration.is_none());
     assert!(saved.recovery_degraded);
     let persisted: serde_json::Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
-    assert_eq!(persisted["version"], 2);
+    assert_eq!(persisted["version"], 3);
     assert_eq!(persisted["launcher"]["kind"], "modifier_double_tap");
     assert!(persisted["launcher"].get("chord").is_none());
     assert_eq!(persisted["actions"].as_object().unwrap().len(), 1);

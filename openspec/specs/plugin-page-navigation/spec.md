@@ -2,10 +2,12 @@
 
 ## Purpose
 
+
 Define how trusted Host services project registered plugin Pages into a unified
-Page Registry, coordinate Page and Action publication, navigate through the
-existing single-window application surface, and fail closed without loading or
-executing plugin Runtime code.
+Page Registry, coordinate Page and Action publication, route navigation by the
+calling instance and owning window, and fail closed without granting plugins
+window selection or native authority.
+
 ## Requirements
 
 ### Requirement: Plugin Pages must project into stable Host-owned descriptors
@@ -164,7 +166,7 @@ One serial coordinator MUST derive Page and Action batches from the same Registr
 
 ### Requirement: Plugin Page navigation must remain framework-neutral and Host-controlled
 
-Plugin Page opening MUST use framework-neutral Host navigation and current Registry availability, and associate the trusted current Action invocation. Failures MUST reject safely; plugins gain no renderer, setter, route, or native authority.
+Opening a plugin Page MUST use framework-neutral Host navigation and current Registry availability, associating the trusted Action invocation with the owning surface. Launcher and global Action entry points MUST route to main; plugin `actions.open` MUST navigate within the calling Session's owning window. Failures MUST be rejected safely; plugins must not obtain renderers, setters, route executors, window selection, or native authority.
 
 #### Scenario: Open an available Plugin Page
 
@@ -192,12 +194,12 @@ Plugin Page opening MUST use framework-neutral Host navigation and current Regis
 - **THEN** The system MUST use the unified framework-neutral application navigation
   service to accept `{ owner_id, page_id }` and an opening Action ID.
 - **THEN** navigation MUST also accept independent Host invocation context and associate it with the current Page attempt; ActivePage retains only owner/page/opened_by_action_id identity fields and never uses invocation IDs as Page identity.
-- **THEN** before notifying the sole App Shell handler, navigation MUST query the current available Page descriptor; unknown, unavailable, or removed Pages MUST reject with safe `page_unavailable` semantics.
+- **THEN** Before notifying the unique presentation handler of the surface selected by the trusted source, navigation MUST query the currently available Page descriptor; unknown, unavailable, or removed Pages MUST be rejected with safe `page_unavailable` semantics.
 - **THEN** plugins, Manifests, Action descriptors, and projection payloads MUST NOT obtain React setters, navigation handlers, route executors, Registry mutation APIs, Tauri APIs, or Page renderers.
 
 #### Scenario: Deliver a new invocation to the same Page
-- **WHEN** the current Action or another Action opens the same owner/page with a new invocation while Runtime facts remain equivalent
-- **THEN** the Host preserves the existing Page, Child WebView, input, selection, and business state while updating the opening Action display and independent activation
+- **WHEN** the current Action or another Action on the same surface opens the same owner/page with a new invocation while Runtime facts remain equivalent
+- **THEN** Host preserves that surface's existing Page, Child WebView, input, selection, and business state, and updates the opening Action presentation and independent activation; instances with the same owner/page on other surfaces do not participate in reuse
 - **THEN** shortcut provenance delivers the activation to the current plugin when it has supplied a callback, while normal provenance only updates activation facts
 - **THEN** invocationId changes do not rebuild the Page or input, and the launcher input does not steal focus
 
@@ -205,6 +207,27 @@ Plugin Page opening MUST use framework-neutral Host navigation and current Regis
 - **WHEN** a Page closes, is replaced, is navigated away from, or becomes unavailable while an invocation awaits initialization or delivery
 - **THEN** the invocation belongs only to its original Page attempt, and undelivered work terminates and is cleaned up
 - **THEN** late results cannot reopen the old Page, contaminate the new Page provenance, or execute in a replacement Session
+
+#### Scenario: Open a new main instance while the same Page is detached
+- **WHEN** A₁ is detached, main is at Home, and the user opens the same owner/page in the Launcher
+- **THEN** main creates an independent A₂ and activation channel without focusing or replacing A₁
+- **THEN** subsequent activations of the same Page in main reuse only A₂
+
+#### Scenario: Transfer navigation ownership without closing the Page
+- **WHEN** a ready instance completes detachment and main returns to Home
+- **THEN** the original instance and activation channel transfer to the target surface, and main clears its old presentation association without closing that instance
+- **THEN** detachment creates no new invocation and replays no Action; a late navigation completion from the old main owner cannot operate on the transferred instance
+
+#### Scenario: Navigate from a detached Session
+- **WHEN** detached A₁ invokes a valid Page Action of its own plugin
+- **THEN** the same Page updates A₁'s opening Action and activation; a different Page replaces the instance only within that detached window
+- **THEN** main and other windows of the same plugin are not focused, replaced, or navigated
+
+
+#### Scenario: Recovery-required state freezes ownership-sensitive navigation
+- **WHEN** an instance enters `recovery_required` and its source/target surfaces receive ordinary Page replacement, global Action navigation, or that instance's `actions.open`
+- **THEN** Host MUST retain the original ActivePage/activation association and transaction context without replacing, copying, or replaying the instance; affected navigation MUST fail within a bound, with plugin `actions.open` using existing `unavailable`
+- **THEN** only successful explicit recovery retry may unfreeze navigation according to confirmed ownership; explicit close or plugin/application termination can still clean up the original instance, while valid navigation on unrelated surfaces remains unaffected
 
 ### Requirement: Plugin Page presentation must resolve current localized metadata safely
 
@@ -248,19 +271,13 @@ Page context MUST resolve current localized Owner and opening-Action metadata wi
 
 ### Requirement: Active Plugin Pages must close when their descriptor becomes unavailable
 
-The system MUST revalidate the current active Plugin Page after Page Registry
-replacement. When the target is removed or its availability becomes false, a
-Host-owned navigation invalidation transition MUST close the Page, return Home,
-and restore safe Launcher state; a plugin MUST NOT receive or call the
-invalidation handler. Changes only to title, Owner presentation, parent, route,
-  while availability remains true MUST NOT close an active Page
-with the same identity.
+Registry replacement MUST revalidate every surface. Unavailable targets MUST terminate matching instances: main returns Home; detached windows close safely. Plugin invalidation covers all matching instances. Title, Owner presentation, parent or route metadata changes with unchanged identity/availability MUST preserve navigation; independent Runtime validation still applies. Plugins MUST NOT obtain the invalidation handler.
 
 #### Scenario: An active Page loses availability
 
 - **WHEN** a new Registration revision removes the active Page or makes its
   provider ineligible
-- **THEN** the Host navigation boundary closes the active Page and returns Home
+- **THEN** Host closes only matching instances: main returns to Home, detached windows close safely, and unrelated surfaces remain unchanged
 - **THEN** unregistered plugin code receives no execution opportunity, and
   other providers' active and registered state is unaffected
 
@@ -271,6 +288,11 @@ with the same identity.
 - **THEN** the active Page identity remains open and uses the latest resolvable
   presentation
 - **THEN** the system creates no second Page state or navigation history entry
+
+#### Scenario: Disable a plugin with several active windows
+- **WHEN** the current Registry marks every Page of a plugin unavailable
+- **THEN** Host closes all matching instances in main and detached windows, including unfocused background windows
+- **THEN** instances of other plugins and unrelated Pages in main remain available
 
 ### Requirement: External Plugin Page presentation MUST declare a Host-owned native slot
 When the current descriptor resolves to an executable external Page, React MUST render Host chrome plus a non-authoritative `PluginRuntimeSlot` whose revisioned physical bounds and visibility are sent to the private presentation controller. The Page layer MUST NOT create an iframe, receive a Child WebView handle or let plugin content control title, close, layout, route identity or Host navigation.

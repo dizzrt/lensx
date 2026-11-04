@@ -5,8 +5,85 @@ use std::{
     fs::{self, OpenOptions},
     io::Write,
     path::PathBuf,
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
+        Arc,
+    },
 };
+
+/// Native installation status is independent of the shortcut transaction lock.
+/// The service and native installer read/write the same durable process fact.
+#[derive(Clone, Default)]
+pub struct LocalMonitorAvailability(Arc<AtomicBool>);
+
+impl LocalMonitorAvailability {
+    pub fn set(&self, available: bool) -> bool {
+        self.0.swap(available, Ordering::AcqRel) != available
+    }
+    fn available(&self) -> bool {
+        self.0.load(Ordering::Acquire)
+    }
+}
+
+/// Native admission reads confirmed shortcut facts without waiting on the
+/// service mutex used by ordinary input polling and configuration transactions.
+#[derive(Clone, Default)]
+pub struct ShortcutAdmission(Arc<AdmissionState>);
+
+#[derive(Default)]
+struct AdmissionState {
+    recovery: AtomicU8,
+    recording_deadline: AtomicU64,
+}
+
+impl ShortcutAdmission {
+    const CHORD: u8 = 1;
+    const DOUBLE_TAP: u8 = 2;
+    const MONITOR: u8 = 4;
+    const SLEEPING: u8 = 8;
+    const STOPPED: u8 = 16;
+
+    fn change(&self, clear: u8, set: u8) {
+        let _ = self
+            .0
+            .recovery
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |state| {
+                Some((state & !clear) | set)
+            });
+    }
+    fn publish_selected(&self, selected: Option<&Trigger>) {
+        let selected = match selected {
+            Some(Trigger::Chord { .. }) => Self::CHORD,
+            Some(Trigger::ModifierDoubleTap { .. }) => Self::DOUBLE_TAP,
+            None => 0,
+        };
+        self.change(Self::CHORD | Self::DOUBLE_TAP, selected);
+    }
+    pub fn set_monitor(&self, active: bool) {
+        self.change(Self::MONITOR, if active { Self::MONITOR } else { 0 });
+    }
+    pub fn set_sleeping(&self, sleeping: bool) {
+        self.change(
+            Self::SLEEPING | Self::MONITOR,
+            if sleeping { Self::SLEEPING } else { 0 },
+        );
+    }
+    pub fn stop(&self) {
+        self.change(0, Self::STOPPED);
+    }
+    pub fn recovery_available(&self) -> bool {
+        let state = self.0.recovery.load(Ordering::Acquire);
+        state & (Self::SLEEPING | Self::STOPPED) == 0
+            && (state & Self::CHORD != 0
+                || state & (Self::DOUBLE_TAP | Self::MONITOR) == Self::DOUBLE_TAP | Self::MONITOR)
+    }
+    fn publish_recording(&self, deadline: u64) {
+        self.0.recording_deadline.store(deadline, Ordering::Release);
+    }
+    pub fn recording_active(&self, now: u64) -> bool {
+        self.0.recording_deadline.load(Ordering::Acquire) > now
+    }
+}
 
 pub trait Registry {
     fn register(&mut self, trigger: &Trigger, generation: u64) -> Result<(), RegistrationFailure>;
@@ -15,7 +92,6 @@ pub trait Registry {
     fn valid_in_layout(&self, _trigger: &Trigger) -> bool {
         true
     }
-    fn refresh_layout(&mut self) {}
     fn key_labels(&self) -> BTreeMap<String, String> {
         BTreeMap::new()
     }
@@ -31,17 +107,42 @@ pub enum RegistrationFailure {
 pub enum Stored {
     Missing,
     Configuration(Configuration),
+    ConfigurationWithMigration {
+        configuration: Configuration,
+        migration: DetachMigration,
+    },
+    VersionTwo {
+        configuration: Configuration,
+        migration: Option<DetachMigration>,
+    },
     VersionOne {
         configuration: Configuration,
         migration: Option<LauncherMigration>,
+        detach_migration: Option<DetachMigration>,
     },
     Invalid,
     Unavailable,
 }
 
+impl Stored {
+    fn current(configuration: Configuration, migration: Option<DetachMigration>) -> Self {
+        match migration {
+            Some(migration) => Self::ConfigurationWithMigration {
+                configuration,
+                migration,
+            },
+            None => Self::Configuration(configuration),
+        }
+    }
+}
+
 pub trait Store {
     fn read(&self) -> Stored;
-    fn stage(&mut self, configuration: &Configuration) -> Result<(), ()>;
+    fn stage(
+        &mut self,
+        configuration: &Configuration,
+        detach_migration: Option<&DetachMigration>,
+    ) -> Result<(), ()>;
     fn commit(&mut self) -> Result<(), ()>;
     fn discard(&mut self);
 }
@@ -64,28 +165,56 @@ impl Store for FileStore {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Stored::Missing,
             Err(_) => return Stored::Unavailable,
         };
-        let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        let Ok(mut value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
             return Stored::Invalid;
         };
         match value.get("version").and_then(serde_json::Value::as_u64) {
-            Some(2) => serde_json::from_value::<Configuration>(value)
+            Some(3) => {
+                let migration = value
+                    .as_object_mut()
+                    .and_then(|object| object.remove("detach_migration"));
+                let migration = match migration {
+                    Some(value) => match serde_json::from_value::<DetachMigration>(value) {
+                        Ok(migration) if migration.valid() => Some(migration),
+                        _ => return Stored::Invalid,
+                    },
+                    None => None,
+                };
+                serde_json::from_value::<Configuration>(value)
+                    .ok()
+                    .and_then(|configuration| configuration.normalized().ok())
+                    .filter(|configuration| migration.is_none() || configuration.detach.is_none())
+                    .map(|configuration| Stored::current(configuration, migration))
+                    .unwrap_or(Stored::Invalid)
+            }
+            Some(2) => serde_json::from_value::<VersionTwoConfiguration>(value)
                 .ok()
-                .and_then(|configuration| configuration.normalized().ok())
-                .map(Stored::Configuration)
+                .and_then(|configuration| configuration.project().ok())
+                .map(|(configuration, migration)| Stored::VersionTwo {
+                    configuration,
+                    migration,
+                })
                 .unwrap_or(Stored::Invalid),
             Some(1) => serde_json::from_value::<VersionOneConfiguration>(value)
                 .ok()
                 .and_then(|configuration| configuration.project().ok())
-                .map(|(configuration, migration)| Stored::VersionOne {
-                    configuration,
-                    migration,
-                })
+                .map(
+                    |(configuration, migration, detach_migration)| Stored::VersionOne {
+                        configuration,
+                        migration,
+                        detach_migration,
+                    },
+                )
                 .unwrap_or(Stored::Invalid),
             _ => Stored::Invalid,
         }
     }
 
-    fn stage(&mut self, configuration: &Configuration) -> Result<(), ()> {
+    fn stage(
+        &mut self,
+        configuration: &Configuration,
+        detach_migration: Option<&DetachMigration>,
+    ) -> Result<(), ()> {
         static SEQUENCE: AtomicU64 = AtomicU64::new(0);
         self.discard();
         let parent = self.path.parent().ok_or(())?;
@@ -101,7 +230,11 @@ impl Store for FileStore {
             .write(true)
             .open(path)
             .map_err(|_| ())?;
-        let bytes = serde_json::to_vec_pretty(configuration).map_err(|_| ())?;
+        let mut value = serde_json::to_value(configuration).map_err(|_| ())?;
+        if let Some(migration) = detach_migration {
+            value["detach_migration"] = serde_json::to_value(migration).map_err(|_| ())?;
+        }
+        let bytes = serde_json::to_vec_pretty(&value).map_err(|_| ())?;
         file.write_all(&bytes)
             .and_then(|_| file.write_all(b"\n"))
             .and_then(|_| file.sync_all())
@@ -168,10 +301,15 @@ pub enum Effect {
 
 pub struct ShortcutService<S: Store, R: Registry> {
     store: S,
-    registry: R,
+    pub(super) registry: R,
     configuration: Configuration,
     legacy_file: bool,
     launcher_migration: Option<LauncherMigration>,
+    detach_migration: Option<DetachMigration>,
+    local_available: LocalMonitorAvailability,
+    admission: ShortcutAdmission,
+    local_pressed: BTreeMap<u16, Option<Trigger>>,
+    recording_chords: BTreeSet<Trigger>,
     registrations: BTreeMap<Trigger, Registration>,
     residual: BTreeSet<Trigger>,
     targets: BTreeSet<String>,
@@ -191,27 +329,43 @@ pub struct ShortcutService<S: Store, R: Registry> {
 
 impl<S: Store, R: Registry> ShortcutService<S, R> {
     pub fn start(store: S, registry: R) -> Self {
-        let (mut configuration, mut launcher_migration, mut legacy_file, mut diagnostics) =
-            match store.read() {
-                Stored::Configuration(configuration) => (configuration, None, false, vec![]),
-                Stored::VersionOne {
-                    configuration,
-                    migration,
-                } => (configuration, migration, true, vec![]),
-                Stored::Missing => (Configuration::default(), None, false, vec![]),
-                Stored::Invalid => (
-                    Configuration::default(),
-                    None,
-                    false,
-                    vec!["invalid_configuration"],
-                ),
-                Stored::Unavailable => (
-                    Configuration::default(),
-                    None,
-                    false,
-                    vec!["storage_unavailable"],
-                ),
-            };
+        let (
+            mut configuration,
+            mut launcher_migration,
+            mut detach_migration,
+            mut legacy_file,
+            mut diagnostics,
+        ) = match store.read() {
+            Stored::Configuration(configuration) => (configuration, None, None, false, vec![]),
+            Stored::ConfigurationWithMigration {
+                configuration,
+                migration,
+            } => (configuration, None, Some(migration), false, vec![]),
+            Stored::VersionTwo {
+                configuration,
+                migration,
+            } => (configuration, None, migration, true, vec![]),
+            Stored::VersionOne {
+                configuration,
+                migration,
+                detach_migration,
+            } => (configuration, migration, detach_migration, true, vec![]),
+            Stored::Missing => (Configuration::default(), None, None, false, vec![]),
+            Stored::Invalid => (
+                Configuration::default(),
+                None,
+                None,
+                false,
+                vec!["invalid_configuration"],
+            ),
+            Stored::Unavailable => (
+                Configuration::default(),
+                None,
+                None,
+                false,
+                vec!["storage_unavailable"],
+            ),
+        };
         if launcher_migration.is_none()
             && configuration
                 .bindings()
@@ -220,6 +374,7 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
         {
             configuration = Configuration::default();
             launcher_migration = None;
+            detach_migration = None;
             legacy_file = false;
             diagnostics = vec!["invalid_configuration"];
         }
@@ -229,6 +384,11 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
             configuration,
             legacy_file,
             launcher_migration,
+            detach_migration,
+            local_available: LocalMonitorAvailability::default(),
+            admission: ShortcutAdmission::default(),
+            local_pressed: BTreeMap::new(),
+            recording_chords: BTreeSet::new(),
             registrations: BTreeMap::new(),
             residual: BTreeSet::new(),
             targets: BTreeSet::new(),
@@ -258,10 +418,19 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
     pub fn snapshot(&self) -> Snapshot {
         let bindings = self
             .configuration
-            .bindings()
+            .all_bindings()
             .into_iter()
             .map(|(target, trigger)| {
-                let status = if self.diagnostics.contains(&"storage_uncertain")
+                let status = if target == DETACH {
+                    if self.local_available.available()
+                        && !self.diagnostics.contains(&"storage_uncertain")
+                        && self.registry.valid_in_layout(&trigger)
+                    {
+                        BindingStatus::Active
+                    } else {
+                        BindingStatus::LocalUnavailable
+                    }
+                } else if self.diagnostics.contains(&"storage_uncertain")
                     || (target == LAUNCHER && self.launcher_migration.is_some())
                 {
                     BindingStatus::Degraded
@@ -294,13 +463,12 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
             .collect::<Vec<_>>();
         Snapshot {
             configuration: self.configuration.clone(),
-            recovery_degraded: !bindings
-                .iter()
-                .any(|entry| entry.target == LAUNCHER && entry.status == BindingStatus::Active),
+            recovery_degraded: !self.recovery_available(),
             bindings,
             diagnostics: self.diagnostics.clone(),
             key_labels: self.registry.key_labels(),
             launcher_migration: self.launcher_migration.clone(),
+            detach_migration: self.detach_migration.clone(),
         }
     }
 
@@ -316,6 +484,38 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
                 .map(|(trigger, entry)| (trigger.clone(), entry.generation))
                 .collect(),
         );
+        let launcher = &self.configuration.launcher;
+        let confirmed = !self.diagnostics.contains(&"storage_uncertain")
+            && self.launcher_migration.is_none()
+            && !self.residual.contains(launcher)
+            && (matches!(launcher, Trigger::ModifierDoubleTap { .. })
+                || self
+                    .registrations
+                    .get(launcher)
+                    .is_some_and(|binding| binding.target == LAUNCHER));
+        self.admission
+            .publish_selected(confirmed.then_some(launcher));
+    }
+
+    fn suspend_publication(&mut self) {
+        self.admission.publish_selected(None);
+        self.registry.publish(&BTreeMap::new());
+    }
+
+    fn reconcile_publication(&mut self, desired: &BTreeMap<Trigger, String>) {
+        if self.residual.is_empty()
+            && self.registrations.len() == desired.len()
+            && desired.iter().all(|(trigger, target)| {
+                self.registrations
+                    .get(trigger)
+                    .is_some_and(|binding| &binding.target == target)
+            })
+        {
+            return;
+        }
+        self.suspend_publication();
+        self.reconcile(desired);
+        self.publish();
     }
 
     fn desired(&self, configuration: &Configuration) -> BTreeMap<Trigger, String> {
@@ -410,14 +610,30 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
         expected_revision: u64,
         configuration: Configuration,
     ) -> Result<Snapshot, ShortcutError> {
-        self.save_resolving_migration(expected_revision, configuration, false)
+        self.save_resolving_migrations(expected_revision, configuration, false, false)
     }
 
+    #[cfg(test)]
     pub fn save_resolving_migration(
         &mut self,
         expected_revision: u64,
         configuration: Configuration,
         resolve_launcher_migration: bool,
+    ) -> Result<Snapshot, ShortcutError> {
+        self.save_resolving_migrations(
+            expected_revision,
+            configuration,
+            resolve_launcher_migration,
+            false,
+        )
+    }
+
+    pub fn save_resolving_migrations(
+        &mut self,
+        expected_revision: u64,
+        configuration: Configuration,
+        resolve_launcher_migration: bool,
+        resolve_detach_migration: bool,
     ) -> Result<Snapshot, ShortcutError> {
         let fail = |code| ShortcutError::new(code);
         if expected_revision != self.configuration.revision
@@ -428,11 +644,22 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
         if self.launcher_migration.is_some() && !resolve_launcher_migration {
             return Err(fail("launcher_choice_required").with_snapshot(self.snapshot()));
         }
+        if self.detach_migration.is_some()
+            && !resolve_detach_migration
+            && configuration.detach != self.configuration.detach
+        {
+            return Err(fail("detach_choice_required").with_snapshot(self.snapshot()));
+        }
+        let candidate_detach_migration = if resolve_detach_migration {
+            None
+        } else {
+            self.detach_migration.clone()
+        };
         let mut candidate = configuration.clone().normalized().map_err(|mut error| {
             if error.code == "conflicting_trigger" {
-                let previous = self.configuration.bindings();
+                let previous = self.configuration.all_bindings();
                 let normalized = configuration
-                    .bindings()
+                    .all_bindings()
                     .into_iter()
                     .filter_map(|(target, trigger)| {
                         trigger.normalized().ok().map(|trigger| (target, trigger))
@@ -452,13 +679,14 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
             error.with_snapshot(self.snapshot())
         })?;
         if candidate
-            .bindings()
+            .all_bindings()
             .values()
             .any(|trigger| !self.registry.valid_in_layout(trigger))
         {
             return Err(fail("reserved_trigger").with_snapshot(self.snapshot()));
         }
         if candidate == self.configuration
+            && candidate_detach_migration == self.detach_migration
             && !self.legacy_file
             && self.diagnostics.is_empty()
             && self.residual.is_empty()
@@ -469,13 +697,17 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
             .checked_add(1)
             .filter(|revision| *revision <= MAX_SAFE_INTEGER)
             .ok_or_else(|| fail("revision_conflict").with_snapshot(self.snapshot()))?;
-        if self.store.stage(&candidate).is_err() {
+        if self
+            .store
+            .stage(&candidate, candidate_detach_migration.as_ref())
+            .is_err()
+        {
             self.store.discard();
             return Err(fail("storage_failed").with_snapshot(self.snapshot()));
         }
         self.end_recording();
-        self.suppressed_until_release = !self.pressed.is_empty();
-        self.registry.publish(&BTreeMap::new());
+        self.suppressed_until_release = !self.pressed.is_empty() || !self.local_pressed.is_empty();
+        self.suspend_publication();
         self.fail_pending("stale_binding");
         let previous = self.configuration.clone();
         let previous_desired = self.desired(&previous);
@@ -516,6 +748,7 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
                 self.configuration = candidate;
                 self.legacy_file = false;
                 self.launcher_migration = None;
+                self.detach_migration = candidate_detach_migration;
                 self.diagnostics.clear();
                 self.store.discard();
                 self.publish();
@@ -524,22 +757,40 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
             error = Some("storage_failed");
             // A failed rename/fsync may have committed. Never overwrite an uncertain file.
             match self.store.read() {
-                Stored::Configuration(actual) if actual == candidate => {
-                    self.configuration = actual;
+                actual
+                    if actual
+                        == Stored::current(
+                            candidate.clone(),
+                            candidate_detach_migration.clone(),
+                        ) =>
+                {
+                    self.configuration = candidate;
                     self.legacy_file = false;
                     self.launcher_migration = None;
+                    self.detach_migration = candidate_detach_migration;
                     self.diagnostics = vec!["commit_reconciled"];
                     self.store.discard();
                     self.publish();
                     return Err(fail("storage_failed").with_snapshot(self.snapshot()));
                 }
-                Stored::Configuration(actual) if actual == previous && !self.legacy_file => {}
-                Stored::VersionOne {
+                actual
+                    if actual
+                        == Stored::current(previous.clone(), self.detach_migration.clone())
+                        && !self.legacy_file => {}
+                Stored::VersionTwo {
                     configuration: actual,
                     migration,
                 } if self.legacy_file
                     && actual == previous
-                    && migration == self.launcher_migration => {}
+                    && migration == self.detach_migration => {}
+                Stored::VersionOne {
+                    configuration: actual,
+                    migration,
+                    detach_migration,
+                } if self.legacy_file
+                    && actual == previous
+                    && migration == self.launcher_migration
+                    && detach_migration == self.detach_migration => {}
                 Stored::Missing if previous.revision == 0 && !self.legacy_file => {}
                 _ => {
                     self.diagnostics = vec!["storage_uncertain"];
@@ -572,10 +823,8 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
             return Err(ShortcutError::new("invalid_configuration"));
         }
         self.targets = targets;
-        self.registry.publish(&BTreeMap::new());
         let desired = self.desired(&self.configuration);
-        self.reconcile(&desired);
-        self.publish();
+        self.reconcile_publication(&desired);
         let stale = self
             .pending
             .iter()
@@ -592,14 +841,87 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
     pub fn set_monitor(&mut self, status: MonitorStatus) -> bool {
         let changed = self.monitor != status;
         self.monitor = status;
+        self.admission.set_monitor(status == MonitorStatus::Active);
         changed
     }
+    pub fn local_availability(&self) -> LocalMonitorAvailability {
+        self.local_available.clone()
+    }
+    pub fn admission(&self) -> ShortcutAdmission {
+        self.admission.clone()
+    }
+    #[cfg(test)]
+    pub fn set_local_available(&self, available: bool) -> bool {
+        self.local_available.set(available)
+    }
+    pub fn local_available(&self) -> bool {
+        self.local_available.available()
+            && !self.diagnostics.contains(&"storage_uncertain")
+            && self
+                .configuration
+                .detach
+                .as_ref()
+                .is_none_or(|trigger| self.registry.valid_in_layout(trigger))
+    }
+    pub fn recovery_available(&self) -> bool {
+        self.admission.recovery_available()
+    }
+    pub fn detach(&self) -> Option<Trigger> {
+        self.configuration.detach.clone()
+    }
+    pub fn configuration_revision(&self) -> u64 {
+        self.configuration.revision
+    }
+    pub fn suppressed_until_release(&self) -> bool {
+        self.suppressed_until_release
+    }
+
+    /// Local candidates share held-chord identity with registered global
+    /// callbacks. Keys remain claimed through lease revocation until release.
+    pub fn local_recording_press(
+        &mut self,
+        key: u16,
+        trigger: Option<&Trigger>,
+        down: bool,
+        repeat: bool,
+        expected_epoch: u64,
+        now: u64,
+    ) -> (bool, Effect) {
+        self.expire(now);
+        if !down {
+            let captured = self.local_pressed.remove(&key);
+            if let Some(Some(trigger)) = &captured {
+                if !self.pressed.iter().any(|(pressed, _)| pressed == trigger) {
+                    self.recording_chords.remove(trigger);
+                }
+            }
+            if self.local_pressed.is_empty() && self.pressed.is_empty() {
+                self.suppressed_until_release = false;
+            }
+            return (captured.is_some(), Effect::None);
+        }
+        if self.local_pressed.contains_key(&key) {
+            return (true, Effect::None);
+        }
+        if self.recording_epoch != expected_epoch || self.recording.is_none() {
+            return (false, Effect::None);
+        }
+        let trigger = trigger
+            .and_then(|trigger| trigger.normalized().ok())
+            .filter(|trigger| matches!(trigger, Trigger::Chord { .. }));
+        self.local_pressed.insert(key, trigger.clone());
+        let effect = if repeat {
+            Effect::None
+        } else {
+            trigger
+                .map(|trigger| self.recording_candidate(&trigger))
+                .unwrap_or(Effect::None)
+        };
+        (true, effect)
+    }
     pub fn refresh_layout(&mut self) {
-        self.registry.refresh_layout();
         let desired = self.desired(&self.configuration);
-        self.registry.publish(&BTreeMap::new());
-        self.reconcile(&desired);
-        self.publish();
+        self.reconcile_publication(&desired);
     }
     pub fn wants_monitor(&self) -> bool {
         self.configuration
@@ -618,6 +940,7 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
             expires_at: now.saturating_add(30_000),
         };
         self.recording = Some(lease.clone());
+        self.admission.publish_recording(lease.expires_at);
         lease
     }
     pub fn renew_recording(
@@ -632,6 +955,7 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
             .filter(|lease| lease.lease_id == lease_id)
             .ok_or_else(|| ShortcutError::new("recording_unavailable"))?;
         lease.expires_at = now.saturating_add(30_000);
+        self.admission.publish_recording(lease.expires_at);
         Ok(lease.clone())
     }
     pub fn recording(&self) -> Option<&RecordingLease> {
@@ -643,8 +967,13 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
     pub fn end_recording(&mut self) -> Option<RecordingLease> {
         let lease = self.recording.take();
         if lease.is_some() {
+            self.admission.publish_recording(0);
             self.recording_epoch += 1;
-            self.suppressed_until_release = !self.pressed.is_empty();
+            self.suppressed_until_release =
+                !self.pressed.is_empty() || !self.local_pressed.is_empty();
+            if !self.suppressed_until_release {
+                self.recording_chords.clear();
+            }
         }
         lease
     }
@@ -721,7 +1050,14 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
         if !pressed {
             // Re-registration while held changes generation but not the physical key.
             self.pressed.retain(|(existing, _)| existing != trigger);
-            if self.pressed.is_empty() {
+            if !self
+                .local_pressed
+                .values()
+                .any(|held| held.as_ref() == Some(trigger))
+            {
+                self.recording_chords.remove(trigger);
+            }
+            if self.pressed.is_empty() && self.local_pressed.is_empty() {
                 self.suppressed_until_release = false;
             }
             return Effect::None;
@@ -745,11 +1081,8 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
         {
             return Effect::None;
         }
-        if let Some(lease) = &self.recording {
-            return Effect::Candidate {
-                lease_id: lease.lease_id.clone(),
-                trigger: trigger.clone(),
-            };
+        if self.recording.is_some() {
+            return self.recording_candidate(trigger);
         }
         if self.suppressed_until_release {
             return Effect::None;
@@ -795,6 +1128,18 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
             (invocation.clone(), now.saturating_add(10_000)),
         );
         Effect::Action(invocation)
+    }
+
+    fn recording_candidate(&mut self, trigger: &Trigger) -> Effect {
+        if matches!(trigger, Trigger::Chord { .. })
+            && !self.recording_chords.insert(trigger.clone())
+        {
+            return Effect::None;
+        }
+        Effect::Candidate {
+            lease_id: self.recording.as_ref().unwrap().lease_id.clone(),
+            trigger: trigger.clone(),
+        }
     }
 }
 

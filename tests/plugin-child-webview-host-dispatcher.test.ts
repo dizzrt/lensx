@@ -47,7 +47,7 @@ const createFixture = () => {
   });
   if (!registered.ok) throw new Error('Action fixture registration failed.');
   let active = true;
-  const closePageIfMatches = rs.fn(() => {
+  const closePageIfMatches = rs.fn((_target: { readonly owner_id: string; readonly page_id: string }) => {
     active = false;
     return true;
   });
@@ -77,6 +77,13 @@ const createFixture = () => {
     navigation: {
       isActivePage: (target) => active && target.owner_id === identity.plugin_id && target.page_id === identity.page_id,
       closePageIfMatches,
+      isActiveInstance: (target, attemptId) =>
+        attemptId === 'attempt_0123456789abcdef' &&
+        active &&
+        target.owner_id === identity.plugin_id &&
+        target.page_id === identity.page_id,
+      closeInstanceIfMatches: (target, attemptId) =>
+        attemptId === 'attempt_0123456789abcdef' ? closePageIfMatches(target) : false,
     },
     storage,
   });
@@ -292,4 +299,96 @@ test('SDK disconnect after Context readiness fails the current activation attemp
     expect(controller.disconnect({ contract_version: '0.1.0', session_id: sessionId })).toBe(false);
     controller.dispose();
   }
+});
+
+test('isolates simultaneous same-plugin Session requests, cancellation, Context events, and terminal cleanup', async () => {
+  const context = createMutablePluginHostApiContextSource({ locale: 'en-US', theme: 'light' });
+  const registry = new LauncherActionRegistry();
+  const operations: Array<{
+    readonly instance: number;
+    readonly signal: AbortSignal;
+    readonly complete: (result: PluginScopedStorageResult) => void;
+  }> = [];
+  const disposed = [rs.fn(), rs.fn()];
+  let instances = 0;
+  const factory = createPluginHostApiDispatcherFactory({
+    actions: { registry, dispatcher: new LauncherActionDispatcher(registry) },
+    context,
+    navigation: { isActivePage: () => true, closePageIfMatches: () => true },
+    storage: {
+      create() {
+        const instance = instances++;
+        return {
+          available: () => true,
+          execute: (_request, signal) => new Promise((complete) => operations.push({ instance, signal, complete })),
+          subscribeAvailability: () => () => undefined,
+          dispose: disposed[instance],
+        };
+      },
+    },
+  });
+  const settled: Array<{ dispatchId: string; output: unknown }> = [];
+  const emitted: Array<{ sessionId: string; event: HostApiEvent }> = [];
+  const controller = createPluginChildWebviewHostDispatcherController(factory, {
+    settle: async (dispatchId, output) => {
+      settled.push({ dispatchId, output });
+      return true;
+    },
+    fail: async () => true,
+    emitEvent: (sessionId, event) => {
+      emitted.push({ sessionId, event });
+      return true;
+    },
+  });
+  const event = (instance: number, sequence: number, request: unknown) => ({
+    ...dispatchEvent(sequence, request),
+    // Native IDs incorporate the distinct Session even when each plugin uses the same request sequence.
+    session_id: String(instance + 1).repeat(32),
+    dispatch_id: String(instance + 1).repeat(16) + sequence.toString(16).padStart(16, '0'),
+    attempt_id: `attempt_${String(instance + 1).repeat(16)}`,
+  });
+  for (const instance of [0, 1]) {
+    expect(controller.dispatch(event(instance, 1, { method: 'runtime.get_context', params: {} }))).toBe(true);
+  }
+  await flush();
+  context.update({ locale: 'zh-CN', theme: 'dark' });
+  await flush();
+  expect(emitted.map(({ sessionId }) => sessionId).sort()).toEqual(['1'.repeat(32), '2'.repeat(32)]);
+  const first = event(0, 2, { method: 'storage.get', params: { key: 'same-key' } });
+  const second = event(1, 2, { method: 'storage.get', params: { key: 'same-key' } });
+  controller.dispatch(first);
+  controller.dispatch(second);
+  await flush();
+  expect(operations.map(({ instance }) => instance)).toEqual([0, 1]);
+  expect(
+    controller.cancel({ contract_version: '0.1.0', session_id: second.session_id, dispatch_id: first.dispatch_id }),
+  ).toBe(false);
+  expect(
+    controller.cancel({ contract_version: '0.1.0', session_id: first.session_id, dispatch_id: first.dispatch_id }),
+  ).toBe(true);
+  expect(operations.map(({ signal }) => signal.aborted)).toEqual([true, false]);
+  operations[0].complete({ method: 'storage.get', result: { found: true, value: 'first' } });
+  operations[1].complete({ method: 'storage.get', result: { found: true, value: 'second' } });
+  await flush();
+  expect(settled.filter(({ dispatchId }) => dispatchId === first.dispatch_id)).toEqual([]);
+  expect(settled.find(({ dispatchId }) => dispatchId === second.dispatch_id)?.output).toEqual({
+    method: 'storage.get',
+    result: { found: true, value: 'second' },
+  });
+  expect(controller.disconnect({ contract_version: '0.1.0', session_id: first.session_id })).toBe(true);
+  emitted.length = 0;
+  context.update({ locale: 'en-US', theme: 'light' });
+  await flush();
+  expect(emitted.map(({ sessionId }) => sessionId)).toEqual([second.session_id]);
+  expect(disposed.map((dispose) => dispose.mock.calls.length)).toEqual([1, 0]);
+  controller.dispatch(event(1, 3, { method: 'storage.get', params: { key: 'same-key' } }));
+  await flush();
+  controller.dispose();
+  controller.dispose();
+  expect(operations[2].signal.aborted).toBe(true);
+  expect(disposed.map((dispose) => dispose.mock.calls.length)).toEqual([1, 1]);
+  emitted.length = 0;
+  context.update({ locale: 'zh-CN', theme: 'dark' });
+  await flush();
+  expect(emitted).toEqual([]);
 });

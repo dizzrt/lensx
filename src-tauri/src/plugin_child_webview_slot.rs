@@ -1,5 +1,5 @@
 use crate::{
-    launcher_window::MAIN_WINDOW_LABEL,
+    plugin_child_webview_owner::PluginChildWebviewOwner,
     plugin_child_webview_service::{
         PluginChildWebviewAttempt, PluginChildWebviewBounds, PluginChildWebviewRegistry,
         PluginChildWebviewService, PluginChildWebviewSlotUpdateResult,
@@ -7,9 +7,9 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tauri::{AppHandle, Manager, State};
+use tauri::{State, Webview};
 
-pub(crate) const PLUGIN_CHILD_WEBVIEW_SLOT_CONTRACT_VERSION: &str = "0.1.0";
+pub(crate) const PLUGIN_CHILD_WEBVIEW_SLOT_CONTRACT_VERSION: &str = "0.2.0";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -34,6 +34,7 @@ pub struct UpdatePluginChildWebviewSlotRequest {
     pub(crate) contract_version: String,
     pub(crate) attempt_id: String,
     pub(crate) window_label: String,
+    pub(crate) ownership_revision: String,
     pub(crate) surface_mode: PluginChildWebviewSurfaceMode,
     pub(crate) scale_factor: f64,
     pub(crate) physical_bounds: PluginChildWebviewPhysicalBounds,
@@ -99,12 +100,45 @@ fn exact_nonnegative_integer(value: f64) -> bool {
     value.is_finite() && value >= 0.0 && value.fract() == 0.0
 }
 
+pub(crate) fn parse_presentation_owner(
+    window_label: &str,
+    ownership_revision: &str,
+    actual_host_source: &str,
+    actual_window_label: &str,
+) -> Option<PluginChildWebviewOwner> {
+    if ownership_revision.is_empty()
+        || ownership_revision.len() > 20
+        || ownership_revision.starts_with('0')
+        || !ownership_revision.bytes().all(|byte| byte.is_ascii_digit())
+        || actual_host_source != actual_window_label
+    {
+        return None;
+    }
+    let owner =
+        PluginChildWebviewOwner::from_parts(window_label, ownership_revision.parse::<u64>().ok()?)?;
+    owner
+        .matches_host_source(actual_host_source)
+        .then_some(owner)
+}
+
 fn parse_request(
     request: &UpdatePluginChildWebviewSlotRequest,
     window: SlotWindowFacts,
-) -> Option<(PluginChildWebviewAttempt, u64, PluginChildWebviewBounds)> {
+    actual_host_source: &str,
+    actual_window_label: &str,
+) -> Option<(
+    PluginChildWebviewAttempt,
+    PluginChildWebviewOwner,
+    u64,
+    PluginChildWebviewBounds,
+)> {
+    let owner = parse_presentation_owner(
+        &request.window_label,
+        &request.ownership_revision,
+        actual_host_source,
+        actual_window_label,
+    )?;
     if request.contract_version != PLUGIN_CHILD_WEBVIEW_SLOT_CONTRACT_VERSION
-        || request.window_label != MAIN_WINDOW_LABEL
         || request.surface_mode != PluginChildWebviewSurfaceMode::Page
         || !request.scale_factor.is_finite()
         || request.scale_factor <= 0.0
@@ -143,6 +177,7 @@ fn parse_request(
     }
     Some((
         PluginChildWebviewAttempt::from_opaque_id(&request.attempt_id)?,
+        owner,
         revision,
         PluginChildWebviewBounds {
             x: bounds.x as i32,
@@ -159,11 +194,14 @@ pub(crate) fn apply_slot_update<
     service: &PluginChildWebviewRegistry<H>,
     request: UpdatePluginChildWebviewSlotRequest,
     window: SlotWindowFacts,
+    actual_host_source: &str,
+    actual_window_label: &str,
 ) -> Result<UpdatePluginChildWebviewSlotResponse, PluginChildWebviewSlotError> {
-    let (attempt, revision, bounds) = parse_request(&request, window).ok_or_else(|| {
-        PluginChildWebviewSlotError::new(PluginChildWebviewSlotErrorCode::InvalidRequest)
-    })?;
-    match service.apply_slot_update(attempt, revision, bounds) {
+    let (attempt, owner, revision, bounds) =
+        parse_request(&request, window, actual_host_source, actual_window_label).ok_or_else(
+            || PluginChildWebviewSlotError::new(PluginChildWebviewSlotErrorCode::InvalidRequest),
+        )?;
+    match service.apply_owned_slot_update(attempt, &owner, revision, bounds) {
         PluginChildWebviewSlotUpdateResult::Applied => Ok(UpdatePluginChildWebviewSlotResponse {
             contract_version: PLUGIN_CHILD_WEBVIEW_SLOT_CONTRACT_VERSION,
             accepted_revision: revision.to_string(),
@@ -182,11 +220,18 @@ pub(crate) fn apply_slot_update<
 
 #[tauri::command]
 pub(crate) fn update_plugin_child_webview_slot(
-    app: AppHandle,
+    webview: Webview,
     service: State<'_, Arc<PluginChildWebviewService<tauri::Wry>>>,
     request: UpdatePluginChildWebviewSlotRequest,
 ) -> Result<UpdatePluginChildWebviewSlotResponse, PluginChildWebviewSlotError> {
-    let window = app.get_window(MAIN_WINDOW_LABEL).ok_or_else(|| {
+    let window = webview.window();
+    parse_presentation_owner(
+        &request.window_label,
+        &request.ownership_revision,
+        webview.label(),
+        window.label(),
+    )
+    .ok_or_else(|| {
         PluginChildWebviewSlotError::new(PluginChildWebviewSlotErrorCode::InvalidRequest)
     })?;
     let size = window.inner_size().map_err(|_| {
@@ -203,12 +248,15 @@ pub(crate) fn update_plugin_child_webview_slot(
             physical_width: size.width,
             physical_height: size.height,
         },
+        webview.label(),
+        window.label(),
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::launcher_window::MAIN_WINDOW_LABEL;
     use crate::{
         plugin_child_webview_adapter::PluginChildWebviewNativeHandle,
         plugin_child_webview_service::PluginChildWebviewIdentity,
@@ -218,6 +266,7 @@ mod tests {
 
     #[derive(Clone, Default)]
     struct FakeHandle {
+        source_label: Option<String>,
         bounds_updates: Arc<AtomicUsize>,
         fail_bounds: Arc<AtomicBool>,
     }
@@ -231,7 +280,9 @@ mod tests {
         }
 
         fn source_label(&self) -> String {
-            "fake-child".to_owned()
+            self.source_label
+                .clone()
+                .unwrap_or_else(|| "fake-child".to_owned())
         }
 
         fn update_bounds(&self, _x: i32, _y: i32, _width: u32, _height: u32) -> Result<(), ()> {
@@ -283,6 +334,7 @@ mod tests {
             contract_version: PLUGIN_CHILD_WEBVIEW_SLOT_CONTRACT_VERSION.to_owned(),
             attempt_id,
             window_label: MAIN_WINDOW_LABEL.to_owned(),
+            ownership_revision: "1".to_owned(),
             surface_mode: PluginChildWebviewSurfaceMode::Page,
             scale_factor: 2.0,
             physical_bounds: PluginChildWebviewPhysicalBounds {
@@ -312,8 +364,14 @@ mod tests {
         let handle = FakeHandle::default();
         let updates = Arc::clone(&handle.bounds_updates);
         assert!(service.attach_current(attempt, handle));
-        let response = apply_slot_update(&service, request(attempt.opaque_id(), "1"), window())
-            .expect("slot update should apply");
+        let response = apply_slot_update(
+            &service,
+            request(attempt.opaque_id(), "1"),
+            window(),
+            "main",
+            "main",
+        )
+        .expect("slot update should apply");
         assert_eq!(response.accepted_revision, "1");
         assert_eq!(updates.load(Ordering::SeqCst), 1);
         let snapshot = service.snapshot().expect("current remains");
@@ -342,17 +400,30 @@ mod tests {
             &service,
             request("attempt_00000000000000ff".to_owned(), "1"),
             window(),
+            "main",
+            "main",
         )
         .expect_err("stale attempt must fail");
         assert_eq!(
             stale_attempt.code,
             PluginChildWebviewSlotErrorCode::StaleAttempt
         );
-        apply_slot_update(&service, request(attempt.opaque_id(), "2"), window())
-            .expect("new revision applies");
-        let stale_revision =
-            apply_slot_update(&service, request(attempt.opaque_id(), "2"), window())
-                .expect_err("duplicate revision must fail");
+        apply_slot_update(
+            &service,
+            request(attempt.opaque_id(), "2"),
+            window(),
+            "main",
+            "main",
+        )
+        .expect("new revision applies");
+        let stale_revision = apply_slot_update(
+            &service,
+            request(attempt.opaque_id(), "2"),
+            window(),
+            "main",
+            "main",
+        )
+        .expect_err("duplicate revision must fail");
         assert_eq!(
             stale_revision.code,
             PluginChildWebviewSlotErrorCode::StaleRevision
@@ -399,7 +470,7 @@ mod tests {
             },
         ];
         for invalid in cases {
-            let error = apply_slot_update(&service, invalid, window())
+            let error = apply_slot_update(&service, invalid, window(), "main", "main")
                 .expect_err("invalid slot input must fail");
             assert_eq!(error.code, PluginChildWebviewSlotErrorCode::InvalidRequest);
         }
@@ -421,8 +492,14 @@ mod tests {
         let handle = FakeHandle::default();
         handle.fail_bounds.store(true, Ordering::SeqCst);
         assert!(service.attach_current(attempt, handle));
-        let error = apply_slot_update(&service, request(attempt.opaque_id(), "1"), window())
-            .expect_err("native update should fail");
+        let error = apply_slot_update(
+            &service,
+            request(attempt.opaque_id(), "1"),
+            window(),
+            "main",
+            "main",
+        )
+        .expect_err("native update should fail");
         assert_eq!(
             error.code,
             PluginChildWebviewSlotErrorCode::NativeUpdateFailed
@@ -430,6 +507,147 @@ mod tests {
         let snapshot = service.snapshot().expect("current remains");
         assert_eq!(snapshot.presentation_revision, 0);
         assert!(snapshot.bounds.is_none());
+    }
+
+    #[test]
+    fn owner_payload_requires_actual_host_and_native_parent_with_bounded_revision() {
+        for revision in [
+            "",
+            "0",
+            "01",
+            "-1",
+            "+1",
+            "1.0",
+            " 1",
+            "18446744073709551616",
+            "111111111111111111111",
+        ] {
+            assert!(
+                parse_presentation_owner("main", revision, "main", "main").is_none(),
+                "{revision}"
+            );
+        }
+        assert_eq!(
+            parse_presentation_owner("main", "18446744073709551615", "main", "main")
+                .unwrap()
+                .revision,
+            u64::MAX
+        );
+        let detached = "plugin-window-0000000000000001";
+        for (requested, source, parent) in [
+            ("main", "plugin-child-0000000000000001", "main"),
+            ("main", detached, detached),
+            (detached, "main", "main"),
+            (detached, detached, "main"),
+            ("main?window=main", "main", "main"),
+        ] {
+            assert!(parse_presentation_owner(requested, "1", source, parent).is_none());
+        }
+        assert!(parse_presentation_owner(detached, "2", detached, detached).is_some());
+    }
+
+    #[test]
+    fn forged_host_and_old_owner_revision_do_not_update_native_bounds() {
+        let service = PluginChildWebviewRegistry::<FakeHandle>::default();
+        let attempt = service.reserve_current(identity(), "fake-child").unwrap();
+        let handle = FakeHandle::default();
+        let updates = Arc::clone(&handle.bounds_updates);
+        assert!(service.attach_current(attempt, handle));
+        for source in [
+            "plugin-child-0000000000000001",
+            "plugin-window-0000000000000001",
+        ] {
+            let error = apply_slot_update(
+                &service,
+                request(attempt.opaque_id(), "1"),
+                window(),
+                source,
+                "main",
+            )
+            .unwrap_err();
+            assert_eq!(error.code, PluginChildWebviewSlotErrorCode::InvalidRequest);
+        }
+        let mut stale = request(attempt.opaque_id(), "1");
+        stale.ownership_revision = "2".into();
+        assert_eq!(
+            apply_slot_update(&service, stale, window(), "main", "main")
+                .unwrap_err()
+                .code,
+            PluginChildWebviewSlotErrorCode::StaleAttempt
+        );
+        assert_eq!(updates.load(Ordering::SeqCst), 0);
+        assert_eq!(service.snapshot().unwrap().presentation_revision, 0);
+    }
+
+    #[test]
+    fn simultaneous_surface_slots_reject_main_updates_for_a_detached_owner() {
+        let service = PluginChildWebviewRegistry::<FakeHandle>::default();
+        let detached_owner = PluginChildWebviewOwner::detached(1).unwrap();
+        let detached = service
+            .reserve_owned_with_derived_label(identity(), detached_owner.clone())
+            .unwrap();
+        let detached_handle = FakeHandle {
+            source_label: Some(service.creation_facts(detached).unwrap().source_label),
+            ..FakeHandle::default()
+        };
+        let detached_updates = Arc::clone(&detached_handle.bounds_updates);
+        assert!(service.attach_current(detached, detached_handle));
+        let main = service.reserve_current(identity(), "fake-child").unwrap();
+        let main_handle = FakeHandle::default();
+        let main_updates = Arc::clone(&main_handle.bounds_updates);
+        assert!(service.attach_current(main, main_handle));
+        assert_eq!(
+            apply_slot_update(
+                &service,
+                request(detached.opaque_id(), "9"),
+                window(),
+                "main",
+                "main"
+            )
+            .unwrap_err()
+            .code,
+            PluginChildWebviewSlotErrorCode::StaleAttempt
+        );
+        let mut detached_request = request(detached.opaque_id(), "1");
+        detached_request.window_label = detached_owner.window_label.clone();
+        detached_request.physical_bounds.width = 500.0;
+        apply_slot_update(
+            &service,
+            detached_request,
+            window(),
+            &detached_owner.window_label,
+            &detached_owner.window_label,
+        )
+        .unwrap();
+        apply_slot_update(
+            &service,
+            request(main.opaque_id(), "1"),
+            window(),
+            "main",
+            "main",
+        )
+        .unwrap();
+        assert_eq!(detached_updates.load(Ordering::SeqCst), 1);
+        assert_eq!(main_updates.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            service
+                .snapshot_attempt(detached)
+                .unwrap()
+                .bounds
+                .unwrap()
+                .width,
+            500
+        );
+        assert_eq!(
+            service
+                .snapshot_attempt(main)
+                .unwrap()
+                .bounds
+                .unwrap()
+                .width,
+            600
+        );
+        assert_eq!(service.snapshots().len(), 2);
     }
 
     #[test]

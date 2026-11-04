@@ -168,8 +168,17 @@ module messages. Theme changes apply immediately without reopening.
 Input, language mode, the effective language, Find query/options, selection,
 and undo history remain in memory in the current Page generation. Hiding and
 restoring Launcher preserves the same Child WebView, Runtime Session, model,
-and Workers while execution identity remains current. This is not a close or
-a new document. A real close/reopen starts empty in Auto with no recognized
+and Workers while execution identity remains current. Detachment moves that same
+native WebView into an independent window, preserving its editor, undo history,
+Find state, Worker work, and SDK Session without another load or initialization.
+Its Monaco framework language still follows the first-import limitation above.
+An independent window stays visible on blur; closing it terminates only that
+instance. Opening ConfigLens again from main creates a separate empty editor;
+neither input nor undo history is synchronized between instances. These Host
+behaviors require no plugin Manifest or SDK change.
+
+Hiding, restoring, and detaching do not create a new document.
+A real close/reopen starts empty in Auto with no recognized
 language and uses the new opening interface locale. Disable, replacement,
 development reload, uninstall, teardown, or an SDK failure/retry discards the
 old editor and its temporary content/query state. A same-document retry keeps

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MIT
 
 use std::{
-  collections::HashMap,
   str::FromStr,
   sync::{
     atomic::{AtomicU32, AtomicUsize, Ordering},
@@ -43,7 +42,18 @@ static CHANNEL_DATA_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 /// Maps a channel id to a pending data that must be send to the JavaScript side via the IPC.
 #[derive(Default, Clone)]
-pub struct ChannelDataIpcQueue(Arc<Mutex<HashMap<u32, InvokeResponseBody>>>);
+pub struct ChannelDataIpcQueue(
+  Arc<Mutex<channel_recipient::RecipientQueue<Mutex<crate::ResourceTable>, InvokeResponseBody>>>,
+);
+
+#[path = "channel_recipient.rs"]
+mod channel_recipient;
+
+impl ChannelDataIpcQueue {
+  pub(crate) fn retire_recipient(&self, resource_identity: &Arc<Mutex<crate::ResourceTable>>) {
+    self.0.lock().unwrap().retire(resource_identity);
+  }
+}
 
 /// An IPC channel.
 pub struct Channel<TSend = InvokeResponseBody> {
@@ -168,12 +178,15 @@ impl JavaScriptChannelId {
           _ => {
             let data_id = CHANNEL_DATA_COUNTER.fetch_add(1, Ordering::Relaxed);
 
-            webview
+            if !webview
               .state::<ChannelDataIpcQueue>()
               .0
               .lock()
               .unwrap()
-              .insert(data_id, body);
+              .insert(data_id, webview.resources_table.clone(), body)
+            {
+              return Err(crate::Error::WebviewNotFound);
+            }
 
             webview.eval(format!(
               "window.__TAURI_INTERNALS__.invoke('{FETCH_CHANNEL_DATA_COMMAND}', null, {{ headers: {{ '{CHANNEL_ID_HEADER_NAME}': '{data_id}' }} }}).then((response) => window.__TAURI_INTERNALS__.runCallback({callback_id}, {{ message: response, index: {current_index} }})).catch(console.error)",
@@ -264,12 +277,15 @@ impl<TSend> Channel<TSend> {
           _ => {
             let data_id = CHANNEL_DATA_COUNTER.fetch_add(1, Ordering::Relaxed);
 
-            webview
+            if !webview
               .state::<ChannelDataIpcQueue>()
               .0
               .lock()
               .unwrap()
-              .insert(data_id, body);
+              .insert(data_id, webview.resources_table.clone(), body)
+            {
+              return Err(crate::Error::WebviewNotFound);
+            }
 
             webview.eval(format!(
               "window.__TAURI_INTERNALS__.invoke('{FETCH_CHANNEL_DATA_COMMAND}', null, {{ headers: {{ '{CHANNEL_ID_HEADER_NAME}': '{data_id}' }} }}).then((response) => window.__TAURI_INTERNALS__.runCallback({callback_id}, response)).catch(console.error)",
@@ -316,7 +332,8 @@ impl<'de, R: Runtime, TSend> CommandArg<'de, R> for Channel<TSend> {
 }
 
 #[command(root = "crate")]
-fn fetch(
+fn fetch<R: Runtime>(
+  webview: Webview<R>,
   request: Request<'_>,
   cache: State<'_, ChannelDataIpcQueue>,
 ) -> Result<Response, &'static str> {
@@ -326,7 +343,7 @@ fn fetch(
     .and_then(|v| v.to_str().ok())
     .and_then(|id| id.parse().ok())
   {
-    if let Some(data) = cache.0.lock().unwrap().remove(&id) {
+    if let Some(data) = cache.0.lock().unwrap().take(id, &webview.resources_table) {
       Ok(Response::new(data))
     } else {
       Err("data not found")

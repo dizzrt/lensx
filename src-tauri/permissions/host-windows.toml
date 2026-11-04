@@ -1,0 +1,11 @@
+[[permission]]
+identifier = "detached-shell"
+description = "Registered detached Host bootstrap, subscription and current shell geometry only."
+commands.allow = [
+  "read_host_window_bootstrap",
+  "subscribe_host_window",
+  "read_host_window_snapshot",
+  "release_host_window_subscription",
+  "ready_host_window",
+  "update_host_window_slot",
+]

@@ -70,6 +70,9 @@ export interface MutablePluginHostApiContextSource extends PluginHostApiContextS
 export interface PluginHostApiNavigation {
   readonly isActivePage: (target: HostPageTarget) => boolean;
   readonly closePageIfMatches: (target: HostPageTarget) => boolean;
+  readonly isActiveInstance?: (target: HostPageTarget, attemptId: string) => boolean;
+  readonly closeInstanceIfMatches?: (target: HostPageTarget, attemptId: string) => boolean;
+  readonly instanceIsFrozen?: (attemptId: string) => boolean;
 }
 
 export interface PluginHostApiDispatcherDependencies {
@@ -77,6 +80,7 @@ export interface PluginHostApiDispatcherDependencies {
   readonly context: PluginHostApiContextSource;
   readonly navigation: PluginHostApiNavigation;
   readonly storage?: PluginScopedStorageProviderFactory;
+  readonly awaitInstanceStable?: (attemptId: string, signal: AbortSignal) => Promise<boolean>;
   readonly bindActivations?: (
     target: HostPageTarget,
     runtimeAttemptId?: string,
@@ -289,18 +293,31 @@ export const createPluginHostApiDispatcherFactory = (
             }
             case 'ui.close': {
               const target = Object.freeze({ owner_id: identity.plugin_id, page_id: identity.page_id });
-              if (!dependencies.navigation.isActivePage(target)) return errors.notFound;
+              const matches =
+                runtimeAttemptId === undefined
+                  ? dependencies.navigation.isActivePage(target)
+                  : dependencies.navigation.isActiveInstance?.(target, runtimeAttemptId) === true;
+              if (!matches) return errors.notFound;
               const current = isAvailable(disposed, isCurrent, signal);
               if (current) return current;
               return createPluginRuntimeTransportPostResponseOutcome(
                 validateResult({ method: request.method, result: { accepted: true } }),
                 () => {
                   if (isAvailable(disposed, isCurrent, signal)) return;
-                  dependencies.navigation.closePageIfMatches(target);
+                  if (runtimeAttemptId === undefined) dependencies.navigation.closePageIfMatches(target);
+                  else dependencies.navigation.closeInstanceIfMatches?.(target, runtimeAttemptId);
                 },
               );
             }
             case 'actions.open': {
+              if (runtimeAttemptId !== undefined) {
+                if (
+                  dependencies.awaitInstanceStable &&
+                  !(await dependencies.awaitInstanceStable(runtimeAttemptId, signal))
+                )
+                  return errors.unavailable;
+                if (dependencies.navigation.instanceIsFrozen?.(runtimeAttemptId)) return errors.unavailable;
+              }
               const current = isAvailable(disposed, isCurrent, signal);
               if (current) return current;
               const actionId = `${identity.plugin_id}.${request.params.actionId}`;
@@ -309,10 +326,12 @@ export const createPluginHostApiDispatcherFactory = (
                 .find(({ action_id: candidate }) => candidate === actionId);
               if (!descriptor || descriptor.owner_id !== identity.plugin_id || !descriptor.enabled)
                 return errors.notFound;
-              const result = await dependencies.actions.dispatcher.dispatch(
-                actionId,
-                () => !isAvailable(disposed, isCurrent, signal),
-              );
+              const admit = () =>
+                !isAvailable(disposed, isCurrent, signal) &&
+                (runtimeAttemptId === undefined || !dependencies.navigation.instanceIsFrozen?.(runtimeAttemptId));
+              const result = await (runtimeAttemptId === undefined
+                ? dependencies.actions.dispatcher.dispatch(actionId, admit)
+                : dependencies.actions.dispatcher.dispatch(actionId, admit, { runtimeAttemptId }));
               // Successful Page navigation may itself replace the calling Page. The
               // Session/cancellation check still owns delivery of its accepted result.
               const completed = isAvailable(disposed, isSessionCurrent, signal);

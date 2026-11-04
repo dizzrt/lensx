@@ -31,7 +31,9 @@
       },
       "pluginRuntimeRetry": "Retry",
       "errorTitle": "This page could not be displayed",
-      "errorDescription": "Close the page and try opening it again."
+      "errorDescription": "Close the page and try opening it again.",
+      "pluginWindowFailureTitle": "This plugin window needs attention",
+      "pluginWindowFailureDescription": "Close this window or return to lensX to continue."
     },
     "preferences": {
       "startupFailure": "Saved preferences could not be restored. Safe defaults are in use."
@@ -67,6 +69,18 @@
           "configuration": "configuration"
         }
       }
+    },
+    "pluginWindow": {
+      "recoveryTitle": "Restore plugin window",
+      "recoveryDescription": "The window could not be restored automatically. Your original plugin instance is retained.",
+      "recoveryState": {
+        "recovery_required": "Recovery needs attention.",
+        "recovering": "Restoring the original window…",
+        "closing": "Closing the original instance…"
+      },
+      "retryRecovery": "Retry restoration",
+      "closeInstance": "Close instance",
+      "quit": "Quit lensX"
     }
   },
   "settings": {
@@ -277,7 +291,7 @@
       "permission": "Allow input monitoring",
       "reset": "Restore default shortcuts",
       "resetConfirm": "Restore defaults",
-      "resetDescription": "Restore Ctrl + Shift + Space to open lensX? Feature shortcuts, other settings, and collections will stay the same.",
+      "resetDescription": "Restore Ctrl + Shift + Space to open lensX? The detach shortcut, feature shortcuts, other settings, and collections will stay the same.",
       "editor": "Shortcut for {{target}}",
       "mode": "Shortcut type",
       "chordMode": "Key combination",
@@ -317,7 +331,8 @@
         "target_unavailable": "Saved · action unavailable",
         "registration_failed": "Saved · could not register",
         "monitor_unavailable": "Saved · input monitoring unavailable",
-        "degraded": "Recovery needs attention"
+        "degraded": "Recovery needs attention",
+        "local_unavailable": "Saved · in-app shortcut unavailable"
       },
       "feedback": {
         "saved": "Shortcuts saved. Check each binding’s availability.",
@@ -332,7 +347,8 @@
         "unavailable": "Shortcuts are currently unavailable. Try again.",
         "invalid_response": "The shortcut state could not be confirmed. Try again.",
         "duplicate_action": "This action already has a shortcut. Edit its existing row instead.",
-        "launcher_choice_required": "Choose and save the shortcut type that should open lensX first."
+        "launcher_choice_required": "Choose and save the shortcut type that should open lensX first.",
+        "detach_choice_required": "Choose a detach shortcut or confirm keeping it disabled before changing that binding."
       },
       "add": "Add feature shortcut",
       "newShortcut": "New shortcut",
@@ -342,7 +358,14 @@
       "chooseType": "Choose a type",
       "launcherMigration": "Two launcher shortcuts were found. Choose which type to keep and save it. Only the selected shortcut will open lensX.",
       "modifierForTarget": "Modifier key for {{target}}",
-      "system": "System shortcuts"
+      "system": "System shortcuts",
+      "detach": "Detach plugin window",
+      "local": "In-app shortcuts",
+      "localBindings": "In-app shortcut bindings",
+      "detachScope": "Works only on a ready plugin page in the main launcher. Other applications and detached windows keep their own shortcuts.",
+      "detachMigration": "The default detach shortcut was not enabled because {{target}} used Cmd + D. Choose another shortcut or confirm keeping it disabled.",
+      "detachKeepDisabled": "Keep detach shortcut disabled",
+      "detachReset": "Restore Cmd + D"
     }
   },
   "error": {

@@ -84,10 +84,53 @@ const structured = vm.runInContext(
   })`,
   context,
 ) as Record<string, unknown>;
+const request = vm.runInContext(
+  "({contract_version:'0.2.0',type:'lensx.plugin_bridge.request',request_id:'request_0000000000000001',request:{method:'storage.get',params:{key:'value'}}})",
+  context,
+);
+if (!bridge.send(request)) failures.push('bridge did not register a current request before response delivery.');
 if (!deliver(structured) || received !== structured || vm.runInContext('globalThis.injected', context) !== undefined) {
   failures.push('Unicode, HTML, or script-shaped Host delivery escaped the structured frame boundary.');
 }
+// Ordinary response/event delivery remains compatible with installed SDK packages.
+const cancelledRequest = vm.runInContext(
+  "({contract_version:'0.2.0',type:'lensx.plugin_bridge.request',request_id:'request_0000000000000002',request:{method:'ui.close',params:{}}})",
+  context,
+);
+const cancellation = vm.runInContext(
+  "({contract_version:'0.2.0',type:'lensx.plugin_bridge.cancel',request_id:'request_0000000000000002'})",
+  context,
+);
+bridge.send(cancelledRequest);
+bridge.send(cancellation);
+const cancelledResponse = vm.runInContext(
+  "({contract_version:'0.2.0',type:'lensx.plugin_bridge.response',request_id:'request_0000000000000002',result:{method:'ui.close',result:{accepted:true}}})",
+  context,
+);
+if (deliver(cancelledResponse) || received !== structured)
+  failures.push('cancelled JavaScript request was acknowledged or delivered.');
+for (let sequence = 3; sequence <= 35; sequence += 1) {
+  const request = vm.runInContext(
+    `({contract_version:'0.2.0',type:'lensx.plugin_bridge.request',request_id:'request_${sequence.toString(16).padStart(16, '0')}',request:{method:'ui.close',params:{}}})`,
+    context,
+  );
+  if (!bridge.send(request))
+    failures.push('close receipt tracking changed the native 32-request limit into a transport failure.');
+}
+const overflowError = vm.runInContext(
+  "({contract_version:'0.2.0',type:'lensx.plugin_bridge.response',request_id:'request_0000000000000023',error:{code:'limit_exceeded',message:'limit'}})",
+  context,
+);
+if (!deliver(overflowError)) failures.push('native quota response for an untracked overflow request was suppressed.');
+const acceptedClose = vm.runInContext(
+  "({contract_version:'0.2.0',type:'lensx.plugin_bridge.response',request_id:'request_0000000000000003',result:{method:'ui.close',result:{accepted:true}}})",
+  context,
+);
+if (!deliver(acceptedClose) || deliver(acceptedClose))
+  failures.push('close receipt acknowledgement was not exactly once.');
+
 unsubscribe?.();
+if (deliver(ready)) failures.push('delivery without an SDK receiver was acknowledged.');
 if (Reflect.defineProperty(context, '__LENSX_PLUGIN_WEBVIEW_BRIDGE__', { value: null })) {
   failures.push('plugin script can redefine the bridge global.');
 }
@@ -102,8 +145,12 @@ for (const privateFact of [
 ]) {
   if (bootstrap.includes(privateFact)) failures.push(`bridge bootstrap exposes ${privateFact}.`);
 }
-if ((adapter.match(/plugin_child_webview_bridge_bootstrap\(BRIDGE_PROBE_FRESHNESS\)/gu) ?? []).length < 3) {
-  failures.push('bridge bootstrap is not installed before every isolated Child WebView probe document.');
+if (
+  !adapter.includes('plugin_child_webview_bridge_bootstrap(freshness)?') ||
+  !adapter.includes('.initialization_script(bootstrap)') ||
+  !adapter.includes('&input.freshness')
+) {
+  failures.push('production Child construction does not install the private bridge bootstrap.');
 }
 
 if (failures.length > 0) {

@@ -318,6 +318,26 @@ const taoRustFiles = [
   'src/platform_impl/macos/window_delegate.rs',
   'src/window.rs',
 ].map((path) => `vendor/frame-aware-navigation/tao/${path}`);
+const webviewVendorRustFiles = [
+  'wry/src/lib.rs',
+  'wry/src/wkwebview/mod.rs',
+  'wry/src/wkwebview/reparent.rs',
+  'wry/src/wkwebview/class/mod.rs',
+  'wry/src/wkwebview/class/wry_web_view.rs',
+  'wry/src/wkwebview/class/key_equivalent.rs',
+  'tauri-runtime/src/lib.rs',
+  'tauri-runtime/src/webview.rs',
+  'tauri-runtime-wry/src/lib.rs',
+  'tauri-runtime-wry/src/reparent.rs',
+  'tauri-runtime-wry/src/data_delivery.rs',
+  'tauri-runtime-wry/src/reparent_transaction.rs',
+  'tauri/src/webview/mod.rs',
+  'tauri/src/webview/reparent.rs',
+  'tauri/src/webview/reparent_transaction.rs',
+  'tauri/src/ipc/channel.rs',
+  'tauri/src/ipc/channel_recipient.rs',
+  'tauri/src/manager/mod.rs',
+].map((path) => `vendor/frame-aware-navigation/${path}`);
 const dependencyDriftGate = gatesById.get('frame-aware-navigation-dependency-drift');
 if (dependencyDriftGate === undefined) throw new Error('[validation/catalog] missing dependency drift Gate.');
 dependencyDriftGate.steps.push(
@@ -325,8 +345,9 @@ dependencyDriftGate.steps.push(
   internStep('cargo rustc --locked --manifest-path src-tauri/Cargo.toml -p tao --lib -- -D warnings', false, 'darwin'),
   internStep('node --experimental-strip-types scripts/tao-policy-tests.ts', false, 'any'),
   internStep('node --experimental-strip-types scripts/wry-policy-tests.ts', false, 'any'),
+  internStep('cargo check --locked --manifest-path src-tauri/Cargo.toml', false, 'darwin'),
   internStep(
-    'rustfmt --config-path scripts/validation/vendor-rustfmt.toml --check vendor/frame-aware-navigation/wry/src/wkwebview/class/mod.rs vendor/frame-aware-navigation/wry/src/wkwebview/class/wry_web_view.rs vendor/frame-aware-navigation/wry/src/wkwebview/class/key_equivalent.rs',
+    `rustfmt --config-path scripts/validation/vendor-rustfmt.toml --config skip_children=true --check ${webviewVendorRustFiles.join(' ')}`,
     false,
     'any',
   ),
@@ -408,6 +429,37 @@ gatesById.set('plugin-host-http', {
 prependWorkspaceBuildPreparation({
   gateId: 'plugin-host-http',
   targetPaths: ['packages/plugin-sdk', 'packages/plugin-testkit', 'packages/plugin-ui', 'packages/plugin-cli'],
+});
+
+gatesById.set('plugin-detached-windows', {
+  id: 'plugin-detached-windows',
+  description: 'Same-instance window migration, recovery, scoped ownership, native commands and plugin continuity',
+  legacyNames: [],
+  dependsOn: [
+    'plugin-child-webview-window-lifecycle',
+    'plugin-child-webview-continuity',
+    'plugin-child-webview-session',
+    'plugin-child-webview-runtime',
+    'plugin-child-webview-resource-binding',
+    'isolated-plugin-runtime-origin',
+    'plugin-host-api-dispatcher',
+    'plugin-host-http',
+    'plugin-scoped-storage',
+    'launcher-input-focus',
+    'launcher-shortcuts',
+    'plugin-development-mode',
+    'frame-aware-navigation-dependency-drift',
+    'plugin-contract-docs',
+  ],
+  steps: [
+    internStep(
+      'pnpm exec rstest run tests/plugin-detached-shell.test.tsx tests/plugin-detached-window-composition.test.tsx tests/plugin-window-controls.test.tsx tests/plugin-detached-official-plugins.test.ts tests/host-window-permissions.test.ts tests/validation-registry.test.ts tests/validation-governance.test.ts',
+    ),
+    internStep('cargo test --locked --manifest-path src-tauri/Cargo.toml plugin_detached'),
+    internStep('pnpm --dir plugins/config-lens run test'),
+    internStep('pnpm --dir plugins/config-lens run build'),
+    internStep('pnpm --dir plugins/config-lens run test:e2e'),
+  ],
 });
 
 const targetFromLegacy = (legacyName: string, writable: boolean): WritableTarget => {

@@ -7,12 +7,21 @@ const failures: string[] = [];
 const resource = read('src-tauri/src/plugin_resource_service.rs');
 const child = read('src-tauri/src/plugin_child_webview_service.rs');
 const library = read('src-tauri/src/lib.rs');
+const presentation = read('src-tauri/src/plugin_child_webview_presentation.rs');
 
 for (const marker of [
   'struct RuntimeResourceAuthority',
   'attempt_id: String',
   'webview_label: String',
   'binding: ScopeBinding',
+  'leases: HashMap<String, RuntimeResourceAuthority>',
+  'reservations: HashMap<String, ResourceCreationReservation>',
+  'reserve_entry_for_attempt(',
+  'release_creation_reservation(',
+  'scopes.expire(resource_now_ms())',
+  'scopes.used_sources.contains(webview_label)',
+  'scopes.reservations.remove(attempt_id)',
+  'scopes.retire_if_unheld(&binding)',
   'activate_runtime_source(',
   'revoke_runtime_source(',
   'handle_request_from_source(',
@@ -44,6 +53,16 @@ if (
   )
 ) {
   failures.push('application composition does not bind Resource Service to Child WebView lifecycle.');
+}
+
+const reserveAttempt = presentation.indexOf('.reserve_creation_for_entry(');
+const reserveResources = presentation.indexOf('.reserve_entry_for_attempt(');
+const bindAttempt = presentation.indexOf('.bind_creation_reservation(');
+if (reserveAttempt < 0 || reserveResources <= reserveAttempt || bindAttempt <= reserveResources) {
+  failures.push('native creation must allocate a trusted attempt before reserving resources and binding the instance.');
+}
+if (resource.includes('runtime_authority: Mutex<Option<RuntimeResourceAuthority>>')) {
+  failures.push('resource authority must retain independent source leases, not a global singleton.');
 }
 
 if (failures.length > 0) {

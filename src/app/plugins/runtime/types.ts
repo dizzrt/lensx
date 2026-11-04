@@ -1,4 +1,5 @@
 import type { ActivePage, PageResolution } from '../../navigation';
+import type { PluginChildWebviewAdmission } from './pluginChildWebviewPresentation';
 
 export type PluginPageRuntimeErrorCode =
   | 'runtime_unavailable'
@@ -49,7 +50,12 @@ export interface PluginPageRuntimeDescriptor {
 }
 
 export interface PluginPageRuntimeResolver {
-  resolve: (request: PluginPageRuntimeRequest) => Promise<PluginPageRuntimeDescriptor>;
+  admit?: (request: PluginPageRuntimeRequest, signal?: AbortSignal) => Promise<PluginChildWebviewAdmission>;
+  resolve: (
+    request: PluginPageRuntimeRequest,
+    admission?: PluginChildWebviewAdmission,
+    signal?: AbortSignal,
+  ) => Promise<PluginPageRuntimeDescriptor>;
   isCurrent?: (request: PluginPageRuntimeRequest, descriptor: PluginPageRuntimeDescriptor) => Promise<boolean>;
   subscribeInvalidation?: (listener: () => void) => () => void;
 }

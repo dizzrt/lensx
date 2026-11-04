@@ -418,7 +418,9 @@ revision 保持不变。Scope map 从不持久化，因此重启会使全部旧 
 文本不是授权。Service 复用 Installer ownership proof，要求精确
 `packages/<plugin-key>/<sha256>` active pointer、匹配的 record identity 与 digest、canonical real
 payload tree，以及 regular 且非 link 的 Runtime entry。每个 `(entry_id, resource_generation)` 最多
-获得一个由 OS CSPRNG 生成、具有 128-bit entropy 的 scope。重复 resolve 保持幂等；
+获得一个由 OS CSPRNG 生成、具有 128-bit entropy 的有效 scope，并由实例租约或有界创建预留
+持有。重复 resolve 复用该 scope；最后一个租约与预留释放后，scope 永久退休，同 generation
+重新打开会获得新 scope。
 disable/re-enable、replacement、逻辑 uninstall、incompatible/quarantine 状态与重启会永久撤销旧
 scope；无关的全局 revision 变化不会撤销它。
 
@@ -466,7 +468,9 @@ policy；Child WebView adapter 与下游 Runtime Session 会消费它校验后�
 ## 已交付的 macOS 隔离 Plugin Runtime Origin 前置能力
 
 每个 current `(entry_id, resource_generation)` 都复用现有 128-bit process-local Resource scope，同时
-作为 browser-origin key 与 path authorization key。同一个 generation 重复 resolve 保持幂等。
+作为 browser-origin key 与 path authorization key，前提是仍有有效租约或创建预留。关闭一个实例
+只撤销其来源租约，最后一个持有者结束后 scope 永久退休；重新打开可复用已验证字节，不能
+复用旧 URL。
 disable/re-enable、replacement、uninstall 与 restart 会撤销旧 scope，使未来 document 进入不同 origin
 与 storage partition；无关插件变化不会轮换 current scope。该映射不持久化，也不会在 opaque
 `entry_url` 之外单独导出。
@@ -529,17 +533,20 @@ lease，但不会改变 native policy contract。
 
 ## 已交付的 macOS 隔离 Plugin Child WebView Runtime
 
-available external Plugin Page 在现有单窗口 surface 内拥有一个 Host 管理的 Child WebView。React
+available external Plugin Page 在所属 surface 内拥有一个 Host 管理的 Child WebView。registry
+支持独立 attempt，并保证每个 surface 至多一个插件实例。React
 渲染可信 chrome 与不可交互的 `PluginRuntimeSlot`；Host 私有 presentation code 把物理 bounds、
 visibility 与 revision 提交给 Rust。native service 在创建或更新 Child WebView 前校验 current Page、
 Registration、resource generation、route、attempt、window 与 slot revision。插件不能选择 native bounds、
 label、configuration、navigation policy 或 data store。
 
-每次 attempt 都拥有隔离 origin 与 generation-bound resource authority。Host 主 WebView 与 plugin Child
+同一有效 generation scope 内的 attempt 共用 origin 字符串，但 native source、非持久化 data store、Session
+及请求空间彼此独立。资源读取在 cache/file 操作前后校验自身来源租约；兄弟租约不能授权已关闭
+来源。Host 主 WebView 与 plugin Child
 WebView 使用独立 navigation policy：插件 document 可以加载精确 package entry 与 current-origin
 resource，但 top-level escape、popup、download 与 native authority 保持封闭。close、retry、replacement、
 导航离开、invalidation、App teardown 与 fatal bridge failure 都收敛到 compare-current terminal destroy。
-语义等价的 Launcher hide/restore 保留同一 attempt；最多存在一个 external Plugin Page Child WebView。
+语义等价的 Launcher hide/restore 保留同一 attempt；每个 surface 最多存在一个 external Plugin Page Child WebView。
 
 UI 提供本地化 resolving、loading、ready 与有边界 failure 状态，以及可访问的 retry。native load、
 private bridge ready 与 SDK ready 是三个独立事实。Host 在 document 创建前安装 per-WebView closed
@@ -568,22 +575,29 @@ resource authority 前校验这一份单一 target，只把其准确 origin 替�
 修改这两套 profile。
 
 CSP、隔离 origin/data store、native navigation、闭合 native bridge 与 Runtime Session 是互补边界。
-CSP 控制 resource/document destination；per-generation origin 分离 DOM 与 storage；native lease 控制
-top-level navigation；Session 认证一个 current Child WebView 与 source-bound bridge。这些边界
+CSP 控制 resource/document destination；generation origin 分离插件，每个 attempt 另有独立
+data store 与 document；native lease 控制 top-level navigation；每个 Session 认证一个实例和
+source-bound bridge。这些边界
 不会通过 Host API 中介普通 Web 行为。
 
-Host 私有 controller 在全局拥有一个 Runtime attempt 和一个 external-plugin Child WebView。有界
+应用级 Host 私有 controller 持有 attempt map，并为每个 surface 维护唯一实例绑定。有界
 resolution、load 与 handshake deadline 会 fail closed，不会构造另一个 Child。close、navigation、
 quiescence、disable、uninstall、replacement、相关 fact 变化、retry、timeout、Session failure、
-Host reload 与 App teardown 收敛到同一幂等 compare-current terminal operation：让工作 stale、
+均收敛到幂等的实例级 terminal operation：让工作 stale、
 取消 timer/subscription、dispose Session/bridge、destroy Child、释放 navigation authority 并丢弃引用。
-迟到 promise、load、acknowledgement、timer 与 bridge event 无法影响新 attempt。不存在 preload、
-hidden pool、background Runtime、跨 Page 复用、自动 retry 或持久化 Runtime state。
+迟到 promise、load、acknowledgement、timer 与 bridge event 无法影响新 attempt 或兄弟实例。
+插件 eligibility/generation 变更提交后撤销全部受影响 attempt；staging 被拒绝时旧 generation
+继续存活。Host reload 与应用 teardown 清理全部实例。不存在 preload、无 owner 的 hidden pool、
+background Runtime、跨 Page 复用、自动 retry 或持久化 Runtime state。
 
 进程内 breaker 以 trusted entry identity 与 resource generation 为 key。60,000 ms 内第三次 qualifying
 load、handshake 或 unexpected-disconnect failure 会在 resolve、lease、Child WebView 或 Session 创建前开启
 30,000 ms cooldown；cooldown 到期后仍必须由用户显式 retry。close、navigation、invalidation 与
-graceful exit 不计数；generation 变化或连续 30,000 ms 健康 `ready` 会清除记录，进程退出也会忘记它。
+graceful exit 不计数。generation 变化清除过期历史；其他情况下同时满足实例持续 ready 与
+连续 30,000 ms 无 qualifying failure 才会清零，健康兄弟实例不能抹除新故障。cooldown 只阻止
+新 attempt，不终止健康实例，owner 移交也不重置它。进程退出清除记录。私有实例准入命令在
+资源解析前读取真实 Manager generation，不修改 Resource Contract `0.1.0`；可轮换的 origin
+scope 不是 breaker identity。
 
 可见 failure 只使用 `runtime_load_timeout`、`runtime_handshake_timeout`、
 `runtime_session_disconnected`、`runtime_security_policy_failure`、`runtime_crash_loop` 或

@@ -14,16 +14,22 @@ for (const marker of [
   'struct PluginChildWebviewBounds',
   'enum PluginChildWebviewState',
   'struct CurrentEntry<H>',
-  'current: Option<CurrentEntry<H>>',
+  'instances: BTreeMap<PluginChildWebviewAttempt, CurrentEntry<H>>',
+  'surfaces: BTreeMap<String, PluginChildWebviewAttempt>',
+  'reserved_surfaces: BTreeMap<String, PluginChildWebviewAttempt>',
+  'used_sources: BTreeSet<String>',
   'reserve_current(',
   'attach_current(',
   'apply_slot_update(',
+  'apply_owned_slot_update(',
+  'snapshot_attempt(',
+  'teardown_all(',
   'compare_current_teardown(',
   'setup_plugin_child_webview_service',
 ]) {
   if (!service.includes(marker)) failures.push(`Child WebView service is missing ${marker}.`);
 }
-for (const marker of ['PluginChildWebviewNativeHandle', 'PluginChildWebviewHandle', 'self.webview.close()']) {
+for (const marker of ['PluginChildWebviewNativeHandle', 'PluginChildWebviewHandle', 'close_confirmed()']) {
   if (!adapter.includes(marker)) failures.push(`private native adapter is missing ${marker}.`);
 }
 if (!library.includes('plugin_child_webview_service::setup_plugin_child_webview_service')) {
@@ -37,4 +43,4 @@ if (failures.length > 0) {
   console.error(failures.join('\n'));
   process.exit(1);
 }
-console.log('Host-private single-current Child WebView service boundary passed.');
+console.log('Host-private per-surface Child WebView registry and exact-instance cleanup boundaries passed.');

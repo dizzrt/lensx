@@ -57,7 +57,7 @@ for (const required of [
   "t('launcher.page.pluginRuntimeLoading')",
   "t('launcher.page.pluginRuntimeRetry')",
   'role="alert"',
-  'presentationController.create',
+  'binding.controller.create',
   'binding.attempt.bindPresentation',
 ]) {
   if (!slot.includes(required)) fail(`native slot omits ${required}`);
@@ -67,7 +67,10 @@ const presentation = read('src/app/plugins/runtime/pluginChildWebviewPresentatio
 const createStart = presentation.indexOf('async create({');
 const updateStart = presentation.indexOf('    updateSlot(', createStart);
 if (createStart < 0 || updateStart < 0) fail('presentation create section is missing');
-const createSection = presentation.slice(createStart, updateStart);
+const requestStart = presentation.indexOf('const rawResponse = await invokeCommand(', createStart);
+const responseStart = presentation.indexOf('const response = exactRecord(', requestStart);
+if (requestStart < 0 || responseStart < 0) fail('presentation request/response boundary is missing');
+const createSection = presentation.slice(requestStart, responseStart);
 for (const forbidden of ['entry_url', 'expected_origin', 'webview_label', 'data_store_identifier', 'webview_config']) {
   if (createSection.includes(forbidden)) fail(`React create request exposes Host-private ${forbidden}`);
 }
@@ -78,8 +81,14 @@ for (const safeIdentity of ['entry_id', 'plugin_id', 'version', 'page_id', 'expe
 const rustPresentation = read('src-tauri/src/plugin_child_webview_presentation.rs');
 for (const required of [
   'read_resource_projection(',
-  'resolve_entry(&ResolvePluginResourceEntryRequest',
-  'reserve_current_with_derived_label',
+  'reserve_entry_for_attempt(',
+  'reserve_creation_for_entry(',
+  'bind_creation_reservation(',
+  'snapshot_owned(attempt, &owner)',
+  'parse_owner(',
+  'webview.label()',
+  'webview.window().label()',
+  'service.compare_owned_teardown(attempt, &owner)',
   'prepare_current_creation',
   'create_plugin_child_webview(',
   'service.attach_current',
@@ -105,4 +114,4 @@ for (const evidence of [
   if (!uiTests.includes(evidence)) fail(`UI integration evidence omits ${evidence}`);
 }
 
-console.log('Checked Host-owned Page chrome and the single native Plugin Runtime presentation slot boundary.');
+console.log('Checked Host-owned Page chrome and per-surface native Plugin Runtime presentation boundaries.');

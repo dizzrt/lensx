@@ -653,8 +653,11 @@ impl<R: Runtime> AppManager<R> {
   pub(crate) fn on_window_close(&self, label: &str) {
     let window = self.window.windows_lock().remove(label);
     if let Some(window) = window {
-      for webview in window.webviews() {
-        self.webview.webviews_lock().remove(webview.label());
+      // This callback runs for actual Window destruction, not a queued or
+      // rejected Close request. Capture each exact view before retiring it.
+      let webviews = window.webviews();
+      for webview in webviews {
+        self.on_webview_close_exact(webview.label(), &webview.resources_table);
       }
     }
   }
@@ -662,6 +665,30 @@ impl<R: Runtime> AppManager<R> {
   #[cfg(desktop)]
   pub(crate) fn on_webview_close(&self, label: &str) {
     self.webview.webviews_lock().remove(label);
+  }
+
+  /// Retire only the original view after confirmed native destruction. A late
+  /// close must not remove a new view that reuses its display label.
+  pub(crate) fn on_webview_close_exact(
+    &self,
+    label: &str,
+    resource_identity: &Arc<Mutex<crate::ResourceTable>>,
+  ) {
+    {
+      let mut webviews = self.webview.webviews_lock();
+      if webviews
+        .get(label)
+        .is_some_and(|current| Arc::ptr_eq(&current.resources_table, resource_identity))
+      {
+        webviews.remove(label);
+      }
+    }
+    if let Some(queue) = self
+      .state
+      .try_get::<crate::ipc::channel::ChannelDataIpcQueue>()
+    {
+      queue.retire_recipient(resource_identity);
+    }
   }
 
   pub fn windows(&self) -> HashMap<String, Window<R>> {

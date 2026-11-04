@@ -1,8 +1,6 @@
 import { createHash } from 'node:crypto';
-
 import { afterEach, beforeEach, expect, rs, test } from '@rstest/core';
 import { render, waitFor } from '@testing-library/react';
-
 import { AppProviders } from '../src/app/AppProviders';
 import type { ActivePage, PageResolution } from '../src/app/navigation';
 import type { PluginRegistrationSnapshot } from '../src/app/plugins/registration';
@@ -13,6 +11,7 @@ import {
   type PluginPageRuntimeDescriptor,
   PluginRuntimeSlot,
 } from '../src/app/plugins/runtime';
+import { MAIN_PLUGIN_CHILD_WEBVIEW_OWNER } from '../src/app/plugins/runtime/pluginChildWebviewOwner';
 import type { PluginSurfaceProjectionService } from '../src/app/plugins/surfaces';
 
 const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
@@ -56,11 +55,16 @@ test('direct plugin opens through the ordinary Child WebView slot and closed Hos
     version,
     page_id: 'main',
     expected_origin: origin,
-    resource_generation: '0123456789abcdef0123456789abcdef',
+    resource_generation: '1',
     runtime_attempt_key: 'direct-plugin-attempt',
     registration_revision: '1',
   };
-  const create = rs.fn(async () => ({ attemptId: 'attempt_0123456789abcdef' as const }));
+  const create = rs.fn(async () => ({
+    attemptId: 'attempt_0123456789abcdef' as const,
+    entryUrl: descriptor.entry_url,
+    resourceGeneration: descriptor.resource_generation,
+    owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+  }));
   const setVisible = rs.fn(async () => undefined);
   const destroy = rs.fn(async () => true);
   const presentationController: PluginChildWebviewPresentationController = {
@@ -84,7 +88,17 @@ test('direct plugin opens through the ordinary Child WebView slot and closed Hos
       />
     </AppProviders>,
   );
-  await waitFor(() => expect(setVisible).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }, true));
+  await waitFor(() =>
+    expect(setVisible).toHaveBeenCalledWith(
+      {
+        attemptId: 'attempt_0123456789abcdef',
+        entryUrl: descriptor.entry_url,
+        resourceGeneration: descriptor.resource_generation,
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+      },
+      true,
+    ),
+  );
   expect(document.querySelector('iframe')).toBeNull();
   expect(create).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -100,8 +114,25 @@ test('direct plugin opens through the ordinary Child WebView slot and closed Hos
   window.dispatchEvent(new Event('resize'));
   await waitFor(() => expect(presentationController.updateSlot).toHaveBeenCalledTimes(1));
   view.unmount();
-  await waitFor(() => expect(setVisible).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }, false));
-  await waitFor(() => expect(destroy).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }));
+  await waitFor(() =>
+    expect(setVisible).toHaveBeenCalledWith(
+      {
+        attemptId: 'attempt_0123456789abcdef',
+        entryUrl: descriptor.entry_url,
+        resourceGeneration: descriptor.resource_generation,
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+      },
+      false,
+    ),
+  );
+  await waitFor(() =>
+    expect(destroy).toHaveBeenCalledWith({
+      attemptId: 'attempt_0123456789abcdef',
+      entryUrl: descriptor.entry_url,
+      resourceGeneration: descriptor.resource_generation,
+      owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+    }),
+  );
   expect(document.querySelector('[data-plugin-runtime-slot="true"]')).toBeNull();
 });
 

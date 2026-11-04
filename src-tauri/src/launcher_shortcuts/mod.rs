@@ -26,6 +26,12 @@ const INVOCATION: &str = "launcher-shortcut-invocation";
 const FAILED: &str = "launcher-shortcut-failed";
 
 pub(crate) type State<R> = Arc<Mutex<DesktopService<R>>>;
+pub(crate) fn local_trigger(key: u16, flags: u64) -> Option<Trigger> {
+    macos::local_trigger(key, flags)
+}
+pub(crate) fn local_key_down(key: u16) -> bool {
+    macos::local_key_down(key)
+}
 pub(crate) struct DesktopService<R: Runtime> {
     inner: ShortcutService<FileStore, NativeRegistry<R>>,
     gesture: gesture::Gesture,
@@ -33,6 +39,86 @@ pub(crate) struct DesktopService<R: Runtime> {
     recording_epoch: u64,
     stopped: bool,
     sleeping: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct LocalShortcutFacts {
+    pub configuration_revision: u64,
+    pub detach: Option<Trigger>,
+    pub recording_epoch: u64,
+    pub recording: Option<RecordingLease>,
+    pub suppressed_until_release: bool,
+    pub stopped: bool,
+    pub host_ready: bool,
+    pub recovery_available: bool,
+    pub local_available: bool,
+}
+
+pub(crate) fn local_shortcut_facts<R: Runtime>(app: &AppHandle<R>) -> Option<LocalShortcutFacts> {
+    let state = app.try_state::<State<R>>()?;
+    let mut service = state.try_lock().ok()?;
+    service.synchronize_recording(macos::monotonic_millis());
+    Some(LocalShortcutFacts {
+        configuration_revision: service.inner.configuration_revision(),
+        detach: service.inner.detach(),
+        recording_epoch: service.inner.recording_epoch(),
+        recording: service.inner.recording().cloned(),
+        suppressed_until_release: service.inner.suppressed_until_release(),
+        stopped: service.stopped || service.sleeping,
+        host_ready: service.inner.host_ready,
+        recovery_available: service.inner.recovery_available(),
+        local_available: service.inner.local_available(),
+    })
+}
+
+pub(crate) fn set_local_shortcut_available<R: Runtime>(app: &AppHandle<R>, available: bool) {
+    let Some(installation) = app.try_state::<LocalMonitorAvailability>() else {
+        return;
+    };
+    if !installation.set(available) {
+        return;
+    }
+    // Persist the fact before any lock attempt. Publishing may wait off the
+    // native thread; snapshots and admission already observe the new value.
+    let Ok(state) = state(app) else {
+        return;
+    };
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let snapshot = state.lock().ok().map(|service| service.inner.snapshot());
+        if let Some(snapshot) = snapshot {
+            emit(&app, CHANGED, snapshot);
+        }
+    });
+}
+
+pub(crate) fn local_recording_input<R: Runtime>(
+    app: &AppHandle<R>,
+    key: u16,
+    trigger: Option<Trigger>,
+    down: bool,
+    repeat: bool,
+    expected_epoch: u64,
+) -> Option<bool> {
+    let (captured, effect) = {
+        let state = app.try_state::<State<R>>()?;
+        let mut service = state.try_lock().ok()?;
+        if service.stopped || service.sleeping {
+            return None;
+        }
+        let now = macos::monotonic_millis();
+        service.synchronize_recording(now);
+        service.inner.local_recording_press(
+            key,
+            trigger.as_ref(),
+            down,
+            repeat,
+            expected_epoch,
+            now,
+        )
+    };
+    deliver(app, effect);
+    Some(captured)
 }
 
 impl<R: Runtime> DesktopService<R> {
@@ -49,7 +135,7 @@ impl<R: Runtime> DesktopService<R> {
 struct NativeRegistry<R: Runtime> {
     app: AppHandle<R>,
     gates: BTreeMap<Trigger, (u64, Arc<AtomicBool>)>,
-    key_labels: BTreeMap<String, String>,
+    layout: macos::KeyboardLayout,
 }
 
 fn native_shortcut(trigger: &Trigger) -> Result<Shortcut, ()> {
@@ -72,6 +158,7 @@ fn native_shortcut(trigger: &Trigger) -> Result<Shortcut, ()> {
 
 impl<R: Runtime> Registry for NativeRegistry<R> {
     fn register(&mut self, trigger: &Trigger, generation: u64) -> Result<(), RegistrationFailure> {
+        // A layout switch during a save must not register a newly reserved chord.
         if !macos::layout_allows(trigger) {
             return Err(RegistrationFailure::Rejected);
         }
@@ -82,32 +169,38 @@ impl<R: Runtime> Registry for NativeRegistry<R> {
         self.app
             .global_shortcut()
             .on_shortcut(shortcut, move |app, _, event| {
-                // Check before acquiring the service lock: events during staging must not
-                // wait until publication and then execute under the new mapping.
-                if !callback_gate.load(Ordering::Acquire)
-                    || !macos::layout_allows(&callback_trigger)
-                {
+                // Reject staged registrations at receipt, and recheck their identity at delivery.
+                if !callback_gate.load(Ordering::Acquire) {
                     return;
                 }
-                let Some(state) = app.try_state::<State<R>>() else {
-                    return;
-                };
-                let effect = {
-                    let Ok(mut service) = state.lock() else {
+                let gate = Arc::clone(&callback_gate);
+                let trigger = callback_trigger.clone();
+                let pressed = event.state() == ShortcutState::Pressed;
+                let event_app = app.clone();
+                let _ = app.run_on_main_thread(move || {
+                    // A key-up must still clear held state if the layout changed since key-down.
+                    if !gate.load(Ordering::Acquire) || (pressed && !macos::layout_allows(&trigger))
+                    {
+                        return;
+                    }
+                    let Some(state) = event_app.try_state::<State<R>>() else {
                         return;
                     };
-                    let now = macos::monotonic_millis();
-                    let effect = service.inner.press(
-                        &callback_trigger,
-                        generation,
-                        event.state() == ShortcutState::Pressed,
-                        now,
-                    );
-                    service.gesture.input(gesture::Input::Interrupt, now);
-                    effect
-                };
-                deliver(app, effect);
-                publish_failures(app);
+                    let effect = {
+                        let Ok(mut service) = state.lock() else {
+                            return;
+                        };
+                        if service.stopped || service.sleeping {
+                            return;
+                        }
+                        let now = macos::monotonic_millis();
+                        let effect = service.inner.press(&trigger, generation, pressed, now);
+                        service.gesture.input(gesture::Input::Interrupt, now);
+                        effect
+                    };
+                    deliver(&event_app, effect);
+                    publish_failures(&event_app);
+                });
             })
             .map_err(|error| match error {
                 tauri_plugin_global_shortcut::Error::GlobalHotkey(_) => {
@@ -136,13 +229,10 @@ impl<R: Runtime> Registry for NativeRegistry<R> {
         }
     }
     fn valid_in_layout(&self, trigger: &Trigger) -> bool {
-        macos::layout_allows(trigger)
-    }
-    fn refresh_layout(&mut self) {
-        self.key_labels = macos::key_labels();
+        self.layout.allows(trigger)
     }
     fn key_labels(&self) -> BTreeMap<String, String> {
-        self.key_labels.clone()
+        self.layout.labels.clone()
     }
 }
 
@@ -194,6 +284,13 @@ fn deliver<R: Runtime>(app: &AppHandle<R>, effect: Effect) {
             let app = app.clone();
             let dispatch_app = app.clone();
             let _ = app.run_on_main_thread(move || {
+                if dispatch_app.try_state::<State<R>>().is_none_or(|state| {
+                    state
+                        .try_lock()
+                        .map_or(true, |service| service.stopped || service.sleeping)
+                }) {
+                    return;
+                }
                 let action = if matches!(effect, Effect::Toggle) {
                     LauncherWindowAction::Toggle(LauncherActivationReason::GlobalShortcut)
                 } else {
@@ -246,10 +343,13 @@ pub(crate) fn setup<R: Runtime>(app: &AppHandle<R>) -> Result<(), ShortcutError>
     let registry = NativeRegistry {
         app: app.clone(),
         gates: BTreeMap::new(),
-        key_labels: macos::key_labels(),
+        layout: macos::current_layout().ok_or_else(|| ShortcutError::new("unavailable"))?,
     };
+    let inner = ShortcutService::start(FileStore::new(directory.join("shortcuts.json")), registry);
+    app.manage(inner.local_availability());
+    app.manage(inner.admission());
     let service = Arc::new(Mutex::new(DesktopService {
-        inner: ShortcutService::start(FileStore::new(directory.join("shortcuts.json")), registry),
+        inner,
         gesture: gesture::Gesture::default(),
         monitor_epoch: 0,
         recording_epoch: 0,
@@ -263,15 +363,24 @@ pub(crate) fn setup<R: Runtime>(app: &AppHandle<R>) -> Result<(), ShortcutError>
 }
 
 pub(crate) fn recovery_degraded<R: Runtime>(app: &AppHandle<R>) -> bool {
-    state(app)
-        .ok()
-        .and_then(|state| {
-            state
-                .lock()
-                .ok()
-                .map(|service| service.inner.snapshot().recovery_degraded)
-        })
-        .unwrap_or(true)
+    !recovery_available_now(app)
+}
+
+pub(crate) fn recovery_available_now<R: Runtime>(app: &AppHandle<R>) -> bool {
+    admission_now(app).is_some_and(|facts| facts.recovery_available())
+}
+
+pub(crate) fn recording_active<R: Runtime>(app: &AppHandle<R>) -> bool {
+    admission_now(app).is_none_or(|facts| facts.recording_active(macos::monotonic_millis()))
+}
+
+fn admission_now<R: Runtime>(app: &AppHandle<R>) -> Option<ShortcutAdmission> {
+    let state = app.try_state::<State<R>>()?;
+    if state.is_poisoned() {
+        return None;
+    }
+    app.try_state::<ShortcutAdmission>()
+        .map(|facts| facts.inner().clone())
 }
 
 pub(crate) fn revoke_recording<R: Runtime>(app: &AppHandle<R>) {
@@ -300,6 +409,10 @@ pub(crate) fn revoke_recording<R: Runtime>(app: &AppHandle<R>) {
 }
 
 pub(crate) fn stop<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(facts) = app.try_state::<ShortcutAdmission>() {
+        facts.stop();
+    }
+    set_local_shortcut_available(app, false);
     revoke_recording(app);
     if let Ok(state) = state(app) {
         if let Ok(mut service) = state.lock() {
@@ -330,35 +443,66 @@ pub fn read_launcher_shortcuts(
         .map_err(|_| ShortcutError::new("unavailable"))
 }
 
+// Capture the OS layout and perform registry changes on main. A worker never
+// waits for main while holding the shortcut-service lock.
+async fn with_current_layout(
+    app: AppHandle,
+    change: impl FnOnce(&mut DesktopService<tauri::Wry>) -> Result<Snapshot, ShortcutError>
+        + Send
+        + 'static,
+) -> Result<Snapshot, ShortcutError> {
+    let state = state(&app)?;
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    let main_app = app.clone();
+    app.run_on_main_thread(move || {
+        let result = (|| {
+            let layout =
+                macos::current_layout().ok_or_else(|| ShortcutError::new("unavailable"))?;
+            let mut service = state
+                .lock()
+                .map_err(|_| ShortcutError::new("unavailable"))?;
+            if service.inner.registry.layout != layout {
+                service.inner.registry.layout = layout;
+                service.inner.refresh_layout();
+            }
+            let result = change(&mut service);
+            let snapshot = service.inner.snapshot();
+            drop(service);
+            emit(&main_app, CHANGED, snapshot);
+            publish_failures(&main_app);
+            ensure_recovery_visible(&main_app);
+            result
+        })();
+        let _ = sender.send(result);
+    })
+    .map_err(|_| ShortcutError::new("unavailable"))?;
+    receiver
+        .await
+        .map_err(|_| ShortcutError::new("unavailable"))?
+}
+
 #[tauri::command]
-pub fn write_launcher_shortcuts(
+pub async fn write_launcher_shortcuts(
     webview: Webview,
     app: AppHandle,
     expected_revision: u64,
     configuration: Configuration,
     resolve_launcher_migration: Option<bool>,
+    resolve_detach_migration: Option<bool>,
 ) -> Result<Snapshot, ShortcutError> {
     authorize(&webview)?;
-    let state = state(&app)?;
-    let result = {
-        let mut service = state
-            .lock()
-            .map_err(|_| ShortcutError::new("unavailable"))?;
+    with_current_layout(app, move |service| {
         let now = macos::monotonic_millis();
         service.gesture.reset(now);
         service.monitor_epoch += 1;
-        service.inner.save_resolving_migration(
+        service.inner.save_resolving_migrations(
             expected_revision,
             configuration,
             resolve_launcher_migration.unwrap_or(false),
+            resolve_detach_migration.unwrap_or(false),
         )
-    };
-    if let Ok(service) = state.lock() {
-        emit(&app, CHANGED, service.inner.snapshot());
-    }
-    publish_failures(&app);
-    ensure_recovery_visible(&app);
-    result
+    })
+    .await
 }
 
 fn ensure_recovery_visible<R: Runtime>(app: &AppHandle<R>) {
@@ -382,22 +526,18 @@ fn publish_monitor_snapshot<R: Runtime>(app: &AppHandle<R>, snapshot: Snapshot) 
 }
 
 #[tauri::command]
-pub fn update_launcher_shortcut_targets(
+pub async fn update_launcher_shortcut_targets(
     webview: Webview,
     app: AppHandle,
     action_ids: Vec<String>,
 ) -> Result<Snapshot, ShortcutError> {
     authorize(&webview)?;
-    let state = state(&app)?;
-    let snapshot = state
-        .lock()
-        .map_err(|_| ShortcutError::new("unavailable"))?
-        .inner
-        .update_targets(action_ids.into_iter().collect())?;
-    emit(&app, CHANGED, snapshot.clone());
-    publish_failures(&app);
-    ensure_recovery_visible(&app);
-    Ok(snapshot)
+    with_current_layout(app, move |service| {
+        service
+            .inner
+            .update_targets(action_ids.into_iter().collect())
+    })
+    .await
 }
 
 #[tauri::command]

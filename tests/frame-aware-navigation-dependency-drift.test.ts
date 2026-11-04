@@ -67,9 +67,31 @@ describe('macOS frame-aware navigation dependency patch', () => {
     expect(adapter).toContain('state.resizable = resizable');
     expect(adapter).toContain('.window()');
     expect(adapter).toContain('makeFirstResponder(Some(responder))');
-    const surface = read('src-tauri/src/launcher_surface.rs').split('#[cfg(test)]')[0];
+    const source = read('src-tauri/src/launcher_surface.rs');
+    const testModule = source.search(/^#\[cfg\(test\)\]\s*mod tests\s*\{/mu);
+    expect(testModule).toBeGreaterThan(0);
+    const surface = source.slice(0, testModule);
     expect(surface).toContain('.get_window(MAIN_WINDOW_LABEL)');
-    expect(surface).toContain('self.is_resizable()');
+    expect(surface).toContain(
+      'apply_launcher_surface_target_with_guard(&app, &webview.window(), request.target, guard)',
+    );
+    expect(surface).toContain('GuardedSurfaceWindow::new(window.clone(), guard)');
+    const nativeWindow = surface.slice(
+      surface.indexOf('pub(crate) fn native_content_window'),
+      surface.indexOf('pub(crate) fn set_macos_content_geometry'),
+    );
+    expect(nativeWindow).toMatch(/MainThreadMarker::new\(\)[\s\S]*window\.ns_view\(\)[\s\S]*root\.window\(\)/u);
+    const resizable = surface.slice(
+      surface.indexOf('pub(crate) fn set_macos_resizable'),
+      surface.indexOf('pub(crate) struct GuardedSurfaceWindow'),
+    );
+    expect(resizable).toMatch(
+      /!guard\.is_current\(\)[\s\S]*window\.set_resizable\(resizable\)[\s\S]*guard\.is_current\(\)[\s\S]*native\.styleMask\(\)/u,
+    );
+    const guarded = surface.slice(surface.indexOf('impl<R: Runtime> LauncherSurfaceWindow for GuardedSurfaceWindow'));
+    expect(guarded).toMatch(
+      /fn set_resizable\(&self, resizable: bool\)[\s\S]*?self\.confirmed\(move \|window, guard\|[\s\S]*?native_content_window\(window\)\?[\s\S]*?set_macos_resizable\(window, &native, guard, resizable\)/u,
+    );
     for (const forbidden of ['get_webview_window', 'set_focus', 'emit_activation', 'makeFirstResponder']) {
       expect(surface).not.toContain(forbidden);
     }

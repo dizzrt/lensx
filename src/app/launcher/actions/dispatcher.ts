@@ -1,5 +1,5 @@
 import { type LauncherActionRegistry, resolveRegisteredLauncherAction } from './registry';
-import type { LauncherActionDispatchResult, LauncherActionInvocation } from './types';
+import type { LauncherActionDispatchResult, LauncherActionExecutionContext, LauncherActionInvocation } from './types';
 
 const failure = (
   actionId: string,
@@ -17,6 +17,7 @@ export class LauncherActionAdmissionError extends Error {
 interface QueuedInvocation {
   readonly actionId: string;
   readonly invocation: LauncherActionInvocation;
+  readonly context?: LauncherActionExecutionContext;
   readonly isCurrent?: () => boolean | Promise<boolean>;
   readonly resolve: (result: LauncherActionDispatchResult) => void;
   readonly reject: (error: LauncherActionAdmissionError) => void;
@@ -33,8 +34,12 @@ export class LauncherActionDispatcher {
 
   constructor(private readonly registry: LauncherActionRegistry) {}
 
-  dispatch(actionId: string, isCurrent?: () => boolean | Promise<boolean>): Promise<LauncherActionDispatchResult> {
-    return this.#admit(actionId, 'normal', isCurrent);
+  dispatch(
+    actionId: string,
+    isCurrent?: () => boolean | Promise<boolean>,
+    context?: LauncherActionExecutionContext,
+  ): Promise<LauncherActionDispatchResult> {
+    return this.#admit(actionId, 'normal', isCurrent, context);
   }
 
   /** Host-private: called only after the main native binding has been atomically claimed. */
@@ -56,6 +61,7 @@ export class LauncherActionDispatcher {
     actionId: string,
     source: LauncherActionInvocation['source'],
     isCurrent?: () => boolean | Promise<boolean>,
+    context?: LauncherActionExecutionContext,
   ): Promise<LauncherActionDispatchResult> {
     if (this.#queue.length >= 32 || this.#sequence >= Number.MAX_SAFE_INTEGER) {
       return Promise.reject(new LauncherActionAdmissionError('busy'));
@@ -65,6 +71,7 @@ export class LauncherActionDispatcher {
       const queued: QueuedInvocation = {
         actionId,
         invocation,
+        context,
         isCurrent,
         resolve,
         reject,
@@ -90,7 +97,7 @@ export class LauncherActionDispatcher {
         try {
           if (queued.isCurrent && !(await this.#checkCurrent(queued)))
             throw new LauncherActionAdmissionError('unavailable');
-          const result = await this.#execute(queued.actionId, queued.invocation);
+          const result = await this.#execute(queued.actionId, queued.invocation, queued.context);
           if (result.ok) {
             for (const listener of this.#successListeners) {
               try {
@@ -130,13 +137,19 @@ export class LauncherActionDispatcher {
     }
   }
 
-  async #execute(actionId: string, invocation: LauncherActionInvocation): Promise<LauncherActionDispatchResult> {
+  async #execute(
+    actionId: string,
+    invocation: LauncherActionInvocation,
+    context?: LauncherActionExecutionContext,
+  ): Promise<LauncherActionDispatchResult> {
     const registration = resolveRegisteredLauncherAction(this.registry, actionId);
     if (!registration) return failure(actionId, 'action_not_found', 'Launcher action was not found.');
     if (!registration.descriptor.enabled)
       return failure(actionId, 'action_unavailable', 'Launcher action is unavailable.');
     try {
-      const result: unknown = await registration.executor(invocation);
+      const result: unknown = await (context
+        ? registration.executor(invocation, context)
+        : registration.executor(invocation));
       if (result !== undefined)
         return failure(actionId, 'action_execution_failed', 'Launcher action execution failed.');
     } catch (error) {

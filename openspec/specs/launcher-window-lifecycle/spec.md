@@ -2,9 +2,12 @@
 
 ## Purpose
 
-Define the accepted native launcher window shape, centralized Rust lifecycle
-actions, global shortcut behavior, recoverable hide semantics, and input focus
-restoration across repeated launcher activations.
+
+Define native Launcher and detached-plugin window behavior, centralized Rust
+lifecycle actions, global and application-local shortcut routing, recoverable
+main-window hiding, independent detached-window closure, and input-focus
+continuity across activation and ownership transfer.
+
 ## Requirements
 
 ### Requirement: The launcher main window must use a compact native window shape
@@ -80,7 +83,7 @@ The system MUST configure the main window labeled `main` as an undecorated, non-
 
 ### Requirement: Launcher MUST separate native Window and Host WebView identities
 
-The system MUST treat the native `main` Window, the trusted Host WebView, and the plugin Child WebView as distinct identities.
+The system MUST distinguish the native `main` Window, trusted Host WebView, and plugin Child WebView. Launcher main-window operations MUST continue resolving the complete `main` Window; detached-window operations MUST resolve the complete native Window currently bound to that instance. Host MUST separately validate the window, trusted chrome, plugin instance, and actual native source; application-wide foreground state or a matching plugin/Page ID must not substitute for owning-window identity.
 
 #### Scenario: Resolve the native parent after attaching a Child WebView
 
@@ -107,9 +110,14 @@ The system MUST treat the native `main` Window, the trusted Host WebView, and th
   the dialog lifecycle without changing Child WebView authority
 
 #### Scenario: Route native operations and activation to distinct surfaces
-- **WHEN** the Host sizes, shows, hides, focuses, or parents a dialog while a Child WebView may be attached
-- **THEN** Native sizing, visibility, show, hide, focus, window-event, and native-dialog parent operations MUST always target the complete native `main` Window and MUST remain resolvable before and after a Child WebView is attached or removed.
+- **WHEN** Host performs size, show, hide, focus, or native dialog parenting operations for the Launcher main window, which may contain a Child WebView
+- **THEN** these Launcher main-window operations MUST always target the complete native `main` Window, which remains resolvable before and after attaching or removing a Child WebView; equivalent detached-window operations MUST use the instance's own complete native Window without falling back to `main`.
 - **THEN** Host activation events MUST target only the trusted Host WebView and MUST NOT be broadcast to plugin Child WebViews as a consequence of native Window operations.
+
+#### Scenario: Route by actual owning window after detachment
+- **WHEN** a plugin instance has committed migration to a detached window and main or that instance later receives a window event or asynchronous result
+- **THEN** Host MUST change only the event's owning window and its current instance; old main ownership, old slot revisions, or old focus requests must not control the migrated instance
+- **THEN** Host activation events MUST target only the correct trusted Host document and must not broadcast to plugins or another window
 
 ### Requirement: The unified launcher top region must support native window dragging
 
@@ -184,12 +192,7 @@ The system MUST allow the user to initiate native main-window dragging with the 
 
 ### Requirement: Rust must execute launcher window actions through one boundary
 
-The system MUST provide a unified launcher main-window action boundary in Rust
-that supports at least `show`, `hide`, and `toggle`. Every global-shortcut and
-window-lifecycle entry point MUST execute actions through this boundary and
-MUST NOT duplicate native window operations in its own handler. A failed window
-action MUST return a diagnosable error that identifies both the action and the
-failed operation stage.
+Rust MUST own a unified main-window `show`/`hide`/`toggle` boundary. Global Launcher/Action shortcuts and main lifecycle MUST use it; detached close, focus and lifecycle MUST use trusted owning-window boundaries, never main Hide. Entry points MUST NOT duplicate native operations. Failures MUST identify action and stage while preserving verifiable ownership.
 
 #### Scenario: Show a hidden launcher
 
@@ -274,7 +277,7 @@ The system MUST default to `Ctrl+Shift+Space` without configuration, allow one c
 
 ### Requirement: A recoverable launcher must hide on close and focus loss
 
-While the selected Launcher trigger is confirmed active, the system MUST prevent the main-window close request from terminating the application and execute `hide` through the unified boundary. If recovery cannot be confirmed or shortcut compensation becomes degraded, the system MUST retain visible repair and exit paths and disable close-to-hide, focus-loss hide, and local Cmd+W hide until the recovery entry is confirmed effective again.
+Confirmed Launcher recovery MUST allow main close requests to Hide through the unified boundary instead of exiting. Unconfirmed recovery, degraded compensation or `recovery_required` MUST keep repair/Quit visible and block main close-to-hide, blur, Toggle and `Cmd+W` Hide. This protection is main-only: detached windows MUST stay visible on blur, and close requests or focused `Cmd+W` terminate only their instance.
 
 #### Scenario: Close a ready launcher window
 
@@ -287,8 +290,7 @@ While the selected Launcher trigger is confirmed active, the system MUST prevent
 #### Scenario: Press Cmd+W in a ready macOS launcher
 
 - **WHEN** the selected Launcher trigger is confirmed active
-- **AND** the macOS main window is visible and lensX is the foreground
-  application
+- **AND** the macOS `main` Window is visible and is the actual key Window, with lensX as the foreground application
 - **AND** the user presses `Cmd+W`
 - **THEN** exactly one application-local menu shortcut entry point handles the
   key press
@@ -298,8 +300,7 @@ While the selected Launcher trigger is confirmed active, the system MUST prevent
 
 #### Scenario: Press Cmd+W while a plugin Child WebView is visible
 
-- **WHEN** the foreground macOS Launcher contains a visible current plugin
-  Child WebView
+- **WHEN** the foreground macOS Launcher's actual key Window is `main`, containing a visible current plugin Child WebView
 - **AND** the user presses `Cmd+W`
 - **THEN** the unified action resolves and hides the complete native Window and
   current Child WebView as one semantic transition
@@ -330,7 +331,7 @@ While the selected Launcher trigger is confirmed active, the system MUST prevent
 #### Scenario: Default recovery shortcut is unavailable on macOS
 
 - **WHEN** the selected Launcher entry is unavailable because registration or monitoring fails
-- **AND** the user presses `Cmd+W`
+- **AND** the user presses `Cmd+W` while the actual key Window is `main`
 - **THEN** the new application-local `Cmd+W` entry point does not hide the main
   window
 - **THEN** the system does not produce a hidden window that cannot be restored
@@ -380,7 +381,7 @@ While the selected Launcher trigger is confirmed active, the system MUST prevent
 - **THEN** If menu-event installation or routing fails, or if the hide operation fails, the system MUST make failure information available for developer diagnosis, MUST NOT expose native error details to the user, and MUST NOT terminate the application process because of the failure.
 
 #### Scenario: Coordinate Child and native parent hide or restore
-- **WHEN** the Host hides or restores a Window with a current Child WebView
+- **WHEN** Host hides or restores the Launcher main window containing a current Child WebView
 - **THEN** When a current Child WebView exists, the hide boundary MUST resolve the complete native main Window before changing Child presentation.
 - **THEN** It MUST hide the Child WebView before the native parent to prevent overlay leakage, and MUST either hide both surfaces or restore the still-current Child presentation when native parent hide fails.
 - **THEN** A failed hide MUST NOT leave the Host window visible with only the plugin content blank.
@@ -391,6 +392,17 @@ While the selected Launcher trigger is confirmed active, the system MUST prevent
 - **THEN** that configuration alone does not establish safe recoverable hiding
 - **THEN** the Host shows an already-hidden window and retains visible repair and exit paths; close/blur/local Cmd+W cannot hide it until the selected entry is active again
 - **THEN** no former or default chord is silently registered as a fallback, and monitoring recovery starts with cleared gesture candidates
+
+#### Scenario: A detached window loses focus or closes
+- **WHEN** a detached plugin window loses focus or the user requests that window's closure
+- **THEN** focus loss MUST preserve the window, instance, input, and running tasks, without invoking Launcher Hide or reclaiming focus
+- **THEN** closing MUST terminate only that window's corresponding instance and its Session, requests, and Workers; main and sibling windows MUST retain their existing lifecycles
+- **THEN** even if the Launcher recovery shortcut is unavailable, closing a detached window MUST NOT become hiding, mistakenly close main, or exit the entire process
+
+#### Scenario: Detachment commit interleaves with main-window focus loss
+- **WHEN** detachment commit, detached-window focus, and main-window blur/Hide events interleave
+- **THEN** main-window Hide MUST affect only content main still owns and must not hide, destroy, or refocus an instance whose migration has committed
+- **THEN** an uncommitted migration MUST continue coordinating main-window visibility and failure rollback through its transaction; blur must not leave an empty shell, duplicate visibility, or an instance with no owner
 
 ### Requirement: Launcher activation must restore input focus
 
@@ -434,12 +446,13 @@ The system MUST focus launcher input on initial Home/Search and send a stable se
 
 ### Requirement: Launcher lifecycle MUST coordinate Host and Child WebView surfaces atomically
 
-Hide, restore, resize, scale-factor change, focus, blur, shortcut activation, close and application teardown MUST update the native Child WebView through the current revisioned presentation binding.
+Hide, restore, resize, scale, focus, blur, shortcut, close, and teardown MUST update the corresponding Child WebView through the instance's current owning window and revisioned presentation binding. Main-window semantic Hide/restore MUST preserve the original attempt; detached-window close MUST terminate only its instance; application exit MUST revoke and terminate every instance. Migration MUST preserve the same instance and Session and invalidate late operations from the old window.
 
 #### Scenario: Launcher hides and restores
 - **WHEN** the current plugin facts remain equivalent across temporary Launcher hide and restore
 - **THEN** the same Child WebView and Session are hidden then shown without reload
 - **THEN** launcher input focus and plugin focus follow the Host-owned activation policy
+- **THEN** a transient focus refusal after confirmed visibility MUST preserve the same instance. Only the current owner and visibility revision may retry on a key-window notification; superseded slot or focus results MUST NOT terminate its successor.
 
 #### Scenario: Parent lookup fails before semantic hide
 
@@ -462,18 +475,23 @@ Hide, restore, resize, scale-factor change, focus, blur, shortcut activation, cl
 - **THEN** Rust applies verified physical bounds to the current WebView without affecting a newer attempt
 
 #### Scenario: Launcher terminates
-- **WHEN** the app unmounts or exits
-- **THEN** Child WebView teardown joins the existing root lifecycle and leaves no native surface or bridge binding
+- **WHEN** application-wide teardown or process exit occurs
+- **THEN** all main-window and detached-window instances MUST enter application-level cleanup, leaving no native surface, Session, pending request, or bridge binding
 
 #### Scenario: Apply lifecycle changes to the current presentation binding
-- **WHEN** a launcher lifecycle event updates a current Child WebView
-- **THEN** Semantic hide/restore MUST preserve the same attempt; Page close or application teardown MUST destroy it.
+- **WHEN** a window's lifecycle event updates its current Child WebView
+- **THEN** main-window semantic Hide/restore MUST preserve the same attempt; a true Page close MUST destroy only that instance; application teardown MUST destroy all instances, and successful detachment MUST NOT be treated as Page close or reopening.
 - **THEN** Host-owned overlay or unavailable slot MUST hide the Child WebView before trusted DOM interaction is exposed.
 
 #### Scenario: Keep failed surface transitions compare-current
 - **WHEN** an operation fails or completes rollback after the Child attempt may have changed
-- **THEN** The complete native Window and current Child WebView MUST NOT settle in contradictory presentation states after an operation reports failure.
+- **THEN** after an ordinary window operation reports failure, the complete native Window and current Child WebView MUST retain or restore consistent safe presentation; if detachment compensation itself cannot be confirmed, the system MUST explicitly enter `recovery_required`, retain the original object and last confirmed facts, freeze ordinary presentation writes, and keep the trusted repair entry available, without reporting uncertain ownership as normal stable state.
 - **THEN** All rollback or teardown work MUST remain compare-current so an old attempt cannot reveal, focus, resize, or destroy a replacement.
+
+#### Scenario: One window's Host becomes invalid
+- **WHEN** a detached window's trusted Host surface unmounts or becomes invalid while the application continues running
+- **THEN** the system MUST revoke only that window's instance and authority according to its termination policy, without mistaking one Host's unmount for application-wide exit
+- **THEN** another window's current instance, revision, pending calls, and focus MUST remain unaffected by this instance's cleanup
 
 ### Requirement: macOS Host MUST run as an accessory Launcher without a Dock tile
 
@@ -597,12 +615,11 @@ The complete native macOS `main` Window MUST participate in all Spaces and MUST 
 
 ### Requirement: Accessory Launcher MUST retain application-local close and quit shortcuts
 
-When the macOS accessory policy removes the ordinary application menu bar, the system MUST continue to provide exactly one lensX application-local `Cmd+W` entry point and exactly one lensX application-local `Cmd+Q` entry point.
+macOS accessory mode MUST retain one local entry each for `Cmd+W` and `Cmd+Q`. W MUST use the actual key Window for recoverable main Hide or detached Close; Q MUST clean all instances and exit. Both MUST require valid native events with lensX foreground, without global registration, cached-focus authority or effects on other applications.
 
 #### Scenario: Press Cmd+W without a visible application menu bar
 
-- **WHEN** the accessory lensX Window is visible and focused without an
-  ordinary application menu bar
+- **WHEN** accessory lensX's `main` Window is visible and is the actual key Window, without an ordinary application menu bar
 - **AND** the user presses `Cmd+W`
 - **THEN** exactly one application-local entry point hides the complete Launcher
   through the unified Hide action
@@ -610,12 +627,10 @@ When the macOS accessory policy removes the ordinary application menu bar, the s
 
 #### Scenario: Press Cmd+Q without a visible application menu bar
 
-- **WHEN** the accessory lensX Window is visible and focused without an
-  ordinary application menu bar
+- **WHEN** accessory lensX's main window or any detached plugin window is visible and is the actual key Window, without an ordinary application menu bar
 - **AND** the user presses `Cmd+Q`
 - **THEN** exactly one application-local entry point requests lensX exit
-- **THEN** application teardown terminates the current Child WebView and Host
-  resources before the process ends
+- **THEN** application teardown MUST terminate all main-window and detached-window instances and Host resources before process exit, and cancel all Sessions, ongoing requests, subscriptions, and Workers
 
 #### Scenario: Another application owns the foreground
 
@@ -627,20 +642,30 @@ When the macOS accessory policy removes the ordinary application menu bar, the s
 #### Scenario: Recovery shortcut registration fails
 
 - **WHEN** the selected Launcher entry is unavailable or effective recovery can no longer be confirmed
-- **THEN** the system does not enable application-local `Cmd+W` or focus-loss
-  hiding that would hide the Launcher
+- **THEN** the system MUST NOT enable main-window `Cmd+W` Hide or focus-loss Hide that would make the Launcher unrecoverable; true detached-window Close and application-wide Quit MUST remain available
 - **THEN** the visible Window retains an exit path and the system does not leave
   a hidden process without a Dock tile or recovery entry point
 
 #### Scenario: Dispatch local close and quit only for foreground lensX
 - **WHEN** the user invokes Cmd+W or Cmd+Q while the accessory application has no ordinary visible menu bar
-- **THEN** `Cmd+W` MUST follow the existing recoverable-hide requirement and enter the unified Hide action.
-- **THEN** `Cmd+Q` MUST terminate the lensX process after performing the existing application teardown.
+- **THEN** `Cmd+W` MUST revalidate the actual key Window and instance ownership; main follows recoverable Hide, a detached window closes only its corresponding instance, and an unknown or invalid window target must not be misrouted to main-window Hide.
+- **THEN** `Cmd+Q` MUST perform application-wide teardown and clean up every window instance before terminating the lensX process.
 - **THEN** Both entry points MUST handle keys only while lensX is the foreground application, MUST NOT be registered as system-wide global shortcuts, and MUST NOT intercept the corresponding commands for another foreground application.
+
+#### Scenario: Cmd+W in a detached plugin window
+- **WHEN** lensX is foreground, the actual key Window is a detached plugin window, and the user presses `Cmd+W` in its Host chrome or Child input
+- **THEN** the system MUST admit that instance's true close only once and destroy its window and Runtime, without hiding main or terminating other instances or the application
+- **THEN** the current instance's `ui.close` and native window-close button MUST converge on the same instance-termination semantics
+
+#### Scenario: Native focus changes and duplicate local command delivery
+- **WHEN** native `Cmd+W/Q` delivery, menu routing, key repeat, or queued handling interleaves with window changes
+- **THEN** each admitted original gesture MUST execute its corresponding Close/Hide/Quit at most once, without a second operation caused by duplicate entry points or key repeat
+- **THEN** the command MUST bind to the trusted actual event Window and key Window at admission; after target invalidation it must not close the newly focused window or hide main as a fallback
+- **THEN** when lensX is not foreground, it MUST preserve the original event and execute no local Close/Hide/Quit
 
 ### Requirement: Launcher presentation transitions MUST preserve the valid text input responder
 
-Launcher size, constraint, and resizable configuration MUST preserve the currently valid text input target.
+Window size, constraint, and resizable configuration MUST preserve that window's current valid text-input target. Main continues following existing Launcher presentation and focus rules; detachment MUST bind focus continuity to the instance's actual owning window, cancel delayed restoration for the old owner, and must not steal the migrated instance's input back to main or another window.
 
 #### Scenario: Enter the first ordinary search character
 
@@ -672,9 +697,8 @@ Launcher size, constraint, and resizable configuration MUST preserve the current
 
 #### Scenario: Change the actual resizable state of a plugin Page
 
-- **WHEN** a valid plugin Page needs to enable or disable native resizing
-- **THEN** the complete main Window applies the required state and existing
-  constraints
+- **WHEN** a valid plugin Page needs native user resizing enabled or disabled
+- **THEN** the complete native Window hosting that instance MUST apply the required state and existing constraints; a main-window instance affects `main`, and a detached instance affects its own window
 - **THEN** the valid text input target still belonging to the current Window is
   preserved
 - **THEN** the current Child WebView input target is not unconditionally moved
@@ -750,7 +774,7 @@ Launcher size, constraint, and resizable configuration MUST preserve the current
 #### Scenario: Handle failed configuration and late responder restoration
 - **WHEN** an ordinary transition, environment refresh, or rollback encounters a native failure or delayed restoration
 - **THEN** This constraint MUST apply to ordinary presentation transitions, environment constraint refreshes, and failure rollback.
-- **THEN** Failures in existing observable window-state reads, message submission, size, constraint, or rollback operations MUST preserve or restore the last complete safe presentation and follow the typed safe native error boundary.
+- **THEN** failures in existing ordinary window-state reads, message submission, size, constraint, or rollback operations MUST retain or restore the last complete safe presentation and follow the typed safe native error boundary; when detachment compensation itself cannot be confirmed, the system MUST retain the original snapshot and instance in `recovery_required`, without falsely claiming that the original responder or presentation has been restored.
 - **THEN** When the native system refuses responder restoration, the system MUST retain a safe state and provide bounded developer diagnostics.
 - **THEN** It MUST NOT unconditionally fall back to the original window view, activate the Window, or restore an invalidated page.
 - **THEN** Successful message submission MUST NOT be interpreted as confirmed native responder restoration.
@@ -760,12 +784,18 @@ Launcher size, constraint, and resizable configuration MUST preserve the current
 - **WHEN** the Host applies presentation configuration while a plugin Page or Child WebView may be current
 - **THEN** The identity boundaries between the native Window, Host WebView, and Child WebView MUST remain distinct.
 - **THEN** Actual resizable-state changes for valid plugin Pages MUST continue to take effect.
-- **THEN** Presentation configuration MUST NOT broadcast Host activation events, grant native authority to plugins, or change compare-current lifecycle semantics.
+- **THEN** presentation configuration MUST NOT broadcast Host activation events, grant native authority to plugins, or bypass compare-current lifecycle checks; after detachment, compare-current MUST verify both the instance and its owning window.
 - **THEN** Genuine main-window focus loss MUST continue to follow the existing recoverable-hide contract.
+
+#### Scenario: A detached instance and delayed focus restoration from its old window
+- **WHEN** the same plugin instance has migrated to a detached window and an old main-window configuration, editing, or asynchronous restoration result later completes
+- **THEN** the old result MUST NOT focus, hide, resize, or destroy that instance, or replace a new valid input target with the old main-window responder
+- **THEN** successful migration MUST focus that instance's still-valid input in the new window; existing selection, text, editing history, and ongoing composition MUST NOT be lost through document recreation or synthetic keys
+- **THEN** if responder validity cannot be established, the system MUST retain safe window state and report bounded diagnostics, without fabricating successful focus restoration or replaying input
 
 ### Requirement: Accessory Launcher MUST deliver standard editing commands through the current native focus
 
-On macOS, the foreground lensX Accessory Launcher MUST use a native editing dispatch boundary shared by the Host and Child to let the current valid text focus handle Select All, Copy, Cut, Paste, Undo, and Redo according to the target control and native editing-command semantics.
+Foreground lensX on macOS MUST use a native editing-dispatch boundary shared by Host and Child so that the current valid text focus in the actual key Window handles Select All, Copy, Cut, Paste, Undo, and Redo according to control and native-command semantics. This behavior MUST cover main and detached plugin windows, without redelivering editing events to another window, an old owner, or an invalidated instance.
 
 #### Scenario: Edit text in the Host without a visible application menu bar
 
@@ -819,7 +849,7 @@ On macOS, the foreground lensX Accessory Launcher MUST use a native editing disp
 #### Scenario: Reserved and background application commands retain their ownership
 
 - **WHEN** the user presses `Cmd+W/Q` while lensX is foreground, or uses editing, close, and quit shortcuts in another foreground application
-- **THEN** the former retain single Hide/Quit execution and the corresponding cleanup, while lensX does not consume the latter
+- **THEN** foreground lensX MUST preserve exactly-once main-window Hide or detached-window Close, routed by the actual window, and application-wide Quit with corresponding cleanup; lensX MUST NOT consume another foreground application's editing, close, or quit events
 - **THEN** the currently valid ordinary Launcher entry, selected Launcher trigger, and other non-editing window behavior preserve their respective contracts; ordinary editing combinations cancel modifier double-tap candidates without consuming the original event
 
 #### Scenario: Standard command coverage does not become a per-key or per-plugin patch
@@ -867,7 +897,7 @@ On macOS, the foreground lensX Accessory Launcher MUST use a native editing disp
 #### Scenario: Preserve accessory activation and local lifecycle shortcuts
 - **WHEN** editing dispatch runs while lensX or another application owns foreground focus
 - **THEN** the system MUST preserve Accessory policy, the absence of a Dock icon and ordinary application menu bar, current valid ordinary activation and recovery entries, and existing window lifecycle behavior.
-- **THEN** `Cmd+W/Q` MUST continue to execute recoverable Hide and complete Quit respectively once, only within foreground lensX.
+- **THEN** `Cmd+W/Q` MUST execute only in foreground lensX, exactly once, routing to recoverable main-window Hide or detached-window Close, and to Quit that cleans up all instances.
 - **THEN** When another application is foreground, lensX MUST NOT intercept that application's editing, close, or quit commands.
 - **THEN** Repairing the standard editing chain MUST NOT change unrelated non-editing behavior.
 
@@ -875,3 +905,29 @@ On macOS, the foreground lensX Accessory Launcher MUST use a native editing disp
 - **WHEN** a standard editing combination occurs during a modifier double-tap candidate or its 300ms confirmation period
 - **THEN** the system cancels the candidate and the original event continues to the system or current valid input in the foreground application
 - **THEN** it does not activate lensX, execute an extra edit, retain a delayed gesture, or synthesize or replay keyboard events
+
+### Requirement: Detachment commit MUST release the Launcher and preserve detached-window usability
+
+After target ownership and focus, detachment MUST reset main to fixed Home and recoverably Hide it. Unconfirmed Launcher recovery MUST block commit. Forward failure MUST restore unique original ownership and usable main; failed compensation MUST retain the original object/transaction in `recovery_required`, freeze affected ownership and show repair/Quit. Neither path may reopen the plugin or falsely report success.
+
+#### Scenario: Summon the Launcher after successful detachment
+- **WHEN** a ready main-window plugin completes lossless detachment and the Launcher recovery entry remains active
+- **THEN** the new window MUST receive focus, the Launcher MUST return to non-resizable `650×320` Home and hide, and the original instance MUST continue running in the new window
+- **THEN** invoking the ordinary Launcher entry again MUST restore only main-window Home, without reusing, taking over, reopening, or hiding an instance in a detached window
+- **THEN** global Action shortcuts MUST retain existing main-window Show and Action-execution semantics, without automatically finding and reusing a detached instance of the same plugin/Page
+
+#### Scenario: Recovery becomes unavailable before detachment commits
+- **WHEN** the Launcher recovery entry becomes unavailable during a detach request or safe main-window hiding cannot be confirmed
+- **THEN** the transaction MUST NOT commit an unrecoverable hidden state and MUST preserve or roll back to unique valid plugin ownership; unconfirmed compensation MUST enter `recovery_required`, retain the original instance and recovery context, and provide bounded failure feedback
+- **THEN** main MUST keep repair and quit entries visible, without enabling a hidden fallback shortcut or leaving a blank plugin region or orphaned window
+
+#### Scenario: The Launcher remains available after a detached window closes
+- **WHEN** the user closes the last detached plugin window while the lensX process continues running
+- **THEN** main-window state and the global recovery entry MUST retain their existing confirmed state; reaching zero detached windows must not exit the application or restore an old plugin instance
+- **THEN** pending requests and late results from the closed window MUST NOT affect the next main-window activation or newly created instance
+
+#### Scenario: Recovery-required state keeps the main-window repair entry visible
+- **WHEN** detachment compensation cannot be confirmed and enters `recovery_required`, followed by main blur, close-to-hide, Toggle, local `Cmd+W`, or an old Hide completion
+- **THEN** Host MUST keep trusted recovery and quit entries visible in main and must not execute operations that hide them; old owner/revision completions MUST have no side effect
+- **THEN** explicit recovery retry remains bound to the original attempt/token, explicit close terminates only that instance, and foreground Quit cleans up all instances and recovery contexts; other valid windows are not automatically hidden or terminated
+- **THEN** before cleaning up the target window, Host MUST confirm it no longer contains the original WebView; hiding main or destroying a window must not disguise compensation failure as completion

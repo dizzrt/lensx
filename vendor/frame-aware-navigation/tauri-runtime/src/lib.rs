@@ -529,6 +529,15 @@ pub trait WebviewDispatch<T: UserEvent>: Debug + Clone + Send + Sync + Sized + '
   /// Runs a closure with the platform webview object as argument.
   fn with_webview<F: FnOnce(Box<dyn std::any::Any>) + Send + 'static>(&self, f: F) -> Result<()>;
 
+  /// Execute source-bound data delivery even when the original parent changed.
+  #[doc(hidden)]
+  fn with_webview_data<F: FnOnce(Box<dyn std::any::Any>) + Send + 'static>(
+    &self,
+    f: F,
+  ) -> Result<()> {
+    self.with_webview(f)
+  }
+
   /// Open the web inspector which is usually called devtools.
   #[cfg(any(debug_assertions, feature = "devtools"))]
   fn open_devtools(&self);
@@ -602,6 +611,67 @@ pub trait WebviewDispatch<T: UserEvent>: Debug + Clone + Send + Sync + Sized + '
 
   /// Moves the webview to the given window.
   fn reparent(&self, window_id: WindowId) -> Result<()>;
+
+  /// Begin a Host-private retained native transfer.
+  #[doc(hidden)]
+  fn begin_reparent(&self) -> Result<u64> {
+    Err(Error::FailedToSendMessage)
+  }
+  #[doc(hidden)]
+  fn move_reparent(
+    &self,
+    _token: u64,
+    _target: WindowId,
+    _current: webview::ReparentExecutionGuard,
+  ) -> Result<webview::ReparentOutcome> {
+    Err(Error::FailedToSendMessage)
+  }
+  #[doc(hidden)]
+  fn restore_reparent(
+    &self,
+    _token: u64,
+    _current: webview::ReparentExecutionGuard,
+  ) -> Result<webview::ReparentOutcome> {
+    Err(Error::FailedToSendMessage)
+  }
+  #[doc(hidden)]
+  fn reparent_ownership(&self, _token: u64) -> Result<webview::ReparentOwnership> {
+    Err(Error::FailedToSendMessage)
+  }
+  #[doc(hidden)]
+  fn commit_reparent(
+    &self,
+    _token: u64,
+    _publish: Box<dyn FnOnce() -> bool + Send>,
+    _on_committed: Box<dyn FnOnce() + Send>,
+  ) -> Result<bool> {
+    Err(Error::FailedToSendMessage)
+  }
+  #[doc(hidden)]
+  fn set_reparent_visible(
+    &self,
+    _token: u64,
+    _visible: bool,
+    _current: webview::ReparentExecutionGuard,
+  ) -> Result<bool> {
+    Err(Error::FailedToSendMessage)
+  }
+  #[doc(hidden)]
+  fn close_confirmed(&self) -> Result<bool> {
+    Err(Error::FailedToSendMessage)
+  }
+  #[doc(hidden)]
+  fn destroy_reparent_original(&self, _token: u64) -> Result<bool> {
+    Err(Error::FailedToSendMessage)
+  }
+  #[doc(hidden)]
+  fn finish_terminated_reparent(
+    &self,
+    _token: u64,
+    _on_finished: Box<dyn FnOnce() + Send>,
+  ) -> Result<bool> {
+    Err(Error::FailedToSendMessage)
+  }
 
   /// Get cookies for a particular url.
   ///

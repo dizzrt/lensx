@@ -92,6 +92,7 @@ const harness = (
   let current: PluginRegistrationSnapshot | undefined = initial === null ? snapshot() : initial;
   let currentDetail = registrationDetail;
   let detailRevision: string | undefined;
+  let generation = '1';
   const refresh = rs.fn(async () => undefined);
   const whenIdle = rs.fn(async () => undefined);
   const resolveEntry = rs.fn(async () => ({ ...result, revision: current?.revision ?? result.revision }));
@@ -103,7 +104,14 @@ const harness = (
     }),
   );
   const listeners = new Set<(snapshot: PluginRegistrationSnapshot) => void>();
+  const readAdmission = rs.fn(async (identity: { entryId: string; expectedRevision: string }) => ({
+    entryId: identity.entryId,
+    revision: identity.expectedRevision,
+    generation,
+  }));
   const resolver = createPluginPageRuntimeResolver({
+    readAdmission,
+
     resourceAdapter: { resolveEntry },
     surfaceProjectionService: {
       currentSnapshot: () => current,
@@ -118,6 +126,10 @@ const harness = (
   });
   return {
     resolver,
+    readAdmission,
+    setGeneration: (value: string) => {
+      generation = value;
+    },
     refresh,
     readRegistrationDetail,
     resolveEntry,
@@ -153,7 +165,7 @@ describe('Host-private Plugin Page Runtime resolver', () => {
       version: entry.version,
       page_id: activePage.page_id,
       expected_origin: 'lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost',
-      resource_generation: '0123456789abcdef0123456789abcdef',
+      resource_generation: '1',
       registration_revision: entry.revision,
     });
     expect(Object.isFrozen(descriptor)).toBe(true);
@@ -374,7 +386,85 @@ describe('Host-private Plugin Page Runtime resolver', () => {
       ...entry,
       entry_url: entry.entry_url.replaceAll('0123456789abcdef0123456789abcdef', 'fedcba9876543210fedcba9876543210'),
     });
+    oldGeneration.setGeneration('2');
     await expect(oldGeneration.resolver.isCurrent?.(request, descriptor)).resolves.toBe(false);
+  });
+
+  test('pins metadata admission before resource resolution and keeps Manager generation independent of provisional scope', async () => {
+    const current = harness();
+    const request = { activePage, pageResolution, attempt: 0 };
+    const admission = await current.resolver.admit?.(request);
+    expect(current.resolveEntry).not.toHaveBeenCalled();
+    expect(current.readAdmission).toHaveBeenCalledTimes(1);
+    const first = await current.resolver.resolve(request, admission);
+    expect(current.readAdmission).toHaveBeenCalledTimes(1);
+    await expect(current.resolver.isCurrent?.(request, first)).resolves.toBe(true);
+    expect(current.resolveEntry).toHaveBeenCalledTimes(1);
+    expect(first.entry_url).toBe(entry.entry_url);
+    // A subsequent creation resolution may receive a new provisional scope after
+    // its predecessor closes; this does not authorize revival of the old source.
+    const newScopeUrl = entry.entry_url.replaceAll(
+      '0123456789abcdef0123456789abcdef',
+      'fedcba9876543210fedcba9876543210',
+    );
+    current.resolveEntry.mockResolvedValue({ ...entry, entry_url: newScopeUrl });
+    const second = await current.resolver.resolve(request);
+    expect(second.entry_url).toBe(newScopeUrl);
+    expect(second.resource_generation).toBe(first.resource_generation);
+    const calls = current.resolveEntry.mock.calls.length;
+    // Metadata currentness does not authorize a source; native lease checks remain mandatory.
+    current.setGeneration('2');
+    await expect(current.resolver.isCurrent?.(request, second)).resolves.toBe(false);
+    expect(current.resolveEntry).toHaveBeenCalledTimes(calls);
+  });
+
+  test('rejects stale or corrupt admission without allocating a resource scope', async () => {
+    for (const patch of [
+      { entryId: 'entry_other' },
+      { revision: '999' },
+      { generation: '0' },
+      { generation: '18446744073709551616' },
+    ]) {
+      const current = harness();
+      current.readAdmission.mockResolvedValue({
+        entryId: entry.entry_id,
+        revision: entry.revision,
+        generation: '1',
+        ...patch,
+      });
+      await expect(current.resolver.resolve({ activePage, pageResolution, attempt: 0 })).rejects.toMatchObject({
+        code: 'runtime_stale',
+      });
+      expect(current.resolveEntry).not.toHaveBeenCalled();
+    }
+    const current = harness();
+    const request = { activePage, pageResolution, attempt: 0 };
+    const admission = await current.resolver.admit?.(request);
+    current.publish(snapshot({ revision: '8' }));
+    await expect(current.resolver.resolve(request, admission)).rejects.toMatchObject({ code: 'runtime_stale' });
+    expect(current.resolveEntry).not.toHaveBeenCalled();
+  });
+
+  test('stops late resolution after cancellation and refreshes retry metadata before admission only once', async () => {
+    const current = harness();
+    const request = { activePage, pageResolution, attempt: 1 };
+    const admission = await current.resolver.admit?.(request);
+    let completeDetail!: (value: PluginRegistrationDetailResponse) => void;
+    current.readRegistrationDetail.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          completeDetail = resolve;
+        }),
+    );
+    const cancellation = new AbortController();
+    const resolution = current.resolver.resolve(request, admission, cancellation.signal);
+    cancellation.abort();
+    completeDetail({ contract_version: '0.3.0', revision: entry.revision, detail: registrationDetail });
+    await expect(resolution).rejects.toMatchObject({ code: 'runtime_unavailable' });
+    expect(current.resolveEntry).not.toHaveBeenCalled();
+    expect(current.refresh).toHaveBeenCalledTimes(1);
+    expect(current.whenIdle).toHaveBeenCalledTimes(1);
+    expect(current.readAdmission).toHaveBeenCalledTimes(1);
   });
 
   test('accepts only the isolated native/translated origin and strict Host route grammar', () => {

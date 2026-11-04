@@ -24,17 +24,15 @@ export const runWryPolicyTests = ({
   mkdirSync(targetDir, { recursive: true });
   const outputDir = mkdtempSync(join(targetDir, 'wry-policy-tests-'));
   try {
-    for (const policy of ['key_equivalent']) {
-      const source = join(
-        rootDir,
-        'vendor',
-        'frame-aware-navigation',
-        'wry',
-        'src',
-        'wkwebview',
-        'class',
-        `${policy}.rs`,
-      );
+    for (const [policy, relativeSource] of [
+      ['key_equivalent', 'wry/src/wkwebview/class/key_equivalent.rs'],
+      ['native_reparent', 'wry/src/wkwebview/reparent.rs'],
+      ['runtime_reparent', 'tauri-runtime-wry/src/reparent.rs'],
+      ['data_delivery', 'tauri-runtime-wry/src/data_delivery.rs'],
+      ['wrapper_reparent', 'tauri/src/webview/reparent.rs'],
+      ['channel_recipient', 'tauri/src/ipc/channel_recipient.rs'],
+    ] as const) {
+      const source = join(rootDir, 'vendor', 'frame-aware-navigation', relativeSource);
       const binary = join(outputDir, `${policy}-tests${process.platform === 'win32' ? '.exe' : ''}`);
       for (const [phase, executable, argv] of [
         ['compile', 'rustc', ['--edition=2021', '--test', source, '-o', binary]],

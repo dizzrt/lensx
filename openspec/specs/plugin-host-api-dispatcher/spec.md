@@ -2,10 +2,12 @@
 
 ## Purpose
 
-Define the Host-private, Session-scoped Host API v1 Dispatcher that exposes
-only currently implemented capabilities through an authenticated Runtime Port,
-while preserving trusted identity, currentness, cancellation, lifecycle, and
-public Contract boundaries.
+
+Define the Host-private, Session-scoped Host API Dispatcher over authenticated
+native Runtime bridge bindings, preserving instance identity, caller-window
+routing, currentness, cancellation, lifecycle isolation, and public Contract
+boundaries across main and detached windows.
+
 ## Requirements
 
 ### Requirement: Production Host MUST route requests through a closed Dispatcher bound to a trusted Session
@@ -83,7 +85,7 @@ The Dispatcher MUST derive complete Context from the current Host API `0.4.0` ca
 - **THEN** the SDK replaces all Context before notifying subscribers, and plugins see no Host-private state
 
 #### Scenario: Session authority changes
-- **WHEN** Registration revision, resource generation, or Runtime attempt changes invalidate old Session identity
+- **WHEN** changes to Registration facts relevant to that instance, resource generation, or Runtime attempt invalidate the old Session identity
 - **THEN** the old Session terminates and its old Context cannot authorize subsequent provider calls
 - **THEN** `runtime.context_changed` cannot grant new identity to or reauthorize the old Session
 
@@ -96,21 +98,26 @@ The Dispatcher MUST derive complete Context from the current Host API `0.4.0` ca
 - **WHEN** a runtime.get_context call or Host fact change occurs
 - **THEN** `runtime.get_context` MUST accept exact `{}` and return complete, Contract-valid, copied, frozen Context.
 - **THEN** Real locale, theme, or provider-availability changes in the same Session MUST publish one complete `runtime.context_changed` replacement; identical snapshots MUST NOT be published repeatedly.
-- **THEN** Invalidation of identity, Registration revision, resource generation, or Runtime attempt MUST terminate the old Session and MUST NOT reauthorize it through events.
+- **THEN** Invalidation of identity, relevant Registration facts, resource generation, or Runtime attempt MUST terminate the affected old Session rather than reauthorizing it through an event; an unrelated global revision or valid window detachment MUST NOT invalidate a still-valid Session.
 
 #### Scenario: Compose or omit an activation provider
 - **WHEN** the current Session has a valid composed activation provider or that provider is absent
 - **THEN** the former Context advertises the available actions.get_activation and actions.subscribe_activations methods, while the latter omits unavailable methods
 - **THEN** Context retains its four-field shape, and independent queries and events provide activation facts without inventing plugin permissions or native input-monitoring capabilities
 
+#### Scenario: Multiple instances receive the same application settings change
+
+- **WHEN** locale, theme, or actual provider availability changes while the main and detached windows contain multiple valid Sessions
+- **THEN** Host MUST publish a complete, valid, deduplicated Context replacement separately for each affected Session, deriving capabilities from that Session's own provider state
+- **THEN** Sessions of the same plugin MUST NOT share an event queue or identity; invalidating one instance cannot cause another valid instance to miss updates or receive events with the wrong identity
+
 ### Requirement: ui.close MUST close only the calling Session's current Page after delivering a successful response
 
-`ui.close` MUST accept exact `{}` only.
+`ui.close` MUST accept only exact `{}`. Host MUST derive one unique close target from the trusted calling Session's instance lease; sibling instances of the same plugin/Page cannot substitute for that target. The successful response MUST be delivered first, followed by closure of only the calling instance and its Page; a detached instance closes its owning detached window, while a main-window instance returns Home under the main-window navigation contract.
 
 #### Scenario: Current plugin closes its own Page
 
-- **WHEN** a current ready Plugin Page Session calls `ui.close` and the target
-  still matches the active Page when the response is delivered
+- **WHEN** a valid, ready plugin Session calls `ui.close` and its original instance and the Page on its owning surface still match when the response is delivered
 - **THEN** the SDK first receives
   `{ method: "ui.close", result: { accepted: true } }`
 - **THEN** the Host closes that Page and terminates its Runtime, and the effect
@@ -135,26 +142,42 @@ The Dispatcher MUST derive complete Context from the current Host API `0.4.0` ca
 
 #### Scenario: Derive the close target only from current Session identity
 - **WHEN** the calling plugin requests ui.close
-- **THEN** The Dispatcher MUST derive the sole target `{ owner_id: plugin_id, page_id }` from trusted Session identity and MUST NOT accept a window, route, plugin, Page, or other close target.
-- **THEN** A call may return `{ accepted: true }` only while that target is still the active Plugin Page and the Runtime attempt and current Session remain valid.
+- **THEN** Dispatcher MUST derive one unique target from trusted Session identity and the independent instance lease; `{ owner_id: plugin_id, page_id }` describes only the business Page and cannot select a running instance by itself. Public calls MUST NOT accept window, instance, route, plugin, Page, or other target fields.
+- **THEN** only when the target remains the unterminated Plugin Page instance bound to the calling Session, with its attempt, Session, and current source lease still valid, may the call return `{ accepted: true }`; in `recovery_required`, the same Host-retained instance/transaction context may select the explicit termination target without falsely claiming stable window ownership. Current operating-system focus and the main-window active Page MUST NOT substitute for this determination.
 
 #### Scenario: Deliver the close response before a compare-current effect
 - **WHEN** the Host transport completes or loses a pending ui.close result
 - **THEN** The Host transport MUST validate and successfully deliver the Contract result and terminal the request before executing at most one Host-owned close effect.
 - **THEN** The close effect MUST recheck currentness and the target match.
 - **THEN** If the Page or Session was replaced while the response was pending, the call was cancelled, or the adapter terminated, the effect MUST NOT close any Page.
-- **THEN** Closing MUST use the narrow App Navigation boundary and join the existing iframe, Session, Port, pending-request, and listener cleanup.
+- **THEN** Close MUST use Host's instance-level navigation boundary and clean up that instance's WebView, Session, bridge, pending requests, and listeners without cleaning up other instances of the same plugin/Page.
+
+#### Scenario: Close the caller among multiple instances of the same plugin
+
+- **WHEN** A and B belong to the same plugin/Page and A calls `ui.close` while B or the main window has focus
+- **THEN** after delivering the valid response, Host MUST close only A and its owning detached window; B and other Pages in the main window MUST remain unchanged
+- **THEN** a caller cannot use matching business identity, focus changes, or known public Actions to close other instances
+
+#### Scenario: Valid detachment occurs before a close response is delivered
+
+- **WHEN** A's valid close response is still pending delivery and A successfully moves to a detached window while its Session and attempt remain valid
+- **THEN** the single post-delivery close effect MUST resolve A's current trusted ownership and close only the transferred A
+- **THEN** it MUST NOT close Launcher after Launcher has returned Home or opened a new instance, nor execute again because of the transfer
+
+#### Scenario: Recovery-required state still permits explicitly closing the calling instance
+- **WHEN** the original instance in `recovery_required` still passes current-source and Session validation and requests valid `ui.close`
+- **THEN** after successful response delivery, the sole close effect MUST terminate that instance and its recovery context by the original attempt, without waiting indefinitely for recovery, depending on main's active Page or a guessed owner, or closing sibling/replacement instances
+- **THEN** a failed or cancelled response MUST produce no close effect, and late recovery after termination MUST NOT revive or reauthorize that instance
 
 ### Requirement: actions.open MUST be limited to the calling plugin's currently available local Action
 
-`actions.open` MUST accept only a Contract-valid plugin-local `actionId`.
+`actions.open` MUST accept only a valid plugin-local `actionId` and derive instance/window from its Session. Same-Page navigation MUST preserve that instance; another Page replaces only its surface. It MUST NOT create windows, take over main or select a sibling. Ordinary migration permits only bounded ownership waits; `recovery_required` MUST return bounded `unavailable`, preserving the original instance without automatic replay after recovery.
 
 #### Scenario: Plugin opens its own current Action
 
 - **WHEN** a current Session calls an enabled and available Page Action
   currently projected by the same plugin using its local ID
-- **THEN** the Dispatcher derives the global ID from trusted plugin identity
-  and reuses the existing Launcher Action Dispatcher
+- **THEN** Dispatcher MUST derive the global ID from trusted plugin identity, reuse unified Action validation and execution semantics, and constrain navigation to the calling instance's owning surface
 - **THEN** the Action produces its real navigation effect and returns
   `{ method: "actions.open", result: { opened: true } }`
 
@@ -179,7 +202,7 @@ The Dispatcher MUST derive complete Context from the current Host API `0.4.0` ca
 
 #### Scenario: Resolve a plugin-local Action through the unified Registry
 - **WHEN** the calling plugin submits an actions.open request
-- **THEN** The Dispatcher MUST derive the global Action ID using the trusted Session `plugin_id` and the existing projection rule, and MUST resolve and execute it through the current Launcher Action Registry and Dispatcher.
+- **THEN** Dispatcher MUST derive the global Action ID from the trusted Session `plugin_id` and existing projection rules, validate and execute it through the current unified Registry and Dispatcher, and bind the owning instance and surface through Host-private invocation context; public parameters gain no target instance or window.
 - **THEN** A plugin MUST NOT submit a global ID, owner, Page route, or executor.
 
 #### Scenario: Reject unavailable or foreign Action targets safely
@@ -188,6 +211,30 @@ The Dispatcher MUST derive complete Context from the current Host API `0.4.0` ca
 - **THEN** An unknown, disabled, incompatible, uninstalled, `lensx.core`, or other-plugin target MUST fail with stable `not_found`.
 - **THEN** An unknown executor failure MUST map to safe `internal_error`.
 - **THEN** No error MUST expose an executor, Registry record, route, original exception, or Host object.
+
+#### Scenario: Open the same Page Action within a detached window
+
+- **WHEN** valid detached instance A invokes an Action of its own plugin whose target remains A's current Page
+- **THEN** Host MUST deliver a new `normal` activation to A's existing instance while preserving A's document, Session, input, and business state
+- **THEN** main and B with the same plugin/Page MUST NOT be focused, reloaded, replaced, or receive A's activation
+
+#### Scenario: Navigate to another Page of the same plugin within a detached window
+
+- **WHEN** A invokes a valid Action of its own plugin whose target is a different Page
+- **THEN** Host MUST perform Page replacement and the corresponding termination/creation rules only within A's detached window, preserving that window's independent hosting identity
+- **THEN** the new Page MUST use its own validated presentation, while main and sibling instances MUST remain unchanged
+- **THEN** successful results and termination of old requests MUST preserve existing response, cancellation, and strict-currentness rules without reviving an old Session to deliver a result
+
+#### Scenario: External Launcher entry and plugin-internal entry use separate routes
+
+- **WHEN** Launcher search, click, recent use, pinned entries, or a global Action shortcut initiates a plugin Action while that plugin already has a detached instance
+- **THEN** Host MUST route that external entry to the main Launcher surface, reusing its current Page or establishing a new instance under main-window rules
+- **THEN** external entry MUST NOT select, focus, or broadcast to detached instances by default; plugin-internal `actions.open` remains scoped to the caller's surface
+
+#### Scenario: Action calls in recovery-required state are rejected within a bound
+- **WHEN** the calling Session's instance is in `recovery_required` or enters that state while waiting for ordinary migration ownership
+- **THEN** `actions.open` MUST return `unavailable` within the existing bounded wait, without creating/replacing a Page, selecting another window, or queuing execution for automatic replay after the user recovers
+- **THEN** other still-valid data calls and ongoing results for the original Session MUST continue passing current source/generation/lease and quota checks; recovery state grants no new authority and does not change the boundary for explicit close after a successful response
 
 ### Requirement: Dispatcher MUST preserve stable error, cancellation, and terminal lifecycle semantics
 
@@ -199,8 +246,7 @@ Dispatcher providers MUST produce only a Contract-valid Host API result, a Contr
   exception or returns an internal value that does not match the method
 - **THEN** the plugin receives at most a Contract-valid `internal_error` with
   a fixed safe message, or the existing fatal transport path terminates
-- **THEN** the original exception, stack, internal value, and Host object do
-  not cross the Port
+- **THEN** original exceptions, call stacks, internal values, and Host objects MUST NOT enter plugin-observable native bridge responses, events, or diagnostics
 
 #### Scenario: Cancellation wins before a side effect
 
@@ -215,8 +261,7 @@ Dispatcher providers MUST produce only a Contract-valid Host API result, a Contr
 - **WHEN** a Session request, provider, codec, or lifecycle fails
 - **THEN** the failure terminates at most that Session or adapter and produces
   a safe bounded diagnostic
-- **THEN** other plugin Sessions, Registrations, permissions, and application
-  service state are not modified as collateral effects
+- **THEN** other instances' Sessions, Registration, and application service state MUST NOT be collaterally modified; old permission or grant facts cannot change this isolation boundary
 
 #### Scenario: Keep provider failures inside the safe wire contract
 - **WHEN** a Dispatcher provider returns, throws, or prepares a post-response effect
@@ -227,11 +272,30 @@ Dispatcher providers MUST produce only a Contract-valid Host API result, a Contr
 #### Scenario: Cancel stale asynchronous provider work
 - **WHEN** an operation crosses an asynchronous boundary or its Session is cancelled or invalidated
 - **THEN** Every provider MUST check Host cancellation and Session currentness before a side effect and again after an asynchronous boundary.
-- **THEN** Cancellation, timeout, disconnect, Page replacement, disable, uninstall, Host reload, or disposal MUST prevent every side effect that has not yet occurred.
+- **THEN** Cancellation, timeout, disconnect, Page replacement or disposal of the owning instance, and disable, uninstall, or trusted Host coordinator reload that invalidates the instance MUST prevent effects that have not yet occurred; ordinary main-window presentation replacement and hiding do not terminate detached instances.
 - **THEN** A late result, event, or effect MUST be dropped and MUST NOT affect a replacement Session.
 
+#### Scenario: Detachment does not cancel the caller's valid requests
+
+- **WHEN** the original instance successfully detaches during valid storage, HTTP, Context, or activation operations
+- **THEN** pending operations and the request sequence in the same Session MUST remain valid and results return only to the original caller; returning main Home MUST NOT cancel them
+- **THEN** HTTP MUST retain the existing limit of 4 concurrent requests per attempt and 16 globally, plus existing deadlines, without resubmission or quota reset because of migration
+
+#### Scenario: Terminating one instance of the same plugin cancels only its own operations
+
+- **WHEN** A and B call Host API concurrently and only A closes, retries, or terminates on failure
+- **THEN** Host MUST cancel only A's pending requests, events, and unexecuted effects and discard its late results; B's valid requests MUST continue
+- **THEN** committed plugin-level storage writes MUST retain their existing atomic-commit semantics and cannot be rolled back because A's response is lost; B can observe committed values through subsequent normal reads
+
+#### Scenario: Plugin invalidation or application exit terminates all affected requests
+
+- **WHEN** plugin disable, uninstall, generation change, or application exit invalidates multiple Sessions
+- **THEN** Host MUST idempotently cancel pending operations for every affected Session and suppress unexecuted effects and late responses
+- **THEN** unrelated, still-valid Sessions MUST NOT be cancelled; application exit cleans up all Sessions
+
 ### Requirement: Dispatcher authority MUST derive only from the current Child WebView Session
-Production dispatch MUST accept a request only after native source binding and RPC validation identify the current Child WebView Session. Dispatcher MUST continue to derive plugin/Page/capability/storage namespace from trusted Session facts and MUST receive no plugin-provided WebView label, native handle, origin token, bridge object or Tauri command.
+
+Dispatch MUST require native-source, independent-lease and RPC validation. Trusted Session facts alone MUST determine plugin/Page, owner, capability and storage namespace. Effects/responses MUST revalidate the original caller, never substitute current Page, focus or a same-plugin/Page sibling. Plugins cannot supply source, handle, instance, window or authority.
 
 #### Scenario: Current WebView calls a supported method
 - **WHEN** a validated bridge request reaches Dispatcher from the current ready Session
@@ -240,6 +304,12 @@ Production dispatch MUST accept a request only after native source binding and R
 #### Scenario: Old WebView calls a valid method
 - **WHEN** a replaced or destroyed source sends an otherwise valid request
 - **THEN** request is rejected before provider invocation with zero side effect
+
+#### Scenario: Identical request sequence numbers return to their own sources
+
+- **WHEN** A and B belong to the same plugin/Page and their respective Sessions use the same public request sequence number to call the same method
+- **THEN** Host MUST independently validate, execute, and return each call by native source and instance/Session binding; cancelling A MUST NOT cancel B
+- **THEN** A's private frames, responses, or events MUST NOT forge B's source binding or use a shared generation scope to bypass validation
 
 ### Requirement: Delivery MUST prove deterministic production composition without absorbing later capabilities
 
@@ -271,3 +341,19 @@ Production `PluginRuntimeSlot` MUST install a real Session-scoped Dispatcher for
 - **THEN** coverage includes initial batches, early events, repeated subscriptions, absent callbacks, source-identity forgery, currentness, stream-opening failure termination, and cleanup
 - **THEN** old catalog assertions do not incorrectly reject new methods, while old, unknown, or removed private methods continue to reject without side effects
 - **THEN** these tests do not claim execution of real keyboard monitoring, WebViews, or system authorization flows
+
+### Requirement: Host API services MUST remain available independently of Launcher presentation lifecycle
+
+Hiding the main window, returning Home, or navigating its Pages MUST NOT unmount trusted Host coordination serving still-valid detached instances. Each window MUST use trusted presentation and control boundaries scoped to its instance; shared application facts and services cannot acquire competing owners for global shortcut registration, Action registration, or Settings persistence as windows are added.
+
+#### Scenario: A detached plugin continues calling Host API while main is hidden
+
+- **WHEN** Launcher is hidden on Home after successful detachment and a detached instance continues calling Context, storage, HTTP, or its own Actions
+- **THEN** its valid calls MUST be served normally under existing capabilities and instance routing rather than being considered stale because main has no active plugin Page
+- **THEN** showing main again, hiding it, or opening another plugin MUST NOT recreate the detached instance's Dispatcher binding
+
+#### Scenario: Close one trusted window presentation
+
+- **WHEN** a detached window closes and removes its trusted chrome while other window instances remain valid
+- **THEN** Host MUST remove only that window's and instance's presentation, listeners, and control leases while preserving shared coordination needed by other instances
+- **THEN** actual application exit or coordinator invalidation MUST use unified termination, leaving no instance with native authority but without Host service

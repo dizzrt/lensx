@@ -17,6 +17,7 @@ const codes = new Set<ShortcutErrorCode>([
   'duplicate_shortcut',
   'duplicate_action',
   'launcher_choice_required',
+  'detach_choice_required',
   'revision_conflict',
   'registration_failed',
   'storage_failed',
@@ -82,6 +83,7 @@ export const createDesktopShortcutService = (
           expectedRevision,
           configuration: normalizeShortcutConfiguration(configuration),
           ...(options?.resolveLauncherMigration === true ? { resolveLauncherMigration: true } : {}),
+          ...(options?.resolveDetachMigration === true ? { resolveDetachMigration: true } : {}),
         }),
       ),
     subscribe: (listener) =>

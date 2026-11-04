@@ -31,6 +31,7 @@ pub(crate) fn setup_frame_aware_navigation_policy(
     let callback_policy = Arc::clone(&policy);
     WebviewWindowBuilder::from_config(app, &window_config)?
         .visible(false)
+        .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled)
         .on_navigation_with_frame(move |url, frame| {
             match decide_tauri_navigation(&callback_policy, url, frame) {
                 NavigationDecision::Allow(_) => true,

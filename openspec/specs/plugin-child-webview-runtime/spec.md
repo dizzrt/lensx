@@ -2,21 +2,22 @@
 
 ## Purpose
 
-Define the Host-owned presentation of one current plugin as a native Child
-WebView in the Launcher, including revisioned content-slot bounds, current-source
-navigation policy, semantic-equivalent lifecycle reuse, compare-current teardown,
-and deterministic validation of native authority and lifecycle boundaries.
+
+Define Host-owned plugin Child WebViews with at most one current instance per
+window, including revisioned content slots, trusted source and window ownership,
+same-instance detachment, lifecycle reuse, scoped termination, and deterministic
+validation of native authority and continuity.
 
 ## Requirements
 
 ### Requirement: Host MUST present one current plugin as a native Child WebView sibling
 
-When the current Page belongs to an executable external plugin, the Host MUST create a Child WebView inside the Launcher native window and make it a native sibling of the trusted Host WebView.
+When a window's current Page belongs to an executable plugin, Host MUST present one plugin Child WebView in that window as a native sibling of its trusted Host WebView. The main window and each detached window independently own at most one current plugin instance; the process may contain multiple instances of the same or different plugins.
 
 #### Scenario: External Page enters ready presentation
 - **WHEN** current Registration, Page, Resource, and Runtime facts converge and the Child WebView completes load and Session readiness
 - **THEN** the Host displays that Child WebView inside the assigned plugin content slot and hides loading feedback
-- **THEN** Host chrome continues to be rendered by the trusted Host WebView, and the plugin cannot cover or move outside the slot
+- **THEN** main Page chrome is rendered by the trusted Host WebView, and the detached macOS title bar sits outside its content area. The plugin cannot cover window controls or move outside its slot.
 
 #### Scenario: Host overlay must cover the plugin region
 - **WHEN** the Host must present Settings, a confirmation dialog, or terminal failure feedback
@@ -27,11 +28,16 @@ When the current Page belongs to an executable external plugin, the Host MUST cr
 
 - **WHEN** the Host creates, presents, updates, or destroys the current plugin Child WebView
 - **THEN** React MUST only declare the Host-owned plugin content slot; Rust MUST exclusively own Child WebView creation, label, bounds, visibility, focus, navigation hooks, data store, and destroy authority.
-- **THEN** The system MUST have at most one current plugin Child WebView at a time, and the plugin MUST NOT submit or receive a native handle, window, position, size, z-order, or WebView configuration.
+- **THEN** The system MUST enforce at most one current plugin Child WebView per owning window and distinguish multiple instances of the same plugin and Page by independent attempts and trusted native sources; plugins MUST NOT submit or receive native handles, windows, positions, sizes, z-order, or WebView configuration.
+
+#### Scenario: Detach one instance while opening another
+- **WHEN** instance A is detached from the main window and a new instance B of the same plugin is opened in the main window
+- **THEN** A and B each occupy only their own window's slot, Session, and native source, with Host chrome rendered separately by the trusted Host
+- **THEN** a main-window overlay affects only the instance in main; A's own failure feedback or closure affects only A
 
 ### Requirement: Host MUST provide an edge-to-edge content slot below plugin Page chrome
 
-When a current Page is provided by a plugin, the trusted Host MUST keep Page chrome outside the plugin content rectangle and MUST assign the Child WebView slot all remaining Launcher body space directly below that chrome. On macOS, edge-to-edge plugin content MUST also be clipped to the complete Launcher's rounded outer outline; plugins MUST NOT be responsible for adapting to the window outline.
+In main, the plugin slot MUST fill the area below trusted Page chrome. In a detached macOS window, the slot MUST fill the entire content area from its origin beneath the native title bar. The Host owns window controls and the outer outline without requiring plugin adaptation.
 
 #### Scenario: Ordinary plugin Page enters its content slot
 
@@ -61,7 +67,7 @@ When a current Page is provided by a plugin, the trusted Host MUST keep Page chr
 
 - **WHEN** the trusted Host lays out a current plugin Page
 - **THEN** The plugin Page body MUST add no Host-owned inline padding, bottom padding, inter-region gap, or inner card radius around the Runtime slot.
-- **THEN** The macOS Host MUST clip the complete native content, including the plugin Child WebView, to the shared outer outline defined by `frontend-foundation`; this MUST NOT turn the plugin slot's top edge into a card with inner rounded corners.
+- **THEN** The macOS main window MUST clip its complete native content to the shared outer outline defined by `frontend-foundation`. A detached window uses the system frame outline and confines its plugin to rectangular content without an inner radius at the title-bar seam.
 - **THEN** This layout MUST be selected from the trusted Page provider kind and MUST apply identically to official, external, and Development Mode plugins; plugin identity, Publisher, repository location, release metadata, or Runtime content MUST NOT select a special layout path.
 
 #### Scenario: Measure and publish slot changes
@@ -100,6 +106,11 @@ When a current Page is provided by a plugin, the trusted Host MUST keep Page chr
 - **WHEN** plugin A is closed, invalidated, or replaced by B and A's slot updates, ready events, hide, or destroy operations complete later
 - **THEN** A's late operations MUST NOT clear the common window outline, change B's clipping, or make A visible again
 - **THEN** the current Child slot MUST retain the existing revision and compare-current rules, and the outer outline MUST follow the current complete window bounds
+
+#### Scenario: Detached chrome and slot have one current owner
+- **WHEN** a ready instance successfully moves to a detached window or that detached window is resized
+- **THEN** the native title bar lies outside the detached content rect. The plugin slot fills that rect from content coordinates `(0, 0)`, with no duplicate HTML Page bar, close button or top inset.
+- **THEN** callbacks from the old main window for slot, rounded corners, or focus cannot modify the new owner, and transfer does not reload the document or Session
 
 ### Requirement: Child WebView navigation MUST be top-level, current and Host-derived
 
@@ -140,7 +151,7 @@ The Host MUST coordinate React and Rust through a typed slot update containing t
 
 ### Requirement: Child WebView lifecycle MUST preserve only semantic-equivalent activation
 
-Launcher hide and restore, same-Page shortcut activation, and Registration revisions affecting only other plugins MUST reuse the same Child WebView and Session while the current identity, entry, route, origin, resource generation, and attempt remain unchanged.
+Same-instance Launcher hide/restore, same-Page activation within the owning window, Host window detachment, and unrelated Registration updates MUST preserve the same Child WebView and Session. A change only to trusted window ownership MUST NOT change identity, entry, route, origin, resource generation, attempt, Worker, or pending tasks.
 
 #### Scenario: Launcher hides and restores current plugin
 
@@ -158,12 +169,17 @@ Launcher hide and restore, same-Page shortcut activation, and Registration revis
 
 - **WHEN** the Launcher restores the same valid Page or a lifecycle event terminates its attempt
 - **THEN** Same-attempt restore MUST NOT resolve, create, navigate, read document resources, bootstrap the SDK, recreate a model or Worker, or show a fresh plugin-page loading cycle.
-- **THEN** Close, Page replacement, disable, uninstall, replacement, upgrade, development reload, explicit retry, Session disconnect, bridge fatal failure, breaker, Host reload, App unmount, and process exit MUST make the old attempt terminal and destroy the Child WebView, without retaining a hidden Runtime, pool, or background execution.
+- **THEN** Actual close, Page replacement within the owning window, retry, Session disconnect, or fatal bridge failure MUST terminate that instance; disable, uninstall, replacement, upgrade, and committed development reload MUST terminate every instance of the affected generation; application-level Host reload, App teardown, and process exit MUST clean up all instances. Returning main to Home or unmounting its presentation component because of detachment MUST NOT terminate the transferred instance. The breaker blocks only new creation and does not destroy healthy siblings; no hidden Runtime, pool, or background execution without an owning window may remain.
 
 #### Scenario: Validate Child activation and terminal cleanup
 
 - **WHEN** deterministic tests evaluate same-attempt activation and terminal lifecycle behavior
 - **THEN** Deterministic controller, state, call-count, and cleanup tests MUST cover these invariants without target macOS latency sampling.
+
+#### Scenario: Main returns Home after transfer
+- **WHEN** Host has committed A's detached-window ownership and unmounted the old plugin presentation in main
+- **THEN** A's document, Worker, Session, requests, and activation remain intact, and main's teardown releases only the old presentation binding
+- **THEN** a subsequent actual close of A still uses the same instance's idempotent terminal path
 
 ### Requirement: User-resized plugin Pages MUST converge through the Host-owned slot
 
@@ -375,3 +391,18 @@ On macOS, the current valid, visible plugin Child WebView with native text focus
 - **WHEN** standard editing delivery or its acceptance samples are integrated
 - **THEN** Editing delivery MUST NOT add a Host API, SDK method, plugin permission, generic Tauri capability, controllable native handle, injected script, DOM/page-index targeting, `eval`, or synthetic-key channel, and MUST NOT implement standard editing through production per-plugin or per-key-code allowlists.
 - **THEN** `Cmd+A/C/X/V/Z` and `Cmd+Shift+Z` are acceptance samples and do not change these boundaries.
+
+### Requirement: Presentation updates MUST validate instance ownership across transfer
+
+Every window presentation update MUST jointly validate the instance, actual source, and current owning window. After detachment, slot revisions, visibility operations, and focus operations from the old owner MUST become invalid, even if they complete after operations from the new window; updates MUST NOT be redirected to another instance based on matching plugin/Page text.
+
+#### Scenario: Late source-window update reaches a detached instance
+- **WHEN** asynchronous resize, hide, focus, or destroy completion from the original main window arrives after A has detached
+- **THEN** the update has no side effect because its ownership is stale, and A accepts only valid presentation updates from its new window
+- **THEN** a new main-window instance B does not accept A's old updates
+
+#### Scenario: Recovery-required state retains objects and blocks ordinary presentation changes
+- **WHEN** detachment compensation for the same Child WebView cannot be confirmed and enters `recovery_required`
+- **THEN** Host MUST retain that native object, Session, transaction, and original recovery snapshot, and freeze ordinary slot/visibility/focus updates for affected owners; recovery-failure feedback MUST use trusted Host presentation, without automatically destroying the plugin to display an error Page
+- **THEN** only explicit recovery for the same attempt/token may continue compensation; before cleaning up a target that may contain the original Child, Host MUST confirm actual native ownership and keep main-window repair and quit entries visible
+- **THEN** explicit termination and generation invalidation continue cleaning up under existing current-source and lease boundaries; late presentation or recovery cannot affect other instances or revive an old object

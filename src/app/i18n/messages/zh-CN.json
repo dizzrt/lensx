@@ -31,7 +31,9 @@
       },
       "pluginRuntimeRetry": "重试",
       "errorTitle": "无法显示此页面",
-      "errorDescription": "请关闭页面后重试。"
+      "errorDescription": "请关闭页面后重试。",
+      "pluginWindowFailureTitle": "此插件窗口需要处理",
+      "pluginWindowFailureDescription": "关闭此窗口，或返回 lensX 继续处理。"
     },
     "preferences": {
       "startupFailure": "无法恢复已保存的偏好设置，当前正在使用安全默认值。"
@@ -67,6 +69,18 @@
           "configuration": "配置"
         }
       }
+    },
+    "pluginWindow": {
+      "recoveryTitle": "恢复插件窗口",
+      "recoveryDescription": "未能自动恢复窗口，原插件实例已保留。",
+      "recoveryState": {
+        "recovery_required": "需要手动恢复。",
+        "recovering": "正在恢复原窗口…",
+        "closing": "正在关闭原实例…"
+      },
+      "retryRecovery": "重试恢复",
+      "closeInstance": "关闭实例",
+      "quit": "退出 lensX"
     }
   },
   "settings": {
@@ -277,7 +291,7 @@
       "permission": "允许输入监听",
       "reset": "恢复默认快捷键",
       "resetConfirm": "恢复默认",
-      "resetDescription": "恢复 Ctrl + Shift + Space 唤出 lensX？功能快捷键、其他设置和集合保持不变。",
+      "resetDescription": "将唤出 lensX 的快捷键恢复为 Ctrl + Shift + 空格？分离快捷键、功能快捷键、其它设置和收藏保持不变。",
       "editor": "“{{target}}”的快捷键",
       "mode": "快捷键类型",
       "chordMode": "组合键",
@@ -317,7 +331,8 @@
         "target_unavailable": "已保存 · 操作不可用",
         "registration_failed": "已保存 · 注册失败",
         "monitor_unavailable": "已保存 · 输入监听不可用",
-        "degraded": "恢复能力需要修复"
+        "degraded": "恢复能力需要修复",
+        "local_unavailable": "已保存 · 应用内快捷键不可用"
       },
       "feedback": {
         "saved": "快捷键已保存，请查看各绑定的生效状态。",
@@ -332,7 +347,8 @@
         "unavailable": "快捷键当前不可用，请重试。",
         "invalid_response": "无法确认快捷键状态，请重试。",
         "duplicate_action": "此 Action 已配置快捷键，请编辑已有行。",
-        "launcher_choice_required": "请先选择并保存用于唤出 lensX 的快捷键类型。"
+        "launcher_choice_required": "请先选择并保存用于唤出 lensX 的快捷键类型。",
+        "detach_choice_required": "请选择分离快捷键，或确认保持关闭，然后再保存该绑定。"
       },
       "add": "添加功能快捷键",
       "newShortcut": "新快捷键",
@@ -342,7 +358,14 @@
       "chooseType": "选择类型",
       "launcherMigration": "发现了两种唤出快捷键。请选择要保留的类型并保存，之后仅所选快捷键会唤出 lensX。",
       "modifierForTarget": "{{target}}的修饰键",
-      "system": "系统快捷键"
+      "system": "系统快捷键",
+      "detach": "分离插件窗口",
+      "local": "应用内快捷键",
+      "localBindings": "应用内快捷键绑定",
+      "detachScope": "仅用于主启动窗口中已就绪的插件页面。其它应用和已分离窗口仍使用自己的快捷键。",
+      "detachMigration": "由于“{{target}}”已使用 Cmd + D，迁移时未启用默认分离快捷键。请选择其它快捷键，或确认保持关闭。",
+      "detachKeepDisabled": "保持分离快捷键关闭",
+      "detachReset": "恢复 Cmd + D"
     }
   },
   "error": {

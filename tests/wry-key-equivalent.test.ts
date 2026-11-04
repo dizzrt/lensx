@@ -85,9 +85,19 @@ describe('production Child key-equivalent wiring', () => {
     );
     for (const wiring of [
       'NSEventMask::KeyDown',
-      'dispatch_macos_local_key(',
+      'NSEventMask::KeyUp',
+      'NSEventMask::FlagsChanged',
+      'gestures.input(',
       'NSRunningApplication::currentApplication().isActive()',
-      'modifiers == NSEventModifierFlags::Command',
+      'local_shortcut_facts(',
+      'local_recording_input(',
+      'local_key_down(',
+      'gestures.recording_owned(input)',
+      'dispatch_local_detach(',
+      'dispatch_current_close_target(',
+      'request_macos_application_quit(',
+      'event.isARepeat()',
+      'event.timestamp()',
       'event.keyCode()',
       'if consumed',
       'std::ptr::null_mut()',
@@ -100,5 +110,50 @@ describe('production Child key-equivalent wiring', () => {
     const sdk = read('packages/plugin-contract/src/generated/plugin-host-api-input.ts');
     expect(sdk).not.toMatch(/key_equivalent|native_keyboard|performKeyEquivalent/u);
     expect(read('src-tauri/Cargo.toml')).toContain('wry = { path = "../vendor/frame-aware-navigation/wry" }');
+  });
+
+  test('captures close ownership and finishes native quit cleanup before requesting process exit', () => {
+    const host = read('src-tauri/src/launcher_window.rs');
+    const hide = host.slice(
+      host.indexOf('fn dispatch_captured_main_hide'),
+      host.indexOf('fn dispatch_current_close_target'),
+    );
+    expect(hide).toContain('snapshot_for_surface("main")');
+    expect(hide).toContain('snapshot_owned(*attempt, owner)');
+    expect(hide).toContain('normal_guard(false)');
+    expect(hide).toContain('TauriLauncherWindowAdapter { window, guard }');
+    const quit = host.slice(
+      host.indexOf('fn request_macos_application_quit'),
+      host.indexOf('// The local monitor consumes'),
+    );
+    expect(quit.indexOf('prepare_shutdown()')).toBeLessThan(quit.indexOf('spawn_blocking('));
+    expect(quit.indexOf('compare_current_teardown(attempt)')).toBeLessThan(quit.indexOf('cleanup();'));
+    expect(quit.indexOf('cleanup();')).toBeLessThan(quit.indexOf('app.exit(0)'));
+    expect(quit).not.toMatch(/thread::sleep|from_millis\(300\)/u);
+    const native = read('src-tauri/src/plugin_detached_window_native.rs');
+    const close = native.slice(native.indexOf('fn close_shell_exact('), native.indexOf('fn close_empty_shell('));
+    expect(close.indexOf('claim_shell_close(epoch, revision)')).toBeLessThan(close.indexOf('teardown_surface('));
+    const detach = native.slice(
+      native.indexOf('pub(crate) fn dispatch_local_detach'),
+      native.indexOf('pub(crate) fn dispatch_local_detached_close'),
+    );
+    expect(detach.indexOf('reserve_detach(request.attempt)')).toBeLessThan(detach.indexOf('spawn_blocking('));
+    expect(host).toContain('NSEventMask::KeyDown | NSEventMask::KeyUp | NSEventMask::FlagsChanged');
+    expect(host).not.toMatch(/NSEventMask::LeftMouse(?:Down|Up)/u);
+    expect(detach).toContain('native_detach_candidate(&state)');
+    const candidate = native.slice(
+      native.indexOf('fn native_detach_candidate('),
+      native.indexOf('/// Synchronous native admission'),
+    );
+    for (const check of [
+      'native_focus_in(',
+      'native_main_input_eligible(',
+      'host_input_blocked(',
+      'source_ready_and_current:',
+      'main_hide_blocked()',
+      'is_shutting_down()',
+    ])
+      expect(candidate).toContain(check);
+    expect(detach).toContain('configuration_revision == configuration_revision');
   });
 });

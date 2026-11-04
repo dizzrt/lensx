@@ -16,40 +16,68 @@ if (!product.includes('add_child(') || !product.includes('webview.hide()')) {
 }
 
 const service = read('src-tauri/src/plugin_child_webview_service.rs');
-const showStart = service.indexOf('pub(crate) fn show_current');
+const showStart = service.indexOf('pub(crate) fn show_owned');
 const showEnd = service.indexOf('pub(crate) fn hide_current', showStart);
 const show = service.slice(showStart, showEnd);
 for (const required of ['PluginChildWebviewSessionState::BridgeReady', 'PluginChildWebviewSessionState::SdkReady']) {
-  if (!show.includes(required)) fail(`show_current does not require ${required}`);
+  if (!show.includes(required)) fail(`show_owned does not require ${required}`);
 }
+if (!show.includes('current.matches_owner(owner)')) fail('show_owned does not check the expected owner');
 if (!show.includes('PluginChildWebviewPresentationResult::NotReady')) {
-  fail('show_current does not reject a pre-ready attempt');
+  fail('show_owned does not reject a pre-ready attempt');
 }
 
 const presentation = read('src-tauri/src/plugin_child_webview_presentation.rs');
 for (const required of [
   'read_plugin_child_webview_presentation',
   'wait_plugin_child_webview_presentation',
-  'expire_current_session_deadline',
+  'expire_owned_session_deadline',
+  'wait_owned_presentation_readiness(attempt, &owner)',
+  'snapshot_owned(attempt, &owner)',
+  'parse_owner(',
+  'webview.label()',
+  'webview.window().label()',
   'set_plugin_child_webview_presentation_visibility',
-  'service.show_current(attempt)',
-  'service.hide_current(attempt)',
+  'service.show_owned(attempt, &owner)',
+  'service.hide_owned(attempt, &owner)',
+  'service.focus_owned(attempt, &owner)',
+  'service.compare_owned_teardown(attempt, &owner)',
 ]) {
   if (!presentation.includes(required)) fail(`native presentation contract omits ${required}`);
 }
 
 const slot = read('src/app/plugins/runtime/PluginRuntimeSlot.tsx');
-const readIndex = slot.indexOf('presentationController.waitReadiness');
-const showIndex = slot.indexOf('presentationController.setVisible(presentation, true)');
-const readyIndex = slot.indexOf("dispatch({ type: 'ready'");
+const readIndex = slot.indexOf('const readiness = await controller.waitReadiness(native)');
+const showIndex = slot.indexOf('await controller.setVisible(native, true)', readIndex);
+const readyIndex = slot.indexOf("registry.publish(binding, { status: 'ready'", showIndex);
 if (readIndex < 0 || showIndex < readIndex || readyIndex < showIndex) {
   fail('React does not read current readiness, show natively, then remove loading feedback in order');
 }
-const releaseIndex = slot.indexOf('binding.attempt.bindPresentation');
-const hideIndex = slot.indexOf('presentationController.setVisible(presentation, false)', releaseIndex);
-const destroyIndex = slot.indexOf('presentationController.destroy(presentation)', releaseIndex);
-if (releaseIndex < 0 || hideIndex < releaseIndex || destroyIndex < hideIndex) {
-  fail('terminal presentation release does not hide before native destroy');
+const instances = read('src/app/plugins/runtime/instance-registry.ts');
+if (!instances.includes('attempt.bindRuntime((reason) => this.#releaseNative(binding, reason))')) {
+  fail('application instance registry does not own native terminal cleanup');
+}
+const releaseIndex = instances.indexOf('async #releaseNative(');
+const hideIndex = instances.indexOf('binding.controller.setVisible(presentation, false)', releaseIndex);
+const destroyIndex = instances.indexOf('binding.controller.destroy(presentation)', releaseIndex);
+if (
+  releaseIndex < 0 ||
+  hideIndex < releaseIndex ||
+  destroyIndex < hideIndex ||
+  !instances.includes('this.closeNative(presentation.attemptId, reason, presentation.owner)')
+) {
+  fail('terminal Runtime cleanup lost current-owner forwarding or hide-before-destroy fallback');
+}
+const app = read('src/App.tsx');
+if (
+  !app.includes('hostWindowPort.replaceInstance(attemptId, owner)') ||
+  !app.includes('hostWindowPort.closeInstance(attemptId)')
+) {
+  fail('main coordination does not distinguish Page replacement from explicit instance close');
+}
+const presentationLease = slot.slice(slot.indexOf('binding.attempt.bindPresentation'), readIndex);
+if (!presentationLease.includes('queue.stop()') || /controller\.(?:destroy|setVisible)/u.test(presentationLease)) {
+  fail('presentation unbinding must release geometry without terminating the Runtime');
 }
 
 const lifecycle = read('src/app/plugins/runtime/lifecycle-controller.ts');

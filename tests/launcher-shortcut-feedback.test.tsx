@@ -10,7 +10,7 @@ import { AppNavigationService, PageRegistry } from '../src/app/navigation';
 for (const locale of ['en-US', 'zh-CN'] as const) {
   for (const theme of ['light', 'dark'] as const) {
     for (const presentation of ['home', 'host', 'plugin'] as const) {
-      test(`native invocation failures remain visible without stealing input in ${presentation}/${locale}/${theme}`, async () => {
+      test(`native invocation failures stay scoped without stealing input in ${presentation}/${locale}/${theme}`, async () => {
         const pages = new PageRegistry([{ owner_id: 'lensx.core', page_id: 'settings', enabled: true }]);
         pages.replaceProviderBatch('com.test.plugin', {
           provider: { owner_id: 'com.test.plugin', kind: 'plugin', display_name: { 'en-US': 'Example' } },
@@ -66,13 +66,18 @@ for (const locale of ['en-US', 'zh-CN'] as const) {
         }
         const focused = document.activeElement;
         act(() => failed?.());
-        const message = screen.getByText(
-          locale === 'en-US' ? 'The action could not be completed.' : '无法完成该操作。',
-        );
-        expect(message).toHaveClass('launcher-feedback');
-        expect(message).not.toHaveClass('sr-only');
+        const copy = locale === 'en-US' ? 'The action could not be completed.' : '无法完成该操作。';
+        const message = screen.getByRole('status');
+        if (presentation === 'plugin') {
+          expect(screen.queryByText(copy)).not.toBeInTheDocument();
+          expect(message).not.toHaveAttribute('data-feedback', 'error');
+        } else {
+          expect(message).toHaveTextContent(copy);
+          expect(message).toHaveClass('launcher-feedback');
+          expect(message).not.toHaveClass('sr-only');
+          expect(message).toHaveAttribute('data-feedback', 'error');
+        }
         expect(message).toHaveAttribute('aria-live', 'polite');
-        expect(message).toHaveAttribute('data-feedback', 'error');
         expect(document.activeElement).toBe(focused);
         expect(message.closest('.launcher-content')).toBeNull();
         if (presentation !== 'home')

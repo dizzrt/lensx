@@ -17,7 +17,7 @@ import {
 import type { LauncherSurfaceController, LauncherSurfaceTarget } from '../src/app/launcher/surface';
 import { AppNavigationService, HostPageCatalog } from '../src/app/navigation';
 import { mapPluginActionsToLauncherRegistrations } from '../src/app/plugins/actions';
-import type { PluginRuntimeLifecycleService } from '../src/app/plugins/runtime';
+import { createPluginRuntimeLifecycleService, type PluginRuntimeLifecycleService } from '../src/app/plugins/runtime';
 
 const inertActivationSource = {
   subscribe: async () => () => undefined,
@@ -162,10 +162,14 @@ describe('App Shell page navigation', () => {
   });
 
   test('routes Host reload and root teardown through the Runtime terminal coordinator', async () => {
-    const terminateCurrent = rs.fn(async () => undefined);
+    const terminateAll = rs.fn(async () => undefined);
     const lifecycleService: PluginRuntimeLifecycleService = {
       start: rs.fn(async () => undefined),
-      terminateCurrent,
+      getCurrent: () => undefined,
+      transfer: rs.fn(async () => undefined),
+      terminateCurrent: rs.fn(async () => undefined),
+      terminateAll,
+      terminateMatching: rs.fn(async () => undefined),
       dispose: rs.fn(async () => undefined),
     };
     const view = renderShell({
@@ -174,10 +178,34 @@ describe('App Shell page navigation', () => {
     });
     fireEvent(window, new Event('beforeunload'));
     fireEvent(window, new Event('pagehide'));
-    expect(terminateCurrent).toHaveBeenNthCalledWith(1, 'host_reload');
-    expect(terminateCurrent).toHaveBeenNthCalledWith(2, 'host_reload');
+    expect(terminateAll).toHaveBeenNthCalledWith(1, 'host_reload');
+    expect(terminateAll).toHaveBeenNthCalledWith(2, 'host_reload');
     view.unmount();
-    expect(terminateCurrent).toHaveBeenNthCalledWith(3, 'app_teardown');
+    expect(terminateAll).toHaveBeenNthCalledWith(3, 'app_teardown');
+  });
+
+  test('actual App teardown terminates every retained runtime, including surfaces absent from main navigation', async () => {
+    const lifecycle = createPluginRuntimeLifecycleService();
+    const cleanups = [rs.fn(), rs.fn(), rs.fn()];
+    const instances = [];
+    for (const [index, surfaceId] of ['main', 'detached-1', 'detached-2'].entries()) {
+      const instance = await lifecycle.start({ surfaceId, targetKey: 'same-plugin-page', onFailure: rs.fn() });
+      if (!instance) throw new Error('runtime should exist');
+      instance.bindRuntime(cleanups[index]);
+      instances.push(instance);
+    }
+    const view = renderShell({
+      navigationService: createNavigationService(),
+      pluginRuntimeLifecycleService: lifecycle,
+    });
+    expect(instances.every((instance) => instance.isCurrent())).toBe(true);
+    view.unmount();
+    await waitFor(() => {
+      for (const cleanup of cleanups) expect(cleanup).toHaveBeenCalledTimes(1);
+    });
+    expect(instances.every((instance) => !instance.isCurrent())).toBe(true);
+    await lifecycle.dispose();
+    for (const cleanup of cleanups) expect(cleanup).toHaveBeenCalledTimes(1);
   });
 
   test('derives home, search, and page states and restores focus after closing the page', async () => {

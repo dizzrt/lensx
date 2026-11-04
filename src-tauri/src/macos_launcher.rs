@@ -331,19 +331,28 @@ pub(crate) fn activate_macos_accessory_application() -> Result<(), String> {
 }
 
 #[cfg(target_os = "macos")]
-pub(crate) fn confirm_visible_macos_accessory_application_active() -> Result<(), String> {
+pub(crate) fn queue_next_main_turn(operation: impl Fn() + Send + Sync + 'static) {
+    let block = block2::RcBlock::new(operation);
+    // SAFETY: the block owns a Send + Sync operation and the main operation
+    // queue retains it until execution. Unlike run_on_main_thread, enqueueing
+    // from applicationDidFinishLaunching does not execute the operation inline.
+    unsafe { objc2_foundation::NSOperationQueue::mainQueue().addOperationWithBlock(&block) };
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn activate_visible_macos_accessory_application() -> Result<(), String> {
     let adapter = AppKitApplicationPolicyAdapter::new().map_err(|error| error.to_string())?;
     if adapter.application.isActive() {
         return Ok(());
     }
     objc2_app_kit::NSRunningApplication::currentApplication()
-        .activateWithOptions(objc2_app_kit::NSApplicationActivationOptions::ActivateAllWindows)
+        .activateWithOptions(objc2_app_kit::NSApplicationActivationOptions::empty())
         .then_some(())
         .ok_or_else(|| "macOS visible accessory application activation failed".to_owned())
 }
 
 #[cfg(not(target_os = "macos"))]
-pub(crate) fn confirm_visible_macos_accessory_application_active() -> Result<(), String> {
+pub(crate) fn activate_visible_macos_accessory_application() -> Result<(), String> {
     Ok(())
 }
 

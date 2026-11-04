@@ -28,9 +28,18 @@
     "tao/src/window.rs",
     "tauri/src/manager/webview.rs",
     "tauri/src/webview/mod.rs",
+    "tauri/src/webview/reparent.rs",
+    "tauri/src/webview/reparent_transaction.rs",
+    "tauri/src/ipc/channel.rs",
+    "tauri/src/ipc/channel_recipient.rs",
+    "tauri/src/manager/mod.rs",
     "tauri/src/webview/webview_window.rs",
+    "tauri-runtime/src/lib.rs",
     "tauri-runtime/src/webview.rs",
     "tauri-runtime-wry/src/lib.rs",
+    "tauri-runtime-wry/src/reparent.rs",
+    "tauri-runtime-wry/src/data_delivery.rs",
+    "tauri-runtime-wry/src/reparent_transaction.rs",
     "wry/src/lib.rs",
     "wry/src/wkwebview/download.rs",
     "wry/src/wkwebview/class/mod.rs",
@@ -38,6 +47,7 @@
     "wry/src/wkwebview/class/wry_web_view.rs",
     "wry/src/wkwebview/class/wry_navigation_delegate.rs",
     "wry/src/wkwebview/mod.rs",
+    "wry/src/wkwebview/reparent.rs",
     "wry/src/wkwebview/navigation.rs"
   ],
   "files": [
@@ -562,6 +572,10 @@
       "sha256": "68b2727346e58a9963803a75ac29695b500aaa7d0673e18551465502b60cbf11"
     },
     {
+      "path": "tauri-runtime-wry/src/data_delivery.rs",
+      "sha256": "7d9e28e712d203e3ea75eae000c409ac9c727544bd326ec5b43f4be480f07cc5"
+    },
+    {
       "path": "tauri-runtime-wry/src/dialog/mod.rs",
       "sha256": "ed391f94760a3f257ea7244fa62ad9b536e41f52f83b3994dedde23e5bbd287d"
     },
@@ -571,7 +585,7 @@
     },
     {
       "path": "tauri-runtime-wry/src/lib.rs",
-      "sha256": "abd846b8d49c21df9149eebbd7bd0148abc977700d583a8e3d03ea713bba1781"
+      "sha256": "33be341fc0926f85b51289c6b3fb0ceda394dcb9772ccd1580b3017bd03a25b5"
     },
     {
       "path": "tauri-runtime-wry/src/monitor/linux.rs",
@@ -588,6 +602,14 @@
     {
       "path": "tauri-runtime-wry/src/monitor/windows.rs",
       "sha256": "c177f8f1d7d7f40350076a89d495511c1fd24d79d2f44fb6a1efd0d7e1726657"
+    },
+    {
+      "path": "tauri-runtime-wry/src/reparent.rs",
+      "sha256": "158a822de91b5021520c84908e7e681a0ed86d6273aeab4895a9802c71545134"
+    },
+    {
+      "path": "tauri-runtime-wry/src/reparent_transaction.rs",
+      "sha256": "5c2e00d9d48ed6fe2ebf88affed013f7f9e13ad3ad5dfa43b618dc2a0c3513ca"
     },
     {
       "path": "tauri-runtime-wry/src/undecorated_resizing.rs",
@@ -651,7 +673,7 @@
     },
     {
       "path": "tauri-runtime/src/lib.rs",
-      "sha256": "44e8f02c7647e1ba9eea3b69761eebc9611256eba8d901a7dbe2d58b5200ac9c"
+      "sha256": "57600d51c626cfff2b0fbcaeacfa0b425d86d20b79737cc07872b79e5b68b90f"
     },
     {
       "path": "tauri-runtime/src/monitor.rs",
@@ -659,7 +681,7 @@
     },
     {
       "path": "tauri-runtime/src/webview.rs",
-      "sha256": "50b0c81aebe38491e0361aa123edeffa29d7b41eaa6c249b6436390ad03d1dda"
+      "sha256": "241befaaf8edd3b4bc2148108ba67c02145382208095b18f55c6c21c3368e462"
     },
     {
       "path": "tauri-runtime/src/window.rs",
@@ -999,7 +1021,11 @@
     },
     {
       "path": "tauri/src/ipc/channel.rs",
-      "sha256": "8533436b36afb959401052ab0bd7990c63817e9d984fe0daa49a80bc6ed35e5f"
+      "sha256": "de6a97e38c7819fc6a9a69763b2c4b999dc1b174edc8fed1cef309f177cb3752"
+    },
+    {
+      "path": "tauri/src/ipc/channel_recipient.rs",
+      "sha256": "f519a79ad896a9cbabed89be7e52f4f3aca40a5c449453f59126f93515f75ed6"
     },
     {
       "path": "tauri/src/ipc/command.rs",
@@ -1027,7 +1053,7 @@
     },
     {
       "path": "tauri/src/manager/mod.rs",
-      "sha256": "3b35d04bded3a068d3d9e1737d52a66a69ccfbc4b2300ec00ed6a5deaa85c79a"
+      "sha256": "5555ac2efb2a86fa1574e5542b0978d54ee4f5b7ad5e230146a058ffc50727aa"
     },
     {
       "path": "tauri/src/manager/tray.rs",
@@ -1195,11 +1221,19 @@
     },
     {
       "path": "tauri/src/webview/mod.rs",
-      "sha256": "1d926a09a9f9892139541daa4ff1237f8f1d066c3eb592eee83055e5bb90c19b"
+      "sha256": "8424a291d37df578c9ca9ec5c3e5903c2ab3fcfb0d59aff6482ea00079e3815a"
     },
     {
       "path": "tauri/src/webview/plugin.rs",
       "sha256": "defea87e3f7e8488a77048432e287f9ed7a45151fe307d5495a3671d83a93bd7"
+    },
+    {
+      "path": "tauri/src/webview/reparent.rs",
+      "sha256": "0852a88fc6a5669e0c874d9ddbf0e1b4b24cecb7c9db9a648d82de7af641ccb4"
+    },
+    {
+      "path": "tauri/src/webview/reparent_transaction.rs",
+      "sha256": "733bdd96873a2d932bd160d5044f6888eff00eefdd45e0bea6078df186c366d3"
     },
     {
       "path": "tauri/src/webview/scripts/print.js",
@@ -1435,7 +1469,7 @@
     },
     {
       "path": "wry/src/lib.rs",
-      "sha256": "c8309ffd1aa4593dc58bc65b42b75c3ea0e51f792720ec8c6b0749f77bdf3eaf"
+      "sha256": "5e316d0da3bb2e2a2f33db0b25f8f296c9c9b3af612b51d6c8827b98e2ccc7b0"
     },
     {
       "path": "wry/src/proxy.rs",
@@ -1535,7 +1569,7 @@
     },
     {
       "path": "wry/src/wkwebview/mod.rs",
-      "sha256": "06eddf52465ab6742a961e05325c5c04d414b46c859ee1a3f61614d61e0a2da9"
+      "sha256": "3ad5296d784df3fe86cec81b984bed88c91e6ae7b5f11ea6aa06b5efb9dbfe52"
     },
     {
       "path": "wry/src/wkwebview/navigation.rs",
@@ -1544,6 +1578,10 @@
     {
       "path": "wry/src/wkwebview/proxy.rs",
       "sha256": "f7ee208069b3d4d045540c46b842c71f0fa2bba905b20463e67679471f58ad20"
+    },
+    {
+      "path": "wry/src/wkwebview/reparent.rs",
+      "sha256": "16a25fde7856386e1ecac7f50c507f2a8cf46f64132de74372244d8d855ea683"
     },
     {
       "path": "wry/src/wkwebview/synthetic_mouse_events.rs",

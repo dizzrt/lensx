@@ -1,14 +1,20 @@
 import { describe, expect, test } from '@rstest/core';
+import cases from '../fixtures/plugin-resource-service/valid/cases.json';
+
+const entryUrl = String(cases.find((item) => item.name === 'resolved_entry')?.value.entry_url);
 
 import {
   CREATE_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND,
   createPluginChildWebviewPresentationController,
   DESTROY_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND,
+  READ_PLUGIN_CHILD_WEBVIEW_ADMISSION_COMMAND,
   READ_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND,
+  readPluginChildWebviewAdmission,
   SET_PLUGIN_CHILD_WEBVIEW_PRESENTATION_VISIBILITY_COMMAND,
   UPDATE_PLUGIN_CHILD_WEBVIEW_SLOT_COMMAND,
   WAIT_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND,
 } from '../src/app/plugins/runtime';
+import { MAIN_PLUGIN_CHILD_WEBVIEW_OWNER } from '../src/app/plugins/runtime/pluginChildWebviewOwner';
 
 describe('Plugin Child WebView presentation contract', () => {
   test('creates from safe Host identity and never sends URL, label, handle, origin, or WebView configuration', async () => {
@@ -16,30 +22,37 @@ describe('Plugin Child WebView presentation contract', () => {
     const controller = createPluginChildWebviewPresentationController(async (command, args) => {
       calls.push({ command, args });
       if (command === CREATE_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND) {
-        return { contract_version: '0.2.0', attempt_id: 'attempt_0123456789abcdef' };
+        return {
+          contract_version: '0.3.0',
+          attempt_id: 'attempt_0123456789abcdef',
+          window_label: 'main',
+          ownership_revision: '1',
+          entry_url: entryUrl,
+          resource_generation: '1',
+        };
       }
       if (command === UPDATE_PLUGIN_CHILD_WEBVIEW_SLOT_COMMAND) {
-        return { contract_version: '0.1.0', accepted_revision: '2' };
+        return { contract_version: '0.2.0', accepted_revision: '2' };
       }
       if (command === READ_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND) {
         return {
-          contract_version: '0.2.0',
+          contract_version: '0.3.0',
           attempt_id: 'attempt_0123456789abcdef',
           readiness: 'ready',
           failure_code: null,
         };
       }
       if (command === WAIT_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND) {
-        return { contract_version: '0.2.0', readiness: 'ready', failure_code: null };
+        return { contract_version: '0.3.0', readiness: 'ready', failure_code: null };
       }
       if (command === SET_PLUGIN_CHILD_WEBVIEW_PRESENTATION_VISIBILITY_COMMAND) {
         return {
-          contract_version: '0.2.0',
+          contract_version: '0.3.0',
           attempt_id: 'attempt_0123456789abcdef',
           visible: true,
         };
       }
-      return { contract_version: '0.2.0', destroyed: true };
+      return { contract_version: '0.3.0', destroyed: true };
     });
     const binding = await controller.create({
       identity: {
@@ -69,8 +82,9 @@ describe('Plugin Child WebView presentation contract', () => {
     ]);
     expect(calls[0]?.args).toEqual({
       request: {
-        contract_version: '0.2.0',
+        contract_version: '0.3.0',
         window_label: 'main',
+        ownership_revision: '1',
         surface_mode: 'page',
         scale_factor: 2,
         physical_bounds: { x: 40, y: 80, width: 600, height: 400 },
@@ -91,7 +105,7 @@ describe('Plugin Child WebView presentation contract', () => {
 
   test('rejects malformed create responses and makes destroy failure bounded', async () => {
     const malformed = createPluginChildWebviewPresentationController(async () => ({
-      contract_version: '0.2.0',
+      contract_version: '0.3.0',
       attempt_id: 'forged',
     }));
     await expect(
@@ -111,6 +125,100 @@ describe('Plugin Child WebView presentation contract', () => {
     const unavailable = createPluginChildWebviewPresentationController(async () => {
       throw new Error('private');
     });
-    await expect(unavailable.destroy({ attemptId: 'attempt_0123456789abcdef' })).resolves.toBe(false);
+    await expect(
+      unavailable.destroy({
+        attemptId: 'attempt_0123456789abcdef',
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+        entryUrl,
+        resourceGeneration: '1',
+      }),
+    ).resolves.toBe(false);
   });
+});
+
+test('admission validates exact metadata without creating or resolving a Runtime scope', async () => {
+  const identity = {
+    entryId: 'entry_0123456789abcdef',
+    pluginId: 'com.acme.workspace',
+    version: '1.2.3',
+    pageId: 'home',
+    expectedRevision: '7',
+  };
+  const valid = {
+    contract_version: '0.3.0',
+    entry_id: identity.entryId,
+    revision: '7',
+    resource_generation: '18446744073709551615',
+  };
+  const calls: string[] = [];
+  const invoke = async (command: string) => {
+    calls.push(command);
+    return valid;
+  };
+  await expect(readPluginChildWebviewAdmission(identity, MAIN_PLUGIN_CHILD_WEBVIEW_OWNER, invoke)).resolves.toEqual({
+    entryId: identity.entryId,
+    revision: '7',
+    generation: '18446744073709551615',
+  });
+  expect(calls).toEqual([READ_PLUGIN_CHILD_WEBVIEW_ADMISSION_COMMAND]);
+  for (const patch of [
+    { contract_version: '0.2.0' },
+    { entry_id: 'entry_wrong' },
+    { revision: '8' },
+    { resource_generation: '0' },
+    { resource_generation: '01' },
+    { resource_generation: '18446744073709551616' },
+    { resource_generation: 1 },
+    { extra: true },
+  ]) {
+    await expect(
+      readPluginChildWebviewAdmission(identity, MAIN_PLUGIN_CHILD_WEBVIEW_OWNER, async () => ({ ...valid, ...patch })),
+    ).rejects.toThrow('admission response is invalid');
+  }
+});
+
+test('malformed create metadata cleans up only a verifiable attempt in the requested owner', async () => {
+  for (const patch of [{ entry_url: 'file:///private/plugin.html' }, { resource_generation: '0' }, { extra: true }]) {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const controller = createPluginChildWebviewPresentationController(async (command, args) => {
+      calls.push({ command, args });
+      return command === CREATE_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND
+        ? {
+            contract_version: '0.3.0',
+            attempt_id: 'attempt_0123456789abcdef',
+            window_label: 'main',
+            ownership_revision: '1',
+            entry_url: entryUrl,
+            resource_generation: '1',
+            ...patch,
+          }
+        : { contract_version: '0.3.0', destroyed: true };
+    });
+    await expect(
+      controller.create({
+        identity: {
+          entryId: 'entry_0123456789abcdef',
+          pluginId: 'com.acme.workspace',
+          version: '1.2.3',
+          pageId: 'home',
+          expectedRevision: '7',
+        },
+        scaleFactor: 1,
+        physicalBounds: { x: 0, y: 0, width: 100, height: 100 },
+        presentationRevision: 1n,
+      }),
+    ).rejects.toThrow('presentation response is invalid');
+    expect(calls.map(({ command }) => command)).toEqual([
+      CREATE_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND,
+      DESTROY_PLUGIN_CHILD_WEBVIEW_PRESENTATION_COMMAND,
+    ]);
+    expect(calls[1].args).toEqual({
+      request: {
+        contract_version: '0.3.0',
+        attempt_id: 'attempt_0123456789abcdef',
+        window_label: 'main',
+        ownership_revision: '1',
+      },
+    });
+  }
 });

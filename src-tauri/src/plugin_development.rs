@@ -1679,12 +1679,58 @@ mod tests {
         else {
             panic!("register should publish a development entry")
         };
+        // The same committed callback used by product setup owns all old instances.
+        let children = Arc::new(
+            crate::plugin_child_webview_service::PluginChildWebviewService::<
+                tauri::test::MockRuntime,
+            >::default(),
+        );
+        let projection = coordinator
+            .manager
+            .read_resource_projection(&entry_id, None)
+            .unwrap();
+        let page = &projection.registration.manifest.contributes.pages[0];
+        for owner in [
+            crate::plugin_child_webview_owner::PluginChildWebviewOwner::main(),
+            crate::plugin_child_webview_owner::PluginChildWebviewOwner::detached(1).unwrap(),
+        ] {
+            let identity = crate::plugin_child_webview_service::PluginChildWebviewIdentity::new(
+                projection.plugin_id.clone(),
+                page.id.clone(),
+                entry_id.clone(),
+                projection.registration.manifest.version.clone(),
+                projection.resource_generation,
+                "lensx-plugin://workspace.runtime.localhost/index.html"
+                    .parse()
+                    .unwrap(),
+                page.route.clone(),
+            )
+            .unwrap();
+            assert!(children
+                .reserve_owned_with_derived_label(identity, owner)
+                .is_some());
+        }
+        let before_children = children.snapshots();
+        assert_eq!(before_children.len(), 2);
+        let revocations = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let callback_count = Arc::clone(&revocations);
+        let callback_children = Arc::clone(&children);
+        let callback_manager = Arc::clone(&coordinator.manager);
+        *coordinator.resource_eligibility_revoker.lock().unwrap() = Some(Arc::new(move |entry| {
+            callback_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            crate::plugin_child_webview_host_dispatcher::reconcile_entry_instances(
+                &callback_children,
+                &callback_manager,
+                entry,
+            );
+        }));
         let before = coordinator
             .manager
             .registration("com.acme.workspace")
             .expect("current registration");
         let mut legacy: serde_json::Value =
             serde_json::from_slice(&fs::read(source.join("manifest.json")).unwrap()).unwrap();
+        let original_manifest = legacy.clone();
         legacy["manifest_version"] = serde_json::Value::String("0.2.0".to_owned());
         legacy["runtime"]["kind"] = serde_json::Value::String("iframe".to_owned());
         fs::write(
@@ -1697,7 +1743,7 @@ mod tests {
             &emitter,
             PluginDevelopmentEntryRequest {
                 contract_version: PLUGIN_DEVELOPMENT_CONTRACT_VERSION.to_owned(),
-                entry_id,
+                entry_id: entry_id.clone(),
                 expected_revision: "1".to_owned(),
             },
         );
@@ -1716,6 +1762,25 @@ mod tests {
             .expect("current registration remains");
         assert_eq!(after, before);
         assert_eq!(*emitter.0.lock().unwrap(), ["1"]);
+        assert_eq!(revocations.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert_eq!(children.snapshots(), before_children);
+        fs::write(
+            source.join("manifest.json"),
+            serde_json::to_vec(&original_manifest).unwrap(),
+        )
+        .unwrap();
+        assert!(coordinator
+            .reload(
+                &emitter,
+                PluginDevelopmentEntryRequest {
+                    contract_version: PLUGIN_DEVELOPMENT_CONTRACT_VERSION.to_owned(),
+                    entry_id,
+                    expected_revision: "1".to_owned(),
+                }
+            )
+            .is_ok());
+        assert_eq!(revocations.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(children.snapshots().is_empty());
     }
 
     #[test]

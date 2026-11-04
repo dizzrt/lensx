@@ -1,5 +1,9 @@
 import type { NormalizedPluginManifest } from '@lensx/plugin-contract';
-import type { LauncherActionInvocation, LauncherActionRegistrationInput } from '../../launcher/actions/types';
+import type {
+  LauncherActionExecutionContext,
+  LauncherActionInvocation,
+  LauncherActionRegistrationInput,
+} from '../../launcher/actions/types';
 
 export interface PluginActionPageTarget {
   readonly owner_id: string;
@@ -11,6 +15,7 @@ export interface PluginActionPageOpener {
     target: PluginActionPageTarget,
     openedByActionId: string,
     invocation: LauncherActionInvocation,
+    context?: LauncherActionExecutionContext,
   ) => Promise<void> | void;
 }
 
@@ -55,7 +60,10 @@ export const mapPluginActionsToLauncherRegistrations = (
             default_keywords: cloneKeywords(action.default_keywords),
             enabled: true,
           }),
-          executor: (invocation: LauncherActionInvocation) => pageOpener.openPage(target, actionId, invocation),
+          executor: (invocation: LauncherActionInvocation, context?: LauncherActionExecutionContext) =>
+            context
+              ? pageOpener.openPage(target, actionId, invocation, context)
+              : pageOpener.openPage(target, actionId, invocation),
         }),
       ];
     }),

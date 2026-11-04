@@ -149,9 +149,14 @@ use std::{
 pub type WebviewId = u32;
 type IpcHandler = dyn Fn(Request<String>) + 'static;
 
+#[cfg(target_os = "macos")]
+mod data_delivery;
 #[cfg(not(debug_assertions))]
 mod dialog;
 mod monitor;
+mod reparent;
+#[cfg(target_os = "macos")]
+mod reparent_transaction;
 #[cfg(any(
   windows,
   target_os = "linux",
@@ -347,6 +352,7 @@ impl<T: UserEvent> Context<T> {
       let webview = DetachedWebview {
         label: label.clone(),
         dispatcher: WryWebviewDispatcher {
+          reparent_gate: Arc::default(),
           window_id: Arc::new(Mutex::new(window_id)),
           webview_id: id,
           context: self.clone(),
@@ -398,6 +404,7 @@ impl<T: UserEvent> Context<T> {
     )?;
 
     let dispatcher = WryWebviewDispatcher {
+      reparent_gate: Arc::default(),
       window_id: window_id_wrapper,
       webview_id,
       context: self.clone(),
@@ -431,7 +438,10 @@ pub enum ActiveTracingSpan {
 }
 
 #[derive(Debug)]
-pub struct WindowsStore(pub RefCell<BTreeMap<WindowId, WindowWrapper>>);
+pub struct WindowsStore(
+  pub RefCell<BTreeMap<WindowId, WindowWrapper>>,
+  #[cfg(target_os = "macos")] RefCell<reparent_transaction::Transactions>,
+);
 
 // SAFETY: we ensure this type is only used on the main thread.
 #[allow(clippy::non_send_fields_in_send_ty)]
@@ -1529,6 +1539,38 @@ pub enum WebviewMessage {
   SetBounds(tauri_runtime::dpi::Rect),
   SetFocus,
   Reparent(WindowId, Sender<Result<()>>),
+  #[cfg(target_os = "macos")]
+  RetainedReparent(Box<WebviewMessage>, reparent_transaction::ExecutionPermit),
+  #[cfg(target_os = "macos")]
+  CloseConfirmed(Sender<Result<bool>>),
+  #[cfg(target_os = "macos")]
+  DestroyReparentOriginal(u64, Sender<Result<bool>>),
+  #[cfg(target_os = "macos")]
+  BeginReparent(Sender<Result<u64>>),
+  #[cfg(target_os = "macos")]
+  MoveReparent(
+    u64,
+    WindowId,
+    Sender<Result<tauri_runtime::webview::ReparentOutcome>>,
+  ),
+  #[cfg(target_os = "macos")]
+  RestoreReparent(u64, Sender<Result<tauri_runtime::webview::ReparentOutcome>>),
+  #[cfg(target_os = "macos")]
+  ReparentOwnership(
+    u64,
+    Sender<Result<tauri_runtime::webview::ReparentOwnership>>,
+  ),
+  #[cfg(target_os = "macos")]
+  SetReparentVisible(u64, bool, Sender<Result<bool>>),
+  #[cfg(target_os = "macos")]
+  CommitReparent(
+    u64,
+    Box<dyn FnOnce() -> bool + Send>,
+    Box<dyn FnOnce() + Send>,
+    Sender<Result<bool>>,
+  ),
+  #[cfg(target_os = "macos")]
+  FinishTerminatedReparent(u64, Box<dyn FnOnce() + Send>, Sender<Result<bool>>),
   SetAutoResize(bool),
   SetZoom(f64),
   SetBackgroundColor(Option<Color>),
@@ -1539,6 +1581,8 @@ pub enum WebviewMessage {
   Position(Sender<Result<PhysicalPosition<i32>>>),
   Size(Sender<Result<PhysicalSize<u32>>>),
   WithWebview(Box<dyn FnOnce(Webview) + Send>),
+  #[cfg(target_os = "macos")]
+  WithWebviewData(Box<dyn FnOnce(Webview) + Send>),
   // Devtools
   #[cfg(any(debug_assertions, feature = "devtools"))]
   OpenDevTools,
@@ -1598,8 +1642,55 @@ impl<T: UserEvent> Clone for Message<T> {
 #[derive(Debug, Clone)]
 pub struct WryWebviewDispatcher<T: UserEvent> {
   window_id: Arc<Mutex<WindowId>>,
+  reparent_gate: Arc<reparent::ReparentGate>,
   webview_id: WebviewId,
   context: Context<T>,
+}
+
+#[cfg(target_os = "macos")]
+impl<T: UserEvent> WryWebviewDispatcher<T> {
+  fn reparent_operation<V>(
+    &self,
+    build: impl FnOnce(Sender<Result<V>>) -> WebviewMessage,
+  ) -> Result<V> {
+    self.reparent_operation_guarded(build, None)
+  }
+
+  fn reparent_operation_guarded<V>(
+    &self,
+    build: impl FnOnce(Sender<Result<V>>) -> WebviewMessage,
+    current: Option<tauri_runtime::webview::ReparentExecutionGuard>,
+  ) -> Result<V> {
+    let _permit = self
+      .reparent_gate
+      .try_enter()
+      .ok_or(Error::FailedToSendMessage)?;
+    let window = *self.window_id.lock().unwrap();
+    let (sender, receiver) = channel();
+    let timeout = std::time::Duration::from_secs(5);
+    let execution = reparent_transaction::ExecutionPermit::new(timeout).with_owner(current);
+    send_user_message(
+      &self.context,
+      Message::Webview(
+        window,
+        self.webview_id,
+        WebviewMessage::RetainedReparent(Box::new(build(sender)), execution.clone()),
+      ),
+    )?;
+    match receiver.recv_timeout(timeout) {
+      Ok(result) => result,
+      Err(_) => {
+        execution.expire();
+        Err(Error::FailedToSendMessage)
+      }
+    }
+  }
+
+  fn remember_reparent_owner(&self, owner: tauri_runtime::webview::ReparentOwnership) {
+    if let tauri_runtime::webview::ReparentOwnership::Window(window) = owner {
+      *self.window_id.lock().unwrap() = window;
+    }
+  }
 }
 
 impl<T: UserEvent> WebviewDispatch<T> for WryWebviewDispatcher<T> {
@@ -1626,6 +1717,21 @@ impl<T: UserEvent> WebviewDispatch<T> for WryWebviewDispatcher<T> {
         *self.window_id.lock().unwrap(),
         self.webview_id,
         WebviewMessage::WithWebview(Box::new(move |webview| f(Box::new(webview)))),
+      ),
+    )
+  }
+
+  #[cfg(target_os = "macos")]
+  fn with_webview_data<F: FnOnce(Box<dyn std::any::Any>) + Send + 'static>(
+    &self,
+    f: F,
+  ) -> Result<()> {
+    send_user_message(
+      &self.context,
+      Message::Webview(
+        *self.window_id.lock().unwrap(),
+        self.webview_id,
+        WebviewMessage::WithWebviewData(Box::new(move |view| f(Box::new(view)))),
       ),
     )
   }
@@ -1769,21 +1875,100 @@ impl<T: UserEvent> WebviewDispatch<T> for WryWebviewDispatcher<T> {
   }
 
   fn reparent(&self, window_id: WindowId) -> Result<()> {
-    let mut current_window_id = self.window_id.lock().unwrap();
+    let _permit = self
+      .reparent_gate
+      .try_enter()
+      .ok_or(Error::FailedToSendMessage)?;
+    let current_window_id = *self.window_id.lock().unwrap();
     let (tx, rx) = channel();
     send_user_message(
       &self.context,
       Message::Webview(
-        *current_window_id,
+        current_window_id,
         self.webview_id,
         WebviewMessage::Reparent(window_id, tx),
       ),
     )?;
-
-    rx.recv().unwrap()?;
-
-    *current_window_id = window_id;
+    rx.recv().map_err(|_| Error::FailedToSendMessage)??;
+    *self.window_id.lock().unwrap() = window_id;
     Ok(())
+  }
+
+  #[cfg(target_os = "macos")]
+  fn begin_reparent(&self) -> Result<u64> {
+    self.reparent_operation(WebviewMessage::BeginReparent)
+  }
+  #[cfg(target_os = "macos")]
+  fn move_reparent(
+    &self,
+    token: u64,
+    target: WindowId,
+    current: tauri_runtime::webview::ReparentExecutionGuard,
+  ) -> Result<tauri_runtime::webview::ReparentOutcome> {
+    let outcome = self.reparent_operation_guarded(
+      |sender| WebviewMessage::MoveReparent(token, target, sender),
+      Some(current),
+    )?;
+    self.remember_reparent_owner(outcome.ownership);
+    Ok(outcome)
+  }
+  #[cfg(target_os = "macos")]
+  fn restore_reparent(
+    &self,
+    token: u64,
+    current: tauri_runtime::webview::ReparentExecutionGuard,
+  ) -> Result<tauri_runtime::webview::ReparentOutcome> {
+    let outcome = self.reparent_operation_guarded(
+      |sender| WebviewMessage::RestoreReparent(token, sender),
+      Some(current),
+    )?;
+    self.remember_reparent_owner(outcome.ownership);
+    Ok(outcome)
+  }
+  #[cfg(target_os = "macos")]
+  fn reparent_ownership(&self, token: u64) -> Result<tauri_runtime::webview::ReparentOwnership> {
+    self.reparent_operation(|sender| WebviewMessage::ReparentOwnership(token, sender))
+  }
+  #[cfg(target_os = "macos")]
+  fn set_reparent_visible(
+    &self,
+    token: u64,
+    visible: bool,
+    current: tauri_runtime::webview::ReparentExecutionGuard,
+  ) -> Result<bool> {
+    self.reparent_operation_guarded(
+      |sender| WebviewMessage::SetReparentVisible(token, visible, sender),
+      Some(current),
+    )
+  }
+  #[cfg(target_os = "macos")]
+  fn commit_reparent(
+    &self,
+    token: u64,
+    publish: Box<dyn FnOnce() -> bool + Send>,
+    on_committed: Box<dyn FnOnce() + Send>,
+  ) -> Result<bool> {
+    self.reparent_operation(|sender| {
+      WebviewMessage::CommitReparent(token, publish, on_committed, sender)
+    })
+  }
+  #[cfg(target_os = "macos")]
+  fn close_confirmed(&self) -> Result<bool> {
+    self.reparent_operation(WebviewMessage::CloseConfirmed)
+  }
+  #[cfg(target_os = "macos")]
+  fn destroy_reparent_original(&self, token: u64) -> Result<bool> {
+    self.reparent_operation(|sender| WebviewMessage::DestroyReparentOriginal(token, sender))
+  }
+  #[cfg(target_os = "macos")]
+  fn finish_terminated_reparent(
+    &self,
+    token: u64,
+    on_finished: Box<dyn FnOnce() + Send>,
+  ) -> Result<bool> {
+    self.reparent_operation(|sender| {
+      WebviewMessage::FinishTerminatedReparent(token, on_finished, sender)
+    })
   }
 
   fn cookies_for_url(&self, url: Url) -> Result<Vec<Cookie<'static>>> {
@@ -2597,6 +2782,40 @@ impl Drop for WebviewWrapper {
   }
 }
 
+#[cfg(any(
+  target_os = "macos",
+  windows,
+  target_os = "linux",
+  target_os = "dragonfly",
+  target_os = "freebsd",
+  target_os = "netbsd",
+  target_os = "openbsd"
+))]
+fn reparent_webview_native(view: &WebviewWrapper, target: &Window) -> std::result::Result<(), ()> {
+  #[cfg(target_os = "macos")]
+  {
+    use wry::WebViewExtMacOS;
+    view.inner.reparent(target.ns_window() as _).map_err(|_| ())
+  }
+  #[cfg(windows)]
+  {
+    view.inner.reparent(target.hwnd()).map_err(|_| ())
+  }
+  #[cfg(any(
+    target_os = "linux",
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
+  ))]
+  {
+    view
+      .inner
+      .reparent(target.default_vbox().ok_or(())?)
+      .map_err(|_| ())
+  }
+}
+
 pub struct WindowWrapper {
   label: String,
   inner: Option<Arc<Window>>,
@@ -2924,7 +3143,11 @@ impl<T: UserEvent> Wry<T> {
     let main_thread_id = current_thread().id();
     let web_context = WebContextStore::default();
 
-    let windows = Arc::new(WindowsStore(RefCell::new(BTreeMap::default())));
+    let windows = Arc::new(WindowsStore(
+      RefCell::new(BTreeMap::default()),
+      #[cfg(target_os = "macos")]
+      RefCell::default(),
+    ));
     let window_id_map = WindowIdStore::default();
 
     let context = Context {
@@ -3039,6 +3262,7 @@ impl<T: UserEvent> Runtime<T> for Wry<T> {
       let webview = DetachedWebview {
         label: label.clone(),
         dispatcher: WryWebviewDispatcher {
+          reparent_gate: Arc::default(),
           window_id: Arc::new(Mutex::new(window_id)),
           webview_id: id,
           context: self.context.clone(),
@@ -3101,6 +3325,7 @@ impl<T: UserEvent> Runtime<T> for Wry<T> {
       }
 
       let dispatcher = WryWebviewDispatcher {
+        reparent_gate: Arc::default(),
         window_id: window_id_wrapper,
         webview_id,
         context: self.context.clone(),
@@ -3681,6 +3906,87 @@ fn handle_user_message<T: UserEvent>(
       }
     }
     Message::Webview(window_id, webview_id, webview_message) => {
+      #[cfg(target_os = "macos")]
+      let (webview_message, execution) = match webview_message {
+        WebviewMessage::RetainedReparent(message, permit) => (*message, Some(permit)),
+        message => (message, None),
+      };
+      #[cfg(target_os = "macos")]
+      let current = || execution.as_ref().is_none_or(|permit| permit.current());
+      #[cfg(target_os = "macos")]
+      let webview_message = match webview_message {
+        WebviewMessage::BeginReparent(sender) => {
+          // A timed-out/lost successful reply remains reclaimable by this exact
+          // unmutated source; reply delivery is not an ownership transition.
+          let _ = sender.send(reparent_transaction::begin(
+            &windows, window_id, webview_id, &current,
+          ));
+          return;
+        }
+        WebviewMessage::MoveReparent(token, target, sender) => {
+          let _ = sender.send(reparent_transaction::move_to(
+            &windows, webview_id, token, target, &current,
+          ));
+          return;
+        }
+        WebviewMessage::RestoreReparent(token, sender) => {
+          let _ = sender.send(reparent_transaction::restore(
+            &windows, webview_id, token, &current,
+          ));
+          return;
+        }
+        WebviewMessage::ReparentOwnership(token, sender) => {
+          let _ = sender.send(if current() {
+            reparent_transaction::ownership(&windows, webview_id, token)
+          } else {
+            Err(Error::FailedToSendMessage)
+          });
+          return;
+        }
+        WebviewMessage::SetReparentVisible(token, visible, sender) => {
+          let _ = sender.send(reparent_transaction::set_visible(
+            &windows, webview_id, token, visible, &current,
+          ));
+          return;
+        }
+        WebviewMessage::CommitReparent(token, publish, on_committed, sender) => {
+          let result = reparent_transaction::commit(&windows, webview_id, token, publish, &current);
+          if matches!(result, Ok(true)) {
+            on_committed();
+          }
+          let _ = sender.send(result);
+          return;
+        }
+        WebviewMessage::FinishTerminatedReparent(token, on_finished, sender) => {
+          let result = if current() {
+            reparent_transaction::finish_terminated(&windows, webview_id, token)
+          } else {
+            Err(Error::FailedToSendMessage)
+          };
+          if matches!(result, Ok(true)) {
+            on_finished();
+          }
+          let _ = sender.send(result);
+          return;
+        }
+        WebviewMessage::CloseConfirmed(sender) => {
+          let _ = sender.send(Ok(reparent_transaction::close(
+            &windows, webview_id, &current,
+          )));
+          return;
+        }
+        WebviewMessage::DestroyReparentOriginal(token, sender) => {
+          let _ = sender.send(reparent_transaction::destroy_original(
+            &windows, webview_id, token, &current,
+          ));
+          return;
+        }
+        WebviewMessage::Close => {
+          reparent_transaction::close(&windows, webview_id, &current);
+          return;
+        }
+        message => message,
+      };
       #[cfg(any(
         target_os = "macos",
         windows,
@@ -3691,61 +3997,149 @@ fn handle_user_message<T: UserEvent>(
         target_os = "openbsd"
       ))]
       if let WebviewMessage::Reparent(new_parent_window_id, tx) = webview_message {
-        let webview_handle = windows.0.borrow_mut().get_mut(&window_id).and_then(|w| {
-          w.webviews
-            .iter()
-            .position(|w| w.id == webview_id)
-            .map(|webview_index| w.webviews.remove(webview_index))
-        });
-
-        if let Some(webview) = webview_handle {
-          if let Some((Some(new_parent_window), new_parent_window_webviews)) = windows
-            .0
-            .borrow_mut()
-            .get_mut(&new_parent_window_id)
-            .map(|w| (w.inner.clone(), &mut w.webviews))
-          {
-            #[cfg(target_os = "macos")]
-            let reparent_result = {
-              use wry::WebViewExtMacOS;
-              webview.inner.reparent(new_parent_window.ns_window() as _)
-            };
-            #[cfg(windows)]
-            let reparent_result = { webview.inner.reparent(new_parent_window.hwnd()) };
-
-            #[cfg(any(
-              target_os = "linux",
-              target_os = "dragonfly",
-              target_os = "freebsd",
-              target_os = "netbsd",
-              target_os = "openbsd"
-            ))]
-            let reparent_result = {
-              if let Some(container) = new_parent_window.default_vbox() {
-                webview.inner.reparent(container)
-              } else {
-                Err(wry::Error::MessageSender)
-              }
-            };
-
-            match reparent_result {
-              Ok(_) => {
-                new_parent_window_webviews.push(webview);
-                tx.send(Ok(())).unwrap();
-              }
-              Err(e) => {
-                log::error!("failed to reparent webview: {e}");
-                tx.send(Err(Error::FailedToSendMessage)).unwrap();
-              }
-            }
-          }
-        } else {
-          tx.send(Err(Error::FailedToSendMessage)).unwrap();
+        #[cfg(target_os = "macos")]
+        if reparent_transaction::contains(&windows, webview_id) {
+          let _ = tx.send(Err(Error::FailedToSendMessage));
+          return;
         }
-
+        let result = reparent::transfer(
+          || {
+            // Clone all native owners and the same view. No RefCell borrow is
+            // retained while AppKit or another native backend can reenter us.
+            let registry = windows.0.borrow();
+            let source = registry.get(&window_id)?;
+            let target = registry.get(&new_parent_window_id)?;
+            Some((
+              source
+                .webviews
+                .iter()
+                .find(|view| view.id == webview_id)?
+                .clone(),
+              source.inner.clone()?,
+              target.inner.clone()?,
+            ))
+          },
+          |(view, _, target)| reparent_webview_native(view, target),
+          |(retained_view, source_window, target_window)| {
+            let mut registry = windows.0.borrow_mut();
+            let source = registry.get(&window_id).ok_or(())?;
+            let source_index = source
+              .webviews
+              .iter()
+              .position(|view| {
+                view.id == webview_id && Rc::ptr_eq(&view.inner, &retained_view.inner)
+              })
+              .ok_or(())?;
+            if !source
+              .inner
+              .as_ref()
+              .is_some_and(|window| Arc::ptr_eq(window, source_window))
+            {
+              return Err(());
+            }
+            let target = registry.get(&new_parent_window_id).ok_or(())?;
+            if !target
+              .inner
+              .as_ref()
+              .is_some_and(|window| Arc::ptr_eq(window, target_window))
+            {
+              return Err(());
+            }
+            if window_id == new_parent_window_id {
+              return Ok(());
+            }
+            if target.webviews.iter().any(|view| view.id == webview_id) {
+              return Err(());
+            }
+            let view = registry
+              .get_mut(&window_id)
+              .ok_or(())?
+              .webviews
+              .remove(source_index);
+            // Source and target were validated in this same non-reentrant borrow.
+            let target = registry
+              .get_mut(&new_parent_window_id)
+              .expect("validated reparent target");
+            target.webviews.push(view);
+            target.has_children.store(true, Ordering::Relaxed);
+            Ok(())
+          },
+          |(view, source_window, _)| {
+            let source_alive = windows.0.borrow().get(&window_id).is_some_and(|source| {
+              source
+                .inner
+                .as_ref()
+                .is_some_and(|window| Arc::ptr_eq(window, source_window))
+                && source.webviews.iter().any(|candidate| {
+                  candidate.id == webview_id && Rc::ptr_eq(&candidate.inner, &view.inner)
+                })
+            });
+            if !source_alive {
+              return Err(());
+            }
+            reparent_webview_native(view, source_window)
+          },
+        )
+        .map_err(|_| Error::FailedToSendMessage);
+        // Missing targets, native failure and vanished receivers all settle once.
+        let _ = tx.send(result);
         return;
       }
 
+      #[cfg(target_os = "macos")]
+      let webview_message = match webview_message {
+        #[cfg(not(feature = "tracing"))]
+        WebviewMessage::EvaluateScript(script) => {
+          if let Some(view) = reparent_transaction::data_view(&windows, webview_id) {
+            let _ = view.evaluate_script(&script);
+          }
+          return;
+        }
+        #[cfg(feature = "tracing")]
+        WebviewMessage::EvaluateScript(script, sender, span) => {
+          let _span = span.entered();
+          if let Some(view) = reparent_transaction::data_view(&windows, webview_id) {
+            let _ = view.evaluate_script(&script);
+          }
+          let _ = sender.send(());
+          return;
+        }
+        #[cfg(not(feature = "tracing"))]
+        WebviewMessage::EvaluateScriptWithCallback(script, callback) => {
+          if let Some(view) = reparent_transaction::data_view(&windows, webview_id) {
+            let _ = view.evaluate_script_with_callback(&script, callback);
+          }
+          return;
+        }
+        #[cfg(feature = "tracing")]
+        WebviewMessage::EvaluateScriptWithCallback(script, callback, sender, span) => {
+          let _span = span.entered();
+          if let Some(view) = reparent_transaction::data_view(&windows, webview_id) {
+            let _ = view.evaluate_script_with_callback(&script, callback);
+          }
+          let _ = sender.send(());
+          return;
+        }
+        WebviewMessage::WithWebviewData(deliver) => {
+          if let Some(view) = reparent_transaction::data_view(&windows, webview_id) {
+            use wry::WebViewExtMacOS;
+            let native = view.webview();
+            let manager = view.manager();
+            let parent = native.window();
+            deliver(Webview {
+              webview: (&*native as *const wry::WryWebView).cast_mut().cast(),
+              manager: (&*manager as *const _ as *mut std::ffi::c_void),
+              ns_window: parent.as_ref().map_or(std::ptr::null_mut(), |window| {
+                (&**window as *const objc2_app_kit::NSWindow)
+                  .cast_mut()
+                  .cast()
+              }),
+            });
+          }
+          return;
+        }
+        message => message,
+      };
       let webview_handle = windows.0.borrow().get(&window_id).map(|w| {
         (
           w.inner.clone(),
@@ -3757,6 +4151,19 @@ fn handle_user_message<T: UserEvent>(
           WebviewMessage::WebviewEvent(_) => { /* already handled */ }
           WebviewMessage::SynthesizedWindowEvent(_) => { /* already handled */ }
           WebviewMessage::Reparent(_window_id, _tx) => { /* already handled */ }
+          #[cfg(target_os = "macos")]
+          WebviewMessage::RetainedReparent(..)
+          | WebviewMessage::CloseConfirmed(..)
+          | WebviewMessage::DestroyReparentOriginal(..)
+          | WebviewMessage::BeginReparent(_)
+          | WebviewMessage::MoveReparent(..)
+          | WebviewMessage::RestoreReparent(..)
+          | WebviewMessage::ReparentOwnership(..)
+          | WebviewMessage::SetReparentVisible(..)
+          | WebviewMessage::CommitReparent(..)
+          | WebviewMessage::FinishTerminatedReparent(..) => {
+            unreachable!("handled before parent lookup")
+          }
           WebviewMessage::AddEventListener(id, listener) => {
             webview
               .webview_event_listeners
@@ -3994,6 +4401,10 @@ fn handle_user_message<T: UserEvent>(
               log::error!("failed to get webview bounds: {e}");
             }
           },
+          #[cfg(target_os = "macos")]
+          WebviewMessage::WithWebviewData(_) => {
+            unreachable!("stable data dispatch handled before window lookup")
+          }
           WebviewMessage::WithWebview(f) => {
             #[cfg(any(
               target_os = "linux",
@@ -5414,6 +5825,7 @@ fn create_ipc_handler<T: UserEvent>(
         DetachedWebview {
           label: label.clone(),
           dispatcher: WryWebviewDispatcher {
+            reparent_gate: Arc::default(),
             window_id: window_id.clone(),
             webview_id,
             context: context.clone(),

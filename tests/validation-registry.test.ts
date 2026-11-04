@@ -176,12 +176,39 @@ describe('validation Gate registry and runner', () => {
       argv: [
         '--config-path',
         'scripts/validation/vendor-rustfmt.toml',
+        '--config',
+        'skip_children=true',
         '--check',
-        'vendor/frame-aware-navigation/wry/src/wkwebview/class/mod.rs',
-        'vendor/frame-aware-navigation/wry/src/wkwebview/class/wry_web_view.rs',
-        'vendor/frame-aware-navigation/wry/src/wkwebview/class/key_equivalent.rs',
+        ...[
+          'wry/src/lib.rs',
+          'wry/src/wkwebview/mod.rs',
+          'wry/src/wkwebview/reparent.rs',
+          'wry/src/wkwebview/class/mod.rs',
+          'wry/src/wkwebview/class/wry_web_view.rs',
+          'wry/src/wkwebview/class/key_equivalent.rs',
+          'tauri-runtime/src/lib.rs',
+          'tauri-runtime/src/webview.rs',
+          'tauri-runtime-wry/src/lib.rs',
+          'tauri-runtime-wry/src/reparent.rs',
+          'tauri-runtime-wry/src/data_delivery.rs',
+          'tauri-runtime-wry/src/reparent_transaction.rs',
+          'tauri/src/webview/mod.rs',
+          'tauri/src/webview/reparent.rs',
+          'tauri/src/webview/reparent_transaction.rs',
+          'tauri/src/ipc/channel.rs',
+          'tauri/src/ipc/channel_recipient.rs',
+          'tauri/src/manager/mod.rs',
+        ].map((path) => `vendor/frame-aware-navigation/${path}`),
       ],
       platform: 'any',
+    });
+    expect(
+      plan.steps.find(
+        (item) => item.executable === 'cargo' && item.argv[0] === 'check' && item.argv.includes('--locked'),
+      ),
+    ).toMatchObject({
+      argv: ['check', '--locked', '--manifest-path', 'src-tauri/Cargo.toml'],
+      platform: 'darwin',
     });
     expect(plan.steps.filter((item) => item.argv.includes('scripts/wry-policy-tests.ts'))).toHaveLength(1);
     const reviewedSources = [

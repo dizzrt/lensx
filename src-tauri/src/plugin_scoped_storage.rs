@@ -1731,6 +1731,84 @@ mod tests {
     }
 
     #[test]
+    fn same_key_sibling_writes_share_one_atomic_plugin_namespace() {
+        let (_directory, _manager, _installer, storage, identity) = setup("same-key-siblings");
+        let values = (0..8)
+            .map(
+                |index| json!({"instance": index, "payload": [index, "complete", {"ready": true}]}),
+            )
+            .collect::<Vec<_>>();
+        let barrier = Arc::new(Barrier::new(values.len()));
+        let handles = values
+            .iter()
+            .cloned()
+            .map(|value| {
+                let storage = Arc::clone(&storage);
+                let identity = identity.clone();
+                let barrier = Arc::clone(&barrier);
+                thread::spawn(move || {
+                    barrier.wait();
+                    storage.execute(request(
+                        &identity,
+                        PluginStorageOperation::Set {
+                            key: "shared-setting".into(),
+                            value,
+                        },
+                    ))
+                })
+            })
+            .collect::<Vec<_>>();
+        for handle in handles {
+            handle
+                .join()
+                .unwrap()
+                .expect("each serialized write commits");
+        }
+        let result = execute_value(
+            &storage,
+            &identity,
+            PluginStorageOperation::Get {
+                key: "shared-setting".into(),
+            },
+        );
+        assert!(
+            values.contains(&result["result"]["value"]),
+            "the committed value is one complete write"
+        );
+        for _ in 0..8 {
+            let sibling_identity = identity.clone();
+            assert_eq!(
+                execute_value(
+                    &storage,
+                    &sibling_identity,
+                    PluginStorageOperation::Get {
+                        key: "shared-setting".into()
+                    }
+                ),
+                result
+            );
+        }
+        execute_value(
+            &storage,
+            &identity,
+            PluginStorageOperation::Set {
+                key: "shared-setting".into(),
+                value: json!({"confirmed": "later write"}),
+            },
+        );
+        assert_eq!(
+            execute_value(
+                &storage,
+                &identity,
+                PluginStorageOperation::Get {
+                    key: "shared-setting".into()
+                }
+            )["result"]["value"],
+            json!({"confirmed": "later write"})
+        );
+    }
+
+    #[test]
     fn concurrent_writes_serialize_and_unrelated_plugin_namespaces_are_isolated() {
         let (_directory, manager, _installer, storage, identity) = setup("concurrent");
         let barrier = Arc::new(Barrier::new(8));
@@ -1792,6 +1870,20 @@ mod tests {
             plugin_id: "com.acme.second".to_owned(),
             version: current.manifest.version,
         };
+        let forged_namespace = PluginStorageIdentity {
+            entry_id: identity.entry_id.clone(),
+            plugin_id: second.plugin_id.clone(),
+            version: second.version.clone(),
+        };
+        assert!(storage
+            .execute(request(
+                &forged_namespace,
+                PluginStorageOperation::Set {
+                    key: "key-0".into(),
+                    value: json!("forged namespace"),
+                }
+            ))
+            .is_err());
         execute_value(
             &storage,
             &second,

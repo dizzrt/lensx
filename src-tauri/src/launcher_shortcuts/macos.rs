@@ -2,6 +2,85 @@
 //! synthesizes input, or changes another application's Secure Input state.
 use super::*;
 
+/// Owned key translations. No Carbon object or pointer crosses a thread boundary.
+#[derive(Default, PartialEq, Eq)]
+pub(super) struct KeyboardLayout {
+    pub(super) labels: BTreeMap<String, String>,
+    #[cfg(target_os = "macos")]
+    characters: BTreeMap<String, char>,
+}
+
+#[cfg(target_os = "macos")]
+fn character_key(key: &str) -> bool {
+    key.starts_with("Key") || key.starts_with("Digit") || key == "Backquote"
+}
+
+#[cfg(target_os = "macos")]
+fn single_layout_character(translation: &str) -> Option<char> {
+    let character = translation.chars().next()?;
+    (translation.encode_utf16().count() == 1 && !character.is_control()).then_some(character)
+}
+
+#[cfg(target_os = "macos")]
+fn character_allows(modifiers: &[String], character: Option<char>) -> bool {
+    let Some(character) = character else {
+        return false;
+    };
+    let semantic = character.to_lowercase().to_string();
+    policy().key_aliases.get(&semantic).is_none_or(|key| {
+        !policy()
+            .reserved_chords
+            .iter()
+            .any(|reserved| reserved.modifiers == modifiers && &reserved.key == key)
+    })
+}
+
+impl KeyboardLayout {
+    #[cfg(target_os = "macos")]
+    fn record(&mut self, key: &str, command: bool, translation: &str) {
+        let id = if command {
+            format!("cmd:{key}")
+        } else {
+            key.to_owned()
+        };
+        if let Some(character) = single_layout_character(translation) {
+            self.characters.insert(id.clone(), character);
+        }
+        let label = translation.to_uppercase();
+        if !label.is_empty()
+            && label.encode_utf16().count() <= 16
+            && !label.chars().any(char::is_control)
+        {
+            self.labels.insert(id, label);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(super) fn allows(&self, trigger: &Trigger) -> bool {
+        let Trigger::Chord { modifiers, key } = trigger else {
+            return true;
+        };
+        if !character_key(key) {
+            return true;
+        }
+        let id = if modifiers.iter().any(|m| m == "cmd") {
+            format!("cmd:{key}")
+        } else {
+            key.clone()
+        };
+        character_allows(modifiers, self.characters.get(&id).copied())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    pub(super) fn allows(&self, _trigger: &Trigger) -> bool {
+        true
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+#[path = "keyboard_layout_tests.rs"]
+mod keyboard_layout_tests;
+
 #[cfg(any(target_os = "macos", test))]
 fn wait_for_monitor_poll(
     mut clock: impl FnMut() -> std::time::Duration,
@@ -219,124 +298,103 @@ mod platform {
         .collect()
     }
 
-    pub fn layout_allows(trigger: &Trigger) -> bool {
-        let Trigger::Chord { modifiers, key } = trigger else {
-            return true;
-        };
-        // Non-character keys retain their semantic identity across layouts.
-        if !key.starts_with("Key") && !key.starts_with("Digit") && key != "Backquote" {
-            return true;
+    pub fn local_trigger(code: u16, flags: u64) -> Option<Trigger> {
+        let (_, key) = KEYS.iter().find(|(physical, _)| *physical == code)?;
+        let trigger = Trigger::Chord {
+            modifiers: modifiers(flags),
+            key: (*key).into(),
         }
-        let Some((code, _)) = KEYS.iter().find(|(_, candidate)| *candidate == key) else {
-            return false;
-        };
+        .normalized()
+        .ok()?;
+        layout_allows(&trigger).then_some(trigger)
+    }
+    pub fn local_key_down(code: u16) -> bool {
+        code < 128 && unsafe { CGEventSourceKeyState(0, code) }
+    }
+
+    fn with_layout<T>(
+        _main: objc2::MainThreadMarker,
+        read: impl FnOnce(Ref, u32) -> T,
+    ) -> Option<T> {
         unsafe {
             let source = TISCopyCurrentKeyboardLayoutInputSource();
             if source.is_null() {
-                return false;
+                return None;
             }
             let data = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData);
-            if data.is_null() {
-                CFRelease(source);
-                return false;
-            }
-            let layout = CFDataGetBytePtr(data);
-            let mut dead_state = 0;
-            let mut length = 0;
-            let mut chars = [0u16; 8];
-            // Command-aware translation protects Command-layout variants (e.g. Dvorak-QWERTY).
-            let command = if modifiers.iter().any(|value| value == "cmd") {
-                1
+            let result = if data.is_null() {
+                None
             } else {
-                0
+                let layout = CFDataGetBytePtr(data);
+                (!layout.is_null()).then(|| read(layout.cast(), u32::from(LMGetKbdType())))
             };
-            let result = UCKeyTranslate(
-                layout.cast(),
-                *code,
-                0,
-                command,
-                LMGetKbdType() as u32,
-                1,
-                &mut dead_state,
-                8,
-                &mut length,
-                chars.as_mut_ptr(),
-            );
             CFRelease(source);
-            if result != 0 || length != 1 {
-                return false;
-            }
-            let Some(character) = char::from_u32(chars[0] as u32) else {
-                return false;
-            };
-            let semantic = character.to_lowercase().to_string();
-            if let Some(key) = policy().key_aliases.get(&semantic) {
-                !policy()
-                    .reserved_chords
-                    .iter()
-                    .any(|reserved| &reserved.modifiers == modifiers && &reserved.key == key)
-            } else {
-                true
-            }
+            result
         }
     }
 
-    pub fn key_labels() -> BTreeMap<String, String> {
-        let mut labels = BTreeMap::new();
-        unsafe {
-            let source = TISCopyCurrentKeyboardLayoutInputSource();
-            if source.is_null() {
-                return labels;
-            }
-            let data = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData);
-            if data.is_null() {
-                CFRelease(source);
-                return labels;
-            }
-            let layout = CFDataGetBytePtr(data);
-            for (code, key) in KEYS.iter().filter(|(_, key)| {
-                key.starts_with("Key") || key.starts_with("Digit") || *key == "Backquote"
-            }) {
-                for command in [false, true] {
-                    let mut dead_state = 0;
-                    let mut length = 0;
-                    let mut chars = [0u16; 8];
-                    let result = UCKeyTranslate(
-                        layout.cast(),
-                        *code,
-                        0,
-                        u32::from(command),
-                        LMGetKbdType() as u32,
-                        1,
-                        &mut dead_state,
-                        8,
-                        &mut length,
-                        chars.as_mut_ptr(),
-                    );
-                    if result != 0 || length == 0 || length > 8 {
-                        continue;
-                    }
-                    if let Ok(label) = String::from_utf16(&chars[..length as usize]) {
-                        let label = label.to_uppercase();
-                        if !label.is_empty()
-                            && label.encode_utf16().count() <= 16
-                            && !label.chars().any(char::is_control)
-                        {
-                            labels.insert(
-                                if command {
-                                    format!("cmd:{key}")
-                                } else {
-                                    (*key).into()
-                                },
-                                label,
-                            );
+    fn translate(layout: Ref, keyboard: u32, code: u16, command: bool) -> Option<String> {
+        let mut dead_state = 0;
+        let mut length = 0;
+        let mut chars = [0u16; 8];
+        let result = unsafe {
+            UCKeyTranslate(
+                layout,
+                code,
+                0,
+                u32::from(command),
+                keyboard,
+                1,
+                &mut dead_state,
+                chars.len() as u32,
+                &mut length,
+                chars.as_mut_ptr(),
+            )
+        };
+        if result != 0 || length == 0 {
+            return None;
+        }
+        String::from_utf16(chars.get(..length as usize)?).ok()
+    }
+
+    // Input admission checks the actual current layout, including Command-layout variants.
+    pub(in crate::launcher_shortcuts) fn layout_allows(trigger: &Trigger) -> bool {
+        let Trigger::Chord { modifiers, key } = trigger else {
+            return true;
+        };
+        if !character_key(key) {
+            return true;
+        }
+        let Some(main) = objc2::MainThreadMarker::new() else {
+            return false;
+        };
+        let Some(&(code, _)) = KEYS.iter().find(|(_, candidate)| *candidate == key) else {
+            return false;
+        };
+        let command = modifiers.iter().any(|m| m == "cmd");
+        let character = with_layout(main, |layout, keyboard| {
+            translate(layout, keyboard, code, command).and_then(|s| single_layout_character(&s))
+        })
+        .flatten();
+        character_allows(modifiers, character)
+    }
+
+    pub(in crate::launcher_shortcuts) fn current_layout() -> Option<KeyboardLayout> {
+        let main = objc2::MainThreadMarker::new()?;
+        Some(
+            with_layout(main, |layout, keyboard| {
+                let mut result = KeyboardLayout::default();
+                for &(code, key) in KEYS.iter().filter(|(_, key)| character_key(key)) {
+                    for command in [false, true] {
+                        if let Some(translation) = translate(layout, keyboard, code, command) {
+                            result.record(key, command, &translation);
                         }
                     }
                 }
-            }
-            CFRelease(source);
-        }
-        labels
+                result
+            })
+            .unwrap_or_default(),
+        )
     }
 
     struct Context<R: Runtime> {
@@ -407,6 +465,9 @@ mod platform {
                 || !unsafe { CGPreflightListenEventAccess() }
             {
                 context.interrupted = true;
+                if let Some(facts) = context.app.try_state::<ShortcutAdmission>() {
+                    facts.set_monitor(false);
+                }
                 let snapshot = if let Ok(mut service) = context.state.lock() {
                     let now = macos::monotonic_millis();
                     service.gesture.reset(now);
@@ -439,7 +500,7 @@ mod platform {
             let now = unsafe { CGEventGetTimestamp(event) } / 1_000_000;
             service.synchronize_recording(macos::monotonic_millis());
             let confirmed = service.gesture.input(input, now);
-            let mut effect = confirmed
+            let effect = confirmed
                 .map(|modifier| {
                     service.inner.trigger(
                         &Trigger::ModifierDoubleTap {
@@ -457,19 +518,6 @@ mod platform {
                 {
                     cancelled = service.inner.end_recording();
                     service.gesture.reset(now);
-                } else if unsafe { CGEventGetIntegerValueField(event, 8) } == 0 {
-                    if let Some((_, key)) = KEYS.iter().find(|(key, _)| *key == code) {
-                        if modifiers.iter().any(|modifier| modifier != "shift") {
-                            let lease = service.inner.recording().unwrap();
-                            effect = Effect::Candidate {
-                                lease_id: lease.lease_id.clone(),
-                                trigger: Trigger::Chord {
-                                    modifiers,
-                                    key: (*key).into(),
-                                },
-                            };
-                        }
-                    }
                 }
             }
             drop(service);
@@ -614,6 +662,9 @@ mod platform {
                 let state = Arc::clone(&state);
                 let notification_app = app.clone();
                 let block = RcBlock::new(move |_: std::ptr::NonNull<NSNotification>| {
+                    if let Some(facts) = notification_app.try_state::<ShortcutAdmission>() {
+                        facts.set_sleeping(sleeping);
+                    }
                     let snapshot = if let Ok(mut service) = state.lock() {
                         let now = macos::monotonic_millis();
                         service.sleeping = sleeping;
@@ -704,6 +755,7 @@ mod platform {
                 // healthy passive tap stays attached. Recreating it would briefly
                 // remove a sole double-tap recovery entry after every ordinary hide.
                 if (!observable || !wanted || restart_monitor) && !tap.is_null() {
+                    service.inner.admission().set_monitor(false);
                     unsafe {
                         CFRunLoopRemoveSource(loop_ref, source, kCFRunLoopDefaultMode);
                         CFRelease(source);
@@ -782,8 +834,12 @@ mod platform {
                     let layout_app = app.clone();
                     let layout_state = Arc::clone(&state);
                     let _ = app.run_on_main_thread(move || {
+                        let Some(layout) = current_layout() else {
+                            return;
+                        };
                         let (before, after) = if let Ok(mut service) = layout_state.lock() {
                             let before = service.inner.snapshot();
+                            service.inner.registry.layout = layout;
                             service.inner.refresh_layout();
                             (before, service.inner.snapshot())
                         } else {
@@ -839,11 +895,23 @@ mod platform {
 }
 
 #[cfg(target_os = "macos")]
-pub use platform::{key_labels, layout_allows, monotonic_millis, request_permission, start};
+pub(super) use platform::{current_layout, layout_allows};
+
+#[cfg(target_os = "macos")]
+pub use platform::{local_key_down, local_trigger, monotonic_millis, request_permission, start};
 
 #[cfg(not(target_os = "macos"))]
-pub fn key_labels() -> BTreeMap<String, String> {
-    BTreeMap::new()
+pub fn local_trigger(_code: u16, _flags: u64) -> Option<Trigger> {
+    None
+}
+#[cfg(not(target_os = "macos"))]
+pub fn local_key_down(_code: u16) -> bool {
+    false
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(super) fn current_layout() -> Option<KeyboardLayout> {
+    Some(KeyboardLayout::default())
 }
 
 #[cfg(not(target_os = "macos"))]

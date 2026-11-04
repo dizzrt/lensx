@@ -9,6 +9,8 @@ mod navigation;
 #[cfg(feature = "mac-proxy")]
 mod proxy;
 #[cfg(target_os = "macos")]
+mod reparent;
+#[cfg(target_os = "macos")]
 mod synthetic_mouse_events;
 mod util;
 
@@ -32,13 +34,13 @@ use class::{
 use dpi::{LogicalPosition, LogicalSize};
 #[cfg(target_os = "macos")]
 use objc2::runtime::Bool;
+#[cfg(any(debug_assertions, feature = "devtools", feature = "mac-proxy"))]
+use objc2::runtime::NSObject;
 use objc2::{
   rc::Retained,
   runtime::{AnyObject, ProtocolObject},
   AllocAnyThread, DeclaredClass, MainThreadOnly, Message,
 };
-#[cfg(any(debug_assertions, feature = "devtools", feature = "mac-proxy"))]
-use objc2::runtime::NSObject;
 #[cfg(target_os = "macos")]
 use objc2_app_kit::{NSApplication, NSAutoresizingMaskOptions, NSTitlebarSeparatorStyle, NSView};
 #[cfg(target_os = "macos")]
@@ -128,6 +130,240 @@ pub struct PrintMargin {
 #[derive(Debug, Default, Clone)]
 pub struct PrintOptions {
   pub margins: PrintMargin,
+}
+
+/// Host-private retained native state for a reversible parent transfer.
+/// The value must remain on the native main thread.
+#[cfg(target_os = "macos")]
+#[doc(hidden)]
+pub struct NativeReparentSnapshot {
+  view: Retained<WryWebView>,
+  parent: Retained<NSView>,
+  window: Retained<NSWindow>,
+  frame: CGRect,
+  hidden: bool,
+  responder: Option<Retained<objc2_app_kit::NSResponder>>,
+}
+
+#[cfg(target_os = "macos")]
+impl NativeReparentSnapshot {
+  pub fn actual_window(&self) -> Option<*mut NSWindow> {
+    self
+      .view
+      .window()
+      .map(|window| &*window as *const NSWindow as *mut NSWindow)
+  }
+
+  pub fn is_detached(&self) -> bool {
+    self.view.window().is_none() && unsafe { self.view.superview() }.is_none()
+  }
+
+  pub fn set_visible(
+    &self,
+    visible: bool,
+    current: &dyn Fn() -> bool,
+    changed: &dyn Fn(),
+  ) -> crate::Result<()> {
+    self.execute(
+      reparent::RetainedOperation::Visibility(visible),
+      None,
+      current,
+      changed,
+    )
+  }
+
+  pub fn move_to(
+    &self,
+    window: *mut NSWindow,
+    current: &dyn Fn() -> bool,
+    changed: &dyn Fn(),
+  ) -> crate::Result<()> {
+    if MainThreadMarker::new().is_none() {
+      return Err(crate::Error::NotMainThread);
+    }
+    let target = if window.is_null() {
+      None
+    } else {
+      unsafe { Retained::retain(window) }
+    };
+    self.execute(reparent::RetainedOperation::Move, target, current, changed)
+  }
+
+  pub fn restore(&self, current: &dyn Fn() -> bool) -> crate::Result<()> {
+    self.execute(reparent::RetainedOperation::Restore, None, current, &|| {})
+  }
+
+  fn execute(
+    &self,
+    operation: reparent::RetainedOperation,
+    target: Option<Retained<NSWindow>>,
+    current: &dyn Fn() -> bool,
+    changed: &dyn Fn(),
+  ) -> crate::Result<()> {
+    if MainThreadMarker::new().is_none() {
+      return Err(crate::Error::NotMainThread);
+    }
+    let parent = target.as_ref().and_then(|window| window.contentView());
+    reparent::execute_retained(
+      &mut AppKitRetainedReparent {
+        snapshot: self,
+        target,
+        parent,
+        current,
+        changed,
+      },
+      operation,
+    )
+    .map_err(|_| crate::Error::MessageSender)
+  }
+}
+
+#[cfg(target_os = "macos")]
+struct AppKitRetainedReparent<'a> {
+  snapshot: &'a NativeReparentSnapshot,
+  target: Option<Retained<NSWindow>>,
+  parent: Option<Retained<NSView>>,
+  current: &'a dyn Fn() -> bool,
+  changed: &'a dyn Fn(),
+}
+
+#[cfg(target_os = "macos")]
+impl AppKitRetainedReparent<'_> {
+  fn responder_window(&self, source: bool) -> Option<&NSWindow> {
+    if source {
+      Some(&self.snapshot.window)
+    } else {
+      self.target.as_deref()
+    }
+  }
+}
+
+#[cfg(target_os = "macos")]
+impl reparent::RetainedNativeAdapter for AppKitRetainedReparent<'_> {
+  fn current(&self) -> bool {
+    (self.current)()
+  }
+  fn prepare(&self, operation: reparent::RetainedOperation) -> bool {
+    match operation {
+      reparent::RetainedOperation::Move => self.target.is_some() && self.parent.is_some(),
+      reparent::RetainedOperation::Restore => self
+        .snapshot
+        .parent
+        .window()
+        .is_some_and(|window| std::ptr::eq(&*window, &*self.snapshot.window)),
+      reparent::RetainedOperation::Visibility(_) => true,
+    }
+  }
+  fn mutate(&mut self, mutation: reparent::NativeMutation) -> bool {
+    let view = &self.snapshot.view;
+    match mutation {
+      reparent::NativeMutation::AttachTarget => {
+        let Some(parent) = &self.parent else {
+          return false;
+        };
+        if !unsafe { view.superview() }.is_some_and(|current| std::ptr::eq(&*current, &**parent)) {
+          (self.changed)();
+          parent.addSubview(view);
+        }
+      }
+      reparent::NativeMutation::AttachSource => {
+        if !unsafe { view.superview() }
+          .is_some_and(|current| std::ptr::eq(&*current, &*self.snapshot.parent))
+        {
+          (self.changed)();
+          self.snapshot.parent.addSubview(view);
+        }
+      }
+      reparent::NativeMutation::RestoreFrame => {
+        if view.frame() != self.snapshot.frame {
+          (self.changed)();
+          view.setFrame(self.snapshot.frame);
+        }
+      }
+      reparent::NativeMutation::RestoreVisibility => {
+        if view.isHidden() != self.snapshot.hidden {
+          (self.changed)();
+          view.setHidden(self.snapshot.hidden);
+        }
+      }
+      reparent::NativeMutation::Visibility(visible) => {
+        if view.isHidden() == visible {
+          (self.changed)();
+          view.setHidden(!visible);
+        }
+      }
+    }
+    true
+  }
+  fn confirmed(&self, operation: reparent::RetainedOperation) -> bool {
+    match operation {
+      reparent::RetainedOperation::Move => {
+        self.target.as_ref().is_some_and(|target| {
+          self.snapshot.actual_window() == Some(&**target as *const NSWindow as *mut NSWindow)
+        }) && self.parent.as_ref().is_some_and(|parent| {
+          unsafe { self.snapshot.view.superview() }
+            .is_some_and(|actual| std::ptr::eq(&*actual, &**parent))
+        })
+      }
+      reparent::RetainedOperation::Restore => {
+        self.snapshot.actual_window()
+          == Some(&*self.snapshot.window as *const NSWindow as *mut NSWindow)
+          && unsafe { self.snapshot.view.superview() }
+            .is_some_and(|parent| std::ptr::eq(&*parent, &*self.snapshot.parent))
+          && self.snapshot.view.frame() == self.snapshot.frame
+          && self.snapshot.view.isHidden() == self.snapshot.hidden
+      }
+      reparent::RetainedOperation::Visibility(visible) => self.snapshot.view.isHidden() != visible,
+    }
+  }
+  fn responder(&self, source: bool) -> reparent::ResponderStatus {
+    let (Some(window), Some(responder)) = (
+      self.responder_window(source),
+      self.snapshot.responder.as_ref(),
+    ) else {
+      return reparent::ResponderStatus::Unavailable;
+    };
+    let valid = responder.downcast_ref::<NSView>().is_some_and(|view| {
+      view
+        .window()
+        .is_some_and(|owner| std::ptr::eq(&*owner, window))
+        && !view.isHiddenOrHasHiddenAncestor()
+        && view.isDescendantOf(&self.snapshot.view)
+    });
+    if !valid {
+      reparent::ResponderStatus::Unavailable
+    } else if window
+      .firstResponder()
+      .is_some_and(|current| std::ptr::eq(&*current, &**responder))
+    {
+      reparent::ResponderStatus::Current
+    } else if responder.acceptsFirstResponder() {
+      reparent::ResponderStatus::Accepts
+    } else {
+      reparent::ResponderStatus::Refuses
+    }
+  }
+  fn focus(&mut self, source: bool) -> bool {
+    let (Some(window), Some(responder)) = (
+      self.responder_window(source),
+      self.snapshot.responder.as_ref(),
+    ) else {
+      return false;
+    };
+    (self.changed)();
+    window.makeFirstResponder(Some(responder))
+  }
+  fn focus_confirmed(&self, source: bool) -> bool {
+    let (Some(window), Some(responder)) = (
+      self.responder_window(source),
+      self.snapshot.responder.as_ref(),
+    ) else {
+      return false;
+    };
+    window
+      .firstResponder()
+      .is_some_and(|current| std::ptr::eq(&*current, &**responder))
+  }
 }
 
 pub(crate) struct InnerWebView {
@@ -1270,13 +1506,156 @@ r#"Object.defineProperty(window, 'ipc', {
   }
 
   #[cfg(target_os = "macos")]
-  pub(crate) fn reparent(&self, window: *mut NSWindow) -> crate::Result<()> {
-    unsafe {
-      let content_view = (*window).contentView().unwrap();
-      content_view.addSubview(&self.webview);
+  pub(crate) fn close_confirmed(&self, current: &dyn Fn() -> bool) -> crate::Result<()> {
+    if MainThreadMarker::new().is_none() {
+      return Err(crate::Error::NotMainThread);
     }
+    reparent::close_retained(current, |step| match step {
+      reparent::CloseStep::Hide => {
+        self.webview.setHidden(true);
+        self.webview.isHidden()
+      }
+      reparent::CloseStep::StopLoading => {
+        unsafe { self.webview.stopLoading() };
+        true
+      }
+      reparent::CloseStep::Detach => {
+        self.webview.removeFromSuperview();
+        self.webview.window().is_none() && unsafe { self.webview.superview() }.is_none()
+      }
+    })
+    .then_some(())
+    .ok_or(crate::Error::MessageSender)
+  }
 
-    Ok(())
+  #[cfg(target_os = "macos")]
+  pub(crate) fn capture_reparent_snapshot(&self) -> crate::Result<NativeReparentSnapshot> {
+    if MainThreadMarker::new().is_none() {
+      return Err(crate::Error::NotMainThread);
+    }
+    let parent = unsafe { self.webview.superview() }.ok_or(crate::Error::MessageSender)?;
+    let window = self.webview.window().ok_or(crate::Error::MessageSender)?;
+    let responder = window.firstResponder().filter(|responder| {
+      responder.downcast_ref::<NSView>().is_some_and(|view| {
+        view
+          .window()
+          .is_some_and(|owner| std::ptr::eq(&*owner, &*window))
+          && !view.isHiddenOrHasHiddenAncestor()
+          && view.isDescendantOf(&self.webview)
+      })
+    });
+    Ok(NativeReparentSnapshot {
+      view: self.webview.clone(),
+      parent,
+      window,
+      frame: self.webview.frame(),
+      hidden: self.webview.isHidden(),
+      responder,
+    })
+  }
+
+  #[cfg(target_os = "macos")]
+  pub(crate) fn reparent(&self, window: *mut NSWindow) -> crate::Result<()> {
+    if MainThreadMarker::new().is_none() {
+      return Err(crate::Error::NotMainThread);
+    }
+    if window.is_null() {
+      return Err(crate::Error::MessageSender);
+    }
+    // The caller provides a live native Window; retaining it protects the
+    // transaction across synchronous AppKit callbacks without changing identity.
+    let target = unsafe { Retained::retain(window) }.ok_or(crate::Error::MessageSender)?;
+    reparent::transfer(
+      || {
+        let target_parent = target.contentView()?;
+        let source_parent = unsafe { self.webview.superview() }?;
+        let source_window = self.webview.window()?;
+        let frame = self.webview.frame();
+        let responder = source_window.firstResponder().filter(|responder| {
+          responder.downcast_ref::<NSView>().is_some_and(|view| {
+            view
+              .window()
+              .is_some_and(|owner| std::ptr::eq(&*owner, &*source_window))
+              && !view.isHiddenOrHasHiddenAncestor()
+              && view.isDescendantOf(&self.webview)
+          })
+        });
+        Some((
+          target_parent,
+          source_parent,
+          source_window,
+          frame,
+          responder,
+        ))
+      },
+      |(target_parent, _, _, _, responder)| {
+        target_parent.addSubview(&self.webview);
+        let attached = self
+          .webview
+          .window()
+          .is_some_and(|owner| std::ptr::eq(&*owner, &*target))
+          && unsafe { self.webview.superview() }
+            .is_some_and(|parent| std::ptr::eq(&*parent, &**target_parent));
+        if !attached {
+          return false;
+        }
+        if let Some(responder) = responder {
+          // Only restore the retained input target if it still belongs to this
+          // same moved subtree. Never focus a detached or replaced responder.
+          let valid = responder.downcast_ref::<NSView>().is_some_and(|view| {
+            view
+              .window()
+              .is_some_and(|owner| std::ptr::eq(&*owner, &*target))
+              && !view.isHiddenOrHasHiddenAncestor()
+              && view.isDescendantOf(&self.webview)
+          });
+          if valid
+            && (!responder.acceptsFirstResponder()
+              || !target.makeFirstResponder(Some(responder))
+              || !target
+                .firstResponder()
+                .is_some_and(|current| std::ptr::eq(&*current, &**responder)))
+          {
+            return false;
+          }
+        }
+        true
+      },
+      |(_, source_parent, source_window, frame, responder)| {
+        source_parent.addSubview(&self.webview);
+        self.webview.setFrame(*frame);
+        let restored = self
+          .webview
+          .window()
+          .is_some_and(|owner| std::ptr::eq(&*owner, &**source_window))
+          && unsafe { self.webview.superview() }
+            .is_some_and(|parent| std::ptr::eq(&*parent, &**source_parent))
+          && self.webview.frame() == *frame;
+        if !restored {
+          return false;
+        }
+        if let Some(responder) = responder {
+          let valid = responder.downcast_ref::<NSView>().is_some_and(|view| {
+            view
+              .window()
+              .is_some_and(|owner| std::ptr::eq(&*owner, &**source_window))
+              && !view.isHiddenOrHasHiddenAncestor()
+              && view.isDescendantOf(&self.webview)
+          });
+          if valid
+            && (!responder.acceptsFirstResponder()
+              || !source_window.makeFirstResponder(Some(responder))
+              || !source_window
+                .firstResponder()
+                .is_some_and(|current| std::ptr::eq(&*current, &**responder)))
+          {
+            return false;
+          }
+        }
+        true
+      },
+    )
+    .map_err(|_| crate::Error::MessageSender)
   }
 
   #[cfg(target_os = "macos")]

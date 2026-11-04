@@ -25,13 +25,16 @@ import {
   type PluginRegistrationSnapshot,
   parsePluginRegistrationDetailResponse,
 } from '../src/app/plugins/registration';
+import * as runtime from '../src/app/plugins/runtime';
 import {
   createPluginRuntimeLifecycleService,
   type PluginChildWebviewPresentationController,
   type PluginPageRuntimeDescriptor,
 } from '../src/app/plugins/runtime';
+import { MAIN_PLUGIN_CHILD_WEBVIEW_OWNER } from '../src/app/plugins/runtime/pluginChildWebviewOwner';
 import { createPluginSurfaceProjectionService } from '../src/app/plugins/surfaces';
 import { useAppTheme } from '../src/app/theme';
+import { createHostWindowPort, type HostWindowPort } from '../src/app/windows/host-window-protocol';
 
 const parsed = parsePluginRegistrationDetailResponse(
   structuredClone(validCases.find(({ name }) => name === 'healthy_detail')?.value),
@@ -108,7 +111,7 @@ const runtimeDescriptor: PluginPageRuntimeDescriptor = Object.freeze({
   version: detail.manifest.version,
   page_id: 'open_project',
   expected_origin: 'lensx-plugin://0123456789abcdef0123456789abcdef.runtime.localhost',
-  resource_generation: '0123456789abcdef0123456789abcdef',
+  resource_generation: '1',
   runtime_attempt_key: 'attempt-1',
   registration_revision: '1',
 });
@@ -161,6 +164,7 @@ const renderPluginComposition = (
     readonly strictMode?: boolean;
     readonly renderPage?: ComponentProps<typeof App>['renderPage'];
     readonly surfaceController?: LauncherSurfaceController;
+    readonly hostWindowPort?: HostWindowPort;
   } = {},
 ) => {
   const pageRegistry = new PageRegistry([
@@ -176,7 +180,12 @@ const renderPluginComposition = (
   });
   const pluginRuntimeResolver = { resolve: rs.fn(async () => runtimeDescriptor) };
   const pluginChildWebviewPresentationController: PluginChildWebviewPresentationController = {
-    create: rs.fn(async () => ({ attemptId: 'attempt_0123456789abcdef' as const })),
+    create: rs.fn(async () => ({
+      attemptId: 'attempt_0123456789abcdef' as const,
+      entryUrl: runtimeDescriptor.entry_url,
+      resourceGeneration: runtimeDescriptor.resource_generation,
+      owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+    })),
     updateSlot: rs.fn(async () => undefined),
     readReadiness: rs.fn(async () => ({ status: 'ready' as const })),
     waitReadiness: rs.fn(async () => ({ status: 'ready' as const })),
@@ -200,6 +209,13 @@ const renderPluginComposition = (
         renderPage={options.renderPage}
         surfaceController={options.surfaceController}
         surfaceProjectionService={projection}
+        hostWindowPort={options.hostWindowPort}
+        enablePluginChildWebviewHostDispatcher={options.hostWindowPort !== undefined}
+        nativeActionInvocationPort={
+          options.hostWindowPort
+            ? { listen: async () => () => undefined, ready: async () => [], claim: async () => false }
+            : undefined
+        }
       />
     </AppProviders>
   );
@@ -343,6 +359,9 @@ describe('Plugin Page navigation UI', () => {
     await waitFor(() =>
       expect(view.pluginChildWebviewPresentationController.destroy).toHaveBeenCalledWith({
         attemptId: 'attempt_0123456789abcdef',
+        entryUrl: runtimeDescriptor.entry_url,
+        resourceGeneration: runtimeDescriptor.resource_generation,
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
       }),
     );
 
@@ -396,7 +415,12 @@ describe('Plugin Page navigation UI', () => {
     expect(view.pluginChildWebviewPresentationController.destroy).not.toHaveBeenCalled();
     expect(setPresentationState).toHaveBeenCalledTimes(surfaceCount);
     expect(view.pluginChildWebviewPresentationController.setVisible).toHaveBeenLastCalledWith(
-      { attemptId: 'attempt_0123456789abcdef' },
+      {
+        attemptId: 'attempt_0123456789abcdef',
+        entryUrl: runtimeDescriptor.entry_url,
+        resourceGeneration: runtimeDescriptor.resource_generation,
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+      },
       true,
     );
   });
@@ -470,6 +494,8 @@ describe('Plugin Page navigation UI', () => {
     expect(document.querySelector('iframe')).toBeNull();
     expect(pluginRuntimeResolver.resolve).toHaveBeenCalledWith(
       expect.objectContaining({ attempt: 0, activePage: expect.objectContaining({ owner_id: pluginId }) }),
+      undefined,
+      expect.objectContaining({ aborted: false }),
     );
     await waitFor(() =>
       expect(pluginChildWebviewPresentationController.create).toHaveBeenCalledWith({
@@ -511,6 +537,9 @@ describe('Plugin Page navigation UI', () => {
     await waitFor(() =>
       expect(pluginChildWebviewPresentationController.destroy).toHaveBeenCalledWith({
         attemptId: 'attempt_0123456789abcdef',
+        entryUrl: runtimeDescriptor.entry_url,
+        resourceGeneration: runtimeDescriptor.resource_generation,
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
       }),
     );
     expect(document.querySelector('[data-plugin-runtime-slot="true"]')).toBeNull();
@@ -567,7 +596,14 @@ describe('Plugin Page navigation UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Close page and return home' }));
 
-    await waitFor(() => expect(destroy).toHaveBeenCalledWith({ attemptId: 'attempt_0123456789abcdef' }));
+    await waitFor(() =>
+      expect(destroy).toHaveBeenCalledWith({
+        attemptId: 'attempt_0123456789abcdef',
+        entryUrl: runtimeDescriptor.entry_url,
+        resourceGeneration: runtimeDescriptor.resource_generation,
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
+      }),
+    );
     expect(finishDestroy).toBeDefined();
     await waitFor(() => expect(submittedTargets.at(-1)).toEqual({ kind: 'home' }));
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Launcher query' })).toHaveFocus());
@@ -598,4 +634,120 @@ describe('Plugin Page navigation UI', () => {
     ).toThrow(expect.objectContaining({ code: 'page_unavailable' }));
     expect(screen.queryByText('Color theme')).not.toBeInTheDocument();
   });
+});
+
+test('actual App has no Page detach control or shortcut hint and keeps recovery actions outside frozen Home', async () => {
+  const startDispatcher = rs
+    .spyOn(runtime, 'startPluginChildWebviewHostDispatcherDesktopAdapter')
+    .mockResolvedValue(() => undefined);
+  try {
+    let nativeHint: (() => void) | undefined;
+    const port: HostWindowPort = {
+      ...createHostWindowPort(
+        async (command) => {
+          if (command === 'subscribe_host_window_operations')
+            return { contract_version: '0.1.0', subscription_id: 'main_controls', operations: [] };
+          if (command === 'read_host_window_operations') return { contract_version: '0.1.0', operations: [] };
+          return { contract_version: '0.1.0', accepted: true };
+        },
+        async () => ({ channelId: '__CHANNEL__:1', release: () => undefined }),
+      ),
+      listenPluginWindowState: async (listener) => {
+        nativeHint = listener;
+        return () => {
+          nativeHint = undefined;
+        };
+      },
+      readPluginWindowState: rs.fn(async () => ({
+        admissionFailure: null,
+        pendingAttempts: [],
+        recovery: [],
+      })),
+    };
+    const fixture = renderPluginComposition({ hostWindowPort: port });
+    await waitFor(() =>
+      expect(fixture.actionService.registry.snapshot().some((action) => action.owner_id === pluginId)).toBe(true),
+    );
+    expect(screen.queryByRole('button', { name: /Detach window/ })).not.toBeInTheDocument();
+    await act(async () => {
+      fixture.navigationService.openPage(
+        { owner_id: pluginId, page_id: runtimeDescriptor.page_id },
+        `${pluginId}.open`,
+      );
+    });
+    await waitFor(() => expect(document.querySelector('[data-runtime-state="ready"]')).not.toBeNull());
+    expect(screen.queryByRole('button', { name: /Detach window/ })).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent('Cmd + D');
+    expect(screen.getByRole('button', { name: 'Close page and return home' })).toBeEnabled();
+    expect(fixture.pluginChildWebviewPresentationController.create).toHaveBeenCalledTimes(1);
+    rs.mocked(port.readPluginWindowState).mockResolvedValue({
+      admissionFailure: null,
+      pendingAttempts: [],
+      recovery: [
+        { status: 'closing', ticket: { attemptId: 'attempt_0123456789abcdef', transferToken: 'migration_1' } },
+      ],
+    });
+    await act(async () => {
+      fixture.navigationService.closePage();
+      nativeHint?.();
+    });
+    expect(screen.queryByRole('button', { name: /Detach window/ })).not.toBeInTheDocument();
+    const close = await screen.findByRole('button', { name: 'Close instance' });
+    expect(close.closest('[inert]')).toBeNull();
+    expect(close).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Quit lensX' })).toBeEnabled();
+    await fixture.projection.destroy();
+  } finally {
+    startDispatcher.mockRestore();
+  }
+});
+
+test('a rejected window update cannot label an already-open plugin Action as failed', async () => {
+  let rejectSurface!: (error: unknown) => void;
+  const view = renderPluginComposition({
+    initialLocale: 'zh-CN',
+    surfaceController: {
+      setPresentationState: async (target) => {
+        if (target.kind === 'plugin_page')
+          await new Promise<void>((_resolve, reject) => {
+            rejectSurface = reject;
+          });
+      },
+    },
+  });
+  const id = `${pluginId}.open_project`;
+  await waitFor(() => expect(view.actionService.registry.get(id)).toBeDefined());
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: '启动工作区' } });
+  fireEvent.click(await screen.findByRole('option', { name: /启动工作区/ }));
+  await waitFor(() => expect(document.querySelector('[data-runtime-state="ready"]')).not.toBeNull());
+  expect(view.navigationService.getActivePage()?.opened_by_action_id).toBe(id);
+  await act(async () => rejectSurface({ code: 'launcher_surface_transition_failed', operation: 'set_size' }));
+  expect(screen.queryByText('无法完成该操作。')).not.toBeInTheDocument();
+  expect(screen.getByRole('status')).not.toHaveAttribute('data-feedback', 'error');
+  expect(view.pluginChildWebviewPresentationController.create).toHaveBeenCalledTimes(1);
+});
+
+test('a late Home presentation rejection leaves the current plugin footer and Runtime alone', async () => {
+  let rejectHome!: (error: unknown) => void;
+  const view = renderPluginComposition({
+    initialLocale: 'zh-CN',
+    surfaceController: {
+      setPresentationState: async (target) => {
+        if (target.kind === 'home')
+          await new Promise<void>((_resolve, reject) => {
+            rejectHome = reject;
+          });
+      },
+    },
+  });
+  const id = `${pluginId}.open_project`;
+  await waitFor(() => expect(view.actionService.registry.get(id)).toBeDefined());
+  await act(async () => {
+    expect((await view.actionService.dispatcher.dispatch(id)).ok).toBe(true);
+  });
+  await waitFor(() => expect(document.querySelector('[data-runtime-state="ready"]')).not.toBeNull());
+  await act(async () => rejectHome({ code: 'launcher_surface_transition_failed', operation: 'stale_surface_intent' }));
+  expect(screen.queryByText('无法完成该操作。')).not.toBeInTheDocument();
+  expect(screen.getByRole('status')).not.toHaveAttribute('data-feedback', 'error');
+  expect(view.pluginChildWebviewPresentationController.create).toHaveBeenCalledTimes(1);
 });

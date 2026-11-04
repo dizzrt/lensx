@@ -140,6 +140,14 @@
             "errorDescription": {
               "type": "string",
               "minLength": 1
+            },
+            "pluginWindowFailureTitle": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pluginWindowFailureDescription": {
+              "type": "string",
+              "minLength": 1
             }
           },
           "required": [
@@ -153,7 +161,9 @@
             "pluginRuntimeFailure",
             "pluginRuntimeRetry",
             "errorTitle",
-            "errorDescription"
+            "errorDescription",
+            "pluginWindowFailureTitle",
+            "pluginWindowFailureDescription"
           ]
         },
         "preferences": {
@@ -287,9 +297,72 @@
             }
           },
           "required": ["hideLauncher", "openSettings"]
+        },
+        "pluginWindow": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "recoveryTitle": {
+              "type": "string",
+              "minLength": 1
+            },
+            "recoveryDescription": {
+              "type": "string",
+              "minLength": 1
+            },
+            "recoveryState": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "recovery_required": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "recovering": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "closing": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["recovery_required", "recovering", "closing"]
+            },
+            "retryRecovery": {
+              "type": "string",
+              "minLength": 1
+            },
+            "closeInstance": {
+              "type": "string",
+              "minLength": 1
+            },
+            "quit": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "recoveryTitle",
+            "recoveryDescription",
+            "recoveryState",
+            "retryRecovery",
+            "closeInstance",
+            "quit"
+          ]
         }
       },
-      "required": ["inputLabel", "inputPlaceholder", "home", "page", "preferences", "search", "collections", "actions"]
+      "required": [
+        "inputLabel",
+        "inputPlaceholder",
+        "home",
+        "page",
+        "preferences",
+        "search",
+        "collections",
+        "actions",
+        "pluginWindow"
+      ]
     },
     "settings": {
       "type": "object",
@@ -1374,6 +1447,10 @@
                 "degraded": {
                   "type": "string",
                   "minLength": 1
+                },
+                "local_unavailable": {
+                  "type": "string",
+                  "minLength": 1
                 }
               },
               "required": [
@@ -1382,7 +1459,8 @@
                 "target_unavailable",
                 "registration_failed",
                 "monitor_unavailable",
-                "degraded"
+                "degraded",
+                "local_unavailable"
               ]
             },
             "feedback": {
@@ -1440,6 +1518,10 @@
                 "launcher_choice_required": {
                   "type": "string",
                   "minLength": 1
+                },
+                "detach_choice_required": {
+                  "type": "string",
+                  "minLength": 1
                 }
               },
               "required": [
@@ -1455,7 +1537,8 @@
                 "unavailable",
                 "invalid_response",
                 "duplicate_action",
-                "launcher_choice_required"
+                "launcher_choice_required",
+                "detach_choice_required"
               ]
             },
             "add": {
@@ -1491,6 +1574,34 @@
               "minLength": 1
             },
             "system": {
+              "type": "string",
+              "minLength": 1
+            },
+            "detach": {
+              "type": "string",
+              "minLength": 1
+            },
+            "local": {
+              "type": "string",
+              "minLength": 1
+            },
+            "localBindings": {
+              "type": "string",
+              "minLength": 1
+            },
+            "detachScope": {
+              "type": "string",
+              "minLength": 1
+            },
+            "detachMigration": {
+              "type": "string",
+              "minLength": 1
+            },
+            "detachKeepDisabled": {
+              "type": "string",
+              "minLength": 1
+            },
+            "detachReset": {
               "type": "string",
               "minLength": 1
             }
@@ -1542,7 +1653,14 @@
             "chooseType",
             "launcherMigration",
             "modifierForTarget",
-            "system"
+            "system",
+            "detach",
+            "local",
+            "localBindings",
+            "detachScope",
+            "detachMigration",
+            "detachKeepDisabled",
+            "detachReset"
           ]
         }
       },

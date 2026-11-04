@@ -2,14 +2,21 @@
 
 ## Runtime lifecycle
 
-Each eligible plugin Page runs in the Launcher's single current native Child
-WebView with a generation-scoped origin and data store. The Host creates the
-WebView and private bridge Session, waits separately for native load, bridge
-ready, and `runtime.get_context`, and owns deadlines, retry, breaker,
-navigation, presentation, and final teardown. Close, navigation, disable,
-uninstall, replacement, development reload, disconnect, Host reload, and app
-unmount destroy the old WebView and make its Worker, connection, timer,
-listener, bridge, Session, and resource authority inert.
+Each eligible plugin Page instance runs in a Host-owned native Child WebView.
+Each owning window has at most one instance, and the same plugin may have
+several independent instances. A live generation scope can share an origin
+string, but each attempt has a distinct non-persistent data store, source lease
+and Session. Use Host `storage.*` for persistent plugin configuration.
+The Host waits separately for native load, bridge readiness and
+`runtime.get_context`, and owns deadlines, retry, breaker, navigation,
+presentation and final teardown.
+
+Close, local Page replacement, retry and disconnect terminate only the affected
+instance. Committed disable, uninstall, replacement or development reload
+revokes all affected plugin-generation instances; rejected staging preserves
+them. Host reload and application exit terminate every instance. Terminal
+cleanup makes that instance's Worker, connection, timer, listener, bridge,
+Session and source authority inert, without revoking a healthy sibling's lease.
 
 Temporarily hiding and restoring the Launcher window is not Page close or
 Runtime teardown. Each restore activation refreshes and revalidates current
@@ -18,6 +25,18 @@ origin, resource generation, and Runtime attempt are unchanged, the Host keeps
 the same Child WebView, Session, and page memory. A global
 Registration revision is only an invalidation hint; an unrelated plugin change
 does not replace the current Runtime.
+
+Host detachment also retains the same document, Session, SDK, Worker, request
+sequence and temporary state. It changes only Host-owned presentation. Main
+returning Home does not close the transferred instance; opening the same Page
+from Launcher creates or reuses only main's own instance. A detached window
+stays visible on blur. Its close ends that instance, and application exit does
+not restore window layouts or temporary state on the next launch.
+
+Shared plugin `storage.*` configuration remains separate from browser storage
+and in-memory working state. Concurrent instances observe shared configuration
+through their ordinary reads and writes; there is no automatic input/result
+synchronization and no new multi-window Manifest declaration or permission.
 
 ## Context replacement
 
@@ -60,6 +79,13 @@ timeout, limits, disconnect, and incompatible context without blind retry.
 After replacement or reload, create fresh Workers, connections, SDK state, and
 subscriptions. Never reuse a previous generation's URL, port, cursor, or
 browser state as Host authority.
+
+Detachment recovery retries restoration of the original instance, not Runtime
+Retry. If native compensation cannot be confirmed, the Host retains that
+instance in an explicit recovery state with trusted restore, close and exit
+controls. It does not reload or replay work. Ownership-sensitive `actions.open`
+returns bounded `unavailable` until recovery resolves, while valid source and
+Session checks remain mandatory and `ui.close` can request explicit termination.
 
 ## Security boundary
 

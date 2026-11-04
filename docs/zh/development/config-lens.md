@@ -120,7 +120,13 @@ document 内 SDK retry 不会刷新已求值的模块消息。Theme 即时更新
 
 正文、语言模式、生效语言、Find 查询／选项、选择范围与撤销历史只留在当前 Page
 generation 的内存。只要执行身份仍有效，隐藏／恢复 Launcher 就保留同一 Child
-WebView、Runtime Session、model 和 Worker；这不构成关闭或新 document。真正
+WebView、Runtime Session、model 和 Worker。分离把同一原生 WebView 移入独立窗口，
+保留 editor、撤销历史、Find 状态、Worker 工作与 SDK Session，不再次 load 或初始化。
+Monaco 框架语言仍遵循上文首次 import 的限制。独立窗口失焦后保持可见，关闭时只终止
+该实例。从 main 再次打开 ConfigLens 会创建独立的空 editor；实例间不自动同步输入或
+撤销历史。这些 Host 行为不需要修改插件 Manifest 或 SDK。
+
+隐藏、恢复与分离都不创建新 document。真正
 关闭后重开，以空内容、Auto 未识别模式开始，并使用新打开时的界面 locale。禁用、
 替换、development reload、卸载、teardown 或 SDK 失败／retry 会丢弃旧 editor
 及临时正文／查询状态。同 document retry 仅保留上节说明的 module/NLS 初始化。

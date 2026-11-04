@@ -6,7 +6,12 @@ import {
 } from './builtins';
 import { LauncherActionDispatcher } from './dispatcher';
 import { LauncherActionRegistry } from './registry';
-import type { LauncherActionDescriptor, LauncherActionDispatchResult, LauncherActionInvocation } from './types';
+import type {
+  LauncherActionDescriptor,
+  LauncherActionDispatchResult,
+  LauncherActionExecutionContext,
+  LauncherActionInvocation,
+} from './types';
 
 export interface LauncherActionService {
   readonly registry: {
@@ -14,7 +19,11 @@ export interface LauncherActionService {
     subscribe?: (listener: () => void) => () => void;
   };
   readonly dispatcher: {
-    dispatch: (actionId: string, isCurrent?: () => boolean | Promise<boolean>) => Promise<LauncherActionDispatchResult>;
+    dispatch: (
+      actionId: string,
+      isCurrent?: () => boolean | Promise<boolean>,
+      context?: LauncherActionExecutionContext,
+    ) => Promise<LauncherActionDispatchResult>;
     dispatchShortcut?: (
       actionId: string,
       isCurrent?: () => boolean | Promise<boolean>,

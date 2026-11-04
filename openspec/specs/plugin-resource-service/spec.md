@@ -2,13 +2,15 @@
 
 ## Purpose
 
+
 Define the secure Host-private service that resolves scoped plugin entry URLs
-and serves bounded resources from the currently eligible installer-owned
-payload, including strict contract validation, unguessable process-local
-authorization, path and MIME enforcement, lifecycle revocation, and
-fail-closed responses without exposing Host filesystem or plugin-management
-facts.
+and serves bounded resources from currently eligible managed payloads, with
+shared generation scopes, independent source leases, bounded creation
+reservations, strict file and MIME validation, final-holder retirement, and
+fail-closed responses that expose no Host filesystem or management facts.
+
 ## Requirements
+
 ### Requirement: The Host MUST resolve the current plugin entry URL through an independent private contract
 
 The system MUST provide an independently versioned Host-private Plugin Resource Contract and allow only the trusted lensX root application to query a plugin entry URL through `resolve_plugin_resource_entry`.
@@ -155,20 +157,19 @@ The system MUST use an operating-system CSPRNG to generate at least 128 bits of 
 #### Scenario: The Host issues or reuses a current resource scope
 
 - **WHEN** a current entry and resource generation is resolved to a scope
-- **THEN** Each current `(entry_id, resource_generation)` MUST map to at most one scope, and repeated queries MUST reuse it.
+- **THEN** Each current `(entry_id, resource_generation)` MUST map to at most one valid scope; repeated resolution and concurrent instances MUST reuse that scope while valid instance leases or bounded creation reservations still hold it.
 - **THEN** The scope MUST serve as both the isolated browser-origin key and the path-authorization key, and the authority scope and path scope MUST match exactly.
 - **THEN** A scope MUST reside only in process memory and MUST NOT be persisted, sent in a changed event, written to logs, or returned as a standalone field.
 
 #### Scenario: A scoped URL authorizes a protocol read
 
 - **WHEN** a protocol request presents an opaque scope and readable URL fields
-- **THEN** For every protocol request, the system MUST re-confirm the scope, entry, generation, plugin identity, version, digest, and payload root against the current Manager projection.
-- **THEN** Readable fields in the URL and a browser same-origin result MUST NOT replace authorization by the opaque scope.
+- **THEN** Every protocol request MUST reconfirm scope, entry, generation, plugin identity, version, digest, and payload root against the current Manager projection, and confirm that the calling instance's source lease, attempt, and actual native WebView source remain valid.
+- **THEN** Readable URL fields, browser same-origin results, or possession of an opaque scope alone MUST NOT replace complete instance-source authorization.
 
 #### Scenario: The same generation is resolved repeatedly
 
-- **WHEN** the caller repeats a valid query while the registration and resource
-  generation remain unchanged
+- **WHEN** a caller repeats a valid query and Registration, resource generation, and the scope still held by valid leases or creation reservations are unchanged
 - **THEN** the Host returns the same entry URL and isolated browser origin and
   does not create scopes without bound
 - **THEN** a revision change for an unrelated plugin does not invalidate this
@@ -198,6 +199,18 @@ The system MUST use an operating-system CSPRNG to generate at least 128 bits of 
   the recovered registration uses a new process-local generation
 - **THEN** the Store record, Registration Contract, and package layout gain no
   persisted scope, origin, or generation field
+
+#### Scenario: Reopen after the final source lease is released
+
+- **WHEN** the final valid instance lease and creation reservation for the same generation have both been released and the user subsequently opens the plugin again
+- **THEN** Host MUST permanently revoke the old scope and issue a new unpredictable scope for subsequent valid creation; the old URL MUST NOT become valid again
+- **THEN** a still-valid immutable byte cache MAY be reused under existing generation, source, and file rules, but it cannot restore old Sessions, Workers, models, or leases
+
+#### Scenario: Concurrent creation and closure share a generation
+
+- **WHEN** instance A closes while B of the same generation already has a valid source lease or still holds a bounded creation reservation
+- **THEN** closing A MUST NOT revoke the common scope held by B or cause B to reload its document or recreate its Session
+- **THEN** a creation reservation MUST bind to a trusted creation attempt and be released on failure, cancellation, timeout, or termination; the reservation itself MUST NOT authorize an arbitrary WebView to read resources
 
 ### Requirement: Protocol requests MUST be restricted to a package-relative regular file bound to the scope
 
@@ -390,6 +403,12 @@ The resource generation MUST change on a successful state transition that affect
 - **THEN** the global revision is not the sole authorization condition for a
   protocol request
 
+#### Scenario: Plugin generation invalidation reaches every instance
+
+- **WHEN** disable, uninstall, replacement, development reload, or retirement commits a change to the target plugin's eligibility or generation
+- **THEN** Host MUST revoke every old instance source lease, creation reservation, and scope for that target before payload cleanup, including those belonging to unfocused detached windows
+- **THEN** closed instances, late creation, and cached reads MUST NOT regain old authority; unrelated plugins' still-valid leases MUST remain unchanged
+
 ### Requirement: Caching and errors MUST fail closed and MUST NOT create a Host information oracle
 
 All successful and error responses in v0 MUST use `Cache-Control: no-store`.
@@ -478,7 +497,7 @@ The Resource Service MUST provide a Host-owned byte cache and MAY reuse only imm
 - **THEN** the existence of an equivalent Host byte-cache value grants no access
 
 ### Requirement: Resource authority MUST match the current Child WebView source
-Entry resolution MUST produce only Host-private facts needed to create the current Child WebView. Every custom-protocol request and verified byte-cache hit MUST match its scope, resource generation, Runtime attempt and actual current Child WebView binding. Destroy, replacement, reload, disable, uninstall and retirement MUST revoke the binding before payload cleanup; Host or old WebViews MUST fail closed even if they know a well-formed URL.
+Resource resolution MUST produce only Host-private facts. Multiple instances of the same generation may share a scope, but every protocol request and cache hit MUST jointly match the calling instance's valid lease, Runtime attempt, and actual native WebView source. Instance termination revokes only its corresponding source; generation invalidation revokes every matching source. The Host, unknown sources, and revoked sources MUST fail closed; knowing a valid URL does not constitute authority.
 
 #### Scenario: Current WebView requests a package file
 - **WHEN** the current bound Child WebView requests a safe regular file in its exact generation
@@ -488,3 +507,27 @@ Entry resolution MUST produce only Host-private facts needed to create the curre
 #### Scenario: Generation is replaced during a cached request
 - **WHEN** a replacement commits before a previous-generation request or cache lookup completes
 - **THEN** compare-current validation rejects the late result and no bytes reach the replacement WebView
+
+#### Scenario: Two instances of the same plugin read the same resource concurrently
+
+- **WHEN** A and B belong to the same current generation, each has an independent valid source/attempt lease, and both request the same package file
+- **THEN** both requests MUST succeed after independently completing source and generation validation, and they may reuse the same verified immutable bytes
+- **THEN** A's authority MUST NOT be overwritten by B; a shared scope MUST NOT give read access to other unauthorized sources
+
+#### Scenario: An old source impersonates a sibling through their shared URL after closure
+
+- **WHEN** A has closed while B remains valid, and A's old WebView or late request uses the same-generation URL still used by B
+- **THEN** A's source lease MUST already be invalid, and that request and its cached result MUST be rejected
+- **THEN** B's document, source lease, resource reads, and Session MUST remain valid; A's cleanup cannot revoke their common scope
+
+#### Scenario: Detaching the original instance preserves its resource lease
+
+- **WHEN** Host successfully transfers the original instance from the main window to a detached window without changing its actual WebView, attempt, or generation
+- **THEN** the original source lease and resource URL MUST remain continuously valid; a window ownership change cannot trigger scope revocation, resource resolution, or document reload
+- **THEN** when migration fails or races with termination, only the current source and ownership still confirmed by Host may continue using the lease
+
+#### Scenario: An instance closes after request validation but before delivery
+
+- **WHEN** A's resource read or cache hit has begun but A terminates before byte delivery while B of the same generation continues running
+- **THEN** final validation MUST discard A's result; B's continued ownership of the common scope cannot authorize delivery to A
+- **THEN** the result MUST NOT be redirected to B; B's own valid requests remain independent

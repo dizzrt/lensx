@@ -1,4 +1,7 @@
 use serde::Serialize;
+#[cfg(any(target_os = "macos", test))]
+#[path = "launcher_local_commands.rs"]
+pub(crate) mod local_commands;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::sync::{
@@ -212,6 +215,9 @@ struct LauncherChildPresentationSnapshot {
 }
 
 trait LauncherChildPresentation {
+    fn hide_blocked(&self) -> bool {
+        false
+    }
     fn snapshot(&self) -> Option<LauncherChildPresentationSnapshot>;
     fn hide_current(
         &self,
@@ -226,45 +232,6 @@ trait LauncherChildPresentation {
         attempt: PluginChildWebviewAttempt,
     ) -> PluginChildWebviewPresentationResult;
     fn compare_current_teardown(&self, attempt: PluginChildWebviewAttempt) -> Result<bool, ()>;
-}
-
-impl<R: Runtime> LauncherChildPresentation for PluginChildWebviewService<R> {
-    fn snapshot(&self) -> Option<LauncherChildPresentationSnapshot> {
-        PluginChildWebviewService::<R>::snapshot(self).map(|snapshot| {
-            LauncherChildPresentationSnapshot {
-                attempt: snapshot.attempt,
-                state: snapshot.state,
-                ready: matches!(snapshot.session_state,
-                    crate::plugin_child_webview_service::PluginChildWebviewSessionState::BridgeReady
-                    | crate::plugin_child_webview_service::PluginChildWebviewSessionState::SdkReady),
-            }
-        })
-    }
-
-    fn hide_current(
-        &self,
-        attempt: PluginChildWebviewAttempt,
-    ) -> PluginChildWebviewPresentationResult {
-        PluginChildWebviewService::<R>::hide_current(self, attempt)
-    }
-
-    fn show_current(
-        &self,
-        attempt: PluginChildWebviewAttempt,
-    ) -> PluginChildWebviewPresentationResult {
-        PluginChildWebviewService::<R>::show_current(self, attempt)
-    }
-
-    fn focus_current(
-        &self,
-        attempt: PluginChildWebviewAttempt,
-    ) -> PluginChildWebviewPresentationResult {
-        PluginChildWebviewService::<R>::focus_current(self, attempt)
-    }
-
-    fn compare_current_teardown(&self, attempt: PluginChildWebviewAttempt) -> Result<bool, ()> {
-        PluginChildWebviewService::<R>::compare_current_teardown(self, attempt)
-    }
 }
 
 #[cfg(test)]
@@ -346,6 +313,7 @@ fn execute_composed_with_adapter_policy<R: LauncherWindowResolver>(
     action: LauncherWindowAction,
     suppress_hide: bool,
 ) -> Result<(), LauncherWindowActionError> {
+    let suppress_hide = suppress_hide || child.is_some_and(|child| child.hide_blocked());
     match action {
         LauncherWindowAction::Show(reason) => {
             show_with_host(resolver, window, child, action, reason)
@@ -451,42 +419,124 @@ fn run_operation(
 
 struct TauriLauncherWindowAdapter<R: Runtime> {
     window: Window<R>,
+    guard: crate::plugin_child_webview_execution::NativeExecutionGuard,
+}
+impl<R: Runtime> TauriLauncherWindowAdapter<R> {
+    fn confirmed<T: Send + 'static>(
+        &self,
+        operation: impl FnOnce(
+                &Window<R>,
+                &crate::plugin_child_webview_execution::NativeExecutionGuard,
+            ) -> Result<T, ()>
+            + Send
+            + 'static,
+    ) -> Result<T, String> {
+        let window = self.window.clone();
+        crate::launcher_native_execution::confirmed(
+            self.window.app_handle(),
+            &self.guard,
+            std::time::Duration::from_secs(5),
+            move |guard| operation(&window, guard),
+        )
+        .map_err(|_| {
+            if self.guard.is_current() {
+                "launcher native operation is unavailable".to_owned()
+            } else {
+                "launcher ownership is stale".to_owned()
+            }
+        })
+    }
+}
+
+fn request_main_window_focus<R: Runtime>(
+    window: &Window<R>,
+    guard: &crate::plugin_child_webview_execution::NativeExecutionGuard,
+    activate_visible_app: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    if !guard.is_current() {
+        return Err("launcher ownership is stale".into());
+    }
+    window.set_focus().map_err(|error| error.to_string())?;
+    if !guard.is_current() {
+        return Err("launcher ownership is stale".into());
+    }
+    // During applicationDidFinishLaunching, AppKit can deliver windowDidBecomeKey
+    // after setup returns. Ordinary Show only needs the focus request to succeed.
+    activate_visible_app()
 }
 
 impl<R: Runtime> LauncherWindowAdapter for TauriLauncherWindowAdapter<R> {
     fn ensure_rounded_corners(&mut self) -> Result<(), String> {
-        crate::launcher_rounded_corners::ensure_launcher_rounded_corners(&self.window)
-            .map_err(|_| "launcher content is unavailable".to_owned())
+        self.confirmed(|window, _| {
+            crate::launcher_rounded_corners::ensure_launcher_rounded_corners(window).map_err(|_| ())
+        })
     }
-
     fn is_visible(&mut self) -> Result<bool, String> {
+        if !self.guard.is_current() {
+            return Err("launcher ownership is stale".into());
+        }
         self.window.is_visible().map_err(|error| error.to_string())
     }
-
     fn restore(&mut self) -> Result<(), String> {
-        self.window.unminimize().map_err(|error| error.to_string())
+        self.confirmed(|window, guard| {
+            window.unminimize().map_err(|_| ())?;
+            if !guard.is_current() {
+                return Err(());
+            }
+            window
+                .is_minimized()
+                .is_ok_and(|value| !value)
+                .then_some(())
+                .ok_or(())
+        })
     }
-
     fn show(&mut self) -> Result<(), String> {
-        self.window.show().map_err(|error| error.to_string())
+        self.confirmed(|window, guard| {
+            window.show().map_err(|_| ())?;
+            if !guard.is_current() {
+                return Err(());
+            }
+            window
+                .is_visible()
+                .is_ok_and(|value| value)
+                .then_some(())
+                .ok_or(())
+        })
     }
-
     fn hide(&mut self) -> Result<(), String> {
-        self.window.hide().map_err(|error| error.to_string())
+        self.confirmed(|window, guard| {
+            window.hide().map_err(|_| ())?;
+            if !guard.is_current() {
+                return Err(());
+            }
+            window
+                .is_visible()
+                .is_ok_and(|value| !value)
+                .then_some(())
+                .ok_or(())
+        })
     }
-
     fn focus(&mut self) -> Result<(), String> {
-        self.window.set_focus().map_err(|error| error.to_string())?;
-        crate::macos_launcher::confirm_visible_macos_accessory_application_active()
+        self.confirmed(|window, guard| {
+            Ok(request_main_window_focus(
+                window,
+                guard,
+                crate::macos_launcher::activate_visible_macos_accessory_application,
+            ))
+        })?
     }
 }
 
 struct TauriLauncherHostWebviewEmitter<R: Runtime> {
     host: Webview<R>,
+    guard: crate::plugin_child_webview_execution::NativeExecutionGuard,
 }
 
 impl<R: Runtime> LauncherHostWebviewEmitter for TauriLauncherHostWebviewEmitter<R> {
     fn emit_activation(&mut self, reason: LauncherActivationReason) -> Result<(), String> {
+        if !self.guard.is_current() {
+            return Err("launcher ownership is stale".into());
+        }
         self.host
             .emit(
                 LAUNCHER_ACTIVATED_EVENT,
@@ -498,6 +548,7 @@ impl<R: Runtime> LauncherHostWebviewEmitter for TauriLauncherHostWebviewEmitter<
 
 struct TauriLauncherWindowResolver<'app, R: Runtime> {
     app: &'app AppHandle<R>,
+    guard: crate::plugin_child_webview_execution::NativeExecutionGuard,
 }
 
 impl<R: Runtime> LauncherWindowResolver for TauriLauncherWindowResolver<'_, R> {
@@ -507,19 +558,31 @@ impl<R: Runtime> LauncherWindowResolver for TauriLauncherWindowResolver<'_, R> {
     fn resolve_window(&self) -> Result<Self::Window, String> {
         self.app
             .get_window(MAIN_WINDOW_LABEL)
-            .map(|window| TauriLauncherWindowAdapter { window })
+            .map(|window| TauriLauncherWindowAdapter {
+                window,
+                guard: self.guard.clone(),
+            })
             .ok_or_else(|| format!("native window '{MAIN_WINDOW_LABEL}' was not found"))
     }
 
     fn resolve_host(&self) -> Result<Self::Host, String> {
         self.app
             .get_webview(MAIN_WINDOW_LABEL)
-            .map(|host| TauriLauncherHostWebviewEmitter { host })
+            .map(|host| TauriLauncherHostWebviewEmitter {
+                host,
+                guard: self.guard.clone(),
+            })
             .ok_or_else(|| format!("Host webview '{MAIN_WINDOW_LABEL}' was not found"))
     }
 
     fn activate_application(&self) -> Result<(), String> {
-        crate::macos_launcher::activate_macos_accessory_application()
+        crate::launcher_native_execution::confirmed(
+            self.app,
+            &self.guard,
+            std::time::Duration::from_secs(5),
+            |_| crate::macos_launcher::activate_macos_accessory_application().map_err(|_| ()),
+        )
+        .map_err(|_| "launcher activation is unavailable".into())
     }
 }
 
@@ -542,6 +605,43 @@ pub struct LauncherWindowActions {
     native_dialog_depth: Arc<AtomicUsize>,
     #[cfg(any(target_os = "macos", test))]
     startup_revealed: AtomicBool,
+    #[cfg(target_os = "macos")]
+    action_revision: AtomicUsize,
+    #[cfg(target_os = "macos")]
+    startup_turn_started: AtomicBool,
+}
+
+#[cfg(any(target_os = "macos", test))]
+enum StartupAttempt {
+    Complete,
+    Superseded,
+    RetryFocus(LauncherWindowActionError),
+    VisibleFocusFailure(LauncherWindowActionError),
+    Failed(LauncherWindowActionError),
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn attempt_startup_reveal(
+    retry: bool,
+    current: impl Fn() -> bool,
+    visible: impl Fn() -> bool,
+    reveal: impl FnOnce() -> Result<(), LauncherWindowActionError>,
+) -> StartupAttempt {
+    if !current() || (retry && !visible()) {
+        return StartupAttempt::Superseded;
+    }
+    match reveal() {
+        Ok(()) => StartupAttempt::Complete,
+        Err(_) if !current() => StartupAttempt::Superseded,
+        Err(error) if error.operation == LauncherWindowOperation::Focus && visible() => {
+            if retry {
+                StartupAttempt::VisibleFocusFailure(error)
+            } else {
+                StartupAttempt::RetryFocus(error)
+            }
+        }
+        Err(error) => StartupAttempt::Failed(error),
+    }
 }
 
 #[cfg(any(target_os = "macos", test))]
@@ -560,16 +660,69 @@ fn reveal_startup_once(
 }
 
 #[cfg(target_os = "macos")]
-pub(crate) fn reveal_launcher_startup<R: Runtime>(
+pub(crate) fn schedule_launcher_startup<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<(), LauncherWindowActionError> {
     let actions = app.state::<LauncherWindowActions>();
-    reveal_startup_once(&actions.startup_revealed, || {
-        actions.dispatch(
-            app,
-            LauncherWindowAction::Show(LauncherActivationReason::Startup),
-        )
-    })
+    let revision = actions.action_revision.load(Ordering::Acquire);
+    let window = resolve_main_window(
+        app,
+        LauncherWindowAction::Show(LauncherActivationReason::Startup),
+    )?;
+    queue_startup_reveal(app.clone(), window, revision, None);
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn queue_startup_reveal<R: Runtime>(
+    app: AppHandle<R>,
+    window: Window<R>,
+    revision: usize,
+    retry_guard: Option<crate::plugin_child_webview_execution::NativeExecutionGuard>,
+) {
+    crate::macos_launcher::queue_next_main_turn(move || {
+        let actions = app.state::<LauncherWindowActions>();
+        actions.startup_turn_started.store(true, Ordering::Release);
+        // Initial Host navigation may complete between setup and the first turn.
+        // Once the first request has run, its retry belongs to that exact epoch.
+        let guard = retry_guard
+            .clone()
+            .unwrap_or_else(|| crate::launcher_native_execution::fence(&app).normal_guard(false));
+        let result = attempt_startup_reveal(
+            retry_guard.is_some(),
+            || actions.action_revision.load(Ordering::Acquire) == revision && guard.is_current(),
+            || window.is_visible().unwrap_or(false),
+            || {
+                reveal_startup_once(&actions.startup_revealed, || {
+                    actions.dispatch(
+                        &app,
+                        LauncherWindowAction::Show(LauncherActivationReason::Startup),
+                    )
+                })
+            },
+        );
+        match result {
+            StartupAttempt::Complete | StartupAttempt::Superseded => {}
+            StartupAttempt::RetryFocus(error) => {
+                eprintln!(
+                    "{error}. Retrying startup focus once while the main window remains visible."
+                );
+                let app = app.clone();
+                let window = window.clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                    queue_startup_reveal(app, window, revision, Some(guard));
+                });
+            }
+            StartupAttempt::VisibleFocusFailure(error) => {
+                eprintln!("{error}. Startup focus retry ended with the main window visible.");
+            }
+            StartupAttempt::Failed(error) => {
+                eprintln!("Launcher startup reveal failed: {error}");
+                app.exit(1);
+            }
+        }
+    });
 }
 
 impl LauncherWindowActions {
@@ -584,7 +737,7 @@ impl LauncherWindowActions {
         }
     }
 
-    fn native_dialog_active(&self) -> bool {
+    pub(crate) fn native_dialog_active(&self) -> bool {
         self.native_dialog_depth.load(Ordering::Acquire) > 0
     }
 
@@ -593,17 +746,50 @@ impl LauncherWindowActions {
         app: &AppHandle<R>,
         action: LauncherWindowAction,
     ) -> Result<(), LauncherWindowActionError> {
+        #[cfg(target_os = "macos")]
+        if action == LauncherWindowAction::Show(LauncherActivationReason::Programmatic)
+            && !self.startup_turn_started.load(Ordering::Acquire)
+        {
+            // A degraded shortcut registration can request a recovery Show
+            // during setup. The scheduled first reveal serves that window too.
+            return Err(LauncherWindowActionError::new(
+                action,
+                LauncherWindowOperation::ActivateApplication,
+                "the first launcher reveal is pending",
+            ));
+        }
+        #[cfg(target_os = "macos")]
+        if action != LauncherWindowAction::Show(LauncherActivationReason::Startup) {
+            self.action_revision.fetch_add(1, Ordering::AcqRel);
+        }
         if matches!(action, LauncherWindowAction::Hide) {
             crate::launcher_shortcuts::revoke_recording(app);
         }
-        let suppress_hide =
-            self.native_dialog_active() || crate::launcher_shortcuts::recovery_degraded(app);
         let service = app.try_state::<Arc<PluginChildWebviewService<R>>>();
-        let child = service
+        let suppress_hide = self.native_dialog_active()
+            || crate::launcher_shortcuts::recovery_degraded(app)
+            || service
+                .as_ref()
+                .is_some_and(|service| service.main_hide_blocked());
+        // Every ordinary action binds its Child cleanup to the observed owner,
+        // even if the exact instance moves between the native operations.
+        let captured = service.as_ref().and_then(|service| {
+            let snapshot = service.snapshot_for_surface(MAIN_WINDOW_LABEL)?;
+            Some(CapturedMainChild {
+                service: Arc::clone(service.inner()),
+                attempt: snapshot.attempt,
+                owner: snapshot.owner,
+            })
+        });
+        let child = captured
             .as_ref()
-            .map(|service| service.inner().as_ref() as &dyn LauncherChildPresentation);
+            .map(|child| child as &dyn LauncherChildPresentation);
         execute_with_resolver_policy(
-            &TauriLauncherWindowResolver { app },
+            &TauriLauncherWindowResolver {
+                app,
+                guard: crate::launcher_native_execution::fence(app)
+                    .normal_guard(!matches!(action, LauncherWindowAction::Hide)),
+            },
             child,
             action,
             suppress_hide,
@@ -642,11 +828,21 @@ fn rollback_current_plugin_presentation(
     };
     match child.show_current(attempt) {
         PluginChildWebviewPresentationResult::Applied => {
-            if child.focus_current(attempt) != PluginChildWebviewPresentationResult::Applied {
-                let _ = child.compare_current_teardown(attempt);
-            }
+            focus_restored_child(child, attempt);
         }
         PluginChildWebviewPresentationResult::StaleAttempt => {}
+        _ => {
+            let _ = child.compare_current_teardown(attempt);
+        }
+    }
+}
+
+fn focus_restored_child(child: &dyn LauncherChildPresentation, attempt: PluginChildWebviewAttempt) {
+    match child.focus_current(attempt) {
+        PluginChildWebviewPresentationResult::Applied
+        | PluginChildWebviewPresentationResult::StaleAttempt
+        | PluginChildWebviewPresentationResult::NotVisible
+        | PluginChildWebviewPresentationResult::FocusUnavailable => {}
         _ => {
             let _ = child.compare_current_teardown(attempt);
         }
@@ -665,11 +861,7 @@ fn restore_current_plugin_presentation(child: Option<&dyn LauncherChildPresentat
     };
     match child.show_current(snapshot.attempt) {
         PluginChildWebviewPresentationResult::Applied => {
-            if child.focus_current(snapshot.attempt)
-                != PluginChildWebviewPresentationResult::Applied
-            {
-                let _ = child.compare_current_teardown(snapshot.attempt);
-            }
+            focus_restored_child(child, snapshot.attempt);
         }
         PluginChildWebviewPresentationResult::StaleAttempt => {}
         _ => {
@@ -763,26 +955,162 @@ where
     }
 }
 
+struct CapturedMainChild<R: Runtime> {
+    service: Arc<PluginChildWebviewService<R>>,
+    attempt: PluginChildWebviewAttempt,
+    owner: crate::plugin_child_webview_owner::PluginChildWebviewOwner,
+}
+impl<R: Runtime> LauncherChildPresentation for CapturedMainChild<R> {
+    fn hide_blocked(&self) -> bool {
+        self.service.main_hide_blocked()
+    }
+    fn snapshot(&self) -> Option<LauncherChildPresentationSnapshot> {
+        self.service.snapshot_owned(self.attempt, &self.owner).map(|snapshot| LauncherChildPresentationSnapshot {
+            attempt: self.attempt, state: snapshot.state,
+            ready: matches!(snapshot.session_state, crate::plugin_child_webview_service::PluginChildWebviewSessionState::BridgeReady | crate::plugin_child_webview_service::PluginChildWebviewSessionState::SdkReady),
+        })
+    }
+    fn hide_current(
+        &self,
+        attempt: PluginChildWebviewAttempt,
+    ) -> PluginChildWebviewPresentationResult {
+        if attempt != self.attempt {
+            return PluginChildWebviewPresentationResult::StaleAttempt;
+        }
+        self.service.hide_owned(attempt, &self.owner)
+    }
+    fn show_current(
+        &self,
+        attempt: PluginChildWebviewAttempt,
+    ) -> PluginChildWebviewPresentationResult {
+        if attempt != self.attempt {
+            return PluginChildWebviewPresentationResult::StaleAttempt;
+        }
+        self.service.show_owned(attempt, &self.owner)
+    }
+    fn focus_current(
+        &self,
+        attempt: PluginChildWebviewAttempt,
+    ) -> PluginChildWebviewPresentationResult {
+        if attempt != self.attempt {
+            return PluginChildWebviewPresentationResult::StaleAttempt;
+        }
+        self.service.focus_owned(attempt, &self.owner)
+    }
+    fn compare_current_teardown(&self, attempt: PluginChildWebviewAttempt) -> Result<bool, ()> {
+        if attempt != self.attempt {
+            return Ok(false);
+        }
+        self.service.compare_owned_teardown(attempt, &self.owner)
+    }
+}
+
 #[cfg(target_os = "macos")]
-fn request_macos_application_quit<R: Runtime>(app: &AppHandle<R>) {
+fn dispatch_captured_main_hide<R: Runtime>(app: &AppHandle<R>, window: Window<R>) {
+    let Some(actions) = app.try_state::<LauncherWindowActions>() else {
+        return;
+    };
+    actions.action_revision.fetch_add(1, Ordering::AcqRel);
+    let service = app
+        .try_state::<Arc<PluginChildWebviewService<R>>>()
+        .map(|service| Arc::clone(service.inner()));
+    if actions.native_dialog_active()
+        || !crate::launcher_shortcuts::recovery_available_now(app)
+        || service
+            .as_ref()
+            .is_some_and(|service| service.main_hide_blocked())
+    {
+        return;
+    }
+    let captured = service
+        .as_ref()
+        .and_then(|service| service.snapshot_for_surface("main"))
+        .map(|snapshot| (snapshot.attempt, snapshot.owner));
+    let child = service
+        .as_ref()
+        .zip(captured.as_ref())
+        .map(|(service, (attempt, owner))| CapturedMainChild {
+            service: Arc::clone(service),
+            attempt: *attempt,
+            owner: owner.clone(),
+        });
+    let epoch_guard = crate::launcher_native_execution::fence(app).normal_guard(false);
+    let guard = crate::plugin_child_webview_execution::NativeExecutionGuard::new(move || {
+        epoch_guard.is_current()
+            && service.as_ref().is_none_or(|service| match &captured {
+                Some((attempt, owner)) => service.snapshot_owned(*attempt, owner).is_some(),
+                None => {
+                    service.snapshot_for_surface("main").is_none()
+                        && !service.surface_has_pending("main")
+                }
+            })
+    });
+    let mut adapter = TauriLauncherWindowAdapter { window, guard };
+    let child = child
+        .as_ref()
+        .map(|child| child as &dyn LauncherChildPresentation);
+    let _ = hide_with_child(&mut adapter, child, LauncherWindowAction::Hide);
+}
+
+#[cfg(target_os = "macos")]
+fn dispatch_current_close_target<R: Runtime>(app: &AppHandle<R>) -> bool {
+    let Some(marker) = objc2::MainThreadMarker::new() else {
+        return false;
+    };
+    let application = objc2_app_kit::NSApplication::sharedApplication(marker);
+    if !application.isActive() {
+        return false;
+    }
     crate::launcher_shortcuts::revoke_recording(app);
+    let Some(key) = application.keyWindow() else {
+        return false;
+    };
+    let key = &*key as *const objc2_app_kit::NSWindow as usize;
+    if let Some(main) = app.get_window(MAIN_WINDOW_LABEL).filter(|window| {
+        window
+            .ns_window()
+            .is_ok_and(|window| window as usize == key)
+    }) {
+        dispatch_captured_main_hide(app, main);
+        return true;
+    }
+    crate::plugin_detached_window_native::dispatch_local_detached_close(app, key)
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn request_macos_application_quit<R: Runtime>(app: &AppHandle<R>) {
     if MACOS_QUIT_IN_FLIGHT.swap(true, Ordering::AcqRel) {
         return;
     }
-    if let Some(service) = app.try_state::<Arc<PluginChildWebviewService<R>>>() {
-        if let Some(snapshot) = service.snapshot() {
-            let _ = service.compare_current_teardown(snapshot.attempt);
-        }
-    }
+    crate::launcher_native_execution::fence(app).shutdown();
+    let service = app
+        .try_state::<Arc<PluginChildWebviewService<R>>>()
+        .map(|service| Arc::clone(service.inner()));
+    let attempts = service
+        .as_ref()
+        .map(|service| service.prepare_shutdown())
+        .unwrap_or_default();
+    let detached_cleanup = crate::plugin_detached_window_native::prepare_detached_shutdown(app);
     let app = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(300));
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::launcher_shortcuts::stop(&app);
+        crate::launcher_shortcuts::invalidate_host(&app);
+        crate::launcher_shortcuts::set_local_shortcut_available(&app, false);
+        if let Some(service) = service {
+            for attempt in attempts {
+                let _ = service.compare_current_teardown(attempt);
+            }
+        }
+        if let Some(cleanup) = detached_cleanup {
+            cleanup();
+        }
         app.exit(0);
     });
 }
 
 // The local monitor consumes only these foreground application commands. Other
 // events retain their original native object and continue to the focused view.
+#[cfg(test)]
 fn dispatch_macos_local_key(
     application_active: bool,
     command_only: bool,
@@ -799,6 +1127,7 @@ fn dispatch_macos_local_key(
     true
 }
 
+#[cfg(test)]
 fn route_macos_local_key(command_only: bool, key_code: u16) -> Option<MacosMenuCommand> {
     if !command_only {
         return None;
@@ -815,45 +1144,140 @@ fn install_macos_local_command_monitor<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<(), LauncherWindowActionError> {
     if MACOS_LOCAL_COMMAND_MONITOR.load(Ordering::Acquire) != 0 {
+        crate::launcher_shortcuts::set_local_shortcut_available(app, true);
         return Ok(());
     }
     let monitor_app = app.clone();
+    let gestures = std::sync::Mutex::new(local_commands::LocalGestures::default());
     let monitor_block = RcBlock::new(move |event: NonNull<NSEvent>| -> *mut NSEvent {
+        use local_commands::{KeyInput, KeyKind, LocalCommand};
         let event = unsafe { event.as_ref() };
-        let modifiers = event.modifierFlags() & NSEventModifierFlags::DeviceIndependentFlagsMask;
-        if modifiers.is_empty() && event.keyCode() == 53 {
-            // Recording cancellation remains native-owned without global Input
-            // Monitoring permission; the foreground Escape still passes on.
+        let original = event as *const NSEvent as *mut NSEvent;
+        let kind = match event.r#type() {
+            objc2_app_kit::NSEventType::KeyDown => KeyKind::Down,
+            objc2_app_kit::NSEventType::KeyUp => KeyKind::Up,
+            _ => KeyKind::Flags,
+        };
+        let flags = event.modifierFlags();
+        let modifiers = u8::from(flags.contains(NSEventModifierFlags::Command))
+            | (u8::from(flags.contains(NSEventModifierFlags::Control)) << 1)
+            | (u8::from(flags.contains(NSEventModifierFlags::Option)) << 2)
+            | (u8::from(flags.contains(NSEventModifierFlags::Shift)) << 3);
+        let input = KeyInput {
+            kind,
+            physical: event.keyCode(),
+            modifiers,
+            repeat: kind == KeyKind::Down && event.isARepeat(),
+            stamp: (event.timestamp() * 1_000_000_000.0) as u64,
+            foreground: NSRunningApplication::currentApplication().isActive(),
+        };
+        let Ok(mut gestures) = gestures.try_lock() else {
+            return original;
+        };
+        // Key-up may occur while another app owns focus. Reconcile only keys
+        // already observed locally; keep gesture ownership for delayed repeats.
+        if input.foreground && kind == KeyKind::Down && !input.repeat {
+            for key in gestures.held_keys() {
+                if key != input.physical && !crate::launcher_shortcuts::local_key_down(key) {
+                    let _ = crate::launcher_shortcuts::local_recording_input(
+                        &monitor_app,
+                        key,
+                        None,
+                        false,
+                        false,
+                        0,
+                    );
+                }
+            }
+            if gestures.is_fresh_replacement(input) {
+                let _ = crate::launcher_shortcuts::local_recording_input(
+                    &monitor_app,
+                    input.physical,
+                    None,
+                    false,
+                    false,
+                    0,
+                );
+            }
+        }
+        let facts = crate::launcher_shortcuts::local_shortcut_facts(&monitor_app);
+        let trigger = (kind == KeyKind::Down)
+            .then(|| crate::launcher_shortcuts::local_trigger(input.physical, flags.0 as u64))
+            .flatten();
+        let mut recorded = false;
+        if let Some(facts) = &facts {
+            if kind != KeyKind::Flags && input.foreground {
+                recorded = crate::launcher_shortcuts::local_recording_input(
+                    &monitor_app,
+                    input.physical,
+                    trigger.clone(),
+                    kind == KeyKind::Down,
+                    input.repeat,
+                    facts.recording_epoch,
+                )
+                .unwrap_or(false);
+            }
+        }
+        if kind == KeyKind::Down && modifiers == 0 && input.physical == 53 && input.foreground {
             crate::launcher_shortcuts::revoke_recording(&monitor_app);
         }
-        let consumed = dispatch_macos_local_key(
-            NSRunningApplication::currentApplication().isActive(),
-            modifiers == NSEventModifierFlags::Command,
-            event.keyCode(),
-            |command| match command {
-                MacosMenuCommand::Window(action) => {
-                    let actions = monitor_app.state::<LauncherWindowActions>();
-                    let _ = actions.dispatch(&monitor_app, action);
-                }
-                MacosMenuCommand::Quit => request_macos_application_quit(&monitor_app),
-            },
-        );
-        if consumed {
+        let recording_or_tail = recorded
+            || facts.as_ref().is_none_or(|facts| {
+                facts.recording.is_some() || facts.suppressed_until_release || facts.stopped
+            });
+        let detach_matches = facts.as_ref().is_some_and(|facts| {
+            facts.local_available
+                && facts.host_ready
+                && facts.recovery_available
+                && !facts.stopped
+                && facts
+                    .detach
+                    .as_ref()
+                    .is_some_and(|detach| Some(detach) == trigger.as_ref())
+        });
+        let consumed =
+            gestures.input(
+                input,
+                recording_or_tail,
+                detach_matches,
+                |command| match command {
+                    LocalCommand::Detach => facts.as_ref().is_some_and(|facts| {
+                        crate::plugin_detached_window_native::dispatch_local_detach(
+                            &monitor_app,
+                            facts.configuration_revision,
+                        )
+                    }),
+                    LocalCommand::Close => dispatch_current_close_target(&monitor_app),
+                    LocalCommand::Quit => {
+                        request_macos_application_quit(&monitor_app);
+                        true
+                    }
+                },
+            );
+        if recorded {
+            gestures.recording_owned(input);
+        }
+        if consumed || recorded {
             std::ptr::null_mut()
         } else {
-            event as *const NSEvent as *mut NSEvent
+            original
         }
     });
     let monitor = unsafe {
-        NSEvent::addLocalMonitorForEventsMatchingMask_handler(NSEventMask::KeyDown, &monitor_block)
+        NSEvent::addLocalMonitorForEventsMatchingMask_handler(
+            NSEventMask::KeyDown | NSEventMask::KeyUp | NSEventMask::FlagsChanged,
+            &monitor_block,
+        )
     }
     .ok_or_else(|| {
+        crate::launcher_shortcuts::set_local_shortcut_available(app, false);
         LauncherWindowActionError::new(
             LauncherWindowAction::Hide,
             LauncherWindowOperation::InstallMenu,
             "application-local command monitor is unavailable",
         )
     })?;
+    crate::launcher_shortcuts::set_local_shortcut_available(app, true);
     let pointer = Retained::into_raw(monitor) as usize;
     if MACOS_LOCAL_COMMAND_MONITOR
         .compare_exchange(0, pointer, Ordering::AcqRel, Ordering::Acquire)
@@ -1069,9 +1493,23 @@ fn install_window_lifecycle_listener<R: Runtime>(
             api.prevent_close();
             dispatch_hide(&app, "close request");
         }
+        WindowEvent::Focused(true) => {
+            if let Some(service) = app.try_state::<Arc<PluginChildWebviewService<R>>>() {
+                service.retry_pending_main_focus();
+            }
+        }
         WindowEvent::Focused(focused)
             if route_window_event(false, Some(*focused)) == LauncherWindowEventRoute::Hide =>
         {
+            // A queued blur may follow transfer rollback or a newer main Page.
+            // The native current focus is authoritative before issuing a new
+            // hide intent; an old event cannot hide a newly focused main.
+            if app
+                .get_window(MAIN_WINDOW_LABEL)
+                .is_none_or(|window| window.is_focused().unwrap_or(true))
+            {
+                return;
+            }
             crate::launcher_shortcuts::revoke_recording(&app);
             dispatch_hide(&app, "focus loss");
         }
@@ -1193,7 +1631,6 @@ fn install_macos_close_window_menu<R: Runtime>(
         )
     })?;
     app.on_menu_event(|app, event| {
-        let actions = app.state::<LauncherWindowActions>();
         let application_active = match crate::macos_launcher::is_macos_application_active() {
             Ok(active) => active,
             Err(error) => {
@@ -1204,13 +1641,16 @@ fn install_macos_close_window_menu<R: Runtime>(
         match dispatch_macos_local_command(
             application_active,
             event.id().as_ref(),
-            |action| actions.dispatch(app, action),
+            |_action| {
+                dispatch_current_close_target(app);
+                Ok(())
+            },
             || {
                 request_macos_application_quit(app);
             },
         ) {
             Ok(MacosLocalCommandOutcome::WindowAction) => {
-                eprintln!("macOS Close Window menu routed to launcher action 'hide'");
+                eprintln!("macOS Close Window menu routed to the captured key window");
             }
             Ok(MacosLocalCommandOutcome::QuitRequested) => {
                 eprintln!("macOS Quit menu routed to application teardown");
@@ -1483,6 +1923,7 @@ mod tests {
     }
 
     struct FakeChildPresentation {
+        hide_blocked: bool,
         calls: Rc<RefCell<Vec<&'static str>>>,
         state: PluginChildWebviewState,
         ready: bool,
@@ -1499,6 +1940,9 @@ mod tests {
     }
 
     impl LauncherChildPresentation for FakeChildPresentation {
+        fn hide_blocked(&self) -> bool {
+            self.hide_blocked
+        }
         fn snapshot(&self) -> Option<LauncherChildPresentationSnapshot> {
             self.calls.borrow_mut().push("child_snapshot");
             Some(LauncherChildPresentationSnapshot {
@@ -1565,6 +2009,7 @@ mod tests {
         state: PluginChildWebviewState,
     ) -> FakeChildPresentation {
         FakeChildPresentation {
+            hide_blocked: false,
             calls: Rc::clone(calls),
             state,
             ready: true,
@@ -1591,6 +2036,24 @@ mod tests {
                 "window_hide"
             ]
         );
+    }
+
+    #[test]
+    fn retained_migration_recovery_blocks_both_hide_and_visible_toggle_without_touching_child() {
+        for action in [
+            LauncherWindowAction::Hide,
+            LauncherWindowAction::Toggle(LauncherActivationReason::GlobalShortcut),
+        ] {
+            let (calls, resolver) = ordered_fixture(true, None);
+            let mut child = child_fixture(&calls, PluginChildWebviewState::Visible);
+            child.hide_blocked = true;
+            child.hide_result = PluginChildWebviewPresentationResult::StaleAttempt;
+            execute_with_resolver_policy(&resolver, Some(&child), action, false).unwrap();
+            let calls = calls.borrow();
+            assert!(!calls.contains(&"window_hide"));
+            assert!(!calls.contains(&"child_hide"));
+            assert!(!calls.contains(&"child_teardown"));
+        }
     }
 
     #[test]
@@ -1665,6 +2128,51 @@ mod tests {
                 "child_focus",
             ]
         );
+    }
+
+    #[test]
+    fn an_unavailable_or_superseded_focus_does_not_terminate_a_visibly_restored_child() {
+        for focus in [
+            PluginChildWebviewPresentationResult::FocusUnavailable,
+            PluginChildWebviewPresentationResult::StaleAttempt,
+            PluginChildWebviewPresentationResult::NotVisible,
+        ] {
+            let (calls, resolver) = ordered_fixture(false, None);
+            let mut child = child_fixture(&calls, PluginChildWebviewState::Hidden);
+            child.focus_result = focus;
+            execute_with_resolver_policy(
+                &resolver,
+                Some(&child),
+                LauncherWindowAction::Show(LauncherActivationReason::GlobalShortcut),
+                false,
+            )
+            .unwrap();
+            assert!(calls.borrow().ends_with(&["child_show", "child_focus"]));
+            assert!(!calls.borrow().contains(&"child_teardown"));
+            let (calls, resolver) = ordered_fixture(true, Some(LauncherWindowOperation::Hide));
+            let mut child = child_fixture(&calls, PluginChildWebviewState::Visible);
+            child.focus_result = focus;
+            execute_with_resolver_policy(
+                &resolver,
+                Some(&child),
+                LauncherWindowAction::Hide,
+                false,
+            )
+            .unwrap_err();
+            assert!(calls.borrow().ends_with(&["child_show", "child_focus"]));
+            assert!(!calls.borrow().contains(&"child_teardown"));
+        }
+        let (calls, resolver) = ordered_fixture(false, None);
+        let mut child = child_fixture(&calls, PluginChildWebviewState::Hidden);
+        child.focus_result = PluginChildWebviewPresentationResult::NativeUnavailable;
+        execute_with_resolver_policy(
+            &resolver,
+            Some(&child),
+            LauncherWindowAction::Show(LauncherActivationReason::GlobalShortcut),
+            false,
+        )
+        .unwrap();
+        assert!(calls.borrow().ends_with(&["child_focus", "child_teardown"]));
     }
 
     #[test]
@@ -2605,6 +3113,102 @@ mod tests {
     }
 
     #[test]
+    fn visible_startup_focus_refusal_has_one_fenced_retry_and_only_success_emits_activation() {
+        let action = LauncherWindowAction::Show(LauncherActivationReason::Startup);
+        for retry_succeeds in [false, true] {
+            let (calls, mut resolver) =
+                ordered_fixture(false, Some(LauncherWindowOperation::Focus));
+            let revealed = AtomicBool::new(false);
+            let attempt = |retry, resolver: &OrderedResolver| {
+                attempt_startup_reveal(
+                    retry,
+                    || true,
+                    || calls.borrow().contains(&"window_show"),
+                    || {
+                        reveal_startup_once(&revealed, || {
+                            execute_with_resolver_policy(resolver, None, action, false)
+                        })
+                    },
+                )
+            };
+            assert!(matches!(
+                attempt(false, &resolver),
+                StartupAttempt::RetryFocus(_)
+            ));
+            assert!(!revealed.load(Ordering::Acquire));
+            assert!(!calls.borrow().contains(&"host_emit"));
+            if retry_succeeds {
+                resolver.window.fail_at = None;
+            }
+            let result = attempt(true, &resolver);
+            if retry_succeeds {
+                assert!(matches!(result, StartupAttempt::Complete));
+                assert!(revealed.load(Ordering::Acquire));
+                assert_eq!(
+                    calls
+                        .borrow()
+                        .iter()
+                        .filter(|entry| **entry == "host_emit")
+                        .count(),
+                    1
+                );
+            } else {
+                assert!(
+                    matches!(result, StartupAttempt::VisibleFocusFailure(error) if error.operation == LauncherWindowOperation::Focus)
+                );
+                assert!(!revealed.load(Ordering::Acquire));
+                assert!(!calls.borrow().contains(&"host_emit"));
+                assert!(!calls.borrow().contains(&"window_hide"));
+            }
+        }
+    }
+
+    #[test]
+    fn startup_retry_cannot_reshow_after_hide_or_reclaim_a_superseded_owner() {
+        for (current, visible) in [(true, false), (false, true)] {
+            assert!(matches!(
+                attempt_startup_reveal(
+                    true,
+                    || current,
+                    || visible,
+                    || panic!("stale retry executed")
+                ),
+                StartupAttempt::Superseded
+            ));
+        }
+        let action = LauncherWindowAction::Show(LauncherActivationReason::Startup);
+        let (calls, resolver) =
+            ordered_fixture(false, Some(LauncherWindowOperation::EnsureRoundedCorners));
+        let outcome = attempt_startup_reveal(
+            false,
+            || true,
+            || true,
+            || execute_with_resolver_policy(&resolver, None, action, false),
+        );
+        assert!(
+            matches!(outcome, StartupAttempt::Failed(error) if error.operation == LauncherWindowOperation::EnsureRoundedCorners)
+        );
+        assert!(calls.borrow().contains(&"window_hide"));
+        assert!(!calls.borrow().contains(&"window_show") && !calls.borrow().contains(&"host_emit"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn setup_time_recovery_show_leaves_the_first_reveal_to_the_queued_turn() {
+        let app = tauri::test::mock_app();
+        let actions = LauncherWindowActions::default();
+        let error = actions
+            .dispatch(
+                app.handle(),
+                LauncherWindowAction::Show(LauncherActivationReason::Programmatic),
+            )
+            .unwrap_err();
+        assert_eq!(error.details, "the first launcher reveal is pending");
+        assert_eq!(actions.action_revision.load(Ordering::Acquire), 0);
+        assert!(!actions.startup_revealed.load(Ordering::Acquire));
+    }
+
+    #[test]
     fn menu_installation_failure_is_diagnosed_without_disabling_ready_lifecycle() {
         let plugin_installer = FakePluginInstaller {
             attempts: Cell::new(0),
@@ -2654,6 +3258,52 @@ mod rounded_startup_tests {
     use super::*;
 
     #[test]
+    fn startup_accepts_focus_before_the_native_window_becomes_key() {
+        let app = tauri::test::mock_app();
+        let window = tauri::WindowBuilder::new(&app, MAIN_WINDOW_LABEL)
+            .build()
+            .unwrap();
+        window.show().unwrap();
+        let guard = crate::plugin_child_webview_execution::NativeExecutionGuard::new(|| true);
+        let revealed = AtomicBool::new(false);
+        let action = LauncherWindowAction::Show(LauncherActivationReason::Startup);
+        let requests = std::cell::Cell::new(0);
+        for _ in 0..2 {
+            reveal_startup_once(&revealed, || {
+                run_operation(
+                    request_main_window_focus(&window, &guard, || {
+                        requests.set(requests.get() + 1);
+                        Ok(())
+                    }),
+                    action,
+                    LauncherWindowOperation::Focus,
+                )
+            })
+            .unwrap();
+        }
+        assert!(!window.is_focused().unwrap());
+        assert!(revealed.load(Ordering::Acquire));
+        assert_eq!(requests.get(), 1);
+    }
+
+    #[test]
+    fn launcher_focus_reports_activation_refusal_and_rejects_a_revoked_owner() {
+        let app = tauri::test::mock_app();
+        let window = tauri::WindowBuilder::new(&app, MAIN_WINDOW_LABEL)
+            .build()
+            .unwrap();
+        let guard = crate::plugin_child_webview_execution::NativeExecutionGuard::new(|| true);
+        let refused =
+            request_main_window_focus(&window, &guard, || Err("activation refused".into()));
+        assert_eq!(refused, Err("activation refused".to_owned()));
+        guard.expire();
+        assert_eq!(
+            request_main_window_focus(&window, &guard, || panic!("stale owner activated the app")),
+            Err("launcher ownership is stale".to_owned())
+        );
+    }
+
+    #[test]
     fn failed_startup_is_not_recorded_as_revealed_and_can_retry() {
         let actions = LauncherWindowActions::default();
         let failure = || {
@@ -2688,7 +3338,7 @@ mod rounded_startup_tests {
             .unwrap();
         let lifecycle = lib.find("launcher_window::setup_launcher_window(").unwrap();
         let reveal = lib
-            .find("launcher_window::reveal_launcher_startup(")
+            .find("launcher_window::schedule_launcher_startup(")
             .unwrap();
         assert!(create < services && services < lifecycle && lifecycle < reveal);
     }

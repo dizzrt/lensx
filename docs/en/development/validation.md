@@ -38,6 +38,45 @@ pnpm run generate -- plugin-manifest-types --write
 
 Do not add root aliases for a Change, a test subset, or a forwarded Gate.
 
+## Detached Plugin Window Validation
+
+```bash
+pnpm run gate -- plugin-detached-windows
+```
+
+This read-only capability Gate composes the window-lifecycle, continuity,
+Session, runtime, resource-binding, isolated-origin, Host dispatcher, HTTP,
+scoped-storage, input-focus, shortcuts, development-mode, dependency-drift,
+and contract-documentation Gates. Shared steps are deduplicated by the typed
+dispatcher; no feature-specific root script or baseline write is added.
+
+Its focused Rstest cases cover trusted main/detached composition, strict
+control-plane parsing and ACLs, shortcut-only detachment, localized recovery controls and full-content shell geometry,
+and the official plugins' existing handlers. Cargo cases exercise the production
+registry, migration/recovery coordinator, shell broker and per-owner lifecycle.
+The multi-instance sequence detaches A₁ and A₂, opens B in main, closes A₁,
+delivers A₂'s original request, invalidates the plugin generation, and quits;
+assertions inspect live ownership, requests, scopes, retained recovery contexts,
+and cleanup rather than only recording calls. Recovery branches cover explicit
+retry, close, generation invalidation and Quit without reload or activation replay.
+
+ConfigLens and Translation tests and pure CLI artifact checks verify their
+existing business behavior and public package boundaries. Development Mode
+checks cover committed reload fanout and failed staging preservation. No new
+SDK method, Manifest field or plugin-specific detachment hook is required.
+
+| Evidence | What it establishes | What it does not establish |
+| --- | --- | --- |
+| Production Rust policies with controlled native adapters | Ownership, deadlines, rollback/recovery, exact-instance cleanup and resource lifetime | Actual AppKit event order, IME composition or native responder restoration |
+| Real frontend/SDK/plugin handlers with controlled transports | State continuity, response routing, context updates, UI actions and declared DOM behavior | Actual WebKit scheduling, native defaults or real network service delivery |
+| Locked Cargo checks/builds and reviewed vendor policy tests | Adapter integration, pinned APIs and deterministic native policies | Successful interaction with a running desktop window |
+| Pack/inspect and temporary CLI consumers | Public exports, self-contained artifacts and unchanged plugin contracts | Installation or execution in a real WebView |
+
+The Gate neither launches a GUI nor supplies a manual compatibility path.
+Focused results supplement the complete workspace and Rust validation commands
+above. Vendor changes require reviewed diff and the explicit dependency-drift
+Generate target before the read-only Gate runs.
+
 ## Unified Development Launcher Validation
 
 ```bash
@@ -456,12 +495,18 @@ Double taps are passive and not exclusive. Use `plugin-host-api-types --write`
 only through Generate for current Schema-derived files; preserve historical
 WebView corpora. Focused Gates do not replace full workspace and Rust validation.
 
-The shortcut matrix also covers v2 single-entry type switching, lossless v1
-chord-only reads, unresolved dual-entry migration and explicit resolution,
+The shortcut matrix also covers v3 local detach chords, read-only v1/v2
+projection, lossless v1 chord-only reads, unresolved dual-entry migration and explicit resolution,
 permission-loss reveal for a sole double tap, and no hidden chord fallback.
 Real Semi row tests cover Add drafts, atomic Action reassignment, saved/draft
 deletion, inline editing, Escape, focus and stale responses in both locales and
-themes. These remain deterministic tests without native input acceptance.
+themes. It includes preserved global `Cmd+D`, persistent unresolved detach
+conflicts across unrelated saves, explicit disabled/default choices, local-only
+availability, bidirectional canonical conflicts and no global registration for detach.
+Production local-event policy tests cover native key-window/instance capture,
+composition and recording rejection, owned repeats through release, stale W
+targets and ordered all-instance Q cleanup. These remain deterministic tests
+without native input acceptance.
 
 Observer wait tests inject a clock, run-loop result, and sleeper. They cover
 source-free and early returns, completed waits without double sleeping, repeated

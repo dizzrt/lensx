@@ -4,6 +4,26 @@
 
 //! A layer between raw [`Runtime`] webviews and Tauri.
 //!
+/// Host deadline and ownership validation, rechecked between native mutations.
+#[doc(hidden)]
+pub type ReparentExecutionGuard = std::sync::Arc<dyn Fn() -> bool + Send + Sync>;
+
+/// Host-private ownership evidence for a retained native parent transaction.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReparentOwnership {
+  Window(crate::window::WindowId),
+  Destroyed,
+  Unknown,
+}
+
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ReparentOutcome {
+  pub ownership: ReparentOwnership,
+  pub completed: bool,
+}
+
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::window::WindowId;
 use crate::{window::is_label_valid, Rect, Runtime, UserEvent};

@@ -1,6 +1,16 @@
+use crate::plugin_child_webview_execution::{
+    perform_owned_presentation, NativeExecutionGuard, NativePresentationOperation,
+    NativePresentationOutcome, NativePresentationStep,
+};
 use crate::plugin_resource_url::parse_plugin_resource_url;
 use serde_json::Value;
-use std::{fmt, sync::Arc};
+use std::{
+    fmt,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 use tauri::{
     webview::{DownloadEvent, NewWindowResponse, PageLoadEvent, WebviewBuilder},
     AppHandle, Manager, PhysicalPosition, PhysicalSize, Position, Rect, Runtime, Size, Webview,
@@ -17,6 +27,8 @@ const PLUGIN_CHILD_WEBVIEW_BRIDGE_BOOTSTRAP: &str = r#"
     ? globalThis.ipc.postMessage.bind(globalThis.ipc)
     : undefined;
   const listeners = new Set();
+  const pendingClose = new Set();
+  const MAX_PENDING_CLOSE_RECEIPTS = 32;
   const bootstrap = Object.freeze({
     contract_version: '0.2.0',
     type: 'lensx.plugin_bridge.ready',
@@ -70,7 +82,14 @@ const PLUGIN_CHILD_WEBVIEW_BRIDGE_BOOTSTRAP: &str = r#"
     send(frame) {
       const encoded = encode(frame);
       if (encoded === undefined || rawPost === undefined) return false;
-      rawPost(encoded);
+      const closeRequest = frame.type === 'lensx.plugin_bridge.request' && frame.request?.method === 'ui.close';
+      if (closeRequest && pendingClose.size < MAX_PENDING_CLOSE_RECEIPTS) pendingClose.add(frame.request_id);
+      if (frame.type === 'lensx.plugin_bridge.cancel') pendingClose.delete(frame.request_id);
+      if (frame.type === 'lensx.plugin_bridge.disconnect') pendingClose.clear();
+      try { rawPost(encoded); } catch {
+        if (frame.type === 'lensx.plugin_bridge.request') pendingClose.delete(frame.request_id);
+        return false;
+      }
       return true;
     },
     subscribe(listener) {
@@ -80,11 +99,16 @@ const PLUGIN_CHILD_WEBVIEW_BRIDGE_BOOTSTRAP: &str = r#"
     }
   });
   const deliver = Object.freeze((frame) => {
-    if (!closed(frame)) return false;
+    if (!closed(frame) || listeners.size === 0) return false;
+    const closeSuccess = frame.type === 'lensx.plugin_bridge.response' && frame.result?.method === 'ui.close';
+    if (closeSuccess && !pendingClose.has(frame.request_id)) return false;
+    let accepted = false;
     for (const listener of [...listeners]) {
-      try { listener(frame); } catch {}
+      try { listener(frame); accepted = true; } catch {}
     }
-    return true;
+    if (accepted && frame.type === 'lensx.plugin_bridge.response') pendingClose.delete(frame.request_id);
+    if (frame.type === 'lensx.plugin_bridge.disconnect') pendingClose.clear();
+    return accepted;
   });
   Object.defineProperty(globalThis, '__LENSX_PLUGIN_WEBVIEW_BRIDGE__', {
     value: bridge,
@@ -209,7 +233,7 @@ pub(crate) fn create_plugin_child_webview<R: Runtime>(
     lifecycle_ingress: Arc<dyn PluginChildWebviewLifecycleIngress>,
 ) -> Result<PluginChildWebviewHandle<R>, PluginChildWebviewAdapterError> {
     let parent = app
-        .get_webview_window(parent_label)
+        .get_window(parent_label)
         .ok_or_else(|| PluginChildWebviewAdapterError::new("parent_unavailable"))?;
     let policy = PluginChildWebviewNavigationPolicy::new(
         input.attempt_id.clone(),
@@ -222,6 +246,7 @@ pub(crate) fn create_plugin_child_webview<R: Runtime>(
     routed_entry.set_fragment(Some(&input.host_route));
     let builder = WebviewBuilder::new(&input.source_label, WebviewUrl::External(routed_entry))
         .data_store_identifier(input.data_store_identifier)
+        .incognito(true)
         .isolated_uri_scheme_protocols([input.exact_entry.scheme()]);
     let builder = apply_plugin_child_webview_bridge_ingress(
         builder,
@@ -236,8 +261,6 @@ pub(crate) fn create_plugin_child_webview<R: Runtime>(
         lifecycle_ingress,
     );
     let webview = parent
-        .as_ref()
-        .window()
         .add_child(
             builder,
             PhysicalPosition::new(input.bounds.x, input.bounds.y),
@@ -350,6 +373,26 @@ pub(crate) fn valid_host_route(value: &str) -> bool {
 }
 
 pub(crate) trait PluginChildWebviewNativeHandle: Send + Sync + 'static {
+    fn present_owned(
+        &self,
+        _expected_window: &str,
+        guard: &NativeExecutionGuard,
+        operation: NativePresentationOperation,
+    ) -> NativePresentationOutcome {
+        perform_owned_presentation(guard, operation, |step| match step {
+            NativePresentationStep::ConfirmClip => self.ensure_rounded_corners(),
+            NativePresentationStep::HideUnconfirmed => self.hide_unconfirmed_content(),
+            NativePresentationStep::Apply(NativePresentationOperation::Bounds {
+                x,
+                y,
+                width,
+                height,
+            }) => self.update_bounds(x, y, width, height),
+            NativePresentationStep::Apply(NativePresentationOperation::Show) => self.show(),
+            NativePresentationStep::Apply(NativePresentationOperation::Hide) => self.hide(),
+            NativePresentationStep::Apply(NativePresentationOperation::Focus) => self.focus(),
+        })
+    }
     fn source_label(&self) -> String;
     fn ensure_rounded_corners(&self) -> Result<(), ()>;
     fn hide_unconfirmed_content(&self) -> Result<(), ()>;
@@ -358,22 +401,89 @@ pub(crate) trait PluginChildWebviewNativeHandle: Send + Sync + 'static {
     fn hide(&self) -> Result<(), ()>;
     fn focus(&self) -> Result<(), ()>;
     fn deliver_bridge_frame(&self, frame: &Value) -> Result<(), ()>;
+    fn deliver_bridge_frame_confirmed(
+        &self,
+        frame: &Value,
+        guard: NativeExecutionGuard,
+    ) -> Result<(), ()> {
+        if !guard.is_current() {
+            return Err(());
+        }
+        self.deliver_bridge_frame(frame)?;
+        guard.is_current().then_some(()).ok_or(())
+    }
     fn destroy(&self) -> Result<(), ()>;
 }
 
 #[allow(dead_code)] // Product construction is connected by the subsequent Child WebView service tasks.
 pub(crate) struct PluginChildWebviewHandle<R: Runtime> {
     webview: Webview<R>,
+    destroyed: AtomicBool,
 }
 
 #[allow(dead_code)] // Product construction is connected by the subsequent Child WebView service tasks.
 impl<R: Runtime> PluginChildWebviewHandle<R> {
     pub(crate) fn new(webview: Webview<R>) -> Self {
-        Self { webview }
+        Self {
+            webview,
+            destroyed: AtomicBool::new(false),
+        }
+    }
+    pub(crate) fn webview(&self) -> Webview<R> {
+        self.webview.clone()
+    }
+    pub(crate) fn destroyed_confirmed(&self) -> bool {
+        self.destroyed.load(Ordering::Acquire)
     }
 }
 
 impl<R: Runtime> PluginChildWebviewNativeHandle for PluginChildWebviewHandle<R> {
+    fn present_owned(
+        &self,
+        expected_window: &str,
+        guard: &NativeExecutionGuard,
+        operation: NativePresentationOperation,
+    ) -> NativePresentationOutcome {
+        #[cfg(target_os = "macos")]
+        {
+            let webview = self.webview.clone();
+            let expected_window = expected_window.to_owned();
+            crate::plugin_child_webview_execution::confirm_native_execution(
+                guard,
+                std::time::Duration::from_secs(5),
+                objc2::MainThreadMarker::new().is_some(),
+                |job| self.webview.run_on_main_thread(job).map_err(|_| ()),
+                move |guard| {
+                    execute_owned_presentation_on_main_thread(
+                        &webview,
+                        &expected_window,
+                        guard,
+                        operation,
+                    )
+                },
+            )
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            if self.webview.window().label() != expected_window {
+                return NativePresentationOutcome::Stale;
+            }
+            perform_owned_presentation(guard, operation, |step| match step {
+                NativePresentationStep::ConfirmClip => self.ensure_rounded_corners(),
+                NativePresentationStep::HideUnconfirmed => self.hide_unconfirmed_content(),
+                NativePresentationStep::Apply(NativePresentationOperation::Bounds {
+                    x,
+                    y,
+                    width,
+                    height,
+                }) => self.update_bounds(x, y, width, height),
+                NativePresentationStep::Apply(NativePresentationOperation::Show) => self.show(),
+                NativePresentationStep::Apply(NativePresentationOperation::Hide) => self.hide(),
+                NativePresentationStep::Apply(NativePresentationOperation::Focus) => self.focus(),
+            })
+        }
+    }
+
     fn ensure_rounded_corners(&self) -> Result<(), ()> {
         let parent = self.webview.window();
         crate::launcher_rounded_corners::ensure_launcher_rounded_corners(&parent).map_err(|_| ())
@@ -416,9 +526,200 @@ impl<R: Runtime> PluginChildWebviewNativeHandle for PluginChildWebviewHandle<R> 
         deliver_structured_plugin_child_webview_frame(&self.webview, frame).map_err(|_| ())
     }
 
-    fn destroy(&self) -> Result<(), ()> {
-        self.webview.close().map_err(|_| ())
+    fn deliver_bridge_frame_confirmed(
+        &self,
+        frame: &Value,
+        guard: NativeExecutionGuard,
+    ) -> Result<(), ()> {
+        deliver_confirmed_structured_frame(&self.webview, frame, guard)
     }
+
+    fn destroy(&self) -> Result<(), ()> {
+        #[cfg(target_os = "macos")]
+        {
+            let closed = self.webview.close_confirmed().map_err(|_| ())?;
+            if closed {
+                self.destroyed.store(true, Ordering::Release);
+                Ok(())
+            } else {
+                Err(())
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            self.webview.close().map_err(|_| ())
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn execute_owned_presentation_on_main_thread<R: Runtime>(
+    webview: &Webview<R>,
+    expected_window: &str,
+    guard: &NativeExecutionGuard,
+    operation: NativePresentationOperation,
+) -> NativePresentationOutcome {
+    use objc2_app_kit::{NSView, NSWindow};
+    use objc2_foundation::{NSPoint, NSRect, NSSize};
+    use objc2_web_kit::WKWebView;
+
+    if objc2::MainThreadMarker::new().is_none() || !guard.is_current() {
+        return NativePresentationOutcome::Stale;
+    }
+    let window = webview.window();
+    if window.label() != expected_window {
+        return NativePresentationOutcome::Stale;
+    }
+    let Ok(expected_native_window) = window.ns_window() else {
+        return NativePresentationOutcome::Failed;
+    };
+    let expected_native_window = expected_native_window as usize;
+    let guard = guard.clone();
+    let completion_guard = guard.clone();
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    // Already on the main thread: Tauri executes with_webview synchronously.
+    // The result is read without waiting, so a runtime that fails to execute the
+    // callback cannot deadlock the UI thread or be mistaken for native success.
+    if webview
+        .with_webview(move |platform| {
+            // SAFETY: Tauri supplies the current WKWebView on its native UI thread.
+            let view: &WKWebView = unsafe { &*platform.inner().cast() };
+            let Some(native_window) = view.window() else {
+                let _ = sender.send(NativePresentationOutcome::Stale);
+                return;
+            };
+            if (&*native_window as *const NSWindow as usize) != expected_native_window {
+                let _ = sender.send(NativePresentationOutcome::Stale);
+                return;
+            }
+            let owns_focus = || {
+                native_window.firstResponder().is_some_and(|responder| {
+                    responder.downcast_ref::<NSView>().is_some_and(|focused| {
+                        focused
+                            .window()
+                            .is_some_and(|owner| std::ptr::eq(&*owner, &*native_window))
+                            && !focused.isHiddenOrHasHiddenAncestor()
+                            && focused.isDescendantOf(view)
+                    })
+                })
+            };
+            let mut focus_unavailable = None;
+            let result = perform_owned_presentation(&guard, operation, |step| {
+                if !guard.is_current() {
+                    return Err(());
+                }
+                match step {
+                    NativePresentationStep::ConfirmClip => {
+                        crate::launcher_rounded_corners::ensure_launcher_rounded_corners(&window)
+                            .map_err(|_| ())
+                    }
+                    NativePresentationStep::HideUnconfirmed => {
+                        view.setHidden(true);
+                        if !guard.is_current() {
+                            return Err(());
+                        }
+                        native_window.orderOut(None);
+                        if !guard.is_current() {
+                            return Err(());
+                        }
+                        (view.isHidden() && !native_window.isVisible())
+                            .then_some(())
+                            .ok_or(())
+                    }
+                    NativePresentationStep::Apply(NativePresentationOperation::Bounds {
+                        x,
+                        y,
+                        width,
+                        height,
+                    }) => {
+                        // SAFETY: the main-thread callback holds a live WKWebView.
+                        let parent = unsafe { view.superview() }.ok_or(())?;
+                        let [x, y, width, height] =
+                            crate::plugin_child_webview_execution::logical_child_frame(
+                                x,
+                                y,
+                                width,
+                                height,
+                                native_window.backingScaleFactor(),
+                                parent.frame().size.height,
+                                parent.isFlipped(),
+                            )
+                            .ok_or(())?;
+                        let expected = NSRect::new(NSPoint::new(x, y), NSSize::new(width, height));
+                        if !guard.is_current() {
+                            return Err(());
+                        }
+                        view.setFrame(expected);
+                        if !guard.is_current() {
+                            return Err(());
+                        }
+                        (view.frame() == expected).then_some(()).ok_or(())
+                    }
+                    NativePresentationStep::Apply(NativePresentationOperation::Show) => {
+                        view.setHidden(false);
+                        if !guard.is_current() {
+                            return Err(());
+                        }
+                        (!view.isHidden()).then_some(()).ok_or(())
+                    }
+                    NativePresentationStep::Apply(NativePresentationOperation::Hide) => {
+                        view.setHidden(true);
+                        if !guard.is_current() {
+                            return Err(());
+                        }
+                        view.isHidden().then_some(()).ok_or(())
+                    }
+                    NativePresentationStep::Apply(NativePresentationOperation::Focus) => {
+                        if view.isHiddenOrHasHiddenAncestor() || !native_window.isVisible() {
+                            return Err(());
+                        }
+                        if !native_window.isKeyWindow() {
+                            focus_unavailable = Some(true);
+                            return Err(());
+                        }
+                        // Preserve a valid input responder already inside the Child.
+                        if owns_focus() {
+                            return Ok(());
+                        }
+                        if !guard.is_current() {
+                            return Err(());
+                        }
+                        if !native_window.makeFirstResponder(Some(view)) {
+                            focus_unavailable = Some(false);
+                            return Err(());
+                        }
+                        if !guard.is_current() {
+                            return Err(());
+                        }
+                        if owns_focus() {
+                            Ok(())
+                        } else {
+                            focus_unavailable = Some(false);
+                            Err(())
+                        }
+                    }
+                }
+            });
+            // A visible attached WebView can remain healthy while AppKit is
+            // choosing the key window or its responder refuses a focus request.
+            let outcome = match (result, focus_unavailable) {
+                (NativePresentationOutcome::Failed, Some(awaiting_key)) => {
+                    NativePresentationOutcome::FocusUnavailable { awaiting_key }
+                }
+                _ => result,
+            };
+            let _ = sender.send(outcome);
+        })
+        .is_err()
+    {
+        completion_guard.expire();
+        return NativePresentationOutcome::Failed;
+    }
+    let outcome = receiver
+        .try_recv()
+        .unwrap_or(NativePresentationOutcome::Failed);
+    completion_guard.expire();
+    outcome
 }
 
 #[cfg(target_os = "macos")]
@@ -441,7 +742,7 @@ fn deliver_structured_plugin_child_webview_frame<R: Runtime>(
         ));
     }
     webview
-        .with_webview(move |platform| {
+        .with_webview_data(move |platform| {
             let Some(mtm) = MainThreadMarker::new() else {
                 return;
             };
@@ -477,6 +778,105 @@ fn deliver_structured_plugin_child_webview_frame<R: Runtime>(
         .map_err(|_| PluginChildWebviewAdapterError::new("bridge_delivery_unavailable"))
 }
 
+#[cfg(target_os = "macos")]
+fn deliver_confirmed_structured_frame<R: Runtime>(
+    webview: &Webview<R>,
+    frame: &Value,
+    guard: NativeExecutionGuard,
+) -> Result<(), ()> {
+    use objc2::{runtime::AnyObject, AnyThread, MainThreadMarker};
+    use objc2_foundation::{
+        NSData, NSDictionary, NSError, NSJSONReadingOptions, NSJSONSerialization, NSNumber,
+        NSString,
+    };
+    use objc2_web_kit::{WKContentWorld, WKWebView};
+    // Awaiting WebKit completion on its own thread would deadlock. The dispatcher
+    // invokes this narrow path from a worker after releasing its registry mutex.
+    if MainThreadMarker::new().is_some() || !guard.is_current() {
+        return Err(());
+    }
+    let encoded = serde_json::to_vec(frame).map_err(|_| ())?;
+    if encoded.len() > crate::plugin_child_webview_rpc::PLUGIN_CHILD_WEBVIEW_RPC_MAX_FRAME_BYTES {
+        return Err(());
+    }
+    let timeout = guard.remaining_timeout(std::time::Duration::from_secs(5));
+    if timeout.is_zero() {
+        return Err(());
+    }
+    let guard = guard.with_deadline(timeout);
+    let execution = guard.clone();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let cancellation = sender.clone();
+    guard.on_expire(move || {
+        let _ = cancellation.send(Err(()));
+    });
+    webview
+        .with_webview_data(move |platform| {
+            let Some(marker) = MainThreadMarker::new() else {
+                let _ = sender.send(Err(()));
+                return;
+            };
+            if !execution.is_current() {
+                let _ = sender.send(Err(()));
+                return;
+            }
+            unsafe {
+                let data = NSData::initWithBytes_length(
+                    NSData::alloc(),
+                    encoded.as_ptr().cast(),
+                    encoded.len(),
+                );
+                let Ok(object) = NSJSONSerialization::JSONObjectWithData_options_error(
+                    &data,
+                    NSJSONReadingOptions::FragmentsAllowed,
+                ) else {
+                    let _ = sender.send(Err(()));
+                    return;
+                };
+                let key = NSString::from_str("frame");
+                let arguments =
+                    NSDictionary::<NSString, AnyObject>::from_slices(&[&*key], &[&*object]);
+                let view: &WKWebView = &*platform.inner().cast();
+                let world = WKContentWorld::pageWorld(marker);
+                let completion =
+                    block2::RcBlock::new(move |result: *mut AnyObject, error: *mut NSError| {
+                        let accepted = execution.is_current()
+                            && error.is_null()
+                            && result
+                                .as_ref()
+                                .and_then(|object| object.downcast_ref::<NSNumber>())
+                                .is_some_and(|number| number.boolValue());
+                        let _ = sender.send(accepted.then_some(()).ok_or(()));
+                    });
+                view.callAsyncJavaScript_arguments_inFrame_inContentWorld_completionHandler(
+                    &NSString::from_str(
+                        "return globalThis.__LENSX_PLUGIN_WEBVIEW_DELIVER__(frame) === true;",
+                    ),
+                    Some(&arguments),
+                    None,
+                    &world,
+                    Some(&completion),
+                );
+            }
+        })
+        .map_err(|_| ())?;
+    match receiver.recv_timeout(timeout) {
+        Ok(result) if guard.is_current() => result,
+        _ => {
+            guard.expire();
+            Err(())
+        }
+    }
+}
+#[cfg(not(target_os = "macos"))]
+fn deliver_confirmed_structured_frame<R: Runtime>(
+    _webview: &Webview<R>,
+    _frame: &Value,
+    _guard: NativeExecutionGuard,
+) -> Result<(), ()> {
+    Err(())
+}
+
 #[cfg(not(target_os = "macos"))]
 fn deliver_structured_plugin_child_webview_frame<R: Runtime>(
     _webview: &Webview<R>,
@@ -501,6 +901,40 @@ mod tests {
             "/settings",
         )
         .expect("navigation policy should be valid")
+    }
+
+    #[test]
+    fn production_plugins_use_a_fresh_nonpersistent_native_store_without_sdk_changes() {
+        let source = include_str!("plugin_child_webview_adapter.rs");
+        let product = source
+            .split("pub(crate) fn create_plugin_child_webview")
+            .nth(1)
+            .unwrap()
+            .split("pub(crate) trait PluginChildWebviewNativeHandle")
+            .next()
+            .unwrap();
+        assert!(product.contains(".incognito(true)"));
+        assert!(product.contains(".data_store_identifier(input.data_store_identifier)"));
+        assert!(!product.contains("background_throttling"));
+        let native = include_str!("../../vendor/frame-aware-navigation/wry/src/wkwebview/mod.rs");
+        let choice = native
+            .split("let data_store = match (")
+            .nth(1)
+            .expect("native data store selector")
+            .split("config.setWebsiteDataStore")
+            .next()
+            .unwrap();
+        assert!(choice.contains("attributes.incognito"));
+        let ephemeral = choice
+            .find("(true, _, _) => WKWebsiteDataStore::nonPersistentDataStore(mtm)")
+            .expect("fresh ephemeral store has first priority");
+        let persistent = choice
+            .find("(false, true, Some(data_store))")
+            .expect("conditional persistent store branch");
+        let default = choice
+            .find("_ => WKWebsiteDataStore::defaultDataStore(mtm)")
+            .expect("ordinary fallback");
+        assert!(ephemeral < persistent && persistent < default);
     }
 
     #[test]

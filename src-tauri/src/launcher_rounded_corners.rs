@@ -56,11 +56,15 @@ struct RoundedContentState {
 
 #[cfg(any(target_os = "macos", test))]
 impl RoundedContentState {
+    #[cfg(test)]
     fn is_confirmed(self) -> bool {
+        self.matches_radius(LAUNCHER_CORNER_RADIUS_LOGICAL_POINTS)
+    }
+    fn matches_radius(self, radius: f64) -> bool {
         self.layer_backed
-            && self.radius == LAUNCHER_CORNER_RADIUS_LOGICAL_POINTS
+            && self.radius == radius
             && self.masks_to_bounds
-            && self.all_corners
+            && (radius == 0.0 || self.all_corners)
     }
 }
 
@@ -74,13 +78,24 @@ trait RoundedContentAdapter {
 fn ensure_rounded_content(
     adapter: &mut impl RoundedContentAdapter,
 ) -> Result<(), LauncherRoundedCornersError> {
+    ensure_content_clip(adapter, LAUNCHER_CORNER_RADIUS_LOGICAL_POINTS)
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn ensure_content_clip(
+    adapter: &mut impl RoundedContentAdapter,
+    radius: f64,
+) -> Result<(), LauncherRoundedCornersError> {
     // A currently confirmed safe clip requires no mutation, including during
     // same-attempt restore and ordinary surface configuration.
-    if adapter.read().is_ok_and(RoundedContentState::is_confirmed) {
+    if adapter
+        .read()
+        .is_ok_and(|state| state.matches_radius(radius))
+    {
         return Ok(());
     }
-    adapter.configure(LAUNCHER_CORNER_RADIUS_LOGICAL_POINTS)?;
-    if adapter.read()?.is_confirmed() {
+    adapter.configure(radius)?;
+    if adapter.read()?.matches_radius(radius) {
         Ok(())
     } else {
         Err(LauncherRoundedCornersError::ConfirmationFailed)
@@ -160,8 +175,10 @@ impl RoundedContentAdapter for AppKitRoundedContentAdapter {
             .ok_or(LauncherRoundedCornersError::LayerUnavailable)?;
         // Reuse AppKit's layer. Complementing the typed option set selects all
         // four documented corners without adding a direct QuartzCore dependency.
-        let corners = layer.maskedCorners();
-        layer.setMaskedCorners(corners | !corners);
+        if logical_radius != 0.0 {
+            let corners = layer.maskedCorners();
+            layer.setMaskedCorners(corners | !corners);
+        }
         let _: () = unsafe { objc2::msg_send![&*layer, setCornerRadius: logical_radius] };
         layer.setMasksToBounds(true);
         Ok(())
@@ -175,7 +192,12 @@ fn ensure_on_main_thread<R: tauri::Runtime>(
     let _main_thread =
         objc2::MainThreadMarker::new().ok_or(LauncherRoundedCornersError::MainThreadRequired)?;
     if window.label() != crate::launcher_window::MAIN_WINDOW_LABEL {
-        return Err(LauncherRoundedCornersError::WindowUnavailable);
+        use tauri::Manager;
+        let registered = window.app_handle().try_state::<std::sync::Arc<crate::plugin_detached_window_host::PluginDetachedWindowHost>>()
+            .is_some_and(|host| host.snapshot_for_window(window.label()).is_ok());
+        if !registered {
+            return Err(LauncherRoundedCornersError::WindowUnavailable);
+        }
     }
     let native_root = window
         .ns_view()
@@ -192,7 +214,14 @@ fn ensure_on_main_thread<R: tauri::Runtime>(
     let content_view = native_window
         .contentView()
         .ok_or(LauncherRoundedCornersError::ContentViewUnavailable)?;
-    ensure_rounded_content(&mut AppKitRoundedContentAdapter { content_view })
+    let mut content = AppKitRoundedContentAdapter { content_view };
+    if window.label() == crate::launcher_window::MAIN_WINDOW_LABEL {
+        ensure_rounded_content(&mut content)
+    } else {
+        // The native window frame owns its outer corners. Clip both Host and
+        // Child to the rectangular content view immediately beneath the titlebar.
+        ensure_content_clip(&mut content, 0.0)
+    }
 }
 
 #[cfg(target_os = "macos")]

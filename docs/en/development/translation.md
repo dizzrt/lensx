@@ -290,7 +290,19 @@ Persistence confirmation alone is not a semantic configuration change.
 
 Hiding and restoring Launcher within the same current attempt preserves
 source, result, language selection, settings drafts, and request state without
-issuing a request just for restoration. Real close, navigation, disable,
+issuing a request just for restoration. Detachment moves the same WebView and
+SDK Session into an independent window, so in-flight requests keep their original
+identity and deliver a result once without restarting translation. Blur leaves
+that window visible, and closing it cancels only its own work. A second opening
+from main has independent text, results, drafts, and request state.
+
+Confirmed `storage.*` configuration is shared by plugin identity. Another instance
+can read later committed settings, but persistence does not broadcast input or
+automatically replace a sibling's loaded configuration or draft. Host theme and
+locale updates reach each live instance through its existing Runtime Context
+subscription. These behaviors require no plugin Manifest or SDK change.
+
+Real close, navigation, disable,
 replacement, unload, development reload, disconnect, or SDK retry cancels
 timers and local requests, removes subscriptions, and invalidates old
 callbacks. A new attempt reloads configuration and starts with empty text.

@@ -2,11 +2,12 @@
 
 ## Purpose
 
+
 Define the Host-owned Content Security Policy and process-local lifecycle
-boundary for external Plugin Page Runtimes, including bounded deadlines,
-generation-aware terminal cleanup, circuit breaking, single-instance
-enforcement, safe diagnostics, and deterministic security and lifecycle
-validation.
+boundary for plugin Page instances, including bounded deadlines, generation-aware
+termination, aggregate circuit breaking, one instance per owning window, safe
+retained recovery, diagnostics, and deterministic security validation.
+
 ## Requirements
 
 ### Requirement: Host and plugin documents MUST run under distinct Host-owned Content Security Policies
@@ -52,23 +53,23 @@ The production Host main document and every eligible plugin Runtime document MUS
 - **THEN** inability to justify that minimum exception prevents completion rather than enabling a general unsafe policy
 
 ### Requirement: Every Runtime attempt MUST have one idempotent generation-aware terminal cleanup
-Every explicit open, retry or committed development reload MUST create a fresh process-local attempt.
+Every new instance creation, explicit retry, or committed development reload MUST establish a fresh process-local attempt; detachment MUST preserve the original attempt. Each instance MUST execute idempotent termination independently, plugin-wide invalidation MUST terminate all matching instances, and application exit MUST clean up every instance.
 
 #### Scenario: A Runtime attempt reaches terminal cleanup
 
 - **WHEN** a terminal trigger or late callback occurs for a Runtime attempt
-- **THEN** Close, navigation away, disable, uninstall, replacement, reload, disconnect, failure, breaker, Host reload, App unmount and process exit MUST converge on one idempotent coordinator that rejects new ingress, aborts work, removes bridge/Session/resource/navigation authority, hides and destroys the Child WebView, and clears bounds, focus, listeners, timers and caches.
-- **THEN** Every late callback MUST compare current attempt before publishing state.
+- **THEN** Actual close, navigation away within that instance, disable, uninstall, replacement, reload, disconnect, failure, trusted Host coordinator reload, or application exit MUST execute one idempotent cleanup for affected instances: reject new ingress, cancel that instance's operations, revoke its bridge/Session/resource-source/navigation leases, and destroy its WebView, focus state, listeners, and timers; shared generation resources follow the independent-source-lease and final-holder-release rules.
+- **THEN** Every late callback MUST validate its owning instance's valid attempt, actual native source, and source lease before publishing state; the globally current Page or another valid instance cannot substitute for them.
 
 #### Scenario: User closes a ready plugin Page
-- **WHEN** the current external Page closes
-- **THEN** its Child WebView and every owned execution/authority binding terminate exactly once
-- **THEN** no hidden Runtime, Worker, connection or reusable attempt remains
+- **WHEN** a valid external Page instance actually closes
+- **THEN** that instance's Child WebView and every owned execution/authority binding MUST terminate exactly once
+- **THEN** that instance MUST leave no hidden Runtime, Worker, connection, or reusable attempt, and other valid instances MUST continue running
 
 #### Scenario: Lifecycle events race with a new attempt
-- **WHEN** close, retry, invalidation, replacement, development reload or removal and old asynchronous completions race while a later attempt becomes current
-- **THEN** old cleanup and late events can affect only their own attempt and cannot release, fail, load, authenticate or revive the current attempt
-- **THEN** repeated cleanup succeeds safely without double-closing or retaining resources
+- **WHEN** close, retry, invalidation, replacement, development reload, or removal races with old asynchronous completions while that surface already has a replacement attempt or other windows retain valid instances
+- **THEN** old cleanup and late events MUST affect only their own attempt and cannot release, fail, load, authenticate, or revive a replacement attempt or affect another concurrent instance
+- **THEN** repeated cleanup MUST complete idempotently without duplicate closure or retained resources belonging to a terminated instance
 
 #### Scenario: Application process terminates unexpectedly
 - **WHEN** the process exits or crashes before JavaScript can finish best-effort cleanup and later restarts
@@ -76,48 +77,96 @@ Every explicit open, retry or committed development reload MUST create a fresh p
 - **THEN** persistent installed Registration continues to recover with Runtime `inactive`, while development Registration does not recover
 
 #### Scenario: Development reload commits a new generation
-- **WHEN** a manual reload of the current development Plugin Page successfully commits a new resource generation
-- **THEN** the Host makes the old attempt terminal and clears all of its authority before creating a fresh attempt, Child WebView, bridge freshness value and Session for the still-current Page
-- **THEN** development source relaxes none of navigation, origin, bridge ACL, deadlines, breaker, single-WebView, Host API or Host-authority boundaries
+- **WHEN** a manual reload of a development plugin successfully commits a new resource generation
+- **THEN** Host MUST first terminate every affected attempt of the old generation and revoke its authority, then establish new attempts, Child WebViews, source leases, bridge freshness, and Sessions for Pages that Host still retains and permits to reopen
+- **THEN** development provenance MUST NOT relax navigation, origin, bridge ACL, deadline, breaker, one-instance-per-window, Host API, or Host-authority boundaries
 
 #### Scenario: Development reload fails before commit
-- **WHEN** a new development snapshot becomes invalid, incompatible, unsafe or unreadable, or loses a revision race before Manager commit
-- **THEN** the current Runtime attempt is neither terminated nor switched to a new generation because of uncommitted input
-- **THEN** failed staging, late callbacks and diagnostics gain no Resource, Session or handler authority
+- **WHEN** a new development snapshot is invalid, incompatible, unsafe, or unreadable, or loses a revision race before Manager commit
+- **THEN** Host MUST preserve all still-valid instances of the old generation rather than terminating them or changing generation because of uncommitted input
+- **THEN** failed staging, late callbacks, and diagnostics MUST gain no Resource, Session, or handler authority
+
+#### Scenario: Main-window presentation returns Home after detachment commits
+
+- **WHEN** the original instance has successfully moved to a detached window, the main window returns Home and hides, and the old presentation component in main is removed
+- **THEN** Host MUST preserve the original instance, Session, Worker, requests, activation channel, and resource source lease; removal of main-window presentation MUST NOT trigger that instance's termination
+- **THEN** trusted Host coordination MUST continue serving all valid instances while the main window is hidden; reopening a plugin in main cannot overwrite detached instances
+
+#### Scenario: One window of the same plugin closes or fails
+
+- **WHEN** A and B belong to the same plugin/Page/generation and only A actually closes or reaches terminal instance failure
+- **THEN** Host MUST revoke only A's source and operations, while B's Window, Runtime, Worker, Session, HTTP, and storage access MUST remain valid
+- **THEN** A's late responses, rollback, and repeated termination MUST NOT affect B or subsequently created instances
+
+#### Scenario: Plugin lifecycle invalidation covers every owning window
+
+- **WHEN** disable, uninstall, replacement, or development reload has committed and invalidated generation or eligibility
+- **THEN** Host MUST revoke the authority of every matching old instance, then individually close or update its trusted failure presentation; processing only the currently focused window is insufficient
+- **THEN** unrelated plugin instances MUST continue running; failed or cancelled operations before commit MUST preserve old instances
+
+#### Scenario: Application exit cleans up main and detached windows
+
+- **WHEN** the user executes Cmd+Q or the application enters full exit
+- **THEN** Host MUST terminate all instances and creation/migration reservations and clean up all windows, Sessions, Workers, requests, and source leases
+- **THEN** restarting MUST NOT restore detached windows, old attempts, or temporary business state
+
+#### Scenario: Native compensation failure is not implicit instance termination
+- **WHEN** detachment compensation itself cannot be confirmed but the original WebView, Session, and trusted instance have not been invalidated by an actual terminal event
+- **THEN** Host MUST enter `recovery_required`, retaining the original attempt, recovery token, original snapshot, and necessary windows; compensation failure must not be treated as Runtime Retry, automatic destruction, or successful detachment
+- **THEN** recovery state MUST freeze affected ownership changes and retain trusted main repair/quit entries; existing source, Session, generation, and resource-lease checks continue to apply independently
+- **THEN** explicit close, plugin disable/uninstall/replace/upgrade/committed reload, and Quit MUST execute idempotent termination for the corresponding instance/generation/process scope, including recovery context; unrelated instances continue running
 
 ### Requirement: Repeated Runtime failures MUST open a bounded process-local circuit breaker without automatic restart
 
-The Host MUST count qualifying failures by trusted entry identity and current resource generation.
+Host MUST aggregate qualifying failures across all instances of the same plugin by trusted entry and current resource generation, counting each instance failure only once. Three failures within 60,000ms trigger a 30,000ms cooldown; the cooldown blocks only new Runtime creation or retry and neither destroys healthy sibling instances nor changes their existing authority.
 
 #### Scenario: Runtime events are classified for circuit breaking
 
 - **WHEN** a Runtime lifecycle event is evaluated for failure accounting or cooldown
 - **THEN** Load timeout, handshake timeout, an unexpected ready-Session/WebView disconnect, or a supported WebView process-failure signal MUST qualify; user close, navigation, relevant Registration invalidation, replacement and graceful Host exit MUST NOT.
-- **THEN** The third qualifying failure within a rolling 60,000 milliseconds MUST open a 30,000 millisecond cooldown before any new Runtime resource, lease, iframe or Session is created.
+- **THEN** The third qualifying failure within a rolling 60,000ms MUST open a 30,000ms cooldown and reject new creation before allocating any new Runtime WebView, resource or source lease, bridge-readiness handshake freshness, or Session.
 - **THEN** Cooldown expiry MUST NOT launch automatically.
 
 #### Scenario: Breaker history becomes obsolete
 
 - **WHEN** resource generation changes, readiness remains continuous, or the process exits
-- **THEN** A new resource generation or 30,000 milliseconds of continuous ready state MUST clear that key's failure history, and all breaker state MUST disappear at process exit.
+- **THEN** A new resource generation MUST clear the corresponding history; within the same generation, history MUST be cleared only after at least one instance has remained continuously ready and that key has had no qualifying failure for 30,000ms. Ready events from other healthy instances cannot erase failures still accumulating; process exit MUST clear all breaker state.
 
 #### Scenario: Plugin fails three times quickly
 
 - **WHEN** the same current entry and resource generation has three qualifying failures within 60 seconds
 - **THEN** the Host enters cooldown, exposes `runtime_crash_loop`, and refuses to construct another Runtime for 30 seconds
-- **THEN** no hidden or automatic retry creates a resolver request, lease, iframe, nonce, MessageChannel or Session during cooldown
+- **THEN** during cooldown, hidden or automatic retry MUST NOT create resource-resolution requests, source leases, Child WebViews, bridge freshness, native bridge bindings, or Sessions
 
 #### Scenario: Cooldown expires
 
 - **WHEN** 30 seconds pass after the breaker opens
-- **THEN** the Host still remains idle until the user explicitly retries, after which it rereads current facts and creates one new attempt
+- **THEN** Host MUST wait for an explicit user retry or open before rereading current facts and creating a new attempt, rather than automatically restarting a failed instance; existing healthy instances continue running
 - **THEN** a stale retry event from before cooldown cannot create a Runtime
 
 #### Scenario: Current generation changes or remains healthy
 
-- **WHEN** replacement creates a new resource generation, or the current generation remains continuously Session-ready for 30 seconds
+- **WHEN** replacement establishes a new generation, or at least one instance of the current generation remains continuously Session-ready and that key has no qualifying failure for 30 consecutive seconds
 - **THEN** the corresponding failure history is cleared without mutating Plugin Manager, quarantine, source, or enabled intent
 - **THEN** unrelated plugin failures do not open or reset this entry's breaker
+
+#### Scenario: Failures across multiple instances trigger a shared cooldown
+
+- **WHEN** multiple instances of the same entry/generation collectively reach a third qualifying failure within 60 seconds while other siblings remain healthy
+- **THEN** Host MUST open a 30-second cooldown for that key and reject new Runtime creation or explicit retry; switching windows or changing instance identifiers cannot bypass it
+- **THEN** healthy siblings MUST retain their current windows, Sessions, input, and ongoing operations, while failed instances follow their own terminal cleanup paths
+
+#### Scenario: A healthy instance does not conceal continuing failures
+
+- **WHEN** B remains ready while A of the same generation continues producing qualifying failures
+- **THEN** B's ready state alone MUST NOT clear that key's rolling failure history or end its cooldown early
+- **THEN** clearing MUST wait for the required continuous 30-second period without failures and with a ready instance, or an actual generation change
+
+#### Scenario: Detach an existing healthy instance during cooldown
+
+- **WHEN** the user detaches a ready, still-valid healthy instance while that generation is in a cooldown blocking new Runtime creation
+- **THEN** transfer of the original instance without creating a new Runtime MAY complete, but MUST preserve the same attempt, existing cooldown history, and remaining cooldown duration
+- **THEN** opening the plugin again in the main window after detachment MUST remain subject to the same creation restriction; a failed migration cannot trigger implicit reconstruction or automatic retry
 
 ### Requirement: Runtime security failures MUST remain bounded, accessible, localized and non-oracular
 
@@ -149,17 +198,23 @@ The Host MUST map Runtime security and lifecycle failures to stable Host-private
 - **THEN** no translated copy or theme branch changes lifecycle authority or exposes private diagnostics
 
 ### Requirement: Open execution contexts MUST terminate completely with the Runtime attempt
-Every Dedicated Worker, connection, Blob URL and other supported page-owned context MUST be owned by the current Child WebView attempt and generation. Terminal destroy MUST make it terminated or uncontrollable and without Host authority. SharedWorker, ServiceWorker and background contexts that can outlive the Page remain unsupported.
+Every Dedicated Worker, connection, Blob URL, and other supported Page context MUST belong to one independent Runtime attempt and generation. Detaching the original instance MUST preserve those contexts; actual termination MUST end that instance's contexts or leave them uncontrollable and without Host authority. A shared generation scope is not a shared execution context; SharedWorker, ServiceWorker, and background contexts that can outlive the Page remain unsupported.
 
 #### Scenario: Page closes while Worker and connection are active
 - **WHEN** the Host destroys a Child WebView whose plugin Page still has a Dedicated Worker and active network work
 - **THEN** teardown terminates its page-owned execution contexts or leaves them uncontrollable and without Host authority
-- **THEN** a new Page does not reuse the old Worker, connection, Blob URL, Session, bridge or origin scope
+- **THEN** a new Page MUST NOT reuse old Workers, connections, Blob URLs, Sessions, bridges, or revoked source leases; a valid scope for the same generation may be shared only under the independent-source-lease rules
 
 #### Scenario: Persistent worker is requested
 - **WHEN** a plugin attempts to register a SharedWorker, ServiceWorker or background context that could outlive the current Page or generation
 - **THEN** the current supported baseline rejects or does not claim support for that capability
 - **THEN** the context retains no plugin authority after Page close, replacement or Host restart
+
+#### Scenario: Detached-window blur remains within the valid Page lifecycle
+
+- **WHEN** a valid detached window loses focus while its Page has not closed or become invalid and the application has not exited
+- **THEN** that instance's Worker, connections, and ongoing operations MUST retain the original Page lifecycle rather than being cleaned up as a hidden Runtime pool because of blur
+- **THEN** its continued background existence cannot cross actual closure, generation invalidation, or application exit boundaries, nor affect input focus in other windows
 
 ### Requirement: Child WebView load and bridge readiness MUST have bounded deadlines
 Each attempt MUST have a deterministic 10,000 millisecond initial-load deadline and a 5,000 millisecond bridge-ready deadline. The matching current event clears only its own timer. Expiry MUST produce stable `runtime_load_timeout` or `runtime_handshake_timeout`, run terminal cleanup and never retry automatically.
@@ -172,12 +227,24 @@ Each attempt MUST have a deterministic 10,000 millisecond initial-load deadline 
 - **WHEN** a loaded WebView does not complete current bridge ready within 5 seconds
 - **THEN** Host destroys WebView, bridge and Session state without automatic restart
 
-### Requirement: Host MUST keep at most one active external Plugin Page Child WebView
-The Launcher MUST contain at most one external plugin Child WebView. Switching to another Page MUST terminally destroy the current attempt before creating the next. Host Pages MUST use the trusted Host WebView; preload, pool, hidden background Runtime and multi-plugin concurrency MUST remain absent.
+### Requirement: Host MUST keep one current Plugin Page instance per owning window
+The main Launcher window MUST host at most one current plugin instance, and each detached window MUST own exactly one independent instance; multiple instances of the same plugin MAY coexist. A single instance MUST belong to at most one window, and migration cannot create an operable copy. Switching Pages within a window MUST terminate only that window's original attempt; preload pools and hidden background Runtimes without an owning Page MUST remain absent.
 
 #### Scenario: User switches plugin Pages
-- **WHEN** navigation selects another external Page
-- **THEN** old Child WebView teardown completes before the new one is created
+- **WHEN** navigation within an owning window selects another external Page
+- **THEN** termination of that window's old Child WebView MUST finish before the new instance is created, and instances in other windows MUST remain unaffected
+
+#### Scenario: Main reopens the same plugin after detachment
+
+- **WHEN** A already occupies a detached window and the user opens the same plugin/Page again from Launcher
+- **THEN** Host MUST create a new instance B in the main window instead of focusing, reusing, moving, or closing A
+- **THEN** after B also detaches, it MUST be able to run alongside A, with both windows retaining their own business state and source leases
+
+#### Scenario: Main continues opening other plugins
+
+- **WHEN** one or more detached plugin windows remain open and the user opens another plugin from Launcher
+- **THEN** the new main-window instance MUST run alongside all valid detached instances, each occupying only its own window
+- **THEN** main-window Home, Search, and Host Pages MUST continue using trusted Host presentation and gain no Runtime authority from detached instances
 
 ### Requirement: Plugin CSP MUST be delivered by current scoped resource responses and deterministically validated
 
@@ -209,7 +276,7 @@ Delivery MUST combine Rust response tests, deterministic TypeScript state/race t
 #### Scenario: Security lifecycle validation evaluates delivery evidence
 
 - **WHEN** the deterministic CSP and terminal-lifecycle suite runs
-- **THEN** It MUST cover allowed and forbidden content classes, no Host/Tauri access, load/bridge deadlines as state logic, circuit breaking, exactly one current Child WebView model, terminal triggers, cleanup calls, late-event inertness, unrelated-plugin stability, and zero privileged handler hits.
+- **THEN** Deterministic validation MUST cover content classes, Host/Tauri denial, load/bridge deadlines, the aggregated circuit breaker, one instance per window and multi-window concurrency, detachment continuity, instance-level termination, plugin-level invalidation, cleanup, inert late events, and zero unauthorized handler hits.
 - **THEN** It MUST NOT require browser, real WebView, GUI, native harness, or environment evidence.
 
 #### Scenario: Complete deterministic security lifecycle gate passes
@@ -220,6 +287,13 @@ Delivery MUST combine Rust response tests, deterministic TypeScript state/race t
 
 #### Scenario: A security or cleanup invariant cannot be established
 
-- **WHEN** a required CSP source class, deadline, terminal trigger, late-event guard, single-instance rule, cleanup call, or zero-handler-hit assertion fails
+- **WHEN** an assertion fails for a required CSP class, deadline, terminal trigger, late-event isolation, window ownership or instance isolation, cleanup call, or zero unauthorized handler hits
 - **THEN** the capability remains incomplete and design or implementation is corrected
 - **THEN** validation does not relax CSP, remove negative cases, hide Runtime state, or restore real WebView evidence as an optional path
+
+#### Scenario: Same-plugin multi-window security and lifecycle matrix
+
+- **WHEN** controlled tests establish multiple instances of the same plugin/Page concurrently and interleave detachment, close, failure, retry, disable, generation replacement, and exit
+- **THEN** validation MUST assert each source/attempt's actual state, cleanup counts, request cancellation, event targets, shared-scope survival, and final release rather than only checking that functions were called
+- **THEN** the matrix MUST cover rollback after forward failure with successful compensation, repeated compensation failure entering `recovery_required`, original-context retention and explicit recovery/close/Quit, main presentation unmount preserving a detached instance, closing A without affecting B, invalidation fanout, aggregate cooldown, and no revival of old sources
+- **THEN** tests MUST remain deterministic and launch no real WebView, GUI, native interaction harness, or target-environment performance sampling

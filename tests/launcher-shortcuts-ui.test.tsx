@@ -26,7 +26,10 @@ const action: LauncherActionDescriptor = {
 const makeService = (initial?: ShortcutSnapshot) => {
   let snapshot: ShortcutSnapshot = initial ?? {
     configuration: defaultShortcutConfiguration(),
-    bindings: [{ target: 'launcher', status: 'active' }],
+    bindings: [
+      { target: 'detach', status: 'active' },
+      { target: 'launcher', status: 'active' },
+    ],
     recovery_degraded: false,
     diagnostics: [],
   };
@@ -37,15 +40,20 @@ const makeService = (initial?: ShortcutSnapshot) => {
     const confirmed = { ...configuration, revision: snapshot.configuration.revision + 1 };
     snapshot = {
       configuration: confirmed,
-      bindings: ['launcher', ...Object.keys(confirmed.actions)].map((target) => ({
-        target,
-        status: 'active' as const,
-      })),
+      bindings: ['launcher', ...Object.keys(confirmed.actions), ...(confirmed.detach ? ['detach'] : [])].map(
+        (target) => ({
+          target,
+          status: 'active' as const,
+        }),
+      ),
       recovery_degraded: false,
       diagnostics: [],
       ...(snapshot.key_labels ? { key_labels: snapshot.key_labels } : {}),
       ...(!options?.resolveLauncherMigration && snapshot.launcher_migration
         ? { launcher_migration: snapshot.launcher_migration }
+        : {}),
+      ...(!options?.resolveDetachMigration && snapshot.detach_migration
+        ? { detach_migration: snapshot.detach_migration }
         : {}),
     };
     return snapshot;
@@ -121,6 +129,9 @@ const setup = async ({
   return { ...controlled, ...result };
 };
 const chooseOption = async (control: HTMLElement, label: string | RegExp) => {
+  // A submitted save does not finish when the mock is first called. Wait for
+  // confirmed state to unlock the next row before opening its controlled menu.
+  await waitFor(() => expect(control).toHaveAttribute('aria-disabled', 'false'));
   fireEvent.click(control);
   fireEvent.click(await screen.findByRole('option', { name: label }));
 };
@@ -158,7 +169,7 @@ const recordChord = (input: HTMLElement) =>
 describe('shortcut settings with real Semi controls', () => {
   for (const locale of ['en-US', 'zh-CN'] as const)
     for (const theme of ['light', 'dark'] as const) {
-      test(`renders peer system and feature headings without instructional copy in ${locale}/${theme}`, async () => {
+      test(`renders separate system, local and feature shortcut groups in ${locale}/${theme}`, async () => {
         const { service } = await setup({ locale, theme });
         expect(addButton()).toBeEnabled();
         expect(Object.keys((await service.read()).configuration.actions)).toHaveLength(0);
@@ -174,15 +185,17 @@ describe('shortcut settings with real Semi controls', () => {
         expect(document.body.getAttribute('theme-mode')).toBe(theme === 'dark' ? 'dark' : null);
         const region = screen.getByRole('region', { name: locale === 'en-US' ? 'Shortcuts' : '快捷键' });
         const expectedHeadings =
-          locale === 'en-US' ? ['System shortcuts', 'Feature shortcuts'] : ['系统快捷键', '功能快捷键'];
+          locale === 'en-US'
+            ? ['System shortcuts', 'In-app shortcuts', 'Feature shortcuts']
+            : ['系统快捷键', '应用内快捷键', '功能快捷键'];
         expect(
           within(region)
             .getAllByRole('heading', { level: 3 })
             .map((heading) => heading.textContent),
         ).toEqual(expectedHeadings);
-        expect(within(region).getAllByRole('heading')).toHaveLength(2);
+        expect(within(region).getAllByRole('heading')).toHaveLength(3);
         const systemGroup = within(region).getByRole('region', { name: expectedHeadings[0] });
-        const featureGroup = within(region).getByRole('region', { name: expectedHeadings[1] });
+        const featureGroup = within(region).getByRole('region', { name: expectedHeadings[2] });
         const reset = within(systemGroup).getByRole('button', {
           name: locale === 'en-US' ? 'Restore default shortcuts' : '恢复默认快捷键',
         });
@@ -200,7 +213,11 @@ describe('shortcut settings with real Semi controls', () => {
           'page',
         );
         const expectNoInstructions = () => {
-          expect(within(region).queryByRole('paragraph')).not.toBeInTheDocument();
+          expect(within(systemGroup).queryByRole('paragraph')).not.toBeInTheDocument();
+          expect(within(featureGroup).queryByRole('paragraph')).not.toBeInTheDocument();
+          expect(within(region).getByRole('paragraph')).toHaveTextContent(
+            locale === 'en-US' ? /only on a ready plugin page/ : /仅用于主启动窗口中已就绪/,
+          );
           expect(
             within(region).queryByText(/Choose how to open lensX|设置唤出 lensX 和执行操作/),
           ).not.toBeInTheDocument();
@@ -268,6 +285,7 @@ describe('shortcut settings with real Semi controls', () => {
           actions: { 'dev.example.open': { kind: 'chord', modifiers: ['ctrl'], key: 'KeyQ' } },
         },
         bindings: [
+          { target: 'detach', status: 'active' },
           { target: 'launcher', status: 'active' },
           { target: 'dev.example.open', status: 'active' },
         ],
@@ -332,6 +350,7 @@ describe('shortcut settings with real Semi controls', () => {
         actions: { 'dev.example.open': { kind: 'chord', modifiers: ['cmd', 'shift'], key: 'KeyK' } },
       },
       bindings: [
+        { target: 'detach', status: 'active' },
         { target: 'launcher', status: 'active' },
         { target: action.action_id, status: 'active' },
       ],
@@ -385,6 +404,7 @@ describe('shortcut settings with real Semi controls', () => {
           actions: { 'dev.example.open': { kind: 'chord', modifiers: ['ctrl'], key: 'KeyJ' } },
         },
         bindings: [
+          { target: 'detach', status: 'active' },
           { target: 'launcher', status: 'active' },
           { target: 'dev.example.open', status: 'active' },
         ],
@@ -444,7 +464,10 @@ describe('shortcut settings with real Semi controls', () => {
         ...defaultShortcutConfiguration(),
         launcher: { kind: 'modifier_double_tap', modifier: 'cmd' },
       },
-      bindings: [{ target: 'launcher', status: 'permission_required' }],
+      bindings: [
+        { target: 'detach', status: 'active' },
+        { target: 'launcher', status: 'permission_required' },
+      ],
       recovery_degraded: true,
       diagnostics: [],
     };
@@ -464,7 +487,11 @@ describe('shortcut settings with real Semi controls', () => {
         revision: 2,
         actions: { 'dev.example.open': { kind: 'chord', modifiers: ['ctrl'], key: 'KeyJ' } },
       },
-      bindings: [...initial.bindings, { target: action.action_id, status: 'active' }],
+      bindings: [
+        { target: 'detach', status: 'active' },
+        ...initial.bindings,
+        { target: action.action_id, status: 'active' },
+      ],
     };
     act(() => publish(newer));
     await act(async () => resolvePermission?.(initial));
@@ -533,6 +560,7 @@ describe('shortcut settings with real Semi controls', () => {
       initial: {
         configuration,
         bindings: [
+          { target: 'detach', status: 'active' },
           { target: 'launcher', status: 'permission_required' },
           { target: action.action_id, status: 'active' },
           { target: otherAction.action_id, status: 'active' },
@@ -574,6 +602,7 @@ describe('shortcut settings with real Semi controls', () => {
             launcher: { kind: 'modifier_double_tap', modifier: 'cmd' },
           },
           bindings: [
+            { target: 'detach', status: 'active' },
             { target: 'launcher', status: 'permission_required' },
             { target: id, status: 'target_unavailable' },
           ],
@@ -723,7 +752,10 @@ describe('shortcut editor Escape cancellation', () => {
     await act(async () =>
       resolveSave?.({
         configuration: { ...submitted, revision: 1 },
-        bindings: [{ target: 'launcher', status: 'active' }],
+        bindings: [
+          { target: 'detach', status: 'active' },
+          { target: 'launcher', status: 'active' },
+        ],
         recovery_degraded: false,
         diagnostics: [],
       }),
@@ -835,6 +867,7 @@ describe('inline shortcut rows', () => {
       initial: {
         configuration,
         bindings: [
+          { target: 'detach', status: 'active' },
           { target: 'launcher', status: 'active' },
           { target: action.action_id, status: 'active' },
           { target: otherAction.action_id, status: 'active' },
@@ -863,6 +896,7 @@ describe('inline shortcut rows', () => {
       initial: {
         configuration: { ...defaultShortcutConfiguration(), actions: { 'dev.example.open': original } },
         bindings: [
+          { target: 'detach', status: 'active' },
           { target: 'launcher', status: 'active' },
           { target: action.action_id, status: 'active' },
         ],
@@ -898,6 +932,7 @@ describe('inline shortcut rows', () => {
       initial: {
         configuration,
         bindings: [
+          { target: 'detach', status: 'active' },
           { target: 'launcher', status: 'active' },
           { target: action.action_id, status: 'active' },
           { target: otherAction.action_id, status: 'active' },
@@ -925,6 +960,7 @@ describe('inline shortcut rows', () => {
           actions: { 'dev.example.open': { kind: 'chord', modifiers: ['ctrl'], key: 'KeyJ' } },
         },
         bindings: [
+          { target: 'detach', status: 'active' },
           { target: 'launcher', status: 'active' },
           { target: action.action_id, status: 'active' },
         ],
@@ -967,6 +1003,7 @@ for (const locale of ['en-US', 'zh-CN'] as const)
           },
           launcher_migration: { chord: oldChord, double_tap: oldDoubleTap },
           bindings: [
+            { target: 'detach', status: 'active' },
             { target: 'launcher', status: 'degraded' },
             { target: action.action_id, status: 'target_unavailable' },
           ],
@@ -1031,7 +1068,10 @@ test('a failed migration choice remains unresolved until its explicit retry succ
     initial: {
       configuration: { ...defaultShortcutConfiguration(4), launcher: oldChord },
       launcher_migration: { chord: oldChord, double_tap: oldDoubleTap },
-      bindings: [{ target: 'launcher', status: 'degraded' }],
+      bindings: [
+        { target: 'detach', status: 'active' },
+        { target: 'launcher', status: 'degraded' },
+      ],
       recovery_degraded: true,
       diagnostics: [],
     },
@@ -1066,6 +1106,7 @@ test('system-only reset resolves a legacy launcher choice while preserving every
       },
       launcher_migration: { chord: oldChord, double_tap: oldDoubleTap },
       bindings: [
+        { target: 'detach', status: 'active' },
         { target: 'launcher', status: 'degraded' },
         { target: action.action_id, status: 'active' },
       ],
@@ -1094,6 +1135,7 @@ test('a concurrent removal keeps the local Action candidate editable until Escap
         actions: { 'dev.example.open': { kind: 'chord', modifiers: ['ctrl'], key: 'KeyJ' } },
       },
       bindings: [
+        { target: 'detach', status: 'active' },
         { target: 'launcher', status: 'active' },
         { target: action.action_id, status: 'active' },
       ],
@@ -1108,7 +1150,10 @@ test('a concurrent removal keeps the local Action candidate editable until Escap
   act(() =>
     publish({
       configuration: defaultShortcutConfiguration(1),
-      bindings: [{ target: 'launcher', status: 'active' }],
+      bindings: [
+        { target: 'detach', status: 'active' },
+        { target: 'launcher', status: 'active' },
+      ],
       recovery_degraded: false,
       diagnostics: [],
     }),
@@ -1134,6 +1179,7 @@ describe('direct modifier selection', () => {
             actions: { 'dev.example.open': { kind: 'modifier_double_tap', modifier: 'shift' } },
           },
           bindings: [
+            { target: 'detach', status: 'active' },
             { target: 'launcher', status: 'active' },
             { target: action.action_id, status: 'active' },
           ],
@@ -1182,6 +1228,7 @@ describe('direct modifier selection', () => {
           actions: { 'dev.example.open': { kind: 'modifier_double_tap', modifier: 'shift' } },
         },
         bindings: [
+          { target: 'detach', status: 'active' },
           { target: 'launcher', status: 'active' },
           { target: action.action_id, status: 'active' },
         ],
@@ -1208,7 +1255,10 @@ describe('direct modifier selection', () => {
           ...defaultShortcutConfiguration(),
           launcher: { kind: 'modifier_double_tap', modifier: 'cmd' },
         },
-        bindings: [{ target: 'launcher', status: 'permission_required' }],
+        bindings: [
+          { target: 'detach', status: 'active' },
+          { target: 'launcher', status: 'permission_required' },
+        ],
         recovery_degraded: true,
         diagnostics: [],
       },
@@ -1356,6 +1406,7 @@ test('system reset reports a feature occupying the default key without writing o
     initial: {
       configuration,
       bindings: [
+        { target: 'detach', status: 'active' },
         { target: 'launcher', status: 'active' },
         { target: action.action_id, status: 'active' },
       ],
@@ -1385,6 +1436,7 @@ test('system reset uses the latest revision and retains features added while con
     initial: {
       configuration,
       bindings: [
+        { target: 'detach', status: 'active' },
         { target: 'launcher', status: 'active' },
         { target: action.action_id, status: 'active' },
       ],
@@ -1407,6 +1459,7 @@ test('system reset uses the latest revision and retains features added while con
     publish({
       configuration: latest,
       bindings: [
+        { target: 'detach', status: 'active' },
         { target: 'launcher', status: 'active' },
         { target: action.action_id, status: 'active' },
         { target: otherAction.action_id, status: 'active' },
@@ -1459,6 +1512,7 @@ for (const locale of ['en-US', 'zh-CN'] as const) {
       initial: {
         configuration: { ...defaultShortcutConfiguration(), actions: { [action.action_id]: savedKey } },
         bindings: [
+          { target: 'detach', status: 'active' },
           { target: 'launcher', status: 'active' },
           { target: action.action_id, status: 'active' },
         ],
@@ -1513,7 +1567,7 @@ for (const locale of ['en-US', 'zh-CN'] as const) {
       actions: [builtinHide, builtinSettings, action, otherAction],
       initial: {
         configuration,
-        bindings: ['launcher', HIDE_LAUNCHER_ACTION_ID, OPEN_SETTINGS_ACTION_ID, otherAction.action_id].map(
+        bindings: ['detach', 'launcher', HIDE_LAUNCHER_ACTION_ID, OPEN_SETTINGS_ACTION_ID, otherAction.action_id].map(
           (target) => ({ target, status: 'active' as const }),
         ),
         recovery_degraded: false,
@@ -1579,3 +1633,200 @@ for (const locale of ['en-US', 'zh-CN'] as const) {
     expect(Object.hasOwn(write.mock.calls[0]?.[1].actions ?? {}, OPEN_SETTINGS_ACTION_ID)).toBe(false);
   });
 }
+
+const detachPendingSnapshot = (): ShortcutSnapshot => ({
+  configuration: {
+    ...defaultShortcutConfiguration(9),
+    detach: null,
+    actions: { 'dev.example.open': { kind: 'chord', modifiers: ['cmd'], key: 'KeyD' } },
+  },
+  bindings: [
+    { target: 'launcher', status: 'active' },
+    { target: 'dev.example.open', status: 'active' },
+  ],
+  recovery_degraded: false,
+  diagnostics: [],
+  detach_migration: {
+    version: 1,
+    reason: 'default_conflict',
+    trigger: { kind: 'chord', modifiers: ['cmd'], key: 'KeyD' },
+    conflicting_target: 'dev.example.open',
+  },
+});
+
+describe('fixed in-app detach shortcut', () => {
+  for (const locale of ['en-US', 'zh-CN'] as const)
+    for (const theme of ['light', 'dark'] as const) {
+      test(`records, cancels, saves, clears and restores only detach in ${locale}/${theme}`, async () => {
+        const { service, write, emit, endRecording } = await setup({ locale, theme });
+        const name = locale === 'en-US' ? 'Detach plugin window' : '分离插件窗口';
+        const row = () =>
+          screen.getByRole('listitem', { name: locale === 'en-US' ? `Shortcut for ${name}` : `“${name}”的快捷键` });
+        const edit = () =>
+          within(row()).getByRole('button', {
+            name: locale === 'en-US' ? `Edit shortcut for ${name}` : `修改“${name}”的快捷键`,
+          });
+        expect(within(row()).queryByRole('combobox')).not.toBeInTheDocument();
+        expect(edit()).toHaveTextContent('Cmd + D');
+        const original = (await service.read()).configuration;
+        fireEvent.click(edit());
+        let candidate = await waitForRecording();
+        await act(async () => emit({ lease_id: 'lease_1', trigger: original.detach, cancelled: false }));
+        expect(candidate).toHaveValue('Cmd + D');
+        expect(write).not.toHaveBeenCalled();
+        fireEvent.keyDown(candidate, { key: 'Escape', code: 'Escape' });
+        await waitFor(() => expect(edit()).toHaveFocus());
+        expect(endRecording).toHaveBeenCalledWith('lease_1');
+        fireEvent.click(edit());
+        candidate = await waitForRecording();
+        fireEvent.keyDown(candidate, { key: 'j', code: 'KeyJ', metaKey: true, shiftKey: true });
+        expect((await service.read()).configuration).toEqual(original);
+        fireEvent.click(saveButton());
+        await waitFor(() => expect(edit()).toHaveFocus());
+        expect(write).toHaveBeenLastCalledWith(
+          0,
+          { ...original, detach: { kind: 'chord', modifiers: ['cmd', 'shift'], key: 'KeyJ' } },
+          { resolveDetachMigration: true },
+        );
+        expect(edit()).toHaveTextContent('Cmd + Shift + J');
+        fireEvent.click(
+          within(row()).getByRole('button', {
+            name: locale === 'en-US' ? `Clear shortcut for ${name}` : `清除“${name}”的快捷键`,
+          }),
+        );
+        await waitFor(() => expect(edit()).toHaveTextContent(locale === 'en-US' ? 'Not set' : '未设置'));
+        await waitFor(() => expect(edit()).toHaveFocus());
+        expect((await service.read()).configuration).toMatchObject({
+          launcher: original.launcher,
+          actions: original.actions,
+          detach: null,
+        });
+        fireEvent.click(
+          within(row()).getByRole('button', { name: locale === 'en-US' ? 'Restore Cmd + D' : '恢复 Cmd + D' }),
+        );
+        await waitFor(() => expect(edit()).toHaveTextContent('Cmd + D'));
+        expect((await service.read()).configuration.detach).toEqual(original.detach);
+        expect(service.requestMonitorPermission).not.toHaveBeenCalled();
+        expect(document.body.getAttribute('theme-mode')).toBe(theme === 'dark' ? 'dark' : null);
+      });
+    }
+
+  test('keeps a same-null migration unresolved after failed confirmation, then resolves only the successful explicit retry', async () => {
+    const initial = detachPendingSnapshot();
+    const { service, write } = await setup({ initial });
+    const warning = /default detach shortcut was not enabled because Example used Cmd \+ D/;
+    expect(screen.getByText(warning)).toBeInTheDocument();
+    expect(screen.queryByText(/launcher shortcut is unavailable/)).not.toBeInTheDocument();
+    write.mockRejectedValueOnce(new ShortcutError('storage_failed', undefined, initial));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep detach shortcut disabled' }));
+    await screen.findByText(/could not be saved/);
+    expect((await service.read()).detach_migration).toEqual(initial.detach_migration);
+    expect(screen.getByText(warning)).toBeInTheDocument();
+    const retry = screen.getByRole('button', { name: 'Keep detach shortcut disabled' });
+    await waitFor(() => expect(retry).toBeEnabled());
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.queryByText(warning)).not.toBeInTheDocument());
+    expect(write).toHaveBeenLastCalledWith(9, initial.configuration, { resolveDetachMigration: true });
+    expect((await service.read()).configuration.detach).toBeNull();
+    expect((await service.read()).configuration.actions).toEqual(initial.configuration.actions);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Edit shortcut for Detach plugin window' })).toHaveFocus(),
+    );
+  });
+
+  test('reports default and bidirectional canonical conflicts without replacing global bindings', async () => {
+    const initial = detachPendingSnapshot();
+    const { service, write } = await setup({ initial, actions: [{ ...action, enabled: false }] });
+    fireEvent.click(screen.getByRole('button', { name: 'Restore Cmd + D' }));
+    await screen.findByText('This shortcut is already used by Unavailable action (dev.example.open).');
+    expect(write).not.toHaveBeenCalled();
+    expect((await service.read()).configuration).toEqual(initial.configuration);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit shortcut for Detach plugin window' }));
+    const candidate = await waitForRecording();
+    fireEvent.keyDown(candidate, { key: ' ', code: 'Space', ctrlKey: true, shiftKey: true });
+    fireEvent.click(saveButton());
+    await screen.findByText('This shortcut is already used by Open lensX.');
+    expect(write).not.toHaveBeenCalled();
+    fireEvent.keyDown(candidate, { key: 'Escape', code: 'Escape' });
+  });
+
+  test('an unrelated Action save and Launcher reset retain pending detach choice after the original key changes', async () => {
+    const initial = detachPendingSnapshot();
+    const { service, write } = await setup({ initial });
+    await chooseOption(screen.getByRole('combobox', { name: 'Shortcut type for Example' }), 'Modifier double tap');
+    await chooseOption(modifierFor('Example'), 'Option');
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(addButton()).toBeEnabled());
+    expect((await service.read()).detach_migration).toEqual(initial.detach_migration);
+    expect((await service.read()).configuration.detach).toBeNull();
+    expect(screen.getByText(/default detach shortcut was not enabled/)).toBeInTheDocument();
+    expect(write.mock.calls[0]?.[2]).toBeUndefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Restore default shortcuts' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/detach shortcut.*stay the same/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Restore defaults' }));
+    await waitFor(() => expect(dialog).toHaveClass('semi-modal-content-animate-hide'));
+    fireEvent.animationEnd(dialog);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const confirmed = await service.read();
+    expect(confirmed.detach_migration).toEqual(initial.detach_migration);
+    expect(confirmed.configuration.detach).toBeNull();
+    expect(confirmed.configuration.actions[action.action_id]).toEqual({
+      kind: 'modifier_double_tap',
+      modifier: 'option',
+    });
+    expect(write.mock.calls[1]?.[2]).toBeUndefined();
+  });
+
+  test('a local execution failure does not request global monitoring or display a degraded Launcher', async () => {
+    const { service } = await setup({
+      initial: {
+        configuration: defaultShortcutConfiguration(),
+        bindings: [
+          { target: 'launcher', status: 'active' },
+          { target: 'detach', status: 'local_unavailable' },
+        ],
+        recovery_degraded: false,
+        diagnostics: [],
+      },
+    });
+    expect(screen.getByText('Saved · in-app shortcut unavailable')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Allow input monitoring' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/launcher shortcut is unavailable/)).not.toBeInTheDocument();
+    expect(service.requestMonitorPermission).not.toHaveBeenCalled();
+  });
+
+  test('a late detach save response cannot replace a newer confirmed snapshot or revive a cleared migration', async () => {
+    const initial = detachPendingSnapshot();
+    const { write, publish } = await setup({ initial });
+    let resolveSave: ((value: ShortcutSnapshot) => void) | undefined;
+    write.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Keep detach shortcut disabled' }));
+    expect(screen.getByRole('button', { name: 'Edit shortcut for Open lensX' })).toBeDisabled();
+    const latest: ShortcutSnapshot = {
+      configuration: {
+        ...initial.configuration,
+        revision: 12,
+        detach: { kind: 'chord', modifiers: ['ctrl'], key: 'KeyJ' },
+      },
+      bindings: [
+        { target: 'launcher', status: 'active' },
+        { target: 'detach', status: 'active' },
+        { target: action.action_id, status: 'active' },
+      ],
+      recovery_degraded: false,
+      diagnostics: [],
+    };
+    await act(async () => publish(latest));
+    await act(async () => resolveSave?.({ ...initial, configuration: { ...initial.configuration, revision: 10 } }));
+    const edit = screen.getByRole('button', { name: 'Edit shortcut for Detach plugin window' });
+    await waitFor(() => expect(edit).toHaveFocus());
+    expect(edit).toHaveTextContent('Ctrl + J');
+    expect(screen.queryByText(/default detach shortcut was not enabled/)).not.toBeInTheDocument();
+  });
+});

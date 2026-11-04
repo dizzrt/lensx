@@ -22,11 +22,12 @@ use crate::{
 #[cfg(feature = "plugin-development-mode")]
 use std::time::{Duration, UNIX_EPOCH};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::{self, File},
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, Mutex, MutexGuard, OnceLock},
+    time::Instant,
 };
 use tauri::{http, AppHandle, Manager, Runtime, State};
 
@@ -34,6 +35,8 @@ const MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_VERIFIED_CACHE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_VERIFIED_CACHE_ENTRIES: usize = 256;
 const MAX_SCOPE_ATTEMPTS: usize = 8;
+const RESOURCE_CREATION_RESERVATION_MS: u64 = 10_000;
+const MAX_RESOURCE_CREATION_RESERVATIONS: usize = 32;
 const NOT_FOUND_BODY: &[u8] = b"Plugin resource unavailable.";
 const METHOD_NOT_ALLOWED_BODY: &[u8] = b"Plugin resource method unavailable.";
 const INTERNAL_BODY: &[u8] = b"Plugin resource request failed.";
@@ -76,6 +79,86 @@ struct DevelopmentPayloadSeal(Vec<DevelopmentPayloadSealEntry>);
 struct ScopeState {
     by_entry: HashMap<String, ScopeBinding>,
     by_scope: HashMap<String, ScopeBinding>,
+    leases: HashMap<String, RuntimeResourceAuthority>,
+    reservations: HashMap<String, ResourceCreationReservation>,
+    provisional_until: HashMap<String, u64>,
+    issued_scopes: HashSet<String>,
+    used_attempts: HashSet<String>,
+    used_sources: HashSet<String>,
+}
+
+#[derive(Clone)]
+struct ResourceCreationReservation {
+    binding: ScopeBinding,
+    expires_at_ms: u64,
+}
+
+/// This reservation retains generation bytes, not WebView read authority.
+/// Dropping an unconsumed native creation always releases its scope hold.
+pub(crate) struct PluginResourceCreationReservation<'a> {
+    service: &'a PluginResourceService,
+    attempt_id: String,
+    pub(crate) entry: PluginResourceEntry,
+}
+
+impl Drop for PluginResourceCreationReservation<'_> {
+    fn drop(&mut self) {
+        self.service.release_creation_reservation(&self.attempt_id);
+    }
+}
+
+impl ScopeState {
+    fn retire(&mut self, binding: &ScopeBinding) {
+        self.leases.retain(|_, lease| lease.binding != *binding);
+        self.reservations
+            .retain(|_, reservation| reservation.binding != *binding);
+        self.provisional_until.remove(&binding.scope);
+        self.by_scope.remove(&binding.scope);
+        if self.by_entry.get(&binding.entry_id) == Some(binding) {
+            self.by_entry.remove(&binding.entry_id);
+        }
+    }
+
+    fn retire_if_unheld(&mut self, binding: &ScopeBinding) {
+        if !self.leases.values().any(|lease| lease.binding == *binding)
+            && !self
+                .reservations
+                .values()
+                .any(|reservation| reservation.binding == *binding)
+        {
+            self.retire(binding);
+        }
+    }
+
+    fn expire(&mut self, now_ms: u64) -> usize {
+        let expired = self
+            .reservations
+            .iter()
+            .filter(|(_, reservation)| now_ms >= reservation.expires_at_ms)
+            .map(|(attempt, reservation)| (attempt.clone(), reservation.binding.clone()))
+            .collect::<Vec<_>>();
+        for (attempt, _) in &expired {
+            self.reservations.remove(attempt);
+        }
+        for (_, binding) in &expired {
+            self.retire_if_unheld(binding);
+        }
+        let provisional = self
+            .provisional_until
+            .iter()
+            .filter(|(_, deadline)| now_ms >= **deadline)
+            .filter_map(|(scope, _)| self.by_scope.get(scope).cloned())
+            .collect::<Vec<_>>();
+        for binding in provisional {
+            self.retire_if_unheld(&binding);
+        }
+        expired.len()
+    }
+}
+
+fn resource_now_ms() -> u64 {
+    static EPOCH: OnceLock<Instant> = OnceLock::new();
+    u64::try_from(EPOCH.get_or_init(Instant::now).elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -181,22 +264,6 @@ impl VerifiedPluginResourceByteCache {
             }
         }
     }
-
-    fn evict_entry(&mut self, entry_id: &str) {
-        let keys = self
-            .entries
-            .keys()
-            .filter(|key| key.entry_id == entry_id)
-            .cloned()
-            .collect::<Vec<_>>();
-        for key in keys {
-            if let Some(evicted) = self.entries.remove(&key) {
-                self.total_bytes = self
-                    .total_bytes
-                    .saturating_sub(evicted.value.bounded_length);
-            }
-        }
-    }
 }
 
 pub struct PluginResourceService {
@@ -205,7 +272,6 @@ pub struct PluginResourceService {
     html_csp: Arc<str>,
     scopes: Mutex<ScopeState>,
     verified_byte_cache: Mutex<VerifiedPluginResourceByteCache>,
-    runtime_authority: Mutex<Option<RuntimeResourceAuthority>>,
     #[cfg(feature = "plugin-development-mode")]
     development_snapshots: Mutex<Option<Arc<DevelopmentSnapshotStore>>>,
     #[cfg(feature = "plugin-development-mode")]
@@ -277,6 +343,15 @@ fn development_payload_seal(root: &Path) -> Result<DevelopmentPayloadSeal, ()> {
 
 impl PluginResourceService {
     #[cfg(test)]
+    pub(crate) fn live_authority_counts(&self) -> (usize, usize, usize) {
+        let scopes = self.lock_scopes();
+        (
+            scopes.by_scope.len(),
+            scopes.leases.len(),
+            scopes.reservations.len(),
+        )
+    }
+    #[cfg(test)]
     pub fn initialize(manager: Arc<PluginManager>, packages_root: Option<PathBuf>) -> Arc<Self> {
         Self::initialize_with_html_csp(manager, packages_root, Arc::from(TEST_PLUGIN_DOCUMENT_CSP))
     }
@@ -292,7 +367,6 @@ impl PluginResourceService {
             html_csp,
             scopes: Mutex::new(ScopeState::default()),
             verified_byte_cache: Mutex::new(VerifiedPluginResourceByteCache::default()),
-            runtime_authority: Mutex::new(None),
             #[cfg(feature = "plugin-development-mode")]
             development_snapshots: Mutex::new(None),
             #[cfg(feature = "plugin-development-mode")]
@@ -306,6 +380,33 @@ impl PluginResourceService {
         &self,
         request: &ResolvePluginResourceEntryRequest,
     ) -> Result<PluginResourceEntry, PluginResourceError> {
+        self.resolve_entry_inner(request, None, resource_now_ms())
+    }
+
+    pub(crate) fn reserve_entry_for_attempt(
+        &self,
+        request: &ResolvePluginResourceEntryRequest,
+        attempt_id: &str,
+    ) -> Result<PluginResourceCreationReservation<'_>, PluginResourceError> {
+        let entry = self.resolve_entry_inner(request, Some(attempt_id), resource_now_ms())?;
+        Ok(PluginResourceCreationReservation {
+            service: self,
+            attempt_id: attempt_id.into(),
+            entry,
+        })
+    }
+
+    fn resolve_entry_inner(
+        &self,
+        request: &ResolvePluginResourceEntryRequest,
+        attempt_id: Option<&str>,
+        now_ms: u64,
+    ) -> Result<PluginResourceEntry, PluginResourceError> {
+        if attempt_id.is_some_and(|id| !valid_resource_attempt(id)) {
+            return Err(PluginResourceError::new(
+                PluginResourceErrorCode::InvalidRequest,
+            ));
+        }
         let projection = self
             .manager
             .read_resource_projection(&request.entry_id, Some(&request.expected_revision))
@@ -353,38 +454,85 @@ impl PluginResourceService {
                 );
         }
 
-        let mut scopes = self.lock_scopes();
-        if let Some(existing) = scopes.by_entry.get(&projection.entry_id).cloned() {
-            if existing.resource_generation == projection.resource_generation {
-                return Ok(resource_entry(
-                    &projection,
-                    build_native_resource_url(
-                        &existing.scope,
-                        &projection.record_key,
-                        &projection.registration.manifest.version,
-                        entry_path,
-                    ),
-                ));
-            }
-            scopes.by_entry.remove(&projection.entry_id);
-            scopes.by_scope.remove(&existing.scope);
-            self.evict_verified_generation(&existing.entry_id, existing.resource_generation);
+        #[cfg(test)]
+        if let Some(hook) = self.test_hook() {
+            hook(ResourceReadHookPoint::BeforeScopeCommit, &payload_root);
         }
-
-        let scope = generate_scope(&scopes)?;
-        let binding = ScopeBinding {
-            scope: scope.clone(),
-            entry_id: projection.entry_id.clone(),
-            resource_generation: projection.resource_generation,
+        let mut scopes = self.lock_scopes();
+        scopes.expire(now_ms);
+        // Revalidate while scope replacement is excluded. A delayed old resolve
+        // must never retire a newer generation already installed by a sibling.
+        let current = self
+            .manager
+            .read_resource_projection(&projection.entry_id, None)
+            .map_err(map_projection_error)?;
+        if current.resource_generation != projection.resource_generation
+            || current.record_key != projection.record_key
+            || !current.registration.facts.enabled
+            || !current.registration.compatibility.lensx
+            || !current.registration.compatibility.host_api
+        {
+            return Err(PluginResourceError::new(
+                PluginResourceErrorCode::Unavailable,
+            ));
+        }
+        if attempt_id.is_some_and(|id| scopes.used_attempts.contains(id))
+            || (attempt_id.is_some()
+                && scopes.reservations.len() >= MAX_RESOURCE_CREATION_RESERVATIONS)
+        {
+            return Err(PluginResourceError::new(
+                PluginResourceErrorCode::Unavailable,
+            ));
+        }
+        // Allocation and its trusted-attempt reservation commit under one mutex.
+        // A sibling close can retire either before this point or after it, never between.
+        let binding = match scopes.by_entry.get(&projection.entry_id).cloned() {
+            Some(existing) if existing.resource_generation == projection.resource_generation => {
+                existing
+            }
+            previous => {
+                if let Some(previous) = previous {
+                    scopes.retire(&previous);
+                    self.evict_verified_generation(
+                        &previous.entry_id,
+                        previous.resource_generation,
+                    );
+                }
+                let scope = generate_scope(&scopes)?;
+                let binding = ScopeBinding {
+                    scope: scope.clone(),
+                    entry_id: projection.entry_id.clone(),
+                    resource_generation: projection.resource_generation,
+                };
+                scopes.issued_scopes.insert(scope.clone());
+                scopes
+                    .by_entry
+                    .insert(projection.entry_id.clone(), binding.clone());
+                scopes.by_scope.insert(scope.clone(), binding.clone());
+                // Preflight descriptors cannot authorize reads. They are short-lived
+                // candidates until native creation binds a trusted attempt.
+                scopes.provisional_until.insert(
+                    scope,
+                    now_ms.saturating_add(RESOURCE_CREATION_RESERVATION_MS),
+                );
+                binding
+            }
         };
-        scopes
-            .by_entry
-            .insert(projection.entry_id.clone(), binding.clone());
-        scopes.by_scope.insert(scope.clone(), binding);
+        if let Some(attempt_id) = attempt_id {
+            scopes.used_attempts.insert(attempt_id.into());
+            scopes.provisional_until.remove(&binding.scope);
+            scopes.reservations.insert(
+                attempt_id.into(),
+                ResourceCreationReservation {
+                    binding: binding.clone(),
+                    expires_at_ms: now_ms.saturating_add(RESOURCE_CREATION_RESERVATION_MS),
+                },
+            );
+        }
         Ok(resource_entry(
             &projection,
             build_native_resource_url(
-                &scope,
+                &binding.scope,
                 &projection.record_key,
                 &projection.registration.manifest.version,
                 entry_path,
@@ -443,12 +591,15 @@ impl PluginResourceService {
         request: &http::Request<Vec<u8>>,
     ) -> Result<(&'static str, Vec<u8>), ProtocolFailure> {
         let parsed = parse_resource_uri(request.uri()).ok_or(ProtocolFailure::Unavailable)?;
-        let binding = self
-            .lock_scopes()
-            .by_scope
-            .get(&parsed.origin_scope)
-            .cloned()
-            .ok_or(ProtocolFailure::Unavailable)?;
+        let binding = {
+            let mut scopes = self.lock_scopes();
+            scopes.expire(resource_now_ms());
+            scopes
+                .by_scope
+                .get(&parsed.origin_scope)
+                .cloned()
+                .ok_or(ProtocolFailure::Unavailable)?
+        };
         if let Some(webview_label) = webview_label {
             if !self.source_is_current(webview_label, &binding) {
                 return Err(ProtocolFailure::Unavailable);
@@ -493,6 +644,13 @@ impl PluginResourceService {
                 }
             }
         };
+        #[cfg(test)]
+        if let Some(hook) = self.test_hook() {
+            hook(
+                ResourceReadHookPoint::BeforeDelivery,
+                &payload_root.join(&parsed.resource_path),
+            );
+        }
         let current = self
             .manager
             .read_resource_projection(&binding.entry_id, None)
@@ -508,6 +666,9 @@ impl PluginResourceService {
         {
             self.evict_verified_generation(&binding.entry_id, binding.resource_generation);
             self.revoke_binding(&binding);
+            return Err(ProtocolFailure::Unavailable);
+        }
+        if self.lock_scopes().by_scope.get(&binding.scope) != Some(&binding) {
             return Err(ProtocolFailure::Unavailable);
         }
         if let Some(webview_label) = webview_label {
@@ -532,49 +693,72 @@ impl PluginResourceService {
         entry_id: &str,
         resource_generation: u64,
     ) -> bool {
-        if attempt_id.is_empty()
-            || webview_label.is_empty()
+        if !valid_resource_attempt(attempt_id)
+            || !crate::plugin_child_webview_adapter::valid_source_label(webview_label)
             || entry_id.is_empty()
             || resource_generation == 0
         {
             return false;
         }
-        let binding = self.lock_scopes().by_entry.get(entry_id).cloned();
-        let Some(binding) = binding.filter(|binding| {
-            binding.resource_generation == resource_generation
-                && self
-                    .manager
-                    .read_resource_projection(entry_id, None)
-                    .is_ok_and(|projection| projection.resource_generation == resource_generation)
-        }) else {
-            return false;
-        };
-        let mut authority = self.lock_runtime_authority();
-        if authority.is_some() {
+        if !self
+            .manager
+            .read_resource_projection(entry_id, None)
+            .is_ok_and(|projection| {
+                projection.resource_generation == resource_generation
+                    && self.prove_eligible_payload(&projection).is_ok()
+            })
+        {
             return false;
         }
-        *authority = Some(RuntimeResourceAuthority {
-            attempt_id: attempt_id.to_owned(),
-            webview_label: webview_label.to_owned(),
-            binding,
-        });
+        let mut scopes = self.lock_scopes();
+        scopes.expire(resource_now_ms());
+        let Some(reservation) = scopes
+            .reservations
+            .get(attempt_id)
+            .filter(|reservation| {
+                reservation.binding.entry_id == entry_id
+                    && reservation.binding.resource_generation == resource_generation
+                    && scopes.by_scope.get(&reservation.binding.scope) == Some(&reservation.binding)
+            })
+            .cloned()
+        else {
+            return false;
+        };
+        if scopes.leases.contains_key(attempt_id) || scopes.used_sources.contains(webview_label) {
+            return false;
+        }
+        scopes.reservations.remove(attempt_id);
+        scopes.used_sources.insert(webview_label.into());
+        scopes.leases.insert(
+            attempt_id.into(),
+            RuntimeResourceAuthority {
+                attempt_id: attempt_id.into(),
+                webview_label: webview_label.into(),
+                binding: reservation.binding,
+            },
+        );
+        true
+    }
+
+    fn release_creation_reservation(&self, attempt_id: &str) -> bool {
+        let mut scopes = self.lock_scopes();
+        let Some(reservation) = scopes.reservations.remove(attempt_id) else {
+            return false;
+        };
+        scopes.retire_if_unheld(&reservation.binding);
         true
     }
 
     pub(crate) fn revoke_runtime_source(&self, attempt_id: &str) -> bool {
-        let revoked = {
-            let mut authority = self.lock_runtime_authority();
-            if authority
-                .as_ref()
-                .is_some_and(|authority| authority.attempt_id == attempt_id)
-            {
-                authority.take()
-            } else {
-                None
-            }
-        };
-        if let Some(authority) = revoked {
-            self.revoke_binding(&authority.binding);
+        let mut scopes = self.lock_scopes();
+        scopes.expire(resource_now_ms());
+        let authority = scopes.leases.remove(attempt_id);
+        let reservation = scopes.reservations.remove(attempt_id);
+        let binding = authority
+            .map(|authority| authority.binding)
+            .or_else(|| reservation.map(|reservation| reservation.binding));
+        if let Some(binding) = binding {
+            scopes.retire_if_unheld(&binding);
             true
         } else {
             false
@@ -582,25 +766,46 @@ impl PluginResourceService {
     }
 
     pub(crate) fn revoke_entry_eligibility(&self, entry_id: &str) {
-        {
-            let mut authority = self.lock_runtime_authority();
-            if authority
-                .as_ref()
-                .is_some_and(|authority| authority.binding.entry_id == entry_id)
-            {
-                authority.take();
-            }
-        }
-        {
+        let retained_generation = {
             let mut scopes = self.lock_scopes();
-            if let Some(binding) = scopes.by_entry.remove(entry_id) {
-                scopes.by_scope.remove(&binding.scope);
+            // The callback may arrive after a later successful re-enable/reload.
+            // Read current Manager facts under the scope mutex so a new scope
+            // cannot be installed between this decision and the retirement.
+            let retained = self
+                .manager
+                .read_resource_projection(entry_id, None)
+                .ok()
+                .filter(|projection| {
+                    projection.registration.facts.enabled
+                        && projection.registration.compatibility.lensx
+                        && projection.registration.compatibility.host_api
+                })
+                .map(|projection| projection.resource_generation);
+            if let Some(binding) = scopes.by_entry.get(entry_id).cloned().filter(|binding| {
+                retained.is_none_or(|generation| binding.resource_generation < generation)
+            }) {
+                scopes.retire(&binding);
             }
-        }
-        self.verified_byte_cache
+            retained
+        };
+        let mut cache = self
+            .verified_byte_cache
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .evict_entry(entry_id);
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let generations = cache
+            .entries
+            .keys()
+            .filter(|key| {
+                key.entry_id == entry_id
+                    && retained_generation
+                        .is_none_or(|generation| key.resource_generation < generation)
+            })
+            .map(|key| key.resource_generation)
+            .collect::<HashSet<_>>();
+        for generation in generations {
+            cache.evict_entry_generation(entry_id, generation);
+        }
+        drop(cache);
         #[cfg(feature = "plugin-development-mode")]
         self.development_payload_proofs
             .lock()
@@ -609,9 +814,10 @@ impl PluginResourceService {
     }
 
     fn source_is_current(&self, webview_label: &str, binding: &ScopeBinding) -> bool {
-        self.lock_runtime_authority()
-            .as_ref()
-            .is_some_and(|authority| {
+        let mut scopes = self.lock_scopes();
+        scopes.expire(resource_now_ms());
+        scopes.by_scope.get(&binding.scope) == Some(binding)
+            && scopes.leases.values().any(|authority| {
                 authority.webview_label == webview_label && authority.binding == *binding
             })
     }
@@ -699,24 +905,7 @@ impl PluginResourceService {
     }
 
     fn revoke_binding(&self, binding: &ScopeBinding) {
-        {
-            let mut authority = self.lock_runtime_authority();
-            if authority
-                .as_ref()
-                .is_some_and(|authority| authority.binding == *binding)
-            {
-                authority.take();
-            }
-        }
-        let mut scopes = self.lock_scopes();
-        scopes.by_scope.remove(&binding.scope);
-        if scopes
-            .by_entry
-            .get(&binding.entry_id)
-            .is_some_and(|current| current.scope == binding.scope)
-        {
-            scopes.by_entry.remove(&binding.entry_id);
-        }
+        self.lock_scopes().retire(binding);
     }
 
     fn evict_verified_generation(&self, entry_id: &str, resource_generation: u64) {
@@ -728,12 +917,6 @@ impl PluginResourceService {
 
     fn lock_scopes(&self) -> MutexGuard<'_, ScopeState> {
         self.scopes
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
-
-    fn lock_runtime_authority(&self) -> MutexGuard<'_, Option<RuntimeResourceAuthority>> {
-        self.runtime_authority
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
@@ -776,6 +959,11 @@ impl crate::plugin_child_webview_service::PluginChildWebviewResourceAuthority
     fn revoke(&self, attempt_id: &str) -> bool {
         self.revoke_runtime_source(attempt_id)
     }
+}
+
+fn valid_resource_attempt(value: &str) -> bool {
+    crate::plugin_child_webview_service::PluginChildWebviewAttempt::from_opaque_id(value)
+        .is_some_and(|attempt| attempt.opaque_id() != "attempt_0000000000000000")
 }
 
 fn resource_entry(
@@ -854,7 +1042,7 @@ fn generate_scope(scopes: &ScopeState) -> Result<String, PluginResourceError> {
             .iter()
             .map(|byte| format!("{byte:02x}"))
             .collect::<String>();
-        if !scopes.by_scope.contains_key(&scope) {
+        if !scopes.issued_scopes.contains(&scope) {
             return Ok(scope);
         }
     }
@@ -901,6 +1089,8 @@ impl From<std::io::Error> for ProtocolFailure {
 #[cfg(test)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ResourceReadHookPoint {
+    BeforeScopeCommit,
+    BeforeDelivery,
     BeforeOpen,
     AfterOpen,
     BeforeFinalValidation,
@@ -1087,15 +1277,31 @@ pub(crate) fn setup_plugin_resource_service<R: Runtime>(
     app_target: &TrustedAppTarget,
 ) -> Arc<PluginResourceService> {
     let service = PluginResourceService::initialize_with_html_csp(
-        manager,
+        Arc::clone(&manager),
         installer.managed_packages_root(),
         current_plugin_runtime_document_csp(app_target),
     );
     let weak_service = Arc::downgrade(&service);
+    let weak_children = app
+        .try_state::<Arc<crate::plugin_child_webview_service::PluginChildWebviewService<R>>>()
+        .map(|children| Arc::downgrade(children.inner()));
+    let installer_manager = Arc::clone(&manager);
+    let installer_app = app.clone();
     installer.attach_resource_eligibility_revoker(Arc::new(move |entry_id| {
         if let Some(service) = weak_service.upgrade() {
             service.revoke_entry_eligibility(entry_id);
         }
+        if let Some(children) = weak_children
+            .as_ref()
+            .and_then(|children| children.upgrade())
+        {
+            crate::plugin_child_webview_host_dispatcher::reconcile_entry_instances(
+                &children,
+                &installer_manager,
+                entry_id,
+            );
+        }
+        crate::plugin_detached_window_native::reconcile_plugin_detached_windows(&installer_app);
     }));
     #[cfg(feature = "plugin-development-mode")]
     if let Some(state) =
@@ -1103,10 +1309,28 @@ pub(crate) fn setup_plugin_resource_service<R: Runtime>(
     {
         service.attach_development_snapshots(state.snapshot_store());
         let weak_service = Arc::downgrade(&service);
+        let weak_children = app
+            .try_state::<Arc<crate::plugin_child_webview_service::PluginChildWebviewService<R>>>()
+            .map(|children| Arc::downgrade(children.inner()));
+        let development_manager = Arc::clone(&manager);
+        let development_app = app.clone();
         state.attach_resource_eligibility_revoker(Arc::new(move |entry_id| {
             if let Some(service) = weak_service.upgrade() {
                 service.revoke_entry_eligibility(entry_id);
             }
+            if let Some(children) = weak_children
+                .as_ref()
+                .and_then(|children| children.upgrade())
+            {
+                crate::plugin_child_webview_host_dispatcher::reconcile_entry_instances(
+                    &children,
+                    &development_manager,
+                    entry_id,
+                );
+            }
+            crate::plugin_detached_window_native::reconcile_plugin_detached_windows(
+                &development_app,
+            );
         }));
     }
     let managed = app.manage(Arc::clone(&service));
@@ -1300,7 +1524,18 @@ mod tests {
         attempt_id: &str,
         webview_label: &str,
     ) -> PluginResourceEntry {
-        let entry = resolve(fixture);
+        let reservation = fixture
+            .service
+            .reserve_entry_for_attempt(
+                &ResolvePluginResourceEntryRequest {
+                    contract_version: PLUGIN_RESOURCE_CONTRACT_VERSION.into(),
+                    entry_id: fixture.entry_id.clone(),
+                    expected_revision: fixture.manager.registration_revision(),
+                },
+                attempt_id,
+            )
+            .expect("creation reservation");
+        let entry = reservation.entry.clone();
         let projection = fixture
             .manager
             .read_resource_projection(&fixture.entry_id, None)
@@ -1936,9 +2171,13 @@ mod tests {
             .entries
             .is_empty());
 
+        fixture
+            .manager
+            .set_enabled(&fixture.plugin_id, false)
+            .unwrap();
         fixture.service.revoke_entry_eligibility(&fixture.entry_id);
 
-        assert!(fixture.service.lock_runtime_authority().is_none());
+        assert!(fixture.service.lock_scopes().leases.is_empty());
         assert!(fixture.service.lock_scopes().by_entry.is_empty());
         assert!(fixture.service.lock_scopes().by_scope.is_empty());
         assert!(fixture
@@ -2285,5 +2524,426 @@ mod tests {
                 .status(),
             http::StatusCode::NOT_FOUND
         );
+    }
+    #[test]
+    fn sibling_sources_share_scope_but_never_authority_or_final_retirement() {
+        let fixture = fixture("sibling-leases");
+        let a = activate_source(&fixture, "attempt_0000000000000001", "plugin-child-a");
+        let b = activate_source(&fixture, "attempt_0000000000000002", "plugin-child-b");
+        assert_eq!(a.entry_url, b.entry_url);
+        assert_eq!(resolve(&fixture).entry_url, a.entry_url);
+        for source in ["plugin-child-a", "plugin-child-b"] {
+            assert_eq!(
+                fixture
+                    .service
+                    .handle_request_from_source(source, request(http::Method::GET, &a.entry_url))
+                    .status(),
+                http::StatusCode::OK
+            );
+        }
+        assert!(fixture
+            .service
+            .revoke_runtime_source("attempt_0000000000000001"));
+        assert!(!fixture
+            .service
+            .revoke_runtime_source("attempt_0000000000000001"));
+        assert_eq!(resolve(&fixture).entry_url, b.entry_url);
+        assert_eq!(fixture.service.lock_scopes().leases.len(), 1);
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source(
+                    "plugin-child-a",
+                    request(http::Method::GET, &b.entry_url)
+                )
+                .status(),
+            http::StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source(
+                    "plugin-child-b",
+                    request(http::Method::GET, &b.entry_url)
+                )
+                .status(),
+            http::StatusCode::OK
+        );
+        assert!(fixture
+            .service
+            .revoke_runtime_source("attempt_0000000000000002"));
+        assert!(fixture.service.lock_scopes().by_scope.is_empty());
+        let c = activate_source(&fixture, "attempt_0000000000000003", "plugin-child-c");
+        assert_ne!(c.entry_url, a.entry_url);
+        for source in ["plugin-child-a", "plugin-child-b", "main"] {
+            assert_eq!(
+                fixture
+                    .service
+                    .handle_request_from_source(source, request(http::Method::GET, &c.entry_url))
+                    .status(),
+                http::StatusCode::NOT_FOUND
+            );
+        }
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source(
+                    "plugin-child-c",
+                    request(http::Method::GET, &a.entry_url)
+                )
+                .status(),
+            http::StatusCode::NOT_FOUND
+        );
+    }
+
+    #[test]
+    fn bounded_creation_hold_survives_sibling_close_without_authorizing_a_source() {
+        let fixture = fixture("creation-hold");
+        let a = activate_source(&fixture, "attempt_0000000000000001", "plugin-child-a");
+        let query = ResolvePluginResourceEntryRequest {
+            contract_version: PLUGIN_RESOURCE_CONTRACT_VERSION.into(),
+            entry_id: fixture.entry_id.clone(),
+            expected_revision: fixture.manager.registration_revision(),
+        };
+        let b = fixture
+            .service
+            .reserve_entry_for_attempt(&query, "attempt_0000000000000002")
+            .unwrap();
+        assert_eq!(b.entry.entry_url, a.entry_url);
+        assert!(fixture
+            .service
+            .revoke_runtime_source("attempt_0000000000000001"));
+        assert_eq!(fixture.service.lock_scopes().by_scope.len(), 1);
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source(
+                    "plugin-child-b",
+                    request(http::Method::GET, &b.entry.entry_url)
+                )
+                .status(),
+            http::StatusCode::NOT_FOUND
+        );
+        let generation = fixture
+            .manager
+            .read_resource_projection(&fixture.entry_id, None)
+            .unwrap()
+            .resource_generation;
+        assert!(fixture.service.activate_runtime_source(
+            "attempt_0000000000000002",
+            "plugin-child-b",
+            &fixture.entry_id,
+            generation
+        ));
+        drop(b);
+        assert_eq!(fixture.service.lock_scopes().reservations.len(), 0);
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source(
+                    "plugin-child-b",
+                    request(http::Method::GET, &a.entry_url)
+                )
+                .status(),
+            http::StatusCode::OK
+        );
+        assert!(fixture
+            .service
+            .revoke_runtime_source("attempt_0000000000000002"));
+        let failed = fixture
+            .service
+            .reserve_entry_for_attempt(&query, "attempt_0000000000000003")
+            .unwrap();
+        let failed_url = failed.entry.entry_url.clone();
+        assert_ne!(failed_url, a.entry_url);
+        drop(failed);
+        assert!(fixture.service.lock_scopes().by_scope.is_empty());
+        assert!(fixture
+            .service
+            .reserve_entry_for_attempt(&query, "attempt_0000000000000003")
+            .is_err());
+        let next = fixture
+            .service
+            .reserve_entry_for_attempt(&query, "attempt_0000000000000004")
+            .unwrap();
+        assert_ne!(next.entry.entry_url, failed_url);
+        assert!(!fixture.service.activate_runtime_source(
+            "attempt_0000000000000004",
+            "plugin-child-b",
+            &fixture.entry_id,
+            generation
+        ));
+        drop(next);
+        assert!(fixture.service.lock_scopes().by_scope.is_empty());
+    }
+
+    #[test]
+    fn reservation_deadline_and_capacity_are_bounded_and_never_revive_retired_scopes() {
+        let fixture = fixture("reservation-deadline");
+        let query = ResolvePluginResourceEntryRequest {
+            contract_version: PLUGIN_RESOURCE_CONTRACT_VERSION.into(),
+            entry_id: fixture.entry_id.clone(),
+            expected_revision: fixture.manager.registration_revision(),
+        };
+        let first = fixture
+            .service
+            .resolve_entry_inner(&query, Some("attempt_0000000000000001"), 0)
+            .unwrap();
+        for sequence in 2..=32 {
+            let next = fixture
+                .service
+                .resolve_entry_inner(&query, Some(&format!("attempt_{sequence:016x}")), 0)
+                .unwrap();
+            assert_eq!(first.entry_url, next.entry_url);
+        }
+        assert!(fixture
+            .service
+            .resolve_entry_inner(&query, Some("attempt_0000000000000021"), 0)
+            .is_err());
+        assert_eq!(fixture.service.lock_scopes().expire(9_999), 0);
+        assert_eq!(fixture.service.lock_scopes().expire(10_000), 32);
+        assert!(fixture.service.lock_scopes().reservations.is_empty());
+        assert!(fixture.service.lock_scopes().by_scope.is_empty());
+        let generation = fixture
+            .manager
+            .read_resource_projection(&fixture.entry_id, None)
+            .unwrap()
+            .resource_generation;
+        assert!(!fixture.service.activate_runtime_source(
+            "attempt_0000000000000001",
+            "plugin-child-expired",
+            &fixture.entry_id,
+            generation
+        ));
+        let after = fixture
+            .service
+            .resolve_entry_inner(&query, Some("attempt_0000000000000021"), 10_001)
+            .unwrap();
+        assert_ne!(first.entry_url, after.entry_url);
+        assert!(fixture
+            .service
+            .resolve_entry_inner(&query, Some("attempt_0000000000000001"), 10_001)
+            .is_err());
+    }
+
+    #[test]
+    fn source_close_before_cold_or_cached_delivery_drops_only_that_response() {
+        for cached in [false, true] {
+            let fixture = fixture(if cached {
+                "cached-source-race"
+            } else {
+                "cold-source-race"
+            });
+            let a = activate_source(&fixture, "attempt_0000000000000001", "plugin-child-a");
+            let b = activate_source(&fixture, "attempt_0000000000000002", "plugin-child-b");
+            let script = resource_url(&a.entry_url, "dist/plugin.js");
+            if cached {
+                assert_eq!(
+                    fixture
+                        .service
+                        .handle_request_from_source(
+                            "plugin-child-a",
+                            request(http::Method::GET, &script)
+                        )
+                        .status(),
+                    http::StatusCode::OK
+                );
+            }
+            let service = Arc::downgrade(&fixture.service);
+            let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let observed = calls.clone();
+            fixture
+                .service
+                .set_read_hook(Some(Arc::new(move |point, target| {
+                    if point == ResourceReadHookPoint::BeforeDelivery
+                        && target.ends_with("plugin.js")
+                    {
+                        observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        assert!(service
+                            .upgrade()
+                            .unwrap()
+                            .revoke_runtime_source("attempt_0000000000000001"));
+                    }
+                })));
+            let response = fixture
+                .service
+                .handle_request_from_source("plugin-child-a", request(http::Method::GET, &script));
+            fixture.service.set_read_hook(None);
+            assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+            assert_eq!(response.status(), http::StatusCode::NOT_FOUND);
+            assert_eq!(fixture.service.lock_scopes().leases.len(), 1);
+            assert_eq!(resolve(&fixture).entry_url, b.entry_url);
+            assert_eq!(
+                fixture
+                    .service
+                    .handle_request_from_source(
+                        "plugin-child-b",
+                        request(http::Method::GET, &script)
+                    )
+                    .status(),
+                http::StatusCode::OK
+            );
+        }
+    }
+
+    #[test]
+    fn generation_retirement_revokes_all_sibling_leases_and_pending_creations_only() {
+        let fixture = fixture("fanout-resource");
+        let a = activate_source(&fixture, "attempt_0000000000000001", "plugin-child-a");
+        let b = activate_source(&fixture, "attempt_0000000000000002", "plugin-child-b");
+        let query = ResolvePluginResourceEntryRequest {
+            contract_version: PLUGIN_RESOURCE_CONTRACT_VERSION.into(),
+            entry_id: fixture.entry_id.clone(),
+            expected_revision: fixture.manager.registration_revision(),
+        };
+        let pending = fixture
+            .service
+            .reserve_entry_for_attempt(&query, "attempt_0000000000000003")
+            .unwrap();
+        let other_id = "com.acme.sibling";
+        let other_root = fixture
+            .packages_root
+            .join(plugin_record_key(other_id))
+            .join(DIGEST_B);
+        write_file(&other_root, "dist/plugin.html", b"other plugin");
+        fixture
+            .manager
+            .register(
+                manifest(other_id, "1.0.0", true),
+                facts(&other_root, DIGEST_B, true),
+            )
+            .unwrap();
+        let other_entry = healthy_entry_id(&fixture.manager.registration(other_id).unwrap());
+        let other_query = ResolvePluginResourceEntryRequest {
+            contract_version: PLUGIN_RESOURCE_CONTRACT_VERSION.into(),
+            entry_id: other_entry.clone(),
+            expected_revision: fixture.manager.registration_revision(),
+        };
+        let other = fixture
+            .service
+            .reserve_entry_for_attempt(&other_query, "attempt_0000000000000004")
+            .unwrap();
+        let other_url = other.entry.entry_url.clone();
+        let other_generation = fixture
+            .manager
+            .read_resource_projection(&other_entry, None)
+            .unwrap()
+            .resource_generation;
+        assert!(fixture.service.activate_runtime_source(
+            "attempt_0000000000000004",
+            "plugin-child-other",
+            &other_entry,
+            other_generation
+        ));
+        drop(other);
+        fixture
+            .manager
+            .set_enabled(&fixture.plugin_id, false)
+            .unwrap();
+        fixture.service.revoke_entry_eligibility(&fixture.entry_id);
+        assert_eq!(fixture.service.lock_scopes().leases.len(), 1);
+        assert!(fixture.service.lock_scopes().reservations.is_empty());
+        for (source, url) in [
+            ("plugin-child-a", a.entry_url),
+            ("plugin-child-b", b.entry_url),
+            ("plugin-child-c", pending.entry.entry_url.clone()),
+        ] {
+            assert_eq!(
+                fixture
+                    .service
+                    .handle_request_from_source(source, request(http::Method::GET, &url))
+                    .status(),
+                http::StatusCode::NOT_FOUND
+            );
+        }
+        drop(pending);
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source(
+                    "plugin-child-other",
+                    request(http::Method::GET, &other_url)
+                )
+                .status(),
+            http::StatusCode::OK
+        );
+    }
+    #[test]
+    fn late_old_resolve_and_lifecycle_callback_cannot_retire_new_generation() {
+        let fixture = fixture("late-generation-allocation");
+        let old = activate_source(&fixture, "attempt_0000000000000001", "plugin-child-old");
+        let query = ResolvePluginResourceEntryRequest {
+            contract_version: PLUGIN_RESOURCE_CONTRACT_VERSION.into(),
+            entry_id: fixture.entry_id.clone(),
+            expected_revision: fixture.manager.registration_revision(),
+        };
+        let service = Arc::downgrade(&fixture.service);
+        let manager = fixture.manager.clone();
+        let plugin_id = fixture.plugin_id.clone();
+        let entry_id = fixture.entry_id.clone();
+        let changed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let changed_hook = changed.clone();
+        let newest_url = Arc::new(Mutex::new(None));
+        let published = newest_url.clone();
+        fixture
+            .service
+            .set_read_hook(Some(Arc::new(move |point, _| {
+                if point != ResourceReadHookPoint::BeforeScopeCommit
+                    || changed_hook.swap(true, std::sync::atomic::Ordering::SeqCst)
+                {
+                    return;
+                }
+                manager.set_enabled(&plugin_id, false).unwrap();
+                manager.set_enabled(&plugin_id, true).unwrap();
+                let service = service.upgrade().unwrap();
+                let reservation = service
+                    .reserve_entry_for_attempt(
+                        &ResolvePluginResourceEntryRequest {
+                            contract_version: PLUGIN_RESOURCE_CONTRACT_VERSION.into(),
+                            entry_id: entry_id.clone(),
+                            expected_revision: manager.registration_revision(),
+                        },
+                        "attempt_0000000000000002",
+                    )
+                    .unwrap();
+                let generation = manager
+                    .read_resource_projection(&entry_id, None)
+                    .unwrap()
+                    .resource_generation;
+                assert!(service.activate_runtime_source(
+                    "attempt_0000000000000002",
+                    "plugin-child-new",
+                    &entry_id,
+                    generation
+                ));
+                *published.lock().unwrap() = Some(reservation.entry.entry_url.clone());
+            })));
+        assert!(fixture.service.resolve_entry(&query).is_err());
+        fixture.service.set_read_hook(None);
+        let current = newest_url.lock().unwrap().clone().unwrap();
+        assert_ne!(old.entry_url, current);
+        fixture.service.revoke_entry_eligibility(&fixture.entry_id);
+        assert_eq!(fixture.service.lock_scopes().leases.len(), 1);
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source(
+                    "plugin-child-new",
+                    request(http::Method::GET, &current)
+                )
+                .status(),
+            http::StatusCode::OK
+        );
+        assert_eq!(
+            fixture
+                .service
+                .handle_request_from_source(
+                    "plugin-child-old",
+                    request(http::Method::GET, &old.entry_url)
+                )
+                .status(),
+            http::StatusCode::NOT_FOUND
+        );
+        assert_eq!(resolve(&fixture).entry_url, current);
     }
 }

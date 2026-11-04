@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from '@rstest/core';
+import { MAIN_PLUGIN_CHILD_WEBVIEW_OWNER } from '../src/app/plugins/runtime/pluginChildWebviewOwner';
 import {
   createPluginChildWebviewSlotController,
   physicalBoundsFromDomRect,
@@ -7,13 +8,23 @@ import {
 } from '../src/app/plugins/runtime/pluginChildWebviewSlot';
 
 describe('Plugin Child WebView slot contract', () => {
-  test('reads post-creation slot geometry from the native parent window registry', () => {
+  test('derives slot geometry and owner checks from the actual Host WebView parent', () => {
     const source = readFileSync(new URL('../src-tauri/src/plugin_child_webview_slot.rs', import.meta.url), 'utf8');
     const command = source.slice(
       source.indexOf('pub(crate) fn update_plugin_child_webview_slot'),
       source.indexOf('\n}\n\n#[cfg(test)]'),
     );
-    expect(command).toContain('app.get_window(MAIN_WINDOW_LABEL)');
+    expect(command).toContain('webview: Webview');
+    expect(command).toContain('let window = webview.window()');
+    expect(command).toContain('parse_presentation_owner(');
+    expect(command).toContain('webview.label()');
+    expect(command).toContain('window.label()');
+    expect(command).toContain('&request.ownership_revision');
+    expect(command.indexOf('parse_presentation_owner(')).toBeLessThan(command.indexOf('window.inner_size()'));
+    expect(command).not.toContain('get_window(');
+    expect(source).toContain('actual_host_source != actual_window_label');
+    expect(source).toContain('matches_host_source(actual_host_source)');
+    expect(source).toContain('service.apply_owned_slot_update(attempt, &owner, revision, bounds)');
     expect(command).not.toContain('get_webview_window');
   });
 
@@ -41,10 +52,11 @@ describe('Plugin Child WebView slot contract', () => {
     const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
     const controller = createPluginChildWebviewSlotController(async (command, args) => {
       calls.push({ command, args });
-      return { contract_version: '0.1.0', accepted_revision: '7' };
+      return { contract_version: '0.2.0', accepted_revision: '7' };
     });
     await controller.update({
       attemptId: 'attempt_0123456789abcdef',
+      owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
       scaleFactor: 2,
       physicalBounds: { x: 40, y: 80, width: 600, height: 400 },
       presentationRevision: 7n,
@@ -54,9 +66,10 @@ describe('Plugin Child WebView slot contract', () => {
         command: UPDATE_PLUGIN_CHILD_WEBVIEW_SLOT_COMMAND,
         args: {
           request: {
-            contract_version: '0.1.0',
+            contract_version: '0.2.0',
             attempt_id: 'attempt_0123456789abcdef',
             window_label: 'main',
+            ownership_revision: '1',
             surface_mode: 'page',
             scale_factor: 2,
             physical_bounds: { x: 40, y: 80, width: 600, height: 400 },
@@ -69,12 +82,13 @@ describe('Plugin Child WebView slot contract', () => {
 
   test('rejects zero revisions and mismatched response revisions', async () => {
     const controller = createPluginChildWebviewSlotController(async () => ({
-      contract_version: '0.1.0',
+      contract_version: '0.2.0',
       accepted_revision: '2',
     }));
     await expect(
       controller.update({
         attemptId: 'attempt_0123456789abcdef',
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
         scaleFactor: 2,
         physicalBounds: { x: 0, y: 0, width: 100, height: 100 },
         presentationRevision: 0n,
@@ -83,6 +97,7 @@ describe('Plugin Child WebView slot contract', () => {
     await expect(
       controller.update({
         attemptId: 'attempt_0123456789abcdef',
+        owner: MAIN_PLUGIN_CHILD_WEBVIEW_OWNER,
         scaleFactor: 2,
         physicalBounds: { x: 0, y: 0, width: 100, height: 100 },
         presentationRevision: 1n,

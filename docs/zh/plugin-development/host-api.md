@@ -11,6 +11,15 @@ Catalog 条目不等于 provider 可用性，也不会暴露 Tauri、任意 Rust
 和 origin storage 仍属于 Web Runtime 能力。独立的 `http.request` method 提供受控
 Host HTTPS 传输，不改变浏览器的 CORS 或 CSP。
 
+每个存活插件实例都有独立 Session 与请求空间，包括多个窗口运行同一插件和 Page 的情况。
+Host 分离保留原实例，不重新初始化 SDK 或重放 Action。窗口选择来自调用 Session，绝不来自
+插件提供的 window 或 instance 字段。现有合规包无需修改 Manifest 或 SDK。
+
+`storage.*` 仍是按插件身份共享的持久化配置。并发写入遵循既有串行原子提交和配额规则；
+后续读取可以看到另一实例已提交的写入。浏览器 data store、document 内存、输入、撤销历史
+与 Worker 彼此独立。Host 不同步临时输入、不在实例之间推送任意配置值，也不在退出后恢复
+这些实例。
+
 ## Method 参考
 
 ### `http.request`
@@ -56,7 +65,7 @@ Set-Cookie/Set-Cookie2 与 hop-by-hop 字段。Host 不共享 cookie jar 或 HTT
 取消使用 SDK 既有的 operation signal。取消、超时、断线或 Runtime 终止会停止请求等待、
 释放请求并发名额，并使晚到结果失效。已开始的 OS DNS lookup 不能中断，会持有独立的
 有界 worker 名额直到结束；随后丢弃结果，绝不为该取消请求继续连接。
-隐藏/恢复同一当前 Runtime 不会创建额外请求。
+隐藏/恢复或分离同一当前 Runtime 不会创建额外请求、取消有效工作或重置并发额度。
 URL query、headers、body、凭据、签名和原始网络异常不得进入日志或诊断。签名及服务
 特定响应解释属于插件。
 
@@ -64,6 +73,9 @@ URL query、headers、body、凭据、签名和原始网络异常不得进入日
 
 参数：`{ actionId: string }`。结果：`{ opened: true }`。Action 必须属于当前插件，
 并且仍指向可用目标。
+Action 在调用实例所属窗口打开。相同 Page 复用该实例并接收 normal activation；另一 Page
+只替换该窗口实例。Launcher 与全局 Action 入口仍指向 main。迁移期间，归属解析只进行
+有界等待；恢复未解决时返回 `unavailable`，不会在稍后自动重放导航。
 
 ### `runtime.get_context`
 
@@ -95,8 +107,10 @@ URL query、headers、body、凭据、签名和原始网络异常不得进入日
 
 ### `ui.close`
 
-参数：`{}`。结果：`{ accepted: true }`。只有匹配的当前 Page 可以关闭；被替换的
-Session 不能关闭更新的 attempt。
+参数：`{}`。结果：`{ accepted: true }`。Host 先交付成功响应，再关闭调用实例。独立实例
+关闭自己的窗口，main 实例使 main 返回 Home。effect 重新检查同一个 attempt，并解析其
+当前 owner，即使它在等待响应期间已经迁移。取消或失败响应不产生关闭效果；被替换的
+Session 不能关闭更新或兄弟实例。保留在恢复态的实例仍可通过有效 Session 请求明确终止。
 
 ## 稳定错误
 

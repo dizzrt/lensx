@@ -20,6 +20,7 @@ import {
   type ShortcutService,
   type ShortcutSnapshot,
   type ShortcutTrigger,
+  type ShortcutWriteOptions,
   shortcutFromKeyEvent,
 } from '../shortcuts';
 
@@ -275,6 +276,7 @@ export const ShortcutSettings = ({ service, actions }: ShortcutSettingsProps) =>
 
   const targetName = (target: string) => {
     if (target === 'launcher') return t('settings.shortcuts.recovery');
+    if (target === 'detach') return t('settings.shortcuts.detach');
     if (!target) return t('settings.shortcuts.newShortcut');
     const action = actions.find(({ action_id }) => action_id === target);
     return action?.enabled
@@ -378,7 +380,7 @@ export const ShortcutSettings = ({ service, actions }: ShortcutSettingsProps) =>
   const save = async (
     configuration: ShortcutSnapshot['configuration'],
     focusId?: string,
-    resolveLauncherMigration = false,
+    options?: ShortcutWriteOptions,
   ) => {
     if (!snapshot || pendingRef.current) return;
     pendingRef.current = true;
@@ -388,8 +390,8 @@ export const ShortcutSettings = ({ service, actions }: ShortcutSettingsProps) =>
     setEditor((current) => (current ? { ...current, recording: false } : current));
     const epoch = snapshotEpoch.current;
     try {
-      const value = resolveLauncherMigration
-        ? await service.write(configuration.revision, configuration, { resolveLauncherMigration: true })
+      const value = options
+        ? await service.write(configuration.revision, configuration, options)
         : await service.write(configuration.revision, configuration);
       if (!alive.current) return;
       acceptSnapshot(value, epoch);
@@ -421,24 +423,33 @@ export const ShortcutSettings = ({ service, actions }: ShortcutSettingsProps) =>
       return;
     try {
       const configuration =
-        current.target === 'launcher'
+        current.target === 'launcher' || current.target === 'detach'
           ? replaceShortcut(confirmed.configuration, current.target, current.candidate)
           : replaceActionShortcut(confirmed.configuration, current.originalTarget, current.target, current.candidate);
       void save(
         configuration,
         `shortcut-edit-${current.target}`,
-        current.target === 'launcher' && !!confirmed.launcher_migration,
+        current.target === 'detach'
+          ? { resolveDetachMigration: true }
+          : current.target === 'launcher' && confirmed.launcher_migration
+            ? { resolveLauncherMigration: true }
+            : undefined,
       );
     } catch (error) {
       reportError(error);
     }
   };
   const clear = (target: string) => {
-    if (!snapshot) return;
+    const confirmed = snapshotRef.current;
+    if (!confirmed) return;
     returnFocus.current = undefined;
-    returnFocusId.current = 'shortcut-add';
+    returnFocusId.current = target === 'detach' ? 'shortcut-edit-detach' : 'shortcut-add';
     try {
-      void save(replaceShortcut(snapshot.configuration, target, null));
+      void save(
+        replaceShortcut(confirmed.configuration, target, null),
+        returnFocusId.current,
+        target === 'detach' ? { resolveDetachMigration: true } : undefined,
+      );
     } catch (error) {
       reportError(error);
     }
@@ -451,7 +462,23 @@ export const ShortcutSettings = ({ service, actions }: ShortcutSettingsProps) =>
       void save(
         replaceShortcut(confirmed.configuration, 'launcher', defaultShortcutConfiguration().launcher),
         'shortcut-reset',
-        !!confirmed.launcher_migration,
+        confirmed.launcher_migration ? { resolveLauncherMigration: true } : undefined,
+      );
+    } catch (error) {
+      reportError(error);
+    }
+  };
+
+  const restoreDetachShortcut = () => {
+    const confirmed = snapshotRef.current;
+    if (!confirmed || pendingRef.current) return;
+    returnFocus.current = undefined;
+    returnFocusId.current = 'shortcut-detach-reset';
+    try {
+      void save(
+        replaceShortcut(confirmed.configuration, 'detach', defaultShortcutConfiguration().detach),
+        'shortcut-detach-reset',
+        { resolveDetachMigration: true },
       );
     } catch (error) {
       reportError(error);
@@ -467,6 +494,8 @@ export const ShortcutSettings = ({ service, actions }: ShortcutSettingsProps) =>
 
   const renderShortcutRow = (target: string | undefined, trigger: ShortcutTrigger | null, rowNumber = 0) => {
     const launcher = target === 'launcher';
+    const detach = target === 'detach';
+    const fixed = launcher || detach;
     const current =
       editor && (target === undefined ? editor.draft : editor.originalTarget === target) ? editor : undefined;
     const name = current?.target
@@ -474,7 +503,7 @@ export const ShortcutSettings = ({ service, actions }: ShortcutSettingsProps) =>
       : target
         ? targetName(target)
         : t('settings.shortcuts.newShortcut');
-    const mode = current?.mode ?? trigger?.kind;
+    const mode = current?.mode ?? (detach ? 'chord' : trigger?.kind);
     const candidate = current ? current.candidate : trigger;
     const rowId = target ?? 'draft';
     const migration = snapshot?.launcher_migration;
@@ -487,56 +516,60 @@ export const ShortcutSettings = ({ service, actions }: ShortcutSettingsProps) =>
         showTick: false,
         disabled: action.action_id !== target && Object.hasOwn(snapshot?.configuration.actions ?? {}, action.action_id),
       }));
-    if (target && !launcher && isFeatureShortcutTarget(target) && !options.some(({ value }) => value === target)) {
+    if (target && !fixed && isFeatureShortcutTarget(target) && !options.some(({ value }) => value === target)) {
       options.unshift({ value: target, label: targetName(target), showTick: false, disabled: false });
     }
     const status = snapshot?.bindings.find((binding) => binding.target === target)?.status;
     return (
       <li key={rowId} className="shortcut-binding" aria-label={t('settings.shortcuts.editor', { target: name })}>
-        <div className={launcher ? 'shortcut-launcher-columns' : 'shortcut-action-columns'}>
-          {launcher ? (
+        <div className={fixed ? 'shortcut-launcher-columns' : 'shortcut-action-columns'}>
+          {fixed ? (
             <Typography.Text strong className="shortcut-target">
-              {t('settings.shortcuts.recovery')}
+              {name}
             </Typography.Text>
           ) : null}
           <span className="sr-only" id={`shortcut-type-label-${rowId}`}>
             {t('settings.shortcuts.typeForTarget', { target: name })}
           </span>
-          <Select
-            ref={(select) => {
-              if (select) rowSelects.current.set(`${rowId}.type`, select);
-              else rowSelects.current.delete(`${rowId}.type`);
-            }}
-            className="shortcut-type-select"
-            aria-labelledby={`shortcut-type-label-${rowId}`}
-            placeholder={t('settings.shortcuts.chooseType')}
-            value={mode}
-            disabled={disabled}
-            optionList={[
-              { value: 'chord', label: t('settings.shortcuts.chordMode'), showTick: false },
-              { value: 'modifier_double_tap', label: t('settings.shortcuts.doubleTapMode'), showTick: false },
-            ]}
-            onChange={(value) => {
-              if (value !== 'chord' && value !== 'modifier_double_tap') return;
-              const next = currentRowEditor(target, trigger);
-              releaseRecording();
-              updateEditor({
-                ...next,
-                mode: value,
-                candidate:
-                  launcher && migration
-                    ? value === 'chord'
-                      ? migration.chord
-                      : migration.double_tap
-                    : next.candidate?.kind === value
-                      ? next.candidate
-                      : null,
-                recording: false,
-              });
-              setFeedback(undefined);
-              setConflictingTarget(undefined);
-            }}
-          />
+          {detach ? (
+            <Typography.Text type="tertiary">{t('settings.shortcuts.chordMode')}</Typography.Text>
+          ) : (
+            <Select
+              ref={(select) => {
+                if (select) rowSelects.current.set(`${rowId}.type`, select);
+                else rowSelects.current.delete(`${rowId}.type`);
+              }}
+              className="shortcut-type-select"
+              aria-labelledby={`shortcut-type-label-${rowId}`}
+              placeholder={t('settings.shortcuts.chooseType')}
+              value={mode}
+              disabled={disabled}
+              optionList={[
+                { value: 'chord', label: t('settings.shortcuts.chordMode'), showTick: false },
+                { value: 'modifier_double_tap', label: t('settings.shortcuts.doubleTapMode'), showTick: false },
+              ]}
+              onChange={(value) => {
+                if (value !== 'chord' && value !== 'modifier_double_tap') return;
+                const next = currentRowEditor(target, trigger);
+                releaseRecording();
+                updateEditor({
+                  ...next,
+                  mode: value,
+                  candidate:
+                    launcher && migration
+                      ? value === 'chord'
+                        ? migration.chord
+                        : migration.double_tap
+                      : next.candidate?.kind === value
+                        ? next.candidate
+                        : null,
+                  recording: false,
+                });
+                setFeedback(undefined);
+                setConflictingTarget(undefined);
+              }}
+            />
+          )}
           <div className="shortcut-key-cell">
             {mode === 'modifier_double_tap' ? (
               <>
@@ -677,7 +710,7 @@ export const ShortcutSettings = ({ service, actions }: ShortcutSettingsProps) =>
               </Typography.Text>
             ) : null}
           </div>
-          {!launcher ? (
+          {!fixed ? (
             <>
               <span className="sr-only" id={`shortcut-action-label-${rowId}`}>
                 {t('settings.shortcuts.actionForRow', { index: rowNumber })}
@@ -721,6 +754,24 @@ export const ShortcutSettings = ({ service, actions }: ShortcutSettingsProps) =>
             </>
           ) : null}
         </div>
+        {detach && !current ? (
+          <div className="flex justify-end gap-2">
+            <Button
+              id="shortcut-detach-clear"
+              disabled={disabled || (trigger === null && !snapshot?.detach_migration)}
+              aria-label={t(
+                snapshot?.detach_migration ? 'settings.shortcuts.detachKeepDisabled' : 'settings.shortcuts.clearTarget',
+                { target: name },
+              )}
+              onClick={() => clear('detach')}
+            >
+              {t(snapshot?.detach_migration ? 'settings.shortcuts.detachKeepDisabled' : 'settings.shortcuts.clear')}
+            </Button>
+            <Button id="shortcut-detach-reset" disabled={disabled} onClick={restoreDetachShortcut}>
+              {t('settings.shortcuts.detachReset')}
+            </Button>
+          </div>
+        ) : null}
         {current ? (
           <div className="shortcut-inline-edit flex justify-end gap-1">
             <Button
@@ -756,6 +807,7 @@ export const ShortcutSettings = ({ service, actions }: ShortcutSettingsProps) =>
   if (
     editor?.originalTarget &&
     editor.originalTarget !== 'launcher' &&
+    editor.originalTarget !== 'detach' &&
     !visibleActionBindings.some(([target]) => target === editor.originalTarget)
   ) {
     // A confirmed refresh may remove the saved binding while its local candidate
@@ -867,6 +919,27 @@ export const ShortcutSettings = ({ service, actions }: ShortcutSettingsProps) =>
           </>
         ) : null}
       </section>
+      {snapshot ? (
+        <section aria-labelledby="shortcut-local-heading" className="shortcut-settings-group flex flex-col gap-3">
+          <Typography.Title heading={3} id="shortcut-local-heading">
+            {t('settings.shortcuts.local')}
+          </Typography.Title>
+          <Typography.Paragraph type="tertiary">{t('settings.shortcuts.detachScope')}</Typography.Paragraph>
+          {snapshot.detach_migration ? (
+            <Banner
+              type="warning"
+              closeIcon={null}
+              fullMode={false}
+              description={t('settings.shortcuts.detachMigration', {
+                target: targetName(snapshot.detach_migration.conflicting_target),
+              })}
+            />
+          ) : null}
+          <ul className="shortcut-bindings flex flex-col gap-2" aria-label={t('settings.shortcuts.localBindings')}>
+            {renderShortcutRow('detach', snapshot.configuration.detach)}
+          </ul>
+        </section>
+      ) : null}
       {snapshot ? (
         <section aria-labelledby="shortcut-actions-heading" className="shortcut-settings-group flex flex-col gap-3">
           <Typography.Title heading={3} id="shortcut-actions-heading" tabIndex={-1}>
