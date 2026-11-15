@@ -1398,6 +1398,61 @@ fn double_tap_only_startup_never_retargets_default_chord_owned_by_an_action() {
 }
 
 #[test]
+fn passive_monitor_recovery_preserves_registered_action_chords_without_launcher_fallback() {
+    let (mut service, _, native) = fixture();
+    available(&mut service);
+    let former_launcher = service.configuration.launcher.clone();
+    let double = Trigger::ModifierDoubleTap {
+        modifier: "cmd".into(),
+    };
+    let action = chord("KeyK");
+    let mut configuration = action_configuration(&service);
+    configuration.launcher = double.clone();
+    service.save(0, configuration).unwrap();
+    let generation = service.registrations[&action].generation;
+    let registrations = native.0.borrow().keys.clone();
+    let registration_calls = native.0.borrow().calls.len();
+    assert_eq!(registrations.len(), 1);
+    assert!(registrations.contains_key(&action));
+
+    for (index, status) in [
+        MonitorStatus::PermissionRequired,
+        MonitorStatus::Unavailable,
+        MonitorStatus::Active,
+        MonitorStatus::Unavailable,
+        MonitorStatus::Active,
+        MonitorStatus::PermissionRequired,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let now = index as u64 * 10;
+        service.set_monitor(status);
+        assert_eq!(
+            service.snapshot().recovery_degraded,
+            status != MonitorStatus::Active
+        );
+        assert_eq!(
+            service.trigger(&double, now),
+            if status == MonitorStatus::Active {
+                Effect::Toggle
+            } else {
+                Effect::None
+            }
+        );
+        assert_eq!(service.trigger(&former_launcher, now), Effect::None);
+        let Effect::Action(invocation) = service.press(&action, generation, true, now) else {
+            panic!("passive monitor status must not revoke a confirmed Action chord");
+        };
+        assert_eq!(invocation.action_id, "com.test.open");
+        assert!(service.acknowledge(invocation.invocation_id, true, now));
+        assert_eq!(service.press(&action, generation, false, now), Effect::None);
+        assert_eq!(native.0.borrow().keys, registrations);
+        assert_eq!(native.0.borrow().calls.len(), registration_calls);
+    }
+}
+
+#[test]
 fn real_legacy_file_is_only_replaced_after_confirmed_selection() {
     let root = std::env::temp_dir().join(format!(
         "lensx-shortcuts-real-migration-{}",

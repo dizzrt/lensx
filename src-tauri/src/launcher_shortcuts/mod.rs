@@ -1,6 +1,8 @@
 mod gesture;
 mod macos;
 pub mod model;
+#[cfg(any(target_os = "macos", test))]
+mod monitor;
 mod service;
 
 use crate::launcher_window::{
@@ -525,6 +527,43 @@ fn publish_monitor_snapshot<R: Runtime>(app: &AppHandle<R>, snapshot: Snapshot) 
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
+fn finish_observation<R: Runtime>(app: &AppHandle<R>, state: &State<R>) {
+    // This runs after the native owner has dropped. Independent admission must
+    // also be revoked when poisoned service state cannot publish a snapshot.
+    if let Some(admission) = app.try_state::<ShortcutAdmission>() {
+        admission.set_monitor(false);
+    }
+    let (snapshot, cancelled, stopped) = match state.lock() {
+        Ok(mut service) => {
+            service.gesture.reset(macos::monotonic_millis());
+            let cancelled = service.inner.end_recording();
+            service.inner.set_monitor(MonitorStatus::Unavailable);
+            (Some(service.inner.snapshot()), cancelled, service.stopped)
+        }
+        Err(_) => (None, None, false),
+    };
+    if let Some(lease) = cancelled {
+        emit(
+            app,
+            RECORDING,
+            RecordingEvent {
+                lease_id: lease.lease_id,
+                trigger: None,
+                cancelled: true,
+            },
+        );
+    }
+    if let Some(snapshot) = snapshot {
+        emit(app, CHANGED, snapshot);
+    }
+    if !stopped {
+        // The repair/quit entry must remain accessible even without a snapshot.
+        let recovery_app = app.clone();
+        let _ = app.run_on_main_thread(move || ensure_recovery_visible(&recovery_app));
+    }
+}
+
 #[tauri::command]
 pub async fn update_launcher_shortcut_targets(
     webview: Webview,
@@ -656,3 +695,7 @@ pub fn request_launcher_shortcut_monitor_permission(
     macos::request_permission();
     read_launcher_shortcuts(webview, app)
 }
+
+#[cfg(test)]
+#[path = "monitor_exit_tests.rs"]
+mod monitor_exit_tests;

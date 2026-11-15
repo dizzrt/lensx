@@ -161,6 +161,7 @@ mod platform {
     unsafe extern "C" {
         static kCFRunLoopDefaultMode: Ref;
         fn CFRelease(value: Ref);
+        fn CFMachPortInvalidate(port: Ref);
         fn CFMachPortCreateRunLoopSource(allocator: Ref, port: Ref, order: isize) -> Ref;
         fn CFRunLoopGetCurrent() -> Ref;
         fn CFRunLoopAddSource(loop_ref: Ref, source: Ref, mode: Ref);
@@ -401,6 +402,8 @@ mod platform {
         app: AppHandle<R>,
         state: State<R>,
         interrupted: bool,
+        workspace: monitor::WorkspaceSleep,
+        workspace_epoch: u64,
     }
 
     fn seed_physical_state(gesture: &mut gesture::Gesture, now: u64) {
@@ -458,9 +461,13 @@ mod platform {
         context: *mut c_void,
     ) -> Event {
         // Unwind must never cross the C event-tap ABI. Poisoned state simply disables recognition.
-        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let context = unsafe { &mut *(context as *mut Context<R>) };
+            if context.interrupted {
+                return;
+            }
             if kind >= u32::MAX - 1
+                || !context.workspace.allows(context.workspace_epoch)
                 || unsafe { IsSecureEventInputEnabled() }
                 || !unsafe { CGPreflightListenEventAccess() }
             {
@@ -495,8 +502,23 @@ mod platform {
             );
             let mut service = match context.state.lock() {
                 Ok(service) => service,
-                Err(_) => return,
+                Err(_) => {
+                    context.interrupted = true;
+                    if let Some(facts) = context.app.try_state::<ShortcutAdmission>() {
+                        facts.set_monitor(false);
+                    }
+                    return;
+                }
             };
+            if service.stopped
+                || service.sleeping
+                || !context.workspace.allows(context.workspace_epoch)
+            {
+                context.interrupted = true;
+                service.inner.admission().set_monitor(false);
+                service.gesture.reset(macos::monotonic_millis());
+                return;
+            }
             let now = unsafe { CGEventGetTimestamp(event) } / 1_000_000;
             service.synchronize_recording(macos::monotonic_millis());
             let confirmed = service.gesture.input(input, now);
@@ -534,6 +556,14 @@ mod platform {
             }
             deliver(&context.app, effect);
         }));
+        if outcome.is_err() {
+            // Never leave an independent Active fact behind after a callback panic.
+            let context = unsafe { &mut *(context as *mut Context<R>) };
+            context.interrupted = true;
+            if let Some(facts) = context.app.try_state::<ShortcutAdmission>() {
+                facts.set_monitor(false);
+            }
+        }
         event // Every original input is always passed through unchanged.
     }
 
@@ -651,17 +681,43 @@ mod platform {
         }
     }
 
-    pub fn start<R: Runtime>(app: AppHandle<R>, state: State<R>) {
-        std::thread::spawn(move || {
+    // The backend holds the callback allocation and subscription scope until the
+    // shared owner has invalidated the tap and removed/released its source.
+    struct NativeMonitor<R: Runtime> {
+        context: Box<Context<R>>,
+        loop_ref: Ref, // CFRunLoopGetCurrent is borrowed, never CFRelease'd here.
+        mode: Ref,
+        workspace: monitor::WorkspaceSleep,
+        _notifications: monitor::OnExit<Box<dyn FnOnce()>>,
+    }
+
+    impl<R: Runtime> NativeMonitor<R> {
+        fn new(app: AppHandle<R>, state: State<R>) -> Self {
             let notification_center = NSWorkspace::sharedWorkspace().notificationCenter();
-            let mut observers = Vec::new();
+            type Observer = objc2::rc::Retained<
+                objc2::runtime::ProtocolObject<dyn objc2_foundation::NSObjectProtocol>,
+            >;
+            let observers = std::rc::Rc::new(std::cell::RefCell::new(Vec::<Observer>::new()));
+            let cleanup_observers = std::rc::Rc::clone(&observers);
+            let cleanup_center = notification_center.clone();
+            let notifications: monitor::OnExit<Box<dyn FnOnce()>> =
+                monitor::OnExit::new(Box::new(move || {
+                    for observer in cleanup_observers.borrow_mut().drain(..) {
+                        unsafe {
+                            cleanup_center.removeObserver((*observer).as_ref());
+                        }
+                    }
+                }));
+            let workspace = monitor::WorkspaceSleep::default();
             for (name, sleeping) in [
                 (unsafe { NSWorkspaceWillSleepNotification }, true),
                 (unsafe { NSWorkspaceDidWakeNotification }, false),
             ] {
                 let state = Arc::clone(&state);
+                let workspace = workspace.clone();
                 let notification_app = app.clone();
                 let block = RcBlock::new(move |_: std::ptr::NonNull<NSNotification>| {
+                    workspace.update(sleeping);
                     if let Some(facts) = notification_app.try_state::<ShortcutAdmission>() {
                         facts.set_sleeping(sleeping);
                     }
@@ -682,7 +738,7 @@ mod platform {
                         publish_monitor_snapshot(&notification_app, snapshot);
                     }
                 });
-                observers.push(unsafe {
+                observers.borrow_mut().push(unsafe {
                     notification_center.addObserverForName_object_queue_usingBlock(
                         Some(name),
                         None,
@@ -691,206 +747,252 @@ mod platform {
                     )
                 });
             }
-            let mut context = Box::new(Context {
-                app: app.clone(),
-                state: Arc::clone(&state),
-                interrupted: false,
-            });
-            let mut tap: Ref = ptr::null();
-            let mut source: Ref = ptr::null();
-            let mut previous_status = MonitorStatus::PermissionRequired;
-            let mut epoch = 0;
-            let mut wall = SystemTime::now();
-            let mut last_attempt = Instant::now() - Duration::from_secs(2);
-            let mut last_layout_check = Instant::now();
-            let loop_ref = unsafe { CFRunLoopGetCurrent() };
-            loop {
-                // All currently queued source-stamped input is processed before
-                // time-only confirmation. A busy source postpones confirmation.
-                let mut drained = false;
-                for _ in 0..256 {
-                    if unsafe { CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.0, true) } != 4 {
-                        drained = true;
-                        break;
-                    }
-                }
-                if !drained {
-                    if state.lock().map(|service| service.stopped).unwrap_or(true) {
-                        break;
-                    }
-                    continue;
-                }
-                let visible = foreground(&app);
-                let mut service = match state.lock() {
-                    Ok(service) => service,
-                    Err(_) => break,
-                };
-                if service.stopped {
-                    break;
-                }
-                let now = macos::monotonic_millis();
-                let previous_lease = service.inner.recording().cloned();
-                service.synchronize_recording(now);
-                if !visible {
-                    service.inner.end_recording();
-                }
-                let cancelled = previous_lease.filter(|_| service.inner.recording().is_none());
-                let elapsed = wall.elapsed().unwrap_or(Duration::from_secs(1));
-                wall = SystemTime::now();
-                let permitted = unsafe { CGPreflightListenEventAccess() };
-                let observable =
-                    permitted && !service.sleeping && !unsafe { IsSecureEventInputEnabled() };
-                let wanted = service.inner.wants_monitor();
-                let restart_monitor = context.interrupted
-                    || elapsed > Duration::from_millis(500)
-                    || (!tap.is_null() && !unsafe { CGEventTapIsEnabled(tap) });
-                let interrupted =
-                    restart_monitor || epoch != service.monitor_epoch || cancelled.is_some();
-                if interrupted || !observable || !wanted {
-                    service.gesture.reset(now);
-                }
-                epoch = service.monitor_epoch;
-                context.interrupted = false;
-                // Configuration/recording transitions reset recognition while the
-                // healthy passive tap stays attached. Recreating it would briefly
-                // remove a sole double-tap recovery entry after every ordinary hide.
-                if (!observable || !wanted || restart_monitor) && !tap.is_null() {
-                    service.inner.admission().set_monitor(false);
-                    unsafe {
-                        CFRunLoopRemoveSource(loop_ref, source, kCFRunLoopDefaultMode);
-                        CFRelease(source);
-                        CFRelease(tap);
-                    }
-                    tap = ptr::null();
-                    source = ptr::null();
-                }
-                if observable
-                    && wanted
-                    && tap.is_null()
-                    && last_attempt.elapsed() >= Duration::from_secs(1)
-                {
-                    last_attempt = Instant::now();
-                    seed_physical_state(&mut service.gesture, now);
-                    let mask = [1, 2, 3, 4, 10, 11, 12, 22, 25, 26]
-                        .into_iter()
-                        .fold(0u64, |mask, event| mask | (1 << event));
-                    // Session-level, head insertion, listen-only. No root/HID tap or active filter.
-                    tap = unsafe {
-                        CGEventTapCreate(
-                            1,
-                            0,
-                            1,
-                            mask,
-                            callback::<R>,
-                            (&mut *context as *mut Context<R>).cast(),
-                        )
-                    };
-                    if !tap.is_null() {
-                        source = unsafe { CFMachPortCreateRunLoopSource(ptr::null(), tap, 0) };
-                        if source.is_null() {
-                            unsafe {
-                                CFRelease(tap);
-                            }
-                            tap = ptr::null();
-                        } else {
-                            unsafe {
-                                CFRunLoopAddSource(loop_ref, source, kCFRunLoopDefaultMode);
-                            }
-                        }
-                    }
-                }
-                let status = if !permitted {
-                    MonitorStatus::PermissionRequired
-                } else if observable && !tap.is_null() && unsafe { CGEventTapIsEnabled(tap) } {
-                    MonitorStatus::Active
-                } else {
-                    MonitorStatus::Unavailable
-                };
-                if status != previous_status {
-                    service.gesture.reset(now);
-                }
-                service.inner.set_monitor(status);
-                let effect = if status == MonitorStatus::Active {
-                    service
-                        .gesture
-                        .tick(now)
-                        .map(|modifier| {
-                            service.inner.trigger(
-                                &Trigger::ModifierDoubleTap {
-                                    modifier: modifier.into(),
-                                },
-                                now,
-                            )
-                        })
-                        .unwrap_or(Effect::None)
-                } else {
-                    Effect::None
-                };
-                let snapshot = (status != previous_status).then(|| service.inner.snapshot());
-                previous_status = status;
-                drop(service);
-                if last_layout_check.elapsed() >= Duration::from_secs(1) {
-                    last_layout_check = Instant::now();
-                    let layout_app = app.clone();
-                    let layout_state = Arc::clone(&state);
-                    let _ = app.run_on_main_thread(move || {
-                        let Some(layout) = current_layout() else {
-                            return;
-                        };
-                        let (before, after) = if let Ok(mut service) = layout_state.lock() {
-                            let before = service.inner.snapshot();
-                            service.inner.registry.layout = layout;
-                            service.inner.refresh_layout();
-                            (before, service.inner.snapshot())
-                        } else {
-                            return;
-                        };
-                        if before != after {
-                            emit(&layout_app, CHANGED, after);
-                            ensure_recovery_visible(&layout_app);
-                        }
-                    });
-                }
-                if let Some(lease) = cancelled {
-                    emit(
-                        &app,
-                        RECORDING,
-                        RecordingEvent {
-                            lease_id: lease.lease_id,
-                            trigger: None,
-                            cancelled: true,
-                        },
-                    );
-                }
-                if let Some(snapshot) = snapshot {
-                    publish_monitor_snapshot(&app, snapshot);
-                }
-                deliver(&app, effect);
-                publish_failures(&app);
-                // Drain queued input before the next timer tick. Equal-time inputs win.
-                // Neither the run-loop wait nor its idle fallback holds service state.
-                let wait_started = Instant::now();
-                wait_for_monitor_poll(
-                    || wait_started.elapsed(),
-                    |interval| unsafe {
-                        CFRunLoopRunInMode(kCFRunLoopDefaultMode, interval.as_secs_f64(), false)
-                    },
-                    std::thread::sleep,
-                );
+            Self {
+                context: Box::new(Context {
+                    app,
+                    state,
+                    interrupted: false,
+                    workspace: workspace.clone(),
+                    workspace_epoch: workspace.snapshot().0,
+                }),
+                loop_ref: unsafe { CFRunLoopGetCurrent() },
+                mode: unsafe { kCFRunLoopDefaultMode },
+                workspace,
+                _notifications: notifications,
             }
-            if !tap.is_null() {
-                unsafe {
-                    CFRunLoopRemoveSource(loop_ref, source, kCFRunLoopDefaultMode);
-                    CFRelease(source);
-                    CFRelease(tap);
-                }
+        }
+    }
+
+    impl<R: Runtime> monitor::Backend for NativeMonitor<R> {
+        type Tap = Ref;
+        type Source = Ref;
+
+        fn create_tap(&mut self) -> Option<Ref> {
+            if !self.workspace.allows(self.context.workspace_epoch) {
+                return None;
             }
-            for observer in observers {
-                unsafe {
-                    notification_center.removeObserver((*observer).as_ref());
-                }
+            let mask = [1, 2, 3, 4, 10, 11, 12, 22, 25, 26]
+                .into_iter()
+                .fold(0u64, |mask, event| mask | (1 << event));
+            // Session-level, head insertion, listen-only. Original input is preserved.
+            let tap = unsafe {
+                CGEventTapCreate(
+                    1,
+                    0,
+                    1,
+                    mask,
+                    callback::<R>,
+                    (&mut *self.context as *mut Context<R>).cast(),
+                )
+            };
+            (!tap.is_null()).then_some(tap)
+        }
+        fn create_source(&mut self, tap: &Ref) -> Option<Ref> {
+            let source = unsafe { CFMachPortCreateRunLoopSource(ptr::null(), *tap, 0) };
+            (!source.is_null()).then_some(source)
+        }
+        fn attach(&mut self, source: &Ref) {
+            unsafe {
+                CFRunLoopAddSource(self.loop_ref, *source, self.mode);
+            }
+        }
+        fn enabled(&self, tap: &Ref) -> bool {
+            self.workspace.allows(self.context.workspace_epoch)
+                && unsafe { CGEventTapIsEnabled(*tap) }
+        }
+        fn invalidate(&mut self, tap: &Ref) {
+            unsafe {
+                CFMachPortInvalidate(*tap);
+            }
+        }
+        fn remove(&mut self, source: &Ref) {
+            unsafe {
+                CFRunLoopRemoveSource(self.loop_ref, *source, self.mode);
+            }
+        }
+        fn release_source(&mut self, source: Ref) {
+            unsafe {
+                CFRelease(source);
+            }
+        }
+        fn release_tap(&mut self, tap: Ref) {
+            unsafe {
+                CFRelease(tap);
+            }
+        }
+    }
+
+    struct Recognition<'a, R: Runtime> {
+        service: &'a mut DesktopService<R>,
+        now: u64,
+    }
+    impl<R: Runtime> monitor::Recognition for Recognition<'_, R> {
+        fn revoke(&mut self) {
+            self.service.inner.admission().set_monitor(false);
+        }
+        fn reset(&mut self) {
+            self.service.gesture.reset(self.now);
+        }
+        fn seed(&mut self) {
+            seed_physical_state(&mut self.service.gesture, self.now);
+        }
+    }
+
+    pub fn start<R: Runtime>(app: AppHandle<R>, state: State<R>) {
+        std::thread::spawn(move || {
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                observe(&app, &state);
+            }));
+            // Native cleanup and subscription teardown have already completed,
+            // including on unwind, before any business-state publication takes a lock.
+            finish_observation(&app, &state);
+            if outcome.is_err() {
+                eprintln!("passive shortcut observer terminated after a Rust panic");
             }
         });
+    }
+
+    fn observe<R: Runtime>(app: &AppHandle<R>, state: &State<R>) {
+        let backend = NativeMonitor::new(app.clone(), Arc::clone(state));
+        let mut monitor = monitor::Monitor::new(backend);
+        let admission = app
+            .try_state::<ShortcutAdmission>()
+            .map(|facts| facts.inner().clone());
+        let _revoke_on_exit = monitor::OnExit::new(move || {
+            if let Some(admission) = admission {
+                admission.set_monitor(false);
+            }
+        });
+        let mut previous_status = MonitorStatus::PermissionRequired;
+        let mut epoch = 0;
+        let mut wall = SystemTime::now();
+        let retry_clock = Instant::now();
+        let mut notification_epoch = 0;
+        let mut last_layout_check = Instant::now();
+        loop {
+            // All currently queued source-stamped input is processed before
+            // time-only confirmation. A busy source postpones confirmation.
+            let mut drained = false;
+            for _ in 0..256 {
+                if unsafe { CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.0, true) } != 4 {
+                    drained = true;
+                    break;
+                }
+            }
+            // Busy input postpones quiet confirmation, but cannot postpone
+            // permission/stop/interruption retirement and resource cleanup.
+            let visible = foreground(&app);
+            let mut service = match state.lock() {
+                Ok(service) => service,
+                Err(_) => break,
+            };
+            if service.stopped {
+                break;
+            }
+            let now = macos::monotonic_millis();
+            let previous_lease = service.inner.recording().cloned();
+            service.synchronize_recording(now);
+            if !visible {
+                service.inner.end_recording();
+            }
+            let cancelled = previous_lease.filter(|_| service.inner.recording().is_none());
+            let elapsed = wall.elapsed().unwrap_or(Duration::from_secs(1));
+            wall = SystemTime::now();
+            let permitted = unsafe { CGPreflightListenEventAccess() };
+            let (observed_epoch, sleeping) = monitor.backend().workspace.snapshot();
+            let restart_monitor = monitor.backend().context.interrupted
+                || elapsed > Duration::from_millis(500)
+                || observed_epoch != notification_epoch;
+            let facts = monitor::Facts {
+                permitted,
+                sleeping: service.sleeping || sleeping,
+                secure_input: unsafe { IsSecureEventInputEnabled() },
+                wanted: service.inner.wants_monitor(),
+                interrupted: restart_monitor,
+                reset: epoch != service.monitor_epoch || cancelled.is_some(),
+                stopped: service.stopped,
+            };
+            epoch = service.monitor_epoch;
+            notification_epoch = observed_epoch;
+            monitor.backend_mut().context.interrupted = false;
+            monitor.backend_mut().context.workspace_epoch = observed_epoch;
+            let status = monitor.poll(
+                facts,
+                retry_clock.elapsed(),
+                &mut Recognition {
+                    service: &mut service,
+                    now,
+                },
+            );
+            service.inner.set_monitor(status);
+            let effect = if drained && status == MonitorStatus::Active {
+                service
+                    .gesture
+                    .tick(now)
+                    .map(|modifier| {
+                        service.inner.trigger(
+                            &Trigger::ModifierDoubleTap {
+                                modifier: modifier.into(),
+                            },
+                            now,
+                        )
+                    })
+                    .unwrap_or(Effect::None)
+            } else {
+                Effect::None
+            };
+            let snapshot = (status != previous_status).then(|| service.inner.snapshot());
+            previous_status = status;
+            drop(service);
+            if last_layout_check.elapsed() >= Duration::from_secs(1) {
+                last_layout_check = Instant::now();
+                let layout_app = app.clone();
+                let layout_state = Arc::clone(&state);
+                let _ = app.run_on_main_thread(move || {
+                    let Some(layout) = current_layout() else {
+                        return;
+                    };
+                    let (before, after) = if let Ok(mut service) = layout_state.lock() {
+                        let before = service.inner.snapshot();
+                        service.inner.registry.layout = layout;
+                        service.inner.refresh_layout();
+                        (before, service.inner.snapshot())
+                    } else {
+                        return;
+                    };
+                    if before != after {
+                        emit(&layout_app, CHANGED, after);
+                        ensure_recovery_visible(&layout_app);
+                    }
+                });
+            }
+            if let Some(lease) = cancelled {
+                emit(
+                    &app,
+                    RECORDING,
+                    RecordingEvent {
+                        lease_id: lease.lease_id,
+                        trigger: None,
+                        cancelled: true,
+                    },
+                );
+            }
+            if let Some(snapshot) = snapshot {
+                publish_monitor_snapshot(&app, snapshot);
+            }
+            deliver(&app, effect);
+            publish_failures(&app);
+            // Drain queued input before the next timer tick. Equal-time inputs win.
+            // Neither the run-loop wait nor its idle fallback holds service state.
+            let wait_started = Instant::now();
+            wait_for_monitor_poll(
+                || wait_started.elapsed(),
+                |interval| unsafe {
+                    CFRunLoopRunInMode(kCFRunLoopDefaultMode, interval.as_secs_f64(), false)
+                },
+                std::thread::sleep,
+            );
+        }
     }
 }
 

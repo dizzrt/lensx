@@ -666,6 +666,43 @@ observation samples currently held physical keys/buttons; source event timestamp
 and quiet confirmation share a monotonic clock, and queued input drains before
 confirmation. Unsupported modifiers interrupt without becoming gestures.
 
+The observer thread owns at most one session-level, listen-only tap and its
+RunLoop source through a unique resource owner shared with the deterministic
+backend. The current RunLoop is borrowed; the owner releases only the references
+obtained by creating the tap and source. A created tap is owned immediately, so
+source-creation failure or a tap that never becomes enabled leaves no partial
+registration. Only an attached source and an enabled tap can publish `Active`.
+Cleanup is idempotent: invalidate the tap with `CFMachPortInvalidate`, remove an
+attached source from its original RunLoop and mode, release the source, then
+release the tap. Replacement starts only after this cleanup finishes. Callback
+state outlives native cleanup, and scoped sleep/wake notification subscriptions
+are removed on thread exit, including early return and Rust unwind. Native
+resource destruction does not acquire the shortcut-service lock.
+
+Sleep/wake notifications publish sleep state and its epoch in one atomic
+snapshot before acquiring the service lock. The observer treats either this
+snapshot or service-owned sleep state as sleeping, so a delayed notification
+cannot permit replacement during sleep. Callbacks check their admitted epoch
+before and after acquiring the service lock; tap creation and enabled checks
+also reject a stale epoch. Even a complete sleep/wake pair between polls
+invalidates the old input stream when the final sleep state is awake.
+
+Configuration, recording, hiding and gesture-epoch resets preserve the same
+healthy tap while observation remains authorized and needed. A disabled tap,
+callback interruption or abnormal observation gap instead revokes admission and
+clears candidates before cleanup. Permission loss, Secure Input, sleep or no
+remaining observation demand also retire the current resources and prevent
+creation until observation is allowed and needed again. The first eligible
+creation attempt runs immediately; later attempts use monotonic time and are at
+least one second apart, without queued retries. Recovery samples current
+physical state before restoring `Active`; retired callbacks and old candidates
+cannot execute a recovered gesture. Stop, service-lock poisoning and abnormal
+observer exit revoke admission and release resources; a stopped observer cannot
+rebuild. The existing sole-double-tap policy keeps repair and quit accessible and
+blocks unrecoverable hiding without adding a fallback chord. Ordinary chords
+remain independent when the shared service is healthy and only passive
+monitoring fails; a damaged shared service degrades conservatively.
+
 The observer completes a 10 ms wait outside the shortcut state lock even when
 the native run loop has no input source or returns early. This prevents idle or
 unauthorized monitoring from continuously querying the main Window. Queued

@@ -487,10 +487,36 @@ partial failures, uncertain commits, compensation, recovery degradation and leas
 expiry. Session/SDK tests cover 32-item initial admission, 64-item initialization
 merge, retry/terminal boundaries and optional callback isolation.
 
+The same Gate discovers the production passive-monitor resource owner and
+transition tests through `cargo test ... launcher_shortcuts`. Its fake backend
+tracks system registrations separately from tap/source references and source
+attachments, so releasing a reference cannot hide a missing invalidate call.
+Operation-order assertions require invalidation before reference release and
+source removal from the original RunLoop/mode; negative checks show that omitted
+invalidation or incorrect cleanup order fails these assertions. Tests cover
+empty and repeated cleanup, tap/source creation failure, creation without enable,
+healthy-resource identity across configuration/recording/hiding/gesture resets,
+callback-state lifetime, notification unsubscription, stop, poisoned-lock exit
+and controlled Rust unwind. At least 1000 mixed interruption, authorization,
+Secure Input, sleep, creation-failure and recovery transitions assert at most one
+live registration, bounded reference counts, old cleanup before replacement,
+balanced final allocation/release, and no replay of old candidates or callbacks.
+Sleep-notification tests inject atomic sleep/epoch facts while the service-owned
+sleep state is still stale, and a complete sleep/wake pair between polls. They
+verify that sleeping prevents replacement and that both transitions reject the
+old admitted epoch even after wake.
+Virtual time covers the first attempt and 999/1000 ms retry boundaries. Recovery
+tests require complete enabled resources and fresh physical-state sampling
+before `Active`, while retaining sole-double-tap repair access, no hidden
+fallback, and ordinary-chord independence when only passive monitoring fails.
+
 These deterministic checks establish configured versus active state, independent
 preferences persistence, native adapter wiring and bounded semantic delivery.
 They do not prove macOS authorization dialogs, OS keyboard delivery, Secure Input
-transitions on a real system, or conflicts with every external shortcut tool.
+transitions on a real system, long-running macOS performance, the frequency of
+native tap interruptions, or conflicts with every external shortcut tool. The
+resource tests inject native facts and operations without starting a system input
+tap, browser, real WebView, GUI application or native interaction harness.
 Double taps are passive and not exclusive. Use `plugin-host-api-types --write`
 only through Generate for current Schema-derived files; preserve historical
 WebView corpora. Focused Gates do not replace full workspace and Rust validation.
