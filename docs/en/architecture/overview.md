@@ -229,9 +229,20 @@ modifier double tap. The separate Rust shortcut service owns it and Action
 bindings; changing the Launcher type stops its previous entry.
 One physical press produces at most one invocation. Ordinary activation uses
 Toggle; an Action binding uses Show and the current shared Action dispatcher.
-Registration generations isolate stale events. Close, blur, and local close
-commands may hide only while the selected Launcher trigger is confirmed active.
-A recovery failure keeps the window visible with settings and quit available.
+On a running macOS Host, a hidden Home or plugin Page stays hidden through
+lock, sleep and wake. The next ordinary Launcher shortcut restores the Home
+input or the same plugin instance. For example, Translation keeps its source
+and result, and showing it sends no translation request. Genuine main-window
+blur still hides the current Child before the parent when hiding is safe.
+Detached windows keep their content on blur and close only their own instance.
+
+Runtime shortcut repair uses the same window action boundary. Before a queued
+repair can show the window, the main thread rechecks the session, configuration,
+current fault and window visibility. A continuous fault permits one successful
+show. A visible window keeps its current focus, and a failed show can be retried.
+When fresh desktop activation evidence is missing, explicitly reopening the
+running app from Finder can reveal the hidden repair and quit controls once
+known interruptions have cleared and the sole Launcher entry still needs repair.
 
 On macOS, the undecorated launcher cannot rely on the default Close Window
 menu command: its native `performClose:` selector expects a closable window
@@ -258,7 +269,7 @@ Hide for main and exact-instance Close for a detached window. Q rejects new work
 and cleans all captured instances and retained transactions while the event loop
 still runs, then exits once; Exit teardown remains a final safeguard. These local
 commands are absent from global registration. The monitor prevents duplicate
-menu/repeat delivery and is released on exit. Unconfirmed Launcher recovery or
+menu/repeat delivery and is released on exit. A confirmed Launcher entry fault or
 an unresolved migration recovery disables main Hide while retaining visible
 repair and Quit; it does not disable closing a detached window.
 
@@ -634,15 +645,28 @@ otherwise confirmed Launcher recovery entry. Clearing the binding disables detac
 
 Unavailable Actions retain their configuration and internal trigger ownership
 while releasing native registrations. Reappearance revalidates current targets
-and OS registration. A saved double tap without authorization remains inactive. If this is the
-sole Launcher entry, the Host shows even an already-hidden window and disables
-unrecoverable hiding until the selected entry is active; it never silently
-registers a former/default chord. Healthy monitoring is preserved across gesture
-resets so ordinary hiding does not itself interrupt the recovery entry.
-Native hide and detachment consult a published snapshot of confirmed Launcher
-registration or monitor health and recording-lease expiry. A real registration
-transition, loss of recovery, sleep or shutdown revokes eligibility. Ordinary
-contention on the shortcut-service lock leaves the confirmed facts intact.
+and OS registration. With a registered Launcher chord and a Translation double
+tap, loss of passive monitoring suspends the Translation binding alone. If
+the double tap is the sole Launcher entry, the Host rechecks permission and
+attempts to establish the monitor once observation is permitted. Permission
+revocation, an actual failed establishment or a stopped observer requires
+repair. Waiting for an eligible retry or rebuilding successfully preserves the
+hidden window. Registration failure of the selected chord, unresolved Launcher
+migration and uncertain compensation also require repair.
+
+Shortcut execution, safe hiding and automatic repair have separate checks.
+System or display sleep and an inactive session suspend input. Secure Input
+also interrupts observation, including while typing a password. Interruptions
+invalidate old gestures, recording and queued shortcut work. A newly accepted
+gesture is required after recovery. A wake, session return, or the end of Secure
+Input triggers a recheck. After an interruption, automatic repair also requires
+a fresh activation of an ordinary desktop app matching the current frontmost
+app with all known interruptions cleared. This workspace evidence remains
+available when Input Monitoring permission is revoked. The Host retains the
+selected binding throughout repair. Focus-loss Hide checks the published repair
+state. Local `Cmd+W` Hide and detachment require current Launcher shortcut
+availability. Detachment also requires an inactive recording lease. The admission checks can read these facts while the service lock is busy.
+
 Stored chord identities use native physical key codes. The Host supplies current
 layout labels, including Command-specific layout semantics; recording checks both
 the current semantic key and physical reserved aliases. Layout changes refresh
@@ -675,17 +699,18 @@ registration. Only an attached source and an enabled tap can publish `Active`.
 Cleanup is idempotent: invalidate the tap with `CFMachPortInvalidate`, remove an
 attached source from its original RunLoop and mode, release the source, then
 release the tap. Replacement starts only after this cleanup finishes. Callback
-state outlives native cleanup, and scoped sleep/wake notification subscriptions
-are removed on thread exit, including early return and Rust unwind. Native
-resource destruction does not acquire the shortcut-service lock.
+state outlives native cleanup. Host-owned workspace subscriptions survive the
+input observer's exit and are released on shutdown. Native resource destruction
+does not acquire the shortcut-service lock.
 
-Sleep/wake notifications publish sleep state and its epoch in one atomic
-snapshot before acquiring the service lock. The observer treats either this
-snapshot or service-owned sleep state as sleeping, so a delayed notification
-cannot permit replacement during sleep. Callbacks check their admitted epoch
-before and after acquiring the service lock; tap creation and enabled checks
-also reject a stale epoch. Even a complete sleep/wake pair between polls
-invalidates the old input stream when the final sleep state is awake.
+An atomic session snapshot tracks overlapping interruptions and their epoch
+before a notification acquires the service lock. Display wake clears only the
+display interruption. A login surface, inactive session, system sleep or Secure
+Input can still block observation. Tap callbacks, establishment and queued
+window or Action delivery check their epoch, so even a complete sleep/wake
+pair between polls invalidates the old input stream. An accepted Action that
+has yet to be dispatched receives a failure receipt and cannot replay when
+the Host becomes ready.
 
 Configuration, recording, hiding and gesture-epoch resets preserve the same
 healthy tap while observation remains authorized and needed. A disabled tap,

@@ -177,6 +177,8 @@ fn startup_defaults_invalid_snapshots_and_valid_custom_failure_keep_distinct_rec
     native.0.borrow_mut().failures.push_back("register");
     let mut service = ShortcutService::start(disk, native.clone());
     assert!(service.snapshot().recovery_degraded);
+    assert_eq!(service.repair_fault(), Some(RepairFault::Registration));
+    assert!(!service.admission().can_hide());
     assert_eq!(service.configuration, configuration);
     // A default chord owned by an Action never becomes an implicit recovery fallback.
     assert!(native.0.borrow().keys.is_empty());
@@ -264,6 +266,8 @@ fn uncertain_commits_read_actual_disk_and_never_blindly_overwrite() {
     let next = changed(&service);
     assert_eq!(service.save(0, next).unwrap_err().code, "degraded");
     assert!(service.snapshot().recovery_degraded);
+    assert_eq!(service.repair_fault(), Some(RepairFault::Uncertain));
+    assert!(!service.admission().can_hide());
     assert!(native.0.borrow().keys.is_empty());
     assert_eq!(disk.read(), Stored::Unavailable);
 }
@@ -281,6 +285,8 @@ fn compensation_failure_reports_residual_ownership_and_disables_hiding_if_recove
     let error = service.save(0, next).unwrap_err();
     assert_eq!(error.code, "degraded");
     assert!(service.snapshot().recovery_degraded);
+    assert!(service.repair_fault().is_some());
+    assert!(!service.admission().can_hide());
     assert!(!service.residual.is_empty());
     assert!(service
         .snapshot()
@@ -402,6 +408,11 @@ fn pending_delivery_is_bounded_expires_and_claims_current_bindings_once() {
     }
     assert_eq!(service.trigger(&chord("KeyK"), 0), Effect::None);
     assert_eq!(service.take_failures()[0].code, "busy");
+    assert!(service.ready(true, 0).is_empty());
+    assert!(!service.acknowledge(1, true, 0));
+    for id in 1..=32 {
+        assert!(service.mark_shown(id, 1));
+    }
     assert_eq!(service.ready(true, 1).len(), 32);
     assert!(service.acknowledge(1, true, 2));
     assert!(!service.acknowledge(1, true, 3));
@@ -418,6 +429,7 @@ fn pending_delivery_is_bounded_expires_and_claims_current_bindings_once() {
 #[test]
 fn saved_double_taps_are_inactive_without_permission_and_snapshot_is_safe() {
     let (mut service, _, _) = fixture();
+    service.set_monitor(MonitorStatus::PermissionRequired);
     let mut configuration = service.configuration.clone();
     let trigger = Trigger::ModifierDoubleTap {
         modifier: "cmd".into(),
@@ -631,6 +643,63 @@ fn show_failure_is_retained_until_ready_and_recording_revocation_advances_input_
         assert!(service.recording_epoch() > epoch);
         assert!(service.recording().is_none());
     }
+}
+
+#[test]
+fn interruption_retires_unclaimed_invocations_before_host_ready_can_replay_them() {
+    let (mut service, _, _) = fixture();
+    available(&mut service);
+    service.save(0, action_configuration(&service)).unwrap();
+    let action = chord("KeyK");
+    let Effect::Action(waiting_to_show) = service.trigger(&action, 0) else {
+        panic!()
+    };
+    let Effect::Action(waiting_for_host) = service.trigger(&action, 1) else {
+        panic!()
+    };
+    assert!(service.mark_shown(waiting_for_host.invocation_id, 2));
+    let Effect::Action(claimed) = service.trigger(&action, 3) else {
+        panic!()
+    };
+    assert!(service.mark_shown(claimed.invocation_id, 4));
+    assert!(service.acknowledge(claimed.invocation_id, true, 5));
+    let admission = service.admission();
+    let before = admission.input_generation();
+    service.interrupt_input();
+    assert!(admission.input_generation() > before);
+    assert!(!service.invocation_pending(waiting_to_show.invocation_id, 6));
+    assert!(!service.mark_shown(waiting_to_show.invocation_id, 7));
+    assert!(service.ready(true, 8).is_empty());
+    assert!(!service.acknowledge(waiting_for_host.invocation_id, true, 9));
+    assert_eq!(
+        service.take_failures(),
+        [waiting_to_show, waiting_for_host].map(|invocation| Failure {
+            invocation_id: invocation.invocation_id,
+            code: "delivery_failed"
+        })
+    );
+    let generation = service.registrations[&action].generation;
+    service.sync_held_chords(|held| held == &action);
+    assert_eq!(service.press(&action, generation, true, 10), Effect::None);
+    assert_eq!(service.press(&action, generation, false, 10), Effect::None);
+    let Effect::Action(fresh) = service.press(&action, generation, true, 11) else {
+        panic!()
+    };
+    assert_eq!(service.press(&action, generation, true, 12), Effect::None);
+    service.ready(false, 13);
+    assert!(!service.mark_shown(fresh.invocation_id, 14));
+    assert!(service.ready(true, 15).is_empty());
+    assert_eq!(
+        service.take_failures(),
+        [Failure {
+            invocation_id: fresh.invocation_id,
+            code: "delivery_failed"
+        }]
+    );
+
+    let lease = service.begin_recording(16);
+    assert_eq!(service.interrupt_input(), Some(lease));
+    assert!(!admission.recording_active(17));
 }
 
 #[test]
@@ -1000,6 +1069,107 @@ fn double_tap_monitor_loss_sleep_and_stop_revoke_only_confirmed_recovery() {
 }
 
 #[test]
+fn only_current_launcher_fault_evidence_requires_visible_repair() {
+    let (mut service, _, _) = fixture();
+    let facts = service.admission();
+    let double = Trigger::ModifierDoubleTap {
+        modifier: "cmd".into(),
+    };
+    let mut config = service.configuration.clone();
+    config
+        .actions
+        .insert("com.test.open".into(), double.clone());
+    service.save(0, config.clone()).unwrap();
+    // The only passive binding belongs to a plugin. Even a real monitor
+    // failure cannot break the independently registered Launcher chord.
+    for status in [
+        MonitorStatus::PermissionRequired,
+        MonitorStatus::ObserverStopped,
+        MonitorStatus::EstablishmentFailed,
+    ] {
+        service.set_monitor(status);
+        assert!(facts.recovery_available());
+        assert!(facts.can_hide());
+        assert_eq!(service.repair_fault(), None);
+    }
+    config = service.configuration.clone();
+    config.actions.clear();
+    config.launcher = double;
+    service.save(1, config).unwrap();
+    assert!(!facts.recovery_available());
+    assert!(
+        facts.can_hide(),
+        "an attempt for the previous revision is inconclusive"
+    );
+    assert_eq!(service.repair_fault(), None);
+    service.set_monitor(MonitorStatus::Active);
+    facts.set_sleeping(true);
+    service.set_monitor(MonitorStatus::Unavailable);
+    assert!(!service.snapshot().recovery_degraded);
+    assert!(facts.can_hide());
+    facts.set_sleeping(false);
+    assert!(!facts.recovery_available());
+    assert!(facts.can_hide(), "waiting for a retry is not a fault");
+    service.set_monitor(MonitorStatus::Active);
+    assert!(facts.recovery_available());
+    let healthy = service.repair_generation();
+    for (status, reason) in [
+        (
+            MonitorStatus::EstablishmentFailed,
+            RepairFault::MonitorEstablishment,
+        ),
+        (MonitorStatus::PermissionRequired, RepairFault::Permission),
+        (MonitorStatus::ObserverStopped, RepairFault::ObserverStopped),
+    ] {
+        service.set_monitor(status);
+        assert_eq!(service.repair_fault(), Some(reason));
+        assert!(service.repair_generation() > healthy);
+        let generation = service.repair_generation();
+        assert!(!service.set_monitor(status));
+        assert_eq!(generation, service.repair_generation());
+        assert!(!facts.can_hide());
+        assert!(service.snapshot().recovery_degraded);
+    }
+    service.set_monitor(MonitorStatus::Active);
+    assert!(facts.can_hide());
+    assert_eq!(service.repair_fault(), None);
+}
+
+#[test]
+fn sleep_invalidates_show_evidence_but_only_success_ends_a_confirmed_monitor_fault() {
+    for failure in [
+        MonitorStatus::PermissionRequired,
+        MonitorStatus::EstablishmentFailed,
+    ] {
+        let (mut service, _, _) = fixture();
+        let mut config = service.configuration.clone();
+        config.launcher = Trigger::ModifierDoubleTap {
+            modifier: "cmd".into(),
+        };
+        service.save(0, config).unwrap();
+        service.set_monitor(failure);
+        let episode = service.repair_generation();
+        for _ in 0..2 {
+            service.admission().set_sleeping(true);
+            service.set_monitor(MonitorStatus::Unavailable);
+            assert_eq!(service.repair_fault(), None);
+            assert_eq!(service.repair_generation(), episode);
+            assert!(!service.admission().can_hide());
+            assert!(service.snapshot().recovery_degraded);
+            service.admission().set_sleeping(false);
+            service.set_monitor(failure);
+            assert!(service.repair_fault().is_some());
+            assert_eq!(service.repair_generation(), episode);
+        }
+        service.set_monitor(MonitorStatus::Active);
+        assert!(service.admission().can_hide());
+        assert!(!service.snapshot().recovery_degraded);
+        service.set_monitor(failure);
+        assert_ne!(service.repair_generation(), episode);
+    }
+}
+
+#[test]
 fn legacy_cmd_d_keeps_global_owner_and_unrelated_saves_persist_unresolved_choice() {
     for launcher in [true, false] {
         let (mut service, disk, native) = detach_conflict_fixture(launcher);
@@ -1110,7 +1280,7 @@ fn detach_resolution_storage_failures_preserve_marker_until_commit_is_confirmed(
 #[test]
 fn local_recording_is_permission_independent_and_owns_only_current_lease_gesture() {
     let (mut service, _, native) = fixture();
-    assert_eq!(service.monitor, MonitorStatus::PermissionRequired);
+    service.set_monitor(MonitorStatus::PermissionRequired);
     let lease = service.begin_recording(10);
     let epoch = service.recording_epoch();
     let trigger = default_detach();
@@ -1328,7 +1498,8 @@ fn only_the_selected_launcher_trigger_is_registered_and_monitored_for_recovery()
     let mut candidate = service.configuration.clone();
     candidate.launcher = double.clone();
     let saved = service.save(0, candidate).unwrap();
-    assert!(saved.recovery_degraded);
+    assert!(!saved.recovery_degraded);
+    assert!(!service.recovery_available());
     assert!(native.0.borrow().keys.is_empty());
     assert_eq!(service.press(&old, old_generation, true, 1), Effect::None);
     assert_eq!(service.trigger(&old, 1), Effect::None);
@@ -1342,7 +1513,7 @@ fn only_the_selected_launcher_trigger_is_registered_and_monitored_for_recovery()
         service.set_monitor(monitor);
         assert_eq!(
             service.snapshot().recovery_degraded,
-            monitor != MonitorStatus::Active
+            monitor == MonitorStatus::PermissionRequired
         );
         assert_eq!(
             service.trigger(&double, 2),
@@ -1379,7 +1550,8 @@ fn double_tap_only_startup_never_retargets_default_chord_owned_by_an_action() {
     let disk = FakeStore::new(Stored::Configuration(configuration));
     let native = FakeRegistry::default();
     let mut service = ShortcutService::start(disk, native.clone());
-    assert!(service.snapshot().recovery_degraded);
+    assert!(!service.snapshot().recovery_degraded);
+    assert!(!service.recovery_available());
     assert!(native.0.borrow().keys.is_empty());
     available(&mut service);
     assert_eq!(
@@ -1415,23 +1587,20 @@ fn passive_monitor_recovery_preserves_registered_action_chords_without_launcher_
     assert_eq!(registrations.len(), 1);
     assert!(registrations.contains_key(&action));
 
-    for (index, status) in [
-        MonitorStatus::PermissionRequired,
-        MonitorStatus::Unavailable,
-        MonitorStatus::Active,
-        MonitorStatus::Unavailable,
-        MonitorStatus::Active,
-        MonitorStatus::PermissionRequired,
+    for (index, (status, degraded)) in [
+        (MonitorStatus::PermissionRequired, true),
+        (MonitorStatus::Unavailable, true),
+        (MonitorStatus::Active, false),
+        (MonitorStatus::Unavailable, false),
+        (MonitorStatus::Active, false),
+        (MonitorStatus::PermissionRequired, true),
     ]
     .into_iter()
     .enumerate()
     {
         let now = index as u64 * 10;
         service.set_monitor(status);
-        assert_eq!(
-            service.snapshot().recovery_degraded,
-            status != MonitorStatus::Active
-        );
+        assert_eq!(service.snapshot().recovery_degraded, degraded);
         assert_eq!(
             service.trigger(&double, now),
             if status == MonitorStatus::Active {
@@ -1445,6 +1614,7 @@ fn passive_monitor_recovery_preserves_registered_action_chords_without_launcher_
             panic!("passive monitor status must not revoke a confirmed Action chord");
         };
         assert_eq!(invocation.action_id, "com.test.open");
+        assert!(service.mark_shown(invocation.invocation_id, now));
         assert!(service.acknowledge(invocation.invocation_id, true, now));
         assert_eq!(service.press(&action, generation, false, now), Effect::None);
         assert_eq!(native.0.borrow().keys, registrations);
@@ -1463,6 +1633,7 @@ fn real_legacy_file_is_only_replaced_after_confirmed_selection() {
     let original=serde_json::to_vec(&serde_json::json!({"version":1,"revision":4,"launcher":{"chord":chord("KeyK"),"double_tap":{"kind":"modifier_double_tap","modifier":"cmd"}},"actions":{"com.test.open":chord("KeyL")}})).unwrap();
     fs::write(&file, &original).unwrap();
     let mut service = ShortcutService::start(FileStore::new(file.clone()), FakeRegistry::default());
+    service.set_monitor(MonitorStatus::PermissionRequired);
     let snapshot = service.snapshot();
     assert_eq!(fs::read(&file).unwrap(), original);
     let mut choice = snapshot.configuration;
@@ -1481,7 +1652,9 @@ fn real_legacy_file_is_only_replaced_after_confirmed_selection() {
     assert_eq!(persisted["launcher"]["kind"], "modifier_double_tap");
     assert!(persisted["launcher"].get("chord").is_none());
     assert_eq!(persisted["actions"].as_object().unwrap().len(), 1);
-    let restarted = ShortcutService::start(FileStore::new(file.clone()), FakeRegistry::default());
+    let mut restarted =
+        ShortcutService::start(FileStore::new(file.clone()), FakeRegistry::default());
+    restarted.set_monitor(MonitorStatus::PermissionRequired);
     assert!(restarted.launcher_migration.is_none());
     assert_eq!(restarted.configuration, saved.configuration);
     assert!(restarted.snapshot().recovery_degraded);

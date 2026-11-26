@@ -328,6 +328,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
     app.run(|app, event| {
+        #[cfg(target_os = "macos")]
+        if matches!(event, tauri::RunEvent::Reopen { .. }) {
+            launcher_shortcuts::reopen(app);
+        }
         if matches!(event, tauri::RunEvent::Exit) {
             launcher_shortcuts::stop(app);
             launcher_window::release_macos_local_command_monitor();

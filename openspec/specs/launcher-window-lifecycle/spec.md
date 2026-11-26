@@ -251,7 +251,7 @@ The system MUST default to `Ctrl+Shift+Space` without configuration, allow one c
 
 #### Scenario: Default shortcut registration fails
 
-- **WHEN** the selected Launcher chord cannot register or its selected double tap cannot be observed reliably
+- **WHEN** an interactive session confirms registration failure for the selected Launcher chord or failure to observe the selected double tap once recovery is eligible
 - **THEN** the system reports a diagnosable error containing the binding and
   failure reason
 - **THEN** the system keeps the main window visible and permits ordinary window
@@ -277,7 +277,7 @@ The system MUST default to `Ctrl+Shift+Space` without configuration, allow one c
 
 ### Requirement: A recoverable launcher must hide on close and focus loss
 
-Confirmed Launcher recovery MUST allow main close requests to Hide through the unified boundary instead of exiting. Unconfirmed recovery, degraded compensation or `recovery_required` MUST keep repair/Quit visible and block main close-to-hide, blur, Toggle and `Cmd+W` Hide. This protection is main-only: detached windows MUST stay visible on blur, and close requests or focused `Cmd+W` terminate only their instance.
+With confirmed recovery, main close and blur MUST use unified Hide. A confirmed entry fault, degraded compensation or `recovery_required` MUST keep repair and quit reachable and block unrecoverable main Hide on close, blur, Toggle or `Cmd+W`. Lock, sleep and input recovery alone MUST NOT show or focus a running macOS Launcher. Detached windows MUST stay visible on blur. Closing a detached window or pressing `Cmd+W` there MUST terminate only its instance.
 
 #### Scenario: Close a ready launcher window
 
@@ -388,9 +388,9 @@ Confirmed Launcher recovery MUST allow main close requests to Hide through the u
 - **THEN** Restore MUST show and focus the native parent before restoring and focusing the same current Child WebView.
 
 #### Scenario: Retain double-tap configuration while input monitoring is unavailable
-- **WHEN** the selected Launcher is a double tap but input monitoring is unauthorized, invalid, or temporarily unavailable
+- **WHEN** an interactive session confirms missing permission or monitor failure for the selected Launcher double tap, or an eligible rebuild actually fails
 - **THEN** that configuration alone does not establish safe recoverable hiding
-- **THEN** the Host shows an already-hidden window and retains visible repair and exit paths; close/blur/local Cmd+W cannot hide it until the selected entry is active again
+- **THEN** the Host MUST show a hidden main window with repair and quit accessible. Close, blur and local `Cmd+W` MUST NOT hide it until the selected entry recovers.
 - **THEN** no former or default chord is silently registered as a fallback, and monitoring recovery starts with cleared gesture candidates
 
 #### Scenario: A detached window loses focus or closes
@@ -403,6 +403,35 @@ Confirmed Launcher recovery MUST allow main close requests to Hide through the u
 - **WHEN** detachment commit, detached-window focus, and main-window blur/Hide events interleave
 - **THEN** main-window Hide MUST affect only content main still owns and must not hide, destroy, or refocus an instance whose migration has committed
 - **THEN** an uncommitted migration MUST continue coordinating main-window visibility and failure rollback through its transaction; blur must not leave an empty shell, duplicate visibility, or an instance with no owner
+
+#### Scenario: A hidden main window stays hidden across lock, sleep and unlock
+
+- **WHEN** the running macOS main window is hidden and the user locks and unlocks the session, or sleeps the system, wakes it and unlocks later
+- **THEN** without a new summon or confirmed current entry fault, the main window and plugin content MUST remain hidden throughout. The Host MUST NOT activate the app, request keyboard focus or execute an Action.
+- **THEN** these notifications MUST NOT reactivate or reclaim focus for an already visible main window. Detached windows retain their own blur and close behavior.
+
+#### Scenario: An ordinary summon restores the previous content
+
+- **WHEN** the user returns to an interactive session and uses the recovered ordinary Launcher shortcut to summon the hidden window
+- **THEN** Home MUST return to Home. A valid current Translation Page MUST restore the same instance, input and result, with focus restored under the existing policy.
+- **THEN** the summon MUST NOT execute a plugin Action, recreate the plugin or issue another translation request by showing the window
+
+#### Scenario: A stale repair request reaches the main thread
+
+- **WHEN** a repair request reaches the main thread after lock, renewed sleep, configuration or session replacement, entry recovery, or the start of Host shutdown
+- **THEN** the stale request MUST NOT show the window, activate the app, restore a Child or change focus. A later independent fault MUST be evaluated against the state at that time.
+
+#### Scenario: A persistent entry fault requires repair in the current interactive session
+
+- **WHEN** the user has returned to an interactive session, a recheck confirms failure of the sole Launcher entry and the main window is hidden
+- **THEN** the Host MUST show the main window once to make shortcut repair and quit reachable. An already visible window MUST retain both entries.
+- **THEN** repeat notifications for the same continuous fault MUST NOT reclaim focus. A healthy recheck MUST leave a hidden window hidden.
+
+#### Scenario: The user explicitly reopens a running app with a pending repair
+
+- **WHEN** the sole Launcher entry has failed, the main window is hidden and the user explicitly reopens the running lensX app from the desktop, for example through Finder
+- **THEN** after rechecking the fault and confirming that all known interruptions have cleared, the Host MUST make repair and quit accessible even without a new ordinary desktop app activation or a press of the failed shortcut
+- **THEN** this repair MUST NOT execute a plugin Action. A healthy session or wake alone MUST NOT trigger this repair display.
 
 ### Requirement: Launcher activation must restore input focus
 
@@ -641,7 +670,7 @@ macOS accessory mode MUST retain one local entry each for `Cmd+W` and `Cmd+Q`. W
 
 #### Scenario: Recovery shortcut registration fails
 
-- **WHEN** the selected Launcher entry is unavailable or effective recovery can no longer be confirmed
+- **WHEN** an interactive session confirms failure of the selected Launcher entry, or registration or compensation failures leave recovery unconfirmed
 - **THEN** the system MUST NOT enable main-window `Cmd+W` Hide or focus-loss Hide that would make the Launcher unrecoverable; true detached-window Close and application-wide Quit MUST remain available
 - **THEN** the visible Window retains an exit path and the system does not leave
   a hidden process without a Dock tile or recovery entry point

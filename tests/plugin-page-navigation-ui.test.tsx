@@ -323,6 +323,19 @@ describe('Plugin Page navigation UI', () => {
     await waitFor(() => expect(view.actionService.registry.get(`${pluginId}.open_project`)).toBeDefined());
     await waitFor(() => expect(activationSource.listeners.size).toBe(1));
 
+    const input = screen.getByRole('combobox', { name: 'Launcher query' });
+    input.blur();
+    fireEvent(document, new Event('visibilitychange'));
+    expect(input).not.toHaveFocus();
+    expect(view.navigationService.getActivePage()).toBeUndefined();
+    act(() => activationSource.emit({ reason: 'global_shortcut' }));
+    await waitFor(() => expect(input).toHaveFocus());
+    expect(screen.getByRole('region', { name: 'Recent' }).closest('[data-presentation-state]')).toHaveAttribute(
+      'data-presentation-state',
+      'home',
+    );
+    expect(view.pluginChildWebviewPresentationController.create).not.toHaveBeenCalled();
+
     act(() =>
       view.navigationService.openPage({ owner_id: pluginId, page_id: 'open_project' }, `${pluginId}.open_project`),
     );
@@ -340,6 +353,9 @@ describe('Plugin Page navigation UI', () => {
       ),
     );
     const surfaceCallsBeforeRestore = setPresentationState.mock.calls.length;
+    const channel = view.navigationService.bindActivations({ owner_id: pluginId, page_id: 'open_project' });
+    const delivered = rs.fn(() => true);
+    expect(channel?.subscribe(delivered)).toEqual([]);
 
     await act(async () => {
       activationSource.emit({ reason: 'global_shortcut' });
@@ -352,6 +368,7 @@ describe('Plugin Page navigation UI', () => {
     expect(view.pluginChildWebviewPresentationController.create).toHaveBeenCalledTimes(1);
     expect(view.pluginChildWebviewPresentationController.destroy).not.toHaveBeenCalled();
     expect(setPresentationState).toHaveBeenCalledTimes(surfaceCallsBeforeRestore);
+    expect(delivered).not.toHaveBeenCalled();
     expect(document.body).not.toHaveTextContent('Loading the plugin page');
 
     fireEvent.click(screen.getByRole('button', { name: 'Close page and return home' }));

@@ -112,7 +112,7 @@ A double tap MUST comprise two complete presses and releases of the same physica
 
 ### Requirement: Double-tap availability MUST reflect native monitoring authorization
 
-The system MUST execute double taps only while passive monitoring is authorized and available. Settings MUST distinguish authorization missing, monitor unavailable, and active states. This authorization belongs to Host native integration, not plugin permissions or SDK capabilities. Monitoring MUST NOT store or transmit raw input content to plugins.
+Double taps MUST execute only with native authorization and available passive monitoring. Settings MUST distinguish missing permission, unavailable monitoring and active monitoring. Lock, sleep or pending input recovery alone MUST NOT reveal a hidden window. The native Host owns this authorization independently of plugin permissions and the SDK. Monitoring MUST NOT store raw input content or transmit it to plugins.
 
 #### Scenario: Monitoring is not authorized
 - **WHEN** the user configures a double tap while monitoring authorization is unavailable
@@ -123,8 +123,20 @@ The system MUST execute double taps only while passive monitoring is authorized 
 #### Scenario: Authorization revoked or monitoring interrupted
 - **WHEN** monitoring fails, the system disables it, or current input cannot be observed reliably
 - **THEN** all candidates are cleared, bindings show unavailable or suspended, and observation resumes from a new sequence
-- **THEN** when the sole Launcher double tap becomes unavailable, even a hidden window is shown and unrecoverable hiding is disabled until the selected entry is active again
+- **THEN** a confirmed failure of the sole Launcher double tap in an interactive session MUST reveal a hidden window and prevent unrecoverable hiding. During suspension or until monitoring can be retried, a hidden window MUST stay hidden pending recheck.
 - **THEN** the system does not bypass Secure Input or disable another application's system protection
+
+#### Scenario: An ordinary Launcher chord remains independent of a plugin double tap
+
+- **WHEN** lock or sleep interrupts modifier double-tap monitoring for an Action such as Translation while the ordinary Launcher chord is registered
+- **THEN** the Host MUST discard old gestures and MUST NOT treat the interrupted Action binding as a Launcher registration failure or a reason to show the window
+- **THEN** after recovery a fresh valid Launcher chord MUST perform ordinary Toggle. Shortcut execution of the Action requires a fresh gesture for its own configured binding.
+
+#### Scenario: Input spanning lock or sleep is discarded on recovery
+
+- **WHEN** lock or sleep interrupts a candidate, a pending gesture confirmation, or a queued shortcut awaiting window dispatch, and the user returns
+- **THEN** the Host MUST discard those candidates, confirmations and queued window actions. Unlocking, old key releases and stale callbacks MUST NOT trigger Toggle, Show or a plugin Action.
+- **THEN** recognition MUST restart from the current physical input state. Each subsequent valid new gesture MUST execute once.
 
 ### Requirement: Shortcut persistence MUST report confirmed state and compensating failures
 
@@ -353,6 +365,17 @@ Host MUST preserve a healthy, authorized and still-needed monitor across recogni
 
 #### Scenario: Failed recovery retains accessible repair and quit
 
-- **WHEN** the sole Launcher entry is a modifier double tap and its monitor cannot be completely established, becomes disabled, or its observer thread exits abnormally
+- **WHEN** a modifier double tap is the sole Launcher entry and an interactive session confirms monitor establishment failure, unexpected disablement or abnormal observer exit
 - **THEN** Host MUST revoke monitoring availability and preserve accessible repair and quit through the existing recovery policy, preventing unrecoverable hiding
 - **THEN** Host MUST NOT secretly register a default or historical fallback chord; failure limited to passive monitoring MUST NOT revoke confirmed ordinary chords while the shared shortcut service remains healthy
+
+#### Scenario: Wake waits for an eligible monitoring recheck
+
+- **WHEN** the sole Launcher entry is a double tap and the system wakes while still locked, Secure Input prevents observation, or the retry interval has yet to allow a rebuild attempt
+- **THEN** monitoring eligibility MUST reflect the actual monitor state and a hidden window MUST stay hidden. Wake, entering or leaving Secure Input in a password field, and timer expiry alone MUST NOT trigger repair display.
+- **THEN** the Host MUST actively recheck when eligible. Successful rebuilding preserves a hidden window. Confirmed permission revocation, an actual failure to rebuild while permitted, or observer termination MUST follow the main-window repair policy.
+
+#### Scenario: A persistent failure can be repaired without a new monitor status event
+
+- **WHEN** a fault affecting the sole Launcher entry was recorded during an interruption and the user returns to an interactive session with the same monitor status or a stopped observer
+- **THEN** the Host MUST recheck the current entry without waiting for another monitor status change or for the user to press the failed shortcut. A recovered entry leaves a hidden window hidden. A persistent fault MUST make repair and quit accessible.

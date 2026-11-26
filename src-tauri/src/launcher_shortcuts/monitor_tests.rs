@@ -22,7 +22,6 @@ struct Ledger {
     source_releases: usize,
     invalidations: usize,
     context_live: bool,
-    notifications: usize,
     admitted: bool,
 }
 
@@ -73,7 +72,6 @@ impl Fake {
     fn new(log: &Log) -> Self {
         let mut ledger = log.borrow_mut();
         ledger.context_live = true;
-        ledger.notifications = 2;
         drop(ledger);
         Self {
             log: Rc::clone(log),
@@ -191,8 +189,6 @@ impl Drop for Fake {
     fn drop(&mut self) {
         let mut ledger = self.log.borrow_mut();
         ledger.empty();
-        ledger.notifications = 0;
-        ledger.operations.push(("unsubscribe", 0));
         ledger.context_live = false;
         ledger.operations.push(("context_drop", 0));
     }
@@ -266,6 +262,7 @@ impl Recognition for Observer {
 
 fn ready() -> Facts {
     Facts {
+        configuration_revision: 0,
         permitted: true,
         sleeping: false,
         secure_input: false,
@@ -311,9 +308,8 @@ fn empty_owner_drops_context_and_subscriptions_without_native_operations() {
     let ledger = log.borrow();
     ledger.empty();
     assert_eq!(ledger.attempts, 0);
-    assert_eq!(ledger.notifications, 0);
     assert!(!ledger.context_live);
-    assert_eq!(ledger.operations, [("unsubscribe", 0), ("context_drop", 0)]);
+    assert_eq!(ledger.operations, [("context_drop", 0)]);
 }
 
 #[test]
@@ -328,8 +324,12 @@ fn partial_creation_and_disabled_taps_never_become_active_or_leave_resources() {
         monitor.backend_mut().failure = failure;
         let status = observer.poll(&mut monitor, ready(), 0);
         assert_eq!(
-            status == MonitorStatus::Active,
-            matches!(failure, Failure::None)
+            status,
+            if matches!(failure, Failure::None) {
+                MonitorStatus::Active
+            } else {
+                MonitorStatus::EstablishmentFailed
+            }
         );
         if status != MonitorStatus::Active {
             log.borrow().empty();
@@ -341,7 +341,6 @@ fn partial_creation_and_disabled_taps_never_become_active_or_leave_resources() {
         monitor.stop(&mut observer);
         log.borrow().empty();
         drop(monitor);
-        assert_eq!(log.borrow().notifications, 0);
         assert!(!log.borrow().context_live);
     }
 }
@@ -373,7 +372,6 @@ fn empty_and_repeated_cleanup_are_idempotent_and_preserve_teardown_order() {
             ("release_tap", 1),
             ("revoke", 0),
             ("reset", 0),
-            ("unsubscribe", 0),
             ("context_drop", 0),
         ]
     );
@@ -490,17 +488,19 @@ fn disabled_tap_and_callback_or_run_gap_interruptions_share_the_retirement_path(
 #[test]
 fn workspace_sleep_facts_retire_before_the_notification_can_obtain_the_service_lock() {
     let (log, mut monitor, mut observer) = fixture();
-    let workspace = WorkspaceSleep::default();
+    use crate::launcher_shortcuts::macos::{Interruption::Sleep, WorkspaceSession};
+    let workspace = WorkspaceSession::default();
     let callback_workspace = workspace.clone();
-    let (mut admitted_epoch, _) = workspace.snapshot();
+    let mut admitted_epoch = workspace.snapshot().epoch;
     assert!(workspace.allows(admitted_epoch));
     observer.poll(&mut monitor, ready(), 0);
 
-    callback_workspace.update(true);
+    callback_workspace.set(Sleep, true);
     // The notification has published its facts but is blocked behind the
     // observer's service lock, so the service-owned sleeping value is stale.
     let service_sleeping = false;
-    let (sleep_epoch, sleeping) = workspace.snapshot();
+    let sleep_epoch = workspace.snapshot().epoch;
+    let sleeping = workspace.snapshot().interrupted;
     assert!(sleeping);
     assert_ne!(sleep_epoch, admitted_epoch);
     assert!(!workspace.allows(admitted_epoch));
@@ -525,8 +525,9 @@ fn workspace_sleep_facts_retire_before_the_notification_can_obtain_the_service_l
     );
     admitted_epoch = sleep_epoch;
 
-    callback_workspace.update(false);
-    let (wake_epoch, sleeping) = workspace.snapshot();
+    callback_workspace.set(Sleep, false);
+    let wake_epoch = workspace.snapshot().epoch;
+    let sleeping = workspace.snapshot().interrupted;
     assert!(!sleeping);
     assert_ne!(wake_epoch, admitted_epoch);
     assert!(!workspace.allows(admitted_epoch));
@@ -548,9 +549,10 @@ fn workspace_sleep_facts_retire_before_the_notification_can_obtain_the_service_l
 
     // A full sleep/wake pair between polls still invalidates the old stream;
     // the final false sleeping bit must not hide either transition.
-    callback_workspace.update(true);
-    callback_workspace.update(false);
-    let (coalesced_epoch, sleeping) = workspace.snapshot();
+    callback_workspace.set(Sleep, true);
+    callback_workspace.set(Sleep, false);
+    let coalesced_epoch = workspace.snapshot().epoch;
+    let sleeping = workspace.snapshot().interrupted;
     assert!(!sleeping);
     assert_ne!(coalesced_epoch, admitted_epoch);
     assert!(!workspace.allows(admitted_epoch));
@@ -577,11 +579,14 @@ fn monotonic_retry_attempts_are_immediate_then_at_least_one_second_apart() {
     monitor.backend_mut().failure = Failure::Tap;
     assert_eq!(
         observer.poll(&mut monitor, ready(), 50),
-        MonitorStatus::Unavailable
+        MonitorStatus::EstablishmentFailed
     );
     assert_eq!(log.borrow().attempts, 1);
     for now in 51..1050 {
-        observer.poll(&mut monitor, ready(), now);
+        assert_eq!(
+            observer.poll(&mut monitor, ready(), now),
+            MonitorStatus::EstablishmentFailed
+        );
     }
     assert_eq!(log.borrow().attempts, 1, "999 ms must not retry");
     for _ in 0..100 {
@@ -600,6 +605,57 @@ fn monotonic_retry_attempts_are_immediate_then_at_least_one_second_apart() {
     // A regressing injected timestamp cannot bypass monotonic spacing.
     observer.poll(&mut monitor, ready(), 0);
     assert_eq!(log.borrow().attempts, 100);
+}
+
+#[test]
+fn a_new_configuration_or_session_requires_its_own_eligible_failed_attempt() {
+    let (_, mut monitor, mut observer) = fixture();
+    monitor.backend_mut().failure = Failure::Source;
+    assert_eq!(
+        observer.poll(&mut monitor, ready(), 0),
+        MonitorStatus::EstablishmentFailed
+    );
+    let current = Facts {
+        configuration_revision: 1,
+        ..ready()
+    };
+    assert_eq!(
+        observer.poll(&mut monitor, current, 999),
+        MonitorStatus::Unavailable
+    );
+    assert_eq!(
+        observer.poll(&mut monitor, current, 1000),
+        MonitorStatus::EstablishmentFailed
+    );
+    let suspended = Facts {
+        sleeping: true,
+        permitted: false,
+        ..current
+    };
+    assert_eq!(
+        observer.poll(&mut monitor, suspended, 1100),
+        MonitorStatus::Unavailable
+    );
+    assert_eq!(
+        observer.poll(&mut monitor, current, 1999),
+        MonitorStatus::Unavailable
+    );
+    monitor.backend_mut().failure = Failure::None;
+    assert_eq!(
+        observer.poll(&mut monitor, current, 2000),
+        MonitorStatus::Active
+    );
+    assert_eq!(
+        observer.poll(
+            &mut monitor,
+            Facts {
+                permitted: false,
+                ..current
+            },
+            2001
+        ),
+        MonitorStatus::PermissionRequired
+    );
 }
 
 #[test]
@@ -691,7 +747,6 @@ fn normal_early_return_and_rust_unwind_revoke_before_native_and_context_teardown
         ledger.empty();
         assert!(!ledger.admitted);
         assert!(!ledger.context_live);
-        assert_eq!(ledger.notifications, 0);
         assert_eq!(
             ledger.operations,
             [
@@ -700,7 +755,6 @@ fn normal_early_return_and_rust_unwind_revoke_before_native_and_context_teardown
                 ("remove", 1),
                 ("release_source", 1),
                 ("release_tap", 1),
-                ("unsubscribe", 0),
                 ("context_drop", 0),
             ]
         );
@@ -778,7 +832,7 @@ fn more_than_one_thousand_mixed_failures_and_recoveries_keep_registrations_and_r
         };
         assert_eq!(
             observer.poll(&mut monitor, ready(), now),
-            MonitorStatus::Unavailable
+            MonitorStatus::EstablishmentFailed
         );
         log.borrow().empty();
         monitor.backend_mut().failure = Failure::None;
@@ -795,6 +849,5 @@ fn more_than_one_thousand_mixed_failures_and_recoveries_keep_registrations_and_r
     log.borrow().empty();
     assert_eq!(log.borrow().attempts, 2401);
     drop(monitor);
-    assert_eq!(log.borrow().notifications, 0);
     assert!(!log.borrow().context_live);
 }

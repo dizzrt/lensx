@@ -2,6 +2,10 @@
 //! synthesizes input, or changes another application's Secure Input state.
 use super::*;
 
+#[path = "workspace_session.rs"]
+mod workspace_session;
+pub(super) use workspace_session::{Interruption, WorkspaceSession};
+
 /// Owned key translations. No Carbon object or pointer crosses a thread boundary.
 #[derive(Default, PartialEq, Eq)]
 pub(super) struct KeyboardLayout {
@@ -101,11 +105,6 @@ fn wait_for_monitor_poll(
 #[cfg(target_os = "macos")]
 mod platform {
     use super::*;
-    use block2::RcBlock;
-    use objc2_app_kit::{
-        NSWorkspace, NSWorkspaceDidWakeNotification, NSWorkspaceWillSleepNotification,
-    };
-    use objc2_foundation::NSNotification;
     use std::{
         ffi::c_void,
         ptr,
@@ -140,7 +139,7 @@ mod platform {
     }
     #[link(name = "ApplicationServices", kind = "framework")]
     unsafe extern "C" {
-        fn CGPreflightListenEventAccess() -> bool;
+        pub(super) fn CGPreflightListenEventAccess() -> bool;
         fn CGRequestListenEventAccess() -> bool;
         fn CGEventTapCreate(
             location: u32,
@@ -154,6 +153,7 @@ mod platform {
         fn CGEventGetIntegerValueField(event: Event, field: u32) -> i64;
         fn CGEventGetFlags(event: Event) -> u64;
         fn CGEventGetTimestamp(event: Event) -> u64;
+        fn CGEventSourceFlagsState(state: i32) -> u64;
         fn CGEventSourceKeyState(state: i32, key: u16) -> bool;
         fn CGEventSourceButtonState(state: i32, button: u32) -> bool;
     }
@@ -171,7 +171,7 @@ mod platform {
     }
     #[link(name = "Carbon", kind = "framework")]
     unsafe extern "C" {
-        fn IsSecureEventInputEnabled() -> bool;
+        pub(super) fn IsSecureEventInputEnabled() -> bool;
         fn TISCopyCurrentKeyboardLayoutInputSource() -> Ref;
         fn TISGetInputSourceProperty(source: Ref, property: Ref) -> Ref;
         static kTISPropertyUnicodeKeyLayoutData: Ref;
@@ -313,6 +313,24 @@ mod platform {
         code < 128 && unsafe { CGEventSourceKeyState(0, code) }
     }
 
+    pub(super) fn chord_key_held(trigger: &Trigger) -> bool {
+        let Trigger::Chord {
+            modifiers: binding,
+            key,
+        } = trigger
+        else {
+            return false;
+        };
+        if !KEYS
+            .iter()
+            .any(|&(code, name)| name == key && local_key_down(code))
+        {
+            return false;
+        }
+        let down = modifiers(unsafe { CGEventSourceFlagsState(0) });
+        down.len() == binding.len() && binding.iter().all(|modifier| down.contains(modifier))
+    }
+
     fn with_layout<T>(
         _main: objc2::MainThreadMarker,
         read: impl FnOnce(Ref, u32) -> T,
@@ -402,7 +420,7 @@ mod platform {
         app: AppHandle<R>,
         state: State<R>,
         interrupted: bool,
-        workspace: monitor::WorkspaceSleep,
+        workspace: WorkspaceSession,
         workspace_epoch: u64,
     }
 
@@ -466,9 +484,10 @@ mod platform {
             if context.interrupted {
                 return;
             }
+            let secure = notifications::observe_secure_input(&context.app, &context.workspace);
             if kind >= u32::MAX - 1
                 || !context.workspace.allows(context.workspace_epoch)
-                || unsafe { IsSecureEventInputEnabled() }
+                || secure
                 || !unsafe { CGPreflightListenEventAccess() }
             {
                 context.interrupted = true;
@@ -542,6 +561,7 @@ mod platform {
                     service.gesture.reset(now);
                 }
             }
+            let effect = service.stamp(effect, context.workspace_epoch);
             drop(service);
             if let Some(lease) = cancelled {
                 emit(
@@ -681,84 +701,27 @@ mod platform {
         }
     }
 
-    // The backend holds the callback allocation and subscription scope until the
-    // shared owner has invalidated the tap and removed/released its source.
+    // Keep the callback allocation alive until the source and tap are retired.
     struct NativeMonitor<R: Runtime> {
         context: Box<Context<R>>,
         loop_ref: Ref, // CFRunLoopGetCurrent is borrowed, never CFRelease'd here.
         mode: Ref,
-        workspace: monitor::WorkspaceSleep,
-        _notifications: monitor::OnExit<Box<dyn FnOnce()>>,
+        workspace: WorkspaceSession,
     }
 
     impl<R: Runtime> NativeMonitor<R> {
-        fn new(app: AppHandle<R>, state: State<R>) -> Self {
-            let notification_center = NSWorkspace::sharedWorkspace().notificationCenter();
-            type Observer = objc2::rc::Retained<
-                objc2::runtime::ProtocolObject<dyn objc2_foundation::NSObjectProtocol>,
-            >;
-            let observers = std::rc::Rc::new(std::cell::RefCell::new(Vec::<Observer>::new()));
-            let cleanup_observers = std::rc::Rc::clone(&observers);
-            let cleanup_center = notification_center.clone();
-            let notifications: monitor::OnExit<Box<dyn FnOnce()>> =
-                monitor::OnExit::new(Box::new(move || {
-                    for observer in cleanup_observers.borrow_mut().drain(..) {
-                        unsafe {
-                            cleanup_center.removeObserver((*observer).as_ref());
-                        }
-                    }
-                }));
-            let workspace = monitor::WorkspaceSleep::default();
-            for (name, sleeping) in [
-                (unsafe { NSWorkspaceWillSleepNotification }, true),
-                (unsafe { NSWorkspaceDidWakeNotification }, false),
-            ] {
-                let state = Arc::clone(&state);
-                let workspace = workspace.clone();
-                let notification_app = app.clone();
-                let block = RcBlock::new(move |_: std::ptr::NonNull<NSNotification>| {
-                    workspace.update(sleeping);
-                    if let Some(facts) = notification_app.try_state::<ShortcutAdmission>() {
-                        facts.set_sleeping(sleeping);
-                    }
-                    let snapshot = if let Ok(mut service) = state.lock() {
-                        let now = macos::monotonic_millis();
-                        service.sleeping = sleeping;
-                        service.monitor_epoch += 1;
-                        service.gesture.reset(now);
-                        service.inner.end_recording();
-                        service
-                            .inner
-                            .set_monitor(MonitorStatus::Unavailable)
-                            .then(|| service.inner.snapshot())
-                    } else {
-                        None
-                    };
-                    if let Some(snapshot) = snapshot {
-                        publish_monitor_snapshot(&notification_app, snapshot);
-                    }
-                });
-                observers.borrow_mut().push(unsafe {
-                    notification_center.addObserverForName_object_queue_usingBlock(
-                        Some(name),
-                        None,
-                        None,
-                        &block,
-                    )
-                });
-            }
+        fn new(app: AppHandle<R>, state: State<R>, workspace: WorkspaceSession) -> Self {
             Self {
                 context: Box::new(Context {
                     app,
                     state,
                     interrupted: false,
                     workspace: workspace.clone(),
-                    workspace_epoch: workspace.snapshot().0,
+                    workspace_epoch: workspace.snapshot().epoch,
                 }),
                 loop_ref: unsafe { CFRunLoopGetCurrent() },
                 mode: unsafe { kCFRunLoopDefaultMode },
                 workspace,
-                _notifications: notifications,
             }
         }
     }
@@ -839,11 +802,13 @@ mod platform {
     }
 
     pub fn start<R: Runtime>(app: AppHandle<R>, state: State<R>) {
+        let workspace = app.state::<WorkspaceSession>().inner().clone();
+        notifications::install(&app, &workspace);
         std::thread::spawn(move || {
             let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                observe(&app, &state);
+                observe(&app, &state, workspace);
             }));
-            // Native cleanup and subscription teardown have already completed,
+            // Native tap cleanup has already completed,
             // including on unwind, before any business-state publication takes a lock.
             finish_observation(&app, &state);
             if outcome.is_err() {
@@ -852,8 +817,8 @@ mod platform {
         });
     }
 
-    fn observe<R: Runtime>(app: &AppHandle<R>, state: &State<R>) {
-        let backend = NativeMonitor::new(app.clone(), Arc::clone(state));
+    fn observe<R: Runtime>(app: &AppHandle<R>, state: &State<R>, workspace: WorkspaceSession) {
+        let backend = NativeMonitor::new(app.clone(), Arc::clone(state), workspace.clone());
         let mut monitor = monitor::Monitor::new(backend);
         let admission = app
             .try_state::<ShortcutAdmission>()
@@ -863,7 +828,6 @@ mod platform {
                 admission.set_monitor(false);
             }
         });
-        let mut previous_status = MonitorStatus::PermissionRequired;
         let mut epoch = 0;
         let mut wall = SystemTime::now();
         let retry_clock = Instant::now();
@@ -881,6 +845,7 @@ mod platform {
             }
             // Busy input postpones quiet confirmation, but cannot postpone
             // permission/stop/interruption retirement and resource cleanup.
+            let secure_input = notifications::observe_secure_input(app, &workspace);
             let visible = foreground(&app);
             let mut service = match state.lock() {
                 Ok(service) => service,
@@ -899,14 +864,18 @@ mod platform {
             let elapsed = wall.elapsed().unwrap_or(Duration::from_secs(1));
             wall = SystemTime::now();
             let permitted = unsafe { CGPreflightListenEventAccess() };
-            let (observed_epoch, sleeping) = monitor.backend().workspace.snapshot();
+            let session = workspace.snapshot();
+            let observed_epoch = session.epoch;
             let restart_monitor = monitor.backend().context.interrupted
                 || elapsed > Duration::from_millis(500)
                 || observed_epoch != notification_epoch;
             let facts = monitor::Facts {
                 permitted,
-                sleeping: service.sleeping || sleeping,
-                secure_input: unsafe { IsSecureEventInputEnabled() },
+                sleeping: service.sleeping
+                    || session.interrupted
+                    || service.workspace_epoch != observed_epoch,
+                configuration_revision: service.inner.configuration_revision(),
+                secure_input,
                 wanted: service.inner.wants_monitor(),
                 interrupted: restart_monitor,
                 reset: epoch != service.monitor_epoch || cancelled.is_some(),
@@ -924,7 +893,12 @@ mod platform {
                     now,
                 },
             );
-            service.inner.set_monitor(status);
+            let status = if workspace.snapshot().epoch == observed_epoch {
+                status
+            } else {
+                MonitorStatus::Unavailable
+            };
+            let changed = service.inner.set_monitor(status);
             let effect = if drained && status == MonitorStatus::Active {
                 service
                     .gesture
@@ -941,8 +915,8 @@ mod platform {
             } else {
                 Effect::None
             };
-            let snapshot = (status != previous_status).then(|| service.inner.snapshot());
-            previous_status = status;
+            let snapshot = changed.then(|| service.inner.snapshot());
+            let effect = service.stamp(effect, observed_epoch);
             drop(service);
             if last_layout_check.elapsed() >= Duration::from_secs(1) {
                 last_layout_check = Instant::now();
@@ -1000,6 +974,18 @@ mod platform {
 pub(super) use platform::{current_layout, layout_allows};
 
 #[cfg(target_os = "macos")]
+#[path = "workspace_notifications.rs"]
+mod notifications;
+#[cfg(target_os = "macos")]
+pub(super) use notifications::{refresh_session, stop_workspace};
+
+#[cfg(not(target_os = "macos"))]
+pub(super) fn refresh_session<R: Runtime>(_app: &AppHandle<R>) {}
+
+#[cfg(not(target_os = "macos"))]
+pub(super) fn stop_workspace<R: Runtime>(_app: &AppHandle<R>) {}
+
+#[cfg(target_os = "macos")]
 pub use platform::{local_key_down, local_trigger, monotonic_millis, request_permission, start};
 
 #[cfg(not(target_os = "macos"))]
@@ -1037,7 +1023,7 @@ pub fn start<R: Runtime>(app: AppHandle<R>, state: State<R>) {
             }
             let now = macos::monotonic_millis();
             service.inner.expire(now);
-            service.inner.set_monitor(MonitorStatus::Unavailable);
+            service.inner.set_monitor(MonitorStatus::ObserverStopped);
         }
         publish_failures(&app);
         std::thread::sleep(std::time::Duration::from_millis(25));

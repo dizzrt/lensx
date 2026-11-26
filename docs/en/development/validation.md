@@ -510,6 +510,18 @@ tests require complete enabled resources and fresh physical-state sampling
 before `Active`, while retaining sole-double-tap repair access, no hidden
 fallback, and ordinary-chord independence when only passive monitoring fails.
 
+Injected workspace events cover overlapping system sleep, display sleep,
+session changes, Secure Input and frontmost application activation. Delayed
+main-thread work and a fake window exercise stale Toggle, Show and Action
+delivery, retry after failed repair, duplicate repair requests and explicit
+Reopen. The ordered window adapter records application activation, parent
+show and focus, then restoration of the same Child. Host navigation tests
+check that an ordinary shortcut restores Home focus or the current plugin
+instance without an Action invocation. Translation's workspace tests also
+verify source text, result and provider call count across hide and restore.
+These event sequences are simulated. AppKit notification order and focus
+behavior in an installed build require separate observations.
+
 These deterministic checks establish configured versus active state, independent
 preferences persistence, native adapter wiring and bounded semantic delivery.
 They do not prove macOS authorization dialogs, OS keyboard delivery, Secure Input

@@ -1,41 +1,8 @@
 //! Thread-bound passive monitor ownership and deterministic recovery policy.
-//! Platform backends own their callback context and notification subscriptions;
-//! they are dropped only after this owner has retired every native resource.
+//! The backend and callback context outlive all native tap resources.
+//! Workspace session observation has a separate Host-owned lifetime.
 use super::service::MonitorStatus;
-use std::{
-    marker::PhantomData,
-    rc::Rc,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
-
-/// Notification facts must become visible without acquiring the service lock.
-/// Encoding sleep and its epoch together prevents a new epoch from being paired
-/// with the previous sleep state while a notification waits for that lock.
-#[derive(Clone, Default)]
-pub(super) struct WorkspaceSleep(Arc<AtomicU64>);
-
-impl WorkspaceSleep {
-    pub fn update(&self, sleeping: bool) {
-        let _ = self
-            .0
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |state| {
-                Some((state.wrapping_add(2) & !1) | u64::from(sleeping))
-            });
-    }
-
-    pub fn snapshot(&self) -> (u64, bool) {
-        let state = self.0.load(Ordering::Acquire);
-        (state, state & 1 != 0)
-    }
-
-    pub fn allows(&self, expected: u64) -> bool {
-        self.snapshot() == (expected, false)
-    }
-}
+use std::{marker::PhantomData, rc::Rc, time::Duration};
 
 /// Native operations are synchronous and cleanup operations must not unwind.
 /// An implementation retains the original RunLoop/mode used by `attach`.
@@ -79,6 +46,7 @@ impl<F: FnOnce()> Drop for OnExit<F> {
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Facts {
+    pub configuration_revision: u64,
     pub permitted: bool,
     pub sleeping: bool,
     pub secure_input: bool,
@@ -95,6 +63,7 @@ pub(super) struct Monitor<B: Backend> {
     source: Option<B::Source>,
     attached: bool,
     last_attempt: Option<Duration>,
+    failed_revision: Option<u64>,
     stopped: bool,
     // Even a backend made of integer fake handles must obey thread confinement.
     _thread_bound: PhantomData<Rc<()>>,
@@ -108,6 +77,7 @@ impl<B: Backend> Monitor<B> {
             source: None,
             attached: false,
             last_attempt: None,
+            failed_revision: None,
             stopped: false,
             _thread_bound: PhantomData,
         }
@@ -164,6 +134,7 @@ impl<B: Backend> Monitor<B> {
             recognition.revoke();
             recognition.reset();
             self.cleanup();
+            self.failed_revision = None;
         } else if facts.reset {
             // Configuration, recording, hide, and gesture epochs do not alter a
             // healthy registration while observation remains necessary.
@@ -194,15 +165,21 @@ impl<B: Backend> Monitor<B> {
                 // Snapshot physical state only after complete establishment and
                 // before the caller publishes Active.
                 recognition.seed();
+                self.failed_revision = None;
             } else {
                 self.cleanup();
+                self.failed_revision = Some(facts.configuration_revision);
             }
         }
 
-        if !facts.permitted {
+        if facts.sleeping || facts.secure_input {
+            MonitorStatus::Unavailable
+        } else if !facts.permitted {
             MonitorStatus::PermissionRequired
         } else if observable && facts.wanted && self.source.is_some() {
             MonitorStatus::Active
+        } else if self.failed_revision == Some(facts.configuration_revision) {
+            MonitorStatus::EstablishmentFailed
         } else {
             MonitorStatus::Unavailable
         }

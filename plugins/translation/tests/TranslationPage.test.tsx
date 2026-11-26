@@ -876,14 +876,27 @@ describe('Translation real Semi workspace', () => {
     expect(screen.getByRole('textbox', { name: 'Translated text' })).toHaveValue('recovered');
   });
 
-  test('hide/restore events preserve memory, disconnect cleans it and reconnect starts empty', async () => {
+  test('a hidden translation keeps its input and result across restoration until disconnect', async () => {
     const { fake, translate } = await setup();
+    const source = screen.getByRole('textbox', { name: 'Source text' });
+    const result = screen.getByRole('textbox', { name: 'Translated text' });
     edit('hello');
     await tick();
-    fireEvent(document, new Event('visibilitychange'));
-    await tick();
-    expect(translate).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('textbox', { name: 'Source text' })).toHaveValue('hello');
+    const visibility = rs.spyOn(document, 'visibilityState', 'get');
+    try {
+      for (const state of ['hidden', 'visible'] as const) {
+        visibility.mockReturnValue(state);
+        fireEvent(document, new Event('visibilitychange'));
+        fireEvent(window, new Event(state === 'hidden' ? 'blur' : 'focus'));
+        await tick();
+        expect(screen.getByRole('textbox', { name: 'Source text' })).toBe(source);
+        expect(source).toHaveValue('hello');
+        expect(result).toHaveValue('<b>译文</b>\nnext');
+        expect(translate).toHaveBeenCalledTimes(1);
+      }
+    } finally {
+      visibility.mockRestore();
+    }
     act(() => fake.disconnect());
     await flush();
     expect(screen.queryByRole('textbox', { name: 'Source text' })).toBeNull();

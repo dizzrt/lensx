@@ -1,7 +1,7 @@
 use super::*;
 use std::{path::PathBuf, sync::atomic::AtomicU64};
 
-struct ConfigurationDirectory(PathBuf);
+pub(super) struct ConfigurationDirectory(PathBuf);
 
 impl Drop for ConfigurationDirectory {
     fn drop(&mut self) {
@@ -9,7 +9,9 @@ impl Drop for ConfigurationDirectory {
     }
 }
 
-fn monitored_service<R: Runtime>(app: &AppHandle<R>) -> (State<R>, ConfigurationDirectory) {
+pub(super) fn monitored_service<R: Runtime>(
+    app: &AppHandle<R>,
+) -> (State<R>, ConfigurationDirectory) {
     static SEQUENCE: AtomicU64 = AtomicU64::new(0);
     let directory = ConfigurationDirectory(std::env::temp_dir().join(format!(
         "lensx-monitor-exit-{}-{}",
@@ -36,7 +38,12 @@ fn monitored_service<R: Runtime>(app: &AppHandle<R>) -> (State<R>, Configuration
     inner.set_monitor(MonitorStatus::Active);
     assert!(!inner.snapshot().recovery_degraded);
     assert!(app.manage(inner.admission()));
+    let workspace = macos::WorkspaceSession::default();
+    app.manage(workspace.clone());
+    app.manage(Mutex::new(repair::RepairQueue::default()));
     let state = Arc::new(Mutex::new(DesktopService {
+        workspace,
+        workspace_epoch: 0,
         inner,
         gesture: gesture::Gesture::default(),
         monitor_epoch: 0,

@@ -34,6 +34,7 @@ pub struct ShortcutAdmission(Arc<AdmissionState>);
 struct AdmissionState {
     recovery: AtomicU8,
     recording_deadline: AtomicU64,
+    input_generation: AtomicU64,
 }
 
 impl ShortcutAdmission {
@@ -69,7 +70,21 @@ impl ShortcutAdmission {
         );
     }
     pub fn stop(&self) {
+        self.invalidate_input();
         self.change(0, Self::STOPPED);
+    }
+    pub fn stopped(&self) -> bool {
+        self.0.recovery.load(Ordering::Acquire) & Self::STOPPED != 0
+    }
+    pub fn input_generation(&self) -> u64 {
+        self.0.input_generation.load(Ordering::Acquire)
+    }
+    pub fn invalidate_input(&self) {
+        self.0.input_generation.fetch_add(1, Ordering::AcqRel);
+    }
+    pub fn can_hide(&self) -> bool {
+        let state = self.0.recovery.load(Ordering::Acquire);
+        state & Self::STOPPED == 0 && state & (Self::CHORD | Self::DOUBLE_TAP) != 0
     }
     pub fn recovery_available(&self) -> bool {
         let state = self.0.recovery.load(Ordering::Acquire);
@@ -269,7 +284,20 @@ struct Registration {
 pub enum MonitorStatus {
     Active,
     PermissionRequired,
+    /// Suspended, not needed, or awaiting an eligible retry.
     Unavailable,
+    EstablishmentFailed,
+    ObserverStopped,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RepairFault {
+    Registration,
+    Migration,
+    Uncertain,
+    Permission,
+    MonitorEstablishment,
+    ObserverStopped,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -283,6 +311,12 @@ pub struct Invocation {
     pub invocation_id: u64,
     pub binding_revision: u64,
     pub action_id: String,
+}
+
+struct PendingInvocation {
+    invocation: Invocation,
+    deadline: u64,
+    shown: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -315,6 +349,10 @@ pub struct ShortcutService<S: Store, R: Registry> {
     targets: BTreeSet<String>,
     generation: u64,
     monitor: MonitorStatus,
+    repair_fault: Option<RepairFault>,
+    repair_required: bool,
+    repair_generation: u64,
+    published_revision: u64,
     diagnostics: Vec<&'static str>,
     pressed: BTreeSet<(Trigger, u64)>,
     recording: Option<RecordingLease>,
@@ -322,7 +360,7 @@ pub struct ShortcutService<S: Store, R: Registry> {
     lease_sequence: u64,
     suppressed_until_release: bool,
     invocation_sequence: u64,
-    pending: BTreeMap<u64, (Invocation, u64)>,
+    pending: BTreeMap<u64, PendingInvocation>,
     failures: Vec<Failure>,
     pub host_ready: bool,
 }
@@ -393,7 +431,11 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
             residual: BTreeSet::new(),
             targets: BTreeSet::new(),
             generation: 0,
-            monitor: MonitorStatus::PermissionRequired,
+            monitor: MonitorStatus::Unavailable,
+            repair_fault: None,
+            repair_required: false,
+            repair_generation: 0,
+            published_revision: 0,
             diagnostics,
             pressed: BTreeSet::new(),
             recording: None,
@@ -454,7 +496,9 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
                         Trigger::ModifierDoubleTap { .. } => match self.monitor {
                             MonitorStatus::Active => BindingStatus::Active,
                             MonitorStatus::PermissionRequired => BindingStatus::PermissionRequired,
-                            MonitorStatus::Unavailable => BindingStatus::MonitorUnavailable,
+                            MonitorStatus::Unavailable
+                            | MonitorStatus::EstablishmentFailed
+                            | MonitorStatus::ObserverStopped => BindingStatus::MonitorUnavailable,
                         },
                     }
                 };
@@ -463,7 +507,7 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
             .collect::<Vec<_>>();
         Snapshot {
             configuration: self.configuration.clone(),
-            recovery_degraded: !self.recovery_available(),
+            recovery_degraded: self.repair_required,
             bindings,
             diagnostics: self.diagnostics.clone(),
             key_labels: self.registry.key_labels(),
@@ -484,21 +528,65 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
                 .map(|(trigger, entry)| (trigger.clone(), entry.generation))
                 .collect(),
         );
+        if self.configuration.revision != self.published_revision {
+            self.published_revision = self.configuration.revision;
+            self.repair_generation = self.repair_generation.wrapping_add(1);
+            self.repair_required = false;
+            if self.monitor == MonitorStatus::EstablishmentFailed {
+                self.monitor = MonitorStatus::Unavailable;
+            }
+        }
+        self.publish_repair();
+    }
+
+    fn publish_repair(&mut self) {
         let launcher = &self.configuration.launcher;
-        let confirmed = !self.diagnostics.contains(&"storage_uncertain")
-            && self.launcher_migration.is_none()
-            && !self.residual.contains(launcher)
-            && (matches!(launcher, Trigger::ModifierDoubleTap { .. })
-                || self
+        let fault = if self.diagnostics.contains(&"storage_uncertain")
+            || self.residual.contains(launcher)
+        {
+            Some(RepairFault::Uncertain)
+        } else if self.launcher_migration.is_some() {
+            Some(RepairFault::Migration)
+        } else {
+            match launcher {
+                Trigger::Chord { .. } => (!self
                     .registrations
                     .get(launcher)
-                    .is_some_and(|binding| binding.target == LAUNCHER));
+                    .is_some_and(|entry| entry.target == LAUNCHER))
+                .then_some(RepairFault::Registration),
+                Trigger::ModifierDoubleTap { .. } => match self.monitor {
+                    MonitorStatus::Active | MonitorStatus::Unavailable => None,
+                    MonitorStatus::PermissionRequired => Some(RepairFault::Permission),
+                    MonitorStatus::EstablishmentFailed => Some(RepairFault::MonitorEstablishment),
+                    MonitorStatus::ObserverStopped => Some(RepairFault::ObserverStopped),
+                },
+            }
+        };
+        if fault.is_some() && !self.repair_required {
+            self.repair_generation = self.repair_generation.wrapping_add(1);
+        }
+        // Suspension invalidates evidence for a new Show. It does not establish
+        // that a previously broken entry is safe to hide behind, or start a
+        // second fault episode when that same failure is confirmed on return.
+        let awaiting_recheck = matches!(launcher, Trigger::ModifierDoubleTap { .. })
+            && self.monitor == MonitorStatus::Unavailable;
+        self.repair_required = fault.is_some() || (self.repair_required && awaiting_recheck);
+        self.repair_fault = fault;
         self.admission
-            .publish_selected(confirmed.then_some(launcher));
+            .publish_selected((!self.repair_required).then_some(launcher));
+    }
+
+    pub fn repair_fault(&self) -> Option<RepairFault> {
+        self.repair_fault
+    }
+
+    pub fn repair_generation(&self) -> u64 {
+        self.repair_generation
     }
 
     fn suspend_publication(&mut self) {
         self.admission.publish_selected(None);
+        self.admission.invalidate_input();
         self.registry.publish(&BTreeMap::new());
     }
 
@@ -800,6 +888,7 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
                     for trigger in keys {
                         let _ = self.remove(&trigger);
                     }
+                    self.publish_repair();
                     return Err(fail("degraded").with_snapshot(self.snapshot()));
                 }
             }
@@ -828,7 +917,7 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
         let stale = self
             .pending
             .iter()
-            .filter(|(_, (invocation, _))| !self.targets.contains(&invocation.action_id))
+            .filter(|(_, entry)| !self.targets.contains(&entry.invocation.action_id))
             .map(|(id, _)| *id)
             .collect::<Vec<_>>();
         for id in stale {
@@ -842,7 +931,13 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
         let changed = self.monitor != status;
         self.monitor = status;
         self.admission.set_monitor(status == MonitorStatus::Active);
+        if changed {
+            self.publish_repair();
+        }
         changed
+    }
+    pub fn monitor_status(&self) -> MonitorStatus {
+        self.monitor
     }
     pub fn local_availability(&self) -> LocalMonitorAvailability {
         self.local_available.clone()
@@ -931,6 +1026,7 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
             || self.recording.is_some()
     }
     pub fn begin_recording(&mut self, now: u64) -> RecordingLease {
+        self.admission.invalidate_input();
         self.end_recording();
         self.fail_pending("delivery_failed");
         self.lease_sequence += 1;
@@ -977,6 +1073,28 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
         }
         lease
     }
+
+    pub fn interrupt_input(&mut self) -> Option<RecordingLease> {
+        self.admission.invalidate_input();
+        self.fail_pending("delivery_failed");
+        self.pressed.clear();
+        self.local_pressed.clear();
+        self.recording_chords.clear();
+        self.suppressed_until_release = false;
+        self.end_recording()
+    }
+
+    /// The OS may deliver a held chord again after the session resumes. A
+    /// recovered registration admits the next press only after its key-up.
+    pub fn sync_held_chords(&mut self, mut held: impl FnMut(&Trigger) -> bool) {
+        self.pressed = self
+            .registrations
+            .iter()
+            .filter(|(trigger, _)| held(trigger))
+            .map(|(trigger, entry)| (trigger.clone(), entry.generation))
+            .collect();
+    }
+
     pub fn expire(&mut self, now: u64) {
         if self
             .recording
@@ -988,7 +1106,7 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
         let expired = self
             .pending
             .iter()
-            .filter(|(_, (_, deadline))| now >= *deadline)
+            .filter(|(_, entry)| now >= entry.deadline)
             .map(|(id, _)| *id)
             .collect::<Vec<_>>();
         for id in expired {
@@ -1023,25 +1141,41 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
     }
     pub fn ready(&mut self, ready: bool, now: u64) -> Vec<Invocation> {
         self.expire(now);
-        self.host_ready = ready;
         if !ready {
+            self.admission.invalidate_input();
+            self.fail_pending("delivery_failed");
             self.end_recording();
         }
+        self.host_ready = ready;
         if ready {
             self.pending
                 .values()
-                .map(|(invocation, _)| invocation.clone())
+                .filter(|entry| entry.shown)
+                .map(|entry| entry.invocation.clone())
                 .collect()
         } else {
             vec![]
         }
     }
+    pub fn invocation_pending(&mut self, id: u64, now: u64) -> bool {
+        self.expire(now);
+        self.pending.get(&id).is_some_and(|entry| !entry.shown)
+    }
+    pub fn mark_shown(&mut self, id: u64, now: u64) -> bool {
+        self.expire(now);
+        self.pending
+            .get_mut(&id)
+            .is_some_and(|entry| !std::mem::replace(&mut entry.shown, true))
+    }
     pub fn acknowledge(&mut self, id: u64, accepted: bool, now: u64) -> bool {
         self.expire(now);
-        self.pending.remove(&id).is_some_and(|(invocation, _)| {
+        if !self.pending.get(&id).is_some_and(|entry| entry.shown) {
+            return false;
+        }
+        self.pending.remove(&id).is_some_and(|entry| {
             accepted
-                && invocation.binding_revision == self.configuration.revision
-                && self.targets.contains(&invocation.action_id)
+                && entry.invocation.binding_revision == self.configuration.revision
+                && self.targets.contains(&entry.invocation.action_id)
         })
     }
     pub fn press(&mut self, trigger: &Trigger, generation: u64, pressed: bool, now: u64) -> Effect {
@@ -1125,7 +1259,11 @@ impl<S: Store, R: Registry> ShortcutService<S, R> {
         };
         self.pending.insert(
             invocation_id,
-            (invocation.clone(), now.saturating_add(10_000)),
+            PendingInvocation {
+                invocation: invocation.clone(),
+                deadline: now.saturating_add(10_000),
+                shown: false,
+            },
         );
         Effect::Action(invocation)
     }

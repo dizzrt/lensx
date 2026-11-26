@@ -3,7 +3,11 @@ mod macos;
 pub mod model;
 #[cfg(any(target_os = "macos", test))]
 mod monitor;
+mod repair;
 mod service;
+
+#[cfg(target_os = "macos")]
+pub(crate) use repair::reopen;
 
 use crate::launcher_window::{
     LauncherActivationReason, LauncherWindowAction, LauncherWindowActions, MAIN_WINDOW_LABEL,
@@ -41,6 +45,8 @@ pub(crate) struct DesktopService<R: Runtime> {
     recording_epoch: u64,
     stopped: bool,
     sleeping: bool,
+    workspace: macos::WorkspaceSession,
+    workspace_epoch: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -66,7 +72,7 @@ pub(crate) fn local_shortcut_facts<R: Runtime>(app: &AppHandle<R>) -> Option<Loc
         recording_epoch: service.inner.recording_epoch(),
         recording: service.inner.recording().cloned(),
         suppressed_until_release: service.inner.suppressed_until_release(),
-        stopped: service.stopped || service.sleeping,
+        stopped: !service.session_accepts_input(),
         host_ready: service.inner.host_ready,
         recovery_available: service.inner.recovery_available(),
         local_available: service.inner.local_available(),
@@ -105,25 +111,60 @@ pub(crate) fn local_recording_input<R: Runtime>(
     let (captured, effect) = {
         let state = app.try_state::<State<R>>()?;
         let mut service = state.try_lock().ok()?;
-        if service.stopped || service.sleeping {
+        let session = service.workspace.snapshot();
+        if !service.session_accepts_input() {
             return None;
         }
         let now = macos::monotonic_millis();
         service.synchronize_recording(now);
-        service.inner.local_recording_press(
+        let (captured, effect) = service.inner.local_recording_press(
             key,
             trigger.as_ref(),
             down,
             repeat,
             expected_epoch,
             now,
-        )
+        );
+        (captured, service.stamp(effect, session.epoch))
     };
     deliver(app, effect);
     Some(captured)
 }
 
+struct StampedEffect {
+    effect: Effect,
+    session: u64,
+    input_generation: u64,
+}
+
 impl<R: Runtime> DesktopService<R> {
+    fn stamp(&self, effect: Effect, session: u64) -> StampedEffect {
+        StampedEffect {
+            effect,
+            session,
+            input_generation: self.inner.admission().input_generation(),
+        }
+    }
+
+    fn session_accepts_input(&self) -> bool {
+        self.accepts_input(
+            self.workspace_epoch,
+            self.inner.admission().input_generation(),
+        )
+    }
+
+    fn accepts_input(&self, epoch: u64, generation: u64) -> bool {
+        let session = self.workspace.snapshot();
+        let admission = self.inner.admission();
+        !self.stopped
+            && !self.sleeping
+            && !admission.stopped()
+            && !session.interrupted
+            && session.epoch == epoch
+            && self.workspace_epoch == epoch
+            && admission.input_generation() == generation
+    }
+
     fn synchronize_recording(&mut self, now: u64) {
         self.inner.expire(now);
         if self.recording_epoch != self.inner.recording_epoch() {
@@ -175,11 +216,23 @@ impl<R: Runtime> Registry for NativeRegistry<R> {
                 if !callback_gate.load(Ordering::Acquire) {
                     return;
                 }
+                let Some(workspace) = app.try_state::<macos::WorkspaceSession>() else {
+                    return;
+                };
+                let Some(admission) = app.try_state::<ShortcutAdmission>() else {
+                    return;
+                };
+                let session = workspace.snapshot();
+                if session.interrupted || admission.stopped() {
+                    return;
+                }
+                let input_generation = admission.input_generation();
                 let gate = Arc::clone(&callback_gate);
                 let trigger = callback_trigger.clone();
                 let pressed = event.state() == ShortcutState::Pressed;
                 let event_app = app.clone();
                 let _ = app.run_on_main_thread(move || {
+                    macos::refresh_session(&event_app);
                     // A key-up must still clear held state if the layout changed since key-down.
                     if !gate.load(Ordering::Acquire) || (pressed && !macos::layout_allows(&trigger))
                     {
@@ -192,13 +245,13 @@ impl<R: Runtime> Registry for NativeRegistry<R> {
                         let Ok(mut service) = state.lock() else {
                             return;
                         };
-                        if service.stopped || service.sleeping {
+                        if !service.accepts_input(session.epoch, input_generation) {
                             return;
                         }
                         let now = macos::monotonic_millis();
                         let effect = service.inner.press(&trigger, generation, pressed, now);
                         service.gesture.input(gesture::Input::Interrupt, now);
-                        effect
+                        service.stamp(effect, session.epoch)
                     };
                     deliver(&event_app, effect);
                     publish_failures(&event_app);
@@ -270,57 +323,108 @@ fn publish_failures<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
-fn deliver<R: Runtime>(app: &AppHandle<R>, effect: Effect) {
-    match effect {
+fn deliver<R: Runtime>(app: &AppHandle<R>, effect: StampedEffect) {
+    match effect.effect {
         Effect::None => {}
-        Effect::Candidate { lease_id, trigger } => emit(
-            app,
-            RECORDING,
-            RecordingEvent {
-                lease_id,
-                trigger: Some(trigger),
-                cancelled: false,
-            },
-        ),
+        Effect::Candidate { lease_id, trigger } => {
+            let Some(state) = app.try_state::<State<R>>() else {
+                return;
+            };
+            let current = state.lock().is_ok_and(|service| {
+                service.accepts_input(effect.session, effect.input_generation)
+                    && service
+                        .inner
+                        .recording()
+                        .is_some_and(|lease| lease.lease_id == lease_id)
+            });
+            if current {
+                emit(
+                    app,
+                    RECORDING,
+                    RecordingEvent {
+                        lease_id,
+                        trigger: Some(trigger),
+                        cancelled: false,
+                    },
+                );
+            }
+        }
         Effect::Toggle | Effect::Action(_) => {
-            let app = app.clone();
+            let invocation_id = match &effect.effect {
+                Effect::Action(invocation) => Some(invocation.invocation_id),
+                _ => None,
+            };
             let dispatch_app = app.clone();
-            let _ = app.run_on_main_thread(move || {
-                if dispatch_app.try_state::<State<R>>().is_none_or(|state| {
-                    state
-                        .try_lock()
-                        .map_or(true, |service| service.stopped || service.sleeping)
-                }) {
+            let result = app.run_on_main_thread(move || {
+                macos::refresh_session(&dispatch_app);
+                let Ok(state) = state(&dispatch_app) else {
                     return;
-                }
-                let action = if matches!(effect, Effect::Toggle) {
-                    LauncherWindowAction::Toggle(LauncherActivationReason::GlobalShortcut)
-                } else {
-                    LauncherWindowAction::Show(LauncherActivationReason::GlobalShortcut)
                 };
-                let success = dispatch_app
-                    .try_state::<LauncherWindowActions>()
-                    .is_some_and(|actions| actions.dispatch(&dispatch_app, action).is_ok());
-                if let Effect::Action(invocation) = effect {
-                    let Some(state) = dispatch_app.try_state::<State<R>>() else {
-                        return;
-                    };
-                    let mut service = match state.lock() {
-                        Ok(service) => service,
-                        Err(_) => return,
-                    };
-                    if success && service.inner.host_ready {
-                        drop(service);
-                        emit(&dispatch_app, INVOCATION, invocation);
-                    } else if !success {
-                        service.inner.delivery_failed(invocation.invocation_id);
-                        drop(service);
-                        publish_failures(&dispatch_app);
+                let invocation =
+                    dispatch_window_effect(&state, effect, macos::monotonic_millis, |action| {
+                        dispatch_app
+                            .try_state::<LauncherWindowActions>()
+                            .is_some_and(|actions| actions.dispatch(&dispatch_app, action).is_ok())
+                    });
+                if let Some(invocation) = invocation {
+                    emit(&dispatch_app, INVOCATION, invocation);
+                }
+                publish_failures(&dispatch_app);
+            });
+            if let (Err(_), Some(id)) = (result, invocation_id) {
+                if let Ok(state) = state(app) {
+                    if let Ok(mut service) = state.lock() {
+                        service.inner.delivery_failed(id);
                     }
                 }
-            });
+                publish_failures(app);
+            }
         }
     }
+}
+
+/// Execute on main. Only a successful Show may make an Action visible to the
+/// Host, including an invocation retrieved by a later host_ready handshake.
+fn dispatch_window_effect<R: Runtime>(
+    state: &State<R>,
+    delivery: StampedEffect,
+    now: impl Fn() -> u64,
+    dispatch: impl FnOnce(LauncherWindowAction) -> bool,
+) -> Option<Invocation> {
+    let action = {
+        let mut service = state.lock().ok()?;
+        if !service.accepts_input(delivery.session, delivery.input_generation) {
+            if let Effect::Action(ref invocation) = delivery.effect {
+                service.inner.delivery_failed(invocation.invocation_id);
+            }
+            return None;
+        }
+        match &delivery.effect {
+            Effect::Toggle => {
+                LauncherWindowAction::Toggle(LauncherActivationReason::GlobalShortcut)
+            }
+            Effect::Action(invocation)
+                if service
+                    .inner
+                    .invocation_pending(invocation.invocation_id, now()) =>
+            {
+                LauncherWindowAction::Show(LauncherActivationReason::GlobalShortcut)
+            }
+            _ => return None,
+        }
+    };
+    let shown = dispatch(action);
+    if let Effect::Action(invocation) = delivery.effect {
+        let mut service = state.lock().ok()?;
+        if !shown || !service.accepts_input(delivery.session, delivery.input_generation) {
+            service.inner.delivery_failed(invocation.invocation_id);
+        } else if service.inner.mark_shown(invocation.invocation_id, now())
+            && service.inner.host_ready
+        {
+            return Some(invocation);
+        }
+    }
+    None
 }
 
 fn authorize<R: Runtime>(webview: &Webview<R>) -> Result<(), ShortcutError> {
@@ -348,9 +452,20 @@ pub(crate) fn setup<R: Runtime>(app: &AppHandle<R>) -> Result<(), ShortcutError>
         layout: macos::current_layout().ok_or_else(|| ShortcutError::new("unavailable"))?,
     };
     let inner = ShortcutService::start(FileStore::new(directory.join("shortcuts.json")), registry);
+    #[cfg(not(target_os = "macos"))]
+    let inner = {
+        let mut inner = inner;
+        inner.set_monitor(MonitorStatus::ObserverStopped);
+        inner
+    };
     app.manage(inner.local_availability());
     app.manage(inner.admission());
+    let workspace = macos::WorkspaceSession::default();
+    app.manage(workspace.clone());
+    app.manage(Mutex::new(repair::RepairQueue::default()));
     let service = Arc::new(Mutex::new(DesktopService {
+        workspace,
+        workspace_epoch: 0,
         inner,
         gesture: gesture::Gesture::default(),
         monitor_epoch: 0,
@@ -359,17 +474,20 @@ pub(crate) fn setup<R: Runtime>(app: &AppHandle<R>) -> Result<(), ShortcutError>
         sleeping: false,
     }));
     app.manage(Arc::clone(&service));
+    #[cfg(not(target_os = "macos"))]
     ensure_recovery_visible(app);
     macos::start(app.clone(), service);
     Ok(())
 }
 
 pub(crate) fn recovery_degraded<R: Runtime>(app: &AppHandle<R>) -> bool {
-    !recovery_available_now(app)
+    admission_now(app).is_none_or(|facts| !facts.can_hide())
 }
 
 pub(crate) fn recovery_available_now<R: Runtime>(app: &AppHandle<R>) -> bool {
-    admission_now(app).is_some_and(|facts| facts.recovery_available())
+    app.try_state::<macos::WorkspaceSession>()
+        .is_some_and(|session| !session.snapshot().interrupted)
+        && admission_now(app).is_some_and(|facts| facts.recovery_available())
 }
 
 pub(crate) fn recording_active<R: Runtime>(app: &AppHandle<R>) -> bool {
@@ -414,11 +532,14 @@ pub(crate) fn stop<R: Runtime>(app: &AppHandle<R>) {
     if let Some(facts) = app.try_state::<ShortcutAdmission>() {
         facts.stop();
     }
+    #[cfg(target_os = "macos")]
+    macos::stop_workspace(app);
     set_local_shortcut_available(app, false);
     revoke_recording(app);
     if let Ok(state) = state(app) {
         if let Ok(mut service) = state.lock() {
             service.stopped = true;
+            service.inner.interrupt_input();
         }
     }
 }
@@ -508,23 +629,12 @@ pub async fn write_launcher_shortcuts(
 }
 
 fn ensure_recovery_visible<R: Runtime>(app: &AppHandle<R>) {
-    if recovery_degraded(app) {
-        if let Some(actions) = app.try_state::<LauncherWindowActions>() {
-            let _ = actions.dispatch(
-                app,
-                LauncherWindowAction::Show(LauncherActivationReason::Programmatic),
-            );
-        }
-    }
+    repair::recheck(app);
 }
 
 fn publish_monitor_snapshot<R: Runtime>(app: &AppHandle<R>, snapshot: Snapshot) {
-    let needs_recovery = snapshot.recovery_degraded;
     emit(app, CHANGED, snapshot);
-    if needs_recovery {
-        let recovery_app = app.clone();
-        let _ = app.run_on_main_thread(move || ensure_recovery_visible(&recovery_app));
-    }
+    ensure_recovery_visible(app);
 }
 
 #[cfg(any(target_os = "macos", test))]
@@ -538,7 +648,7 @@ fn finish_observation<R: Runtime>(app: &AppHandle<R>, state: &State<R>) {
         Ok(mut service) => {
             service.gesture.reset(macos::monotonic_millis());
             let cancelled = service.inner.end_recording();
-            service.inner.set_monitor(MonitorStatus::Unavailable);
+            service.inner.set_monitor(MonitorStatus::ObserverStopped);
             (Some(service.inner.snapshot()), cancelled, service.stopped)
         }
         Err(_) => (None, None, false),
@@ -559,8 +669,7 @@ fn finish_observation<R: Runtime>(app: &AppHandle<R>, state: &State<R>) {
     }
     if !stopped {
         // The repair/quit entry must remain accessible even without a snapshot.
-        let recovery_app = app.clone();
-        let _ = app.run_on_main_thread(move || ensure_recovery_visible(&recovery_app));
+        ensure_recovery_visible(app);
     }
 }
 
@@ -592,6 +701,9 @@ pub fn set_launcher_shortcut_host_ready(
             .lock()
             .map_err(|_| ShortcutError::new("unavailable"))?;
         let now = macos::monotonic_millis();
+        if !service.session_accepts_input() {
+            service.inner.interrupt_input();
+        }
         service.inner.ready(ready, now)
     };
     publish_failures(&app);
@@ -614,6 +726,10 @@ pub fn ack_launcher_shortcut_invocation(
         .lock()
         .map_err(|_| ShortcutError::new("unavailable"))?;
     let now = macos::monotonic_millis();
+    if !service.session_accepts_input() {
+        service.inner.delivery_failed(invocation_id);
+        return Ok(false);
+    }
     Ok(service
         .inner
         .acknowledge(invocation_id, outcome == "accepted", now))
@@ -639,6 +755,9 @@ pub fn begin_launcher_shortcut_recording(
         .lock()
         .map_err(|_| ShortcutError::new("unavailable"))?;
     let now = macos::monotonic_millis();
+    if !service.session_accepts_input() {
+        return Err(ShortcutError::new("recording_unavailable"));
+    }
     service.gesture.reset(now);
     service.monitor_epoch += 1;
     Ok(service.inner.begin_recording(now))

@@ -1954,24 +1954,27 @@ mod tests {
 
         fn hide_current(
             &self,
-            _attempt: PluginChildWebviewAttempt,
+            attempt: PluginChildWebviewAttempt,
         ) -> PluginChildWebviewPresentationResult {
+            assert_eq!(attempt, Self::attempt());
             self.calls.borrow_mut().push("child_hide");
             self.hide_result
         }
 
         fn show_current(
             &self,
-            _attempt: PluginChildWebviewAttempt,
+            attempt: PluginChildWebviewAttempt,
         ) -> PluginChildWebviewPresentationResult {
+            assert_eq!(attempt, Self::attempt());
             self.calls.borrow_mut().push("child_show");
             self.show_result
         }
 
         fn focus_current(
             &self,
-            _attempt: PluginChildWebviewAttempt,
+            attempt: PluginChildWebviewAttempt,
         ) -> PluginChildWebviewPresentationResult {
+            assert_eq!(attempt, Self::attempt());
             self.calls.borrow_mut().push("child_focus");
             self.focus_result
         }
@@ -2194,33 +2197,43 @@ mod tests {
 
     #[test]
     fn restore_resolves_host_then_shows_parent_before_the_same_child() {
-        let (calls, resolver) = ordered_fixture(false, None);
-        let child = child_fixture(&calls, PluginChildWebviewState::Hidden);
+        for has_child in [false, true] {
+            for action in [
+                LauncherWindowAction::Show(LauncherActivationReason::GlobalShortcut),
+                LauncherWindowAction::Toggle(LauncherActivationReason::GlobalShortcut),
+            ] {
+                let (calls, resolver) = ordered_fixture(false, None);
+                let child =
+                    has_child.then(|| child_fixture(&calls, PluginChildWebviewState::Hidden));
+                execute_with_resolver_policy(
+                    &resolver,
+                    child
+                        .as_ref()
+                        .map(|child| child as &dyn LauncherChildPresentation),
+                    action,
+                    false,
+                )
+                .expect("restore should succeed");
 
-        execute_with_resolver_policy(
-            &resolver,
-            Some(&child),
-            LauncherWindowAction::Show(LauncherActivationReason::GlobalShortcut),
-            false,
-        )
-        .expect("restore should succeed");
-
-        assert_eq!(
-            *calls.borrow(),
-            vec![
-                "resolve_window",
-                "resolve_host",
-                "activate_application",
-                "window_clip",
-                "window_restore",
-                "window_show",
-                "window_focus",
-                "host_emit",
-                "child_snapshot",
-                "child_show",
-                "child_focus",
-            ]
-        );
+                let mut expected = vec!["resolve_window"];
+                if matches!(action, LauncherWindowAction::Toggle(_)) {
+                    expected.push("window_visibility");
+                }
+                expected.extend([
+                    "resolve_host",
+                    "activate_application",
+                    "window_clip",
+                    "window_restore",
+                    "window_show",
+                    "window_focus",
+                    "host_emit",
+                ]);
+                if has_child {
+                    expected.extend(["child_snapshot", "child_show", "child_focus"]);
+                }
+                assert_eq!(*calls.borrow(), expected);
+            }
+        }
     }
 
     #[test]
